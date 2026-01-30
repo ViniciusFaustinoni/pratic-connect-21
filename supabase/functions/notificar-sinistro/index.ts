@@ -18,7 +18,7 @@ const TIPO_LABELS: Record<string, string> = {
   outro: 'Outro',
 };
 
-// Templates de mensagem por status - COM SLAs E PRÓXIMOS PASSOS
+// Templates de mensagem por status - SGA PRATIC 2.0
 const STATUS_TEMPLATES: Record<string, { titulo: string; mensagem: (protocolo: string, extras?: any) => string }> = {
   comunicado: {
     titulo: '✅ Sinistro Registrado',
@@ -31,36 +31,11 @@ const STATUS_TEMPLATES: Record<string, { titulo: string; mensagem: (protocolo: s
       const local = [extras?.cidade_ocorrencia, extras?.estado_ocorrencia]
         .filter(Boolean).join('/') || 'Local não informado';
       
-      let msg = `Olá! Recebemos sua comunicação de sinistro e nossa equipe já está analisando.
-
-📋 *Protocolo:* ${protocolo}
-📌 *Tipo:* ${tipoLabel}`;
-
-      if (veiculo) {
-        msg += `
-
-🚗 *Veículo:*
-${veiculo.placa} - ${veiculo.marca} ${veiculo.modelo}`;
-      }
-      
-      msg += `
-
-📍 *Local:* ${local}`;
-      
-      if (dataEvento) {
-        msg += `
-📅 *Data do evento:* ${dataEvento}`;
-      }
-      
-      msg += `
-
-⏰ *Próximos passos:*
-1. Analisaremos em até 24h úteis
-2. Se necessário, solicitaremos documentos
-3. Acompanhe pelo app ou aqui no WhatsApp
-
-Em breve um analista entrará em contato. Fique tranquilo! 💙`;
-      
+      let msg = `Olá! Recebemos sua comunicação de sinistro.\n\n📋 *Protocolo:* ${protocolo}\n📌 *Tipo:* ${tipoLabel}`;
+      if (veiculo) msg += `\n🚗 *Veículo:* ${veiculo.placa} - ${veiculo.marca} ${veiculo.modelo}`;
+      msg += `\n📍 *Local:* ${local}`;
+      if (dataEvento) msg += `\n📅 *Data:* ${dataEvento}`;
+      msg += `\n\n⏰ *Próximos passos:*\n1. Análise em até 24h úteis\n2. Solicitação de documentos (se necessário)\n3. Acompanhe pelo app\n\nFique tranquilo! 💙`;
       return msg;
     },
   },
@@ -68,65 +43,105 @@ Em breve um analista entrará em contato. Fique tranquilo! 💙`;
     titulo: '📄 Documentos Pendentes',
     mensagem: (protocolo, extras) => {
       const docs = extras?.documentos || [];
-      const listaFormatada = docs.length > 0 
-        ? `\n\n📝 *Documentos solicitados:*\n• ${docs.join('\n• ')}`
-        : '';
-      return `Precisamos de documentos para o sinistro ${protocolo}.${listaFormatada}\n\n⏰ *Prazo:* 48 horas\n\nEnvie pelo app ou responda esta mensagem com as fotos dos documentos.`;
+      const listaFormatada = docs.length > 0 ? `\n\n📝 *Documentos:*\n• ${docs.join('\n• ')}` : '';
+      return `Precisamos de documentos para o sinistro ${protocolo}.${listaFormatada}\n\n⏰ *Prazo:* 30 dias\n\nEnvie pelo app ou responda com as fotos.`;
     },
   },
   em_analise: {
     titulo: '🔍 Em Análise',
-    mensagem: (protocolo) => `Todos os documentos do sinistro ${protocolo} foram recebidos!\n\n🔍 *Status:* Análise técnica em andamento\n\n⏰ *Prazo estimado:* até 5 dias úteis\n\nVocê será notificado sobre o resultado.`,
+    mensagem: (protocolo) => `Documentos do sinistro ${protocolo} recebidos!\n\n🔍 *Status:* Análise técnica\n⏰ *Prazo:* até 5 dias úteis`,
   },
   aguardando_vistoria: {
     titulo: '🔎 Vistoria Agendada',
-    mensagem: (protocolo) => `Uma vistoria foi agendada para o sinistro ${protocolo}.\n\n🚗 Nosso técnico entrará em contato para confirmar data e local.\n\nConfira os detalhes no app.`,
+    mensagem: (protocolo) => `Vistoria agendada para o sinistro ${protocolo}.\n\n🚗 Nosso técnico entrará em contato para confirmar data e local.`,
   },
   em_vistoria: {
     titulo: '🔎 Vistoria em Andamento',
-    mensagem: (protocolo) => `A vistoria do sinistro ${protocolo} está em andamento.\n\n📝 O laudo técnico será emitido em breve.`,
+    mensagem: (protocolo) => `Vistoria do sinistro ${protocolo} em andamento.\n\n📝 Laudo técnico em breve.`,
   },
   aguardando_parecer: {
     titulo: '⏳ Aguardando Parecer',
-    mensagem: (protocolo) => `A vistoria do sinistro ${protocolo} foi concluída.\n\n📋 Aguardando parecer técnico final.\n\n⏰ Prazo: até 3 dias úteis.`,
+    mensagem: (protocolo) => `Vistoria do sinistro ${protocolo} concluída.\n\n📋 Aguardando parecer final.\n⏰ Prazo: 3 dias úteis.`,
+  },
+  em_sindicancia: {
+    titulo: '🔍 Em Análise Especial',
+    mensagem: (protocolo) => `Seu sinistro ${protocolo} está em análise detalhada.\n\n📋 Uma investigação foi aberta para verificação.\n⏰ Prazo: 30 dias.`,
+  },
+  em_pericia: {
+    titulo: '🔬 Em Perícia Técnica',
+    mensagem: (protocolo) => `Sinistro ${protocolo} encaminhado para perícia técnica.\n\n🔬 Um perito especializado fará a análise.`,
+  },
+  suspenso: {
+    titulo: '⏸️ Sinistro Suspenso',
+    mensagem: (protocolo) => `O sinistro ${protocolo} foi suspenso temporariamente.\n\nAguardando resolução de pendências externas (ex: inquérito policial).`,
   },
   aprovado: {
     titulo: '🎉 Sinistro APROVADO!',
     mensagem: (protocolo, extras) => {
-      const valor = extras?.valor_indenizacao ? `\n\n💰 *Valor aprovado:* R$ ${extras.valor_indenizacao.toFixed(2)}` : '';
-      const tipoDano = extras?.tipo_dano === 'perda_total' ? '\n\n⚠️ *Classificação:* Perda Total' : '';
-      return `Ótima notícia! Seu sinistro ${protocolo} foi *APROVADO*!${valor}${tipoDano}\n\n📋 *Próximos passos:*\n1. Verificação dos dados bancários\n2. Pagamento em até 10 dias úteis\n\nAcompanhe os detalhes no app.`;
+      const valor = extras?.valor_indenizacao ? `\n\n💰 *Valor:* R$ ${extras.valor_indenizacao.toFixed(2)}` : '';
+      const tipoDano = extras?.tipo_dano === 'perda_total' ? '\n⚠️ *Classificação:* Perda Total' : '';
+      return `Ótima notícia! Sinistro ${protocolo} *APROVADO*!${valor}${tipoDano}\n\n📋 Próximos passos em breve.`;
     },
   },
   negado: {
     titulo: '❌ Sinistro Negado',
     mensagem: (protocolo, extras) => {
-      const motivo = extras?.parecer ? `\n\n📝 *Motivo resumido:* ${extras.parecer.substring(0, 150)}...` : '';
-      return `Seu sinistro ${protocolo} foi negado.${motivo}\n\n📋 Consulte o parecer completo no app.\n\n⚖️ *Recurso:* Você pode solicitar revisão em até 15 dias.\n\nDúvidas? Responda esta mensagem ou entre em contato.`;
+      const motivo = extras?.parecer ? `\n\n📝 *Motivo:* ${extras.parecer.substring(0, 150)}...` : '';
+      return `Sinistro ${protocolo} foi negado.${motivo}\n\n⚖️ *Recurso:* até 15 dias.\n\nDúvidas? Responda esta mensagem.`;
     },
   },
   em_regulacao: {
     titulo: '📋 Em Regulação',
-    mensagem: (protocolo) => `O sinistro ${protocolo} está em fase de regulação.\n\n📝 Estamos finalizando os trâmites para pagamento.\n\nVocê será notificado quando concluído.`,
+    mensagem: (protocolo) => `Sinistro ${protocolo} em fase de regulação.\n\n📝 Finalizando orçamentos e trâmites.`,
+  },
+  aguardando_termo: {
+    titulo: '📝 Termo de Anuência',
+    mensagem: (protocolo, extras) => {
+      const valor = extras?.valor_cota ? `R$ ${extras.valor_cota.toFixed(2)}` : 'R$ 750,00';
+      return `Para prosseguir com o reparo do sinistro ${protocolo}, assine o Termo de Anuência.\n\n💰 *Cota de participação:* ${valor}\n⏰ *Prazo:* 30 dias\n\nAcesse o link no app para assinar.`;
+    },
+  },
+  aguardando_cota: {
+    titulo: '💰 Cota de Participação',
+    mensagem: (protocolo, extras) => {
+      const valor = extras?.valor_cota ? `R$ ${extras.valor_cota.toFixed(2)}` : 'R$ 750,00';
+      const venc = extras?.vencimento || '';
+      return `Para iniciar o reparo do sinistro ${protocolo}, efetue o pagamento:\n\n💰 *Valor:* ${valor}\n📅 *Vencimento:* ${venc}\n\n⏰ Prazo máximo: 30 dias.`;
+    },
   },
   em_reparo: {
     titulo: '🔧 Em Reparo',
-    mensagem: (protocolo) => `O reparo do veículo referente ao sinistro ${protocolo} está em andamento.\n\n🚗 Acompanhe o status pelo app.`,
+    mensagem: (protocolo) => `Reparo do sinistro ${protocolo} em andamento!\n\n🚗 Prazo estimado: 90 dias úteis.\nAcompanhe pelo app.`,
+  },
+  em_garantia: {
+    titulo: '✅ Garantia Ativa',
+    mensagem: (protocolo) => `Seu veículo foi entregue! Sinistro ${protocolo}.\n\n🛡️ *Garantia:* 90 dias\n\nQualquer problema, entre em contato.`,
+  },
+  em_recuperacao: {
+    titulo: '🔎 Buscando Veículo',
+    mensagem: (protocolo) => `Estamos monitorando e buscando seu veículo - Sinistro ${protocolo}.\n\n📍 Você será informado sobre qualquer atualização.`,
   },
   pago: {
     titulo: '💰 Pagamento Realizado!',
     mensagem: (protocolo, extras) => {
-      const valor = extras?.valor_indenizacao ? ` no valor de R$ ${extras.valor_indenizacao.toFixed(2)}` : '';
-      return `O pagamento do sinistro ${protocolo}${valor} foi realizado com sucesso!\n\n✅ Confira sua conta bancária.\n\nAgradecemos a confiança na PRATICCAR! 🚗`;
+      const valor = extras?.valor_indenizacao ? ` de R$ ${extras.valor_indenizacao.toFixed(2)}` : '';
+      return `Pagamento do sinistro ${protocolo}${valor} realizado!\n\n✅ Confira sua conta.\n\nAgradecemos a confiança! 🚗`;
+    },
+  },
+  indenizado: {
+    titulo: '💰 Indenização Realizada!',
+    mensagem: (protocolo, extras) => {
+      const valor = extras?.valor_indenizacao ? ` de R$ ${extras.valor_indenizacao.toFixed(2)}` : '';
+      return `Indenização do sinistro ${protocolo}${valor} realizada!\n\n✅ Confira sua conta.\n\nAgradecemos a confiança! 🚗`;
     },
   },
   encerrado: {
     titulo: '✔️ Sinistro Encerrado',
-    mensagem: (protocolo) => `Seu sinistro ${protocolo} foi encerrado.\n\n⭐ Como foi nossa análise?\n\nSua opinião é muito importante! Avalie pelo link no app.`,
+    mensagem: (protocolo) => `Sinistro ${protocolo} encerrado.\n\n⭐ Como foi nossa análise? Avalie pelo app!`,
   },
   cancelado: {
     titulo: '🚫 Sinistro Cancelado',
-    mensagem: (protocolo) => `O sinistro ${protocolo} foi cancelado.\n\nSe isso foi um engano, entre em contato conosco.`,
+    mensagem: (protocolo) => `Sinistro ${protocolo} foi cancelado.\n\nSe foi engano, entre em contato.`,
   },
 };
 

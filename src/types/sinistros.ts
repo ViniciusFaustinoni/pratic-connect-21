@@ -1,5 +1,5 @@
 // ============================================
-// ENUMS E TIPOS BASE
+// ENUMS E TIPOS BASE - SGA PRATIC 2.0
 // ============================================
 
 export type TipoSinistro = 
@@ -10,23 +10,63 @@ export type TipoSinistro =
   | 'fenomeno_natural' 
   | 'terceiros' 
   | 'vidros' 
+  | 'vandalismo'
   | 'outro';
 
 export type StatusSinistro = 
+  // FASE 1: ENTRADA
   | 'comunicado'
+  // FASE 2: ABERTURA/DOCUMENTAÇÃO
   | 'em_analise'
   | 'documentacao_pendente'
+  // FASE 3: VISTORIA
+  | 'aguardando_vistoria'
+  | 'em_vistoria'
+  | 'aguardando_parecer'
+  // FASE 4: ANÁLISES ESPECIAIS
+  | 'em_sindicancia'
+  | 'em_pericia'
+  | 'analise_interna'
+  | 'suspenso'
+  // FASE 5: DECISÃO
   | 'aprovado'
   | 'negado'
+  // FASE 6: EXECUÇÃO (REPAROS)
   | 'em_regulacao'
+  | 'aguardando_termo'
+  | 'aguardando_cota'
   | 'em_reparo'
+  | 'em_garantia'
+  // FASE 6B: RECUPERAÇÃO (ROUBO/FURTO)
+  | 'em_recuperacao'
+  // FASE 7: PAGAMENTO
   | 'aguardando_pagamento'
   | 'pago'
+  | 'indenizado'
+  // FINAIS
   | 'encerrado'
-  | 'cancelado'
-  | 'em_sindicancia';
+  | 'cancelado';
 
 export type CanalAbertura = 'app' | 'whatsapp' | 'telefone' | 'presencial';
+
+export type TipoLocalEvento = 'rodovia_federal' | 'rodovia_estadual' | 'urbana' | 'sp_outros';
+
+export type TipoDano = 'parcial' | 'perda_total';
+
+export type ResultadoSindicancia = 'regular' | 'irregular' | 'inconclusivo';
+
+export type CondutorRelacao = 'associado' | 'terceiro_autorizado' | 'terceiro';
+
+export type VeiculoRecuperadoEstado = 'sem_dano' | 'dano_parcial' | 'dano_total';
+
+export type MotivoNegacao = 
+  | 'fora_cobertura' 
+  | 'documentacao_invalida' 
+  | 'fraude_suspeita' 
+  | 'prazo_expirado' 
+  | 'carencia'
+  | 'inadimplencia'
+  | 'outro';
 
 // ============================================
 // LABELS E CORES
@@ -40,6 +80,7 @@ export const TIPO_SINISTRO_LABELS: Record<TipoSinistro, string> = {
   fenomeno_natural: 'Fenômeno Natural',
   terceiros: 'Terceiros',
   vidros: 'Vidros',
+  vandalismo: 'Vandalismo',
   outro: 'Outro',
 };
 
@@ -51,37 +92,78 @@ export const TIPO_SINISTRO_ICONS: Record<TipoSinistro, string> = {
   fenomeno_natural: 'CloudRain',
   terceiros: 'Users',
   vidros: 'Square',
+  vandalismo: 'Hammer',
   outro: 'HelpCircle',
 };
 
 export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
+  // FASE 1
   comunicado: 'Comunicado',
+  // FASE 2
   em_analise: 'Em Análise',
   documentacao_pendente: 'Doc. Pendente',
+  // FASE 3
+  aguardando_vistoria: 'Aguard. Vistoria',
+  em_vistoria: 'Em Vistoria',
+  aguardando_parecer: 'Aguard. Parecer',
+  // FASE 4
+  em_sindicancia: 'Em Sindicância',
+  em_pericia: 'Em Perícia',
+  analise_interna: 'Análise Interna',
+  suspenso: 'Suspenso',
+  // FASE 5
   aprovado: 'Aprovado',
   negado: 'Negado',
+  // FASE 6
   em_regulacao: 'Em Regulação',
+  aguardando_termo: 'Aguard. Termo',
+  aguardando_cota: 'Aguard. Cota',
   em_reparo: 'Em Reparo',
+  em_garantia: 'Em Garantia',
+  // FASE 6B
+  em_recuperacao: 'Em Recuperação',
+  // FASE 7
   aguardando_pagamento: 'Aguard. Pagamento',
   pago: 'Pago',
+  indenizado: 'Indenizado',
+  // FINAIS
   encerrado: 'Encerrado',
   cancelado: 'Cancelado',
-  em_sindicancia: 'Em Sindicância',
 };
 
 export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
+  // FASE 1 - Amarelo
   comunicado: 'bg-yellow-100 text-yellow-800',
+  // FASE 2 - Azul
   em_analise: 'bg-blue-100 text-blue-800',
   documentacao_pendente: 'bg-orange-100 text-orange-800',
+  // FASE 3 - Roxo
+  aguardando_vistoria: 'bg-purple-100 text-purple-800',
+  em_vistoria: 'bg-indigo-100 text-indigo-800',
+  aguardando_parecer: 'bg-cyan-100 text-cyan-800',
+  // FASE 4 - Rosa/Vermelho Suave
+  em_sindicancia: 'bg-rose-100 text-rose-800',
+  em_pericia: 'bg-pink-100 text-pink-800',
+  analise_interna: 'bg-amber-100 text-amber-800',
+  suspenso: 'bg-slate-200 text-slate-700',
+  // FASE 5 - Verde/Vermelho
   aprovado: 'bg-green-100 text-green-800',
   negado: 'bg-red-100 text-red-800',
-  em_regulacao: 'bg-purple-100 text-purple-800',
-  em_reparo: 'bg-indigo-100 text-indigo-800',
+  // FASE 6 - Tons de Azul/Verde
+  em_regulacao: 'bg-teal-100 text-teal-800',
+  aguardando_termo: 'bg-sky-100 text-sky-800',
+  aguardando_cota: 'bg-lime-100 text-lime-800',
+  em_reparo: 'bg-violet-100 text-violet-800',
+  em_garantia: 'bg-emerald-100 text-emerald-800',
+  // FASE 6B
+  em_recuperacao: 'bg-fuchsia-100 text-fuchsia-800',
+  // FASE 7
   aguardando_pagamento: 'bg-cyan-100 text-cyan-800',
   pago: 'bg-emerald-100 text-emerald-800',
+  indenizado: 'bg-green-100 text-green-800',
+  // FINAIS
   encerrado: 'bg-gray-100 text-gray-800',
   cancelado: 'bg-gray-100 text-gray-500',
-  em_sindicancia: 'bg-rose-100 text-rose-800',
 };
 
 export const CANAL_LABELS: Record<CanalAbertura, string> = {
@@ -89,6 +171,127 @@ export const CANAL_LABELS: Record<CanalAbertura, string> = {
   whatsapp: 'WhatsApp',
   telefone: 'Telefone',
   presencial: 'Presencial',
+};
+
+export const TIPO_LOCAL_LABELS: Record<TipoLocalEvento, string> = {
+  rodovia_federal: 'Rodovia Federal',
+  rodovia_estadual: 'Rodovia Estadual RJ',
+  urbana: 'Via Urbana RJ',
+  sp_outros: 'SP e Demais Estados',
+};
+
+export const MOTIVO_NEGACAO_LABELS: Record<MotivoNegacao, string> = {
+  fora_cobertura: 'Fora de Cobertura',
+  documentacao_invalida: 'Documentação Inválida',
+  fraude_suspeita: 'Suspeita de Fraude',
+  prazo_expirado: 'Prazo Expirado',
+  carencia: 'Período de Carência',
+  inadimplencia: 'Inadimplência',
+  outro: 'Outro Motivo',
+};
+
+// ============================================
+// DOCUMENTOS POR LOCAL DO EVENTO
+// ============================================
+
+export const DOCUMENTOS_POR_LOCAL: Record<TipoLocalEvento, { sem_vitima: string[]; com_vitima: string[] }> = {
+  rodovia_federal: {
+    sem_vitima: ['CST (site PRF)'],
+    com_vitima: ['LPST', 'RAPH', 'BAM', 'Certidão CBMERJ'],
+  },
+  rodovia_estadual: {
+    sem_vitima: ['eBRAT (PMERJ)'],
+    com_vitima: ['BRAT/BOPM', 'RAPH', 'BAM', 'Certidão CBMERJ'],
+  },
+  urbana: {
+    sem_vitima: ['eBRAT'],
+    com_vitima: ['BRAT', 'Documentos médicos'],
+  },
+  sp_outros: {
+    sem_vitima: ['B.O.'],
+    com_vitima: ['B.O.', 'Documentos médicos'],
+  },
+};
+
+// ============================================
+// WORKFLOW COMPLETO SGA PRATIC 2.0
+// ============================================
+
+export const WORKFLOW_SINISTRO: Record<StatusSinistro, StatusSinistro[]> = {
+  // FASE 1: ENTRADA
+  comunicado: ['em_analise', 'cancelado'],
+  
+  // FASE 2: ABERTURA/DOCUMENTAÇÃO
+  em_analise: [
+    'documentacao_pendente', 
+    'aguardando_vistoria', 
+    'em_sindicancia', 
+    'analise_interna',
+    'aprovado', 
+    'negado', 
+    'cancelado'
+  ],
+  documentacao_pendente: ['em_analise', 'cancelado'],
+  
+  // FASE 3: VISTORIA
+  aguardando_vistoria: ['em_vistoria', 'cancelado'],
+  em_vistoria: ['aguardando_parecer', 'em_sindicancia', 'cancelado'],
+  aguardando_parecer: ['aprovado', 'negado', 'em_sindicancia'],
+  
+  // FASE 4: ANÁLISES ESPECIAIS
+  em_sindicancia: ['em_pericia', 'em_analise', 'aprovado', 'negado', 'suspenso', 'cancelado'],
+  em_pericia: ['em_sindicancia', 'aprovado', 'negado'],
+  analise_interna: ['em_analise', 'aprovado', 'negado'],
+  suspenso: ['em_analise', 'em_sindicancia', 'cancelado'],
+  
+  // FASE 5: DECISÃO
+  aprovado: ['em_regulacao', 'em_recuperacao', 'aguardando_pagamento'], // Recuperação para Roubo/Furto
+  negado: ['encerrado'],
+  
+  // FASE 6: EXECUÇÃO (REPAROS)
+  em_regulacao: ['aguardando_termo', 'aguardando_cota', 'em_reparo', 'aguardando_pagamento'], 
+  aguardando_termo: ['aguardando_cota', 'cancelado'],
+  aguardando_cota: ['em_reparo', 'cancelado'],
+  em_reparo: ['em_garantia', 'pago', 'encerrado'],
+  em_garantia: ['encerrado'],
+  
+  // FASE 6B: RECUPERAÇÃO (ROUBO/FURTO)
+  em_recuperacao: ['em_regulacao', 'aguardando_pagamento', 'encerrado'], // Recuperado = vai para regulação ou encerra
+  
+  // FASE 7: PAGAMENTO
+  aguardando_pagamento: ['pago', 'indenizado'],
+  pago: ['encerrado'],
+  indenizado: ['encerrado'],
+  
+  // FINAIS
+  encerrado: [],
+  cancelado: [],
+};
+
+// ============================================
+// PRAZOS PADRÃO (em dias)
+// ============================================
+
+export const PRAZOS_SINISTRO = {
+  comunicado_padrao: 30,
+  comunicado_roubo_furto: 3,
+  documentos_pendentes: 30,
+  cota_pendente: 30,
+  termo_pendente: 30,
+  sindicancia: 30,
+  reparo_oficina: 90, // dias úteis
+  garantia: 90,
+  indenizacao: 60, // dias úteis após docs completos
+  carencia_vidros: 120,
+};
+
+// ============================================
+// VALORES PADRÃO
+// ============================================
+
+export const VALORES_SINISTRO = {
+  cota_participacao_padrao: 750.00,
+  percentual_perda_total: 75, // >= 75% FIPE = Perda Total
 };
 
 // ============================================
@@ -99,6 +302,7 @@ export interface Sinistro {
   id: string;
   associado_id: string;
   veiculo_id: string;
+  contrato_id?: string;
   protocolo: string;
   tipo: TipoSinistro;
   status: StatusSinistro;
@@ -108,13 +312,88 @@ export interface Sinistro {
   cidade_ocorrencia: string;
   estado_ocorrencia: string;
   descricao: string;
+  
+  // Condutor
+  condutor_nome?: string;
+  condutor_cnh?: string;
+  condutor_relacao?: CondutorRelacao;
+  condutor_embriaguez?: boolean;
+  condutor_cnh_vencida?: boolean;
+  
+  // Local e documentação
+  tipo_local_evento?: TipoLocalEvento;
+  houve_vitima?: boolean;
+  
+  // B.O.
   bo_numero?: string;
   bo_arquivo_url?: string;
+  
+  // Valores
   valor_fipe_momento?: number;
+  valor_orcamento?: number;
   valor_aprovado?: number;
   valor_participacao?: number;
   valor_pago?: number;
+  valor_indenizacao?: number;
+  
+  // Cota
+  valor_cota_participacao?: number;
+  cota_paga?: boolean;
+  cota_paga_em?: string;
+  cobranca_cota_id?: string;
+  
+  // Termo
+  termo_anuencia_assinado?: boolean;
+  termo_anuencia_url?: string;
+  termo_anuencia_assinado_em?: string;
+  
+  // Classificação
+  tipo_dano?: TipoDano;
+  percentual_fipe?: number;
+  
+  // Recuperação (Roubo/Furto)
+  veiculo_recuperado?: boolean;
+  veiculo_recuperado_em?: string;
+  veiculo_recuperado_local?: string;
+  veiculo_recuperado_estado?: VeiculoRecuperadoEstado;
+  
+  // Garantia
+  data_garantia_inicio?: string;
+  data_garantia_fim?: string;
+  garantia_observacoes?: string;
+  
+  // Sindicância/Perícia
+  sindicante_id?: string;
+  perito_id?: string;
+  resultado_sindicancia?: ResultadoSindicancia;
+  resultado_pericia?: string;
+  sindicancia_prazo_fim?: string;
+  motivo_analise_interna?: string;
+  motivo_suspensao?: string;
+  
+  // Negação
+  motivo_negacao?: MotivoNegacao;
+  justificativa_negacao?: string;
+  parecer?: string;
+  
+  // Prazos
+  prazo_comunicado_dias?: number;
+  data_prazo_documentos?: string;
+  data_prazo_cota?: string;
+  data_prazo_termo?: string;
+  
+  // Vínculos
   analista_id?: string;
+  oficina_id?: string;
+  ordem_servico_id?: string;
+  
+  // Flags
+  alerta_recem_ativado?: boolean;
+  
+  // Coordenadas
+  latitude_informada?: number;
+  longitude_informada?: number;
+  
   canal: CanalAbertura;
   created_at: string;
   updated_at: string;
@@ -126,7 +405,20 @@ export interface SinistroComRelacoes extends Sinistro {
     nome: string;
     cpf: string;
     telefone: string;
+    whatsapp?: string;
     email: string;
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+    data_adesao?: string;
+    data_ativacao?: string;
+    status?: string;
+    plano?: {
+      id: string;
+      nome: string;
+    };
   };
   veiculo?: {
     id: string;
@@ -135,8 +427,21 @@ export interface SinistroComRelacoes extends Sinistro {
     modelo: string;
     ano_modelo: number;
     cor: string;
+    chassi?: string;
+    renavam?: string;
+    valor_fipe?: number;
+    codigo_fipe?: string;
+    data_ativacao?: string;
   };
   analista?: {
+    id: string;
+    nome: string;
+  };
+  sindicante?: {
+    id: string;
+    nome: string;
+  };
+  perito?: {
     id: string;
     nome: string;
   };
@@ -152,10 +457,13 @@ export interface SinistroComRelacoes extends Sinistro {
 export interface SinistroDocumento {
   id: string;
   sinistro_id: string;
-  tipo: 'bo' | 'cnh' | 'crlv' | 'laudo' | 'orcamento' | 'nf' | 'outros';
+  tipo: 'bo' | 'cnh' | 'crlv' | 'laudo' | 'orcamento' | 'nf' | 'cst' | 'ebrat' | 'lpst' | 'raph' | 'bam' | 'termo' | 'outros';
   nome: string;
+  nome_arquivo?: string;
   url: string;
+  status?: string;
   uploaded_at: string;
+  created_at?: string;
 }
 
 export interface SinistroFoto {
@@ -195,6 +503,7 @@ export interface SinistroFilters {
   data_fim?: string;
   canal?: CanalAbertura;
   sem_analista?: boolean;
+  tipo_dano?: TipoDano;
 }
 
 // ============================================
@@ -211,6 +520,11 @@ export interface AbrirSinistroPayload {
   cidade_ocorrencia: string;
   estado_ocorrencia: string;
   descricao: string;
+  tipo_local_evento?: TipoLocalEvento;
+  houve_vitima?: boolean;
+  condutor_nome?: string;
+  condutor_cnh?: string;
+  condutor_relacao?: CondutorRelacao;
   bo_numero?: string;
   canal: CanalAbertura;
 }
@@ -224,8 +538,11 @@ export interface AtualizarSinistroPayload {
   descricao?: string;
   bo_numero?: string;
   valor_fipe_momento?: number;
+  valor_orcamento?: number;
   valor_aprovado?: number;
   valor_participacao?: number;
+  tipo_dano?: TipoDano;
+  percentual_fipe?: number;
 }
 
 export interface MudarStatusSinistroPayload {
@@ -237,6 +554,20 @@ export interface MudarStatusSinistroPayload {
 export interface AtribuirAnalistaPayload {
   sinistro_id: string;
   analista_id: string;
+}
+
+export interface EncaminharSindicanciaPayload {
+  sinistro_id: string;
+  sindicante_id: string;
+  motivo: string;
+}
+
+export interface RegistrarRecuperacaoPayload {
+  sinistro_id: string;
+  recuperado: boolean;
+  local?: string;
+  estado?: VeiculoRecuperadoEstado;
+  observacao?: string;
 }
 
 // ============================================
@@ -251,6 +582,8 @@ export interface ContagemSinistros {
   aprovados: number;
   negados: number;
   em_reparo: number;
+  em_sindicancia: number;
+  em_recuperacao: number;
   encerrados_mes: number;
 }
 
@@ -266,20 +599,34 @@ export interface EstatisticasSinistros {
 }
 
 // ============================================
-// WORKFLOW
+// HELPERS
 // ============================================
 
-export const WORKFLOW_SINISTRO: Record<StatusSinistro, StatusSinistro[]> = {
-  comunicado: ['em_analise', 'em_sindicancia', 'cancelado'],
-  em_analise: ['documentacao_pendente', 'aprovado', 'negado', 'em_sindicancia', 'cancelado'],
-  documentacao_pendente: ['em_analise', 'em_sindicancia', 'cancelado'],
-  aprovado: ['em_regulacao', 'em_reparo', 'aguardando_pagamento'],
-  negado: ['encerrado'],
-  em_regulacao: ['em_reparo', 'aguardando_pagamento'],
-  em_reparo: ['aguardando_pagamento'],
-  aguardando_pagamento: ['pago'],
-  pago: ['encerrado'],
-  encerrado: [],
-  cancelado: [],
-  em_sindicancia: ['em_analise', 'aprovado', 'negado', 'cancelado'],
-};
+export function isRouboFurto(tipo: TipoSinistro): boolean {
+  return tipo === 'roubo' || tipo === 'furto';
+}
+
+export function isPerdaTotal(percentual: number): boolean {
+  return percentual >= VALORES_SINISTRO.percentual_perda_total;
+}
+
+export function calcularPercentualFipe(valorOrcamento: number, valorFipe: number): number {
+  if (!valorFipe || valorFipe <= 0) return 0;
+  return Math.round((valorOrcamento / valorFipe) * 100 * 100) / 100;
+}
+
+export function getStatusesPermitidos(statusAtual: StatusSinistro): StatusSinistro[] {
+  return WORKFLOW_SINISTRO[statusAtual] || [];
+}
+
+export function getPrazoComunicado(tipo: TipoSinistro): number {
+  return isRouboFurto(tipo) 
+    ? PRAZOS_SINISTRO.comunicado_roubo_furto 
+    : PRAZOS_SINISTRO.comunicado_padrao;
+}
+
+export function getDocumentosNecessarios(tipoLocal: TipoLocalEvento, houveVitima: boolean): string[] {
+  const docs = DOCUMENTOS_POR_LOCAL[tipoLocal];
+  if (!docs) return [];
+  return houveVitima ? docs.com_vitima : docs.sem_vitima;
+}

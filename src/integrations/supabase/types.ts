@@ -14716,33 +14716,71 @@ export type Database = {
           canal: string
           chamado_origem_id: string | null
           cidade_ocorrencia: string | null
+          cobranca_cota_id: string | null
+          condutor_cnh: string | null
+          condutor_cnh_vencida: boolean | null
+          condutor_embriaguez: boolean | null
+          condutor_nome: string | null
+          condutor_relacao: string | null
+          cota_paga: boolean | null
+          cota_paga_em: string | null
           created_at: string
+          data_garantia_fim: string | null
+          data_garantia_inicio: string | null
           data_ocorrencia: string
           data_parecer: string | null
+          data_prazo_cota: string | null
+          data_prazo_documentos: string | null
+          data_prazo_termo: string | null
           descricao: string | null
           estado_ocorrencia: string | null
+          garantia_observacoes: string | null
+          houve_vitima: boolean | null
           id: string
+          justificativa_negacao: string | null
           latitude_informada: number | null
           local_descricao: string | null
           local_ocorrencia: string | null
           longitude_informada: number | null
+          motivo_analise_interna: string | null
+          motivo_negacao: string | null
+          motivo_suspensao: string | null
+          oficina_id: string | null
+          ordem_servico_id: string | null
           parecer: string | null
+          percentual_fipe: number | null
+          perito_id: string | null
+          prazo_comunicado_dias: number | null
           protocolo: string
           rastreador_lat_momento: number | null
           rastreador_lng_momento: number | null
           rastreador_posicao_capturada_em: string | null
+          resultado_pericia: string | null
+          resultado_sindicancia: string | null
+          sindicancia_prazo_fim: string | null
+          sindicante_id: string | null
           snapshot_salvo_em: string | null
           snapshot_salvo_por: string | null
           snapshot_trajeto_json: Json | null
           status: Database["public"]["Enums"]["status_sinistro"]
+          termo_anuencia_assinado: boolean | null
+          termo_anuencia_assinado_em: string | null
+          termo_anuencia_url: string | null
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
           tipo_dano: string | null
+          tipo_local_evento: string | null
           updated_at: string
+          valor_cota_participacao: number | null
           valor_fipe: number | null
           valor_indenizacao: number | null
+          valor_orcamento: number | null
           valor_pago: number | null
           valor_participacao: number | null
           veiculo_id: string
+          veiculo_recuperado: boolean | null
+          veiculo_recuperado_em: string | null
+          veiculo_recuperado_estado: string | null
+          veiculo_recuperado_local: string | null
         }
         Insert: {
           alerta_recem_ativado?: boolean | null
@@ -14756,33 +14794,71 @@ export type Database = {
           canal?: string
           chamado_origem_id?: string | null
           cidade_ocorrencia?: string | null
+          cobranca_cota_id?: string | null
+          condutor_cnh?: string | null
+          condutor_cnh_vencida?: boolean | null
+          condutor_embriaguez?: boolean | null
+          condutor_nome?: string | null
+          condutor_relacao?: string | null
+          cota_paga?: boolean | null
+          cota_paga_em?: string | null
           created_at?: string
+          data_garantia_fim?: string | null
+          data_garantia_inicio?: string | null
           data_ocorrencia: string
           data_parecer?: string | null
+          data_prazo_cota?: string | null
+          data_prazo_documentos?: string | null
+          data_prazo_termo?: string | null
           descricao?: string | null
           estado_ocorrencia?: string | null
+          garantia_observacoes?: string | null
+          houve_vitima?: boolean | null
           id?: string
+          justificativa_negacao?: string | null
           latitude_informada?: number | null
           local_descricao?: string | null
           local_ocorrencia?: string | null
           longitude_informada?: number | null
+          motivo_analise_interna?: string | null
+          motivo_negacao?: string | null
+          motivo_suspensao?: string | null
+          oficina_id?: string | null
+          ordem_servico_id?: string | null
           parecer?: string | null
+          percentual_fipe?: number | null
+          perito_id?: string | null
+          prazo_comunicado_dias?: number | null
           protocolo: string
           rastreador_lat_momento?: number | null
           rastreador_lng_momento?: number | null
           rastreador_posicao_capturada_em?: string | null
+          resultado_pericia?: string | null
+          resultado_sindicancia?: string | null
+          sindicancia_prazo_fim?: string | null
+          sindicante_id?: string | null
           snapshot_salvo_em?: string | null
           snapshot_salvo_por?: string | null
           snapshot_trajeto_json?: Json | null
           status?: Database["public"]["Enums"]["status_sinistro"]
+          termo_anuencia_assinado?: boolean | null
+          termo_anuencia_assinado_em?: string | null
+          termo_anuencia_url?: string | null
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
           tipo_dano?: string | null
+          tipo_local_evento?: string | null
           updated_at?: string
+          valor_cota_participacao?: number | null
           valor_fipe?: number | null
           valor_indenizacao?: number | null
+          valor_orcamento?: number | null
           valor_pago?: number | null
           valor_participacao?: number | null
           veiculo_id: string
+          veiculo_recuperado?: boolean | null
+          veiculo_recuperado_em?: string | null
+          veiculo_recuperado_estado?: string | null
+          veiculo_recuperado_local?: string | null
         }
         Update: {
           alerta_recem_ativado?: boolean | null
@@ -14796,33 +14872,71 @@ export type Database = {
           canal?: string
           chamado_origem_id?: string | null
           cidade_ocorrencia?: string | null
+          cobranca_cota_id?: string | null
+          condutor_cnh?: string | null
+          condutor_cnh_vencida?: boolean | null
+          condutor_embriaguez?: boolean | null
+          condutor_nome?: string | null
+          condutor_relacao?: string | null
+          cota_paga?: boolean | null
+          cota_paga_em?: string | null
           created_at?: string
+          data_garantia_fim?: string | null
+          data_garantia_inicio?: string | null
           data_ocorrencia?: string
           data_parecer?: string | null
+          data_prazo_cota?: string | null
+          data_prazo_documentos?: string | null
+          data_prazo_termo?: string | null
           descricao?: string | null
           estado_ocorrencia?: string | null
+          garantia_observacoes?: string | null
+          houve_vitima?: boolean | null
           id?: string
+          justificativa_negacao?: string | null
           latitude_informada?: number | null
           local_descricao?: string | null
           local_ocorrencia?: string | null
           longitude_informada?: number | null
+          motivo_analise_interna?: string | null
+          motivo_negacao?: string | null
+          motivo_suspensao?: string | null
+          oficina_id?: string | null
+          ordem_servico_id?: string | null
           parecer?: string | null
+          percentual_fipe?: number | null
+          perito_id?: string | null
+          prazo_comunicado_dias?: number | null
           protocolo?: string
           rastreador_lat_momento?: number | null
           rastreador_lng_momento?: number | null
           rastreador_posicao_capturada_em?: string | null
+          resultado_pericia?: string | null
+          resultado_sindicancia?: string | null
+          sindicancia_prazo_fim?: string | null
+          sindicante_id?: string | null
           snapshot_salvo_em?: string | null
           snapshot_salvo_por?: string | null
           snapshot_trajeto_json?: Json | null
           status?: Database["public"]["Enums"]["status_sinistro"]
+          termo_anuencia_assinado?: boolean | null
+          termo_anuencia_assinado_em?: string | null
+          termo_anuencia_url?: string | null
           tipo?: Database["public"]["Enums"]["tipo_sinistro"]
           tipo_dano?: string | null
+          tipo_local_evento?: string | null
           updated_at?: string
+          valor_cota_participacao?: number | null
           valor_fipe?: number | null
           valor_indenizacao?: number | null
+          valor_orcamento?: number | null
           valor_pago?: number | null
           valor_participacao?: number | null
           veiculo_id?: string
+          veiculo_recuperado?: boolean | null
+          veiculo_recuperado_em?: string | null
+          veiculo_recuperado_estado?: string | null
+          veiculo_recuperado_local?: string | null
         }
         Relationships: [
           {
@@ -14887,6 +15001,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "chamados_assistencia"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_perito_id_fkey"
+            columns: ["perito_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_perito_id_fkey"
+            columns: ["perito_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sinistros_sindicante_id_fkey"
+            columns: ["sindicante_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_sindicante_id_fkey"
+            columns: ["sindicante_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
           },
           {
             foreignKeyName: "sinistros_snapshot_salvo_por_fkey"
@@ -17591,6 +17733,13 @@ export type Database = {
         | "pago"
         | "encerrado"
         | "em_sindicancia"
+        | "em_pericia"
+        | "suspenso"
+        | "analise_interna"
+        | "aguardando_cota"
+        | "aguardando_termo"
+        | "em_garantia"
+        | "em_recuperacao"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -17948,6 +18097,13 @@ export const Constants = {
         "pago",
         "encerrado",
         "em_sindicancia",
+        "em_pericia",
+        "suspenso",
+        "analise_interna",
+        "aguardando_cota",
+        "aguardando_termo",
+        "em_garantia",
+        "em_recuperacao",
       ],
       status_veiculo: [
         "em_analise",
