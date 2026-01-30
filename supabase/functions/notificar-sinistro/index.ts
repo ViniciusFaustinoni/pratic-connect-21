@@ -5,11 +5,64 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Labels de tipo de sinistro
+const TIPO_LABELS: Record<string, string> = {
+  colisao: 'Colisão',
+  roubo: 'Roubo',
+  furto: 'Furto',
+  incendio: 'Incêndio',
+  fenomeno_natural: 'Fenômeno Natural',
+  vidros: 'Vidros',
+  vandalismo: 'Vandalismo',
+  terceiros: 'Terceiros',
+  outro: 'Outro',
+};
+
 // Templates de mensagem por status - COM SLAs E PRÓXIMOS PASSOS
 const STATUS_TEMPLATES: Record<string, { titulo: string; mensagem: (protocolo: string, extras?: any) => string }> = {
   comunicado: {
     titulo: '✅ Sinistro Registrado',
-    mensagem: (protocolo) => `Seu sinistro foi registrado com sucesso!\n\n📋 *Protocolo:* ${protocolo}\n\n⏰ *Próximos passos:*\n1. Analisaremos em até 24h úteis\n2. Se necessário, solicitaremos documentos\n3. Acompanhe pelo app ou aqui no WhatsApp`,
+    mensagem: (protocolo, extras) => {
+      const tipoLabel = extras?.tipo_label || 'Sinistro';
+      const veiculo = extras?.veiculo;
+      const dataEvento = extras?.data_ocorrencia 
+        ? new Date(extras.data_ocorrencia).toLocaleDateString('pt-BR') 
+        : '';
+      const local = [extras?.cidade_ocorrencia, extras?.estado_ocorrencia]
+        .filter(Boolean).join('/') || 'Local não informado';
+      
+      let msg = `Olá! Recebemos sua comunicação de sinistro e nossa equipe já está analisando.
+
+📋 *Protocolo:* ${protocolo}
+📌 *Tipo:* ${tipoLabel}`;
+
+      if (veiculo) {
+        msg += `
+
+🚗 *Veículo:*
+${veiculo.placa} - ${veiculo.marca} ${veiculo.modelo}`;
+      }
+      
+      msg += `
+
+📍 *Local:* ${local}`;
+      
+      if (dataEvento) {
+        msg += `
+📅 *Data do evento:* ${dataEvento}`;
+      }
+      
+      msg += `
+
+⏰ *Próximos passos:*
+1. Analisaremos em até 24h úteis
+2. Se necessário, solicitaremos documentos
+3. Acompanhe pelo app ou aqui no WhatsApp
+
+Em breve um analista entrará em contato. Fique tranquilo! 💙`;
+      
+      return msg;
+    },
   },
   documentacao_pendente: {
     titulo: '📄 Documentos Pendentes',
@@ -98,7 +151,7 @@ Deno.serve(async (req) => {
       throw new Error('sinistro_id e status são obrigatórios');
     }
 
-    // Buscar dados do sinistro com associado
+    // Buscar dados do sinistro com associado e veículo
     const { data: sinistro, error: sinistroError } = await supabase
       .from('sinistros')
       .select(`
@@ -109,6 +162,10 @@ Deno.serve(async (req) => {
         valor_indenizacao,
         tipo_dano,
         parecer,
+        data_ocorrencia,
+        local_ocorrencia,
+        cidade_ocorrencia,
+        estado_ocorrencia,
         associado_id,
         associados:associado_id (
           id,
@@ -117,6 +174,13 @@ Deno.serve(async (req) => {
           email,
           telefone,
           whatsapp
+        ),
+        veiculos:veiculo_id (
+          id,
+          placa,
+          marca,
+          modelo,
+          ano_modelo
         )
       `)
       .eq('id', sinistro_id)
@@ -138,11 +202,19 @@ Deno.serve(async (req) => {
     }
 
     // Preparar dados extras para templates
+    const veiculo = sinistro.veiculos as any;
     const extrasParaTemplate = {
       ...dados_extras,
       valor_indenizacao: sinistro.valor_indenizacao,
       tipo_dano: sinistro.tipo_dano,
       parecer: sinistro.parecer,
+      // Dados adicionais para template comunicado
+      tipo_label: TIPO_LABELS[sinistro.tipo] || sinistro.tipo,
+      veiculo: veiculo,
+      data_ocorrencia: sinistro.data_ocorrencia,
+      local_ocorrencia: sinistro.local_ocorrencia,
+      cidade_ocorrencia: sinistro.cidade_ocorrencia,
+      estado_ocorrencia: sinistro.estado_ocorrencia,
     };
 
     // Obter template de mensagem

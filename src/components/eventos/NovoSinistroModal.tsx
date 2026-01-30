@@ -170,6 +170,20 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         observacao: 'Sinistro registrado via sistema'
       });
       
+      // Notificar associado via WhatsApp/Email/Sistema
+      try {
+        await supabase.functions.invoke('notificar-sinistro', {
+          body: {
+            sinistro_id: sinistro.id,
+            status: 'comunicado',
+          }
+        });
+        console.log('[NovoSinistroModal] Notificação enviada');
+      } catch (notifError) {
+        console.warn('[NovoSinistroModal] Erro ao notificar (não bloqueante):', notifError);
+        // Não bloqueia - sinistro foi criado com sucesso
+      }
+      
       return sinistro;
     },
     onSuccess: (data) => {
