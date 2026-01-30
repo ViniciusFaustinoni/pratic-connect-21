@@ -1,111 +1,126 @@
 
+# Plano: Pular Etapa de Fotos para Sinistros de Roubo/Furto
 
-# Plano: Enviar Notificação WhatsApp ao Aprovar Proposta para Roubo e Furto
+## Problema Identificado
 
-## Problema
+Quando o associado seleciona **Roubo** ou **Furto** no wizard de criação de sinistro, o sistema ainda exibe a etapa 4 "Envie fotos" solicitando fotos dos danos do veículo. Isso não faz sentido porque:
 
-Quando o analista aprova a proposta para "Roubo e Furto", o cliente **não recebe notificação** informando que pode criar sua conta no app. A página de acompanhamento mostra o formulário de criação de conta, mas o cliente não sabe que precisa acessá-la.
-
-## Análise do Fluxo Atual
-
-```text
-Analista aprova         associados.status    Página /acompanhar/:token      Cliente
-  proposta       --->   muda para 'ativo'   ---> mostra "Criar Conta"       não sabe
-                                                                              ↑
-                                            ❌ SEM NOTIFICAÇÃO!              |
-```
+1. O veículo **não está mais** com o associado (foi roubado/furtado)
+2. Não há como fotografar "danos" ou "detalhes do veículo"
+3. O texto "Fotografe os danos e o local da ocorrência" é confuso neste contexto
 
 ## Solução
 
-Adicionar chamada à edge function `notificar-cliente` com um **novo template** que inclua o link de acompanhamento, após a aprovação da proposta.
+Modificar a lógica de navegação do wizard para **pular automaticamente a etapa de fotos** quando o tipo de sinistro for `roubo` ou `furto`:
 
-## Mudanças Necessárias
+```text
+FLUXO ATUAL (6 etapas para todos):
+Tipo → Data/Local → Descrição → Fotos → B.O. → Confirmação
 
-### 1. Edge Function `notificar-cliente/index.ts`
-
-Adicionar novo template `proposta_aprovada_roubo_furto`:
-
-```typescript
-proposta_aprovada_roubo_furto: {
-  titulo: '🎉 Proposta Aprovada!',
-  mensagem: 'Parabéns {nome}! Seu cadastro foi aprovado e a cobertura de Roubo e Furto já está ativa!\n\nAcesse o link abaixo para criar sua conta no app PRATIC:\n🔗 {link_acompanhamento}\n\nApós a instalação do rastreador, sua proteção será completa. Bem-vindo à PRATIC!',
-  emailTemplate: 'generico',
-},
-```
-
-### 2. Hook `usePropostasPendentes.ts`
-
-Na mutation `useAprovarProposta`, após aprovar o associado e criar a instalação (linha ~1470), adicionar chamada de notificação:
-
-```typescript
-// 9. NOTIFICAR CLIENTE VIA WHATSAPP (NOVO)
-// Buscar link_token do contrato para enviar link de acompanhamento
-const { data: contratoComLink } = await supabase
-  .from('contratos')
-  .select('link_token')
-  .eq('id', contratoId)
-  .single();
-
-if (contratoComLink?.link_token) {
-  try {
-    const linkAcompanhamento = `${window.location.origin}/acompanhar/${contratoComLink.link_token}`;
-    
-    await supabase.functions.invoke('notificar-cliente', {
-      body: {
-        tipo: 'proposta_aprovada_roubo_furto',
-        associado_id: associadoId,
-        dados: {
-          link_acompanhamento: linkAcompanhamento,
-        },
-      },
-    });
-    console.log('[useAprovarProposta] Notificação WhatsApp enviada');
-  } catch (notifError) {
-    console.warn('[useAprovarProposta] Erro ao enviar notificação (não crítico):', notifError);
-  }
-}
+FLUXO PROPOSTO:
+- Colisão, Incêndio, etc: Tipo → Data/Local → Descrição → Fotos → B.O. → Confirmação (6 etapas)
+- Roubo/Furto:           Tipo → Data/Local → Descrição → B.O. → Confirmação (5 etapas)
+                                                          ↑
+                                                    Pula etapa de fotos
 ```
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/notificar-cliente/index.ts` | Adicionar template `proposta_aprovada_roubo_furto` |
-| `src/hooks/usePropostasPendentes.ts` | Adicionar chamada à notificação após aprovação |
+| `src/pages/app/NovoSinistro.tsx` | Pular etapa 4 (fotos) para roubo/furto, ajustar navegação e contagem |
+| `src/pages/app/AppSinistroNovo.tsx` | Mesma lógica - pular etapa de fotos para roubo/furto |
 
-## Fluxo Após Correção
+## Detalhamento Técnico
 
+### 1. `NovoSinistro.tsx`
+
+**a) Criar constante para verificar se é roubo/furto:**
+```typescript
+const isRouboOuFurto = tipoSelecionado === 'roubo' || tipoSelecionado === 'furto';
+```
+
+**b) Ajustar o total de etapas dinamicamente:**
+```typescript
+// Total de etapas: 6 normal, 5 para roubo/furto (pula fotos)
+const totalEtapas = isRouboOuFurto ? 5 : 6;
+const progressoPercentual = (etapa / totalEtapas) * 100;
+```
+
+**c) Modificar navegação `avancarEtapa`:**
+```typescript
+const avancarEtapa = () => {
+  if (etapa === totalEtapas) {
+    handleEnviar();
+  } else if (etapa === 3 && isRouboOuFurto) {
+    // Pular etapa 4 (fotos) - ir direto para B.O.
+    setEtapa(5);
+  } else {
+    setEtapa(e => e + 1);
+  }
+};
+```
+
+**d) Modificar navegação `voltarEtapa`:**
+```typescript
+const voltarEtapa = () => {
+  if (etapa === 1) {
+    navigate('/app/sinistros');
+  } else if (etapa === 5 && isRouboOuFurto) {
+    // Ao voltar do B.O., pular fotos - ir para descrição
+    setEtapa(3);
+  } else {
+    setEtapa(e => e - 1);
+  }
+};
+```
+
+**e) Atualizar indicador de progresso no header:**
+```typescript
+<span className="text-sm text-muted-foreground">
+  Etapa {isRouboOuFurto && etapa > 3 ? etapa - 1 : etapa} de {totalEtapas}
+</span>
+```
+
+### 2. `AppSinistroNovo.tsx`
+
+Aplicar a mesma lógica:
+
+**a) Verificar tipo:**
+```typescript
+const isRouboOuFurto = tipoSelecionado === 'roubo' || tipoSelecionado === 'furto';
+```
+
+**b) Ajustar total de etapas:**
+```typescript
+const totalEtapas = isRouboOuFurto ? 4 : 5;
+```
+
+**c) Modificar navegação para pular etapa 4:**
+- Se etapa 3 → avançar → pular para etapa 5 (confirmação)
+- Se etapa 5 → voltar → pular para etapa 3 (descrição)
+
+## Comportamento Esperado Após Mudança
+
+**Para Roubo/Furto:**
 ```text
-Analista aprova       associados.status     notificar-cliente       Cliente recebe
-  proposta     --->  muda para 'ativo' ---> envia WhatsApp    ---> "Acesse o link
-                                            com link                para criar conta"
-                                               |
-                                               v
-                                         Página /acompanhar/:token
-                                         mostra formulário
-                                         "Criar sua Conta"
+Etapa 1: Tipo de sinistro (seleciona Roubo)
+Etapa 2: Quando e onde? (data/local)
+Etapa 3: Descrição
+Etapa 4: Boletim de Ocorrência (obrigatório) ← vai direto para cá
+Etapa 5: Confirmação
 ```
 
-## Mensagem que o Cliente Receberá
-
+**Para outros tipos (Colisão, Incêndio, etc):**
+```text
+Etapa 1: Tipo de sinistro
+Etapa 2: Quando e onde?
+Etapa 3: Descrição
+Etapa 4: Fotos ← continua exibindo
+Etapa 5: Boletim de Ocorrência
+Etapa 6: Confirmação
 ```
-🎉 Proposta Aprovada!
-
-Parabéns Marcus! Seu cadastro foi aprovado e a cobertura de Roubo e Furto já está ativa!
-
-Acesse o link abaixo para criar sua conta no app PRATIC:
-🔗 https://pratic-connect-21.lovable.app/acompanhar/abc123...
-
-Após a instalação do rastreador, sua proteção será completa. Bem-vindo à PRATIC!
-```
-
-## Considerações Técnicas
-
-1. **Idempotência**: Se a proposta já foi aprovada (`jaAprovado: true`), a notificação **não** será enviada novamente
-2. **Fallback**: Se a notificação falhar, a aprovação continua normalmente (não bloqueia o processo)
-3. **Link Token**: Usa o `link_token` do contrato para gerar o link de acompanhamento correto
 
 ## Tempo Estimado
 
-~10 minutos
-
+~15 minutos
