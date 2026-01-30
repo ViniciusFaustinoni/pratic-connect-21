@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, ClipboardList, Map, User, LogOut, Wrench } from 'lucide-react';
+import { Home, ClipboardList, Map, User, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { useTarefaAtual } from '@/hooks/useTarefaAtual';
 import { toast } from 'sonner';
 import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptProfissional';
 import { PushNotificationBanner } from './PushNotificationBanner';
+import logoPratic from '@/assets/pratic-logo.png';
 
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/instalador' },
@@ -141,11 +142,9 @@ export function InstaladorLayout() {
           {/* Header */}
           <header className="sticky top-0 z-50 bg-slate-800 shadow-sm border-b border-slate-700">
             <div className="flex items-center justify-between px-4 py-3">
-              {/* Logo + Nome */}
+              {/* Logo + Status */}
               <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600 text-white">
-                  <Wrench className="h-4 w-4" />
-                </div>
+                <img src={logoPratic} alt="PRATIC" className="h-9 w-auto" />
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold text-white">
                     {getPrimeiroNome()}
