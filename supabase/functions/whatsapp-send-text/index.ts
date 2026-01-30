@@ -65,6 +65,17 @@ serve(async (req) => {
       );
     }
 
+    // PRIORIZAR URL do secret sobre a URL do banco
+    const apiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+    if (!apiUrl) {
+      return new Response(
+        JSON.stringify({ success: false, error: "URL da Evolution API não configurada" }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    console.log(`[whatsapp-send-text] Usando API URL: ${apiUrl}`);
+
     // Formatar telefone: remover caracteres especiais E garantir prefixo 55
     let telefoneFormatado = telefone.replace(/\D/g, "");
     
@@ -97,7 +108,7 @@ serve(async (req) => {
     console.log(`[whatsapp-send-text] Enviando para ${telefoneFormatado} via ${instancia.instance_name}`);
 
     // Enviar mensagem via Evolution API
-    const response = await fetch(`${instancia.api_url}/message/sendText/${instancia.instance_name}`, {
+    const response = await fetch(`${apiUrl}/message/sendText/${instancia.instance_name}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
