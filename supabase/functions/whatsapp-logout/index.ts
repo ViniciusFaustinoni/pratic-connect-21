@@ -35,9 +35,16 @@ serve(async (req) => {
       throw new Error('EVOLUTION_API_KEY não configurada');
     }
 
+    // PRIORIZAR URL do secret sobre a URL do banco
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+    const apiUrl = evolutionUrl || instancia.api_url;
+    if (!apiUrl) {
+      throw new Error('URL da Evolution API não configurada');
+    }
+
     // Desconectar na Evolution API
     const response = await fetch(
-      `${instancia.api_url}/instance/logout/${instancia.instance_name}`,
+      `${apiUrl}/instance/logout/${instancia.instance_name}`,
       {
         method: 'DELETE',
         headers: { 'apikey': apiKey }

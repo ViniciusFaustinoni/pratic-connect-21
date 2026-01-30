@@ -44,26 +44,35 @@ serve(async (req) => {
       throw new Error('EVOLUTION_API_KEY não configurada');
     }
 
-    // Configurar webhook na Evolution API
+    // PRIORIZAR URL do secret sobre a URL do banco
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+    const apiUrl = evolutionUrl || instancia.api_url;
+    if (!apiUrl) {
+      throw new Error('URL da Evolution API não configurada');
+    }
+
+    // Configurar webhook na Evolution API - usando formato v2.3 com objeto webhook aninhado
     const webhookPayload = {
-      url: WEBHOOK_URL,
-      enabled: true,
-      webhook_by_events: false,
-      webhook_base64: false,
-      events: [
-        'MESSAGES_UPSERT',
-        'MESSAGES_UPDATE',
-        'CONNECTION_UPDATE'
-      ]
+      webhook: {
+        url: WEBHOOK_URL,
+        enabled: true,
+        byEvents: false,
+        base64: false,
+        events: [
+          'MESSAGES_UPSERT',
+          'MESSAGES_UPDATE',
+          'CONNECTION_UPDATE'
+        ]
+      }
     };
 
     console.log('[whatsapp-set-webhook] Enviando configuração para Evolution API:', {
-      url: `${instancia.api_url}/webhook/set/${instancia.instance_name}`,
+      url: `${apiUrl}/webhook/set/${instancia.instance_name}`,
       payload: webhookPayload
     });
 
     const response = await fetch(
-      `${instancia.api_url}/webhook/set/${instancia.instance_name}`,
+      `${apiUrl}/webhook/set/${instancia.instance_name}`,
       {
         method: 'POST',
         headers: {

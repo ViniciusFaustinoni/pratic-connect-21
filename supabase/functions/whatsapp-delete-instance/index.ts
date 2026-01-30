@@ -36,11 +36,18 @@ serve(async (req) => {
       throw new Error('EVOLUTION_API_KEY não configurada');
     }
 
-    console.log('[whatsapp-delete-instance] Deletando instância:', instancia.instance_name);
+    // PRIORIZAR URL do secret sobre a URL do banco
+    const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
+    const apiUrl = evolutionUrl || instancia.api_url;
+    if (!apiUrl) {
+      throw new Error('URL da Evolution API não configurada');
+    }
+
+    console.log('[whatsapp-delete-instance] Deletando instância:', instancia.instance_name, 'URL:', apiUrl);
 
     // Primeiro, verificar se a instância existe na Evolution API
     const checkResponse = await fetch(
-      `${instancia.api_url}/instance/fetchInstances`,
+      `${apiUrl}/instance/fetchInstances?instanceName=${instancia.instance_name}`,
       {
         method: 'GET',
         headers: { 'apikey': apiKey }
@@ -51,13 +58,15 @@ serve(async (req) => {
     if (checkResponse.ok) {
       const instances = await checkResponse.json();
       instanceExists = Array.isArray(instances) && 
-        instances.some((i: { name?: string }) => i.name === instancia.instance_name);
+        instances.some((i: { instanceName?: string; name?: string }) => 
+          i.instanceName === instancia.instance_name || i.name === instancia.instance_name
+        );
     }
 
     // Se existe, deletar da Evolution API
     if (instanceExists) {
       const deleteResponse = await fetch(
-        `${instancia.api_url}/instance/delete/${instancia.instance_name}`,
+        `${apiUrl}/instance/delete/${instancia.instance_name}`,
         {
           method: 'DELETE',
           headers: { 'apikey': apiKey }
