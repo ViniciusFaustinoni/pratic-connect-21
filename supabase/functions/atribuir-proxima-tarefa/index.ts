@@ -574,7 +574,20 @@ serve(async (req) => {
         .single();
 
       if (updateError) {
-        console.log(`[atribuir-proxima-tarefa] Serviço ${servico.id} já foi atribuído a outro profissional`);
+        // ✅ CORRIGIDO: Logar erro REAL do banco em vez de assumir concorrência
+        console.error(`[atribuir-proxima-tarefa] ERRO ao atribuir serviço ${servico.id}:`, JSON.stringify({
+          message: updateError.message,
+          code: updateError.code,
+          details: updateError.details,
+          hint: updateError.hint
+        }));
+        
+        // Identificar se é erro de concorrência ou erro técnico
+        if (updateError.code === 'PGRST116' || updateError.message?.includes('0 rows')) {
+          console.log(`[atribuir-proxima-tarefa] Serviço ${servico.id} já foi atribuído a outro profissional (concorrência)`);
+        } else {
+          console.error(`[atribuir-proxima-tarefa] ❌ ERRO TÉCNICO na atribuição: ${updateError.message}`);
+        }
         continue;
       }
 
