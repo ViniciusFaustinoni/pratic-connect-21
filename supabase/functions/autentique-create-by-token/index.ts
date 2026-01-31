@@ -273,27 +273,55 @@ const generateFooter = () => `
 
 // ============= TEMPLATE PADRÃO =============
 
-const generateCoberturasDefault = (data: ContratoTemplateData) => `
+/**
+ * Gera HTML dinâmico com as coberturas do plano
+ */
+const gerarCoberturasHTML = (coberturas: string[] | null | undefined): string => {
+  if (!coberturas || coberturas.length === 0) {
+    // Fallback para coberturas básicas
+    return `
+      <table class="coverage-table">
+        <tr><td><span class="coverage-check">✓</span> Roubo e Furto</td></tr>
+        <tr><td><span class="coverage-check">✓</span> Assistência 24h</td></tr>
+        <tr><td><span class="coverage-check">✓</span> Rastreamento Veicular</td></tr>
+      </table>
+    `;
+  }
+  
+  const rows = coberturas.map(cobertura => 
+    `<tr><td><span class="coverage-check">✓</span> ${cobertura}</td></tr>`
+  ).join('\n      ');
+  
+  return `
+    <table class="coverage-table">
+      ${rows}
+    </table>
+  `;
+};
+
+/**
+ * Formata a cota de participação com percentual e mínimo
+ */
+const formatarCotaParticipacao = (plano: any): string => {
+  const percentual = plano?.cota_participacao;
+  const minimo = plano?.cota_minima;
+  
+  if (percentual && minimo) {
+    return `${percentual}% (mínimo ${formatCurrency(minimo)})`;
+  } else if (percentual) {
+    return `${percentual}%`;
+  }
+  return "Conforme condições do plano contratado";
+};
+
+const generateCoberturasDefault = (data: ContratoTemplateData, plano?: any) => `
   <div class="section">
     <h2>4. COBERTURAS CONTRATADAS - ${data.planoNome.toUpperCase()}</h2>
-    <table class="coverage-table">
-      <tr>
-        <td><span class="coverage-check">✓</span> Roubo e Furto</td>
-        <td>100% Tabela FIPE</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Assistência 24h</td>
-        <td>Guincho conforme plano</td>
-      </tr>
-      <tr>
-        <td><span class="coverage-check">✓</span> Rastreamento Veicular</td>
-        <td>Monitoramento 24h</td>
-      </tr>
-    </table>
+    ${gerarCoberturasHTML(plano?.coberturas)}
     
     <div class="highlight-box">
-      <strong>Franquia:</strong> Conforme condições do plano contratado<br>
-      <strong>Carência:</strong> Conforme condições do plano contratado
+      <strong>Cota de Participação:</strong> ${formatarCotaParticipacao(plano)}<br>
+      <strong>Carência:</strong> ${plano?.carencia || "90 dias após instalação do rastreador"}
     </div>
   </div>
 `;
@@ -325,7 +353,7 @@ const generateTermosGerais = (data: ContratoTemplateData) => `
   </div>
 `;
 
-function generateTemplateDefault(data: ContratoTemplateData): string {
+function generateTemplateDefault(data: ContratoTemplateData, plano?: any): string {
   return `
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -340,7 +368,7 @@ function generateTemplateDefault(data: ContratoTemplateData): string {
       ${generateDadosContratante(data)}
       ${generateDadosVeiculo(data)}
       ${generateValoresContrato(data)}
-      ${generateCoberturasDefault(data)}
+      ${generateCoberturasDefault(data, plano)}
       ${generateTermosGerais(data)}
       ${generateAssinatura(data)}
       ${generateFooter()}
@@ -488,8 +516,8 @@ serve(async (req) => {
       valorFipe: contrato.leads?.veiculo_fipe,
     };
 
-    // Gerar HTML do contrato
-    const contratoHTML = generateTemplateDefault(templateData);
+    // Gerar HTML do contrato - passar plano para gerar coberturas dinâmicas
+    const contratoHTML = generateTemplateDefault(templateData, contrato.planos);
 
     console.log('[autentique-create-by-token] HTML gerado, tamanho:', contratoHTML.length, 'bytes');
 
