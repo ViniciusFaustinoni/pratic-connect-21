@@ -1,227 +1,92 @@
 
+# Correção de Bugs: Sobreposição do Header e Edição de Propostas Finalizadas
 
-# Melhoria: Compartilhamento de Planos via WhatsApp com Benefícios Estruturados
+## Problemas Identificados
 
-## Resumo do Problema
+### 1. Menu Superior se Sobrepõe ao Drawer
+O header do painel administrativo usa `z-index: 1001` (`z-[1001]`), enquanto o componente Sheet (drawer) usa `z-index: 50` (`z-50`). Isso causa a sobreposição visível na imagem, onde o header cobre o topo do drawer quando ele é aberto.
 
-Atualmente, ao clicar em **"Copiar para WhatsApp"**, a mensagem gerada não apresenta os benefícios de forma organizada por categoria. O sistema envia uma lista simples de coberturas para a IA gerar a mensagem, mas não há estruturação por tipo (Coberturas, Assistência 24h, Extras).
+### 2. Impossibilidade de Editar Dados Após Finalização
+O `ContratoDetailDrawer` atualmente apenas **exibe** dados - não possui funcionalidade de edição. Após a proposta ser enviada/assinada, não há como corrigir dados incorretos de cliente ou veículo.
 
-## Análise Técnica
+## Solução
 
-### Fluxo Atual
+### Parte 1: Corrigir Sobreposição do Header
+
+Aumentar o `z-index` do Sheet no arquivo `src/components/ui/sheet.tsx` para garantir que ele fique acima do header quando aberto.
+
+**Arquivo:** `src/components/ui/sheet.tsx`
+
 ```text
-CotacaoCard → copiarParaWhatsApp() → Edge Function gerar-mensagem-whatsapp → IA Gemini → Mensagem
+ANTES:
+- SheetOverlay: z-50
+- SheetContent: z-50
+
+DEPOIS:
+- SheetOverlay: z-[1100]
+- SheetContent: z-[1100]
 ```
 
-### Dados Atuais Enviados à Edge Function
-```javascript
-planos: [{
-  nome: "SELECT PREMIUM",
-  valorMensal: 166.00,
-  coberturas: ["Roubo e Furto", "Colisão", ...], // Lista simples
-  naoInclui: []
-}]
-```
+### Parte 2: Adicionar Funcionalidade de Edição no Drawer
 
-### Estrutura do Banco de Dados
-O banco já possui categorização de benefícios:
-- `benefits.category = 'cobertura'` → Coberturas Principais
-- `benefits.category = 'assistencia'` → Assistência 24h
-- `benefits.category = 'extra'` → Benefícios Exclusivos
+Implementar modo de edição no `ContratoDetailDrawer` com campos editáveis para:
 
-### Problema Identificado
-A tabela `planos` armazena coberturas como um array simples de strings, sem categoria. O sistema usa essa tabela para cotações, perdendo a informação de categorização disponível na tabela `benefits`.
+**Dados do Cliente:**
+- Nome
+- Telefone
+- Email
+- CPF
 
-## Solução Proposta
+**Dados do Veículo:**
+- Marca
+- Modelo
+- Ano
+- Placa
+- Cor
+- Renavam
 
-### Parte 1: Enriquecer Dados Antes de Enviar ao WhatsApp
-
-Modificar a função `copiarParaWhatsApp` em `Cotacoes.tsx` para:
-1. Categorizar as coberturas automaticamente usando um mapeamento
-2. Enviar os benefícios organizados por categoria para a Edge Function
-
-### Parte 2: Atualizar Edge Function para Benefícios Categorizados
-
-Modificar `gerar-mensagem-whatsapp` para:
-1. Aceitar benefícios estruturados por categoria
-2. Instruir a IA a apresentar cada categoria separadamente na mensagem
-
-### Parte 3: Atualizar Fallback Local
-
-Garantir que a função `gerarMensagemFallback` também apresente benefícios por categoria.
+**Regras de Negócio:**
+- Apenas usuários com permissão (Diretor, Desenvolvedor, Admin) podem editar
+- Contratos já ativos ou cancelados podem ter apenas correções cadastrais
+- Alterações são registradas no histórico do contrato
 
 ## Detalhamento Técnico
 
-### Arquivo: `src/pages/vendas/Cotacoes.tsx`
+### Arquivo 1: `src/components/ui/sheet.tsx`
 
-Adicionar mapeamento de categorias e reestruturar dados:
-
-```typescript
-// Mapeamento de coberturas para categorias
-const CATEGORIAS_BENEFICIOS: Record<string, string> = {
-  'Roubo e Furto': 'cobertura',
-  'Colisão': 'cobertura',
-  'Perda Total': 'cobertura',
-  'Incêndio': 'cobertura',
-  'Alagamento': 'cobertura',
-  'Chuva de Granizo': 'cobertura',
-  'Danos a Terceiros': 'cobertura',
-  'Danos Terceiros': 'cobertura',
-  'Vidros e Faróis': 'cobertura',
-  'Assistência 24h': 'assistencia',
-  'Rastreador/Monitoramento': 'assistencia',
-  'Reboque': 'assistencia',
-  'Reboque Excedente': 'assistencia',
-  'Kit Gás': 'extra',
-  'Carro Reserva': 'extra',
-  'Clube Gás': 'extra',
-  '100% FIPE APP': 'extra',
-};
-
-// Função para categorizar coberturas
-const categorizarBeneficios = (coberturas: string[]) => {
-  const resultado = {
-    coberturas: [] as string[],
-    assistencia: [] as string[],
-    extras: [] as string[],
-  };
-  
-  coberturas.forEach(cob => {
-    // Buscar categoria pelo mapeamento ou por palavras-chave
-    let categoria = 'coberturas'; // default
-    
-    for (const [nome, cat] of Object.entries(CATEGORIAS_BENEFICIOS)) {
-      if (cob.toLowerCase().includes(nome.toLowerCase())) {
-        categoria = cat === 'cobertura' ? 'coberturas' : 
-                   cat === 'assistencia' ? 'assistencia' : 'extras';
-        break;
-      }
-    }
-    
-    resultado[categoria].push(cob);
-  });
-  
-  return resultado;
-};
-```
-
-### Arquivo: `supabase/functions/gerar-mensagem-whatsapp/index.ts`
-
-Atualizar interface e prompts:
+Alterar o z-index do SheetOverlay e SheetContent:
 
 ```typescript
-interface Plano {
-  nome: string;
-  valorMensal: number;
-  coberturas: string[];
-  beneficiosPorCategoria?: {
-    coberturas: string[];
-    assistencia: string[];
-    extras: string[];
-  };
-  naoInclui?: string[];
-}
+// Linha 22 - SheetOverlay
+"fixed inset-0 z-[1100] bg-black/80..."
 
-// Novo prompt do sistema com instrução de categorização
-const systemPrompt = `...
-ESTRUTURA DE BENEFÍCIOS POR CATEGORIA:
-Para cada plano, organize os benefícios assim:
-🛡️ *Coberturas:* Roubo e Furto, Colisão, Perda Total...
-🚗 *Assistência 24h:* Reboque, Rastreamento...
-✨ *Benefícios Extras:* Carro Reserva, Kit Gás...
-...`;
+// Linha 32 - sheetVariants
+"fixed z-[1100] gap-4 bg-background p-6..."
 ```
 
-### Arquivo: `src/pages/vendas/Cotacoes.tsx` - Função Fallback
+### Arquivo 2: `src/components/contratos/ContratoDetailDrawer.tsx`
 
-Atualizar `gerarMensagemFallback` para usar categorias:
+Adicionar:
+1. Estado `editMode` para alternar entre visualização e edição
+2. Campos de formulário editáveis nas seções Cliente e Veículo
+3. Botão "Editar" no header (visível para usuários com permissão)
+4. Botões "Salvar" e "Cancelar" no modo de edição
+5. Lógica para atualizar dados via `useUpdateContrato`
 
-```typescript
-const gerarMensagemFallback = (...) => {
-  // ... código existente ...
-  
-  planos.forEach((plano) => {
-    const beneficios = categorizarBeneficios(plano.coberturas);
-    
-    if (beneficios.coberturas.length > 0) {
-      mensagem += `🛡️ *Coberturas:*\n`;
-      beneficios.coberturas.forEach(c => mensagem += `✓ ${c}\n`);
-    }
-    
-    if (beneficios.assistencia.length > 0) {
-      mensagem += `\n🚗 *Assistência 24h:*\n`;
-      beneficios.assistencia.forEach(c => mensagem += `✓ ${c}\n`);
-    }
-    
-    if (beneficios.extras.length > 0) {
-      mensagem += `\n✨ *Benefícios Extras:*\n`;
-      beneficios.extras.forEach(c => mensagem += `✓ ${c}\n`);
-    }
-  });
-};
-```
+### Arquivo 3: `src/hooks/useContratos.ts` (se necessário)
+
+Verificar se o hook `useUpdateContrato` suporta todos os campos necessários (já suporta via tipo `ContratoUpdate`).
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/vendas/Cotacoes.tsx` | Adicionar categorização de benefícios e atualizar `copiarParaWhatsApp` e `gerarMensagemFallback` |
-| `supabase/functions/gerar-mensagem-whatsapp/index.ts` | Atualizar interface e prompts para benefícios categorizados |
-
-## Exemplo de Mensagem Gerada
-
-```text
-Olá Marcos! 🚗
-
-Preparamos uma cotação especial para seu *Volkswagen Voyage 2018*.
-
-💰 *Valor FIPE:* R$ 48.336,00
-
-━━━━━━━━━━━━━━━━━━
-📦 *OPÇÃO 1: SELECT EXCLUSIVE APLICATIVO*
-💵 *Mensalidade:* R$ 166,00/mês
-
-🛡️ *Coberturas:*
-✓ Roubo e Furto
-✓ Colisão
-✓ Perda Total
-✓ Incêndio
-✓ Alagamento
-✓ Chuva de Granizo
-✓ Danos a Terceiros R$ 40mil
-
-🚗 *Assistência 24h:*
-✓ Assistência 24h 400km
-✓ Rastreador/Monitoramento
-✓ 1000km Reboque
-
-✨ *Benefícios Extras:*
-✓ Kit Gás
-✓ 100% FIPE APP
-✓ Carro Reserva
-
-━━━━━━━━━━━━━━━━━━
-📦 *OPÇÃO 2: SELECT ONE APLICATIVO*
-💵 *Mensalidade:* R$ 166,00/mês
-
-🛡️ *Coberturas:*
-✓ Roubo e Furto
-...
-
-━━━━━━━━━━━━━━━━━━
-
-📝 *Taxa de Adesão:* R$ 199,90
-⏰ Cotação válida por 7 dias.
-
-🔗 Veja mais detalhes: https://...
-
-Qual opção te interessou mais? 😊
-```
+| `src/components/ui/sheet.tsx` | Aumentar z-index de 50 para 1100 |
+| `src/components/contratos/ContratoDetailDrawer.tsx` | Adicionar modo de edição com formulários inline |
 
 ## Resultado Esperado
 
-1. Todos os planos selecionados aparecem na mensagem
-2. Benefícios organizados por categoria (Coberturas, Assistência, Extras)
-3. Formato visual limpo e fácil de comparar
-4. Mensagem funciona tanto via IA quanto via fallback local
-
+1. O drawer abrirá **acima** do header, sem sobreposição
+2. Usuários autorizados verão um botão "Editar" no drawer
+3. Ao clicar em "Editar", os campos de cliente e veículo se tornam editáveis
+4. Após salvar, as alterações são persistidas e registradas no histórico
