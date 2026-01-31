@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,13 +21,15 @@ import {
   Send,
   FileText,
   ClipboardCheck,
-  Trash2
+  Trash2,
+  ShieldAlert
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AtivacaoContrato } from "@/hooks/useAtivacoes";
 import { AtivacaoStatusBadge, StatusMiniCard } from "./AtivacaoStatusBadge";
+import { BotaoEnviarSGA } from "./BotaoEnviarSGA";
 import { toast } from "sonner";
 
 interface AtivacaoCardNewProps {
@@ -68,6 +71,19 @@ export function AtivacaoCardNew({
   const veiculoMarca = contrato.veiculo_marca || contrato.lead?.veiculo_marca;
   const veiculoModelo = contrato.veiculo_modelo || contrato.lead?.veiculo_modelo;
   const veiculoPlaca = contrato.veiculo_placa || contrato.lead?.veiculo_placa;
+
+  // Lógica para exibir botão SGA
+  const podeEnviarSGA = isAtivado && 
+    contrato.veiculo && 
+    contrato.associado_id &&
+    !contrato.veiculo.sincronizado_hinova;
+
+  // Detectar se é plano apenas roubo/furto (sem colisão)
+  const isRouboFurtoApenas = contrato.plano?.coberturas?.some(
+    c => c.toLowerCase().includes('roubo')
+  ) && !contrato.plano?.coberturas?.some(
+    c => c.toLowerCase().includes('colisão') || c.toLowerCase().includes('colisao')
+  );
 
   // Determinar cor do status
   const getStatusColor = () => {
@@ -276,15 +292,42 @@ export function AtivacaoCardNew({
         )}
 
         {/* Footer com botão de ativar ou status */}
-        <div className="pt-2 border-t">
+        <div className="pt-2 border-t space-y-2">
           {isAtivado ? (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Ativado em:</span>
-              <span className="font-medium text-blue-600">
-                {contrato.data_ativacao 
-                  ? format(new Date(contrato.data_ativacao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                  : '-'}
-              </span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Ativado em:</span>
+                <span className="font-medium text-primary">
+                  {contrato.data_ativacao 
+                    ? format(new Date(contrato.data_ativacao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                    : '-'}
+                </span>
+              </div>
+              
+              {/* Badge de plano Roubo/Furto e botão SGA */}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                {isRouboFurtoApenas && (
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                    <ShieldAlert className="h-3 w-3 mr-1" />
+                    Roubo/Furto
+                  </Badge>
+                )}
+                
+                {/* Botão Enviar para SGA */}
+                {contrato.veiculo && contrato.associado_id && (
+                  <BotaoEnviarSGA
+                    contratoId={contrato.id}
+                    veiculoId={contrato.veiculo.id}
+                    associadoId={contrato.associado_id}
+                    sincronizado={contrato.veiculo.sincronizado_hinova}
+                    statusSGA={contrato.veiculo.status_sga}
+                    codigoHinova={contrato.veiculo.codigo_hinova}
+                    isRouboFurto={isRouboFurtoApenas}
+                    clienteNome={nomeCliente}
+                    veiculoPlaca={veiculoPlaca || undefined}
+                  />
+                )}
+              </div>
             </div>
           ) : requisitos === 2 ? (
             <Button
