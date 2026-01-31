@@ -176,18 +176,11 @@ serve(async (req) => {
     }
   }
 
-  // Headers padrão exigidos pela API Hinova após autenticação.
-  // Existem variações entre ambientes/documentação; para compatibilidade enviamos
-  // o token do usuário em ambos os headers.
-  const buildHinovaAuthHeaders = (tokenUsuario: string) => ({
+  // Headers base para todas as requisições (token_usuario vai no BODY, não no header)
+  const baseHeaders = {
+    'Content-Type': 'application/json',
     'Authorization': `Bearer ${hinovaToken}`,
-    'X-Token-Usuario': tokenUsuario,
-    // variações observadas na prática (gateways/proxies podem mapear headers)
-    token: tokenUsuario,
-    'token_usuario': tokenUsuario,
-    'Token-Usuario': tokenUsuario,
-    TokenUsuario: tokenUsuario,
-  });
+  };
 
   try {
     // Validar credenciais
@@ -375,6 +368,7 @@ serve(async (req) => {
       console.log('[SGA Sync] Cadastrando associado no Hinova...');
       
       const associadoPayload = {
+        token_usuario: tokenUsuario,  // Token vai no BODY conforme documentação Hinova
         nome: associado.nome,
         cpf: cleanCPF(associado.cpf),
         rg: associado.rg || '',
@@ -401,10 +395,7 @@ serve(async (req) => {
         `${hinovaApiUrl}/associado/cadastrar`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...buildHinovaAuthHeaders(tokenUsuario)
-          },
+          headers: baseHeaders,
           body: JSON.stringify(associadoPayload)
         }
       );
@@ -467,6 +458,7 @@ serve(async (req) => {
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
 
     const veiculoPayload = {
+      token_usuario: tokenUsuario,  // Token vai no BODY conforme documentação Hinova
       codigo_associado: codigoAssociadoHinova,
       placa: veiculo.placa || '',
       chassi: veiculo.chassi || '',
@@ -490,10 +482,7 @@ serve(async (req) => {
       `${hinovaApiUrl}/veiculo/cadastrar`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...buildHinovaAuthHeaders(tokenUsuario)
-        },
+        headers: baseHeaders,
         body: JSON.stringify(veiculoPayload)
       }
     );
@@ -567,11 +556,9 @@ serve(async (req) => {
             `${hinovaApiUrl}/veiculo/foto/cadastrar`,
             {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...buildHinovaAuthHeaders(tokenUsuario)
-              },
+              headers: baseHeaders,
               body: JSON.stringify({
+                token_usuario: tokenUsuario,  // Token vai no BODY conforme documentação Hinova
                 codigo_veiculo: codigoVeiculoHinova,
                 foto: fotos
               })
