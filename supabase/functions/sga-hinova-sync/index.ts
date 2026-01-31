@@ -190,13 +190,60 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { veiculo_id, associado_id }: SyncRequest = await req.json();
+    const requestBody = await req.json();
+    const { veiculo_id, associado_id, action } = requestBody as SyncRequest & { action?: string };
 
+    // ========================================
+    // MODO TESTE DE CONEXÃO (apenas autenticação)
+    // ========================================
+    if (action === 'test_connection') {
+      console.log('[SGA Sync] Modo teste de conexão...');
+      
+      const authPayload = { usuario: hinovaUsuario, senha: hinovaSenha };
+      const authResponse = await fetchWithRetry(
+        `${hinovaApiUrl}/usuario/autenticar`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${hinovaToken}`
+          },
+          body: JSON.stringify(authPayload)
+        }
+      );
+
+      const authData: HinovaAuthResponse = await authResponse.json();
+      
+      if (!authResponse.ok || !authData.token_usuario) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Falha na autenticação: ${authData.mensagem || 'Credenciais inválidas'}`,
+            step: 'test_connection'
+          }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('[SGA Sync] Teste de conexão bem-sucedido!');
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mensagem: 'Conexão estabelecida com sucesso!',
+          step: 'test_connection'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ========================================
+    // MODO SINCRONIZAÇÃO COMPLETA
+    // ========================================
     if (!veiculo_id || !associado_id) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'veiculo_id e associado_id são obrigatórios',
+          error: 'veiculo_id e associado_id são obrigatórios para sincronização',
           step: 'validation'
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
