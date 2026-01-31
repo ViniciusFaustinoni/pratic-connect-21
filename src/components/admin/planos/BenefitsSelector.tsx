@@ -6,11 +6,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Star, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Star, AlertTriangle, ChevronDown, Check, Eye } from 'lucide-react';
 import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { useBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import type { Benefit } from '@/types/plans';
@@ -20,6 +27,88 @@ import type { PlanBenefitInput } from '@/hooks/usePlansAdmin';
 const CATEGORIAS_PARA_EXCLUSAO = CATEGORIAS_VEICULO.filter(
   (cat) => cat.value !== 'nenhuma'
 );
+
+// Configuração estruturada para valores flexíveis
+interface BenefitValueConfig {
+  prefix: 'ate' | 'a_partir_de' | 'exato' | '';
+  value: string;
+  valueType: 'percent' | 'currency' | 'text';
+  suffix: string;
+}
+
+// Função para formatar valor estruturado
+const formatBenefitValue = (config: BenefitValueConfig): string => {
+  if (!config.value) return '';
+  
+  const prefixMap: Record<string, string> = {
+    'ate': 'até',
+    'a_partir_de': 'a partir de',
+    'exato': '',
+    '': '',
+  };
+  
+  const prefix = prefixMap[config.prefix] || '';
+  
+  let formattedValue = config.value;
+  if (config.valueType === 'currency') {
+    const numValue = Number(config.value.replace(/\D/g, ''));
+    if (!isNaN(numValue)) {
+      formattedValue = `R$ ${numValue.toLocaleString('pt-BR')}`;
+    }
+  } else if (config.valueType === 'percent') {
+    formattedValue = `${config.value}%`;
+  }
+  
+  const suffix = config.suffix ? ` ${config.suffix}` : '';
+  
+  return `${prefix}${prefix ? ' ' : ''}${formattedValue}${suffix}`.trim();
+};
+
+// Função para tentar parsear custom_text de volta para config estruturada
+const parseCustomTextToConfig = (customText: string | null): BenefitValueConfig | null => {
+  if (!customText) return null;
+  
+  const text = customText.trim();
+  
+  // Detectar prefixo
+  let prefix: BenefitValueConfig['prefix'] = '';
+  let remaining = text;
+  
+  if (text.startsWith('até ')) {
+    prefix = 'ate';
+    remaining = text.slice(4);
+  } else if (text.startsWith('a partir de ')) {
+    prefix = 'a_partir_de';
+    remaining = text.slice(12);
+  }
+  
+  // Detectar tipo de valor
+  let valueType: BenefitValueConfig['valueType'] = 'text';
+  let value = '';
+  let suffix = '';
+  
+  // Verificar se é moeda (R$)
+  const currencyMatch = remaining.match(/^R\$\s?([\d.,]+)\s*(.*)?$/i);
+  if (currencyMatch) {
+    valueType = 'currency';
+    value = currencyMatch[1].replace(/\./g, '').replace(',', '');
+    suffix = currencyMatch[2]?.trim() || '';
+  } else {
+    // Verificar se é percentual
+    const percentMatch = remaining.match(/^([\d.,]+)%\s*(.*)?$/);
+    if (percentMatch) {
+      valueType = 'percent';
+      value = percentMatch[1].replace(',', '.');
+      suffix = percentMatch[2]?.trim() || '';
+    }
+  }
+  
+  if (value) {
+    return { prefix, value, valueType, suffix };
+  }
+  
+  return null;
+};
 
 interface BenefitsSelectorProps {
   benefits: Benefit[];
@@ -40,6 +129,12 @@ export function BenefitsSelector({
   // Local state for pending exclusion changes
   const [pendingExclusions, setPendingExclusions] = useState<Map<string, string[]>>(new Map());
   const [initialized, setInitialized] = useState(false);
+  
+  // State for structured value editing per benefit
+  const [valueConfigs, setValueConfigs] = useState<Map<string, BenefitValueConfig>>(new Map());
+  
+  // State to track which benefits are using structured mode
+  const [structuredMode, setStructuredMode] = useState<Set<string>>(new Set());
 
   // Initialize pending exclusions from database data
   useEffect(() => {
@@ -73,6 +168,17 @@ export function BenefitsSelector({
   const toggleBenefit = (benefitId: string) => {
     if (isSelected(benefitId)) {
       onChange(selectedBenefits.filter((b) => b.benefit_id !== benefitId));
+      // Clean up structured mode state
+      setStructuredMode((prev) => {
+        const next = new Set(prev);
+        next.delete(benefitId);
+        return next;
+      });
+      setValueConfigs((prev) => {
+        const next = new Map(prev);
+        next.delete(benefitId);
+        return next;
+      });
     } else {
       onChange([
         ...selectedBenefits,
@@ -94,6 +200,64 @@ export function BenefitsSelector({
         b.benefit_id === benefitId ? { ...b, ...updates } : b
       )
     );
+  };
+
+  // Get or initialize value config for a benefit
+  const getValueConfig = (benefitId: string): BenefitValueConfig => {
+    const existing = valueConfigs.get(benefitId);
+    if (existing) return existing;
+    
+    // Try to parse from existing custom_text
+    const selectedBenefit = getSelectedBenefit(benefitId);
+    const parsed = parseCustomTextToConfig(selectedBenefit?.custom_text || null);
+    
+    return parsed || {
+      prefix: '',
+      value: '',
+      valueType: 'percent',
+      suffix: '',
+    };
+  };
+
+  // Update structured value config and sync to custom_text
+  const updateValueConfig = (benefitId: string, updates: Partial<BenefitValueConfig>) => {
+    const current = getValueConfig(benefitId);
+    const newConfig = { ...current, ...updates };
+    
+    setValueConfigs((prev) => {
+      const next = new Map(prev);
+      next.set(benefitId, newConfig);
+      return next;
+    });
+    
+    // Generate and update custom_text
+    const formattedValue = formatBenefitValue(newConfig);
+    if (formattedValue) {
+      updateBenefit(benefitId, { custom_text: formattedValue });
+    }
+  };
+
+  // Toggle structured mode for a benefit
+  const toggleStructuredMode = (benefitId: string) => {
+    setStructuredMode((prev) => {
+      const next = new Set(prev);
+      if (next.has(benefitId)) {
+        next.delete(benefitId);
+      } else {
+        next.add(benefitId);
+        // Initialize config from existing custom_text if available
+        const selectedBenefit = getSelectedBenefit(benefitId);
+        const parsed = parseCustomTextToConfig(selectedBenefit?.custom_text || null);
+        if (parsed) {
+          setValueConfigs((configs) => {
+            const nextConfigs = new Map(configs);
+            nextConfigs.set(benefitId, parsed);
+            return nextConfigs;
+          });
+        }
+      }
+      return next;
+    });
   };
 
   // Check if a benefit is excluded for a specific category
@@ -148,6 +312,8 @@ export function BenefitsSelector({
                 const selected = isSelected(benefit.id);
                 const selectedData = getSelectedBenefit(benefit.id);
                 const exclusionCount = getExclusionCount(benefit.id);
+                const isStructured = structuredMode.has(benefit.id);
+                const valueConfig = getValueConfig(benefit.id);
 
                 return (
                   <div
@@ -180,32 +346,151 @@ export function BenefitsSelector({
 
                         {selected && (
                           <div className="mt-3 space-y-3 pt-3 border-t">
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <Label className="text-xs">Texto customizado</Label>
-                                <Input
-                                  placeholder="Ex: até 100km"
-                                  value={selectedData?.custom_text || ''}
-                                  onChange={(e) =>
-                                    updateBenefit(benefit.id, {
-                                      custom_text: e.target.value || null,
-                                    })
-                                  }
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">Valor</Label>
-                                <Input
-                                  placeholder="Ex: R$ 500"
-                                  value={selectedData?.custom_value || ''}
-                                  onChange={(e) =>
-                                    updateBenefit(benefit.id, {
-                                      custom_value: e.target.value || null,
-                                    })
-                                  }
-                                />
-                              </div>
+                            {/* Toggle para modo estruturado */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleStructuredMode(benefit.id)}
+                                className={`text-xs px-2 py-1 rounded-md border transition-colors ${
+                                  isStructured 
+                                    ? 'bg-primary text-primary-foreground border-primary' 
+                                    : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+                                }`}
+                              >
+                                {isStructured ? '✓ Valor estruturado' : 'Usar valor estruturado'}
+                              </button>
+                              {!isStructured && (
+                                <span className="text-xs text-muted-foreground">
+                                  Formatos: "até X%", "a partir de R$ Y"
+                                </span>
+                              )}
                             </div>
+
+                            {isStructured ? (
+                              /* Modo Estruturado */
+                              <div className="space-y-3 p-3 bg-muted/30 rounded-lg border">
+                                <Label className="text-xs font-medium">Valor do Benefício (Estruturado)</Label>
+                                
+                                <div className="grid grid-cols-3 gap-2">
+                                  {/* Prefixo */}
+                                  <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">Prefixo</Label>
+                                    <Select
+                                      value={valueConfig.prefix || 'exato'}
+                                      onValueChange={(value) => 
+                                        updateValueConfig(benefit.id, { 
+                                          prefix: value as BenefitValueConfig['prefix'] 
+                                        })
+                                      }
+                                    >
+                                      <SelectTrigger className="h-9">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="exato">Exato</SelectItem>
+                                        <SelectItem value="ate">até</SelectItem>
+                                        <SelectItem value="a_partir_de">a partir de</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  
+                                  {/* Valor numérico */}
+                                  <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">Valor</Label>
+                                    <Input
+                                      type="text"
+                                      inputMode="numeric"
+                                      placeholder="10"
+                                      className="h-9"
+                                      value={valueConfig.value}
+                                      onChange={(e) => 
+                                        updateValueConfig(benefit.id, { 
+                                          value: e.target.value.replace(/[^\d.,]/g, '') 
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  
+                                  {/* Tipo (%/R$) */}
+                                  <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">Tipo</Label>
+                                    <Select
+                                      value={valueConfig.valueType}
+                                      onValueChange={(value) => 
+                                        updateValueConfig(benefit.id, { 
+                                          valueType: value as BenefitValueConfig['valueType'] 
+                                        })
+                                      }
+                                    >
+                                      <SelectTrigger className="h-9">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="percent">%</SelectItem>
+                                        <SelectItem value="currency">R$</SelectItem>
+                                        <SelectItem value="text">Texto</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                                
+                                {/* Sufixo opcional */}
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-muted-foreground">Sufixo (opcional)</Label>
+                                  <Input
+                                    placeholder="Ex: desconto, cobertura, km"
+                                    className="h-9"
+                                    value={valueConfig.suffix}
+                                    onChange={(e) => 
+                                      updateValueConfig(benefit.id, { suffix: e.target.value })
+                                    }
+                                  />
+                                </div>
+                                
+                                {/* Preview */}
+                                {valueConfig.value && (
+                                  <div className="flex items-center gap-2 p-2 bg-background rounded-md border border-primary/30">
+                                    <Eye className="h-4 w-4 text-primary" />
+                                    <span className="text-sm">
+                                      <strong>{benefit.name}</strong>
+                                      {' '}
+                                      <span className="text-primary">
+                                        ({formatBenefitValue(valueConfig)})
+                                      </span>
+                                    </span>
+                                    <Check className="h-4 w-4 text-green-500 ml-auto" />
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              /* Modo Texto Livre (original) */
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Texto customizado</Label>
+                                  <Input
+                                    placeholder="Ex: até 100km"
+                                    value={selectedData?.custom_text || ''}
+                                    onChange={(e) =>
+                                      updateBenefit(benefit.id, {
+                                        custom_text: e.target.value || null,
+                                      })
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Valor</Label>
+                                  <Input
+                                    placeholder="Ex: R$ 500"
+                                    value={selectedData?.custom_value || ''}
+                                    onChange={(e) =>
+                                      updateBenefit(benefit.id, {
+                                        custom_value: e.target.value || null,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            )}
 
                             <div className="space-y-1">
                               <Label className="text-xs">Informações adicionais</Label>
