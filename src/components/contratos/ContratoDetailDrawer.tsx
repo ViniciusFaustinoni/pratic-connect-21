@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { 
   FileText, CheckCircle, XCircle, Clock, Send, Pause, 
   ExternalLink, Phone, Mail, MapPin, Car, User, Link,
-  RefreshCw, Loader2, Eye, Copy, MessageCircle, History, LinkIcon, Info
+  RefreshCw, Loader2, Eye, Copy, MessageCircle, History, LinkIcon, Info, Edit2
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,7 @@ import {
 } from '@/hooks/useAutentique';
 import { useAutentiqueSyncContrato } from '@/hooks/useAutentiqueSyncContrato';
 import { ContratoTimeline } from './ContratoTimeline';
+import { ContratoEditForm } from './ContratoEditForm';
 import { useGerarLinkAssociado, getAssociadoLinkUrl } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
 import type { StatusContrato } from '@/types/database';
@@ -62,7 +64,7 @@ interface ContratoDetailDrawerProps {
 }
 
 export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDetailDrawerProps) {
-  const { data: contrato, isLoading } = useContrato(contratoId || undefined);
+  const { data: contrato, isLoading, refetch } = useContrato(contratoId || undefined);
   const updateContrato = useUpdateContrato();
   const updateLead = useUpdateLead();
   const createHistorico = useCreateLeadHistorico();
@@ -73,9 +75,13 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
   
   const gerarLink = useGerarLinkAssociado();
   
-  // Permissões para ativação de propostas
+  // Estado para modo de edição
+  const [editMode, setEditMode] = useState(false);
+  
+  // Permissões para ativação de propostas e edição
   const { isDiretor, isAnalistaCadastro, isDesenvolvedor, isAdminMaster } = usePermissions();
   const podeAtivarProposta = isDiretor || isAnalistaCadastro || isDesenvolvedor || isAdminMaster;
+  const podeEditar = isDiretor || isDesenvolvedor || isAdminMaster;
   
   // Buscar status do Autentique se houver documento
   const { data: autentiqueStatus, isLoading: isLoadingStatus } = useAutentiqueStatus(
@@ -227,12 +233,24 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
             <SheetHeader className="space-y-4">
               <div className="flex items-center justify-between">
                 <SheetTitle className="font-mono">{contrato?.numero}</SheetTitle>
-                {status && (
-                  <Badge className={status.color}>
-                    <status.icon className="mr-1 h-3 w-3" />
-                    {status.label}
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {podeEditar && !editMode && contrato && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setEditMode(true)}
+                    >
+                      <Edit2 className="h-3.5 w-3.5 mr-1" />
+                      Editar
+                    </Button>
+                  )}
+                  {status && (
+                    <Badge className={status.color}>
+                      <status.icon className="mr-1 h-3 w-3" />
+                      {status.label}
+                    </Badge>
+                  )}
+                </div>
               </div>
             </SheetHeader>
 
@@ -241,6 +259,18 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
         ) : contrato ? (
+          editMode ? (
+            <div className="mt-6">
+              <ContratoEditForm 
+                contrato={contrato}
+                onCancel={() => setEditMode(false)}
+                onSuccess={() => {
+                  setEditMode(false);
+                  refetch();
+                }}
+              />
+            </div>
+          ) : (
           <Tabs defaultValue="detalhes" className="mt-6">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="detalhes">
@@ -726,6 +756,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
               <ContratoTimeline contratoId={contrato.id} />
             </TabsContent>
           </Tabs>
+          )
         ) : (
           <div className="text-center text-muted-foreground py-8">
             Proposta não encontrada
