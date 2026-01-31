@@ -523,6 +523,47 @@ const generateFooter = () => `
   </div>
 `;
 
+/**
+ * Gera HTML dinâmico com as coberturas do plano
+ */
+const gerarCoberturasHTML = (coberturas: string[] | null | undefined): string => {
+  if (!coberturas || coberturas.length === 0) {
+    // Fallback para coberturas básicas
+    return `
+      <table class="coverage-table">
+        <tr><td><span class="coverage-check">✓</span> Roubo e Furto</td></tr>
+        <tr><td><span class="coverage-check">✓</span> Assistência 24h</td></tr>
+        <tr><td><span class="coverage-check">✓</span> Rastreamento Veicular</td></tr>
+      </table>
+    `;
+  }
+  
+  const rows = coberturas.map(cobertura => 
+    `<tr><td><span class="coverage-check">✓</span> ${cobertura}</td></tr>`
+  ).join('\n      ');
+  
+  return `
+    <table class="coverage-table">
+      ${rows}
+    </table>
+  `;
+};
+
+/**
+ * Formata a cota de participação com percentual e mínimo
+ */
+const formatarCotaParticipacao = (plano: any): string => {
+  const percentual = plano?.cota_participacao;
+  const minimo = plano?.cota_minima;
+  
+  if (percentual && minimo) {
+    return `${percentual}% (mínimo ${formatCurrency(minimo)})`;
+  } else if (percentual) {
+    return `${percentual}%`;
+  }
+  return "Conforme condições do plano contratado";
+};
+
 const generateCoberturasDefault = () => `
   <div class="section">
     <h2>4. COBERTURAS CONTRATADAS</h2>
@@ -533,7 +574,7 @@ const generateCoberturasDefault = () => `
       </tr>
       <tr>
         <td><span class="coverage-check">✓</span> Assistência 24h</td>
-        <td>Guincho até 100km</td>
+        <td>Guincho conforme plano</td>
       </tr>
       <tr>
         <td><span class="coverage-check">✓</span> Rastreamento Veicular</td>
@@ -542,7 +583,7 @@ const generateCoberturasDefault = () => `
     </table>
     
     <div class="highlight-box">
-      <strong>Franquia:</strong> Conforme tabela do plano contratado<br>
+      <strong>Cota de Participação:</strong> Conforme tabela do plano contratado<br>
       <strong>Carência:</strong> 90 dias após instalação do rastreador
     </div>
   </div>
@@ -746,9 +787,9 @@ serve(async (req) => {
           codigo: contrato.planos?.codigo || "",
           descricao: contrato.planos?.descricao || "",
           tipo_uso: contrato.planos?.tipo_uso || "particular",
-          franquia: contrato.planos?.franquia || "Conforme tabela do plano",
-          carencia: contrato.planos?.carencia || "90 dias após instalação",
-          coberturas_html: contrato.planos?.coberturas_html || generateCoberturasDefault(),
+          cota_participacao: formatarCotaParticipacao(contrato.planos),
+          carencia: contrato.planos?.carencia || "90 dias após instalação do rastreador",
+          coberturas_html: gerarCoberturasHTML(contrato.planos?.coberturas),
         },
         empresa: {
           nome: empresa.nome || "Associação de Proteção Veicular",
