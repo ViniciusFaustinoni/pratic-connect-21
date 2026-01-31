@@ -1,91 +1,227 @@
 
-# Correção: Tratamento de Erro no Formulário de Criação de Conta
 
-## Diagnóstico
+# Melhoria: Compartilhamento de Planos via WhatsApp com Benefícios Estruturados
 
-O erro "Erro de conexão. Tente novamente." é exibido incorretamente quando a Edge Function retorna um erro HTTP 400 (como "email já em uso").
+## Resumo do Problema
 
-### Causa Raiz
+Atualmente, ao clicar em **"Copiar para WhatsApp"**, a mensagem gerada não apresenta os benefícios de forma organizada por categoria. O sistema envia uma lista simples de coberturas para a IA gerar a mensagem, mas não há estruturação por tipo (Coberturas, Assistência 24h, Extras).
 
-No `CriarContaAssociadoForm.tsx`, o código trata **qualquer erro HTTP** como "Erro de conexão":
+## Análise Técnica
 
-```typescript
-if (error) {
-  throw new Error('Erro de conexão. Tente novamente.');  // Ignora a mensagem real!
-}
+### Fluxo Atual
+```text
+CotacaoCard → copiarParaWhatsApp() → Edge Function gerar-mensagem-whatsapp → IA Gemini → Mensagem
 ```
 
-Quando o Supabase SDK recebe uma resposta não-2xx, ele popula tanto `error` quanto `data`. O `data` contém o body da resposta (com a mensagem de erro real), mas o código atual ignora isso.
-
-### Evidência
-
-Teste da Edge Function retornou:
-```json
-{"success": false, "error": "Este email já está em uso. Escolha outro email."}
+### Dados Atuais Enviados à Edge Function
+```javascript
+planos: [{
+  nome: "SELECT PREMIUM",
+  valorMensal: 166.00,
+  coberturas: ["Roubo e Furto", "Colisão", ...], // Lista simples
+  naoInclui: []
+}]
 ```
 
-Isso porque o email `marcosdativo@gmail.com` já existe na tabela `profiles` vinculado a outro usuário (tipo `funcionario`).
+### Estrutura do Banco de Dados
+O banco já possui categorização de benefícios:
+- `benefits.category = 'cobertura'` → Coberturas Principais
+- `benefits.category = 'assistencia'` → Assistência 24h
+- `benefits.category = 'extra'` → Benefícios Exclusivos
 
-## Solução
+### Problema Identificado
+A tabela `planos` armazena coberturas como um array simples de strings, sem categoria. O sistema usa essa tabela para cotações, perdendo a informação de categorização disponível na tabela `benefits`.
 
-Modificar o tratamento de erro para:
-1. Primeiro verificar se `data` existe e contém um erro (resposta estruturada da Edge Function)
-2. Só então verificar o `error` do SDK para erros de rede/conexão reais
+## Solução Proposta
 
-## Alterações
+### Parte 1: Enriquecer Dados Antes de Enviar ao WhatsApp
 
-### Arquivo: `src/components/public/CriarContaAssociadoForm.tsx`
+Modificar a função `copiarParaWhatsApp` em `Cotacoes.tsx` para:
+1. Categorizar as coberturas automaticamente usando um mapeamento
+2. Enviar os benefícios organizados por categoria para a Edge Function
+
+### Parte 2: Atualizar Edge Function para Benefícios Categorizados
+
+Modificar `gerar-mensagem-whatsapp` para:
+1. Aceitar benefícios estruturados por categoria
+2. Instruir a IA a apresentar cada categoria separadamente na mensagem
+
+### Parte 3: Atualizar Fallback Local
+
+Garantir que a função `gerarMensagemFallback` também apresente benefícios por categoria.
+
+## Detalhamento Técnico
+
+### Arquivo: `src/pages/vendas/Cotacoes.tsx`
+
+Adicionar mapeamento de categorias e reestruturar dados:
 
 ```typescript
-// ANTES (incorreto)
-const { data, error } = await supabase.functions.invoke('app-criar-conta-cliente', {
-  body: { associadoId, email: emailFinal.toLowerCase().trim(), senha }
-});
+// Mapeamento de coberturas para categorias
+const CATEGORIAS_BENEFICIOS: Record<string, string> = {
+  'Roubo e Furto': 'cobertura',
+  'Colisão': 'cobertura',
+  'Perda Total': 'cobertura',
+  'Incêndio': 'cobertura',
+  'Alagamento': 'cobertura',
+  'Chuva de Granizo': 'cobertura',
+  'Danos a Terceiros': 'cobertura',
+  'Danos Terceiros': 'cobertura',
+  'Vidros e Faróis': 'cobertura',
+  'Assistência 24h': 'assistencia',
+  'Rastreador/Monitoramento': 'assistencia',
+  'Reboque': 'assistencia',
+  'Reboque Excedente': 'assistencia',
+  'Kit Gás': 'extra',
+  'Carro Reserva': 'extra',
+  'Clube Gás': 'extra',
+  '100% FIPE APP': 'extra',
+};
 
-if (error) {
-  console.error('Erro HTTP da Edge Function:', error);
-  throw new Error('Erro de conexão. Tente novamente.');
+// Função para categorizar coberturas
+const categorizarBeneficios = (coberturas: string[]) => {
+  const resultado = {
+    coberturas: [] as string[],
+    assistencia: [] as string[],
+    extras: [] as string[],
+  };
+  
+  coberturas.forEach(cob => {
+    // Buscar categoria pelo mapeamento ou por palavras-chave
+    let categoria = 'coberturas'; // default
+    
+    for (const [nome, cat] of Object.entries(CATEGORIAS_BENEFICIOS)) {
+      if (cob.toLowerCase().includes(nome.toLowerCase())) {
+        categoria = cat === 'cobertura' ? 'coberturas' : 
+                   cat === 'assistencia' ? 'assistencia' : 'extras';
+        break;
+      }
+    }
+    
+    resultado[categoria].push(cob);
+  });
+  
+  return resultado;
+};
+```
+
+### Arquivo: `supabase/functions/gerar-mensagem-whatsapp/index.ts`
+
+Atualizar interface e prompts:
+
+```typescript
+interface Plano {
+  nome: string;
+  valorMensal: number;
+  coberturas: string[];
+  beneficiosPorCategoria?: {
+    coberturas: string[];
+    assistencia: string[];
+    extras: string[];
+  };
+  naoInclui?: string[];
 }
 
-if (!data?.success) {
-  throw new Error(data?.error || 'Erro ao criar conta');
-}
+// Novo prompt do sistema com instrução de categorização
+const systemPrompt = `...
+ESTRUTURA DE BENEFÍCIOS POR CATEGORIA:
+Para cada plano, organize os benefícios assim:
+🛡️ *Coberturas:* Roubo e Furto, Colisão, Perda Total...
+🚗 *Assistência 24h:* Reboque, Rastreamento...
+✨ *Benefícios Extras:* Carro Reserva, Kit Gás...
+...`;
+```
 
-// DEPOIS (correto)
-const { data, error } = await supabase.functions.invoke('app-criar-conta-cliente', {
-  body: { associadoId, email: emailFinal.toLowerCase().trim(), senha }
-});
+### Arquivo: `src/pages/vendas/Cotacoes.tsx` - Função Fallback
 
-// O Supabase SDK coloca respostas não-2xx no error, mas o body ainda vem em data
-// Primeiro verificar se temos uma resposta estruturada da Edge Function
-if (data && !data.success) {
-  throw new Error(data.error || 'Erro ao criar conta');
-}
+Atualizar `gerarMensagemFallback` para usar categorias:
 
-// Se não temos data válido mas temos error, é erro de conexão/rede
-if (error && !data) {
-  console.error('Erro de conexão com Edge Function:', error);
-  throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
-}
+```typescript
+const gerarMensagemFallback = (...) => {
+  // ... código existente ...
+  
+  planos.forEach((plano) => {
+    const beneficios = categorizarBeneficios(plano.coberturas);
+    
+    if (beneficios.coberturas.length > 0) {
+      mensagem += `🛡️ *Coberturas:*\n`;
+      beneficios.coberturas.forEach(c => mensagem += `✓ ${c}\n`);
+    }
+    
+    if (beneficios.assistencia.length > 0) {
+      mensagem += `\n🚗 *Assistência 24h:*\n`;
+      beneficios.assistencia.forEach(c => mensagem += `✓ ${c}\n`);
+    }
+    
+    if (beneficios.extras.length > 0) {
+      mensagem += `\n✨ *Benefícios Extras:*\n`;
+      beneficios.extras.forEach(c => mensagem += `✓ ${c}\n`);
+    }
+  });
+};
+```
 
-// Se nem data.success existe, algo deu errado
-if (!data?.success) {
-  throw new Error('Resposta inválida do servidor. Tente novamente.');
-}
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/vendas/Cotacoes.tsx` | Adicionar categorização de benefícios e atualizar `copiarParaWhatsApp` e `gerarMensagemFallback` |
+| `supabase/functions/gerar-mensagem-whatsapp/index.ts` | Atualizar interface e prompts para benefícios categorizados |
+
+## Exemplo de Mensagem Gerada
+
+```text
+Olá Marcos! 🚗
+
+Preparamos uma cotação especial para seu *Volkswagen Voyage 2018*.
+
+💰 *Valor FIPE:* R$ 48.336,00
+
+━━━━━━━━━━━━━━━━━━
+📦 *OPÇÃO 1: SELECT EXCLUSIVE APLICATIVO*
+💵 *Mensalidade:* R$ 166,00/mês
+
+🛡️ *Coberturas:*
+✓ Roubo e Furto
+✓ Colisão
+✓ Perda Total
+✓ Incêndio
+✓ Alagamento
+✓ Chuva de Granizo
+✓ Danos a Terceiros R$ 40mil
+
+🚗 *Assistência 24h:*
+✓ Assistência 24h 400km
+✓ Rastreador/Monitoramento
+✓ 1000km Reboque
+
+✨ *Benefícios Extras:*
+✓ Kit Gás
+✓ 100% FIPE APP
+✓ Carro Reserva
+
+━━━━━━━━━━━━━━━━━━
+📦 *OPÇÃO 2: SELECT ONE APLICATIVO*
+💵 *Mensalidade:* R$ 166,00/mês
+
+🛡️ *Coberturas:*
+✓ Roubo e Furto
+...
+
+━━━━━━━━━━━━━━━━━━
+
+📝 *Taxa de Adesão:* R$ 199,90
+⏰ Cotação válida por 7 dias.
+
+🔗 Veja mais detalhes: https://...
+
+Qual opção te interessou mais? 😊
 ```
 
 ## Resultado Esperado
 
-Após a correção:
-- Se o email já estiver em uso: exibirá "Este email já está em uso. Escolha outro email."
-- Se o associado já tiver conta: exibirá "Você já possui uma conta. Use 'Esqueci minha senha' se necessário."
-- Se houver erro de rede real: exibirá "Erro de conexão. Verifique sua internet."
+1. Todos os planos selecionados aparecem na mensagem
+2. Benefícios organizados por categoria (Coberturas, Assistência, Extras)
+3. Formato visual limpo e fácil de comparar
+4. Mensagem funciona tanto via IA quanto via fallback local
 
-## Sobre o Caso Específico
-
-O cliente MARCOS VINICIUS DATIVO MACHADO está tentando criar conta com o email `marcosdativo@gmail.com`, mas esse email já está cadastrado no sistema para outro usuário (tipo funcionário). 
-
-Opções para resolver:
-1. **Usar outro email** para o associado
-2. **Atualizar o email** do funcionário existente para liberar este email
-3. **Verificar se é o mesmo usuário** e fazer a vinculação manualmente
