@@ -86,8 +86,8 @@ export function useUploadFotoCotacaoVistoria() {
       let kmExtraido: number | undefined;
       if (fotoId === 'odometro') {
         try {
-          const { data: ocrData } = await supabase.functions.invoke('odometro-ocr', { body: { imageUrl: url } });
-          if (ocrData?.quilometragem) kmExtraido = ocrData.quilometragem;
+          const { data: ocrData } = await supabase.functions.invoke('odometro-ocr', { body: { url } });
+          if (ocrData?.km) kmExtraido = ocrData.km;
         } catch (e) { console.warn('OCR falhou:', e); }
       }
       return { fotoId, url, kmExtraido };
