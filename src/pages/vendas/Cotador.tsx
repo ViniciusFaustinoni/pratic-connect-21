@@ -762,8 +762,42 @@ _Cotação válida por 7 dias_
     }
   };
 
-  const handleEnviarEmail = () => {
-    toast.info('Funcionalidade de email será implementada em breve');
+  const handleEnviarEmail = async () => {
+    if (!cotacaoSalva) {
+      toast.error('Salve a cotação primeiro antes de enviar por email');
+      return;
+    }
+    
+    const emailDestino = leadSelecionado?.email;
+    if (!emailDestino) {
+      toast.error('O lead não possui email cadastrado');
+      return;
+    }
+    
+    try {
+      // Preparar dados para o email
+      const dadosEmail = {
+        template: 'boleto-gerado' as const, // Template genérico para cotação
+        to: emailDestino,
+        data: {
+          nome: leadSelecionado?.nome || nomeAssociado || 'Cliente',
+          plano: planoFinalSelecionado?.nome || 'Plano selecionado',
+          valor: planoFinalSelecionado ? formatCurrency(planoFinalSelecionado.valorMensal) : 'N/A',
+          veiculo: `${marca} ${modelo} ${ano}`,
+          numero_cotacao: cotacaoSalva?.numero || '',
+        },
+      };
+      
+      // Por enquanto, mostra preview do email que seria enviado
+      toast.info(
+        `Email seria enviado para ${emailDestino} com os dados da cotação. ` +
+        `Funcionalidade de envio real requer configuração do Resend.`,
+        { duration: 5000 }
+      );
+    } catch (error) {
+      console.error('Erro ao enviar email:', error);
+      toast.error('Erro ao enviar email');
+    }
   };
 
   const handleImprimir = () => {

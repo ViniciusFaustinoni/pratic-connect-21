@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { DocumentoCategoria, ConfiguracaoLayout, VariavelTemplate } from '@/types/documentos';
 import type { Json } from '@/integrations/supabase/types';
+import type { CanvasData, TemplateStatus } from '@/types/canvas-editor';
 
 // Tipo que representa o template como vem do banco
 interface TemplateFromDB {
@@ -22,6 +23,12 @@ interface TemplateFromDB {
   created_by: string;
   created_at: string;
   updated_at: string;
+  // Novos campos do editor visual
+  canvas_data?: Json;
+  document_type_id?: string;
+  is_default?: boolean;
+  status?: string;
+  thumbnail_url?: string;
 }
 
 // Tipo transformado para uso no frontend
@@ -42,6 +49,12 @@ export interface DocumentoTemplateView {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  // Novos campos do editor visual
+  canvas_data?: CanvasData | null;
+  document_type_id?: string;
+  is_default?: boolean;
+  status?: TemplateStatus;
+  thumbnail_url?: string;
 }
 
 // Função para transformar dados do banco para o tipo do frontend
@@ -55,6 +68,12 @@ function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategori
     rodape_html: data.rodape_html || undefined,
     created_by: data.created_by || undefined,
     categoria: data.categoria as DocumentoCategoria,
+    // Novos campos
+    canvas_data: data.canvas_data ? (data.canvas_data as unknown as CanvasData) : null,
+    document_type_id: data.document_type_id || undefined,
+    is_default: data.is_default || false,
+    status: (data.status as TemplateStatus) || 'draft',
+    thumbnail_url: data.thumbnail_url || undefined,
   };
 }
 
@@ -129,6 +148,11 @@ interface CreateTemplateInput {
   variaveis?: VariavelTemplate[];
   requer_assinatura?: boolean;
   config_layout?: ConfiguracaoLayout;
+  // Novos campos do editor visual
+  canvas_data?: CanvasData;
+  document_type_id?: string;
+  is_default?: boolean;
+  status?: TemplateStatus;
 }
 
 export function useCreateTemplate() {
@@ -149,6 +173,11 @@ export function useCreateTemplate() {
           config_layout: (input.config_layout || {}) as unknown as Json,
           versao: 1,
           ativo: true,
+          // Novos campos
+          canvas_data: input.canvas_data ? (input.canvas_data as unknown as Json) : null,
+          document_type_id: input.document_type_id || null,
+          is_default: input.is_default || false,
+          status: input.status || 'draft',
         })
         .select()
         .single();
@@ -177,6 +206,11 @@ interface UpdateTemplateInput {
   variaveis?: VariavelTemplate[];
   requer_assinatura?: boolean;
   config_layout?: ConfiguracaoLayout;
+  // Novos campos do editor visual
+  canvas_data?: CanvasData;
+  document_type_id?: string;
+  is_default?: boolean;
+  status?: TemplateStatus;
 }
 
 export function useUpdateTemplate() {
@@ -196,6 +230,11 @@ export function useUpdateTemplate() {
       if (input.variaveis !== undefined) updateData.variaveis = input.variaveis as unknown as Json;
       if (input.requer_assinatura !== undefined) updateData.requer_assinatura = input.requer_assinatura;
       if (input.config_layout !== undefined) updateData.config_layout = input.config_layout as unknown as Json;
+      // Novos campos
+      if (input.canvas_data !== undefined) updateData.canvas_data = input.canvas_data as unknown as Json;
+      if (input.document_type_id !== undefined) updateData.document_type_id = input.document_type_id;
+      if (input.is_default !== undefined) updateData.is_default = input.is_default;
+      if (input.status !== undefined) updateData.status = input.status;
 
       const { data, error } = await supabase
         .from('documento_templates')
