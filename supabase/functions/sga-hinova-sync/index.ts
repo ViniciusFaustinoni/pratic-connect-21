@@ -367,8 +367,11 @@ serve(async (req) => {
     if (!codigoAssociadoHinova) {
       console.log('[SGA Sync] Cadastrando associado no Hinova...');
       
+      // Algumas versões da API Hinova exigem usuario + senha + token_usuario no body
       const associadoPayload = {
-        token_usuario: tokenUsuario,  // Token vai no BODY conforme documentação Hinova
+        usuario: hinovaUsuario,
+        senha: hinovaSenha,
+        token_usuario: tokenUsuario,
         nome: associado.nome,
         cpf: cleanCPF(associado.cpf),
         rg: associado.rg || '',
@@ -390,6 +393,8 @@ serve(async (req) => {
         ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
       };
+      
+      console.log('[SGA Sync] Payload associado (sem senha):', JSON.stringify({ ...associadoPayload, senha: '***', token_usuario: '***' }));
 
       const associadoResponse = await fetchWithRetry(
         `${hinovaApiUrl}/associado/cadastrar`,
@@ -458,7 +463,9 @@ serve(async (req) => {
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
 
     const veiculoPayload = {
-      token_usuario: tokenUsuario,  // Token vai no BODY conforme documentação Hinova
+      usuario: hinovaUsuario,
+      senha: hinovaSenha,
+      token_usuario: tokenUsuario,
       codigo_associado: codigoAssociadoHinova,
       placa: veiculo.placa || '',
       chassi: veiculo.chassi || '',
@@ -558,7 +565,9 @@ serve(async (req) => {
               method: 'POST',
               headers: baseHeaders,
               body: JSON.stringify({
-                token_usuario: tokenUsuario,  // Token vai no BODY conforme documentação Hinova
+                usuario: hinovaUsuario,
+                senha: hinovaSenha,
+                token_usuario: tokenUsuario,
                 codigo_veiculo: codigoVeiculoHinova,
                 foto: fotos
               })
