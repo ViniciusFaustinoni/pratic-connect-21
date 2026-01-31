@@ -369,8 +369,10 @@ serve(async (req) => {
     if (!codigoAssociadoHinova) {
       console.log('[SGA Sync] Cadastrando associado no Hinova...');
       
-      // API Hinova v2: Authorization: Bearer no header + token_usuario no body (SEM usuario/senha)
+      // API Hinova v2: Authorization: Bearer no header + usuario/senha/token_usuario no body
       const associadoPayload = {
+        usuario: hinovaUsuario,
+        senha: hinovaSenha,
         token_usuario: tokenUsuario,
         nome: associado.nome,
         cpf: cleanCPF(associado.cpf),
@@ -394,7 +396,7 @@ serve(async (req) => {
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
       };
       
-      console.log('[SGA Sync] Payload associado:', JSON.stringify({ ...associadoPayload, token_usuario: '***' }));
+      console.log('[SGA Sync] Payload associado (sem senha):', JSON.stringify({ ...associadoPayload, senha: '***', token_usuario: '***' }));
 
       const associadoResponse = await fetchWithRetry(
         `${hinovaApiUrl}/associado/cadastrar`,
@@ -462,8 +464,10 @@ serve(async (req) => {
     // ========================================
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
 
-    // Authorization: Bearer no header + token_usuario no body (SEM usuario/senha)
+    // Authorization: Bearer no header + usuario/senha/token_usuario no body
     const veiculoPayload = {
+      usuario: hinovaUsuario,
+      senha: hinovaSenha,
       token_usuario: tokenUsuario,
       codigo_associado: codigoAssociadoHinova,
       placa: veiculo.placa || '',
@@ -558,13 +562,15 @@ serve(async (req) => {
         if (fotos.length === 0) continue;
 
         try {
-          // Authorization: Bearer no header + token_usuario no body (SEM usuario/senha)
+          // Authorization: Bearer no header + usuario/senha/token_usuario no body
           const fotosResponse = await fetchWithRetry(
             `${hinovaApiUrl}/veiculo/foto/cadastrar`,
             {
               method: 'POST',
               headers: authHeaders,
               body: JSON.stringify({
+                usuario: hinovaUsuario,
+                senha: hinovaSenha,
                 token_usuario: tokenUsuario,
                 codigo_veiculo: codigoVeiculoHinova,
                 foto: fotos
