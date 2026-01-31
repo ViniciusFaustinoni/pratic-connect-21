@@ -16,6 +16,21 @@ export interface AtivacaoContrato {
   veiculo_marca: string | null;
   veiculo_modelo: string | null;
   veiculo_placa: string | null;
+  // IDs para SGA
+  associado_id: string | null;
+  // Dados do veículo para SGA
+  veiculo: {
+    id: string;
+    sincronizado_hinova: boolean;
+    status_sga: string | null;
+    codigo_hinova: number | null;
+  } | null;
+  // Dados do plano
+  plano: {
+    id: string;
+    nome: string;
+    coberturas: string[];
+  } | null;
   lead: {
     id: string;
     nome: string;
@@ -93,11 +108,46 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
 
       const vistoriasMap = new Map(vistoriasData.map(v => [v.associado_id, v]));
 
+      // Buscar veículos para cada associado (dados SGA)
+      let veiculosData: Array<{ id: string; associado_id: string; sincronizado_hinova: boolean | null; status_sga: string | null; codigo_hinova: number | null }> = [];
+      if (associadoIds.length > 0) {
+        const { data, error } = await supabase
+          .from('veiculos')
+          .select('id, associado_id, sincronizado_hinova, status_sga, codigo_hinova')
+          .in('associado_id', associadoIds);
+        
+        if (error) {
+          console.error('Erro ao buscar veículos:', error);
+        }
+        veiculosData = (data || []) as unknown as typeof veiculosData;
+      }
+
+      const veiculosMap = new Map(veiculosData.map(v => [v.associado_id, v]));
+
+      // Buscar planos para verificar cobertura
+      const planoIds = [...new Set(filteredContratos.map(c => c.plano_id).filter(Boolean))] as string[];
+      let planosData: Array<{ id: string; nome: string; coberturas: string[] | null }> = [];
+      if (planoIds.length > 0) {
+        const { data, error } = await supabase
+          .from('planos')
+          .select('id, nome, coberturas')
+          .in('id', planoIds);
+        
+        if (error) {
+          console.error('Erro ao buscar planos:', error);
+        }
+        planosData = (data || []) as unknown as typeof planosData;
+      }
+
+      const planosMap = new Map(planosData.map(p => [p.id, p]));
+
       // Montar resultado - buscar vendedor do mapa por profiles.id
       const result: AtivacaoContrato[] = filteredContratos.map((contrato: any) => {
         const lead = contrato.leads;
         const vendedor = contrato.vendedor_id ? vendedoresMap.get(contrato.vendedor_id) : null;
         const vistoria = contrato.associado_id ? vistoriasMap.get(contrato.associado_id) : null;
+        const veiculo = contrato.associado_id ? veiculosMap.get(contrato.associado_id) : null;
+        const plano = contrato.plano_id ? planosMap.get(contrato.plano_id) : null;
 
         return {
           id: contrato.id,
@@ -112,6 +162,21 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
           veiculo_marca: contrato.veiculo_marca,
           veiculo_modelo: contrato.veiculo_modelo,
           veiculo_placa: contrato.veiculo_placa,
+          // IDs para SGA
+          associado_id: contrato.associado_id,
+          // Dados do veículo para SGA
+          veiculo: veiculo ? {
+            id: veiculo.id,
+            sincronizado_hinova: veiculo.sincronizado_hinova ?? false,
+            status_sga: veiculo.status_sga,
+            codigo_hinova: veiculo.codigo_hinova,
+          } : null,
+          // Dados do plano
+          plano: plano ? {
+            id: plano.id,
+            nome: plano.nome,
+            coberturas: plano.coberturas || [],
+          } : null,
           lead: lead ? {
             id: lead.id,
             nome: lead.nome,
