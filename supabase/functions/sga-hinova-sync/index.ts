@@ -391,7 +391,7 @@ serve(async (req) => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${hinovaToken}`,
-            'X-Token-Usuario': tokenUsuario
+            'token': tokenUsuario
           },
           body: JSON.stringify(associadoPayload)
         }
@@ -481,7 +481,7 @@ serve(async (req) => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${hinovaToken}`,
-          'X-Token-Usuario': tokenUsuario
+          'token': tokenUsuario
         },
         body: JSON.stringify(veiculoPayload)
       }
@@ -559,7 +559,7 @@ serve(async (req) => {
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${hinovaToken}`,
-                'X-Token-Usuario': tokenUsuario
+                'token': tokenUsuario
               },
               body: JSON.stringify({
                 codigo_veiculo: codigoVeiculoHinova,
