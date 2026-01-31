@@ -1,171 +1,230 @@
 
 
-# Plano: Simplificar Configuração do SGA Hinova
+# Plano: Corrigir Integração SGA Hinova - Token no Body
 
-## Problema Identificado
+## Resumo do Problema
 
-O formulário de configuração do SGA Hinova está solicitando **campos desnecessários como obrigatórios**. De acordo com a documentação oficial da API:
+A autenticação com a API Hinova funciona corretamente, mas todas as requisições subsequentes (cadastro de associado, veículo, fotos) falham com **"Acesso não autorizado"**.
 
-| Campo | Status Atual | Status Correto | Motivo |
-|-------|--------------|----------------|--------|
-| Token Bearer | Obrigatório ✅ | Obrigatório ✅ | Necessário para autenticação |
-| Usuário | Obrigatório ✅ | Obrigatório ✅ | Necessário para autenticação |
-| Senha | Obrigatório ✅ | Obrigatório ✅ | Necessário para autenticação |
-| Código da Conta | **Obrigatório ❌** | **Opcional** | Só é obrigatório se houver mais de uma conta bancária cadastrada |
-| Código Regional | Opcional ✅ | Opcional ✅ | OK |
-| Código Cooperativa | Opcional ✅ | Opcional ✅ | OK |
-| Código Voluntário | Opcional ✅ | Opcional ✅ | OK |
-| URL da API | Opcional ✅ | Opcional ✅ | OK |
+**Causa raiz**: O código atual envia o `token_usuario` via headers HTTP, mas a API Hinova espera o token no **body (corpo) da requisição**.
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    FLUXO ATUAL (INCORRETO)                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. POST /usuario/autenticar                                │
+│     Body: { usuario, senha }                                │
+│     → Retorna: { token_usuario: "abc123..." } ✅            │
+│                                                             │
+│  2. POST /associado/cadastrar                               │
+│     Headers: X-Token-Usuario: abc123... ❌                  │
+│     Body: { nome, cpf, ... }                                │
+│     → Erro: "Acesso não autorizado"                         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    FLUXO CORRETO                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. POST /usuario/autenticar                                │
+│     Body: { usuario, senha }                                │
+│     → Retorna: { token_usuario: "abc123..." } ✅            │
+│                                                             │
+│  2. POST /associado/cadastrar                               │
+│     Headers: Authorization: Bearer {TOKEN_BEARER}           │
+│     Body: { token_usuario: "abc123...", nome, cpf, ... } ✅ │
+│     → Sucesso: { codigo_associado: 12345 }                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Solução
+## Alterações Necessárias
 
-Alterar o schema da integração Hinova para:
-1. **Tornar `codigo_conta` opcional** (com valor padrão "1" no backend)
-2. **Melhorar labels** para ficar mais claro o que cada campo significa
-3. **Adicionar dicas** sobre quando cada campo opcional é necessário
+### Arquivo: `supabase/functions/sga-hinova-sync/index.ts`
 
----
+#### 1. Remover função `buildHinovaAuthHeaders`
 
-## Arquivos a Modificar
-
-### 1. `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
-
-Atualizar o fallback local do schema Hinova:
-
-**Antes:**
+**Antes (linhas 182-190):**
 ```typescript
-hinova: [
-  { nome: 'token', label: 'Token Bearer', tipo: 'password', obrigatorio: true },
-  { nome: 'usuario', label: 'Usuário', tipo: 'text', obrigatorio: true },
-  { nome: 'senha', label: 'Senha', tipo: 'password', obrigatorio: true },
-  { nome: 'codigo_conta', label: 'Código da Conta', tipo: 'text', obrigatorio: true },
-  { nome: 'codigo_regional', label: 'Código Regional', tipo: 'text', obrigatorio: false },
-  { nome: 'codigo_cooperativa', label: 'Código Cooperativa', tipo: 'text', obrigatorio: false },
-  { nome: 'codigo_voluntario', label: 'Código Voluntário', tipo: 'text', obrigatorio: false },
-  { nome: 'api_url', label: 'URL da API (opcional)', tipo: 'text', obrigatorio: false },
-],
+const buildHinovaAuthHeaders = (tokenUsuario: string) => ({
+  'Authorization': `Bearer ${hinovaToken}`,
+  'X-Token-Usuario': tokenUsuario,
+  token: tokenUsuario,
+  'token_usuario': tokenUsuario,
+  'Token-Usuario': tokenUsuario,
+  TokenUsuario: tokenUsuario,
+});
 ```
 
 **Depois:**
 ```typescript
-hinova: [
-  { nome: 'token', label: 'Token Bearer (gerado no SGA)', tipo: 'password', obrigatorio: true },
-  { nome: 'usuario', label: 'Usuário do SGA', tipo: 'text', obrigatorio: true },
-  { nome: 'senha', label: 'Senha do SGA', tipo: 'password', obrigatorio: true },
-  { nome: 'codigo_conta', label: 'Código da Conta (se mais de uma)', tipo: 'text', obrigatorio: false },
-  { nome: 'codigo_voluntario', label: 'Código Voluntário', tipo: 'text', obrigatorio: false },
-],
+// Headers base para todas as requisições (SEM token_usuario)
+const baseHeaders = {
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${hinovaToken}`,
+};
 ```
-
-**Mudanças:**
-- `codigo_conta` passa de obrigatório para **opcional**
-- Labels mais descritivos
-- Removidos campos menos utilizados da visualização principal (regional/cooperativa/api_url ficam no backend com valores padrão)
 
 ---
 
-### 2. `supabase/functions/integracoes-credenciais/index.ts`
-
-Atualizar o schema oficial no backend:
+#### 2. Corrigir cadastro de associado (linhas 377-410)
 
 **Antes:**
 ```typescript
-hinova: {
-  campos: [
-    { nome: 'token', label: 'Token Bearer', tipo: 'password', obrigatorio: true },
-    { nome: 'usuario', label: 'Usuário', tipo: 'text', obrigatorio: true },
-    { nome: 'senha', label: 'Senha', tipo: 'password', obrigatorio: true },
-    { nome: 'codigo_conta', label: 'Código da Conta', tipo: 'text', obrigatorio: true },
-    { nome: 'codigo_regional', label: 'Código Regional', tipo: 'text', obrigatorio: false },
-    { nome: 'codigo_cooperativa', label: 'Código Cooperativa', tipo: 'text', obrigatorio: false },
-    { nome: 'codigo_voluntario', label: 'Código Voluntário', tipo: 'text', obrigatorio: false },
-    { nome: 'api_url', label: 'URL da API (opcional)', tipo: 'text', obrigatorio: false },
-  ]
-}
+const associadoPayload = {
+  nome: associado.nome,
+  cpf: cleanCPF(associado.cpf),
+  // ...demais campos
+};
+
+const associadoResponse = await fetchWithRetry(
+  `${hinovaApiUrl}/associado/cadastrar`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...buildHinovaAuthHeaders(tokenUsuario)  // ❌ Token no header
+    },
+    body: JSON.stringify(associadoPayload)
+  }
+);
 ```
 
 **Depois:**
 ```typescript
-hinova: {
-  campos: [
-    { nome: 'token', label: 'Token Bearer (gerado no SGA)', tipo: 'password', obrigatorio: true },
-    { nome: 'usuario', label: 'Usuário do SGA', tipo: 'text', obrigatorio: true },
-    { nome: 'senha', label: 'Senha do SGA', tipo: 'password', obrigatorio: true },
-    { nome: 'codigo_conta', label: 'Código da Conta (opcional)', tipo: 'text', obrigatorio: false },
-    { nome: 'codigo_voluntario', label: 'Código Voluntário (opcional)', tipo: 'text', obrigatorio: false },
-  ]
-}
+const associadoPayload = {
+  token_usuario: tokenUsuario,  // ✅ Token no body
+  nome: associado.nome,
+  cpf: cleanCPF(associado.cpf),
+  // ...demais campos
+};
+
+const associadoResponse = await fetchWithRetry(
+  `${hinovaApiUrl}/associado/cadastrar`,
+  {
+    method: 'POST',
+    headers: baseHeaders,  // ✅ Apenas Authorization Bearer
+    body: JSON.stringify(associadoPayload)
+  }
+);
 ```
 
 ---
 
-## Interface Visual Atualizada
+#### 3. Corrigir cadastro de veículo (linhas 469-498)
 
-### Antes (8 campos, 4 obrigatórios)
-```text
-┌──────────────────────────────────────────────────┐
-│ Configurar SGA Hinova                            │
-│ Preencha as credenciais para conectar com SGA    │
-├──────────────────────────────────────────────────┤
-│ Token Bearer *              [________________] 👁 │
-│ Usuário *                   [________________]   │
-│ Senha *                     [________________] 👁 │
-│ Código da Conta *           [________________]   │
-│ Código Regional             [________________]   │
-│ Código Cooperativa          [________________]   │
-│ Código Voluntário           [________________]   │
-│ URL da API (opcional)       [________________]   │
-└──────────────────────────────────────────────────┘
-```
-
-### Depois (5 campos, 3 obrigatórios)
-```text
-┌──────────────────────────────────────────────────┐
-│ Configurar SGA Hinova                            │
-│ Preencha as credenciais para conectar com SGA    │
-├──────────────────────────────────────────────────┤
-│ Token Bearer (gerado no SGA) *                   │
-│ [_________________________________________] 👁   │
-│                                                  │
-│ Usuário do SGA *                                 │
-│ [_________________________________________]      │
-│                                                  │
-│ Senha do SGA *                                   │
-│ [_________________________________________] 👁   │
-│                                                  │
-│ Código da Conta (se mais de uma)                 │
-│ [_________________________________________]      │
-│                                                  │
-│ Código Voluntário                                │
-│ [_________________________________________]      │
-│                                                  │
-│ 🔒 As credenciais são criptografadas             │
-├──────────────────────────────────────────────────┤
-│ [Testar Conexão]     [Salvar]                    │
-└──────────────────────────────────────────────────┘
-```
-
----
-
-## Comportamento do Backend
-
-O Edge Function `sga-hinova-sync` já tem valores padrão:
-
+**Antes:**
 ```typescript
-let hinovaCodigoConta = Deno.env.get('HINOVA_CODIGO_CONTA') || '1';  // Padrão: 1
-let hinovaCodigoRegional = Deno.env.get('HINOVA_CODIGO_REGIONAL');   // Pode ser null
-let hinovaCodigoCooperativa = Deno.env.get('HINOVA_CODIGO_COOPERATIVA'); // Pode ser null
+const veiculoPayload = {
+  codigo_associado: codigoAssociadoHinova,
+  placa: veiculo.placa || '',
+  // ...demais campos
+};
+
+const veiculoResponse = await fetchWithRetry(
+  `${hinovaApiUrl}/veiculo/cadastrar`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...buildHinovaAuthHeaders(tokenUsuario)  // ❌ Token no header
+    },
+    body: JSON.stringify(veiculoPayload)
+  }
+);
 ```
 
-Isso significa que se o usuário não preencher `codigo_conta`, o sistema usará **"1" como padrão**, que funciona para associações com conta bancária única.
+**Depois:**
+```typescript
+const veiculoPayload = {
+  token_usuario: tokenUsuario,  // ✅ Token no body
+  codigo_associado: codigoAssociadoHinova,
+  placa: veiculo.placa || '',
+  // ...demais campos
+};
+
+const veiculoResponse = await fetchWithRetry(
+  `${hinovaApiUrl}/veiculo/cadastrar`,
+  {
+    method: 'POST',
+    headers: baseHeaders,  // ✅ Apenas Authorization Bearer
+    body: JSON.stringify(veiculoPayload)
+  }
+);
+```
 
 ---
 
-## Ordem de Implementação
+#### 4. Corrigir envio de fotos (linhas 566-578)
 
-1. Atualizar schema no frontend (`ConfigurarIntegracaoSheet.tsx`)
-2. Atualizar schema no backend (`integracoes-credenciais/index.ts`)
-3. Testar configuração com apenas os 3 campos obrigatórios
+**Antes:**
+```typescript
+const fotosResponse = await fetchWithRetry(
+  `${hinovaApiUrl}/veiculo/foto/cadastrar`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...buildHinovaAuthHeaders(tokenUsuario)  // ❌ Token no header
+    },
+    body: JSON.stringify({
+      codigo_veiculo: codigoVeiculoHinova,
+      foto: fotos
+    })
+  }
+);
+```
+
+**Depois:**
+```typescript
+const fotosResponse = await fetchWithRetry(
+  `${hinovaApiUrl}/veiculo/foto/cadastrar`,
+  {
+    method: 'POST',
+    headers: baseHeaders,  // ✅ Apenas Authorization Bearer
+    body: JSON.stringify({
+      token_usuario: tokenUsuario,  // ✅ Token no body
+      codigo_veiculo: codigoVeiculoHinova,
+      foto: fotos
+    })
+  }
+);
+```
+
+---
+
+## Resumo das Mudanças
+
+| Local | Antes | Depois |
+|-------|-------|--------|
+| Headers | 6 variações de token (`X-Token-Usuario`, `token`, etc.) | Apenas `Authorization: Bearer {TOKEN_BEARER}` |
+| Body associado | Sem `token_usuario` | Com `token_usuario` como primeiro campo |
+| Body veículo | Sem `token_usuario` | Com `token_usuario` como primeiro campo |
+| Body fotos | Sem `token_usuario` | Com `token_usuario` como primeiro campo |
+
+---
+
+## Etapas de Implementação
+
+1. **Substituir** a função `buildHinovaAuthHeaders` por uma constante `baseHeaders` simples
+2. **Adicionar** `token_usuario` ao payload de cadastro de associado
+3. **Adicionar** `token_usuario` ao payload de cadastro de veículo
+4. **Adicionar** `token_usuario` ao payload de envio de fotos
+5. **Atualizar** todas as chamadas `fetch` para usar `baseHeaders`
+6. **Deploy** automático da Edge Function
+7. **Testar** o fluxo completo
+
+---
+
+## Validação Pós-Implementação
+
+Após a correção, o fluxo esperado:
+
+1. **Testar Conexão** → Deve retornar sucesso (já funciona)
+2. **Enviar para SGA** → Deve cadastrar associado + veículo sem erro de autorização
+3. **Verificar logs** → Tabela `sga_sync_logs` deve mostrar `status: success` para todas as etapas
 
