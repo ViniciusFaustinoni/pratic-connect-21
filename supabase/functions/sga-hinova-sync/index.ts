@@ -176,10 +176,15 @@ serve(async (req) => {
     }
   }
 
-  // Headers base para todas as requisições (token_usuario vai no BODY, não no header)
-  const baseHeaders = {
+  // Headers para autenticação (com Bearer token)
+  const authHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${hinovaToken}`,
+  };
+  
+  // Headers para requisições de cadastro (SEM Authorization - token_usuario vai no body)
+  const baseHeaders = {
+    'Content-Type': 'application/json',
   };
 
   try {
@@ -367,10 +372,8 @@ serve(async (req) => {
     if (!codigoAssociadoHinova) {
       console.log('[SGA Sync] Cadastrando associado no Hinova...');
       
-      // Algumas versões da API Hinova exigem usuario + senha + token_usuario no body
+      // API Hinova v2: token_usuario no body (obtido da autenticação)
       const associadoPayload = {
-        usuario: hinovaUsuario,
-        senha: hinovaSenha,
         token_usuario: tokenUsuario,
         nome: associado.nome,
         cpf: cleanCPF(associado.cpf),
@@ -463,8 +466,6 @@ serve(async (req) => {
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
 
     const veiculoPayload = {
-      usuario: hinovaUsuario,
-      senha: hinovaSenha,
       token_usuario: tokenUsuario,
       codigo_associado: codigoAssociadoHinova,
       placa: veiculo.placa || '',
@@ -565,8 +566,6 @@ serve(async (req) => {
               method: 'POST',
               headers: baseHeaders,
               body: JSON.stringify({
-                usuario: hinovaUsuario,
-                senha: hinovaSenha,
                 token_usuario: tokenUsuario,
                 codigo_veiculo: codigoVeiculoHinova,
                 foto: fotos
