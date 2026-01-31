@@ -182,7 +182,11 @@ serve(async (req) => {
   const buildHinovaAuthHeaders = (tokenUsuario: string) => ({
     'Authorization': `Bearer ${hinovaToken}`,
     'X-Token-Usuario': tokenUsuario,
+    // variações observadas na prática (gateways/proxies podem mapear headers)
     token: tokenUsuario,
+    'token_usuario': tokenUsuario,
+    'Token-Usuario': tokenUsuario,
+    TokenUsuario: tokenUsuario,
   });
 
   try {
