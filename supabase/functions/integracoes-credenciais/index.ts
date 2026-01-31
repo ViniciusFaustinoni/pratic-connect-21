@@ -70,14 +70,11 @@ async function decrypt(encryptedData: string, ivString: string, secret: string):
 const integracoesSchema: Record<string, { campos: { nome: string; label: string; tipo: 'text' | 'password'; obrigatorio: boolean }[] }> = {
   hinova: {
     campos: [
-      { nome: 'token', label: 'Token Bearer', tipo: 'password', obrigatorio: true },
-      { nome: 'usuario', label: 'Usuário', tipo: 'text', obrigatorio: true },
-      { nome: 'senha', label: 'Senha', tipo: 'password', obrigatorio: true },
-      { nome: 'codigo_conta', label: 'Código da Conta', tipo: 'text', obrigatorio: true },
-      { nome: 'codigo_regional', label: 'Código Regional', tipo: 'text', obrigatorio: false },
-      { nome: 'codigo_cooperativa', label: 'Código Cooperativa', tipo: 'text', obrigatorio: false },
+      { nome: 'token', label: 'Token Bearer (gerado no SGA)', tipo: 'password', obrigatorio: true },
+      { nome: 'usuario', label: 'Usuário do SGA', tipo: 'text', obrigatorio: true },
+      { nome: 'senha', label: 'Senha do SGA', tipo: 'password', obrigatorio: true },
+      { nome: 'codigo_conta', label: 'Código da Conta (opcional)', tipo: 'text', obrigatorio: false },
       { nome: 'codigo_voluntario', label: 'Código Voluntário', tipo: 'text', obrigatorio: false },
-      { nome: 'api_url', label: 'URL da API (opcional)', tipo: 'text', obrigatorio: false },
     ]
   },
   softruck: {
