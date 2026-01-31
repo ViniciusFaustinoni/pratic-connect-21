@@ -1,44 +1,22 @@
 
+# Plano: Corrigir Headers da API Hinova
 
-# Plano: Corrigir Integração SGA Hinova - Token no Body
+## Diagnóstico Confirmado
 
-## Resumo do Problema
+Com base nos logs do banco de dados, identifiquei o padrão exato dos erros:
 
-A autenticação com a API Hinova funciona corretamente, mas todas as requisições subsequentes (cadastro de associado, veículo, fotos) falham com **"Acesso não autorizado"**.
+| Configuração testada | Erro retornado pela API |
+|---------------------|-------------------------|
+| Sem `Authorization` header | "Parâmetro Authorization incorreto" |
+| Com `Authorization` + usuario/senha no body | "Login ou senha inválido" |
 
-**Causa raiz**: O código atual envia o `token_usuario` via headers HTTP, mas a API Hinova espera o token no **body (corpo) da requisição**.
+**Conclusão**: A API Hinova exige:
+1. **Header obrigatório**: `Authorization: Bearer {TOKEN_API}` - sempre!
+2. **Body**: Apenas `token_usuario` + dados (NÃO enviar usuario/senha novamente)
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    FLUXO ATUAL (INCORRETO)                  │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. POST /usuario/autenticar                                │
-│     Body: { usuario, senha }                                │
-│     → Retorna: { token_usuario: "abc123..." } ✅            │
-│                                                             │
-│  2. POST /associado/cadastrar                               │
-│     Headers: X-Token-Usuario: abc123... ❌                  │
-│     Body: { nome, cpf, ... }                                │
-│     → Erro: "Acesso não autorizado"                         │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                    FLUXO CORRETO                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. POST /usuario/autenticar                                │
-│     Body: { usuario, senha }                                │
-│     → Retorna: { token_usuario: "abc123..." } ✅            │
-│                                                             │
-│  2. POST /associado/cadastrar                               │
-│     Headers: Authorization: Bearer {TOKEN_BEARER}           │
-│     Body: { token_usuario: "abc123...", nome, cpf, ... } ✅ │
-│     → Sucesso: { codigo_associado: 12345 }                  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+O código atual está incorretamente:
+- Removendo o header `Authorization` nas requisições de cadastro (`baseHeaders`)
+- Enviando `usuario` e `senha` no body (causando revalidação desnecessária)
 
 ---
 
@@ -46,49 +24,40 @@ A autenticação com a API Hinova funciona corretamente, mas todas as requisiç�
 
 ### Arquivo: `supabase/functions/sga-hinova-sync/index.ts`
 
-#### 1. Remover função `buildHinovaAuthHeaders`
+#### 1. Remover `baseHeaders` e usar `authHeaders` em todas as requisições
 
-**Antes (linhas 182-190):**
+**Antes (linhas 185-188):**
 ```typescript
-const buildHinovaAuthHeaders = (tokenUsuario: string) => ({
-  'Authorization': `Bearer ${hinovaToken}`,
-  'X-Token-Usuario': tokenUsuario,
-  token: tokenUsuario,
-  'token_usuario': tokenUsuario,
-  'Token-Usuario': tokenUsuario,
-  TokenUsuario: tokenUsuario,
-});
-```
-
-**Depois:**
-```typescript
-// Headers base para todas as requisições (SEM token_usuario)
+// Headers para requisições de cadastro (SEM Authorization - credenciais vão no body)
 const baseHeaders = {
   'Content-Type': 'application/json',
-  'Authorization': `Bearer ${hinovaToken}`,
 };
+```
+
+**Depois:**
+```typescript
+// Remover baseHeaders - usar authHeaders em TODAS as requisições
 ```
 
 ---
 
-#### 2. Corrigir cadastro de associado (linhas 377-410)
+#### 2. Corrigir cadastro de associado - REMOVER usuario/senha do body
 
-**Antes:**
+**Antes (linhas 376-400):**
 ```typescript
 const associadoPayload = {
+  usuario: hinovaUsuario,      // ❌ REMOVER
+  senha: hinovaSenha,          // ❌ REMOVER
+  token_usuario: tokenUsuario,
   nome: associado.nome,
-  cpf: cleanCPF(associado.cpf),
-  // ...demais campos
+  // ...
 };
 
 const associadoResponse = await fetchWithRetry(
   `${hinovaApiUrl}/associado/cadastrar`,
   {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...buildHinovaAuthHeaders(tokenUsuario)  // ❌ Token no header
-    },
+    headers: baseHeaders,  // ❌ SEM Authorization
     body: JSON.stringify(associadoPayload)
   }
 );
@@ -97,17 +66,16 @@ const associadoResponse = await fetchWithRetry(
 **Depois:**
 ```typescript
 const associadoPayload = {
-  token_usuario: tokenUsuario,  // ✅ Token no body
+  token_usuario: tokenUsuario,  // ✅ Apenas token_usuario
   nome: associado.nome,
-  cpf: cleanCPF(associado.cpf),
-  // ...demais campos
+  // ...
 };
 
 const associadoResponse = await fetchWithRetry(
   `${hinovaApiUrl}/associado/cadastrar`,
   {
     method: 'POST',
-    headers: baseHeaders,  // ✅ Apenas Authorization Bearer
+    headers: authHeaders,  // ✅ COM Authorization: Bearer
     body: JSON.stringify(associadoPayload)
   }
 );
@@ -115,116 +83,115 @@ const associadoResponse = await fetchWithRetry(
 
 ---
 
-#### 3. Corrigir cadastro de veículo (linhas 469-498)
+#### 3. Corrigir cadastro de veículo - REMOVER usuario/senha do body
 
 **Antes:**
 ```typescript
 const veiculoPayload = {
+  usuario: hinovaUsuario,      // ❌ REMOVER
+  senha: hinovaSenha,          // ❌ REMOVER
+  token_usuario: tokenUsuario,
   codigo_associado: codigoAssociadoHinova,
-  placa: veiculo.placa || '',
-  // ...demais campos
+  // ...
 };
 
-const veiculoResponse = await fetchWithRetry(
-  `${hinovaApiUrl}/veiculo/cadastrar`,
-  {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...buildHinovaAuthHeaders(tokenUsuario)  // ❌ Token no header
-    },
-    body: JSON.stringify(veiculoPayload)
-  }
-);
+headers: baseHeaders,  // ❌ SEM Authorization
 ```
 
 **Depois:**
 ```typescript
 const veiculoPayload = {
-  token_usuario: tokenUsuario,  // ✅ Token no body
+  token_usuario: tokenUsuario,  // ✅ Apenas token_usuario
   codigo_associado: codigoAssociadoHinova,
-  placa: veiculo.placa || '',
-  // ...demais campos
+  // ...
 };
 
-const veiculoResponse = await fetchWithRetry(
-  `${hinovaApiUrl}/veiculo/cadastrar`,
-  {
-    method: 'POST',
-    headers: baseHeaders,  // ✅ Apenas Authorization Bearer
-    body: JSON.stringify(veiculoPayload)
-  }
-);
+headers: authHeaders,  // ✅ COM Authorization: Bearer
 ```
 
 ---
 
-#### 4. Corrigir envio de fotos (linhas 566-578)
+#### 4. Corrigir envio de fotos - REMOVER usuario/senha do body
 
 **Antes:**
 ```typescript
-const fotosResponse = await fetchWithRetry(
-  `${hinovaApiUrl}/veiculo/foto/cadastrar`,
-  {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...buildHinovaAuthHeaders(tokenUsuario)  // ❌ Token no header
-    },
-    body: JSON.stringify({
-      codigo_veiculo: codigoVeiculoHinova,
-      foto: fotos
-    })
-  }
-);
+body: JSON.stringify({
+  usuario: hinovaUsuario,      // ❌ REMOVER
+  senha: hinovaSenha,          // ❌ REMOVER
+  token_usuario: tokenUsuario,
+  codigo_veiculo: codigoVeiculoHinova,
+  foto: fotos
+})
+
+headers: baseHeaders,  // ❌ SEM Authorization
 ```
 
 **Depois:**
 ```typescript
-const fotosResponse = await fetchWithRetry(
-  `${hinovaApiUrl}/veiculo/foto/cadastrar`,
-  {
-    method: 'POST',
-    headers: baseHeaders,  // ✅ Apenas Authorization Bearer
-    body: JSON.stringify({
-      token_usuario: tokenUsuario,  // ✅ Token no body
-      codigo_veiculo: codigoVeiculoHinova,
-      foto: fotos
-    })
-  }
-);
+body: JSON.stringify({
+  token_usuario: tokenUsuario,  // ✅ Apenas token_usuario
+  codigo_veiculo: codigoVeiculoHinova,
+  foto: fotos
+})
+
+headers: authHeaders,  // ✅ COM Authorization: Bearer
 ```
 
 ---
 
 ## Resumo das Mudanças
 
-| Local | Antes | Depois |
-|-------|-------|--------|
-| Headers | 6 variações de token (`X-Token-Usuario`, `token`, etc.) | Apenas `Authorization: Bearer {TOKEN_BEARER}` |
-| Body associado | Sem `token_usuario` | Com `token_usuario` como primeiro campo |
-| Body veículo | Sem `token_usuario` | Com `token_usuario` como primeiro campo |
-| Body fotos | Sem `token_usuario` | Com `token_usuario` como primeiro campo |
+| Item | Antes | Depois |
+|------|-------|--------|
+| Header de cadastro | `baseHeaders` (sem Authorization) | `authHeaders` (com Authorization: Bearer) |
+| Body associado | usuario + senha + token_usuario | apenas token_usuario |
+| Body veículo | usuario + senha + token_usuario | apenas token_usuario |
+| Body fotos | usuario + senha + token_usuario | apenas token_usuario |
+
+---
+
+## Fluxo Correto Após Correção
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    FLUXO CORRETO                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. POST /usuario/autenticar                                │
+│     Headers: Authorization: Bearer {TOKEN_API}              │
+│     Body: { usuario, senha }                                │
+│     → Retorna: { token_usuario: "abc123..." } ✅            │
+│                                                             │
+│  2. POST /associado/cadastrar                               │
+│     Headers: Authorization: Bearer {TOKEN_API}              │
+│     Body: { token_usuario: "abc123...", nome, cpf, ... } ✅ │
+│     → Sucesso: { codigo_associado: 12345 }                  │
+│                                                             │
+│  3. POST /veiculo/cadastrar                                 │
+│     Headers: Authorization: Bearer {TOKEN_API}              │
+│     Body: { token_usuario, codigo_associado, placa, ... } ✅│
+│     → Sucesso: { codigo_veiculo: 67890 }                    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Etapas de Implementação
 
-1. **Substituir** a função `buildHinovaAuthHeaders` por uma constante `baseHeaders` simples
-2. **Adicionar** `token_usuario` ao payload de cadastro de associado
-3. **Adicionar** `token_usuario` ao payload de cadastro de veículo
-4. **Adicionar** `token_usuario` ao payload de envio de fotos
-5. **Atualizar** todas as chamadas `fetch` para usar `baseHeaders`
-6. **Deploy** automático da Edge Function
-7. **Testar** o fluxo completo
+1. Remover a constante `baseHeaders` do código
+2. Substituir todas as ocorrências de `baseHeaders` por `authHeaders`
+3. Remover `usuario` e `senha` do payload de cadastro de associado
+4. Remover `usuario` e `senha` do payload de cadastro de veículo
+5. Remover `usuario` e `senha` do payload de envio de fotos
+6. Deploy automático da Edge Function
+7. Testar o fluxo "Enviar para SGA"
 
 ---
 
 ## Validação Pós-Implementação
 
-Após a correção, o fluxo esperado:
-
-1. **Testar Conexão** → Deve retornar sucesso (já funciona)
-2. **Enviar para SGA** → Deve cadastrar associado + veículo sem erro de autorização
-3. **Verificar logs** → Tabela `sga_sync_logs` deve mostrar `status: success` para todas as etapas
-
+Após a correção, verificar nos logs `sga_sync_logs`:
+- `action: autenticar` → `status: success`
+- `action: cadastrar_associado` → `status: success` (antes estava `error`)
+- `action: cadastrar_veiculo` → `status: success`
