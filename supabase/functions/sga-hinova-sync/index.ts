@@ -176,6 +176,15 @@ serve(async (req) => {
     }
   }
 
+  // Headers padrão exigidos pela API Hinova após autenticação.
+  // Existem variações entre ambientes/documentação; para compatibilidade enviamos
+  // o token do usuário em ambos os headers.
+  const buildHinovaAuthHeaders = (tokenUsuario: string) => ({
+    'Authorization': `Bearer ${hinovaToken}`,
+    'X-Token-Usuario': tokenUsuario,
+    token: tokenUsuario,
+  });
+
   try {
     // Validar credenciais
     if (!hinovaToken || !hinovaUsuario || !hinovaSenha) {
@@ -390,8 +399,7 @@ serve(async (req) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${hinovaToken}`,
-            'token': tokenUsuario
+            ...buildHinovaAuthHeaders(tokenUsuario)
           },
           body: JSON.stringify(associadoPayload)
         }
@@ -480,8 +488,7 @@ serve(async (req) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${hinovaToken}`,
-          'token': tokenUsuario
+          ...buildHinovaAuthHeaders(tokenUsuario)
         },
         body: JSON.stringify(veiculoPayload)
       }
@@ -558,8 +565,7 @@ serve(async (req) => {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${hinovaToken}`,
-                'token': tokenUsuario
+                ...buildHinovaAuthHeaders(tokenUsuario)
               },
               body: JSON.stringify({
                 codigo_veiculo: codigoVeiculoHinova,
