@@ -6488,6 +6488,54 @@ export type Database = {
         }
         Relationships: []
       }
+      document_types: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          is_system: boolean | null
+          name: string
+          required_variables: Json | null
+          send_moment: string | null
+          sort_order: number | null
+          target_audience: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name: string
+          required_variables?: Json | null
+          send_moment?: string | null
+          sort_order?: number | null
+          target_audience?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name?: string
+          required_variables?: Json | null
+          send_moment?: string | null
+          sort_order?: number | null
+          target_audience?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       documento_assinaturas: {
         Row: {
           assinado_em: string | null
@@ -6716,6 +6764,7 @@ export type Database = {
         Row: {
           ativo: boolean | null
           cabecalho_html: string | null
+          canvas_data: Json | null
           categoria_id: string | null
           codigo: string
           config_layout: Json | null
@@ -6723,11 +6772,15 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           descricao: string | null
+          document_type_id: string | null
           id: string
+          is_default: boolean | null
           nome: string
           perfis_permitidos: string[] | null
           requer_assinatura: boolean | null
           rodape_html: string | null
+          status: Database["public"]["Enums"]["template_status"] | null
+          thumbnail_url: string | null
           updated_at: string | null
           variaveis: Json | null
           versao: number | null
@@ -6735,6 +6788,7 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           cabecalho_html?: string | null
+          canvas_data?: Json | null
           categoria_id?: string | null
           codigo: string
           config_layout?: Json | null
@@ -6742,11 +6796,15 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           descricao?: string | null
+          document_type_id?: string | null
           id?: string
+          is_default?: boolean | null
           nome: string
           perfis_permitidos?: string[] | null
           requer_assinatura?: boolean | null
           rodape_html?: string | null
+          status?: Database["public"]["Enums"]["template_status"] | null
+          thumbnail_url?: string | null
           updated_at?: string | null
           variaveis?: Json | null
           versao?: number | null
@@ -6754,6 +6812,7 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           cabecalho_html?: string | null
+          canvas_data?: Json | null
           categoria_id?: string | null
           codigo?: string
           config_layout?: Json | null
@@ -6761,11 +6820,15 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           descricao?: string | null
+          document_type_id?: string | null
           id?: string
+          is_default?: boolean | null
           nome?: string
           perfis_permitidos?: string[] | null
           requer_assinatura?: boolean | null
           rodape_html?: string | null
+          status?: Database["public"]["Enums"]["template_status"] | null
+          thumbnail_url?: string | null
           updated_at?: string | null
           variaveis?: Json | null
           versao?: number | null
@@ -6798,6 +6861,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "documento_templates_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -16451,6 +16521,50 @@ export type Database = {
         }
         Relationships: []
       }
+      template_versions: {
+        Row: {
+          canvas_data: Json | null
+          change_description: string | null
+          config_layout: Json | null
+          conteudo: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          template_id: string
+          version: number
+        }
+        Insert: {
+          canvas_data?: Json | null
+          change_description?: string | null
+          config_layout?: Json | null
+          conteudo?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          template_id: string
+          version: number
+        }
+        Update: {
+          canvas_data?: Json | null
+          change_description?: string | null
+          config_layout?: Json | null
+          conteudo?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          template_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "documento_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       treinamentos: {
         Row: {
           carga_horaria: number | null
@@ -18825,6 +18939,7 @@ export type Database = {
         | "em_rota"
         | "em_andamento"
         | "concluida"
+      template_status: "draft" | "active" | "archived"
       tipo_documento:
         | "cnh"
         | "crlv"
@@ -19192,6 +19307,7 @@ export const Constants = {
         "em_andamento",
         "concluida",
       ],
+      template_status: ["draft", "active", "archived"],
       tipo_documento: [
         "cnh",
         "crlv",
