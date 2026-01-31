@@ -60,6 +60,78 @@ import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 
 type StatusCotacaoExtended = StatusCotacao | 'visualizada';
 
+// Mapeamento de coberturas para categorias
+const CATEGORIAS_BENEFICIOS: Record<string, 'cobertura' | 'assistencia' | 'extra'> = {
+  'roubo e furto': 'cobertura',
+  'roubo': 'cobertura',
+  'furto': 'cobertura',
+  'colisão': 'cobertura',
+  'perda total': 'cobertura',
+  'incêndio': 'cobertura',
+  'alagamento': 'cobertura',
+  'chuva de granizo': 'cobertura',
+  'granizo': 'cobertura',
+  'fenômenos': 'cobertura',
+  'danos a terceiros': 'cobertura',
+  'danos terceiros': 'cobertura',
+  'terceiros': 'cobertura',
+  'vidros': 'cobertura',
+  'faróis': 'cobertura',
+  'retrovisores': 'cobertura',
+  'assistência 24h': 'assistencia',
+  'assistência': 'assistencia',
+  '24h': 'assistencia',
+  'rastreador': 'assistencia',
+  'monitoramento': 'assistencia',
+  'reboque': 'assistencia',
+  'guincho': 'assistencia',
+  'chaveiro': 'assistencia',
+  'pane seca': 'assistencia',
+  'pane elétrica': 'assistencia',
+  'troca de pneu': 'assistencia',
+  'kit gás': 'extra',
+  'carro reserva': 'extra',
+  'clube gás': 'extra',
+  '100% fipe': 'extra',
+  'fipe app': 'extra',
+  'app': 'extra',
+  'proteção de vidros': 'extra',
+  'cobertura de vidros': 'extra',
+};
+
+// Função para categorizar coberturas
+const categorizarBeneficios = (coberturas: string[]) => {
+  const resultado = {
+    coberturas: [] as string[],
+    assistencia: [] as string[],
+    extras: [] as string[],
+  };
+  
+  coberturas.forEach(cob => {
+    const cobLower = cob.toLowerCase();
+    let categoriaEncontrada: 'cobertura' | 'assistencia' | 'extra' = 'cobertura'; // default
+    
+    // Buscar categoria pelo mapeamento usando includes
+    for (const [termo, cat] of Object.entries(CATEGORIAS_BENEFICIOS)) {
+      if (cobLower.includes(termo)) {
+        categoriaEncontrada = cat;
+        break;
+      }
+    }
+    
+    // Adicionar à categoria correta
+    if (categoriaEncontrada === 'cobertura') {
+      resultado.coberturas.push(cob);
+    } else if (categoriaEncontrada === 'assistencia') {
+      resultado.assistencia.push(cob);
+    } else {
+      resultado.extras.push(cob);
+    }
+  });
+  
+  return resultado;
+};
+
 const statusConfig: Record<StatusCotacaoExtended, { 
   label: string; 
   color: string;
@@ -391,7 +463,7 @@ export default function Cotacoes() {
     mensagem += `Preparamos uma cotação especial para seu *${veiculo}*.\n\n`;
     mensagem += `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n`;
     
-    // Listar cada plano com TODOS os benefícios
+    // Listar cada plano com benefícios categorizados
     planos.forEach((plano, index) => {
       if (planos.length > 1) {
         mensagem += `━━━━━━━━━━━━━━━━━━\n`;
@@ -401,7 +473,38 @@ export default function Cotacoes() {
       }
       mensagem += `💵 *Mensalidade:* R$ ${plano.valorMensal.toFixed(2)}/mês\n\n`;
       
-      if (plano.coberturas && plano.coberturas.length > 0) {
+      // Categorizar benefícios
+      const beneficios = categorizarBeneficios(plano.coberturas || []);
+      
+      // Coberturas principais
+      if (beneficios.coberturas.length > 0) {
+        mensagem += `🛡️ *Coberturas:*\n`;
+        beneficios.coberturas.forEach(c => {
+          mensagem += `✓ ${c}\n`;
+        });
+        mensagem += `\n`;
+      }
+      
+      // Assistência 24h
+      if (beneficios.assistencia.length > 0) {
+        mensagem += `🚗 *Assistência 24h:*\n`;
+        beneficios.assistencia.forEach(c => {
+          mensagem += `✓ ${c}\n`;
+        });
+        mensagem += `\n`;
+      }
+      
+      // Benefícios extras
+      if (beneficios.extras.length > 0) {
+        mensagem += `✨ *Benefícios Extras:*\n`;
+        beneficios.extras.forEach(c => {
+          mensagem += `✓ ${c}\n`;
+        });
+        mensagem += `\n`;
+      }
+      
+      // Se nenhuma categoria tiver itens, listar tudo como benefícios
+      if (beneficios.coberturas.length === 0 && beneficios.assistencia.length === 0 && beneficios.extras.length === 0 && plano.coberturas && plano.coberturas.length > 0) {
         mensagem += `✅ *Benefícios inclusos:*\n`;
         plano.coberturas.forEach(c => {
           mensagem += `✓ ${c}\n`;
@@ -479,6 +582,12 @@ export default function Cotacoes() {
       return;
     }
     
+    // Enriquecer planos com benefícios categorizados
+    const planosEnriquecidos = planos.map(p => ({
+      ...p,
+      beneficiosPorCategoria: categorizarBeneficios(p.coberturas || []),
+    }));
+    
     // Montar dados para a IA
     const dadosCotacao = {
       cliente: { nome: cotacao.leads?.nome || cotacao.nome_solicitante || 'Cliente' },
@@ -491,7 +600,7 @@ export default function Cotacoes() {
       valorFipe: cotacao.valor_fipe || 0,
       valorAdesao: cotacao.valor_adesao || 0,
       validadeDias: cotacao.validade_dias || 7,
-      planos,
+      planos: planosEnriquecidos,
       linkCotacao: cotacao.token_publico 
         ? `${window.location.origin}/cotacao/${cotacao.token_publico}` 
         : undefined,
