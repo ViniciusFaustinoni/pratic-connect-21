@@ -1853,51 +1853,55 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         </Form>
       </DialogContent>
 
-      {/* Dialog de Confirmação de Taxa de Filiação */}
-      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Taxa de Filiação</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-4">
-                <p>Você está definindo a taxa de filiação como:</p>
-                <div className="text-3xl font-bold text-center text-primary py-4 bg-primary/5 rounded-lg">
-                  {formatCurrency(pendingFormData?.valor_adesao || 0)}
+      {/* Dialog de Confirmação de Taxa de Filiação - FORA do Dialog principal para evitar conflito de portais */}
+      {showConfirmDialog && (
+        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Taxa de Filiação</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-4">
+                  <p>Você está definindo a taxa de filiação como:</p>
+                  <div className="text-3xl font-bold text-center text-primary py-4 bg-primary/5 rounded-lg">
+                    {formatCurrency(pendingFormData?.valor_adesao || 0)}
+                  </div>
+                  <p className="text-sm text-muted-foreground text-center">
+                    Associado: <strong>{nomeAssociado}</strong>
+                  </p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    Este valor será cobrado do associado. Confirma?
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground text-center">
-                  Associado: <strong>{nomeAssociado}</strong>
-                </p>
-                <p className="text-sm text-muted-foreground text-center">
-                  Este valor será cobrado do associado. Confirma?
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingFormData(null)} disabled={isSubmitting}>
-              Revisar Valor
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmSubmit} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  Criando...
-                </>
-              ) : (
-                'Confirmar e Criar'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPendingFormData(null)} disabled={isSubmitting}>
+                Revisar Valor
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmSubmit} disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    Criando...
+                  </>
+                ) : (
+                  'Confirmar e Criar'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
       
-      {/* Modal de Placa Duplicada */}
-      <PlacaDuplicadaModal
-        open={showPlacaDuplicadaModal}
-        onOpenChange={setShowPlacaDuplicadaModal}
-        placa={placa}
-        info={placaDuplicadaInfo}
-      />
+      {/* Modal de Placa Duplicada - FORA do Dialog principal */}
+      {showPlacaDuplicadaModal && (
+        <PlacaDuplicadaModal
+          open={showPlacaDuplicadaModal}
+          onOpenChange={setShowPlacaDuplicadaModal}
+          placa={placa}
+          info={placaDuplicadaInfo}
+        />
+      )}
     </Dialog>
   );
 }

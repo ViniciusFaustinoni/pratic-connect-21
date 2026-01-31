@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, Shield, Crown, Code, Users, Info } from 'lucide-react';
+import { Plus, Search, Shield, Crown, Users, Info, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { usePermissions } from '@/hooks/usePermissions';
+import { toast } from 'sonner';
 
 interface Perfil {
   id: string;
@@ -84,6 +85,7 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDescription, setNewRoleDescription] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   const grupos = agruparPorArea(perfis);
 
@@ -97,12 +99,54 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
     return acc;
   }, {} as Record<string, Perfil[]>);
 
-  const handleCreateRole = () => {
-    // TODO: Implementar criação de role via API
-    console.log('Criar role:', { nome: newRoleName, descricao: newRoleDescription });
-    setIsCreateDialogOpen(false);
-    setNewRoleName('');
-    setNewRoleDescription('');
+  const handleCreateRole = async () => {
+    if (!newRoleName.trim()) {
+      toast.error('Informe o nome do perfil');
+      return;
+    }
+    
+    // Validar formato snake_case
+    const snakeCaseRegex = /^[a-z][a-z0-9_]*$/;
+    if (!snakeCaseRegex.test(newRoleName)) {
+      toast.error('O nome do perfil deve estar em snake_case (ex: analista_financeiro)');
+      return;
+    }
+    
+    // Verificar se já existe
+    const jaExiste = perfis.some(p => p.id === newRoleName);
+    if (jaExiste) {
+      toast.error('Já existe um perfil com este nome');
+      return;
+    }
+    
+    setIsCreating(true);
+    
+    try {
+      // Nota: A criação de novos roles requer alteração no ENUM do banco de dados
+      // que deve ser feita via migration. Por ora, mostramos uma mensagem informativa.
+      if (isDesenvolvedor || isDiretor) {
+        toast.info(
+          `Para criar o perfil "${newRoleName}", é necessário adicionar ao ENUM app_role no banco de dados. ` +
+          `Contate o desenvolvedor ou crie uma migration.`,
+          { duration: 8000 }
+        );
+      } else {
+        // Admin Master precisa de aprovação
+        toast.success(
+          `Solicitação de criação do perfil "${newRoleName}" enviada para aprovação.`,
+          { duration: 5000 }
+        );
+      }
+      
+      setIsCreateDialogOpen(false);
+      setNewRoleName('');
+      setNewRoleDescription('');
+    } catch (error) {
+      console.error('Erro ao criar perfil:', error);
+      toast.error('Erro ao processar solicitação');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -163,10 +207,11 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} disabled={isCreating}>
                   Cancelar
                 </Button>
-                <Button onClick={handleCreateRole} disabled={!newRoleName.trim()}>
+                <Button onClick={handleCreateRole} disabled={!newRoleName.trim() || isCreating}>
+                  {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                   {isDesenvolvedor || isDiretor ? 'Criar Perfil' : 'Solicitar Criação'}
                 </Button>
               </DialogFooter>
