@@ -5,10 +5,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+interface BeneficiosPorCategoria {
+  coberturas: string[];
+  assistencia: string[];
+  extras: string[];
+}
+
 interface Plano {
   nome: string;
   valorMensal: number;
   coberturas: string[];
+  beneficiosPorCategoria?: BeneficiosPorCategoria;
   naoInclui?: string[];
 }
 
@@ -69,11 +76,45 @@ ESTRUTURA OBRIGATÓRIA:
 - Apresentação de CADA plano com:
   - Nome do plano em destaque
   - Valor mensal em destaque
-  - TODOS os benefícios listados com ✓
+  - Benefícios ORGANIZADOS POR CATEGORIA (quando disponível):
+    🛡️ *Coberturas:* liste com ✓ (Roubo, Furto, Colisão, Perda Total, etc)
+    🚗 *Assistência 24h:* liste com ✓ (Reboque, Rastreador, Guincho, etc)
+    ✨ *Benefícios Extras:* liste com ✓ (Carro Reserva, Kit Gás, 100% FIPE, etc)
 - Taxa de Adesão
 - Validade da cotação
 - Link para ver mais detalhes (se houver)
-- Call-to-action perguntando qual opção interessou`;
+- Call-to-action perguntando qual opção interessou
+
+IMPORTANTE: Se os benefícios vierem já categorizados em "beneficiosPorCategoria", USE essa estrutura para organizar. Apresente cada categoria com seu emoji e título.`;
+
+    // Formatar planos com benefícios categorizados
+    const formatarPlano = (plano: Plano, index: number) => {
+      let texto = `PLANO ${index + 1}: ${plano.nome}\nValor Mensal: R$ ${plano.valorMensal.toFixed(2)}\n`;
+      
+      // Se temos benefícios categorizados, usar essa estrutura
+      if (plano.beneficiosPorCategoria) {
+        const { coberturas, assistencia, extras } = plano.beneficiosPorCategoria;
+        
+        if (coberturas && coberturas.length > 0) {
+          texto += `\n🛡️ COBERTURAS:\n${coberturas.map(c => `- ${c}`).join('\n')}`;
+        }
+        if (assistencia && assistencia.length > 0) {
+          texto += `\n🚗 ASSISTÊNCIA 24H:\n${assistencia.map(c => `- ${c}`).join('\n')}`;
+        }
+        if (extras && extras.length > 0) {
+          texto += `\n✨ BENEFÍCIOS EXTRAS:\n${extras.map(c => `- ${c}`).join('\n')}`;
+        }
+      } else if (plano.coberturas && plano.coberturas.length > 0) {
+        // Fallback: listar todos juntos
+        texto += `\nBenefícios inclusos:\n${plano.coberturas.map(c => `- ${c}`).join('\n')}`;
+      }
+      
+      if (plano.naoInclui && plano.naoInclui.length > 0) {
+        texto += `\n\nNão inclui:\n${plano.naoInclui.map(n => `- ${n}`).join('\n')}`;
+      }
+      
+      return texto;
+    };
 
     const userPrompt = `Gere uma mensagem de WhatsApp para a seguinte cotação:
 
@@ -84,19 +125,13 @@ VEÍCULO: ${payload.veiculo.marca} ${payload.veiculo.modelo} ${payload.veiculo.a
 VALOR FIPE: R$ ${payload.valorFipe.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
 
 PLANOS (${payload.planos.length} opção${payload.planos.length > 1 ? 'ões' : ''}):
-${payload.planos.map((plano, index) => `
-PLANO ${index + 1}: ${plano.nome}
-Valor Mensal: R$ ${plano.valorMensal.toFixed(2)}
-Benefícios inclusos:
-${plano.coberturas.map(c => `- ${c}`).join('\n')}
-${plano.naoInclui && plano.naoInclui.length > 0 ? `\nNão inclui:\n${plano.naoInclui.map(n => `- ${n}`).join('\n')}` : ''}
-`).join('\n---\n')}
+${payload.planos.map((plano, index) => formatarPlano(plano, index)).join('\n\n---\n\n')}
 
 TAXA DE ADESÃO: R$ ${payload.valorAdesao.toFixed(2)}
 VALIDADE: ${payload.validadeDias} dias
 ${payload.linkCotacao ? `LINK DA COTAÇÃO: ${payload.linkCotacao}` : ''}
 
-Gere APENAS o texto da mensagem, sem explicações adicionais.`;
+Gere APENAS o texto da mensagem, sem explicações adicionais. MANTENHA a organização por categorias (Coberturas, Assistência 24h, Benefícios Extras) na mensagem final.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
