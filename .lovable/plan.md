@@ -1,119 +1,129 @@
 
-Contexto do problema (o que está acontecendo)
-- Esse “card lateral” é o Sheet `Configurar {Integração}` (ex.: “Configurar SGA Hinova”).
-- Hoje, ao abrir o Sheet, o componente zera o estado local (`setValores({})`). Isso faz com que:
-  1) Tudo que você digitou (mesmo antes de salvar) se perca ao fechar e abrir novamente.
-  2) Mesmo após salvar, os campos ficam “vazios” (apenas com placeholder “••••••••”), o que dá a impressão de que não persistiu.
-- Além disso, há um problema de backend/fluxo: o endpoint `integracoes-credenciais` (POST) exige que `credenciais` contenha todos os campos obrigatórios sempre. Isso impede:
-  - Atualizar só um campo (ex.: trocar apenas o token) sem redigitar usuário/senha.
-  - Registrar o resultado do “Testar Conexão” sem reenviar credenciais (no hook atual isso pode falhar silenciosamente e não atualizar status).
+# Plano: Diagnóstico e Correção do Erro de Token Bearer SGA Hinova
 
-Objetivo
-1) Persistir no UI os valores digitados enquanto o usuário estiver na tela, mesmo fechando e reabrindo o Sheet (persistência de “rascunho”).
-2) Melhorar o “Salvar” para permitir atualização parcial (alterar só o que foi digitado) e manter o resto do que já está salvo no banco.
-3) Garantir que “Testar Conexão” atualize o status (teste pendente/sucesso/falha) sem exigir reenvio de credenciais.
+## Diagnóstico do Problema
 
-Exploração do que existe hoje (onde mexer)
-- Frontend
-  - `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
-    - Reseta valores sempre que abre (`useEffect` com `if (open) setValores({})`).
-    - Exige todos os obrigatórios preenchidos sempre (`podeSalvar`).
-  - `src/components/integracoes/ServicosTab.tsx`
-    - Abre o Sheet e controla apenas open/close e seleção da integração.
-  - `src/hooks/useIntegracaoCredenciais.ts`
-    - `salvar()` sempre envia as credenciais informadas.
-    - `testar()` para Hinova chama `sga-hinova-sync` sem enviar credenciais; depois tenta “atualizar status” via POST, mas o endpoint atual pode rejeitar (porque faltam credenciais obrigatórias).
-- Backend
-  - `supabase/functions/integracoes-credenciais/index.ts`
-    - POST sempre valida obrigatórios em `credenciais` e sobrescreve o registro.
-    - Não tem modo “update parcial” nem “somente atualizar teste”.
+Após análise detalhada dos logs e código:
 
-Solução proposta (alto nível)
-A) Frontend: persistir rascunho no estado do `ServicosTab`
-- Manter um estado “draft” por integração (apenas em memória, não localStorage) para que ao fechar/abrir o Sheet, os campos voltem como estavam digitados.
-- Ao salvar ou remover credenciais, limpar o draft dessa integração (para evitar reusar dados antigos).
+| Etapa | Status | Detalhe |
+|-------|--------|---------|
+| Buscar credenciais do banco | ✅ Sucesso | `token`, `usuario`, `senha` são carregados corretamente |
+| Autenticação (`/usuario/autenticar`) | ✅ Sucesso | Retorna `token_usuario` válido → credenciais usuário/senha funcionam |
+| Cadastro (`/associado/cadastrar`) | ❌ Falha | "Login ou senha inválido" mesmo com `token_usuario` válido |
 
-B) Backend: permitir “update parcial” e “atualizar teste” sem credenciais
-- Alterar o POST do `integracoes-credenciais` para suportar 2 comportamentos:
-  1) Atualização de credenciais (parcial): mesclar credenciais novas (não vazias) com as credenciais já salvas (descriptografando as antigas). Validar obrigatórios após o merge.
-  2) Atualização de resultado de teste: quando vier `teste_sucesso`/`teste_mensagem` e `credenciais` vier vazio/ausente, atualizar apenas colunas `teste_sucesso`, `teste_mensagem`, `testado_em` e manter a criptografia existente.
+### Causa Raiz Identificada
 
-C) Frontend: ajustar “Salvar” e “Testar Conexão” para o novo comportamento
-- “Salvar”:
-  - Se já está configurado, permitir salvar quando pelo menos um campo foi digitado (em vez de exigir todos obrigatórios).
-  - Enviar apenas os campos preenchidos (para fazer update parcial).
-- “Testar Conexão”:
-  - Ao terminar o teste, fazer POST para `integracoes-credenciais` com `teste_sucesso`/`teste_mensagem` sem precisar reenviar credenciais.
-  - Isso garante que o status no card e no sheet será persistido corretamente.
+A API Hinova v2 possui **duas camadas de autenticação**:
 
-Passo a passo de implementação (sequência)
-1) Ajustar o backend `integracoes-credenciais` (essencial para corrigir persistência de status e permitir update parcial)
-   - Arquivo: `supabase/functions/integracoes-credenciais/index.ts`
-   - Implementar no POST:
-     - Ler body com: `integracao`, `credenciais?`, `teste_sucesso?`, `teste_mensagem?`
-     - Buscar registro atual por `integracao` (se existir).
-     - Se `credenciais` estiver ausente ou vazio E existir `teste_sucesso`:
-       - Fazer `update` somente dos campos de teste (e `updated_at`), sem validar schema.
-       - Retornar `{success:true}`.
-     - Caso contrário:
-       - Se existe registro atual configurado, descriptografar e fazer merge:
-         - `merged = { ...credenciaisExistentes, ...credenciaisNovasNaoVazias }`
-       - Validar obrigatórios em `merged`.
-       - Criptografar `merged` e fazer upsert, preservando flags/atualizando timestamps.
-   - Garantir que o GET continue retornando apenas status (nunca credenciais).
+1. **Token Bearer (Header)**: Token da API gerado no painel SGA pela Associação - autoriza a aplicação a fazer requisições
+2. **Usuario/Senha/Token_Usuario (Body)**: Identifica a sessão do operador
 
-2) Persistência do rascunho no UI (fechar/abrir sem perder o que digitou)
-   - Arquivo: `src/components/integracoes/ServicosTab.tsx`
-   - Criar estado:
-     - `const [drafts, setDrafts] = useState<Partial<Record<IntegracaoTipo, Record<string,string>>>>({});`
-   - Ao abrir o sheet, manter `integracaoSelecionada` e passar `initialValues={drafts[integracaoSelecionada] ?? {}}`
-   - Passar callback `onValuesChange` para atualizar `drafts[integracao]` conforme o usuário digita.
-   - Em `handleIntegracaoSuccess` (após salvar/remover), limpar draft da integração atual.
+O erro "Login ou senha inválido" no cadastro indica que o **Token Bearer no header `Authorization`** está sendo rejeitado pela API Hinova, mesmo que as credenciais no body estejam corretas.
 
-3) Alterar `ConfigurarIntegracaoSheet` para usar `initialValues` e não resetar ao abrir
-   - Arquivo: `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
-   - Adicionar props:
-     - `initialValues?: Record<string,string>`
-     - `onValuesChange?: (values: Record<string,string>) => void`
-   - Remover/ajustar o `useEffect` que zera tudo ao abrir:
-     - Em vez de resetar, carregar `initialValues` quando `open` ou `integracao` mudar.
-   - `handleChange`:
-     - Atualiza state local + chama `onValuesChange` com o novo objeto.
-   - `podeSalvar`:
-     - Se `configurado === false`: exigir obrigatórios preenchidos (como hoje).
-     - Se `configurado === true`: permitir salvar se existe ao menos 1 campo preenchido (algum valor não vazio) para update parcial.
-   - Melhorar microcopy:
-     - Quando configurado e `valores` vazio, exibir um texto: “Credenciais já salvas. Para alterar, digite apenas o(s) campo(s) que deseja atualizar e clique em Salvar.”
+Possíveis causas:
+- Token Bearer **expirado** ou **revogado** no painel Hinova
+- Token Bearer **sem permissões** para operações de escrita (cadastro)
+- Token Bearer copiado com **caracteres inválidos** (espaços, quebras de linha)
 
-4) Ajustar o hook para atualizar status de teste sem exigir credenciais
-   - Arquivo: `src/hooks/useIntegracaoCredenciais.ts`
-   - No `testar()`:
-     - Depois do teste, sempre registrar resultado chamando POST com:
-       - `{ integracao, credenciais: {}, teste_sucesso, teste_mensagem }`
-     - Agora o backend aceitará isso e persistirá o status.
-   - No `salvar()`:
-     - Para update parcial, enviar apenas os campos que o usuário preencheu (o próprio objeto `valores` já terá só o que ele digitou se a gente não preencher automaticamente).
-   - Garantir `invalidateQueries` para `['integracao-credenciais-status', integracao]` e `['todas-integracoes-credenciais']` (este último é usado no grid do `ServicosTab`).
+---
 
-5) Validação manual (passos de teste)
-   - Abrir: Configurações > Integrações > Serviços > SGA Hinova > Configurar/Editar
-   - Digitar alguns campos e fechar sem salvar; reabrir:
-     - Os valores digitados devem continuar no formulário (rascunho).
-   - Salvar; fechar e reabrir:
-     - Deve mostrar status “Credenciais salvas…” e permitir alterar apenas 1 campo e salvar novamente sem digitar tudo.
-   - Clicar em “Testar Conexão”:
-     - O status “Última tentativa…” deve persistir após fechar e reabrir e também refletir no card (Serviços).
-   - Recarregar a página:
-     - Rascunho (em memória) pode se perder, mas credenciais/status do teste devem continuar (persistidos no banco).
+## Solução
 
-Riscos/observações
-- Segurança: o “rascunho” ficará apenas em memória (state React). Não vamos armazenar em localStorage.
-- Não exibiremos credenciais reais já salvas (por design do endpoint), apenas placeholders e status. O objetivo é não perder o que está digitado e não precisar redigitar tudo para pequenas alterações.
+### Parte 1: Ação Manual (Usuário)
 
-Arquivos envolvidos
-- Frontend
-  - `src/components/integracoes/ServicosTab.tsx`
-  - `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
-  - `src/hooks/useIntegracaoCredenciais.ts`
-- Backend
-  - `supabase/functions/integracoes-credenciais/index.ts`
+1. Acessar o **Painel Administrativo do SGA Hinova**
+2. Navegar até **Configurações > API / Tokens** (ou seção similar)
+3. **Gerar um novo Token Bearer** com permissões completas (leitura e escrita)
+4. Copiar o token **exatamente** (sem espaços extras no início ou fim)
+5. No sistema, acessar **Configurações > Integrações > Serviços > SGA Hinova > Editar**
+6. Colar o novo token no campo **Token Bearer (gerado no SGA)**
+7. Clicar em **Salvar**
+8. Clicar em **Testar Conexão** para validar
+9. Tentar novamente **Enviar para SGA** na tela de Ativações
+
+### Parte 2: Melhorias no Sistema (Implementação)
+
+Para evitar confusão futura, implementarei melhorias no diagnóstico de erros:
+
+#### Arquivo 1: `supabase/functions/sga-hinova-sync/index.ts`
+
+Adicionar detecção específica de erro de token inválido e retornar resposta mais clara:
+
+```typescript
+// Após receber resposta de erro no cadastro
+if (!associadoResponse.ok) {
+  const isTokenError = 
+    associadoData.mensagem?.includes('token de acesso') ||
+    associadoData.error?.some((e: string) => 
+      e.toLowerCase().includes('login') || 
+      e.toLowerCase().includes('senha')
+    );
+  
+  if (isTokenError && authData.token_usuario) {
+    // Usuário/senha funcionaram na autenticação, então o problema é o Token Bearer
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: 'Token Bearer da API Hinova inválido ou expirado. ' +
+             'Gere um novo token no painel SGA e atualize em Configurações > Integrações.',
+      step: 'associado',
+      action_required: 'update_bearer_token',
+      details: associadoData
+    }), { status: 401, headers: {...} });
+  }
+}
+```
+
+Adicionar logging melhorado para debug:
+
+```typescript
+console.log('[SGA Sync] Token Bearer carregado:', hinovaToken ? `${hinovaToken.slice(0,10)}...` : 'VAZIO');
+```
+
+#### Arquivo 2: `src/components/ativacao/BotaoEnviarSGA.tsx`
+
+Tratar o erro de token de forma amigável no frontend:
+
+```typescript
+if (data?.action_required === 'update_bearer_token') {
+  toast.error('Token SGA Hinova Expirado', {
+    description: 'O token da API precisa ser atualizado. Acesse Configurações > Integrações.',
+    duration: 10000,
+  });
+  return;
+}
+```
+
+#### Arquivo 3: Adicionar validação no teste de conexão
+
+O teste de conexão atual só valida autenticação (usuário/senha). Vou adicionar uma chamada de teste que valide também o Token Bearer para operações de escrita:
+
+```typescript
+// No test_connection, após autenticar com sucesso:
+// Fazer uma requisição de leitura simples para validar Token Bearer
+const testReadResponse = await fetch(`${hinovaApiUrl}/associado/consultar`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${hinovaToken}` },
+  body: JSON.stringify({ 
+    usuario: hinovaUsuario, 
+    senha: hinovaSenha, 
+    token_usuario: authData.token_usuario,
+    cpf: '00000000000' // CPF inválido só para testar permissão
+  })
+});
+// Se retornar 401/403, Token Bearer está inválido
+```
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/sga-hinova-sync/index.ts` | Detecção de erro de Token Bearer + logging melhorado + validação no teste de conexão |
+| `src/components/ativacao/BotaoEnviarSGA.tsx` | Tratamento amigável de erro de token expirado |
+
+---
+
+## Resumo
+
+O problema é que o **Token Bearer** (diferente de usuário/senha) está expirado ou inválido na API Hinova. A solução imediata é gerar um novo token no painel Hinova e atualizar nas configurações. A implementação adicionará melhor diagnóstico para que esse tipo de erro seja mais claro no futuro.
