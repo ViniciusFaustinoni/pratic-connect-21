@@ -1,197 +1,119 @@
 
-# Plano: Corrigir Headers da API Hinova
+Contexto do problema (o que está acontecendo)
+- Esse “card lateral” é o Sheet `Configurar {Integração}` (ex.: “Configurar SGA Hinova”).
+- Hoje, ao abrir o Sheet, o componente zera o estado local (`setValores({})`). Isso faz com que:
+  1) Tudo que você digitou (mesmo antes de salvar) se perca ao fechar e abrir novamente.
+  2) Mesmo após salvar, os campos ficam “vazios” (apenas com placeholder “••••••••”), o que dá a impressão de que não persistiu.
+- Além disso, há um problema de backend/fluxo: o endpoint `integracoes-credenciais` (POST) exige que `credenciais` contenha todos os campos obrigatórios sempre. Isso impede:
+  - Atualizar só um campo (ex.: trocar apenas o token) sem redigitar usuário/senha.
+  - Registrar o resultado do “Testar Conexão” sem reenviar credenciais (no hook atual isso pode falhar silenciosamente e não atualizar status).
 
-## Diagnóstico Confirmado
+Objetivo
+1) Persistir no UI os valores digitados enquanto o usuário estiver na tela, mesmo fechando e reabrindo o Sheet (persistência de “rascunho”).
+2) Melhorar o “Salvar” para permitir atualização parcial (alterar só o que foi digitado) e manter o resto do que já está salvo no banco.
+3) Garantir que “Testar Conexão” atualize o status (teste pendente/sucesso/falha) sem exigir reenvio de credenciais.
 
-Com base nos logs do banco de dados, identifiquei o padrão exato dos erros:
+Exploração do que existe hoje (onde mexer)
+- Frontend
+  - `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
+    - Reseta valores sempre que abre (`useEffect` com `if (open) setValores({})`).
+    - Exige todos os obrigatórios preenchidos sempre (`podeSalvar`).
+  - `src/components/integracoes/ServicosTab.tsx`
+    - Abre o Sheet e controla apenas open/close e seleção da integração.
+  - `src/hooks/useIntegracaoCredenciais.ts`
+    - `salvar()` sempre envia as credenciais informadas.
+    - `testar()` para Hinova chama `sga-hinova-sync` sem enviar credenciais; depois tenta “atualizar status” via POST, mas o endpoint atual pode rejeitar (porque faltam credenciais obrigatórias).
+- Backend
+  - `supabase/functions/integracoes-credenciais/index.ts`
+    - POST sempre valida obrigatórios em `credenciais` e sobrescreve o registro.
+    - Não tem modo “update parcial” nem “somente atualizar teste”.
 
-| Configuração testada | Erro retornado pela API |
-|---------------------|-------------------------|
-| Sem `Authorization` header | "Parâmetro Authorization incorreto" |
-| Com `Authorization` + usuario/senha no body | "Login ou senha inválido" |
+Solução proposta (alto nível)
+A) Frontend: persistir rascunho no estado do `ServicosTab`
+- Manter um estado “draft” por integração (apenas em memória, não localStorage) para que ao fechar/abrir o Sheet, os campos voltem como estavam digitados.
+- Ao salvar ou remover credenciais, limpar o draft dessa integração (para evitar reusar dados antigos).
 
-**Conclusão**: A API Hinova exige:
-1. **Header obrigatório**: `Authorization: Bearer {TOKEN_API}` - sempre!
-2. **Body**: Apenas `token_usuario` + dados (NÃO enviar usuario/senha novamente)
+B) Backend: permitir “update parcial” e “atualizar teste” sem credenciais
+- Alterar o POST do `integracoes-credenciais` para suportar 2 comportamentos:
+  1) Atualização de credenciais (parcial): mesclar credenciais novas (não vazias) com as credenciais já salvas (descriptografando as antigas). Validar obrigatórios após o merge.
+  2) Atualização de resultado de teste: quando vier `teste_sucesso`/`teste_mensagem` e `credenciais` vier vazio/ausente, atualizar apenas colunas `teste_sucesso`, `teste_mensagem`, `testado_em` e manter a criptografia existente.
 
-O código atual está incorretamente:
-- Removendo o header `Authorization` nas requisições de cadastro (`baseHeaders`)
-- Enviando `usuario` e `senha` no body (causando revalidação desnecessária)
+C) Frontend: ajustar “Salvar” e “Testar Conexão” para o novo comportamento
+- “Salvar”:
+  - Se já está configurado, permitir salvar quando pelo menos um campo foi digitado (em vez de exigir todos obrigatórios).
+  - Enviar apenas os campos preenchidos (para fazer update parcial).
+- “Testar Conexão”:
+  - Ao terminar o teste, fazer POST para `integracoes-credenciais` com `teste_sucesso`/`teste_mensagem` sem precisar reenviar credenciais.
+  - Isso garante que o status no card e no sheet será persistido corretamente.
 
----
+Passo a passo de implementação (sequência)
+1) Ajustar o backend `integracoes-credenciais` (essencial para corrigir persistência de status e permitir update parcial)
+   - Arquivo: `supabase/functions/integracoes-credenciais/index.ts`
+   - Implementar no POST:
+     - Ler body com: `integracao`, `credenciais?`, `teste_sucesso?`, `teste_mensagem?`
+     - Buscar registro atual por `integracao` (se existir).
+     - Se `credenciais` estiver ausente ou vazio E existir `teste_sucesso`:
+       - Fazer `update` somente dos campos de teste (e `updated_at`), sem validar schema.
+       - Retornar `{success:true}`.
+     - Caso contrário:
+       - Se existe registro atual configurado, descriptografar e fazer merge:
+         - `merged = { ...credenciaisExistentes, ...credenciaisNovasNaoVazias }`
+       - Validar obrigatórios em `merged`.
+       - Criptografar `merged` e fazer upsert, preservando flags/atualizando timestamps.
+   - Garantir que o GET continue retornando apenas status (nunca credenciais).
 
-## Alterações Necessárias
+2) Persistência do rascunho no UI (fechar/abrir sem perder o que digitou)
+   - Arquivo: `src/components/integracoes/ServicosTab.tsx`
+   - Criar estado:
+     - `const [drafts, setDrafts] = useState<Partial<Record<IntegracaoTipo, Record<string,string>>>>({});`
+   - Ao abrir o sheet, manter `integracaoSelecionada` e passar `initialValues={drafts[integracaoSelecionada] ?? {}}`
+   - Passar callback `onValuesChange` para atualizar `drafts[integracao]` conforme o usuário digita.
+   - Em `handleIntegracaoSuccess` (após salvar/remover), limpar draft da integração atual.
 
-### Arquivo: `supabase/functions/sga-hinova-sync/index.ts`
+3) Alterar `ConfigurarIntegracaoSheet` para usar `initialValues` e não resetar ao abrir
+   - Arquivo: `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
+   - Adicionar props:
+     - `initialValues?: Record<string,string>`
+     - `onValuesChange?: (values: Record<string,string>) => void`
+   - Remover/ajustar o `useEffect` que zera tudo ao abrir:
+     - Em vez de resetar, carregar `initialValues` quando `open` ou `integracao` mudar.
+   - `handleChange`:
+     - Atualiza state local + chama `onValuesChange` com o novo objeto.
+   - `podeSalvar`:
+     - Se `configurado === false`: exigir obrigatórios preenchidos (como hoje).
+     - Se `configurado === true`: permitir salvar se existe ao menos 1 campo preenchido (algum valor não vazio) para update parcial.
+   - Melhorar microcopy:
+     - Quando configurado e `valores` vazio, exibir um texto: “Credenciais já salvas. Para alterar, digite apenas o(s) campo(s) que deseja atualizar e clique em Salvar.”
 
-#### 1. Remover `baseHeaders` e usar `authHeaders` em todas as requisições
+4) Ajustar o hook para atualizar status de teste sem exigir credenciais
+   - Arquivo: `src/hooks/useIntegracaoCredenciais.ts`
+   - No `testar()`:
+     - Depois do teste, sempre registrar resultado chamando POST com:
+       - `{ integracao, credenciais: {}, teste_sucesso, teste_mensagem }`
+     - Agora o backend aceitará isso e persistirá o status.
+   - No `salvar()`:
+     - Para update parcial, enviar apenas os campos que o usuário preencheu (o próprio objeto `valores` já terá só o que ele digitou se a gente não preencher automaticamente).
+   - Garantir `invalidateQueries` para `['integracao-credenciais-status', integracao]` e `['todas-integracoes-credenciais']` (este último é usado no grid do `ServicosTab`).
 
-**Antes (linhas 185-188):**
-```typescript
-// Headers para requisições de cadastro (SEM Authorization - credenciais vão no body)
-const baseHeaders = {
-  'Content-Type': 'application/json',
-};
-```
+5) Validação manual (passos de teste)
+   - Abrir: Configurações > Integrações > Serviços > SGA Hinova > Configurar/Editar
+   - Digitar alguns campos e fechar sem salvar; reabrir:
+     - Os valores digitados devem continuar no formulário (rascunho).
+   - Salvar; fechar e reabrir:
+     - Deve mostrar status “Credenciais salvas…” e permitir alterar apenas 1 campo e salvar novamente sem digitar tudo.
+   - Clicar em “Testar Conexão”:
+     - O status “Última tentativa…” deve persistir após fechar e reabrir e também refletir no card (Serviços).
+   - Recarregar a página:
+     - Rascunho (em memória) pode se perder, mas credenciais/status do teste devem continuar (persistidos no banco).
 
-**Depois:**
-```typescript
-// Remover baseHeaders - usar authHeaders em TODAS as requisições
-```
+Riscos/observações
+- Segurança: o “rascunho” ficará apenas em memória (state React). Não vamos armazenar em localStorage.
+- Não exibiremos credenciais reais já salvas (por design do endpoint), apenas placeholders e status. O objetivo é não perder o que está digitado e não precisar redigitar tudo para pequenas alterações.
 
----
-
-#### 2. Corrigir cadastro de associado - REMOVER usuario/senha do body
-
-**Antes (linhas 376-400):**
-```typescript
-const associadoPayload = {
-  usuario: hinovaUsuario,      // ❌ REMOVER
-  senha: hinovaSenha,          // ❌ REMOVER
-  token_usuario: tokenUsuario,
-  nome: associado.nome,
-  // ...
-};
-
-const associadoResponse = await fetchWithRetry(
-  `${hinovaApiUrl}/associado/cadastrar`,
-  {
-    method: 'POST',
-    headers: baseHeaders,  // ❌ SEM Authorization
-    body: JSON.stringify(associadoPayload)
-  }
-);
-```
-
-**Depois:**
-```typescript
-const associadoPayload = {
-  token_usuario: tokenUsuario,  // ✅ Apenas token_usuario
-  nome: associado.nome,
-  // ...
-};
-
-const associadoResponse = await fetchWithRetry(
-  `${hinovaApiUrl}/associado/cadastrar`,
-  {
-    method: 'POST',
-    headers: authHeaders,  // ✅ COM Authorization: Bearer
-    body: JSON.stringify(associadoPayload)
-  }
-);
-```
-
----
-
-#### 3. Corrigir cadastro de veículo - REMOVER usuario/senha do body
-
-**Antes:**
-```typescript
-const veiculoPayload = {
-  usuario: hinovaUsuario,      // ❌ REMOVER
-  senha: hinovaSenha,          // ❌ REMOVER
-  token_usuario: tokenUsuario,
-  codigo_associado: codigoAssociadoHinova,
-  // ...
-};
-
-headers: baseHeaders,  // ❌ SEM Authorization
-```
-
-**Depois:**
-```typescript
-const veiculoPayload = {
-  token_usuario: tokenUsuario,  // ✅ Apenas token_usuario
-  codigo_associado: codigoAssociadoHinova,
-  // ...
-};
-
-headers: authHeaders,  // ✅ COM Authorization: Bearer
-```
-
----
-
-#### 4. Corrigir envio de fotos - REMOVER usuario/senha do body
-
-**Antes:**
-```typescript
-body: JSON.stringify({
-  usuario: hinovaUsuario,      // ❌ REMOVER
-  senha: hinovaSenha,          // ❌ REMOVER
-  token_usuario: tokenUsuario,
-  codigo_veiculo: codigoVeiculoHinova,
-  foto: fotos
-})
-
-headers: baseHeaders,  // ❌ SEM Authorization
-```
-
-**Depois:**
-```typescript
-body: JSON.stringify({
-  token_usuario: tokenUsuario,  // ✅ Apenas token_usuario
-  codigo_veiculo: codigoVeiculoHinova,
-  foto: fotos
-})
-
-headers: authHeaders,  // ✅ COM Authorization: Bearer
-```
-
----
-
-## Resumo das Mudanças
-
-| Item | Antes | Depois |
-|------|-------|--------|
-| Header de cadastro | `baseHeaders` (sem Authorization) | `authHeaders` (com Authorization: Bearer) |
-| Body associado | usuario + senha + token_usuario | apenas token_usuario |
-| Body veículo | usuario + senha + token_usuario | apenas token_usuario |
-| Body fotos | usuario + senha + token_usuario | apenas token_usuario |
-
----
-
-## Fluxo Correto Após Correção
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    FLUXO CORRETO                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. POST /usuario/autenticar                                │
-│     Headers: Authorization: Bearer {TOKEN_API}              │
-│     Body: { usuario, senha }                                │
-│     → Retorna: { token_usuario: "abc123..." } ✅            │
-│                                                             │
-│  2. POST /associado/cadastrar                               │
-│     Headers: Authorization: Bearer {TOKEN_API}              │
-│     Body: { token_usuario: "abc123...", nome, cpf, ... } ✅ │
-│     → Sucesso: { codigo_associado: 12345 }                  │
-│                                                             │
-│  3. POST /veiculo/cadastrar                                 │
-│     Headers: Authorization: Bearer {TOKEN_API}              │
-│     Body: { token_usuario, codigo_associado, placa, ... } ✅│
-│     → Sucesso: { codigo_veiculo: 67890 }                    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Etapas de Implementação
-
-1. Remover a constante `baseHeaders` do código
-2. Substituir todas as ocorrências de `baseHeaders` por `authHeaders`
-3. Remover `usuario` e `senha` do payload de cadastro de associado
-4. Remover `usuario` e `senha` do payload de cadastro de veículo
-5. Remover `usuario` e `senha` do payload de envio de fotos
-6. Deploy automático da Edge Function
-7. Testar o fluxo "Enviar para SGA"
-
----
-
-## Validação Pós-Implementação
-
-Após a correção, verificar nos logs `sga_sync_logs`:
-- `action: autenticar` → `status: success`
-- `action: cadastrar_associado` → `status: success` (antes estava `error`)
-- `action: cadastrar_veiculo` → `status: success`
+Arquivos envolvidos
+- Frontend
+  - `src/components/integracoes/ServicosTab.tsx`
+  - `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
+  - `src/hooks/useIntegracaoCredenciais.ts`
+- Backend
+  - `supabase/functions/integracoes-credenciais/index.ts`
