@@ -150,6 +150,9 @@ serve(async (req) => {
     }
   }
 
+  // Log do token (apenas primeiros caracteres para debug)
+  console.log('[SGA Sync] Token Bearer carregado:', hinovaToken ? `${hinovaToken.slice(0, 10)}...` : 'VAZIO');
+
   // Helper para registrar log
   async function logSync(
     veiculoId: string | null,
@@ -413,12 +416,38 @@ serve(async (req) => {
         { ...associadoPayload, cpf: '***' }, associadoData, associadoResponse.ok ? null : associadoData.mensagem);
 
       if (!associadoResponse.ok) {
+        // Verificar se é erro de Token Bearer inválido (a autenticação do usuário funcionou, então é o token da API)
+        const errorMessages = (associadoData as any).error || [];
+        const isTokenBearerError = 
+          (associadoData.mensagem?.toLowerCase().includes('token de acesso') ||
+           associadoData.mensagem?.toLowerCase().includes('acesso não autorizado') ||
+           errorMessages.some((e: string) => 
+             e.toLowerCase().includes('login') || 
+             e.toLowerCase().includes('senha') ||
+             e.toLowerCase().includes('autorizado')
+           ));
+
+        // Se a autenticação do usuário funcionou (temos token_usuario) mas o cadastro falhou com erro de login/senha,
+        // o problema é o Token Bearer no header Authorization
+        if (isTokenBearerError && tokenUsuario) {
+          console.log('[SGA Sync] Erro de Token Bearer detectado - autenticação OK mas cadastro falhou');
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Token Bearer da API Hinova inválido ou expirado. Gere um novo token no painel SGA Hinova e atualize em Configurações > Integrações.',
+              step: 'associado',
+              action_required: 'update_bearer_token',
+              details: associadoData
+            }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         // Verificar se é erro de CPF duplicado
         if (associadoData.mensagem?.toLowerCase().includes('cpf') && 
             associadoData.mensagem?.toLowerCase().includes('exist')) {
           console.log('[SGA Sync] CPF já existe no Hinova, tentando buscar código...');
-          // Aqui idealmente buscaria o código existente via API de consulta
-          // Por agora, retornar erro orientando verificação manual
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
           return new Response(
             JSON.stringify({ 
