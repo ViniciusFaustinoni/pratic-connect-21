@@ -551,6 +551,7 @@ serve(async (req) => {
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
 
     // Payload SEM credenciais - autenticação já está no header com token_usuario
+    // NOTA: codigo_conta removido - "O campo CONTA selecionado não está homologado"
     const veiculoPayload = {
       codigo_associado: codigoAssociadoHinova,
       placa: veiculo.placa || '',
@@ -563,7 +564,6 @@ serve(async (req) => {
       kilometragem: veiculo.km || veiculo.quilometragem || 0,
       numero_motor: veiculo.numero_motor || '',
       dia_vencimento: associado.dia_vencimento || 10,
-      codigo_conta: parseInt(hinovaCodigoConta),
       codigo_cor: getMapeamento('cor', veiculo.cor),
       codigo_combustivel: getMapeamento('combustivel', veiculo.combustivel),
       codigo_tipo_veiculo: getMapeamento('tipo_veiculo', veiculo.tipo) || 1,
