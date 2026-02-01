@@ -434,6 +434,13 @@ serve(async (req) => {
       };
       
       console.log('[SGA Sync] Payload associado (sem senha):', JSON.stringify({ ...associadoPayload, senha: '***', token_usuario: '***' }));
+      
+      // Log detalhado para debug - comparar com n8n
+      console.log('[SGA Sync] Headers de cadastro:', {
+        'Content-Type': authHeaders['Content-Type'],
+        'Authorization': `Bearer ${hinovaToken.slice(0, 15)}...${hinovaToken.slice(-10)} (${hinovaToken.length} chars)`
+      });
+      console.log('[SGA Sync] URL de cadastro:', `${hinovaApiUrl}/associado/cadastrar`);
 
       const associadoResponse = await fetchWithRetry(
         `${hinovaApiUrl}/associado/cadastrar`,
