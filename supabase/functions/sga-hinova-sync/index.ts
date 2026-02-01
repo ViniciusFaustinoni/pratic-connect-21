@@ -433,14 +433,25 @@ serve(async (req) => {
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
       };
       
-      console.log('[SGA Sync] Payload associado (sem senha):', JSON.stringify({ ...associadoPayload, senha: '***', token_usuario: '***' }));
-      
-      // Log detalhado para debug - comparar com n8n
-      console.log('[SGA Sync] Headers de cadastro:', {
-        'Content-Type': authHeaders['Content-Type'],
-        'Authorization': `Bearer ${hinovaToken.slice(0, 15)}...${hinovaToken.slice(-10)} (${hinovaToken.length} chars)`
+      // ===== DEBUG DETALHADO PARA COMPARAR COM N8N =====
+      console.log('[SGA Sync] ===== DEBUG CADASTRO ASSOCIADO =====');
+      console.log('[SGA Sync] URL:', `${hinovaApiUrl}/associado/cadastrar`);
+      console.log('[SGA Sync] Method: POST');
+      console.log('[SGA Sync] Headers:', {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${hinovaToken.slice(0, 20)}...${hinovaToken.slice(-10)} (total: ${hinovaToken.length} chars)`
       });
-      console.log('[SGA Sync] URL de cadastro:', `${hinovaApiUrl}/associado/cadastrar`);
+      console.log('[SGA Sync] Body keys:', Object.keys(associadoPayload));
+      console.log('[SGA Sync] token_usuario presente:', !!associadoPayload.token_usuario);
+      console.log('[SGA Sync] token_usuario length:', associadoPayload.token_usuario?.length);
+      console.log('[SGA Sync] usuario:', hinovaUsuario);
+      console.log('[SGA Sync] codigo_conta:', associadoPayload.codigo_conta);
+      console.log('[SGA Sync] Payload completo (sem credenciais):', JSON.stringify({ 
+        ...associadoPayload, 
+        senha: '***MASKED***', 
+        token_usuario: `${associadoPayload.token_usuario?.slice(0, 10)}...${associadoPayload.token_usuario?.slice(-5)} (${associadoPayload.token_usuario?.length} chars)` 
+      }, null, 2));
+      console.log('[SGA Sync] ===================================');
 
       const associadoResponse = await fetchWithRetry(
         `${hinovaApiUrl}/associado/cadastrar`,
@@ -451,7 +462,15 @@ serve(async (req) => {
         }
       );
 
+      // ===== DEBUG RESPONSE =====
+      console.log('[SGA Sync] ===== DEBUG RESPONSE CADASTRO =====');
+      console.log('[SGA Sync] Status:', associadoResponse.status);
+      console.log('[SGA Sync] Status Text:', associadoResponse.statusText);
+      
       const associadoData: HinovaAssociadoResponse = await safeJsonParse<HinovaAssociadoResponse>(associadoResponse, 'cadastrar_associado');
+      
+      console.log('[SGA Sync] Response Body:', JSON.stringify(associadoData));
+      console.log('[SGA Sync] =====================================');
       
       await logSync(veiculo_id, associado_id, 'cadastrar_associado', associadoResponse.ok ? 'success' : 'error',
         { ...associadoPayload, cpf: '***' }, associadoData, associadoResponse.ok ? null : associadoData.mensagem);
