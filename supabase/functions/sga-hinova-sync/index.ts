@@ -399,6 +399,16 @@ serve(async (req) => {
     console.log('[SGA Sync] Autenticação bem-sucedida');
 
     // ========================================
+    // HEADERS PARA OPERAÇÕES (usa token_usuario dinâmico)
+    // Baseado no fluxo que funciona em hinova-integration
+    // ========================================
+    const operationHeaders = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${tokenUsuario}`,
+    };
+    console.log('[SGA Sync] Headers de operação configurados com token_usuario');
+
+    // ========================================
     // PASSO 5: Cadastrar ou buscar associado
     // ========================================
     let codigoAssociadoHinova = associado.codigo_hinova;
@@ -406,11 +416,8 @@ serve(async (req) => {
     if (!codigoAssociadoHinova) {
       console.log('[SGA Sync] Cadastrando associado no Hinova...');
       
-      // API Hinova v2: Authorization: Bearer no header + usuario/senha/token_usuario no body
+      // Payload SEM credenciais - autenticação já está no header com token_usuario
       const associadoPayload = {
-        usuario: hinovaUsuario,
-        senha: hinovaSenha,
-        token_usuario: tokenUsuario,
         nome: associado.nome,
         cpf: cleanCPF(associado.cpf),
         rg: associado.rg || '',
@@ -433,31 +440,21 @@ serve(async (req) => {
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
       };
       
-      // ===== DEBUG DETALHADO PARA COMPARAR COM N8N =====
-      console.log('[SGA Sync] ===== DEBUG CADASTRO ASSOCIADO =====');
+      // ===== DEBUG - NOVO FLUXO COM token_usuario NO HEADER =====
+      console.log('[SGA Sync] ===== DEBUG CADASTRO ASSOCIADO (FLUXO CORRIGIDO) =====');
       console.log('[SGA Sync] URL:', `${hinovaApiUrl}/associado/cadastrar`);
       console.log('[SGA Sync] Method: POST');
-      console.log('[SGA Sync] Headers:', {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${hinovaToken.slice(0, 20)}...${hinovaToken.slice(-10)} (total: ${hinovaToken.length} chars)`
-      });
-      console.log('[SGA Sync] Body keys:', Object.keys(associadoPayload));
-      console.log('[SGA Sync] token_usuario presente:', !!associadoPayload.token_usuario);
-      console.log('[SGA Sync] token_usuario length:', associadoPayload.token_usuario?.length);
-      console.log('[SGA Sync] usuario:', hinovaUsuario);
+      console.log('[SGA Sync] Headers: Authorization: Bearer {token_usuario} (dinâmico)');
+      console.log('[SGA Sync] token_usuario usado no header:', `${tokenUsuario.slice(0, 15)}... (${tokenUsuario.length} chars)`);
+      console.log('[SGA Sync] Body keys (SEM credenciais):', Object.keys(associadoPayload));
       console.log('[SGA Sync] codigo_conta:', associadoPayload.codigo_conta);
-      console.log('[SGA Sync] Payload completo (sem credenciais):', JSON.stringify({ 
-        ...associadoPayload, 
-        senha: '***MASKED***', 
-        token_usuario: `${associadoPayload.token_usuario?.slice(0, 10)}...${associadoPayload.token_usuario?.slice(-5)} (${associadoPayload.token_usuario?.length} chars)` 
-      }, null, 2));
-      console.log('[SGA Sync] ===================================');
+      console.log('[SGA Sync] ============================================');
 
       const associadoResponse = await fetchWithRetry(
         `${hinovaApiUrl}/associado/cadastrar`,
         {
           method: 'POST',
-          headers: authHeaders,
+          headers: operationHeaders,  // USA token_usuario NO HEADER
           body: JSON.stringify(associadoPayload)
         }
       );
@@ -553,11 +550,8 @@ serve(async (req) => {
     // ========================================
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
 
-    // Authorization: Bearer no header + usuario/senha/token_usuario no body
+    // Payload SEM credenciais - autenticação já está no header com token_usuario
     const veiculoPayload = {
-      usuario: hinovaUsuario,
-      senha: hinovaSenha,
-      token_usuario: tokenUsuario,
       codigo_associado: codigoAssociadoHinova,
       placa: veiculo.placa || '',
       chassi: veiculo.chassi || '',
@@ -581,7 +575,7 @@ serve(async (req) => {
       `${hinovaApiUrl}/veiculo/cadastrar`,
       {
         method: 'POST',
-        headers: authHeaders,
+        headers: operationHeaders,  // USA token_usuario NO HEADER
         body: JSON.stringify(veiculoPayload)
       }
     );
@@ -651,16 +645,13 @@ serve(async (req) => {
         if (fotos.length === 0) continue;
 
         try {
-          // Authorization: Bearer no header + usuario/senha/token_usuario no body
+          // Payload SEM credenciais - autenticação já está no header com token_usuario
           const fotosResponse = await fetchWithRetry(
             `${hinovaApiUrl}/veiculo/foto/cadastrar`,
             {
               method: 'POST',
-              headers: authHeaders,
+              headers: operationHeaders,  // USA token_usuario NO HEADER
               body: JSON.stringify({
-                usuario: hinovaUsuario,
-                senha: hinovaSenha,
-                token_usuario: tokenUsuario,
                 codigo_veiculo: codigoVeiculoHinova,
                 foto: fotos
               })
