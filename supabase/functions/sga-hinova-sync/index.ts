@@ -417,6 +417,7 @@ serve(async (req) => {
       console.log('[SGA Sync] Cadastrando associado no Hinova...');
       
       // Payload SEM credenciais - autenticação já está no header com token_usuario
+      // NOTA: Removido codigo_conta pois a API retorna "O campo CONTA BANCÁRIA não está homologado"
       const associadoPayload = {
         nome: associado.nome,
         cpf: cleanCPF(associado.cpf),
@@ -434,7 +435,7 @@ serve(async (req) => {
         estado: associado.uf || '',
         sexo: associado.sexo?.toUpperCase() === 'FEMININO' ? 'F' : 'M',
         dia_vencimento: associado.dia_vencimento || 10,
-        codigo_conta: parseInt(hinovaCodigoConta),
+        // codigo_conta removido - não homologado na API
         ...(hinovaCodigoRegional && { codigo_regional: parseInt(hinovaCodigoRegional) }),
         ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
@@ -447,7 +448,6 @@ serve(async (req) => {
       console.log('[SGA Sync] Headers: Authorization: Bearer {token_usuario} (dinâmico)');
       console.log('[SGA Sync] token_usuario usado no header:', `${tokenUsuario.slice(0, 15)}... (${tokenUsuario.length} chars)`);
       console.log('[SGA Sync] Body keys (SEM credenciais):', Object.keys(associadoPayload));
-      console.log('[SGA Sync] codigo_conta:', associadoPayload.codigo_conta);
       console.log('[SGA Sync] ============================================');
 
       const associadoResponse = await fetchWithRetry(
