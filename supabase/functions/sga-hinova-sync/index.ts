@@ -78,6 +78,40 @@ async function fetchWithRetry(
   throw lastError;
 }
 
+// Helper para parse seguro de JSON - trata respostas não-JSON (HTML, texto de erro, etc.)
+async function safeJsonParse<T>(response: Response, context: string): Promise<T> {
+  const contentType = response.headers.get('content-type') || '';
+  const textResponse = await response.text();
+  
+  // Log para debug
+  console.log(`[SGA Sync] ${context} - Status: ${response.status}, Content-Type: ${contentType}`);
+  
+  // Se não é JSON, tentar identificar o tipo de erro
+  if (!contentType.includes('application/json')) {
+    console.error(`[SGA Sync] ${context} - Resposta não-JSON recebida:`, textResponse.substring(0, 300));
+    
+    // Verificar se é HTML (página de erro, login, etc.)
+    if (textResponse.trim().startsWith('<!') || textResponse.includes('<html')) {
+      throw new Error(`API Hinova retornou HTML ao invés de JSON. Isso geralmente indica: erro de servidor, redirecionamento de autenticação ou rate limiting. Status: ${response.status}`);
+    }
+    
+    // Verificar se é erro de conexão ou texto genérico
+    if (textResponse.toLowerCase().includes('erro') || textResponse.toLowerCase().includes('error')) {
+      throw new Error(`Erro da API Hinova: ${textResponse.substring(0, 200)}`);
+    }
+    
+    throw new Error(`Resposta inesperada da API Hinova (${contentType}): ${textResponse.substring(0, 200)}`);
+  }
+  
+  // Tentar fazer parse do JSON
+  try {
+    return JSON.parse(textResponse) as T;
+  } catch (parseError) {
+    console.error(`[SGA Sync] ${context} - Erro ao parsear JSON:`, textResponse.substring(0, 300));
+    throw new Error(`Resposta inválida da API Hinova - não é JSON válido: ${textResponse.substring(0, 100)}`);
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -223,7 +257,7 @@ serve(async (req) => {
         }
       );
 
-      const authData: HinovaAuthResponse = await authResponse.json();
+      const authData: HinovaAuthResponse = await safeJsonParse<HinovaAuthResponse>(authResponse, 'test_connection');
       
       if (!authResponse.ok || !authData.token_usuario) {
         return new Response(
@@ -343,7 +377,7 @@ serve(async (req) => {
       }
     );
 
-    const authData: HinovaAuthResponse = await authResponse.json();
+    const authData: HinovaAuthResponse = await safeJsonParse<HinovaAuthResponse>(authResponse, 'autenticar');
     
     await logSync(veiculo_id, associado_id, 'autenticar', authResponse.ok ? 'success' : 'error', 
       { usuario: hinovaUsuario }, authData, authResponse.ok ? null : authData.mensagem);
@@ -410,7 +444,7 @@ serve(async (req) => {
         }
       );
 
-      const associadoData: HinovaAssociadoResponse = await associadoResponse.json();
+      const associadoData: HinovaAssociadoResponse = await safeJsonParse<HinovaAssociadoResponse>(associadoResponse, 'cadastrar_associado');
       
       await logSync(veiculo_id, associado_id, 'cadastrar_associado', associadoResponse.ok ? 'success' : 'error',
         { ...associadoPayload, cpf: '***' }, associadoData, associadoResponse.ok ? null : associadoData.mensagem);
@@ -526,7 +560,7 @@ serve(async (req) => {
       }
     );
 
-    const veiculoData: HinovaVeiculoResponse = await veiculoResponse.json();
+    const veiculoData: HinovaVeiculoResponse = await safeJsonParse<HinovaVeiculoResponse>(veiculoResponse, 'cadastrar_veiculo');
     
     await logSync(veiculo_id, associado_id, 'cadastrar_veiculo', veiculoResponse.ok ? 'success' : 'error',
       veiculoPayload, veiculoData, veiculoResponse.ok ? null : veiculoData.mensagem);
@@ -607,7 +641,7 @@ serve(async (req) => {
             }
           );
 
-          const fotosData = await fotosResponse.json();
+          const fotosData = await safeJsonParse<any>(fotosResponse, 'enviar_fotos');
           
           await logSync(veiculo_id, associado_id, 'enviar_fotos', fotosResponse.ok ? 'success' : 'error',
             { codigo_veiculo: codigoVeiculoHinova, qtd_fotos: fotos.length }, fotosData, 
