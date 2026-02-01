@@ -88,6 +88,14 @@ export function BotaoEnviarSGA({
       }
 
       if (!data?.success) {
+        // Tratar erro específico de Token Bearer expirado
+        if (data?.action_required === 'update_bearer_token') {
+          toast.error('Token SGA Hinova Expirado', {
+            description: 'O Token Bearer da API precisa ser atualizado. Acesse Configurações > Integrações > SGA Hinova.',
+            duration: 10000,
+          });
+          return;
+        }
         throw new Error(data?.error || 'Falha na sincronização com o SGA');
       }
 
