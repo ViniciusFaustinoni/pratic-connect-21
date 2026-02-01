@@ -1,109 +1,143 @@
 
-# Plano: Corrigir Fluxo de Autenticação SGA Hinova
+# Plano: Corrigir Autenticação SGA Hinova - Usar token_usuario no Header
 
-## Diagnóstico do Problema
+## Problema Identificado
 
-O código atual faz:
-1. **Autenticação**: `Authorization: Bearer {token_fixo}` (header) + `usuario/senha` (body) → Recebe `token_usuario`
-2. **Cadastro**: `Authorization: Bearer {token_fixo}` (header) + `usuario/senha/token_usuario` (body) ❌
+Comparando o código que **funciona** (`hinova-integration`) com o código atual (`sga-hinova-sync`), encontrei a diferença crítica:
 
-**O problema**: Após a autenticação, as requisições subsequentes devem usar o `token_usuario` gerado como autenticação, não o Token Bearer fixo das configurações.
+### Sistema que Funciona (hinova-integration)
+```text
+AUTENTICAÇÃO:
+  Header: Authorization: Bearer {TOKEN_FIXO}
+  Body: { usuario, senha }
+  → Retorna: token_usuario
+
+OPERAÇÕES (cadastro, etc.):
+  Header: Authorization: Bearer {token_usuario}  ← DINÂMICO
+  Body: { ...dados }
+```
+
+### Sistema Atual (sga-hinova-sync) - COM PROBLEMA
+```text
+AUTENTICAÇÃO:
+  Header: Authorization: Bearer {TOKEN_FIXO}
+  Body: { usuario, senha }
+  → Retorna: token_usuario  ✅
+
+OPERAÇÕES (cadastro, etc.):
+  Header: Authorization: Bearer {TOKEN_FIXO}  ← ERRADO! Usa token fixo
+  Body: { usuario, senha, token_usuario, ...dados }
+```
+
+**O erro "Login ou senha inválido" ocorre porque:**
+- O sistema está usando o Token Bearer fixo no header para operações de cadastro
+- A API espera o `token_usuario` (dinâmico) no header Authorization para operações
+
+---
 
 ## Correção Proposta
 
-### Fluxo Correto (baseado na sua explicação)
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│ PASSO 1: AUTENTICAÇÃO                                           │
-│ POST /usuario/autenticar                                        │
-│ Header: Authorization: Bearer {token_configuracao}              │
-│ Body: { usuario, senha }                                        │
-│ Retorno: { token_usuario: "abc123..." }                         │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ PASSO 2: OPERAÇÕES (cadastro, etc.)                             │
-│ POST /associado/cadastrar                                       │
-│ Header: Authorization: Bearer {token_configuracao}              │
-│ Body: { usuario, senha, token_usuario, ...dados }               │
-│                                                                 │
-│ O token_usuario no body é obrigatório para autorizar a ação    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-Revisando o código novamente, **ele já está fazendo isso corretamente**:
-- Linha 413: `token_usuario: tokenUsuario` está sendo incluído no body do cadastro
-
-O erro "Login ou senha inválido" está vindo da API mesmo com o `token_usuario` válido no body.
-
-## Investigação Adicional Necessária
-
-O problema pode ser:
-1. **O Token Bearer (header) realmente está expirado** na API Hinova
-2. **O token_usuario tem escopo limitado** e não autoriza cadastro
-3. **Formato do payload está diferente** do que o n8n envia
-
-### Comparação Necessária
-
-Preciso ver como o n8n faz a **segunda chamada** (cadastro), não apenas a autenticação. 
-
-Você poderia compartilhar o node do n8n que faz o **cadastro do associado** (não a autenticação)?
-
-## Melhoria Imediata no Código
-
-Mesmo assim, vou melhorar o logging para capturar exatamente o que está sendo enviado:
-
 ### Arquivo: `supabase/functions/sga-hinova-sync/index.ts`
 
-Adicionar logging completo do request de cadastro para comparar com n8n:
+#### Mudança 1: Criar headers dinâmicos após autenticação
+
+Após obter o `token_usuario`, criar um novo conjunto de headers:
 
 ```typescript
-// Antes de enviar o cadastro
-console.log('[SGA Sync] ===== DEBUG CADASTRO =====');
-console.log('[SGA Sync] URL:', `${hinovaApiUrl}/associado/cadastrar`);
-console.log('[SGA Sync] Method: POST');
-console.log('[SGA Sync] Headers:', {
+// Linha ~398 - Após autenticação bem-sucedida
+const tokenUsuario = authData.token_usuario;
+console.log('[SGA Sync] Autenticação bem-sucedida');
+
+// Headers para operações (usa token_usuario, não o token fixo)
+const operationHeaders = {
   'Content-Type': 'application/json',
-  'Authorization': `Bearer ${hinovaToken.slice(0, 20)}...`
-});
-console.log('[SGA Sync] Body keys:', Object.keys(associadoPayload));
-console.log('[SGA Sync] token_usuario presente:', !!associadoPayload.token_usuario);
-console.log('[SGA Sync] token_usuario length:', associadoPayload.token_usuario?.length);
-console.log('[SGA Sync] ===========================');
+  'Authorization': `Bearer ${tokenUsuario}`,  // ← TOKEN DINÂMICO
+};
 ```
 
-E adicionar o response completo para debug:
+#### Mudança 2: Simplificar payload do cadastro
+
+Remover credenciais redundantes do body:
 
 ```typescript
-// Após receber resposta
-console.log('[SGA Sync] ===== DEBUG RESPONSE =====');
-console.log('[SGA Sync] Status:', associadoResponse.status);
-console.log('[SGA Sync] Status Text:', associadoResponse.statusText);
-console.log('[SGA Sync] Response Body:', JSON.stringify(associadoData));
-console.log('[SGA Sync] ============================');
+// Linhas ~410-434 - Payload do associado
+const associadoPayload = {
+  // REMOVER: usuario, senha, token_usuario - não são mais necessários no body
+  nome: associado.nome,
+  cpf: cleanCPF(associado.cpf),
+  rg: associado.rg || '',
+  data_nascimento: formatDateBR(associado.data_nascimento),
+  // ... resto dos campos
+  codigo_conta: parseInt(hinovaCodigoConta),
+};
+```
+
+#### Mudança 3: Usar headers corretos nas chamadas
+
+Substituir `authHeaders` por `operationHeaders` em todas as operações:
+
+```typescript
+// Linha ~456-462 - Cadastro de associado
+const associadoResponse = await fetchWithRetry(
+  `${hinovaApiUrl}/associado/cadastrar`,
+  {
+    method: 'POST',
+    headers: operationHeaders,  // ← USAR TOKEN DINÂMICO
+    body: JSON.stringify(associadoPayload)
+  }
+);
+```
+
+#### Mudança 4: Aplicar mesma correção ao cadastro de veículo e fotos
+
+Todas as chamadas após autenticação devem usar `operationHeaders`:
+
+```typescript
+// Cadastro de veículo (~linha 530+)
+headers: operationHeaders,
+
+// Upload de fotos (~linha 600+)
+headers: operationHeaders,
 ```
 
 ---
 
-## Resumo
+## Fluxo Corrigido
 
-| Item | Status |
-|------|--------|
-| `token_usuario` no body do cadastro | ✅ Já está implementado |
-| Token Bearer no header | ✅ Já está implementado |
-| Logging detalhado para debug | 🔧 Será melhorado |
+```text
++---------------------------------------------------------+
+|  PASSO 1: AUTENTICAÇÃO                                  |
+|  POST /usuario/autenticar                               |
+|  Header: Authorization: Bearer {TOKEN_FIXO}             |
+|  Body: { usuario, senha }                               |
+|  → Retorna: token_usuario                               |
++---------------------------------------------------------+
+                          |
+                          v
++---------------------------------------------------------+
+|  PASSO 2: OPERAÇÕES (cadastro, fotos, etc.)             |
+|  POST /associado/cadastrar                              |
+|  Header: Authorization: Bearer {token_usuario}  <-- FIX |
+|  Body: { nome, cpf, ...dados }  <-- Sem credenciais     |
++---------------------------------------------------------+
+```
 
-### Ação Necessária
+---
 
-Para diagnosticar definitivamente, preciso que você **compartilhe o node do n8n que faz o cadastro** (POST /associado/cadastrar), para comparar:
-1. Se o n8n usa o mesmo Token Bearer no header
-2. Se o n8n inclui `token_usuario` no body
-3. Se há diferença no formato dos dados
+## Arquivos a Modificar
 
-### Arquivos a Modificar
+| Arquivo | Alterações |
+|---------|------------|
+| `supabase/functions/sga-hinova-sync/index.ts` | 1. Criar `operationHeaders` com `token_usuario` |
+|  | 2. Remover `usuario`, `senha`, `token_usuario` do body de cadastro |
+|  | 3. Usar `operationHeaders` em todas as chamadas pós-autenticação |
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/sga-hinova-sync/index.ts` | Adicionar logging detalhado para debug de comparação com n8n |
+---
+
+## Resumo da Correção
+
+| Item | Antes (Errado) | Depois (Correto) |
+|------|----------------|------------------|
+| Header operações | `Bearer {TOKEN_FIXO}` | `Bearer {token_usuario}` |
+| Body cadastro | Inclui `usuario/senha/token_usuario` | Apenas dados do associado |
+| Baseado em | Suposição | Código funcional `hinova-integration` |
