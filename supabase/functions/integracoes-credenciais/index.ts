@@ -204,15 +204,15 @@ serve(async (req) => {
     }
 
     // ========================================
-    // POST - Salvar credenciais
+    // POST - Salvar credenciais ou atualizar status de teste
     // ========================================
     if (req.method === 'POST') {
       const body = await req.json();
-      const { integracao: integracaoNome, credenciais } = body;
+      const { integracao: integracaoNome, credenciais, teste_sucesso, teste_mensagem } = body;
 
-      if (!integracaoNome || !credenciais) {
+      if (!integracaoNome) {
         return new Response(
-          JSON.stringify({ success: false, error: 'Integração e credenciais são obrigatórios' }),
+          JSON.stringify({ success: false, error: 'Nome da integração é obrigatório' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -225,17 +225,6 @@ serve(async (req) => {
         );
       }
 
-      // Validar campos obrigatórios
-      const schema = integracoesSchema[integracaoNome];
-      for (const campo of schema.campos) {
-        if (campo.obrigatorio && !credenciais[campo.nome]) {
-          return new Response(
-            JSON.stringify({ success: false, error: `Campo obrigatório não preenchido: ${campo.label}` }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
-
       // Buscar profile_id do usuário
       const { data: profile } = await supabase
         .from('profiles')
@@ -243,20 +232,129 @@ serve(async (req) => {
         .eq('user_id', userId)
         .single();
 
+      // Verificar se já existe registro para esta integração
+      const { data: registroExistente } = await supabase
+        .from('integracoes_credenciais')
+        .select('id, credenciais_encrypted, iv, configurado')
+        .eq('integracao', integracaoNome)
+        .single();
+
+      // ========================================
+      // CASO 1: Atualização somente do status de teste
+      // (credenciais vazio/ausente e teste_sucesso presente)
+      // ========================================
+      const credenciaisVazio = !credenciais || Object.keys(credenciais).length === 0 || 
+                               Object.values(credenciais).every(v => !v || (typeof v === 'string' && v.trim() === ''));
+      
+      if (credenciaisVazio && typeof teste_sucesso === 'boolean') {
+        // Só podemos atualizar status se já existe registro configurado
+        if (!registroExistente?.configurado) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Não há credenciais configuradas para atualizar status de teste' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateError } = await supabase
+          .from('integracoes_credenciais')
+          .update({
+            teste_sucesso,
+            teste_mensagem: teste_mensagem || null,
+            testado_em: new Date().toISOString(),
+            updated_by: profile?.id || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('integracao', integracaoNome);
+
+        if (updateError) {
+          console.error('[integracoes-credenciais] Erro ao atualizar status de teste:', updateError);
+          return new Response(
+            JSON.stringify({ success: false, error: updateError.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log(`[integracoes-credenciais] Status de teste atualizado para: ${integracaoNome}`);
+
+        return new Response(
+          JSON.stringify({ success: true, mensagem: 'Status de teste atualizado com sucesso' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // ========================================
+      // CASO 2: Salvar/Atualizar credenciais
+      // ========================================
+      if (credenciaisVazio) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Credenciais são obrigatórias para salvar' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      let credenciaisParaSalvar: Record<string, string> = {};
+      const schema = integracoesSchema[integracaoNome];
+
+      // Se já existe registro configurado, fazer merge com credenciais existentes
+      if (registroExistente?.configurado && registroExistente.credenciais_encrypted && registroExistente.iv) {
+        try {
+          const credenciaisExistentes = JSON.parse(
+            await decrypt(registroExistente.credenciais_encrypted, registroExistente.iv, supabaseServiceKey)
+          );
+          
+          // Começar com as existentes
+          credenciaisParaSalvar = { ...credenciaisExistentes };
+          
+          // Sobrescrever com as novas que não estão vazias
+          for (const [key, value] of Object.entries(credenciais)) {
+            if (value && typeof value === 'string' && value.trim() !== '') {
+              credenciaisParaSalvar[key] = value;
+            }
+          }
+        } catch (decryptError) {
+          console.error('[integracoes-credenciais] Erro ao descriptografar credenciais existentes:', decryptError);
+          // Se falhar a descriptografia, usar apenas as novas
+          credenciaisParaSalvar = { ...credenciais };
+        }
+      } else {
+        // Novo registro, usar apenas as credenciais fornecidas
+        credenciaisParaSalvar = { ...credenciais };
+      }
+
+      // Validar campos obrigatórios no resultado final do merge
+      for (const campo of schema.campos) {
+        if (campo.obrigatorio && !credenciaisParaSalvar[campo.nome]) {
+          return new Response(
+            JSON.stringify({ success: false, error: `Campo obrigatório não preenchido: ${campo.label}` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       // Criptografar credenciais
-      const { encrypted, iv } = await encrypt(JSON.stringify(credenciais), supabaseServiceKey);
+      const { encrypted, iv } = await encrypt(JSON.stringify(credenciaisParaSalvar), supabaseServiceKey);
+
+      // Preparar dados para upsert
+      const dadosUpsert: Record<string, unknown> = {
+        integracao: integracaoNome,
+        credenciais_encrypted: encrypted,
+        iv,
+        configurado: true,
+        updated_by: profile?.id || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Se veio status de teste junto com credenciais, atualizar também
+      if (typeof teste_sucesso === 'boolean') {
+        dadosUpsert.teste_sucesso = teste_sucesso;
+        dadosUpsert.teste_mensagem = teste_mensagem || null;
+        dadosUpsert.testado_em = new Date().toISOString();
+      }
 
       // Upsert (insert ou update)
       const { error: upsertError } = await supabase
         .from('integracoes_credenciais')
-        .upsert({
-          integracao: integracaoNome,
-          credenciais_encrypted: encrypted,
-          iv,
-          configurado: true,
-          updated_by: profile?.id || null,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'integracao' });
+        .upsert(dadosUpsert, { onConflict: 'integracao' });
 
       if (upsertError) {
         console.error('[integracoes-credenciais] Erro ao salvar:', upsertError);

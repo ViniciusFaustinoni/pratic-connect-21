@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, Mail, Search, Settings, Loader2, Building2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -258,6 +258,9 @@ function ServicoCard({ servico, status, onConfigurar, isLoading }: ServicoCardPr
   );
 }
 
+// Tipo para armazenar rascunhos por integração
+type DraftValues = Partial<Record<IntegracaoTipo, Record<string, string>>>;
+
 export function ServicosTab() {
   // Sheets
   const [rastreadorSheetOpen, setRastreadorSheetOpen] = useState(false);
@@ -268,8 +271,28 @@ export function ServicosTab() {
   const [integracaoSelecionada, setIntegracaoSelecionada] = useState<IntegracaoTipo>('hinova');
   const [nomeIntegracao, setNomeIntegracao] = useState('');
   
+  // Estado de rascunho para manter valores digitados entre abrir/fechar do sheet
+  const [drafts, setDrafts] = useState<DraftValues>({});
+  
   const integracoes = useIntegracoesStatus();
-  const { data: credenciaisBanco } = useTodasIntegracoesCredenciais();
+  const { data: credenciaisBanco, refetch: refetchCredenciais } = useTodasIntegracoesCredenciais();
+
+  // Callback para atualizar o rascunho quando o usuário digita
+  const handleValoresChange = useCallback((integracao: IntegracaoTipo, valores: Record<string, string>) => {
+    setDrafts(prev => ({
+      ...prev,
+      [integracao]: valores,
+    }));
+  }, []);
+
+  // Limpar draft de uma integração específica
+  const clearDraft = useCallback((integracao: IntegracaoTipo) => {
+    setDrafts(prev => {
+      const newDrafts = { ...prev };
+      delete newDrafts[integracao];
+      return newDrafts;
+    });
+  }, []);
 
   // Função para obter status de cada serviço
   function getServicoStatus(servico: Servico): { ativo: boolean; ultimaExecucao?: string } {
@@ -347,7 +370,10 @@ export function ServicosTab() {
   }
 
   function handleIntegracaoSuccess() {
+    // Limpar o rascunho da integração ao salvar/remover com sucesso
+    clearDraft(integracaoSelecionada);
     integracoes.refetch();
+    refetchCredenciais();
     setIntegracaoSheetOpen(false);
   }
 
@@ -393,6 +419,8 @@ export function ServicosTab() {
         integracao={integracaoSelecionada}
         nomeExibicao={nomeIntegracao}
         onSuccess={handleIntegracaoSuccess}
+        initialValues={drafts[integracaoSelecionada] ?? {}}
+        onValuesChange={(valores) => handleValoresChange(integracaoSelecionada, valores)}
       />
     </>
   );

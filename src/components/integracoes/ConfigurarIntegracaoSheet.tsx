@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useIntegracaoCredenciais, IntegracaoTipo } from '@/hooks/useIntegracaoCredenciais';
-import { Loader2, Eye, EyeOff, CheckCircle, XCircle, Save, TestTube, Trash2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff, CheckCircle, XCircle, Save, TestTube, Trash2, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,8 @@ interface ConfigurarIntegracaoSheetProps {
   integracao: IntegracaoTipo;
   nomeExibicao: string;
   onSuccess?: () => void;
+  initialValues?: Record<string, string>;
+  onValuesChange?: (values: Record<string, string>) => void;
 }
 
 // Campos por integração (fallback caso o schema não carregue)
@@ -67,6 +69,8 @@ export function ConfigurarIntegracaoSheet({
   integracao,
   nomeExibicao,
   onSuccess,
+  initialValues = {},
+  onValuesChange,
 }: ConfigurarIntegracaoSheetProps) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [camposVisiveis, setCamposVisiveis] = useState<Record<string, boolean>>({});
@@ -88,17 +92,23 @@ export function ConfigurarIntegracaoSheet({
   // Usar schema do servidor ou fallback local
   const campos = schema?.campos || camposPorIntegracao[integracao] || [];
 
-  // Resetar valores quando abrir
+  // Carregar initialValues quando o sheet abrir ou a integração mudar
   useEffect(() => {
     if (open) {
-      setValores({});
+      // Carregar valores iniciais do rascunho (se houver)
+      setValores(initialValues);
       setCamposVisiveis({});
     }
-  }, [open]);
+  }, [open, integracao, initialValues]);
 
-  const handleChange = (campo: string, valor: string) => {
-    setValores(prev => ({ ...prev, [campo]: valor }));
-  };
+  const handleChange = useCallback((campo: string, valor: string) => {
+    setValores(prev => {
+      const novosValores = { ...prev, [campo]: valor };
+      // Notificar o componente pai sobre a mudança
+      onValuesChange?.(novosValores);
+      return novosValores;
+    });
+  }, [onValuesChange]);
 
   const toggleVisibilidade = (campo: string) => {
     setCamposVisiveis(prev => ({ ...prev, [campo]: !prev[campo] }));
@@ -106,7 +116,14 @@ export function ConfigurarIntegracaoSheet({
 
   const handleSalvar = async () => {
     try {
-      await salvar(valores);
+      // Enviar apenas campos que têm valor (para suportar update parcial)
+      const credenciaisParaEnviar: Record<string, string> = {};
+      for (const [key, value] of Object.entries(valores)) {
+        if (value && value.trim() !== '') {
+          credenciaisParaEnviar[key] = value;
+        }
+      }
+      await salvar(credenciaisParaEnviar);
       onSuccess?.();
       onOpenChange(false);
     } catch (error) {
@@ -129,10 +146,25 @@ export function ConfigurarIntegracaoSheet({
     }
   };
 
-  // Verificar se pode salvar (campos obrigatórios preenchidos)
-  const podeSalvar = campos
-    .filter(c => c.obrigatorio)
-    .every(c => valores[c.nome]?.trim());
+  // Verificar se pode salvar
+  // Se NÃO está configurado: exigir todos os obrigatórios
+  // Se JÁ está configurado: permitir salvar se ao menos 1 campo preenchido (update parcial)
+  const podeSalvar = (() => {
+    const temAlgumValor = Object.values(valores).some(v => v && v.trim() !== '');
+    
+    if (!configurado) {
+      // Nova configuração: todos obrigatórios precisam estar preenchidos
+      return campos
+        .filter(c => c.obrigatorio)
+        .every(c => valores[c.nome]?.trim());
+    } else {
+      // Update: basta ter ao menos um campo com valor
+      return temAlgumValor;
+    }
+  })();
+
+  // Verificar se os campos estão vazios (para mostrar mensagem de update parcial)
+  const camposVazios = !Object.values(valores).some(v => v && v.trim() !== '');
 
   return (
     <>
@@ -190,13 +222,31 @@ export function ConfigurarIntegracaoSheet({
                 </div>
               )}
 
+              {/* Mensagem de update parcial quando já configurado e campos vazios */}
+              {configurado && camposVazios && (
+                <div className="p-4 rounded-lg border bg-blue-500/10 border-blue-500/30">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-5 w-5 text-blue-500 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm text-blue-600 dark:text-blue-400">
+                        Credenciais já salvas
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Para alterar, digite apenas o(s) campo(s) que deseja atualizar e clique em Salvar. 
+                        Os demais campos serão mantidos.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Formulário de campos */}
               <div className="space-y-4">
                 {campos.map((campo) => (
                   <div key={campo.nome} className="space-y-2">
                     <Label htmlFor={campo.nome}>
                       {campo.label}
-                      {campo.obrigatorio && <span className="text-destructive ml-1">*</span>}
+                      {campo.obrigatorio && !configurado && <span className="text-destructive ml-1">*</span>}
                     </Label>
                     <div className="relative">
                       <Input
@@ -239,7 +289,7 @@ export function ConfigurarIntegracaoSheet({
                     variant="outline"
                     className="flex-1"
                     onClick={handleTestar}
-                    disabled={isTesting || isSaving}
+                    disabled={isTesting || isSaving || (!configurado && !podeSalvar)}
                   >
                     {isTesting ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />

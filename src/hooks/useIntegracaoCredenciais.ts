@@ -192,8 +192,9 @@ export function useIntegracaoCredenciais({ integracao }: UseIntegracaoCredenciai
           };
       }
 
-      // Atualizar status de teste no banco
-      if (result.success) {
+      // SEMPRE atualizar status de teste no banco, independente do resultado
+      // Agora o backend aceita credenciais vazio/ausente quando teste_sucesso está presente
+      try {
         await fetch(
           'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/integracoes-credenciais',
           {
@@ -204,15 +205,19 @@ export function useIntegracaoCredenciais({ integracao }: UseIntegracaoCredenciai
             },
             body: JSON.stringify({
               integracao,
-              credenciais: credenciais || {},
+              credenciais: {}, // Não precisamos reenviar credenciais para atualizar status
               teste_sucesso: result.success,
               teste_mensagem: result.mensagem,
             }),
           }
         );
+      } catch (updateError) {
+        console.warn('[useIntegracaoCredenciais] Falha ao persistir status de teste:', updateError);
       }
 
+      // Invalidar queries para atualizar UI
       queryClient.invalidateQueries({ queryKey: ['integracao-credenciais-status', integracao] });
+      queryClient.invalidateQueries({ queryKey: ['todas-integracoes-credenciais'] });
 
       if (result.success) {
         toast.success(result.mensagem || 'Conexão testada com sucesso!');
@@ -223,6 +228,32 @@ export function useIntegracaoCredenciais({ integracao }: UseIntegracaoCredenciai
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao testar conexão';
+      
+      // Persistir falha de teste
+      try {
+        await fetch(
+          'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/integracoes-credenciais',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              integracao,
+              credenciais: {},
+              teste_sucesso: false,
+              teste_mensagem: message,
+            }),
+          }
+        );
+      } catch (updateError) {
+        console.warn('[useIntegracaoCredenciais] Falha ao persistir erro de teste:', updateError);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['integracao-credenciais-status', integracao] });
+      queryClient.invalidateQueries({ queryKey: ['todas-integracoes-credenciais'] });
+      
       toast.error(message);
       return { success: false, error: message };
     } finally {
