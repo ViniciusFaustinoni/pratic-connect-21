@@ -400,102 +400,70 @@ export function CotacaoCard({
         
         <Separator className="my-3" />
         
-        {/* Ações */}
+        {/* Ações Principais - Sempre Visíveis */}
         <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-          <Button 
-            size="sm" 
-            variant="outline"
-            onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}
-          >
-            <FileText className="h-4 w-4 mr-1" />
-            Ver Detalhes
-          </Button>
-          
-          {/* Ações por Status - com controle de permissão */}
-          {cotacao.status === 'rascunho' && hasLead && permissions?.canSend !== false && (
-            <>
-              <Button size="sm" variant="outline" onClick={() => onWhatsApp(cotacao)}>
-                <MessageCircle className="h-4 w-4 mr-1 text-green-600" />
-                WhatsApp
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => onEmail(cotacao)}>
-                <Mail className="h-4 w-4 mr-1 text-blue-600" />
-                Email
-              </Button>
-            </>
-          )}
-          
-          {cotacao.status === 'rascunho' && !hasLead && onCopiarWhatsApp && permissions?.canSend !== false && (
-            <>
-              <Button
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => onCopiarWhatsApp(cotacao)}
-                disabled={isCopiandoWhatsApp}
-              >
-                {isCopiandoWhatsApp ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    Gerando...
-                  </>
-                ) : (
-                  <>
-                    <ClipboardCopy className="h-4 w-4 mr-1" />
-                    Copiar para WhatsApp
-                  </>
-                )}
-              </Button>
-              
-              {cotacao.token_publico && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-                    navigator.clipboard.writeText(link);
-                    toast.success('Link copiado!');
-                  }}
-                >
-                  <Link2 className="h-4 w-4 mr-1" />
-                  Copiar Link do Cliente
-                </Button>
-              )}
-            </>
-          )}
-          
-          {/* Botão Gerar Proposta removido conforme solicitação */}
-          
-          {cotacao.status === 'enviada' && (
-            <>
-              {permissions?.canSend !== false && (
-                <Button size="sm" variant="outline" onClick={() => onWhatsApp(cotacao)}>
-                  <RefreshCw className="h-4 w-4 mr-1" />
-                  Reenviar
-                </Button>
-              )}
-              {permissions?.canEdit !== false && (
-                <Button size="sm" onClick={() => onAceitar(cotacao.id)}>
-                  <Check className="h-4 w-4 mr-1" />
-                  Aceitar
-                </Button>
-              )}
-            </>
-          )}
-          
-          {/* Botão Gerar Proposta para cotação aceita também removido */}
-          
-          {cotacao.status === 'aceita' && cotacao.contrato && (
-            <Button 
+          {/* Copiar para WhatsApp */}
+          {onCopiarWhatsApp && permissions?.canSend !== false && (
+            <Button
               size="sm"
-              variant="outline"
-              onClick={() => navigate('/vendas/contratos', { 
-                state: { openContrato: cotacao.contrato!.id } 
-              })}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => onCopiarWhatsApp(cotacao)}
+              disabled={isCopiandoWhatsApp}
             >
-              <FileSignature className="h-4 w-4 mr-1" />
-              Verificar Proposta
+              {isCopiandoWhatsApp ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Gerando...
+                </>
+              ) : (
+                <>
+                  <ClipboardCopy className="h-4 w-4 mr-1" />
+                  Copiar para WhatsApp
+                </>
+              )}
             </Button>
           )}
+          
+          {/* Acessar Link do Cliente */}
+          {cotacao.token_publico && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                window.open(link, '_blank');
+              }}
+            >
+              <ExternalLink className="h-4 w-4 mr-1" />
+              Acessar Link
+            </Button>
+          )}
+          
+          {/* Copiar Link do Cliente */}
+          {cotacao.token_publico && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                navigator.clipboard.writeText(link);
+                toast.success('Link copiado!');
+              }}
+            >
+              <Link2 className="h-4 w-4 mr-1" />
+              Copiar Link
+            </Button>
+          )}
+          
+          {/* Baixar PDF */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onPdf(cotacao)}
+          >
+            <FileDown className="h-4 w-4 mr-1" />
+            Baixar PDF
+          </Button>
           
           {/* Menu de ações extras */}
           <DropdownMenu>
@@ -505,19 +473,55 @@ export function CotacaoCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onPdf(cotacao)}>
-                <FileDown className="h-4 w-4 mr-2" />
-                Baixar PDF
+              <DropdownMenuItem onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}>
+                <FileText className="h-4 w-4 mr-2" />
+                Ver Detalhes
               </DropdownMenuItem>
-              {cotacao.token_publico && (
-                <DropdownMenuItem onClick={() => {
-                  const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-                  window.open(link, '_blank');
-                }}>
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Acessar Link do Cliente
-                </DropdownMenuItem>
+              
+              {cotacao.status === 'rascunho' && hasLead && permissions?.canSend !== false && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onWhatsApp(cotacao)}>
+                    <MessageCircle className="h-4 w-4 mr-2 text-green-600" />
+                    Enviar via WhatsApp
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onEmail(cotacao)}>
+                    <Mail className="h-4 w-4 mr-2 text-blue-600" />
+                    Enviar via Email
+                  </DropdownMenuItem>
+                </>
               )}
+              
+              {cotacao.status === 'enviada' && (
+                <>
+                  <DropdownMenuSeparator />
+                  {permissions?.canSend !== false && (
+                    <DropdownMenuItem onClick={() => onWhatsApp(cotacao)}>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Reenviar
+                    </DropdownMenuItem>
+                  )}
+                  {permissions?.canEdit !== false && (
+                    <DropdownMenuItem onClick={() => onAceitar(cotacao.id)}>
+                      <Check className="h-4 w-4 mr-2" />
+                      Aceitar
+                    </DropdownMenuItem>
+                  )}
+                </>
+              )}
+              
+              {cotacao.status === 'aceita' && cotacao.contrato && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate('/vendas/contratos', { 
+                    state: { openContrato: cotacao.contrato!.id } 
+                  })}>
+                    <FileSignature className="h-4 w-4 mr-2" />
+                    Verificar Proposta
+                  </DropdownMenuItem>
+                </>
+              )}
+              
               {permissions?.canDuplicate !== false && (
                 <>
                   <DropdownMenuSeparator />
