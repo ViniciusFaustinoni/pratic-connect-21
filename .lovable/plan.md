@@ -1,107 +1,76 @@
 
-# Plano: Corrigir Criação de Conta quando Há Profile Órfão
+# Plano: Corrigir Envio para SGA - Campos RENAVAM e CHASSI Obrigatórios
 
 ## Problema Identificado
 
-O associado **MARCUS VINICIUS FAUSTINONI DE FREITAS** não consegue criar conta porque:
+O veículo **LTB4J74** (Toyota Corolla XEI Flex) do associado **MARCUS VINICIUS FAUSTINONI DE FREITAS** não foi enviado para o SGA Hinova porque:
 
-1. **Já existe um user no Auth** (`6f834291-b3c8-44e6-a96d-3c7a79fb50b5`) com email `viniciusfaustinoni@gmail.com`
-2. **Já existe um profile** vinculado a esse user_id
-3. **Porém, nenhum associado está vinculado** a esse user_id (profile órfão)
-4. O associado atual (`640c05f6-5465-4cf6-ab71-4471ea143797`) tem `user_id = NULL`
-5. A Edge Function retorna: "Este email já está em uso"
+- **RENAVAM**: `NULL` (não preenchido)
+- **CHASSI**: `NULL` (não preenchido)
 
-### Causa Raiz
-
-O associado original foi **excluído** (provavelmente pelo diretor durante testes), mas a exclusão **não removeu o profile e o usuário Auth** correspondentes.
-
-A Edge Function `delete-associado` deveria ter removido esses registros, mas parece que houve uma falha nesse processo.
+### Log de Sincronização
+| Etapa | Status | Mensagem |
+|-------|--------|----------|
+| Autenticação | Sucesso | - |
+| Cadastrar Associado | Sucesso | Código Hinova: 28779 |
+| Validar Veículo | **ERRO** | RENAVAM não informado |
 
 ---
 
-## Soluções
+## Causa Raiz
 
-### Solução Imediata (para este caso específico)
+O fluxo de cadastro atual permite que veículos sejam criados **sem RENAVAM e CHASSI**, que são opcionais no formulário de cadastro e nas cotações.
 
-Executar SQL para vincular o `user_id` existente ao novo associado:
+Porém, a API do SGA Hinova **exige obrigatoriamente** esses campos para cadastrar veículos.
 
-```sql
--- Vincular o user_id existente ao associado atual
-UPDATE associados 
-SET user_id = '6f834291-b3c8-44e6-a96d-3c7a79fb50b5'
-WHERE id = '640c05f6-5465-4cf6-ab71-4471ea143797';
+### Fluxo do Problema
+```text
+1. Vendedor cria cotação → Veículo sem CRLV (sem chassi/renavam)
+2. Cotação aceita → Contrato criado com veículo sem chassi/renavam
+3. Vistoria realizada → Apenas laudo gerado (não extrai chassi/renavam)
+4. Analista aprova proposta
+5. Sistema tenta enviar para SGA
+   └─► ERRO: RENAVAM e CHASSI obrigatórios
 ```
-
-Após isso, o associado poderá fazer login normalmente com email `viniciusfaustinoni@gmail.com` e a senha definida anteriormente.
-
-Se ele não lembrar a senha, pode usar "Esqueci minha senha" na tela de login.
 
 ---
 
-### Solução Sistêmica (prevenir recorrência)
+## Solução Proposta
 
-Modificar a Edge Function `app-criar-conta-cliente` para tratar o cenário de **profile órfão**:
+### Parte 1: Permitir Edição de Campos Faltantes na Análise da Proposta
 
-**Antes (atual):**
-```typescript
-// Verificar se email já está em uso
-const { data: existingProfile } = await supabase
-  .from('profiles')
-  .select('id')
-  .eq('email', emailNormalizado)
-  .maybeSingle();
+O analista de cadastro deve poder **preencher RENAVAM e CHASSI** antes de aprovar, especialmente quando esses dados não foram capturados do CRLV.
 
-if (existingProfile) {
-  return new Response(
-    JSON.stringify({ success: false, error: 'Este email já está em uso.' }),
-    { status: 400 }
-  );
-}
-```
+#### Modificações:
 
-**Depois (corrigido):**
-```typescript
-// Verificar se email já está em uso
-const { data: existingProfile } = await supabase
-  .from('profiles')
-  .select('id, user_id')
-  .eq('email', emailNormalizado)
-  .maybeSingle();
+**Arquivo: `src/pages/cadastro/PropostaAnalise.tsx`**
 
-if (existingProfile) {
-  // Verificar se esse profile está vinculado a algum associado ativo
-  const { data: associadoExistente } = await supabase
-    .from('associados')
-    .select('id, status')
-    .eq('user_id', existingProfile.user_id)
-    .maybeSingle();
-  
-  // Se o profile NÃO tem associado vinculado (profile órfão)
-  // E estamos tentando criar conta para um associado ativo
-  if (!associadoExistente) {
-    // Vincular o user_id existente ao associado atual
-    await supabase
-      .from('associados')
-      .update({ user_id: existingProfile.user_id })
-      .eq('id', associadoId);
-    
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Sua conta já existe! Use a senha cadastrada anteriormente ou recupere-a.',
-        existingAccount: true
-      }),
-      { status: 200 }
-    );
-  }
-  
-  // Se o profile TEM associado vinculado, é duplicidade real
-  return new Response(
-    JSON.stringify({ success: false, error: 'Este email já está em uso.' }),
-    { status: 400 }
-  );
-}
-```
+1. Adicionar **campos editáveis** para RENAVAM e CHASSI no card de dados do veículo
+2. Exibir um **alerta visual** quando esses campos estiverem vazios
+3. **Bloquear aprovação** se RENAVAM ou CHASSI estiverem vazios (opcional)
+4. Salvar os dados no veículo antes de chamar o SGA
+
+---
+
+### Parte 2: Melhorar Mensagem de Erro do SGA
+
+Quando a sincronização falhar por falta de dados obrigatórios, o sistema deve:
+1. Mostrar mensagem clara indicando qual campo está faltando
+2. Oferecer link direto para editar o veículo
+
+**Arquivo: `src/components/ativacao/BotaoEnviarSGA.tsx`**
+
+Tratar o erro `campo_faltante` retornado pela Edge Function e exibir toast mais informativo.
+
+---
+
+### Parte 3: Extração Automática do CRLV (Opcional)
+
+Quando um CRLV for enviado via documentos do contrato, extrair automaticamente os dados e atualizar o veículo.
+
+**Arquivo: `src/components/contratos/UnifiedDocumentUploader.tsx`**
+
+Após extração OCR de CRLV, atualizar o veículo com chassi e renavam se estiverem vazios.
 
 ---
 
@@ -109,46 +78,117 @@ if (existingProfile) {
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `supabase/functions/app-criar-conta-cliente/index.ts` | **MODIFICAR** | Detectar profiles órfãos e revinculá-los |
+| `src/pages/cadastro/PropostaAnalise.tsx` | **MODIFICAR** | Adicionar campos editáveis para RENAVAM/CHASSI e alerta visual |
+| `src/components/ativacao/BotaoEnviarSGA.tsx` | **MODIFICAR** | Melhorar tratamento de erro com campo faltante |
+| `src/components/contratos/UnifiedDocumentUploader.tsx` | **MODIFICAR** | Atualizar veículo automaticamente após OCR do CRLV |
+
+---
+
+## Detalhes Técnicos
+
+### Card de Dados do Veículo na Análise (PropostaAnalise)
+
+```typescript
+// Novo estado para campos editáveis
+const [veiculoEditavel, setVeiculoEditavel] = useState({
+  renavam: veiculo?.renavam || '',
+  chassi: veiculo?.chassi || '',
+});
+
+// Alerta quando campos obrigatórios estão vazios
+const camposFaltantes = [];
+if (!veiculoEditavel.renavam) camposFaltantes.push('RENAVAM');
+if (!veiculoEditavel.chassi) camposFaltantes.push('CHASSI');
+
+// Mostrar alerta
+{camposFaltantes.length > 0 && (
+  <Alert variant="warning">
+    <AlertTriangle className="h-4 w-4" />
+    <AlertTitle>Campos obrigatórios para SGA</AlertTitle>
+    <AlertDescription>
+      Preencha {camposFaltantes.join(' e ')} para enviar ao SGA Hinova.
+    </AlertDescription>
+  </Alert>
+)}
+
+// Salvar antes de aprovar
+const handleAprovar = async () => {
+  // Atualizar veículo com renavam/chassi se preenchidos
+  if (veiculoEditavel.renavam || veiculoEditavel.chassi) {
+    await supabase
+      .from('veiculos')
+      .update({
+        renavam: veiculoEditavel.renavam || null,
+        chassi: veiculoEditavel.chassi || null,
+      })
+      .eq('id', veiculo.id);
+  }
+  
+  // Continuar com aprovação...
+};
+```
+
+### Tratamento de Erro no BotaoEnviarSGA
+
+```typescript
+if (!data?.success) {
+  // Erro de campo faltante
+  if (data?.campo_faltante) {
+    toast.error(`Campo obrigatório não preenchido`, {
+      description: `${data.campo_faltante.toUpperCase()} é obrigatório para enviar ao SGA. Edite o veículo e preencha este campo.`,
+      duration: 10000,
+    });
+    return;
+  }
+  // Outros erros...
+}
+```
+
+---
+
+## Solução Imediata para o Caso Atual
+
+Executar SQL para preencher os dados faltantes manualmente:
+
+```sql
+UPDATE veiculos 
+SET renavam = '00000000000',  -- Preencher com valor real
+    chassi = '00000000000000000'  -- Preencher com valor real (17 caracteres)
+WHERE id = '05a11b11-3eb0-48a3-9d7c-120d68f035e9';
+```
+
+Após isso, o botão "Enviar para SGA" funcionará normalmente.
 
 ---
 
 ## Fluxo Corrigido
 
 ```text
-Cliente tenta criar conta
+Vendedor cria cotação
      │
-     ├─► Verificar se email já existe em profiles
-     │        │
-     │        ├─► SIM, existe profile
-     │        │        │
-     │        │        ├─► Verificar se tem associado vinculado
-     │        │        │        │
-     │        │        │        ├─► NÃO tem associado (órfão)
-     │        │        │        │        → Vincular user_id ao associado atual
-     │        │        │        │        → Retornar "conta já existe, use senha anterior"
-     │        │        │        │
-     │        │        │        └─► SIM, tem associado ativo
-     │        │        │                 → Erro: "email já está em uso"
-     │        │        │
-     │        └─► NÃO existe profile
-     │                 → Criar nova conta normalmente
+     ├─► Veículo criado (possivelmente sem chassi/renavam)
+     │
+Analista abre tela de análise
+     │
+     ├─► Sistema detecta campos vazios
+     │        └─► Mostra alerta: "RENAVAM e CHASSI obrigatórios para SGA"
+     │
+     ├─► Analista pode:
+     │        ├─► Preencher manualmente na tela
+     │        └─► Solicitar CRLV ao cliente
+     │
+Analista aprova proposta
+     │
+     ├─► Sistema salva RENAVAM/CHASSI no veículo
+     ├─► Sistema envia para SGA
+     └─► Sincronização concluída com sucesso
 ```
 
 ---
 
 ## Benefícios
 
-1. **Resolve o problema atual** do MARCUS VINICIUS
-2. **Previne recorrências** em casos futuros de exclusão/recriação de associados
-3. **Mantém integridade** dos dados de autenticação
-4. **Melhora experiência** do usuário com mensagem mais clara
-
----
-
-## Dados do Caso Atual
-
-- **Associado atual**: `640c05f6-5465-4cf6-ab71-4471ea143797` (user_id = NULL)
-- **User existente**: `6f834291-b3c8-44e6-a96d-3c7a79fb50b5`
-- **Email**: `viniciusfaustinoni@gmail.com`
-- **CPF**: `12493649737`
+1. **Analista consegue resolver** o problema diretamente na tela de análise
+2. **Feedback claro** quando dados estão faltando
+3. **Não bloqueia o fluxo** de cadastro para casos legítimos
+4. **Preserva a flexibilidade** do sistema atual
