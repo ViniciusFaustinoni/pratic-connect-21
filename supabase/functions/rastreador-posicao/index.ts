@@ -21,8 +21,9 @@ interface PosicaoResponse {
 /**
  * Obtém token Softruck com suporte a retry em caso de erro 401
  */
+// deno-lint-ignore no-explicit-any
 async function getSoftruckTokenComRetry(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   supabaseUrl: string,
   supabaseKey: string,
   forceRefresh = false
@@ -57,8 +58,9 @@ async function getSoftruckTokenComRetry(
 /**
  * Busca posição do rastreador na Softruck com retry em erro 401
  */
+// deno-lint-ignore no-explicit-any
 async function getPosicaoSoftruckComRetry(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   supabaseUrl: string,
   supabaseKey: string,
   vehicleId: string,
