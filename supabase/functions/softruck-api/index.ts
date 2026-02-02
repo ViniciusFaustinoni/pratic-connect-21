@@ -125,12 +125,11 @@ function getPublicKey(): string {
   return publicKey;
 }
 
+// Enterprise ID fixo conforme plano aprovado
+const SOFTRUCK_ENTERPRISE_ID = 'oydMqwmvgeLJ1kB';
+
 function getEnterpriseId(): string {
-  const enterpriseId = Deno.env.get('SOFTRUCK_ENTERPRISE_ID');
-  if (!enterpriseId) {
-    throw new Error('SOFTRUCK_ENTERPRISE_ID não configurado. Execute "descobrir-enterprise-id" primeiro.');
-  }
-  return enterpriseId;
+  return SOFTRUCK_ENTERPRISE_ID;
 }
 
 // ========== REQUISIÇÃO GENÉRICA COM RETRY EM 401 ==========
@@ -189,17 +188,77 @@ async function softruckRequest(
 
 // ========== MAPEAMENTOS ==========
 
+// Cores hexadecimais aceitas pela API Softruck
+const SOFTRUCK_COLORS: Record<string, string> = {
+  'branco': '#FFFFFF',
+  'white': '#FFFFFF',
+  'preto': '#212121',
+  'black': '#212121',
+  'prata': '#9E9E9E',
+  'silver': '#9E9E9E',
+  'cinza': '#9E9E9E',
+  'gray': '#9E9E9E',
+  'grey': '#9E9E9E',
+  'vermelho': '#FF5722',
+  'red': '#FF5722',
+  'azul': '#2196F3',
+  'blue': '#2196F3',
+  'verde': '#8BC34A',
+  'green': '#8BC34A',
+  'amarelo': '#FFC107',
+  'yellow': '#FFC107',
+  'laranja': '#FF9800',
+  'orange': '#FF9800',
+  'marrom': '#795548',
+  'brown': '#795548',
+  'bege': '#E1C699',
+  'beige': '#E1C699',
+  'rosa': '#F8BBD0',
+  'pink': '#F8BBD0',
+  'roxo': '#9C27B0',
+  'purple': '#9C27B0',
+  'vinho': '#C2185B',
+  'wine': '#C2185B',
+  'bordeaux': '#C2185B',
+  'dourado': '#FFC107',
+  'gold': '#FFC107',
+  'champagne': '#E1C699',
+};
+
+function mapVehicleColor(cor: string | null): string {
+  if (!cor) return '#9E9E9E'; // Cinza como padrão
+  
+  // Se já é hexadecimal válido, retornar
+  if (/^#[0-9A-Fa-f]{6}$/.test(cor)) {
+    return cor.toUpperCase();
+  }
+  
+  // Normalizar: lowercase, remover acentos
+  const normalized = cor.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  return SOFTRUCK_COLORS[normalized] || '#9E9E9E';
+}
+
 function mapVehicleType(combustivel: string | null): string {
   const mapping: Record<string, string> = {
-    'gasolina': 'carro',
-    'etanol': 'carro',
-    'flex': 'carro',
-    'diesel': 'caminhao',
-    'eletrico': 'carro',
-    'hibrido': 'carro',
-    'gnv': 'carro',
+    'gasolina': 'car',
+    'etanol': 'car',
+    'flex': 'car',
+    'diesel': 'truck',
+    'eletrico': 'car',
+    'hibrido': 'car',
+    'gnv': 'car',
+    'carro': 'car',
+    'caminhao': 'truck',
+    'caminhão': 'truck',
+    'moto': 'motorcycle',
+    'motocicleta': 'motorcycle',
+    'van': 'van',
+    'onibus': 'bus',
+    'ônibus': 'bus',
   };
-  return mapping[combustivel?.toLowerCase() || ''] || 'carro';
+  return mapping[combustivel?.toLowerCase() || ''] || 'car';
 }
 
 // ========== HANDLER PRINCIPAL ==========
@@ -339,18 +398,18 @@ serve(async (req) => {
             attributes: {
               plate: placa?.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 16),
               vin: chassi?.substring(0, 20),
-              type: tipo || 'carro',
+              type: tipo ? mapVehicleType(tipo) : 'car',
               brand: marca?.substring(0, 20),
               model: modelo?.substring(0, 20),
               year: ano?.substring(0, 10),
-              color: cor?.substring(0, 7),
+              color: mapVehicleColor(cor ?? null),
               code: codigo?.substring(0, 16),
               description: descricao?.substring(0, 20),
             },
             relationships: {
               enterprise: {
                 type: 'enterprise',
-                id: enterpriseId || getEnterpriseId(),
+                id: SOFTRUCK_ENTERPRISE_ID,
               },
             },
           }],

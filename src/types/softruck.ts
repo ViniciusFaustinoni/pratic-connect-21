@@ -303,35 +303,59 @@ export interface EnterpriseDiscoveryResult {
   cnpj?: string;
 }
 
-// ========== TIPOS DE VEÍCULOS ==========
+// ========== TIPOS DE VEÍCULOS (valores aceitos pela API Softruck) ==========
 
 export const SOFTRUCK_VEHICLE_TYPES = [
-  'carro',
-  'moto',
-  'caminhao',
-  'van',
-  'onibus',
-  'reboque',
-  'barco',
-  'equipamento',
-  'outro',
+  'car', 'utility', 'van', 'scooter', 'motorcycle', 
+  'tricycle', 'quadricycle', 'pickup truck', 'truck', 
+  'bus', 'micro bus', 'other', 'implement', 
+  'agricultural machine', 'tractor truck', 'tractor'
 ] as const;
 
 export type SoftruckVehicleType = typeof SOFTRUCK_VEHICLE_TYPES[number];
 
 // ========== MAPEAMENTOS ==========
 
+// Mapeamento de combustível para tipo de veículo (valores em inglês)
 export const COMBUSTIVEL_TO_VEHICLE_TYPE: Record<string, SoftruckVehicleType> = {
-  'gasolina': 'carro',
-  'etanol': 'carro',
-  'flex': 'carro',
-  'diesel': 'caminhao',
-  'eletrico': 'carro',
-  'hibrido': 'carro',
-  'gnv': 'carro',
+  'gasolina': 'car',
+  'etanol': 'car',
+  'flex': 'car',
+  'diesel': 'truck',
+  'eletrico': 'car',
+  'hibrido': 'car',
+  'gnv': 'car',
+};
+
+// Mapeamento de cores para hexadecimal
+export const SOFTRUCK_COLORS: Record<string, string> = {
+  'branco': '#FFFFFF',
+  'preto': '#212121',
+  'prata': '#9E9E9E',
+  'cinza': '#9E9E9E',
+  'vermelho': '#FF5722',
+  'azul': '#2196F3',
+  'verde': '#8BC34A',
+  'amarelo': '#FFC107',
+  'laranja': '#FF9800',
+  'marrom': '#795548',
+  'bege': '#E1C699',
+  'rosa': '#F8BBD0',
+  'roxo': '#9C27B0',
+  'vinho': '#C2185B',
+  'dourado': '#FFC107',
+  'champagne': '#E1C699',
 };
 
 export function mapCombustivelToVehicleType(combustivel?: string | null): SoftruckVehicleType {
-  if (!combustivel) return 'carro';
-  return COMBUSTIVEL_TO_VEHICLE_TYPE[combustivel.toLowerCase()] || 'carro';
+  if (!combustivel) return 'car';
+  return COMBUSTIVEL_TO_VEHICLE_TYPE[combustivel.toLowerCase()] || 'car';
+}
+
+export function mapCorToHex(cor?: string | null): string {
+  if (!cor) return '#9E9E9E';
+  if (/^#[0-9A-Fa-f]{6}$/.test(cor)) return cor.toUpperCase();
+  const normalized = cor.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return SOFTRUCK_COLORS[normalized] || '#9E9E9E';
 }
