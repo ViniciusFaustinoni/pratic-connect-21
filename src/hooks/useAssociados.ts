@@ -720,6 +720,17 @@ export function useDeleteAssociado() {
       queryClient.invalidateQueries({ queryKey: ['associados-contagem'] });
       queryClient.invalidateQueries({ queryKey: ['associados-cidades'] });
       queryClient.invalidateQueries({ queryKey: ['associado'] });
+      
+      // Invalidar instalações e veículos (excluídos junto com associado)
+      queryClient.invalidateQueries({ queryKey: ['instalacoes-aguardando-ativacao'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos-associado'] });
+      
+      // Invalidar propostas pendentes (UI atualizada)
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['proposta-stats'] });
+      
       toast.success(result.message || 'Associado excluído permanentemente');
     },
     onError: (error) => {
