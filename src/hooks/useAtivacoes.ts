@@ -18,6 +18,8 @@ export interface AtivacaoContrato {
   veiculo_placa: string | null;
   // IDs para SGA
   associado_id: string | null;
+  // Pagamento de adesão
+  adesao_paga: boolean;
   // Dados do veículo para SGA
   veiculo: {
     id: string;
@@ -164,6 +166,8 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
           veiculo_placa: contrato.veiculo_placa,
           // IDs para SGA
           associado_id: contrato.associado_id,
+          // Pagamento de adesão
+          adesao_paga: contrato.adesao_paga ?? false,
           // Dados do veículo para SGA
           veiculo: veiculo ? {
             id: veiculo.id,

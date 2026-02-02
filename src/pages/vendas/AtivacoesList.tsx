@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   Rocket, RefreshCw, Clock, 
   AlertTriangle, CheckCircle2, Timer, Search,
@@ -11,7 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAtivacoes, useAtivarContrato, useAtivacaoMetricas, useExcluirAtivacao, FiltroAtivacao } from "@/hooks/useAtivacoes";
-import { AtivacaoCardNew } from "@/components/ativacao/AtivacaoCardNew";
+import { AtivacaoTableRow } from "@/components/ativacao/AtivacaoTableRow";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -211,9 +212,9 @@ export default function AtivacoesList() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6 pt-0">
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-[320px] rounded-xl" />
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-lg" />
             ))}
           </div>
         ) : filteredItems.length === 0 ? (
@@ -233,19 +234,31 @@ export default function AtivacoesList() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredItems.map((contrato) => (
-              <AtivacaoCardNew
-                key={contrato.id}
-                contrato={contrato}
-                onAtivar={() => handleAtivar(contrato.id)}
-                onClickRequisito={(tipo) => handleClickRequisito(contrato.id, tipo)}
-                onExcluir={() => excluirAtivacao(contrato.id)}
-                canDelete={canDeleteAtivacoes}
-                isAtivando={isAtivando}
-                isExcluindo={isExcluindo}
-              />
-            ))}
+          <div className="rounded-lg border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[250px]">Cliente</TableHead>
+                  <TableHead className="w-[180px]">Veículo</TableHead>
+                  <TableHead className="w-[120px]">Vendedor</TableHead>
+                  <TableHead className="w-[180px] text-center">Progresso</TableHead>
+                  <TableHead className="w-[150px]">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredItems.map((contrato) => (
+                  <AtivacaoTableRow
+                    key={contrato.id}
+                    contrato={contrato}
+                    onAtivar={() => handleAtivar(contrato.id)}
+                    onExcluir={() => excluirAtivacao(contrato.id)}
+                    canDelete={canDeleteAtivacoes}
+                    isAtivando={isAtivando}
+                    isExcluindo={isExcluindo}
+                  />
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
