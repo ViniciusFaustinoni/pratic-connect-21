@@ -74,6 +74,13 @@ export function CriarContaAssociadoForm({ associadoId, nomeAssociado, emailCadas
         throw new Error(data?.error || 'Resposta inválida do servidor. Tente novamente.');
       }
 
+      // Se é uma conta existente que foi vinculada, redirecionar para login
+      if (data?.existingAccount) {
+        toast.success('Sua conta já existe! Faça login ou recupere sua senha.');
+        navigate('/app/login');
+        return;
+      }
+
       // 2. Fazer login automático com as credenciais recém-criadas
       const { error: loginError } = await supabase.auth.signInWithPassword({
         email: emailFinal.toLowerCase().trim(),

@@ -89,13 +89,59 @@ Deno.serve(async (req) => {
     // 3. Verificar se email já está em uso
     const { data: existingProfile } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, user_id')
       .eq('email', emailNormalizado)
       .maybeSingle();
 
     if (existingProfile) {
+      // Verificar se esse profile está vinculado a algum associado ativo
+      const { data: associadoExistente } = await supabase
+        .from('associados')
+        .select('id, status')
+        .eq('user_id', existingProfile.user_id)
+        .maybeSingle();
+      
+      // Se o profile NÃO tem associado vinculado (profile órfão)
+      // E estamos tentando criar conta para um associado ativo
+      if (!associadoExistente) {
+        console.log('Profile órfão detectado. Vinculando user_id existente ao associado:', associadoId);
+        
+        // Vincular o user_id existente ao associado atual
+        const { error: vinculoError } = await supabase
+          .from('associados')
+          .update({ user_id: existingProfile.user_id })
+          .eq('id', associadoId);
+        
+        if (vinculoError) {
+          console.error('Erro ao vincular user_id ao associado:', vinculoError);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Erro ao vincular conta existente. Tente novamente.' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+          );
+        }
+
+        // Registrar histórico
+        await supabase
+          .from('associados_historico')
+          .insert({
+            associado_id: associadoId,
+            tipo: 'acesso_vinculado',
+            descricao: `Conta existente vinculada ao associado (email: ${emailNormalizado})`
+          });
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Sua conta já existe! Use a senha cadastrada anteriormente ou clique em "Esqueci minha senha".',
+            existingAccount: true
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Se o profile TEM associado vinculado, é duplicidade real
       return new Response(
-        JSON.stringify({ success: false, error: 'Este email já está em uso. Escolha outro email.' }),
+        JSON.stringify({ success: false, error: 'Este email já está em uso por outro associado.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
