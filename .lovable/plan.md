@@ -1,65 +1,91 @@
 
-# Plano: Corrigir Exibição de Rastreadores e Adicionar Coluna Veículo
+# Plano: Corrigir Rastreadores Órfãos e Ajustar Lógica de Exclusão
 
-## Problema Identificado
+## Diagnóstico
 
-### 1. Rastreador 4305 - Dados Corretos no Banco
-O rastreador com IMEI `862667083494305` **já está atualizado** no banco de dados:
-- **Status**: `instalado` ✅
-- **Veículo vinculado**: `LTB4J74` (Corolla XEi Flex) ✅
-- **veiculo_id**: `a2bb7db1-96b1-4507-8912-4137d3d8abca` ✅
+### Problema 1: Rastreador "Sem placa" Aparecendo na Lista
+- **IMEI**: `862667083403686`
+- **Status atual**: `instalado` 
+- **veiculo_id**: `null`
+- **Causa raiz**: A função `delete-associado` desvincula o `veiculo_id` do rastreador, mas mantém o `status = instalado`. Como a view `view_rastreadores_posicao` filtra por `status = 'instalado'`, esse rastreador órfão continua aparecendo.
 
-O problema é que a **interface não está refletindo os dados atualizados** - provavelmente cache da query React Query.
-
-### 2. Coluna Veículo Não Exibindo
-A coluna "Veículo" já existe no código, mas não está funcionando porque:
-- **Não existe Foreign Key** entre `rastreadores.veiculo_id` e `veiculos.id`
-- A sintaxe do Supabase `veiculos (placa, modelo)` depende de uma FK para funcionar automaticamente
+### Problema 2: LTB4J74 com Badge "Atenção"  
+- **Não é um bug** - comportamento esperado
+- O badge "Atenção" indica comunicação entre 1-24h atrás
+- Última comunicação: 16:29 (há ~3 horas)
+- Isso não tem relação com o status de ativação do rastreador
 
 ---
 
-## Solução
+## Correções
 
-### Parte 1: Criar Foreign Key no Banco de Dados
+### 1. Edge Function `delete-associado` - Voltar rastreador para estoque
 
-Adicionar a constraint de FK faltante via migração:
+**Arquivo:** `supabase/functions/delete-associado/index.ts`
 
-```sql
-ALTER TABLE rastreadores
-ADD CONSTRAINT rastreadores_veiculo_id_fkey
-FOREIGN KEY (veiculo_id) REFERENCES veiculos(id)
-ON DELETE SET NULL;
-```
-
-### Parte 2: Ajustar Query com Hint Explícito (Fallback)
-
-Se a FK não puder ser criada imediatamente, ajustar a query para usar hint explícito:
-
-**Arquivo:** `src/components/monitoramento/estoque/ListaRastreadores.tsx`
+**Mudança (linha ~251):**
 
 ```typescript
-// Antes (linha 132):
-veiculos (placa, modelo)
+// ANTES (só desvincula):
+await supabaseAdmin
+  .from("rastreadores")
+  .update({ veiculo_id: null })
+  .eq("veiculo_id", veiculo.id);
 
-// Depois (com hint explícito):
-veiculos:veiculos!veiculo_id(placa, modelo)
+// DEPOIS (desvincula E volta para estoque):
+await supabaseAdmin
+  .from("rastreadores")
+  .update({ 
+    veiculo_id: null,
+    associado_id: null,
+    associado_email: null,
+    status: 'estoque',  // Volta para estoque
+    updated_at: new Date().toISOString()
+  })
+  .eq("veiculo_id", veiculo.id);
 ```
 
-### Parte 3: Garantir Atualização em Tempo Real
+### 2. Script de Correção Manual - Limpar rastreador órfão atual
 
-Adicionar invalidação de queries quando rastreadores são atualizados em outras partes do sistema para evitar dados desatualizados.
+Executar no banco de dados para corrigir o rastreador existente:
+
+```sql
+UPDATE rastreadores 
+SET 
+  status = 'estoque',
+  veiculo_id = null,
+  associado_id = null,
+  associado_email = null,
+  updated_at = now()
+WHERE 
+  imei = '862667083403686'
+  AND veiculo_id IS NULL 
+  AND status = 'instalado';
+```
 
 ---
-
-## Resumo de Mudanças
-
-| Arquivo | Mudança |
-|---------|---------|
-| Migração SQL | Criar FK `rastreadores_veiculo_id_fkey` |
-| `ListaRastreadores.tsx` | Ajustar sintaxe da query para veículos |
 
 ## Resultado Esperado
 
-1. O rastreador 4305 aparecerá com status "Instalado" ✅
-2. Todos os rastreadores instalados mostrarão o veículo na coluna "Veículo" ✅
-3. Dados ficarão sincronizados automaticamente após alterações
+1. O rastreador `862667083403686` ("Sem placa") desaparecerá da lista de veículos em tempo real
+2. O rastreador voltará para o estoque, disponível para nova instalação
+3. Futuras exclusões de associados voltarão os rastreadores automaticamente para estoque
+4. O badge "Atenção" do LTB4J74 é comportamento normal - indica apenas que não comunicou na última hora (pode ajustar regra se desejado)
+
+---
+
+## Detalhes Técnicos
+
+### View `view_rastreadores_posicao`
+```sql
+-- Lógica atual de status_comunicacao:
+CASE
+  WHEN ultima_comunicacao IS NULL THEN 'sem_dados'
+  WHEN ultima_comunicacao > (now() - '01:00:00') THEN 'online'
+  WHEN ultima_comunicacao > (now() - '24:00:00') THEN 'atencao'  -- 1-24h
+  ELSE 'offline'
+END
+```
+
+### Opcional: Ajustar período de "Atenção"
+Se desejar que o veículo fique "online" por mais tempo antes de ir para "Atenção", posso alterar o intervalo de 1 hora para 2 ou 3 horas.
