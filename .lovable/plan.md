@@ -1,150 +1,137 @@
 
-# Plano: Corrigir Redirecionamento após Criação de Conta do Associado
+# Plano: Corrigir Incompatibilidade de Criptografia entre Componentes
 
-## Diagnóstico
+## Problema Identificado
 
-Identificamos uma **race condition** no fluxo de criação de conta do associado:
+Há uma **incompatibilidade crítica** entre os métodos de criptografia usados em dois arquivos diferentes:
 
-### Fluxo Atual (com bug)
-```
-CriarContaAssociadoForm.tsx
-    │
-    ├─ 1. Cria conta via Edge Function ✓
-    ├─ 2. signInWithPassword() ✓
-    └─ 3. navigate('/app/home') ❌ (imediato, sem aguardar profile)
-            │
-            └─► /app/home (ProtectedRoute)
-                    │
-                    ├─ user existe ✓
-                    ├─ profile?.tipo = undefined (ainda carregando!)
-                    └─ Redireciona para /app/login ❌
-```
+| Arquivo | Formato de Criptografia | Derivação de Chave |
+|---------|------------------------|---------------------|
+| `integracoes-credenciais/index.ts` | Base64 separado (`encrypted`, `iv`) | PBKDF2 com salt fixo |
+| `_shared/credenciais-hibridas.ts` | Hex concatenado (`IV:ciphertext`) | Chave direta (truncada/padding) |
 
-### Causa Raiz
-O `navigate('/app/home')` na linha 91 do `CriarContaAssociadoForm.tsx` é executado imediatamente após o login, **sem aguardar** que o `AuthContext` termine de carregar o `profile` do usuário recém-logado.
-
-O `ProtectedRoute` (linha 56-66) verifica `profile?.tipo`, e quando este é `undefined`, redireciona o usuário de volta para `/app/login`.
+**Resultado**: Quando o diretor salva credenciais via interface, elas são gravadas no banco usando o formato do `integracoes-credenciais`. Porém, quando o `rastreador-auth` tenta ler, usa o `_shared/credenciais-hibridas.ts` que espera um formato diferente → **falha na descriptografia**.
 
 ---
 
-## Solução Proposta
+## Situação Atual
 
-Modificar o `CriarContaAssociadoForm.tsx` para **aguardar a confirmação de que o profile está carregado** antes de redirecionar.
+1. **Credenciais funcionando agora**: As credenciais estão funcionando porque estão configuradas como ENV (Supabase Secrets), não no banco
+2. **Banco vazio para Softruck**: A query `SELECT * FROM integracoes_credenciais WHERE integracao = 'softruck'` retorna vazio
+3. **Interface não persiste**: Quando o diretor tenta salvar pela interface, pode estar falhando silenciosamente ou as credenciais são salvas mas não podem ser lidas
 
-### Abordagem: Polling Otimizado
-Após o login bem-sucedido, fazer um polling curto verificando se o `AuthContext` já carregou o profile com `tipo === 'associado'` antes de navegar.
+---
 
-### Código da Correção
+## Solução: Unificar Método de Criptografia
 
-**Arquivo: `src/components/public/CriarContaAssociadoForm.tsx`**
+Atualizar o `_shared/credenciais-hibridas.ts` para usar o **mesmo método** do `integracoes-credenciais/index.ts`:
+
+### Mudanças no `_shared/credenciais-hibridas.ts`
 
 ```typescript
-// Após signInWithPassword bem-sucedido (linha 88-91)
+// ANTES (formato errado)
+async function descriptografar(encryptedData: string, key: string) {
+  const [ivHex, encryptedHex] = encryptedData.split(':');
+  // ...usa hex e chave direta
+}
 
-// Aguardar profile estar disponível no AuthContext
-// Polling com timeout para evitar loop infinito
-const maxAttempts = 20; // 20 tentativas x 150ms = 3 segundos max
-let attempts = 0;
+// DEPOIS (formato correto - igual ao integracoes-credenciais)
+async function deriveKey(secret: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  );
+  
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: encoder.encode('integracoes_credenciais_salt'),
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+}
 
-const waitForProfile = async (): Promise<boolean> => {
-  return new Promise((resolve) => {
-    const checkProfile = async () => {
-      attempts++;
-      
-      // Verificar se profile foi carregado consultando o Supabase
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('tipo')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-        
-        if (profile?.tipo === 'associado') {
-          resolve(true);
-          return;
-        }
-      }
-      
-      if (attempts >= maxAttempts) {
-        resolve(false);
-        return;
-      }
-      
-      setTimeout(checkProfile, 150);
-    };
-    
-    checkProfile();
-  });
-};
-
-const profileReady = await waitForProfile();
-
-if (profileReady) {
-  toast.success('Bem-vindo ao PRATIC!');
-  navigate('/app/home');
-} else {
-  // Fallback: redirecionar para login mesmo assim
-  toast.success('Conta criada! Faça login para continuar.');
-  navigate('/app/login');
+async function descriptografar(encryptedBase64: string, ivBase64: string, secret: string) {
+  const key = await deriveKey(secret);
+  const encrypted = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+  const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+  
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    encrypted
+  );
+  
+  return JSON.parse(new TextDecoder().decode(decrypted));
 }
 ```
 
-### Alternativa Mais Simples (Recomendada)
-Verificar diretamente no banco se o profile já existe antes de redirecionar:
+### Atualizar busca para incluir campo `iv`
 
 ```typescript
-// Após signInWithPassword bem-sucedido (linhas 77-91)
-if (loginError) {
-  toast.success('Conta criada! Faça login com seu email.');
-  navigate('/app/login');
-  return;
-}
+// ANTES
+const { data: credencial } = await supabase
+  .from('integracoes_credenciais')
+  .select('credenciais_encrypted, configurado')
+  .eq('integracao', 'softruck')
+  .maybeSingle();
 
-// Verificar que o profile foi criado corretamente
-const { data: { session } } = await supabase.auth.getSession();
-if (session?.user) {
-  const { data: verifiedProfile } = await supabase
-    .from('profiles')
-    .select('id, tipo')
-    .eq('user_id', session.user.id)
-    .single();
-
-  if (verifiedProfile?.tipo === 'associado') {
-    toast.success('Bem-vindo ao PRATIC!');
-    // Pequeno delay para AuthContext sincronizar
-    await new Promise(r => setTimeout(r, 300));
-    navigate('/app/home');
-    return;
-  }
-}
-
-// Fallback se algo der errado
-toast.success('Conta criada! Faça login para continuar.');
-navigate('/app/login');
+// DEPOIS
+const { data: credencial } = await supabase
+  .from('integracoes_credenciais')
+  .select('credenciais_encrypted, iv, configurado')
+  .eq('integracao', 'softruck')
+  .maybeSingle();
 ```
 
 ---
 
-## Arquivo a ser Modificado
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/public/CriarContaAssociadoForm.tsx` | Adicionar verificação de profile antes de redirecionar |
+| `supabase/functions/_shared/credenciais-hibridas.ts` | Usar PBKDF2 + base64 (mesmo método do integracoes-credenciais) |
 
 ---
 
-## Benefícios
+## Resultado Esperado
 
-1. **Elimina race condition**: O redirecionamento só ocorre após confirmação de que os dados estão prontos
-2. **Melhor UX**: Usuário é redirecionado corretamente para o app na primeira tentativa
-3. **Fallback seguro**: Se algo falhar, usuário é direcionado para login manual (funcionalidade existente)
-4. **Sem mudanças no AuthContext**: Mantém a arquitetura atual intacta
+1. Diretor configura credenciais em **Configurações > Integrações > Softruck**
+2. Credenciais são salvas no banco (criptografadas com PBKDF2 + AES-256-GCM)
+3. Edge Functions (`rastreador-auth`, `rastreador-posicao`, etc.) conseguem ler e descriptografar
+4. Se não houver credenciais no banco, continua usando ENV como fallback
 
 ---
 
 ## Detalhes Técnicos
 
-A solução segue o padrão recomendado no "Stack Overflow" de verificar a leitura dos dados antes de redirecionar:
+### Estrutura do registro no banco
+```json
+{
+  "integracao": "softruck",
+  "credenciais_encrypted": "base64_do_ciphertext",
+  "iv": "base64_do_iv",
+  "configurado": true
+}
+```
 
-> "Verify data readability: Use the ID of the newly created profile to perform a separate select query. This step confirms that the data is readable, taking into account RLS policies and any triggers that may have executed."
+### Fluxo de busca híbrida
+```text
+getCredenciaisSoftruck(supabase):
+  1. SELECT credenciais_encrypted, iv FROM integracoes_credenciais WHERE integracao = 'softruck'
+  2. SE encontrou e configurado:
+     a. deriveKey(SUPABASE_SERVICE_ROLE_KEY) via PBKDF2
+     b. decrypt(encrypted, iv, key) via AES-256-GCM
+     c. return JSON.parse(decrypted)
+  3. SENÃO:
+     a. return { publicKey: Deno.env.get('SOFTRUCK_PUBLIC_KEY'), ... }
+```
