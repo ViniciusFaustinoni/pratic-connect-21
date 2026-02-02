@@ -21,6 +21,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Clock,
   Eye,
   CheckCircle,
@@ -29,12 +36,21 @@ import {
   FileText,
   RefreshCw,
   Zap,
+  MoreHorizontal,
+  Upload,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
-import { usePropostasPendentes, usePropostaStats } from '@/hooks/usePropostasPendentes';
+import { toast } from 'sonner';
+import { usePropostasPendentes, usePropostaStats, PropostaPendente } from '@/hooks/usePropostasPendentes';
 import { useInstalacoesAguardandoAtivacao } from '@/hooks/useVistoriaCompletaAnalise';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useDeleteAssociado } from '@/hooks/useAssociados';
+import { supabase } from '@/integrations/supabase/client';
+import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 
 // ============================================
 // COMPONENTE: KPI Card
@@ -154,10 +170,133 @@ export default function PropostasPendentes() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [enviandoSGAId, setEnviandoSGAId] = useState<string | null>(null);
+  const [ativandoRastreadorId, setAtivandoRastreadorId] = useState<string | null>(null);
+  const [dialogExcluirAberto, setDialogExcluirAberto] = useState(false);
+  const [associadoParaExcluir, setAssociadoParaExcluir] = useState<{ id: string; nome: string } | null>(null);
+
+  const { isDiretor } = usePermissions();
+  const { mutate: deleteAssociado, isPending: isExcluindo } = useDeleteAssociado();
 
   const { data: propostas, isLoading: propostasLoading, refetch } = usePropostasPendentes();
   const { data: stats, isLoading: statsLoading } = usePropostaStats();
   const { data: instalacoesPendentes, isLoading: instalacoesPendentesLoading } = useInstalacoesAguardandoAtivacao();
+
+  // Função para enviar para SGA Hinova
+  const handleEnviarSGA = async (proposta: PropostaPendente) => {
+    if (!proposta.associado_id) {
+      toast.error('Associado não encontrado');
+      return;
+    }
+    
+    setEnviandoSGAId(proposta.id);
+    try {
+      // Buscar veiculo_id real da proposta
+      const { data: veiculo } = await supabase
+        .from('veiculos')
+        .select('id')
+        .eq('associado_id', proposta.associado_id)
+        .eq('placa', proposta.veiculo_placa)
+        .single();
+      
+      if (!veiculo) throw new Error('Veículo não encontrado');
+      
+      const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
+        body: { veiculo_id: veiculo.id, associado_id: proposta.associado_id }
+      });
+      
+      if (error) throw error;
+      if (data.success) {
+        toast.success('Enviado para SGA com sucesso!', {
+          description: `Código Hinova: ${data.data?.codigo_veiculo_hinova || 'Processado'}`
+        });
+        refetch();
+      } else {
+        throw new Error(data.error || 'Erro ao enviar para SGA');
+      }
+    } catch (err: any) {
+      console.error('Erro ao enviar para SGA:', err);
+      toast.error('Erro ao enviar para SGA', {
+        description: err.message || 'Tente novamente mais tarde'
+      });
+    } finally {
+      setEnviandoSGAId(null);
+    }
+  };
+
+  // Função para ativar rastreador
+  const handleAtivarRastreador = async (proposta: PropostaPendente) => {
+    if (!proposta.instalacao_info?.rastreador_id || !proposta.associado_id) {
+      toast.error('Dados insuficientes para ativação');
+      return;
+    }
+    
+    setAtivandoRastreadorId(proposta.id);
+    try {
+      // Buscar veiculo_id
+      const { data: veiculo } = await supabase
+        .from('veiculos')
+        .select('id')
+        .eq('associado_id', proposta.associado_id)
+        .eq('placa', proposta.veiculo_placa)
+        .single();
+      
+      if (!veiculo) throw new Error('Veículo não encontrado');
+      
+      // Ativar baseado na plataforma
+      const plataforma = proposta.instalacao_info.rastreador_plataforma;
+      
+      if (plataforma === 'softruck') {
+        const { data, error } = await supabase.functions.invoke('softruck-ativar-dispositivo', {
+          body: { 
+            imei: proposta.instalacao_info.rastreador_imei,
+            veiculoId: veiculo.id,
+            associadoId: proposta.associado_id,
+          }
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Erro na ativação Softruck');
+      } else if (plataforma === 'rede_veiculos') {
+        const { data, error } = await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+          body: { 
+            imei: proposta.instalacao_info.rastreador_imei,
+            veiculoId: veiculo.id,
+            associadoId: proposta.associado_id,
+          }
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Erro na ativação Rede Veículos');
+      } else {
+        // Ativação local
+        await supabase.from('rastreadores')
+          .update({ status: 'instalado', veiculo_id: veiculo.id })
+          .eq('id', proposta.instalacao_info.rastreador_id);
+      }
+      
+      toast.success('Rastreador ativado com sucesso!');
+      refetch();
+    } catch (err: any) {
+      console.error('Erro ao ativar rastreador:', err);
+      toast.error('Erro ao ativar rastreador', {
+        description: err.message || 'Tente novamente mais tarde'
+      });
+    } finally {
+      setAtivandoRastreadorId(null);
+    }
+  };
+
+  // Função para excluir associado
+  const handleExcluirAssociado = async (motivo: string) => {
+    if (!associadoParaExcluir) return;
+    
+    deleteAssociado(associadoParaExcluir.id, {
+      onSuccess: () => {
+        setDialogExcluirAberto(false);
+        setAssociadoParaExcluir(null);
+        refetch();
+      }
+    });
+  };
 
   // Filtrar propostas
   const propostasFiltradas = propostas?.filter((proposta) => {
@@ -413,32 +552,92 @@ export default function PropostasPendentes() {
                         />
                       </TableCell>
                       <TableCell className="text-right">
-                        {proposta.tem_documento_pendente ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-muted-foreground/30"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/cadastro/propostas/${proposta.id}`);
-                            }}
-                          >
-                            <Eye className="mr-1 h-4 w-4" />
-                            Ver Detalhes
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            className="bg-purple-600 hover:bg-purple-700 text-white"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/cadastro/propostas/${proposta.id}`);
-                            }}
-                          >
-                            <Eye className="mr-1 h-4 w-4" />
-                            Analisar
-                          </Button>
-                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {(enviandoSGAId === proposta.id || ativandoRastreadorId === proposta.id) ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MoreHorizontal className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-popover border-border">
+                            {/* Analisar */}
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/cadastro/propostas/${proposta.id}`);
+                              }}
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              Analisar Proposta
+                            </DropdownMenuItem>
+
+                            {/* Enviar para SGA - se associado não sincronizado */}
+                            {proposta.associado_id && !proposta.associado?.sincronizado_hinova && (
+                              <DropdownMenuItem 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  handleEnviarSGA(proposta); 
+                                }}
+                                disabled={enviandoSGAId === proposta.id}
+                              >
+                                {enviandoSGAId === proposta.id ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Upload className="mr-2 h-4 w-4" />
+                                )}
+                                Enviar para SGA
+                              </DropdownMenuItem>
+                            )}
+
+                            {/* Ativar Rastreador - se instalação concluída mas não ativado */}
+                            {proposta.instalacao_info && 
+                             !proposta.instalacao_info.rastreador_ativado && 
+                             proposta.instalacao_info.rastreador_id && (
+                              <DropdownMenuItem 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  handleAtivarRastreador(proposta); 
+                                }}
+                                disabled={ativandoRastreadorId === proposta.id}
+                              >
+                                {ativandoRastreadorId === proposta.id ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Zap className="mr-2 h-4 w-4" />
+                                )}
+                                Ativar Rastreador
+                              </DropdownMenuItem>
+                            )}
+
+                            {/* Excluir Associado - apenas diretores */}
+                            {isDiretor && proposta.associado_id && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAssociadoParaExcluir({ 
+                                      id: proposta.associado_id!, 
+                                      nome: proposta.cliente_nome || proposta.associado?.nome || 'Associado' 
+                                    });
+                                    setDialogExcluirAberto(true);
+                                  }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Excluir Associado
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -448,6 +647,15 @@ export default function PropostasPendentes() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de confirmação de exclusão */}
+      <ConfirmacaoAcaoDialog
+        open={dialogExcluirAberto}
+        onOpenChange={setDialogExcluirAberto}
+        acao="excluir"
+        nomeAssociado={associadoParaExcluir?.nome || ''}
+        onConfirm={handleExcluirAssociado}
+      />
     </div>
   );
 }

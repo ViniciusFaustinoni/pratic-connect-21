@@ -17,13 +17,11 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useContratosRealtime } from "@/hooks/useContratosRealtime";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function AtivacoesList() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [filtro, setFiltro] = useState<FiltroAtivacao>("todos");
-  const [enviandoSGAId, setEnviandoSGAId] = useState<string | null>(null);
   
   // Ativar atualizações em tempo real
   useContratosRealtime();
@@ -34,34 +32,6 @@ export default function AtivacoesList() {
   const { mutate: ativarContrato, isPending: isAtivando } = useAtivarContrato();
   const { mutate: excluirAtivacao, isPending: isExcluindo } = useExcluirAtivacao();
   const metrics = useAtivacaoMetricas();
-
-  // Função para enviar para SGA Hinova
-  const handleEnviarSGA = async (contratoId: string, veiculoId: string, associadoId: string) => {
-    setEnviandoSGAId(contratoId);
-    try {
-      const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
-        body: { veiculo_id: veiculoId, associado_id: associadoId }
-      });
-      
-      if (error) throw error;
-      
-      if (data.success) {
-        toast.success('Enviado para SGA com sucesso!', {
-          description: `Código Hinova: ${data.data?.codigo_veiculo_hinova || 'Processado'}`
-        });
-        refetch();
-      } else {
-        throw new Error(data.error || 'Erro ao enviar para SGA');
-      }
-    } catch (err: any) {
-      console.error('Erro ao enviar para SGA:', err);
-      toast.error('Erro ao enviar para SGA', {
-        description: err.message || 'Tente novamente mais tarde'
-      });
-    } finally {
-      setEnviandoSGAId(null);
-    }
-  };
 
   // Filtrar por busca
   const filteredItems = ativacoes?.filter(item => {
@@ -281,16 +251,10 @@ export default function AtivacoesList() {
                     key={contrato.id}
                     contrato={contrato}
                     onAtivar={() => handleAtivar(contrato.id)}
-                    onEnviarSGA={
-                      contrato.veiculo?.id && contrato.associado_id
-                        ? () => handleEnviarSGA(contrato.id, contrato.veiculo!.id, contrato.associado_id!)
-                        : undefined
-                    }
                     onExcluir={() => excluirAtivacao(contrato.id)}
                     canDelete={canDeleteAtivacoes}
                     isAtivando={isAtivando}
                     isExcluindo={isExcluindo}
-                    isEnviandoSGA={enviandoSGAId === contrato.id}
                   />
                 ))}
               </TableBody>
