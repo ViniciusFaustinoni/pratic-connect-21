@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -29,6 +29,7 @@ import {
   Clock,
   Locate,
   ClipboardCheck,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MapaVistoriasContent } from "@/components/mapa/MapaVistoriasContent";
@@ -136,6 +137,25 @@ export default function Mapa() {
     },
     refetchInterval: 30000, // Atualizar a cada 30 segundos
     enabled: abaAtiva === "veiculos",
+  });
+
+  // Mutation para atualizar posição individual do rastreador
+  const atualizarPosicao = useMutation({
+    mutationFn: async (rastreadorId: string) => {
+      const { data, error } = await supabase.functions.invoke('rastreador-posicao', {
+        body: { rastreador_id: rastreadorId }
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao buscar posição');
+      return data;
+    },
+    onSuccess: (data) => {
+      refetch();
+      toast.success('Posição atualizada!');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao atualizar posição');
+    }
   });
 
   // Filtrar veículos
@@ -374,19 +394,35 @@ export default function Mapa() {
                               )}
                             </div>
 
-                            {v.latitude && v.longitude && (
+                            <div className="flex flex-col gap-1 flex-shrink-0">
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 flex-shrink-0"
+                                className="h-8 w-8"
+                                title="Atualizar localização"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  selecionarVeiculo(v);
+                                  atualizarPosicao.mutate(v.rastreador_id);
                                 }}
+                                disabled={atualizarPosicao.isPending && atualizarPosicao.variables === v.rastreador_id}
                               >
-                                <Locate className="h-4 w-4" />
+                                <RefreshCw className={`h-4 w-4 ${atualizarPosicao.isPending && atualizarPosicao.variables === v.rastreador_id ? 'animate-spin' : ''}`} />
                               </Button>
-                            )}
+                              {v.latitude && v.longitude && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  title="Localizar no mapa"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    selecionarVeiculo(v);
+                                  }}
+                                >
+                                  <Locate className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
