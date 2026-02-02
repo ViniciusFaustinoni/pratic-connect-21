@@ -46,10 +46,20 @@ const getPlataformasConfig = (): Record<string, PlataformaConfig> => ({
 interface Rastreador {
   id: string;
   codigo: string;
+  imei?: string;
   plataforma: string;
   id_plataforma: string;
   plataforma_device_id?: string;
   plataforma_veiculo_id?: string;
+  // Dados do veículo e associado (para Rede Veículos)
+  veiculo?: {
+    placa?: string;
+    chassi?: string;
+    associado?: {
+      cpf?: string;
+      cnpj?: string;
+    };
+  };
 }
 
 interface Posicao {
@@ -294,43 +304,73 @@ async function syncRedeVeiculos(
 
   for (const rast of rastreadores) {
     try {
-      // Chamada à API da Rede Veículos
+      // Obter dados necessários para a API
+      const imei = rast.imei || rast.codigo || '';
+      const placa = rast.veiculo?.placa || '';
+      const cpfCnpj = rast.veiculo?.associado?.cnpj || rast.veiculo?.associado?.cpf || '';
+      
+      if (!imei && !placa) {
+        result.falhas++;
+        result.erros.push(`${rast.codigo}: IMEI ou Placa não configurados`);
+        continue;
+      }
+      
+      if (!cpfCnpj) {
+        result.falhas++;
+        result.erros.push(`${rast.codigo}: CPF/CNPJ do associado não encontrado`);
+        continue;
+      }
+      
+      // Montar payload conforme documentação da API
+      const payload = JSON.stringify({
+        chassi: "",
+        placa: placa || "",
+        imei: imei || "",
+        cpfCnpjCliente: cpfCnpj || ""
+      });
+      
+      console.log(`[Rede Veículos] POST /obterUltimaPosicaoValida/ para ${rast.codigo}`);
+      
+      // Chamada à API da Rede Veículos usando endpoint correto
       const response = await fetch(
-        `${config.baseUrl}/veiculos/${rast.id_plataforma}/posicao`,
+        `${config.baseUrl}/obterUltimaPosicaoValida/`,
         {
-          method: "GET",
+          method: "POST",
           headers: {
             "Authorization": `Bearer ${config.apiKey}`,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
           },
+          body: `json=${encodeURIComponent(payload)}`
         }
       );
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
 
-      // Mapear resposta da API para nosso formato
+      // Mapear resposta da API conforme documentação
       if (data.latitude && data.longitude) {
         posicoes.push({
           rastreador_id: rast.id,
-          latitude: parseFloat(data.latitude || data.lat || 0),
-          longitude: parseFloat(data.longitude || data.lng || data.lon || 0),
-          velocidade: parseInt(data.velocidade || data.speed || 0),
-          ignicao: Boolean(data.ignicao || data.ignition || data.ign),
-          data_posicao: data.data_hora || data.timestamp || data.datetime || new Date().toISOString(),
-          odometro: data.odometro || data.hodometro || undefined,
-          direcao: data.direcao || data.heading || data.curso || undefined,
-          bateria_nivel: data.bateria || data.battery || undefined,
-          sinal_gsm: data.sinal || data.gsm || undefined,
+          latitude: parseFloat(data.latitude),
+          longitude: parseFloat(data.longitude),
+          velocidade: parseInt(data.velocidade || '0', 10),
+          ignicao: data.ignicaoLigada === 'S',
+          data_posicao: data.dataGPRS || data.dataGPS || new Date().toISOString(),
+          odometro: undefined,
+          direcao: data.direcao ? parseInt(data.direcao, 10) : undefined,
+          bateria_nivel: data.voltagemBateria ? parseFloat(data.voltagemBateria) : undefined,
+          sinal_gsm: undefined,
         });
         result.sucesso++;
+        console.log(`[Rede Veículos] ${rast.codigo}: lat=${data.latitude}, lng=${data.longitude}`);
       } else {
         result.falhas++;
-        result.erros.push(`${rast.codigo}: Sem dados de posição`);
+        result.erros.push(`${rast.codigo}: Sem dados de posição na resposta`);
+        console.warn(`[Rede Veículos] ${rast.codigo}: Resposta sem lat/lng:`, JSON.stringify(data).slice(0, 200));
       }
     } catch (error: unknown) {
       result.falhas++;
@@ -338,6 +378,9 @@ async function syncRedeVeiculos(
       result.erros.push(`${rast.codigo}: ${errorMessage}`);
       console.error(`[Rede Veículos] Erro no rastreador ${rast.codigo}:`, error);
     }
+    
+    // Rate limiting: delay entre requisições
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
   return { posicoes, result };
@@ -377,10 +420,16 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Buscar rastreadores instalados com IDs de plataforma (device ou veículo)
+    // Buscar rastreadores instalados com dados de plataforma, veículo e associado
     let query = supabase
       .from("rastreadores")
-      .select("id, codigo, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id")
+      .select(`
+        id, codigo, imei, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id,
+        veiculo:veiculos(
+          placa, chassi,
+          associado:associados(cpf, cnpj)
+        )
+      `)
       .eq("status", "instalado");
 
     if (plataformaFiltro) {
