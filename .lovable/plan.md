@@ -1,43 +1,65 @@
 
-# Plano: Remover Botão "Ativar Contrato" da Página de Ativações em Vendas
+# Plano: Corrigir Exibição de Rastreadores e Adicionar Coluna Veículo
 
-## Resumo
+## Problema Identificado
 
-Remover a opção "Ativar Contrato" do menu dropdown na tabela de ativações (`/vendas/ativacoes`). O menu continuará exibindo outras opções como "Enviar para SGA" e "Excluir" quando aplicáveis.
+### 1. Rastreador 4305 - Dados Corretos no Banco
+O rastreador com IMEI `862667083494305` **já está atualizado** no banco de dados:
+- **Status**: `instalado` ✅
+- **Veículo vinculado**: `LTB4J74` (Corolla XEi Flex) ✅
+- **veiculo_id**: `a2bb7db1-96b1-4507-8912-4137d3d8abca` ✅
 
-## Análise
+O problema é que a **interface não está refletindo os dados atualizados** - provavelmente cache da query React Query.
 
-O botão está localizado no componente `AtivacaoTableRow.tsx`, dentro do `DropdownMenuContent`:
+### 2. Coluna Veículo Não Exibindo
+A coluna "Veículo" já existe no código, mas não está funcionando porque:
+- **Não existe Foreign Key** entre `rastreadores.veiculo_id` e `veiculos.id`
+- A sintaxe do Supabase `veiculos (placa, modelo)` depende de uma FK para funcionar automaticamente
 
-```typescript
-{isProntoParaAtivar && (
-  <DropdownMenuItem 
-    onClick={onAtivar}
-    disabled={isAtivando}
-    className="text-emerald-600"
-  >
-    <Rocket className="h-4 w-4 mr-2" />
-    Ativar Contrato
-  </DropdownMenuItem>
-)}
+---
+
+## Solução
+
+### Parte 1: Criar Foreign Key no Banco de Dados
+
+Adicionar a constraint de FK faltante via migração:
+
+```sql
+ALTER TABLE rastreadores
+ADD CONSTRAINT rastreadores_veiculo_id_fkey
+FOREIGN KEY (veiculo_id) REFERENCES veiculos(id)
+ON DELETE SET NULL;
 ```
 
-## Mudanças
+### Parte 2: Ajustar Query com Hint Explícito (Fallback)
 
-### Arquivo: `src/components/ativacao/AtivacaoTableRow.tsx`
+Se a FK não puder ser criada imediatamente, ajustar a query para usar hint explícito:
 
-1. **Remover a interface prop** `onAtivar` e `isAtivando` (não mais necessários)
-2. **Remover o DropdownMenuItem** do "Ativar Contrato" (linhas 158-171)
-3. **Remover imports não utilizados** (`Rocket`)
+**Arquivo:** `src/components/monitoramento/estoque/ListaRastreadores.tsx`
 
-### Arquivo: `src/pages/vendas/AtivacoesList.tsx`
+```typescript
+// Antes (linha 132):
+veiculos (placa, modelo)
 
-1. **Remover o hook** `useAtivarContrato` (não mais usado)
-2. **Remover a função** `handleAtivar`
-3. **Remover as props** `onAtivar` e `isAtivando` da chamada do `AtivacaoTableRow`
+// Depois (com hint explícito):
+veiculos:veiculos!veiculo_id(placa, modelo)
+```
+
+### Parte 3: Garantir Atualização em Tempo Real
+
+Adicionar invalidação de queries quando rastreadores são atualizados em outras partes do sistema para evitar dados desatualizados.
+
+---
+
+## Resumo de Mudanças
+
+| Arquivo | Mudança |
+|---------|---------|
+| Migração SQL | Criar FK `rastreadores_veiculo_id_fkey` |
+| `ListaRastreadores.tsx` | Ajustar sintaxe da query para veículos |
 
 ## Resultado Esperado
 
-- O menu dropdown continuará aparecendo para contratos não ativos
-- Apenas as opções "Enviar para SGA" (quando aplicável) e "Excluir" (quando permitido) serão exibidas
-- O badge de status (Pronto/Pendente/Ativo) continuará visível
+1. O rastreador 4305 aparecerá com status "Instalado" ✅
+2. Todos os rastreadores instalados mostrarão o veículo na coluna "Veículo" ✅
+3. Dados ficarão sincronizados automaticamente após alterações
