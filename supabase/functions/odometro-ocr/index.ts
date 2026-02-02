@@ -36,7 +36,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('[OCR] Analisando:', url.substring(0, 80));
+    console.log('[OCR] Analisando URL completa:', url);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -45,7 +45,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.0-flash',
+        model: 'google/gemini-2.5-flash-image',
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -66,7 +66,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[OCR] Erro AI:', response.status);
+      console.error('[OCR] Erro AI:', response.status, errorText);
       
       const errorResponse = { km: null, confianca: 0, legivel: false };
       
