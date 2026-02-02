@@ -94,28 +94,44 @@ export function CriarContaAssociadoForm({ associadoId, nomeAssociado, emailCadas
         return;
       }
 
-      // 3. Verificar que o profile foi criado corretamente antes de redirecionar
+      // 3. Verificar que o associado foi vinculado ao user antes de redirecionar
       // Isso evita race condition com o AuthContext/ProtectedRoute
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const { data: verifiedProfile } = await supabase
-          .from('profiles')
-          .select('id, tipo')
+        // Buscar associado vinculado a este user_id
+        const { data: associadoVinculado } = await supabase
+          .from('associados')
+          .select('id, status')
           .eq('user_id', session.user.id)
-          .single();
+          .maybeSingle();
 
-        if (verifiedProfile?.tipo === 'associado') {
+        if (associadoVinculado?.id) {
           toast.success('Bem-vindo ao PRATIC!');
-          // Pequeno delay para AuthContext sincronizar
-          await new Promise(r => setTimeout(r, 300));
-          navigate('/app/home');
+          // Delay para AuthContext sincronizar
+          await new Promise(r => setTimeout(r, 500));
+          navigate('/app/home', { replace: true });
+          return;
+        }
+        
+        // Se não encontrou por user_id, tentar por email (fallback)
+        const { data: associadoPorEmail } = await supabase
+          .from('associados')
+          .select('id, status')
+          .eq('email', emailFinal.toLowerCase().trim())
+          .maybeSingle();
+
+        if (associadoPorEmail?.id) {
+          toast.success('Bem-vindo ao PRATIC!');
+          await new Promise(r => setTimeout(r, 500));
+          navigate('/app/home', { replace: true });
           return;
         }
       }
 
-      // Fallback se profile não estiver pronto
-      toast.success('Conta criada! Faça login para continuar.');
-      navigate('/app/login');
+      // Fallback - sempre redirecionar para app home após criar conta
+      toast.success('Conta criada com sucesso!');
+      await new Promise(r => setTimeout(r, 500));
+      navigate('/app/home', { replace: true });
 
     } catch (err: any) {
       console.error('Erro ao criar conta:', err);
