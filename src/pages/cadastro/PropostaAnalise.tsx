@@ -155,6 +155,11 @@ export default function PropostaAnalise() {
   const [showConfirmAprovar, setShowConfirmAprovar] = useState(false);
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
   
+  // Campos editáveis do veículo para SGA Hinova
+  const [veiculoRenavam, setVeiculoRenavam] = useState('');
+  const [veiculoChassi, setVeiculoChassi] = useState('');
+  const [isSavingVeiculo, setIsSavingVeiculo] = useState(false);
+  
 
   const { data: proposta, isLoading } = useProposta(id);
   const { data: todasPropostas } = usePropostasPendentes();
@@ -175,6 +180,24 @@ export default function PropostaAnalise() {
   const handleConfirmarAprovacao = async () => {
     if (!id) return;
     setShowConfirmAprovar(false);
+    
+    // Salvar RENAVAM/CHASSI no veículo antes de aprovar (se preenchidos)
+    if (proposta?.veiculo_id && (veiculoRenavam || veiculoChassi)) {
+      const updateData: Record<string, string | null> = {};
+      if (veiculoRenavam) updateData.renavam = veiculoRenavam;
+      if (veiculoChassi) updateData.chassi = veiculoChassi;
+      
+      const { error: updateError } = await supabase
+        .from('veiculos')
+        .update(updateData)
+        .eq('id', proposta.veiculo_id);
+      
+      if (updateError) {
+        toast.error('Erro ao salvar dados do veículo', { description: updateError.message });
+        return;
+      }
+    }
+    
     await aprovarMutation.mutateAsync(id);
     // Navegar para próxima ou voltar para lista
     if (nextProposta) {
@@ -410,32 +433,90 @@ export default function PropostaAnalise() {
                 Dados do Veículo
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <InfoItem
-                icon={Car}
-                label="Modelo/Marca"
-                value={`${proposta.veiculo_modelo || '---'} ${proposta.veiculo_marca || ''}`}
-                highlight
-                iconColor="text-purple-500"
-              />
-              <InfoItem
-                icon={FileText}
-                label="Placa"
-                value={proposta.veiculo_placa}
-                iconColor="text-purple-500"
-              />
-              <InfoItem
-                icon={Calendar}
-                label="Ano"
-                value={proposta.veiculo_ano?.toString()}
-                iconColor="text-purple-500"
-              />
-              <InfoItem
-                icon={FileText}
-                label="Cor"
-                value={proposta.veiculo_cor}
-                iconColor="text-purple-500"
-              />
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <InfoItem
+                  icon={Car}
+                  label="Modelo/Marca"
+                  value={`${proposta.veiculo_modelo || '---'} ${proposta.veiculo_marca || ''}`}
+                  highlight
+                  iconColor="text-purple-500"
+                />
+                <InfoItem
+                  icon={FileText}
+                  label="Placa"
+                  value={proposta.veiculo_placa}
+                  iconColor="text-purple-500"
+                />
+                <InfoItem
+                  icon={Calendar}
+                  label="Ano"
+                  value={proposta.veiculo_ano?.toString()}
+                  iconColor="text-purple-500"
+                />
+                <InfoItem
+                  icon={FileText}
+                  label="Cor"
+                  value={proposta.veiculo_cor}
+                  iconColor="text-purple-500"
+                />
+              </div>
+              
+              {/* Alerta de campos obrigatórios para SGA */}
+              {(!proposta.veiculo_renavam && !veiculoRenavam) || (!proposta.veiculo_chassi && !veiculoChassi) ? (
+                <div className="rounded-lg border border-warning/50 bg-warning/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-warning">Campos obrigatórios para SGA Hinova</h4>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Preencha {[
+                          !proposta.veiculo_renavam && !veiculoRenavam ? 'RENAVAM' : '',
+                          !proposta.veiculo_chassi && !veiculoChassi ? 'CHASSI' : ''
+                        ].filter(Boolean).join(' e ')} para enviar ao SGA.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              
+              {/* Campos Editáveis RENAVAM e CHASSI */}
+              <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    RENAVAM
+                  </label>
+                  {proposta.veiculo_renavam ? (
+                    <p className="text-sm font-medium text-foreground">{proposta.veiculo_renavam}</p>
+                  ) : (
+                    <input
+                      type="text"
+                      value={veiculoRenavam}
+                      onChange={(e) => setVeiculoRenavam(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Digite o RENAVAM"
+                      maxLength={11}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    CHASSI
+                  </label>
+                  {proposta.veiculo_chassi ? (
+                    <p className="text-sm font-medium text-foreground">{proposta.veiculo_chassi}</p>
+                  ) : (
+                    <input
+                      type="text"
+                      value={veiculoChassi}
+                      onChange={(e) => setVeiculoChassi(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                      placeholder="Digite o CHASSI"
+                      maxLength={17}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
 

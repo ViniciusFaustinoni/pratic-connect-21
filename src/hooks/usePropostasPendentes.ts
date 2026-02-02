@@ -94,6 +94,8 @@ export interface PropostaPendente {
   veiculo_marca: string | null;
   veiculo_ano: number | null;
   veiculo_cor: string | null;
+  veiculo_renavam: string | null;
+  veiculo_chassi: string | null;
   dia_vencimento: number | null;
   associado_id: string | null;
   cotacao_id: string | null;
@@ -526,6 +528,8 @@ export function usePropostasPendentes() {
             vistoria_base_info: vistoriaBaseInfo,
             veiculo_id: null, // Não disponível na lista resumida
             veiculo_cobertura_total: null, // Não disponível na lista resumida
+            veiculo_renavam: null, // Não disponível na lista resumida
+            veiculo_chassi: null, // Não disponível na lista resumida
           } as PropostaPendente;
         })
       );
@@ -1023,11 +1027,13 @@ export function useProposta(contratoId: string | undefined) {
       // Buscar veículo_id e cobertura_total do veículo
       let veiculoId: string | null = null;
       let veiculoCoberturaTotal: boolean | null = null;
+      let veiculoRenavam: string | null = null;
+      let veiculoChassi: string | null = null;
       
       if (contrato.associado_id) {
         const { data: veiculo } = await supabase
           .from('veiculos')
-          .select('id, cobertura_total')
+          .select('id, cobertura_total, renavam, chassi')
           .eq('associado_id', contrato.associado_id)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -1036,6 +1042,8 @@ export function useProposta(contratoId: string | undefined) {
         if (veiculo) {
           veiculoId = veiculo.id;
           veiculoCoberturaTotal = veiculo.cobertura_total;
+          veiculoRenavam = veiculo.renavam;
+          veiculoChassi = veiculo.chassi;
         }
       }
 
@@ -1091,6 +1099,8 @@ export function useProposta(contratoId: string | undefined) {
         vistoria_base_info: vistoriaBaseInfo,
         veiculo_id: veiculoId,
         veiculo_cobertura_total: veiculoCoberturaTotal,
+        veiculo_renavam: veiculoRenavam,
+        veiculo_chassi: veiculoChassi,
       };
       return result;
     },
