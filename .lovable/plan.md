@@ -1,53 +1,43 @@
 
-# Plano: Exibir Botão de Contato do Vendedor no PDF
+# Plano: Remover Botão "Ativar Contrato" da Página de Ativações em Vendas
 
-## Problema Identificado
+## Resumo
 
-O botão de WhatsApp não aparece no PDF porque a coluna `whatsapp` na tabela `profiles` está **vazia (null)** para todos os vendedores.
+Remover a opção "Ativar Contrato" do menu dropdown na tabela de ativações (`/vendas/ativacoes`). O menu continuará exibindo outras opções como "Enviar para SGA" e "Excluir" quando aplicáveis.
 
-```
-Consulta no banco:
-| nome               | whatsapp |
-|--------------------|----------|
-| ALINE DE SOUZA     | null     |
-| DB CAR RIO         | null     |
-| DIEGO PEREIRA      | null     |
-| ... (todos null)   | null     |
-```
+## Análise
 
-O código atual em `BotaoGerarPdf.tsx` só adiciona os dados do vendedor se `whatsapp` estiver preenchido:
+O botão está localizado no componente `AtivacaoTableRow.tsx`, dentro do `DropdownMenuContent`:
+
 ```typescript
-vendedor: cotacao.profiles?.whatsapp ? { nome, whatsapp } : null
+{isProntoParaAtivar && (
+  <DropdownMenuItem 
+    onClick={onAtivar}
+    disabled={isAtivando}
+    className="text-emerald-600"
+  >
+    <Rocket className="h-4 w-4 mr-2" />
+    Ativar Contrato
+  </DropdownMenuItem>
+)}
 ```
 
-## Solução
+## Mudanças
 
-### 1. Permitir edição do WhatsApp no perfil do vendedor
+### Arquivo: `src/components/ativacao/AtivacaoTableRow.tsx`
 
-Verificar se existe um campo para o vendedor cadastrar seu WhatsApp no sistema e, se não existir, adicionar.
+1. **Remover a interface prop** `onAtivar` e `isAtivando` (não mais necessários)
+2. **Remover o DropdownMenuItem** do "Ativar Contrato" (linhas 158-171)
+3. **Remover imports não utilizados** (`Rocket`)
 
-### 2. Alternativa: Usar telefone do vendedor como fallback
+### Arquivo: `src/pages/vendas/AtivacoesList.tsx`
 
-Se o campo telefone do vendedor existir, usar como fallback quando WhatsApp não estiver preenchido.
+1. **Remover o hook** `useAtivarContrato` (não mais usado)
+2. **Remover a função** `handleAtivar`
+3. **Remover as props** `onAtivar` e `isAtivando` da chamada do `AtivacaoTableRow`
 
----
+## Resultado Esperado
 
-## Próximos Passos
-
-1. Verificar a página de perfil do usuário para adicionar/editar campo WhatsApp
-2. Popular os WhatsApps existentes (ex: via SQL ou formulário)
-3. Ajustar a lógica para usar telefone como fallback se necessário
-
----
-
-## Pergunta
-
-Para o botão de WhatsApp aparecer, preciso de uma das seguintes ações:
-
-**Opção A**: Adicionar um campo no perfil do vendedor para ele cadastrar seu WhatsApp
-
-**Opção B**: Usar o telefone do vendedor como número de WhatsApp (se existir)
-
-**Opção C**: Popular manualmente os WhatsApps via SQL para os vendedores
-
-Qual abordagem você prefere?
+- O menu dropdown continuará aparecendo para contratos não ativos
+- Apenas as opções "Enviar para SGA" (quando aplicável) e "Excluir" (quando permitido) serão exibidas
+- O badge de status (Pronto/Pendente/Ativo) continuará visível
