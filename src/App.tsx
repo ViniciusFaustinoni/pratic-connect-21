@@ -492,6 +492,7 @@ const App = () => (
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />
               <Route path="/diretoria/produtos" element={<ProdutosGestao />} />
+              <Route path="/diretoria/planos-beneficios" element={<PlanosAdmin />} />
               <Route path="/diretoria/produtos/:id" element={<ProdutoDetalhe />} />
               <Route path="/diretoria/precos" element={<TabelaPrecos />} />
               <Route path="/diretoria/rateios" element={<RateioSinistros />} />

@@ -1,15 +1,12 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronDown, ChevronUp, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PlanWithDetails } from '@/types/plans';
 
 interface PlanoCardDynamicProps {
   plan: PlanWithDetails;
-  canEdit?: boolean;
-  onEdit?: (plan: PlanWithDetails) => void;
-  onDelete?: (plan: PlanWithDetails) => void;
 }
 
 // Mapeamento de cores da linha para classes Tailwind
@@ -37,7 +34,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export function PlanoCardDynamic({ plan, canEdit, onEdit, onDelete }: PlanoCardDynamicProps) {
+export function PlanoCardDynamic({ plan }: PlanoCardDynamicProps) {
   const [expanded, setExpanded] = useState(false);
   const BENEFICIOS_VISIVEIS = 4;
 
@@ -93,37 +90,9 @@ export function PlanoCardDynamic({ plan, canEdit, onEdit, onDelete }: PlanoCardD
       {/* Borda colorida superior */}
       <div className={cn('h-2 bg-gradient-to-r', gradientClass)} />
       
-      {/* Botões de Edição */}
-      {canEdit && (
-        <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 bg-background/80 hover:bg-background"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit?.(plan);
-            }}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 bg-background/80 hover:bg-destructive hover:text-destructive-foreground"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete?.(plan);
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      )}
-      
       {/* Badge do plano */}
       {plan.badge_text && (
-        <div className={cn('absolute top-4 text-xs', badgeColorClass, canEdit ? 'right-20' : 'right-4', 'inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2')}>
+        <div className={cn('absolute top-4 right-4 text-xs', badgeColorClass, 'inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2')}>
           ⭐ {plan.badge_text}
         </div>
       )}

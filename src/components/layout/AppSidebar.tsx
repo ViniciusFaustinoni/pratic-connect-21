@@ -341,6 +341,7 @@ const menuConfig: {
       items: [
         { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
         { title: 'Produtos', url: '/diretoria/produtos', icon: Package },
+        { title: 'Planos/Benefícios', url: '/diretoria/planos-beneficios', icon: Gift },
         { title: 'Tabela de Preços', url: '/diretoria/precos', icon: DollarSign },
         { title: 'Rateio', url: '/diretoria/rateios', icon: PieChart },
         { title: 'Atuarial', url: '/diretoria/indicadores', icon: TrendingUp },
