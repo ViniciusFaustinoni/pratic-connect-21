@@ -96,20 +96,25 @@ function InfoItem({
   label,
   value,
   highlight,
+  iconColor = 'text-muted-foreground',
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | null | undefined;
   highlight?: boolean;
+  iconColor?: string;
 }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="p-2 rounded-lg bg-muted">
-        <Icon className="h-4 w-4 text-muted-foreground" />
+      <div className="p-2 rounded-lg bg-muted/50 flex-shrink-0">
+        <Icon className={cn("h-4 w-4", iconColor)} />
       </div>
-      <div>
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className={cn("text-foreground", highlight && "font-semibold text-lg")}>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
+        <p className={cn(
+          "text-foreground break-words", 
+          highlight && "font-semibold text-base"
+        )}>
           {value || '---'}
         </p>
       </div>
@@ -319,9 +324,9 @@ export default function PropostaAnalise() {
   const associado = proposta.associado;
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* HEADER */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pb-4 border-b border-border">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -395,21 +400,25 @@ export default function PropostaAnalise() {
                 label="Nome Completo"
                 value={proposta.cliente_nome || associado?.nome}
                 highlight
+                iconColor="text-primary"
               />
               <InfoItem
                 icon={FileText}
                 label="CPF"
                 value={maskCPF(proposta.cliente_cpf || associado?.cpf)}
+                iconColor="text-primary"
               />
               <InfoItem
                 icon={Phone}
                 label="Telefone"
                 value={proposta.cliente_telefone || associado?.telefone}
+                iconColor="text-primary"
               />
               <InfoItem
                 icon={Mail}
                 label="Email"
                 value={proposta.cliente_email || associado?.email}
+                iconColor="text-primary"
               />
               <div className="sm:col-span-2">
                 <InfoItem
@@ -420,6 +429,7 @@ export default function PropostaAnalise() {
                       ? `${associado.logradouro}, ${associado.numero || 'S/N'} - ${associado.bairro || ''}, ${associado.cidade || ''} - ${associado.uf || ''}`
                       : proposta.endereco_completo || null
                   }
+                  iconColor="text-primary"
                 />
               </div>
             </CardContent>
@@ -439,21 +449,25 @@ export default function PropostaAnalise() {
                 label="Modelo/Marca"
                 value={`${proposta.veiculo_modelo || '---'} ${proposta.veiculo_marca || ''}`}
                 highlight
+                iconColor="text-purple-500"
               />
               <InfoItem
                 icon={FileText}
                 label="Placa"
                 value={proposta.veiculo_placa}
+                iconColor="text-purple-500"
               />
               <InfoItem
                 icon={Calendar}
                 label="Ano"
                 value={proposta.veiculo_ano?.toString()}
+                iconColor="text-purple-500"
               />
               <InfoItem
                 icon={FileText}
                 label="Cor"
                 value={proposta.veiculo_cor}
+                iconColor="text-purple-500"
               />
             </CardContent>
           </Card>
@@ -477,11 +491,13 @@ export default function PropostaAnalise() {
                     label="Data Agendada"
                     value={format(new Date(proposta.instalacao_agendada.data), "dd/MM/yyyy", { locale: ptBR })}
                     highlight
+                    iconColor="text-info"
                   />
                   <InfoItem
                     icon={Clock}
                     label="Horário"
                     value={proposta.instalacao_agendada.horario}
+                    iconColor="text-info"
                   />
                 </div>
                 
@@ -521,16 +537,19 @@ export default function PropostaAnalise() {
                   label="Data da Vistoria"
                   value={format(new Date(proposta.vistoria_base_info.data_agendada + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR })}
                   highlight
+                  iconColor="text-green-500"
                 />
                 <InfoItem
                   icon={Clock}
                   label="Horário"
                   value={proposta.vistoria_base_info.horario}
+                  iconColor="text-green-500"
                 />
                 <InfoItem
                   icon={User}
                   label="Atendido por"
                   value={proposta.vistoria_base_info.atendido_por_nome}
+                  iconColor="text-green-500"
                 />
                 <div className="flex items-center gap-2">
                   <Badge className="bg-green-500/20 text-green-500 border-green-500/30">
@@ -560,11 +579,13 @@ export default function PropostaAnalise() {
                   label="IMEI do Rastreador"
                   value={proposta.instalacao_info.rastreador_imei}
                   highlight
+                  iconColor="text-blue-500"
                 />
                 <InfoItem
                   icon={Hash}
                   label="Código do Rastreador"
                   value={proposta.instalacao_info.rastreador_codigo}
+                  iconColor="text-blue-500"
                 />
                 <InfoItem
                   icon={Calendar}
@@ -574,11 +595,13 @@ export default function PropostaAnalise() {
                       ? format(new Date(proposta.instalacao_info.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
                       : null
                   }
+                  iconColor="text-blue-500"
                 />
                 <InfoItem
                   icon={Wrench}
                   label="Instalador Responsável"
                   value={proposta.instalacao_info.instalador_nome}
+                  iconColor="text-blue-500"
                 />
               </CardContent>
             </Card>
@@ -605,18 +628,21 @@ export default function PropostaAnalise() {
                 icon={FileText}
                 label="Número do Contrato"
                 value={proposta.numero}
+                iconColor="text-emerald-500"
               />
               <InfoItem
                 icon={FileCheck}
                 label="Plano Escolhido"
                 value={proposta.plano?.nome || proposta.plano_nome}
                 highlight
+                iconColor="text-emerald-500"
               />
               <InfoItem
                 icon={DollarSign}
                 label="Valor Mensal"
                 value={formatCurrency(proposta.valor_mensal)}
                 highlight
+                iconColor="text-emerald-500"
               />
               {/* Dia de Vencimento removido - não exibido ao Analista de Cadastro */}
               <InfoItem
@@ -627,11 +653,13 @@ export default function PropostaAnalise() {
                     ? format(new Date(proposta.data_assinatura), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
                     : null
                 }
+                iconColor="text-emerald-500"
               />
               <InfoItem
                 icon={User}
                 label="Vendedor"
                 value={proposta.vendedor?.nome}
+                iconColor="text-emerald-500"
               />
             </CardContent>
           </Card>
@@ -641,13 +669,15 @@ export default function PropostaAnalise() {
         <div className="lg:col-span-2 space-y-6">
           {/* Status Card */}
           <Card className="border-border bg-card">
-            <CardHeader>
+            <CardHeader className="text-center pb-2">
               <CardTitle className="text-foreground">Status da Proposta</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col items-center gap-4">
-              <StatusBadge status={proposta.status} />
+            <CardContent className="flex flex-col items-center gap-4 pt-4">
+              <div className="scale-110">
+                <StatusBadge status={proposta.status} />
+              </div>
               {proposta.status === 'assinado' && (
-                <p className="text-sm text-muted-foreground text-center">
+                <p className="text-sm text-muted-foreground text-center max-w-xs">
                   Esta proposta está aguardando sua análise e aprovação.
                 </p>
               )}
@@ -683,15 +713,15 @@ export default function PropostaAnalise() {
 
           {/* Ações */}
           <Card className="border-border bg-card">
-            <CardHeader>
+            <CardHeader className="text-center pb-2">
               <CardTitle className="text-foreground">Ações</CardTitle>
-              <CardDescription>
+              <CardDescription className="text-center">
                 {proposta.status === 'assinado' && !proposta.tem_documento_pendente
                   ? 'Analise os dados e tome uma decisão'
                   : 'Ações indisponíveis no momento'}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 pt-4">
               {proposta.status === 'assinado' && !proposta.tem_documento_pendente ? (
                 <>
                   {(() => {
