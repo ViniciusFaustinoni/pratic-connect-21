@@ -811,7 +811,7 @@ const desenharPaginaCapa = (
   const numPlanos = cotacao.planosComparar.length;
   const MAX_CARDS_POR_LINHA = 3;
   const cardGap = 6;
-  const cardWidth = 55; // Largura fixa menor
+  const cardWidth = 60; // Largura aumentada para nomes maiores
   const cardHeight = 72; // Altura reduzida
   const planoRecomendadoIndex = numPlanos > 1 ? 1 : 0;
 
@@ -861,13 +861,16 @@ const desenharPaginaCapa = (
       innerY += 3;
     }
 
-    // Nome do plano
+    // Nome do plano - usando splitTextToSize para quebrar em múltiplas linhas
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7);
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'bold');
-    const nomeTruncado = plano.nome.length > 20 ? plano.nome.substring(0, 18) + '...' : plano.nome;
-    doc.text(nomeTruncado.toUpperCase(), centerX, innerY, { align: 'center' });
-    innerY += 8;
+    const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), cardWidth - 8);
+    const linesToShow = nomeLines.slice(0, 2); // Máximo 2 linhas
+    linesToShow.forEach((line: string, lineIndex: number) => {
+      doc.text(line, centerX, innerY + (lineIndex * 4), { align: 'center' });
+    });
+    innerY += linesToShow.length * 4 + 4;
 
     // Valor mensal
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
