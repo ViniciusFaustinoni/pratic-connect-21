@@ -748,7 +748,7 @@ export function useServicoDetalhes(id: string | undefined) {
             logradouro, numero, bairro, cidade, uf, cep, complemento
           ),
           veiculos:veiculo_id (
-            id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, tipo_veiculo
+            id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, combustivel
           ),
           rastreadores:rastreador_id (
             id, codigo, numero_serie, imei, plataforma, status
@@ -770,7 +770,7 @@ export function useServicoDetalhes(id: string | undefined) {
         .select(`
           *,
           associados (id, nome, telefone, email, whatsapp, cpf, rg, logradouro, numero, bairro, cidade, uf, cep, complemento),
-          veiculos (id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, tipo_veiculo),
+          veiculos (id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, combustivel),
           rastreadores (id, codigo, numero_serie, imei, plataforma, status)
         `)
         .eq('id', id)
