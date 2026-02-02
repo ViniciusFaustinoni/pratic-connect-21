@@ -9,6 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -254,6 +260,26 @@ export default function Mapa() {
     }
   };
 
+  const getStatusTooltip = (status: string, horasSemComunicacao: number) => {
+    const horas = Math.floor(horasSemComunicacao);
+    const minutos = Math.round((horasSemComunicacao - horas) * 60);
+    
+    const tempoFormatado = horas > 0 
+      ? `${horas}h${minutos > 0 ? ` ${minutos}min` : ''}`
+      : `${minutos}min`;
+
+    switch (status) {
+      case "online":
+        return `Comunicação recente (há ${tempoFormatado})`;
+      case "atencao":
+        return `Sem comunicação há ${tempoFormatado}\n(entre 1h e 24h = Atenção)`;
+      case "offline":
+        return `Sem comunicação há ${tempoFormatado}\n(mais de 24h = Offline)`;
+      default:
+        return "Nenhum dado de posição recebido";
+    }
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] p-4">
       {/* Tabs de navegação */}
@@ -357,9 +383,18 @@ export default function Mapa() {
                                 <span className="font-semibold text-sm truncate">
                                   {v.placa || "Sem placa"}
                                 </span>
-                                <Badge className={`text-xs ${getStatusBadgeClass(v.status_comunicacao)}`}>
-                                  {getStatusLabel(v.status_comunicacao)}
-                                </Badge>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge className={`text-xs cursor-help ${getStatusBadgeClass(v.status_comunicacao)}`}>
+                                        {getStatusLabel(v.status_comunicacao)}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs whitespace-pre-line">
+                                      {getStatusTooltip(v.status_comunicacao, v.horas_sem_comunicacao)}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               </div>
 
                               <p className="text-xs text-muted-foreground truncate">
