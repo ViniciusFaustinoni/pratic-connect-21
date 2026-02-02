@@ -1,73 +1,140 @@
 
-# Plano: Adicionar Botão de Atualizar Localização no Card de Veículo
+# Plano: Corrigir Endpoint de Posição para Rede Veículos
 
-## Contexto
+## Problema Identificado
 
-Na tela de "Veículos em Tempo Real", cada card de veículo deve ter um botão para atualizar a localização daquele veículo específico, buscando posição em tempo real da API do rastreador (Softruck/Rede Veículos).
+As Edge Functions `rastreador-posicao` e `sync-rastreadores` usam o endpoint incorreto para buscar a última posição dos rastreadores Rede Veículos:
 
-## Solução
+**Atual (incorreto):**
+```
+GET /veiculos/{codigo}/posicao
+```
 
-### 1. Adicionar Mutation para Atualização Individual
+**Correto (conforme documentação):**
+```
+POST /obterUltimaPosicaoValida/
+Content-Type: application/x-www-form-urlencoded
+Body: json={"chassi":"","placa":"","imei":"","cpfCnpjCliente":""}
+```
 
-Criar uma mutation usando a Edge Function `rastreador-posicao` já existente para buscar posição em tempo real de um rastreador específico:
+---
+
+## Dados Necessários
+
+Para usar o endpoint correto, precisamos:
+- **imei** do rastreador (disponível na tabela `rastreadores`)
+- **placa** do veículo (disponível via join com `veiculos`)
+- **cpfCnpjCliente** do associado (disponível via join com `associados`)
+
+---
+
+## Arquivos a Modificar
+
+### 1. `supabase/functions/rastreador-posicao/index.ts`
+
+Alterar a função `getPosicaoRedeVeiculos` para:
 
 ```typescript
-const atualizarPosicao = useMutation({
-  mutationFn: async (rastreadorId: string) => {
-    const { data, error } = await supabase.functions.invoke('rastreador-posicao', {
-      body: { rastreador_id: rastreadorId }
-    });
-    if (error || !data.success) throw new Error(data?.error || 'Erro');
-    return data;
-  },
-  onSuccess: () => {
-    refetch(); // Recarrega lista de veículos
-    toast.success('Posição atualizada!');
+async function getPosicaoRedeVeiculos(
+  token: string,
+  imei: string,
+  placa: string,
+  cpfCnpj: string,
+  baseUrl: string
+): Promise<PosicaoResponse> {
+  console.log(`[Rede Veículos] Buscando posição: imei=${imei}, placa=${placa}`);
+  
+  const url = `${baseUrl}/obterUltimaPosicaoValida/`;
+  
+  const payload = JSON.stringify({
+    chassi: "",
+    placa: placa || "",
+    imei: imei || "",
+    cpfCnpjCliente: cpfCnpj || ""
+  });
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `json=${encodeURIComponent(payload)}`
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Erro Rede Veículos ${response.status}: ${error}`);
   }
-});
+
+  const data = await response.json();
+  
+  // Mapear campos da resposta documentada
+  return {
+    latitude: parseFloat(data.latitude),
+    longitude: parseFloat(data.longitude),
+    velocidade: parseInt(data.velocidade || 0),
+    direcao: data.direcao,
+    ignicao: data.ignicaoLigada === 'S',
+    data_posicao: data.dataGPRS || data.dataGPS || new Date().toISOString(),
+    endereco: data.endereco,
+    dados_extras: {
+      voltagemBateria: data.voltagemBateria,
+      movimento: data.movimento,
+      bloqueado: data.bloqueado,
+      statusGPRS: data.statusGPRS,
+      statusGPS: data.statusGPS,
+    }
+  };
+}
 ```
 
-### 2. Adicionar Botão no Card de Veículo
-
-Adicionar um botão de refresh ao lado do botão de localizar no mapa:
+Também ajustar o select do rastreador para incluir dados do veículo e associado:
 
 ```typescript
-<Button
-  variant="ghost"
-  size="icon"
-  className="h-8 w-8"
-  onClick={(e) => {
-    e.stopPropagation();
-    atualizarPosicao.mutate(v.rastreador_id);
-  }}
-  disabled={atualizarPosicao.isPending}
->
-  <RefreshCw className={`h-4 w-4 ${atualizarPosicao.isPending ? 'animate-spin' : ''}`} />
-</Button>
+// Buscar rastreador com veículo e associado
+const { data: rastreador } = await supabase
+  .from('rastreadores')
+  .select(`
+    *,
+    plataforma:rastreadores_config_plataformas(*),
+    veiculo:veiculos(
+      id, placa, modelo, marca, chassi,
+      associado:associados(cpf, cnpj)
+    )
+  `)
+  .eq('id', rastreador_id)
+  .single();
 ```
 
-### 3. Arquivo a Modificar
+### 2. `supabase/functions/sync-rastreadores/index.ts`
 
-**Arquivo:** `src/pages/monitoramento/Mapa.tsx`
+Alterar a função `syncRedeVeiculos` de forma similar:
+- Mudar de GET para POST
+- Usar o endpoint `/obterUltimaPosicaoValida/`
+- Enviar body com formato urlencoded
+- Mapear a resposta corretamente
 
-- Adicionar import `useMutation` do TanStack Query
-- Adicionar import `RefreshCw` do Lucide
-- Criar mutation `atualizarPosicao`
-- Adicionar botão de refresh no card do veículo (linha ~377-389)
+---
 
-## Comportamento Esperado
+## Mapeamento de Resposta
 
-1. Usuário clica no botão de refresh (ícone de seta circular) no card do veículo
-2. Sistema chama a Edge Function `rastreador-posicao` para buscar posição em tempo real
-3. Botão mostra animação de loading (gira)
-4. Posição é atualizada no banco de dados
-5. Lista de veículos é recarregada automaticamente
-6. Toast de sucesso é exibido
+| Campo API Rede Veículos | Campo Sistema |
+|------------------------|---------------|
+| `latitude` | `latitude` |
+| `longitude` | `longitude` |
+| `velocidade` | `velocidade` |
+| `ignicaoLigada` ("S"/"N") | `ignicao` (boolean) |
+| `dataGPRS` | `data_posicao` |
+| `movimento` | `dados_extras.movimento` |
+| `bloqueado` | `dados_extras.bloqueado` |
+| `statusGPRS` | `dados_extras.statusGPRS` |
+| `voltagemBateria` | `dados_extras.voltagemBateria` |
 
-## Detalhes Técnicos
+---
 
-A Edge Function `rastreador-posicao` já existe e:
-- Busca posição em tempo real via API da plataforma (Softruck/Rede Veículos)
-- Atualiza `rastreadores.ultima_posicao_*` no banco
-- Salva posição no histórico `rastreador_posicoes`
-- Suporta retry automático em erros de autenticação
+## Resultado Esperado
+
+1. Rastreadores Rede Veículos terão sua posição atualizada corretamente
+2. O botão de "Atualizar" no mapa funcionará para veículos desta plataforma
+3. A sincronização automática (cron) também funcionará corretamente
