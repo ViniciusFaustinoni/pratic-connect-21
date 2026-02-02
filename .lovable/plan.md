@@ -1,142 +1,160 @@
 
-# Plano: Corrigir Erro "Serviço não encontrado" na Execução de Instalação
+# Plano: Ajustar Visibilidade dos Botões de Ação nas Propostas Pendentes
 
-## Diagnóstico do Problema
+## Resumo das Regras de Negócio
 
-O erro ocorre porque a consulta em `useServicoDetalhes` está tentando selecionar a coluna `tipo_veiculo` da tabela `veiculos`, mas essa coluna **não existe**.
+### 1. Botão "Ativar Rastreador"
+- **Na lista (PropostasPendentes.tsx):** Deve aparecer APENAS se o rastreador **não foi ativado** pelo vistoriador
+- **Na análise (PropostaAnalise.tsx):** Mesmo comportamento - só exibir se não ativado
 
-### Evidência
+### 2. Botão "Enviar para SGA"
+- **Na lista (PropostasPendentes.tsx):** REMOVER deste local
+- **Na análise (PropostaAnalise.tsx):** ADICIONAR junto aos botões de ação (Aprovar, Solicitar Documentos, Reprovar)
+- Deve desaparecer após envio com sucesso (quando `sincronizado_hinova = true`)
 
-**Request que falha:**
-```
-GET /rest/v1/servicos?select=*,veiculos:veiculo_id(id,...,tipo_veiculo)
-Status: 400
-Response: {"code":"42703","message":"column veiculos_1.tipo_veiculo does not exist"}
-```
+### 3. Botões "Aprovar Proposta" e "Solicitar Documentos"
+- Devem desaparecer quando a proposta for **aprovada** (`status = 'ativo'`) ou **reprovada** (`status = 'reprovado'`)
+- Atualmente já está parcialmente implementado, mas vou garantir a consistência
 
-### Colunas disponíveis na tabela `veiculos`:
+---
 
-| Coluna Existente | Coluna Requisitada |
-|------------------|-------------------|
-| id | id |
-| marca | marca |
-| modelo | modelo |
-| placa | placa |
-| ano_modelo | ano_modelo |
-| ano_fabricacao | ano_fabricacao |
-| cor | cor |
-| chassi | chassi |
-| renavam | renavam |
-| valor_fipe | valor_fipe |
-| combustivel | - |
-| - | **tipo_veiculo** (NAO EXISTE) |
+## Alterações por Arquivo
 
-## Correção Necessária
+### Arquivo 1: `src/pages/cadastro/PropostasPendentes.tsx`
 
-### Arquivo: `src/hooks/useServicos.ts`
+| Alteração | Descrição |
+|-----------|-----------|
+| Remover botão "Enviar para SGA" | Remover do menu dropdown (linhas 581-596) |
+| Remover função `handleEnviarSGA` | Remover função (linhas 185-225) |
+| Remover estado `enviandoSGAId` | Remover estado não utilizado (linha 173) |
 
-Remover a coluna inexistente `tipo_veiculo` da query.
+### Arquivo 2: `src/pages/cadastro/PropostaAnalise.tsx`
 
-**Alteração na função `useServicoDetalhes` (linha ~751):**
+| Alteração | Descrição |
+|-----------|-----------|
+| Adicionar botão "Enviar para SGA" | Adicionar na seção de Ações, junto com Aprovar/Solicitar/Reprovar |
+| Esconder botão SGA quando sincronizado | Verificar `associado.sincronizado_hinova` |
+| Adicionar verificação de status | Botões de ação só aparecem quando `status === 'assinado'` (já existente) |
 
-```typescript
-// ANTES
-veiculos:veiculo_id (
-  id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, tipo_veiculo
-)
+### Arquivo 3: `src/hooks/usePropostasPendentes.ts`
 
-// DEPOIS
-veiculos:veiculo_id (
-  id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, combustivel
-)
-```
+| Alteração | Descrição |
+|-----------|-----------|
+| Incluir `sincronizado_hinova` no associado | Garantir que o campo está disponível para verificação |
 
-**NOTA:** A coluna `combustivel` existe e pode ser usada para detectar tipo de veículo (moto/carro) se necessário.
+---
 
-### Também verificar fallback na tabela `instalacoes` (linha ~773)
+## Detalhes Técnicos
 
-A mesma correção deve ser aplicada no fallback:
+### PropostasPendentes.tsx - Remoções
 
 ```typescript
-// ANTES
-veiculos (id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, tipo_veiculo)
+// REMOVER: Linha 173 - Estado do SGA
+const [enviandoSGAId, setEnviandoSGAId] = useState<string | null>(null);
 
-// DEPOIS
-veiculos (id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, combustivel)
+// REMOVER: Linhas 185-225 - Função handleEnviarSGA
+const handleEnviarSGA = async (proposta: PropostaPendente) => { ... }
+
+// REMOVER: Linhas 581-596 - MenuItem do SGA no dropdown
+{proposta.associado_id && !proposta.associado?.sincronizado_hinova && (
+  <DropdownMenuItem onClick={...}>
+    <Upload className="mr-2 h-4 w-4" />
+    Enviar para SGA
+  </DropdownMenuItem>
+)}
 ```
 
-## Arquivo a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useServicos.ts` | Remover `tipo_veiculo` da query em 2 locais |
-
-## Impacto
-
-### Componente `InstaladorChecklist.tsx`
-
-O componente usa `tipo_veiculo` para detectar tipo de veículo:
+### PropostaAnalise.tsx - Adições
 
 ```typescript
-const tipoVeiculo: TipoVeiculo = useMemo(() => {
-  const veiculoData = servico?.veiculos as { tipo_veiculo?: string } | undefined;
-  return detectarTipoVeiculo(veiculoData?.tipo_veiculo);  // <-- Usa tipo_veiculo
-}, [servico?.veiculos]);
+// ADICIONAR: Importar hook do SGA
+import { supabase } from '@/integrations/supabase/client';
+import { Upload, Loader2 } from 'lucide-react';
+
+// ADICIONAR: Estado para controle do envio
+const [enviandoSGA, setEnviandoSGA] = useState(false);
+
+// ADICIONAR: Função handleEnviarSGA (similar à removida do outro arquivo)
+const handleEnviarSGA = async () => { ... };
+
+// ADICIONAR: Na seção de Ações (após botões de Aprovar/Solicitar/Reprovar)
+// Condição: status === 'assinado' && !proposta.associado?.sincronizado_hinova
+{proposta.status === 'assinado' && 
+ !proposta.tem_documento_pendente && 
+ !proposta.associado?.sincronizado_hinova && (
+  <Button onClick={handleEnviarSGA}>
+    <Upload className="mr-2 h-4 w-4" />
+    Enviar para SGA
+  </Button>
+)}
 ```
 
-**Ajuste necessário:** Usar `combustivel` como fallback para detecção ou deixar como `undefined` (a função `detectarTipoVeiculo` já trata isso retornando 'automovel' como padrão).
-
-## Fluxo Corrigido
+### Condições de Visibilidade Atualizadas
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  BUSCA DE SERVIÇO PARA EXECUÇÃO (CORRIGIDO)                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. Clica "Executar Instalação"                                 │
-│     └─> Navigate para /instalador/instalacao/:id                │
-│                                                                 │
-│  2. useServicoDetalhes(id)                                      │
-│     ├─> SELECT * FROM servicos WHERE id = :id                   │
-│     ├─> JOIN veiculos (sem tipo_veiculo)                        │
-│     └─> Retorna dados corretamente                              │
-│                                                                 │
-│  3. InstaladorChecklist renderiza                               │
-│     ├─> Exibe dados do veículo                                  │
-│     ├─> detectarTipoVeiculo() retorna 'automovel' (padrão)      │
-│     └─> Checklist funciona normalmente                          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  BOTÃO              │ CONDIÇÃO DE EXIBIÇÃO                  │
+├─────────────────────┼────────────────────────────────────────┤
+│ Ativar Rastreador   │ instalacao_info &&                    │
+│ (lista)             │ !instalacao_info.rastreador_ativado   │
+├─────────────────────┼────────────────────────────────────────┤
+│ Enviar para SGA     │ status === 'assinado' &&              │
+│ (análise)           │ !tem_documento_pendente &&            │
+│                     │ !associado.sincronizado_hinova        │
+├─────────────────────┼────────────────────────────────────────┤
+│ Aprovar Proposta    │ status === 'assinado' &&              │
+│                     │ !tem_documento_pendente               │
+├─────────────────────┼────────────────────────────────────────┤
+│ Solicitar Docs      │ status === 'assinado' &&              │
+│                     │ !tem_documento_pendente               │
+├─────────────────────┼────────────────────────────────────────┤
+│ Reprovar Proposta   │ status === 'assinado' &&              │
+│                     │ !tem_documento_pendente               │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-## Resumo
+---
 
-| Problema | Causa | Solução |
-|----------|-------|---------|
-| "Serviço não encontrado" | Query solicita coluna `tipo_veiculo` que não existe | Remover coluna da query |
+## Fluxo de Estados
 
-## Alterações no Código
-
-### `src/hooks/useServicos.ts` - Linha ~750-751
-
-```typescript
-// ANTES
-veiculos:veiculo_id (
-  id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, tipo_veiculo
-)
-
-// DEPOIS
-veiculos:veiculo_id (
-  id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, combustivel
-)
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  PROPOSTA ASSINADA (status = 'assinado')                    │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ Botões visíveis:                                      │  │
+│  │ ✓ Aprovar Proposta                                    │  │
+│  │ ✓ Solicitar Documentos                                │  │
+│  │ ✓ Reprovar Proposta                                   │  │
+│  │ ✓ Enviar para SGA (se não sincronizado)               │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                          │                                  │
+│           ┌──────────────┼──────────────┐                   │
+│           ▼              ▼              ▼                   │
+│      [Aprovar]     [Solicitar]     [Reprovar]               │
+│           │              │              │                   │
+│           ▼              ▼              ▼                   │
+│     status='ativo'  (aguarda)    status='reprovado'         │
+│           │                             │                   │
+│           └──────────────┬──────────────┘                   │
+│                          ▼                                  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ Todos os botões de ação desaparecem                   │  │
+│  │ Exibe apenas mensagem de status                       │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### `src/hooks/useServicos.ts` - Linha ~773
+---
 
-```typescript
-// ANTES  
-veiculos (id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, tipo_veiculo)
+## Arquivos a Modificar
 
-// DEPOIS
-veiculos (id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, combustivel)
-```
+| Arquivo | Tipo de Alteração |
+|---------|-------------------|
+| `src/pages/cadastro/PropostasPendentes.tsx` | Remover botão SGA e lógica associada |
+| `src/pages/cadastro/PropostaAnalise.tsx` | Adicionar botão SGA na seção de Ações |
+
+## Resultado Esperado
+
+1. Na **lista de propostas**: Menu dropdown terá apenas "Analisar Proposta", "Ativar Rastreador" (condicional) e "Excluir Associado" (diretores)
+2. Na **tela de análise**: Botão "Enviar para SGA" aparece junto com os outros botões de ação, e desaparece após sincronização
+3. Botões de aprovação/solicitação desaparecem após a proposta ser aprovada ou reprovada
