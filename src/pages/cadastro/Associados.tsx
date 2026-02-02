@@ -337,15 +337,6 @@ export default function Associados() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={() => setFiltersSheetOpen(true)} className="relative">
-            <Filter className="mr-2 h-4 w-4" />
-            Filtros
-            {Object.keys(sheetFilters).length > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] font-medium text-primary-foreground flex items-center justify-center">
-                {Object.keys(sheetFilters).length}
-              </span>
-            )}
-          </Button>
           <Button onClick={() => setFormDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Novo Associado
