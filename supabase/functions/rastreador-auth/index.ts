@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCredenciaisSoftruck, getCredenciaisRedeVeiculos } from '../_shared/credenciais-hibridas.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,19 +16,20 @@ interface AuthResult {
 
 /**
  * Autenticação Softruck (OAuth JWT)
- * Tenta usar refresh_token primeiro, depois faz login completo
+ * Usa credenciais híbridas (banco > ENV)
  */
 async function authSoftruck(
+  supabase: ReturnType<typeof createClient>,
   baseUrl: string, 
   existingRefreshToken?: string | null
 ): Promise<AuthResult> {
-  const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY');
-  const username = Deno.env.get('SOFTRUCK_USERNAME');
-  const password = Deno.env.get('SOFTRUCK_PASSWORD');
+  const credenciais = await getCredenciaisSoftruck(supabase);
 
-  if (!publicKey || !username || !password) {
-    throw new Error('Credenciais Softruck não configuradas. Configure em Monitoramento > Credenciais API.');
+  if (!credenciais) {
+    throw new Error('Credenciais Softruck não configuradas. Configure em Configurações > Integrações.');
   }
+
+  const { public_key: publicKey, username, password } = credenciais;
 
   // Tentar usar refresh_token primeiro (se disponível)
   if (existingRefreshToken) {
@@ -106,18 +108,19 @@ async function authSoftruck(
 
 /**
  * RedeVeículos usa token fixo (Bearer)
+ * Usa credenciais híbridas (banco > ENV)
  */
-function authRedeVeiculos(): AuthResult {
-  const token = Deno.env.get('REDE_VEICULOS_TOKEN');
+async function authRedeVeiculos(supabase: ReturnType<typeof createClient>): Promise<AuthResult> {
+  const credenciais = await getCredenciaisRedeVeiculos(supabase);
   
-  if (!token) {
-    throw new Error('Token Rede Veículos não configurado. Configure em Monitoramento > Credenciais API.');
+  if (!credenciais) {
+    throw new Error('Token Rede Veículos não configurado. Configure em Configurações > Integrações.');
   }
   
   // Token fixo - expiração longa (1 ano)
   const expires_at = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
   
-  return { token, expires_at, renovado_via: 'cache' };
+  return { token: credenciais.bearer_token, expires_at, renovado_via: 'cache' };
 }
 
 serve(async (req) => {
@@ -204,9 +207,9 @@ serve(async (req) => {
     let authResult: AuthResult;
     
     if (plataforma === 'softruck') {
-      authResult = await authSoftruck(baseUrl, existingRefreshToken);
+      authResult = await authSoftruck(supabase, baseUrl, existingRefreshToken);
     } else {
-      authResult = authRedeVeiculos();
+      authResult = await authRedeVeiculos(supabase);
     }
 
     // Salvar token no cache
