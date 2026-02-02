@@ -941,19 +941,6 @@ export default function PropostaAnalise() {
                           <span>Ativar o associado no sistema</span>
                         </div>
                         
-                        <div className="flex items-center gap-2 text-sm">
-                          <div className="w-6 h-6 rounded-full bg-info/20 flex items-center justify-center">
-                            <Wrench className="h-3 w-3 text-info" />
-                          </div>
-                          <span>Criar instalação pendente (rastreador)</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 text-sm">
-                          <div className="w-6 h-6 rounded-full bg-warning/20 flex items-center justify-center">
-                            <CreditCard className="h-3 w-3 text-warning" />
-                          </div>
-                          <span>Gerar primeira cobrança</span>
-                        </div>
                         
                         <div className="flex items-center gap-2 text-sm">
                           <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center">
