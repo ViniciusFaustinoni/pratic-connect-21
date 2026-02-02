@@ -933,16 +933,15 @@ const desenharPaginaCapa = (
   const tabelaX = (pageWidth - tabelaWidth) / 2;
   
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.roundedRect(tabelaX, y, tabelaWidth, 28, 3, 3, 'F');
+  doc.roundedRect(tabelaX, y, tabelaWidth, 21, 3, 3, 'F');
 
   // Labels
   const labelWidth = 45;
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
-  doc.text('ADESÃO', tabelaX + 5, y + 8);
-  doc.text('MÉDIO MENSAL', tabelaX + 5, y + 15);
-  doc.text('1º PAGAMENTO', tabelaX + 5, y + 22);
+  doc.text('TAXA DE ADESÃO', tabelaX + 5, y + 8);
+  doc.text('VALOR MÉDIO MENSAL', tabelaX + 5, y + 15);
 
   // Valores por plano (max 3 por linha)
   const planosExibidos = cotacao.planosComparar.slice(0, MAX_CARDS_POR_LINHA);
@@ -950,51 +949,40 @@ const desenharPaginaCapa = (
   
   planosExibidos.forEach((plano, index) => {
     const valorX = tabelaX + labelWidth + valorWidth * index + valorWidth / 2;
-    const primeiroPagamento = plano.valorAdesao + plano.valorMensal; // Primeiro pagamento = adesão + mensalidade
 
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.text(formatCurrency(plano.valorAdesao), valorX, y + 8, { align: 'center' });
     doc.text(formatCurrency(plano.valorMensal), valorX, y + 15, { align: 'center' });
-    
-    doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-    doc.setFont('helvetica', 'bold');
-    doc.text(formatCurrency(primeiroPagamento), valorX, y + 22, { align: 'center' });
   });
 
   // Se houver mais de 3 planos, adicionar segunda tabela
   if (numPlanos > MAX_CARDS_POR_LINHA) {
-    y += 32;
+    y += 25;
     const planosRestantes = cotacao.planosComparar.slice(MAX_CARDS_POR_LINHA);
     const tabelaWidth2 = Math.min(contentWidth, (cardWidth + cardGap) * planosRestantes.length + 40);
     const tabelaX2 = (pageWidth - tabelaWidth2) / 2;
     
     doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-    doc.roundedRect(tabelaX2, y, tabelaWidth2, 28, 3, 3, 'F');
+    doc.roundedRect(tabelaX2, y, tabelaWidth2, 21, 3, 3, 'F');
 
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
-    doc.text('ADESÃO', tabelaX2 + 5, y + 8);
-    doc.text('MÉDIO MENSAL', tabelaX2 + 5, y + 15);
-    doc.text('1º PAGAMENTO', tabelaX2 + 5, y + 22);
+    doc.text('TAXA DE ADESÃO', tabelaX2 + 5, y + 8);
+    doc.text('VALOR MÉDIO MENSAL', tabelaX2 + 5, y + 15);
 
     const valorWidth2 = (tabelaWidth2 - labelWidth) / planosRestantes.length;
     
     planosRestantes.forEach((plano, index) => {
       const valorX = tabelaX2 + labelWidth + valorWidth2 * index + valorWidth2 / 2;
-      const primeiroPagamento = plano.valorAdesao + plano.valorMensal; // Primeiro pagamento = adesão + mensalidade
 
       doc.setTextColor(textLight.r, textLight.g, textLight.b);
       doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');
       doc.text(formatCurrency(plano.valorAdesao), valorX, y + 8, { align: 'center' });
       doc.text(formatCurrency(plano.valorMensal), valorX, y + 15, { align: 'center' });
-      
-      doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-      doc.setFont('helvetica', 'bold');
-      doc.text(formatCurrency(primeiroPagamento), valorX, y + 22, { align: 'center' });
     });
   }
 
@@ -1409,11 +1397,10 @@ const desenharPaginaComparativa = (
   drawGradientRect(doc, margin, y, contentWidth, 1.5, glowBlue, brandRed, 40);
   y += 8;
 
-  // Linhas de valores
+  // Linhas de valores (apenas 2 linhas - removido 1º PAGAMENTO)
   const linhasValores = [
     { label: 'VALOR MÉDIO MENSAL', key: 'valorMensal', highlight: false },
     { label: 'TAXA DE ADESÃO', key: 'valorAdesao', highlight: false },
-    { label: '1º PAGAMENTO', key: 'primeiroPagamento', highlight: true },
   ];
 
   linhasValores.forEach((linha, index) => {
