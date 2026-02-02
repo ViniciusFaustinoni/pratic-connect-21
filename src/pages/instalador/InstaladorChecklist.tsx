@@ -1086,6 +1086,11 @@ export default function InstaladorChecklist() {
                                 <div className="flex items-center gap-2">
                                   <Package className="h-4 w-4 text-muted-foreground" />
                                   <span className="font-medium">{r.codigo}</span>
+                                  {r.plataforma && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-primary/20 text-primary capitalize">
+                                      {r.plataforma.replace(/_/g, ' ')}
+                                    </span>
+                                  )}
                                   {r.imei && (
                                     <span className="text-muted-foreground font-mono text-xs">
                                       IMEI: {r.imei}
