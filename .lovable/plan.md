@@ -1,227 +1,156 @@
 
 
-# Plano: Simplificar Formulário de Novo Rastreador
+# Análise: Integração Rede Veículos na Conclusão de Instalação
 
-## Resumo
+## Resumo da Análise
 
-Simplificar o formulário de criação de rastreadores para exibir apenas os 4 campos solicitados pelo usuário.
+Após investigar o codebase, identifiquei que **a integração já está implementada** de forma mais robusta do que o PRD sugere.
 
-## Estado Atual
+## Comparação: PRD vs. Implementação Atual
 
-O formulário atual (`RastreadorFormDialog.tsx`) possui **9 campos**:
-- Código * (obrigatório)
-- Número de Série
-- IMEI
-- ICCID do Chip
-- Plataforma *
-- ID na Plataforma
-- Status *
-- Veículo (condicional - se status = instalado)
-- Portador (condicional - se status = estoque)
+| Aspecto | PRD Sugere | Já Implementado |
+|---------|-----------|-----------------|
+| Edge Function | `rede-veiculos-ativar` (nova) | `rede-veiculos-vincular-cliente` ✅ |
+| Endpoint API | `/preCadastroAgendamento/` | `/vincularClienteVeiculo/` ✅ |
+| Dados enviados | CPF + Chassi + Placa + IMEI | Cliente + Veículo + Equipamento + Permissões ✅ |
+| Gatilho | Conclusão de instalação | Conclusão de instalação ✅ |
+| Tabela de log | `rastreadores_ativacoes` (não existe) | `rastreadores_logs` ✅ |
 
-## Nova Estrutura
+## O que já funciona
 
-O formulário deve exibir apenas **4 campos**:
+### 1. Hook `useAprovarVeiculoServico` (src/hooks/useServicos.ts)
 
-| Campo | Obrigatório | Observação |
-|-------|-------------|------------|
-| IMEI | Sim | 15-17 dígitos numéricos |
-| Plataforma | Sim | Select com opções cadastradas |
-| Status | Não | Default: "Em Estoque" |
-| Portador (Vistoriador) | Não | Exibido apenas se status = "estoque" |
-
-## Regras de Negócio
-
-1. **Código será gerado automaticamente** a partir do IMEI
-   - Formato: `RAT-{IMEI}` (ex: `RAT-867322045123456`)
-   - Isso satisfaz a constraint NOT NULL do banco de dados
-
-2. **IMEI passa a ser obrigatório** no formulário de criação
-   - Manter opcional apenas na edição (para compatibilidade com registros antigos)
-
-3. **Status tem default** no banco (`estoque`), então será opcional no formulário
-
-4. **Campos removidos da interface**:
-   - Código (gerado automaticamente)
-   - Número de Série
-   - ICCID do Chip
-   - ID na Plataforma
-   - Veículo (removido - rastreador novo não pode estar "instalado")
-
-## Alterações no Arquivo
-
-**Arquivo:** `src/components/rastreadores/RastreadorFormDialog.tsx`
-
-### 1. Atualizar Schema de Validação
+Linhas 952-961 já chamam a integração Rede Veículos:
 
 ```typescript
-const rastreadorSchema = z.object({
-  imei: z.string()
-    .min(15, 'IMEI deve ter pelo menos 15 dígitos')
-    .max(17, 'IMEI deve ter no máximo 17 dígitos')
-    .refine((val) => /^\d{15,17}$/.test(val), {
-      message: 'IMEI deve conter apenas dígitos numéricos',
-    }),
-  plataforma: z.string().min(1, 'Plataforma é obrigatória'),
-  status: z.enum(['estoque', 'manutencao', 'baixado'] as const).default('estoque'),
-  portador_id: z.string().uuid().optional().nullable(),
-  // Campos mantidos apenas para edição
-  codigo: z.string().optional(),
-  numero_serie: z.string().optional().nullable(),
-  chip_iccid: z.string().optional().nullable(),
-  id_plataforma: z.string().optional().nullable(),
-  veiculo_id: z.string().uuid().optional().nullable(),
-});
+} else if (rastreadorInfo?.plataforma === 'rede_veiculos') {
+  await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+    body: {
+      imei: data.imeiRastreador,
+      veiculoId: data.veiculoId,
+      associadoId: data.associadoId,
+    },
+  });
+  console.log('[useAprovarVeiculoServico] Rastreador vinculado na Rede Veículos com sucesso');
+}
 ```
 
-### 2. Atualizar Função onSubmit
+### 2. Edge Function `rede-veiculos-vincular-cliente`
+
+Faz o fluxo completo:
+- Busca dados do associado, veículo e rastreador
+- Autentica na API Rede Veículos via `rastreador-auth`
+- Chama endpoint `/vincularClienteVeiculo/` com payload completo
+- Atualiza IDs da plataforma no banco local
+- Chama `/ativarVeiculo/` automaticamente após vinculação
+- Registra logs em `rastreadores_logs`
+
+### 3. Tabela de Logs
+
+`rastreadores_logs` já existe com campos:
+- `rastreador_id`, `plataforma`, `operacao`, `request`, `response`, `status`, `erro_mensagem`, `created_at`
+
+## Diferença entre Endpoints da API Rede Veículos
+
+| Endpoint | Propósito |
+|----------|-----------|
+| `/preCadastroAgendamento/` | Pré-cadastro simplificado (sem vincular) |
+| `/vincularClienteVeiculo/` | **Cadastro completo** (cliente + veículo + equipamento vinculados) ✅ |
+
+## Recomendação
+
+**Não criar nova Edge Function**. O sistema já está implementado corretamente com uma abordagem mais robusta.
+
+## Ajustes Necessários
+
+Apenas pequenos ajustes para garantir funcionamento correto:
+
+### 1. Garantir que a chamada não está bloqueada pelo if
+
+**Problema identificado**: O código só chama a integração **se** o veículo já tinha `cobertura_roubo_furto` (linha 913):
 
 ```typescript
-const onSubmit = async (data: RastreadorFormData) => {
-  try {
-    const payload = {
-      // Gerar código automaticamente a partir do IMEI (apenas na criação)
-      codigo: isEditing ? (data.codigo || `RAT-${data.imei}`) : `RAT-${data.imei}`,
-      imei: data.imei,
-      plataforma: data.plataforma,
-      status: data.status || 'estoque',
-      portador_id: data.status === 'estoque' ? (data.portador_id || null) : null,
-      // Manter outros campos apenas na edição
-      numero_serie: isEditing ? data.numero_serie : null,
-      chip_iccid: isEditing ? data.chip_iccid : null,
-      id_plataforma: isEditing ? data.id_plataforma : null,
-      veiculo_id: isEditing && data.status === 'instalado' ? data.veiculo_id : null,
-    };
-    // ... resto da função
+if (veiculoAtual?.cobertura_roubo_furto && !veiculoAtual?.cobertura_total) {
+  // ... chama integração Rede Veículos
+}
+```
+
+Isso significa que se a vistoria não foi aprovada previamente, a integração **não é chamada**.
+
+**Solução**: Sempre tentar chamar a integração quando o rastreador for Rede Veículos, independente do status de cobertura.
+
+### 2. Não bloquear fluxo em caso de erro
+
+Já está implementado com try/catch (linha 962-965).
+
+## Arquivo a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useServicos.ts` | Mover chamada da integração para FORA do if de cobertura |
+
+## Código Proposto
+
+```typescript
+// Linha ~891 - Após vincular rastreador ao veículo
+// SEMPRE tentar ativar na plataforma, independente de cobertura
+try {
+  const { data: rastreadorInfo } = await supabase
+    .from('rastreadores')
+    .select('plataforma')
+    .eq('imei', data.imeiRastreador)
+    .single();
+
+  if (rastreadorInfo?.plataforma === 'rede_veiculos') {
+    console.log('[useAprovarVeiculoServico] Ativando rastreador na Rede Veículos...');
+    await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+      body: {
+        imei: data.imeiRastreador,
+        veiculoId: data.veiculoId,
+        associadoId: data.associadoId,
+      },
+    });
+    console.log('[useAprovarVeiculoServico] Rastreador vinculado na Rede Veículos com sucesso');
+  } else if (rastreadorInfo?.plataforma === 'softruck') {
+    // ... código softruck existente ...
   }
-};
+} catch (err) {
+  console.warn('[useAprovarVeiculoServico] Ativação na plataforma falhou:', err);
+  // Não bloquear fluxo
+}
 ```
 
-### 3. Simplificar Interface do Formulário
+## Por que NÃO criar Edge Function nova?
 
-Remover campos desnecessários e reorganizar o layout:
+1. **Redundância** - Já existe `rede-veiculos-vincular-cliente` funcionando
+2. **Endpoint inferior** - `/preCadastroAgendamento/` é mais limitado que `/vincularClienteVeiculo/`
+3. **Tabela inexistente** - PRD menciona `rastreadores_ativacoes` que não existe
+4. **Manutenção** - Ter duas funções fazendo coisas similares complica manutenção
 
-```tsx
-<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-  {/* IMEI - Obrigatório */}
-  <FormField
-    control={form.control}
-    name="imei"
-    render={({ field }) => (
-      <FormItem>
-        <FormLabel>IMEI *</FormLabel>
-        <FormControl>
-          <Input
-            placeholder="000000000000000"
-            maxLength={17}
-            inputMode="numeric"
-            {...field}
-            value={field.value || ''}
-            onChange={(e) => {
-              const value = e.target.value.replace(/\D/g, '');
-              field.onChange(value);
-            }}
-            className="font-mono"
-          />
-        </FormControl>
-        <FormMessage />
-      </FormItem>
-    )}
-  />
-
-  {/* Plataforma - Obrigatório */}
-  <FormField
-    control={form.control}
-    name="plataforma"
-    render={({ field }) => (
-      <FormItem>
-        <FormLabel>Plataforma *</FormLabel>
-        <Select onValueChange={field.onChange} value={field.value}>
-          ...
-        </Select>
-        <FormMessage />
-      </FormItem>
-    )}
-  />
-
-  {/* Status - Opcional */}
-  <FormField
-    control={form.control}
-    name="status"
-    render={({ field }) => (
-      <FormItem>
-        <FormLabel>Status</FormLabel>
-        <Select onValueChange={field.onChange} value={field.value}>
-          {/* Excluir 'instalado' das opções de criação */}
-        </Select>
-        <FormMessage />
-      </FormItem>
-    )}
-  />
-
-  {/* Portador - Apenas quando status = estoque */}
-  {watchStatus === 'estoque' && (
-    <FormField
-      control={form.control}
-      name="portador_id"
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>Atribuir a Vistoriador (Porte)</FormLabel>
-          <Select ...>
-            ...
-          </Select>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  )}
-</form>
-```
-
-### 4. Manter Edição Completa
-
-Quando `isEditing = true`, exibir todos os campos originais para permitir edição completa dos registros existentes.
-
-## Layout Visual
+## Resumo da Implementação
 
 ```text
-┌──────────────────────────────────────────┐
-│  Novo Rastreador                     [X] │
-├──────────────────────────────────────────┤
-│                                          │
-│  IMEI *                                  │
-│  ┌────────────────────────────────────┐  │
-│  │ 000000000000000                    │  │
-│  └────────────────────────────────────┘  │
-│                                          │
-│  Plataforma *                            │
-│  ┌────────────────────────────────┬───┐  │
-│  │ Selecione                      │ ▼ │  │
-│  └────────────────────────────────┴───┘  │
-│                                          │
-│  Status                                  │
-│  ┌────────────────────────────────┬───┐  │
-│  │ Em Estoque                     │ ▼ │  │
-│  └────────────────────────────────┴───┘  │
-│                                          │
-│  Atribuir a Vistoriador (Porte)          │
-│  ┌────────────────────────────────┬───┐  │
-│  │ Nenhum portador                │ ▼ │  │
-│  └────────────────────────────────┴───┘  │
-│                                          │
-│             ┌──────────┐ ┌──────────┐    │
-│             │ Cancelar │ │  Criar   │    │
-│             └──────────┘ └──────────┘    │
-└──────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  FLUXO ATUAL (CORRETO)                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  1. Instalador conclui checklist                                │
+│  2. handleConcluirInstalacao() é chamado                        │
+│  3. aprovarVeiculoMutation.mutateAsync() executa                │
+│  4. Verifica se plataforma === 'rede_veiculos'                  │
+│  5. Chama rede-veiculos-vincular-cliente                        │ ← JÁ EXISTE
+│  6. Edge Function faz cadastro completo na API                  │
+│  7. Registra log em rastreadores_logs                           │
+│  8. Atualiza rastreador com status 'instalado'                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Resumo das Alterações
+## Única Modificação Necessária
 
-| Aspecto | Antes | Depois |
-|---------|-------|--------|
-| Campos visíveis (criação) | 9 | 4 |
-| IMEI | Opcional | Obrigatório |
-| Código | Manual | Automático (RAT-{IMEI}) |
-| Status "instalado" | Disponível | Indisponível na criação |
-| Complexidade visual | Alta | Baixa |
+Mover a chamada da integração Rede Veículos para **sempre executar** quando o rastreador for dessa plataforma, não apenas quando há cobertura prévia.
+
+Isso garante que:
+- ✅ Rastreador é cadastrado na plataforma
+- ✅ Logs são registrados
+- ✅ IDs da plataforma são salvos localmente
+- ✅ Fluxo não é bloqueado em caso de erro
 
