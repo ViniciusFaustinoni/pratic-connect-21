@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, KeyRound, Loader2, Rocket, Check, X, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
 interface CriarContaAssociadoFormProps {
@@ -51,21 +52,26 @@ export function CriarContaAssociadoForm({ associadoId, nomeAssociado, emailCadas
         body: { associadoId, email: emailFinal.toLowerCase().trim(), senha }
       });
 
-      // O Supabase SDK coloca respostas não-2xx no error, mas o body ainda vem em data
-      // Primeiro verificar se temos uma resposta estruturada da Edge Function
-      if (data && !data.success) {
-        throw new Error(data.error || 'Erro ao criar conta');
-      }
-
-      // Se não temos data válido mas temos error, é erro de conexão/rede
-      if (error && !data) {
+      // Tratar erro HTTP da Edge Function (status não-2xx)
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          // Extrair corpo da resposta de erro
+          try {
+            const errorData = await error.context.json();
+            throw new Error(errorData.error || 'Erro ao criar conta');
+          } catch (parseError) {
+            // Se não conseguir parsear o JSON, usar mensagem genérica
+            throw new Error('Erro ao criar conta. Tente novamente.');
+          }
+        }
+        // Erro de rede/conexão real
         console.error('Erro de conexão com Edge Function:', error);
         throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
       }
 
-      // Se nem data.success existe, algo deu errado
+      // Verificar sucesso na resposta
       if (!data?.success) {
-        throw new Error('Resposta inválida do servidor. Tente novamente.');
+        throw new Error(data?.error || 'Resposta inválida do servidor. Tente novamente.');
       }
 
       // 2. Fazer login automático com as credenciais recém-criadas
