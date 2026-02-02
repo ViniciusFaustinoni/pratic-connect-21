@@ -175,6 +175,50 @@ export function detectarTipoVeiculo(tipoVeiculoStr?: string | null): TipoVeiculo
   return 'automovel';
 }
 
+// =============================================
+// FUNÇÕES PARA FILTRAR RASTREADOR/INSTALAÇÃO
+// =============================================
+
+/**
+ * Retorna categorias filtradas, opcionalmente excluindo 'instalacao'
+ */
+export function getCategoriasFiltradas(
+  tipo: TipoVeiculo, 
+  incluirInstalacao: boolean
+): VistoriaCategoriaConfig[] {
+  const categorias = getCategoriasByTipoVeiculo(tipo);
+  if (!incluirInstalacao) {
+    return categorias.filter(c => c.id !== 'instalacao');
+  }
+  return categorias;
+}
+
+/**
+ * Retorna fotos filtradas, opcionalmente excluindo categoria 'instalacao'
+ */
+export function getFotosFiltradas(
+  tipo: TipoVeiculo,
+  incluirInstalacao: boolean
+): VistoriaFotoConfig[] {
+  const fotos = getFotosByTipoVeiculo(tipo);
+  if (!incluirInstalacao) {
+    return fotos.filter(f => f.categoria !== 'instalacao');
+  }
+  return fotos;
+}
+
+/**
+ * Agrupa fotos por categoria, filtrando 'instalacao' se necessário
+ */
+export function agruparFotosFiltradas(tipo: TipoVeiculo, incluirInstalacao: boolean) {
+  const categorias = getCategoriasFiltradas(tipo, incluirInstalacao);
+  const fotos = getFotosFiltradas(tipo, incluirInstalacao);
+  return categorias.map(categoria => ({
+    ...categoria,
+    fotos: fotos.filter(foto => foto.categoria === categoria.id).sort((a, b) => a.ordem - b.ordem),
+  }));
+}
+
 // Constantes legadas para compatibilidade
 export const TOTAL_FOTOS_OBRIGATORIAS = FOTOS_VISTORIA_COMPLETA.filter(f => f.categoria !== 'instalacao').length; // 31
 

@@ -50,6 +50,7 @@ import {
   getFotosByTipoVeiculo,
   getTotalFotosObrigatorias,
   detectarTipoVeiculo,
+  agruparFotosFiltradas,
   type TipoVeiculo
 } from '@/data/vistoriaConfigCompleta';
 import { useSaveAssinatura } from '@/hooks/useAssinatura';
@@ -58,7 +59,9 @@ import { VistoriaFotoCard } from '@/components/vistorias/VistoriaFotoCard';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { ModalRecusaVeiculo } from '@/components/instalador/ModalRecusaVeiculo';
 import { useRastreadoresDoPortador, type RastreadorEmPorte } from '@/hooks/useRastreadoresPortador';
+import { useConfigFipeRastreador, precisaRastreador } from '@/hooks/useConfigRastreador';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const CHECKLIST_ITEMS = [
   { id: 'veiculo_confere', label: 'Veículo corresponde aos dados cadastrados' },
@@ -109,6 +112,7 @@ export default function InstaladorChecklist() {
   const { data: servico, isLoading, error } = useServicoDetalhes(id);
   const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompletaPorServico(id ?? null);
   const { data: rastreadoresEmPorte, isLoading: isLoadingRastreadores } = useRastreadoresDoPortador();
+  const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
   const uploadFotoMutation = useUploadFotoVistoriaCompleta();
   const uploadVideoMutation = useUploadVideo360();
   const saveAssinaturaMutation = useSaveAssinatura();
@@ -129,10 +133,24 @@ export default function InstaladorChecklist() {
     return detectarTipoVeiculo(veiculoData?.tipo_veiculo);
   }, [servico?.veiculos]);
 
-  // Configuração dinâmica baseada no tipo de veículo
+  // Verificar valor FIPE do veículo e se precisa de rastreador
+  const valorFipeVeiculo = useMemo(() => {
+    const veiculoData = servico?.veiculos as { valor_fipe?: number } | undefined;
+    return veiculoData?.valor_fipe || null;
+  }, [servico?.veiculos]);
+
+  const veiculoPrecisaRastreador = useMemo(() => {
+    return precisaRastreador(valorFipeVeiculo, fipeMinRastreador);
+  }, [valorFipeVeiculo, fipeMinRastreador]);
+
+  // Configuração dinâmica baseada no tipo de veículo (e se precisa rastreador)
   const fotosConfig = useMemo(() => getFotosByTipoVeiculo(tipoVeiculo), [tipoVeiculo]);
   const totalObrigatorias = useMemo(() => getTotalFotosObrigatorias(tipoVeiculo), [tipoVeiculo]);
-  const categoriasComFotos = useMemo(() => agruparFotosPorCategoriaCompleta(tipoVeiculo), [tipoVeiculo]);
+  
+  // Usar categorias filtradas se não precisa de rastreador
+  const categoriasComFotos = useMemo(() => {
+    return agruparFotosFiltradas(tipoVeiculo, veiculoPrecisaRastreador);
+  }, [tipoVeiculo, veiculoPrecisaRastreador]);
 
   // Carregar checklist e quilometragem salvos
   useEffect(() => {
@@ -366,11 +384,13 @@ export default function InstaladorChecklist() {
       return;
     }
     
-    // Validar IMEI: pode vir do dropdown (rastreadorSelecionadoId) ou modo manual (imeiStatus === 'disponivel')
-    const rastreadorValido = rastreadorSelecionadoId || imeiStatus === 'disponivel';
-    if (!rastreadorValido || !imeiRastreador) {
-      toast.error('Selecione ou informe o rastreador instalado');
-      return;
+    // Se veículo precisa de rastreador, validar IMEI
+    if (veiculoPrecisaRastreador) {
+      const rastreadorValido = rastreadorSelecionadoId || imeiStatus === 'disponivel';
+      if (!rastreadorValido || !imeiRastreador) {
+        toast.error('Selecione ou informe o rastreador instalado');
+        return;
+      }
     }
     
     try {
@@ -378,7 +398,8 @@ export default function InstaladorChecklist() {
         servicoId: id,
         veiculoId: servico.veiculos.id,
         associadoId: servico.associados.id,
-        imeiRastreador,
+        // Só passa IMEI se precisa de rastreador
+        imeiRastreador: veiculoPrecisaRastreador ? imeiRastreador : undefined,
       });
       navigate('/instalador');
     } catch (err) {
@@ -986,7 +1007,27 @@ export default function InstaladorChecklist() {
               </CardContent>
             </Card>
 
-            {/* Seleção de Rastreador */}
+            {/* Alerta de dispensa de rastreador */}
+            {!veiculoPrecisaRastreador && (
+              <Alert className="border-blue-500/50 bg-blue-500/10">
+                <Router className="h-4 w-4 text-blue-400" />
+                <AlertDescription className="text-blue-200">
+                  <strong className="text-blue-300">Rastreador dispensado</strong>
+                  <br />
+                  <span className="text-slate-400">
+                    Veículo com FIPE abaixo de R$ {fipeMinRastreador.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} não requer instalação de rastreador.
+                    {valorFipeVeiculo && (
+                      <span className="block mt-1">
+                        FIPE do veículo: R$ {valorFipeVeiculo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </span>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Seleção de Rastreador - apenas se precisa */}
+            {veiculoPrecisaRastreador && (
             <Card className={cn(
               "border-purple-500/50 bg-purple-500/10",
               (imeiStatus === 'disponivel' || rastreadorSelecionadoId) && "border-green-500/50 bg-green-500/10",
@@ -1232,6 +1273,7 @@ export default function InstaladorChecklist() {
                 )}
               </CardContent>
             </Card>
+            )}
 
             <div className="space-y-2 text-sm">
               <div className="flex justify-between rounded-lg bg-slate-800 p-3">
