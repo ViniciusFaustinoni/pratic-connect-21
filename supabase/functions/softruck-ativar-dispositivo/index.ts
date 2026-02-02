@@ -178,6 +178,22 @@ serve(async (req) => {
       throw new Error(`Rastreador ${imei} não está disponível (status: ${rastreador.status})`);
     }
     
+    // CORREÇÃO: Verificar se já foi ativado na Softruck para evitar duplicidade
+    if (rastreador.plataforma_device_id) {
+      console.log('[Softruck Ativar] Rastreador já possui device na Softruck:', rastreador.plataforma_device_id);
+      // Retornar sucesso - já está ativado
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Rastreador já está ativado na Softruck',
+          softruck_device_id: rastreador.plataforma_device_id,
+          softruck_vehicle_id: rastreador.plataforma_veiculo_id,
+          already_activated: true,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     const jaInstalado = rastreador.status === 'instalado';
     console.log('[Softruck Ativar] Status do rastreador:', rastreador.status, jaInstalado ? '(já vinculado localmente)' : '');
 
@@ -590,42 +606,14 @@ serve(async (req) => {
       throw new Error(`Erro ao atualizar rastreador: ${updateError.message}`);
     }
 
-    // ===== 10. Atualizar status do associado para 'ativo' =====
-    console.log('[Softruck Ativar] Atualizando status do associado para ativo...');
-    
-    const { error: updateAssociadoError } = await supabase
-      .from('associados')
-      .update({
-        status: 'ativo',
-        data_ativacao: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', associadoId);
+    // ===== 10. NOTA: Ativação do associado e liberação de cobertura =====
+    // CORREÇÃO: Removida atualização redundante de associados.status e veiculos.cobertura_total
+    // Essas atualizações devem ser feitas pelo chamador (hook/componente) para evitar duplicidade
+    // A edge function softruck-ativar-dispositivo deve focar APENAS na integração com Softruck
+    console.log('[Softruck Ativar] NOTA: Ativação de status/cobertura delegada ao chamador');
 
-    if (updateAssociadoError) {
-      console.error('[Softruck Ativar] Erro ao ativar associado:', updateAssociadoError);
-    } else {
-      console.log('[Softruck Ativar] Associado ativado com sucesso');
-    }
-
-    // ===== 11. Liberar cobertura total no veículo =====
-    console.log('[Softruck Ativar] Liberando cobertura total do veículo...');
-    
-    const { error: updateVeiculoError } = await supabase
-      .from('veiculos')
-      .update({
-        cobertura_total: true,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', veiculoId);
-
-    if (updateVeiculoError) {
-      console.error('[Softruck Ativar] Erro ao liberar cobertura:', updateVeiculoError);
-    } else {
-      console.log('[Softruck Ativar] Cobertura total liberada');
-    }
-
-    // ===== 12. Chamar ativar-associado para criar acesso do cliente =====
+    // ===== 11. Chamar ativar-associado para criar acesso do cliente =====
+    // CORREÇÃO: Usando service key ao invés de anon key para garantir autenticação
     console.log('[Softruck Ativar] Ativando associado (criando acesso)...');
     
     try {
@@ -633,7 +621,7 @@ serve(async (req) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Authorization': `Bearer ${supabaseServiceKey}`,
         },
         body: JSON.stringify({
           veiculo_id: veiculoId,
