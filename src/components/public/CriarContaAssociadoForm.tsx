@@ -87,8 +87,28 @@ export function CriarContaAssociadoForm({ associadoId, nomeAssociado, emailCadas
         return;
       }
 
-      toast.success('Bem-vindo ao PRATIC!');
-      navigate('/app/home');
+      // 3. Verificar que o profile foi criado corretamente antes de redirecionar
+      // Isso evita race condition com o AuthContext/ProtectedRoute
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: verifiedProfile } = await supabase
+          .from('profiles')
+          .select('id, tipo')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (verifiedProfile?.tipo === 'associado') {
+          toast.success('Bem-vindo ao PRATIC!');
+          // Pequeno delay para AuthContext sincronizar
+          await new Promise(r => setTimeout(r, 300));
+          navigate('/app/home');
+          return;
+        }
+      }
+
+      // Fallback se profile não estiver pronto
+      toast.success('Conta criada! Faça login para continuar.');
+      navigate('/app/login');
 
     } catch (err: any) {
       console.error('Erro ao criar conta:', err);
