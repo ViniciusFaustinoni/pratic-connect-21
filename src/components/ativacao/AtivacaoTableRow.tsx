@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AtivacaoProgressIcons } from "./AtivacaoProgressIcons";
 import { AtivacaoContrato } from "@/hooks/useAtivacoes";
 import { 
-  Rocket, Trash2, MoreHorizontal, Phone, Car,
+  Trash2, MoreHorizontal, Phone, Car,
   Loader2, Send
 } from "lucide-react";
 import {
@@ -30,22 +30,18 @@ import { cn } from "@/lib/utils";
 
 interface AtivacaoTableRowProps {
   contrato: AtivacaoContrato;
-  onAtivar: () => void;
   onEnviarSGA?: () => void;
   onExcluir: () => void;
   canDelete: boolean;
-  isAtivando: boolean;
   isExcluindo: boolean;
   isEnviandoSGA?: boolean;
 }
 
 export function AtivacaoTableRow({
   contrato,
-  onAtivar,
   onEnviarSGA,
   onExcluir,
   canDelete,
-  isAtivando,
   isExcluindo,
   isEnviandoSGA,
 }: AtivacaoTableRowProps) {
@@ -155,21 +151,6 @@ export function AtivacaoTableRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {isProntoParaAtivar && (
-                  <DropdownMenuItem 
-                    onClick={onAtivar}
-                    disabled={isAtivando}
-                    className="text-emerald-600"
-                  >
-                    {isAtivando ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Rocket className="h-4 w-4 mr-2" />
-                    )}
-                    Ativar Contrato
-                  </DropdownMenuItem>
-                )}
-
                 {!sgaOk && onEnviarSGA && (
                   <DropdownMenuItem 
                     onClick={onEnviarSGA}

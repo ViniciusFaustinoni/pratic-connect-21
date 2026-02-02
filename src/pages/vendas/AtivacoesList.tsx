@@ -11,7 +11,7 @@ import {
   ChevronRight, Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAtivacoes, useAtivarContrato, useAtivacaoMetricas, useExcluirAtivacao, FiltroAtivacao } from "@/hooks/useAtivacoes";
+import { useAtivacoes, useAtivacaoMetricas, useExcluirAtivacao, FiltroAtivacao } from "@/hooks/useAtivacoes";
 import { AtivacaoTableRow } from "@/components/ativacao/AtivacaoTableRow";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -29,7 +29,6 @@ export default function AtivacoesList() {
   const { isDiretor, isAdminMaster, isVendedor } = usePermissions();
   const canDeleteAtivacoes = isDiretor || isAdminMaster;
   const { data: ativacoes, isLoading, error, refetch } = useAtivacoes(filtro);
-  const { mutate: ativarContrato, isPending: isAtivando } = useAtivarContrato();
   const { mutate: excluirAtivacao, isPending: isExcluindo } = useExcluirAtivacao();
   const metrics = useAtivacaoMetricas();
 
@@ -43,10 +42,6 @@ export default function AtivacoesList() {
       item.lead?.veiculo_placa?.toLowerCase().includes(query)
     );
   }) || [];
-
-  const handleAtivar = (contratoId: string) => {
-    ativarContrato(contratoId);
-  };
 
   const handleClickRequisito = (contratoId: string, tipo: 'proposta' | 'vistoria') => {
     if (tipo === 'proposta') {
@@ -250,10 +245,8 @@ export default function AtivacoesList() {
                   <AtivacaoTableRow
                     key={contrato.id}
                     contrato={contrato}
-                    onAtivar={() => handleAtivar(contrato.id)}
                     onExcluir={() => excluirAtivacao(contrato.id)}
                     canDelete={canDeleteAtivacoes}
-                    isAtivando={isAtivando}
                     isExcluindo={isExcluindo}
                   />
                 ))}
