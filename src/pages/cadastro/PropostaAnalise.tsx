@@ -44,6 +44,7 @@ import {
   Loader2,
   Building2,
   RefreshCw,
+  Upload,
 } from 'lucide-react';
 import {
   useProposta,
@@ -52,6 +53,8 @@ import {
   useSolicitarDocumentos,
   useReprovarProposta,
 } from '@/hooks/usePropostasPendentes';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { useAtivarRastreador } from '@/hooks/useAtivarRastreador';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
 import { DocumentosAnexadosCard } from '@/components/cadastro/DocumentosAnexadosCard';
@@ -146,6 +149,7 @@ export default function PropostaAnalise() {
   const [showReprovar, setShowReprovar] = useState(false);
   const [showConfirmAprovar, setShowConfirmAprovar] = useState(false);
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
+  const [enviandoSGA, setEnviandoSGA] = useState(false);
 
   const { data: proposta, isLoading } = useProposta(id);
   const { data: todasPropostas } = usePropostasPendentes();
@@ -241,6 +245,40 @@ export default function PropostaAnalise() {
     !proposta?.veiculo_cobertura_total;
 
   const isAtivandoSoftruck = ativarRastreadorMutation.isPending;
+
+  // Função para enviar para SGA Hinova
+  const handleEnviarSGA = async () => {
+    if (!proposta?.associado_id || !proposta?.veiculo_id) {
+      toast.error('Dados insuficientes para enviar ao SGA');
+      return;
+    }
+    
+    setEnviandoSGA(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
+        body: { veiculo_id: proposta.veiculo_id, associado_id: proposta.associado_id }
+      });
+      
+      if (error) throw error;
+      if (data.success) {
+        toast.success('Enviado para SGA com sucesso!', {
+          description: `Código Hinova: ${data.data?.codigo_veiculo_hinova || 'Processado'}`
+        });
+        // Atualizar dados
+        queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+        queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+      } else {
+        throw new Error(data.error || 'Erro ao enviar para SGA');
+      }
+    } catch (err: any) {
+      console.error('Erro ao enviar para SGA:', err);
+      toast.error('Erro ao enviar para SGA', {
+        description: err.message || 'Tente novamente mais tarde'
+      });
+    } finally {
+      setEnviandoSGA(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -707,6 +745,29 @@ export default function PropostaAnalise() {
                     <XCircle className="mr-2 h-5 w-5" />
                     Reprovar Proposta
                   </Button>
+
+                  {/* Enviar para SGA - se não sincronizado ainda */}
+                  {proposta.associado_id && !proposta.associado?.sincronizado_hinova && (
+                    <Button
+                      variant="outline"
+                      className="w-full border-purple-500 text-purple-500 hover:bg-purple-500/10"
+                      size="lg"
+                      onClick={handleEnviarSGA}
+                      disabled={enviandoSGA}
+                    >
+                      {enviandoSGA ? (
+                        <>
+                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-5 w-5" />
+                          Enviar para SGA
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </>
               ) : (
                 <div className="text-center py-4 space-y-3">

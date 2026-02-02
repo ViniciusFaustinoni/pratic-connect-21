@@ -37,7 +37,6 @@ import {
   RefreshCw,
   Zap,
   MoreHorizontal,
-  Upload,
   Trash2,
   Loader2,
 } from 'lucide-react';
@@ -170,7 +169,6 @@ export default function PropostasPendentes() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
-  const [enviandoSGAId, setEnviandoSGAId] = useState<string | null>(null);
   const [ativandoRastreadorId, setAtivandoRastreadorId] = useState<string | null>(null);
   const [dialogExcluirAberto, setDialogExcluirAberto] = useState(false);
   const [associadoParaExcluir, setAssociadoParaExcluir] = useState<{ id: string; nome: string } | null>(null);
@@ -181,48 +179,6 @@ export default function PropostasPendentes() {
   const { data: propostas, isLoading: propostasLoading, refetch } = usePropostasPendentes();
   const { data: stats, isLoading: statsLoading } = usePropostaStats();
   const { data: instalacoesPendentes, isLoading: instalacoesPendentesLoading } = useInstalacoesAguardandoAtivacao();
-
-  // Função para enviar para SGA Hinova
-  const handleEnviarSGA = async (proposta: PropostaPendente) => {
-    if (!proposta.associado_id) {
-      toast.error('Associado não encontrado');
-      return;
-    }
-    
-    setEnviandoSGAId(proposta.id);
-    try {
-      // Buscar veiculo_id real da proposta
-      const { data: veiculo } = await supabase
-        .from('veiculos')
-        .select('id')
-        .eq('associado_id', proposta.associado_id)
-        .eq('placa', proposta.veiculo_placa)
-        .single();
-      
-      if (!veiculo) throw new Error('Veículo não encontrado');
-      
-      const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
-        body: { veiculo_id: veiculo.id, associado_id: proposta.associado_id }
-      });
-      
-      if (error) throw error;
-      if (data.success) {
-        toast.success('Enviado para SGA com sucesso!', {
-          description: `Código Hinova: ${data.data?.codigo_veiculo_hinova || 'Processado'}`
-        });
-        refetch();
-      } else {
-        throw new Error(data.error || 'Erro ao enviar para SGA');
-      }
-    } catch (err: any) {
-      console.error('Erro ao enviar para SGA:', err);
-      toast.error('Erro ao enviar para SGA', {
-        description: err.message || 'Tente novamente mais tarde'
-      });
-    } finally {
-      setEnviandoSGAId(null);
-    }
-  };
 
   // Função para ativar rastreador
   const handleAtivarRastreador = async (proposta: PropostaPendente) => {
@@ -559,7 +515,7 @@ export default function PropostasPendentes() {
                               size="sm"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {(enviandoSGAId === proposta.id || ativandoRastreadorId === proposta.id) ? (
+                              {ativandoRastreadorId === proposta.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
                                 <MoreHorizontal className="h-4 w-4" />
@@ -578,30 +534,12 @@ export default function PropostasPendentes() {
                               Analisar Proposta
                             </DropdownMenuItem>
 
-                            {/* Enviar para SGA - se associado não sincronizado */}
-                            {proposta.associado_id && !proposta.associado?.sincronizado_hinova && (
-                              <DropdownMenuItem 
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
-                                  handleEnviarSGA(proposta); 
-                                }}
-                                disabled={enviandoSGAId === proposta.id}
-                              >
-                                {enviandoSGAId === proposta.id ? (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Upload className="mr-2 h-4 w-4" />
-                                )}
-                                Enviar para SGA
-                              </DropdownMenuItem>
-                            )}
-
-                            {/* Ativar Rastreador - se instalação concluída mas não ativado */}
+                            {/* Ativar Rastreador - se instalação concluída mas não ativado pelo vistoriador */}
                             {proposta.instalacao_info && 
                              !proposta.instalacao_info.rastreador_ativado && 
                              proposta.instalacao_info.rastreador_id && (
                               <DropdownMenuItem 
-                                onClick={(e) => { 
+                                onClick={(e) => {
                                   e.stopPropagation(); 
                                   handleAtivarRastreador(proposta); 
                                 }}
