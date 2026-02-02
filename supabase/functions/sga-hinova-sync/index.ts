@@ -501,32 +501,90 @@ serve(async (req) => {
           );
         }
 
-        // Verificar se é erro de CPF duplicado
-        if (associadoData.mensagem?.toLowerCase().includes('cpf') && 
-            associadoData.mensagem?.toLowerCase().includes('exist')) {
-          console.log('[SGA Sync] CPF já existe no Hinova, tentando buscar código...');
+        // Verificar se é erro de CPF duplicado - tentar buscar associado existente
+        const isCpfDuplicado = 
+          (associadoData.mensagem?.toLowerCase().includes('cpf') && 
+           associadoData.mensagem?.toLowerCase().includes('exist')) ||
+          errorMessages.some((e: string) => 
+            e.toLowerCase().includes('cpf') && e.toLowerCase().includes('exist')
+          );
+        
+        if (isCpfDuplicado) {
+          console.log('[SGA Sync] CPF já existe no Hinova, buscando código do associado existente...');
+          
+          // Tentar buscar associado pelo CPF no Hinova
+          const buscaCpf = cleanCPF(associado.cpf);
+          const buscaResponse = await fetchWithRetry(
+            `${hinovaApiUrl}/associado/consultar/cpf/${buscaCpf}`,
+            {
+              method: 'GET',
+              headers: operationHeaders,
+            }
+          );
+          
+          if (buscaResponse.ok) {
+            const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_associado_cpf');
+            console.log('[SGA Sync] Resposta busca CPF:', JSON.stringify(buscaData));
+            
+            // Tentar extrair codigo_associado da resposta
+            const codigoExistente = buscaData?.codigo_associado || buscaData?.codigo || buscaData?.data?.codigo_associado;
+            
+            if (codigoExistente) {
+              console.log(`[SGA Sync] Associado encontrado no Hinova - Código: ${codigoExistente}`);
+              
+              // Atualizar o associado local com o código do Hinova
+              await supabase
+                .from('associados')
+                .update({ 
+                  codigo_hinova: codigoExistente,
+                  sincronizado_hinova: true,
+                  sincronizado_hinova_em: new Date().toISOString()
+                })
+                .eq('id', associado_id);
+              
+              // Usar o código encontrado para continuar o fluxo
+              codigoAssociadoHinova = codigoExistente;
+              console.log(`[SGA Sync] Usando código existente: ${codigoAssociadoHinova}`);
+            } else {
+              console.log('[SGA Sync] Busca retornou sucesso mas sem codigo_associado:', buscaData);
+              await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+              return new Response(
+                JSON.stringify({ 
+                  success: false, 
+                  error: 'CPF já cadastrado no Hinova mas não foi possível obter o código. Verifique manualmente.',
+                  step: 'associado',
+                  details: { cadastro: associadoData, busca: buscaData }
+                }),
+                { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+          } else {
+            const buscaError = await safeJsonParse<any>(buscaResponse, 'buscar_associado_cpf_error');
+            console.log('[SGA Sync] Erro ao buscar CPF existente:', buscaError);
+            await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+            return new Response(
+              JSON.stringify({ 
+                success: false, 
+                error: 'CPF já cadastrado no Hinova. Não foi possível recuperar o código automaticamente.',
+                step: 'associado',
+                details: { cadastro: associadoData, busca: buscaError }
+              }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        } else {
+          // Erro genérico (não é CPF duplicado)
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'CPF já cadastrado no Hinova. Verifique o código do associado manualmente.',
+              error: `Falha ao cadastrar associado: ${associadoData.mensagem}`,
               step: 'associado',
               details: associadoData
             }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: `Falha ao cadastrar associado: ${associadoData.mensagem}`,
-            step: 'associado',
-            details: associadoData
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
       }
 
       codigoAssociadoHinova = associadoData.codigo_associado;
