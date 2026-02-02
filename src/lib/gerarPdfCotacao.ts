@@ -887,21 +887,12 @@ const desenharPaginaCapa = (
     });
 
     const centerX = cardX + cardWidth / 2;
-    let innerY = cardY + 5;
-
-    // Badge de recomendado
-    if (isRecommended) {
-      doc.setFillColor(brandRed.r, brandRed.g, brandRed.b);
-      const badgeWidth = cardWidth - 8;
-      doc.roundedRect(cardX + 4, innerY - 2, badgeWidth, 9, 2, 2, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(5);
-      doc.setFont('helvetica', 'bold');
-      doc.text('⭐ RECOMENDADO', centerX, innerY + 4, { align: 'center' });
-      innerY += 12;
-    } else {
-      innerY += 3;
-    }
+    
+    // Posições fixas para garantir alinhamento entre todos os cards
+    const nomeY = cardY + 10;        // Nome do plano
+    const valorY = cardY + 26;       // Valor mensal
+    const mensalY = cardY + 32;      // "médio mensal"
+    const fipeY = cardY + 42;        // Badge FIPE
 
     // Nome do plano - usando splitTextToSize para quebrar em múltiplas linhas
     doc.setTextColor(255, 255, 255);
@@ -910,30 +901,27 @@ const desenharPaginaCapa = (
     const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), cardWidth - 8);
     const linesToShow = nomeLines.slice(0, 2); // Máximo 2 linhas
     linesToShow.forEach((line: string, lineIndex: number) => {
-      doc.text(line, centerX, innerY + (lineIndex * 4), { align: 'center' });
+      doc.text(line, centerX, nomeY + (lineIndex * 5), { align: 'center' });
     });
-    innerY += linesToShow.length * 4 + 4;
 
     // Valor mensal
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text(formatCurrency(plano.valorMensal), centerX, innerY, { align: 'center' });
-    innerY += 4;
+    doc.text(formatCurrency(plano.valorMensal), centerX, valorY, { align: 'center' });
     
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
     doc.setFontSize(5);
     doc.setFont('helvetica', 'normal');
-    doc.text('médio mensal', centerX, innerY, { align: 'center' });
-    innerY += 7;
+    doc.text('médio mensal', centerX, mensalY, { align: 'center' });
 
-    // Badge FIPE
+    // Badge FIPE - posição fixa para alinhamento horizontal entre todos os cards
     doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
-    doc.roundedRect(cardX + 6, innerY - 3, cardWidth - 12, 8, 2, 2, 'F');
+    doc.roundedRect(cardX + 6, fipeY - 3, cardWidth - 12, 8, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(5);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${plano.coberturaFipe}% FIPE`, centerX, innerY + 2, { align: 'center' });
+    doc.text(`${plano.coberturaFipe}% FIPE`, centerX, fipeY + 2, { align: 'center' });
   });
 
   // Calcular quantas linhas de cards foram usadas
