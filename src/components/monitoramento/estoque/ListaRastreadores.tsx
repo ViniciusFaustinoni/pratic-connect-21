@@ -129,7 +129,7 @@ export function ListaRastreadores() {
           ultima_comunicacao,
           portador_id,
           portador:profiles!rastreadores_portador_id_fkey(id, nome),
-          veiculos (placa, modelo)
+          veiculos:veiculos!rastreadores_veiculo_id_fkey(placa, modelo)
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
         .range((pagina - 1) * ITEMS_PER_PAGE, pagina * ITEMS_PER_PAGE - 1);
