@@ -13870,6 +13870,7 @@ export type Database = {
           associado_id: string | null
           bloqueado: boolean | null
           chip_iccid: string | null
+          chip_number: string | null
           codigo: string
           config_plataforma: Json | null
           created_at: string
@@ -13886,6 +13887,11 @@ export type Database = {
           plataforma_user_id: string | null
           plataforma_veiculo_id: string | null
           portador_id: string | null
+          softruck_chip_id: string | null
+          softruck_integration_status: string | null
+          softruck_last_attempt_at: string | null
+          softruck_payload_sent: Json | null
+          softruck_response_raw: Json | null
           status: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao: string | null
           ultima_ignicao: boolean | null
@@ -13901,6 +13907,7 @@ export type Database = {
           associado_id?: string | null
           bloqueado?: boolean | null
           chip_iccid?: string | null
+          chip_number?: string | null
           codigo: string
           config_plataforma?: Json | null
           created_at?: string
@@ -13917,6 +13924,11 @@ export type Database = {
           plataforma_user_id?: string | null
           plataforma_veiculo_id?: string | null
           portador_id?: string | null
+          softruck_chip_id?: string | null
+          softruck_integration_status?: string | null
+          softruck_last_attempt_at?: string | null
+          softruck_payload_sent?: Json | null
+          softruck_response_raw?: Json | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -13932,6 +13944,7 @@ export type Database = {
           associado_id?: string | null
           bloqueado?: boolean | null
           chip_iccid?: string | null
+          chip_number?: string | null
           codigo?: string
           config_plataforma?: Json | null
           created_at?: string
@@ -13948,6 +13961,11 @@ export type Database = {
           plataforma_user_id?: string | null
           plataforma_veiculo_id?: string | null
           portador_id?: string | null
+          softruck_chip_id?: string | null
+          softruck_integration_status?: string | null
+          softruck_last_attempt_at?: string | null
+          softruck_payload_sent?: Json | null
+          softruck_response_raw?: Json | null
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null

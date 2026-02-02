@@ -6,11 +6,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * Interface para request body
+ * Suporta dados de chip opcionais para criar chip na Softruck
+ */
 interface RequestBody {
   imei: string;
   veiculoId: string;
   associadoId: string;
   associadoEmail?: string;
+  // Dados de chip opcionais (podem vir do request ou do rastreador)
+  chipSerial?: string;      // ICCID do chip
+  chipNumber?: string;      // Número de telefone do chip
+  chipOperadora?: string;   // Operadora (Vivo, Claro, Tim)
 }
 
 interface SoftruckVehicle {
@@ -28,6 +36,25 @@ interface SoftruckDevice {
     name?: string;
   };
 }
+
+interface SoftruckChip {
+  id: string;
+  attributes?: {
+    serial?: string;
+    number?: string;
+  };
+}
+
+// Status de integração possíveis
+type IntegrationStatus = 
+  | 'PENDING'
+  | 'SUCCESS'
+  | 'FAILED_AUTH'
+  | 'FAILED_VEHICLE'
+  | 'FAILED_CHIP'
+  | 'FAILED_DEVICE'
+  | 'FAILED_ASSOCIATION'
+  | 'CREATED_BUT_NOT_ACTIVATED';
 
 // Chamar softruck-api edge function
 async function callSoftruckApi(
@@ -49,6 +76,38 @@ async function callSoftruckApi(
   return result;
 }
 
+// Atualizar status de integração no rastreador
+async function updateIntegrationStatus(
+  supabase: any,
+  rastreadorId: string | null,
+  status: IntegrationStatus,
+  _errorMessage?: string,
+  payloadSent?: unknown,
+  responseRaw?: unknown
+) {
+  if (!rastreadorId) {
+    console.warn('[Softruck Ativar] rastreadorId não disponível para atualizar status');
+    return;
+  }
+  
+  try {
+    await supabase
+      .from('rastreadores')
+      .update({
+        softruck_integration_status: status,
+        softruck_last_attempt_at: new Date().toISOString(),
+        softruck_payload_sent: payloadSent || null,
+        softruck_response_raw: responseRaw || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', rastreadorId);
+    
+    console.log(`[Softruck Ativar] Status de integração atualizado: ${status}`);
+  } catch (err) {
+    console.error('[Softruck Ativar] Erro ao atualizar status de integração:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -60,16 +119,32 @@ serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  let rastreadorId: string | null = null;
+  let payloadSent: Record<string, unknown> = {};
+
   try {
     const body = await req.json() as RequestBody;
-    const { imei, veiculoId, associadoId, associadoEmail } = body;
+    const { imei, veiculoId, associadoId, associadoEmail, chipSerial, chipNumber, chipOperadora } = body;
+    
+    payloadSent = { imei, veiculoId, associadoId, associadoEmail };
 
-    console.log('[Softruck Ativar] Iniciando ativação:', { imei, veiculoId, associadoId });
+    console.log('[Softruck Ativar] ===== INICIANDO ATIVAÇÃO COMPLETA =====');
+    console.log('[Softruck Ativar] Dados recebidos:', { imei, veiculoId, associadoId });
+
+    // ===== VALIDAÇÕES INICIAIS =====
+    if (!imei) {
+      throw new Error('IMEI é obrigatório');
+    }
+    if (!veiculoId) {
+      throw new Error('veiculoId é obrigatório');
+    }
 
     // ===== 1. Buscar rastreador local pelo IMEI =====
+    console.log('[Softruck Ativar] [1/9] Buscando rastreador local...');
+    
     const { data: rastreador, error: rastreadorError } = await supabase
       .from('rastreadores')
-      .select('id, codigo, numero_serie, plataforma, status, plataforma_device_id, chip_iccid')
+      .select('id, codigo, numero_serie, plataforma, status, plataforma_device_id, chip_iccid, chip_number, plataforma_veiculo_id, softruck_chip_id')
       .eq('imei', imei)
       .maybeSingle();
 
@@ -81,11 +156,24 @@ serve(async (req) => {
       throw new Error(`Rastreador com IMEI ${imei} não encontrado no sistema`);
     }
 
+    rastreadorId = rastreador.id;
+
+    // Atualizar status para PENDING
+    await updateIntegrationStatus(supabase, rastreadorId, 'PENDING', undefined, payloadSent);
+
     if (rastreador.plataforma !== 'softruck') {
-      throw new Error(`Rastreador ${imei} não é da plataforma Softruck (plataforma: ${rastreador.plataforma})`);
+      console.log(`[Softruck Ativar] Rastreador ${imei} não é Softruck (plataforma: ${rastreador.plataforma}). Pulando integração.`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Rastreador não é Softruck - integração não aplicável',
+          plataforma: rastreador.plataforma,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Aceitar status 'estoque' (novo) ou 'instalado' (já vinculado localmente pelo vistoriador)
+    // Aceitar status 'estoque' (novo) ou 'instalado' (já vinculado localmente)
     if (rastreador.status !== 'estoque' && rastreador.status !== 'instalado') {
       throw new Error(`Rastreador ${imei} não está disponível (status: ${rastreador.status})`);
     }
@@ -93,9 +181,9 @@ serve(async (req) => {
     const jaInstalado = rastreador.status === 'instalado';
     console.log('[Softruck Ativar] Status do rastreador:', rastreador.status, jaInstalado ? '(já vinculado localmente)' : '');
 
-    console.log('[Softruck Ativar] Rastreador encontrado:', rastreador.id);
-
     // ===== 2. Buscar veículo local =====
+    console.log('[Softruck Ativar] [2/9] Buscando veículo local...');
+    
     const { data: veiculo, error: veiculoError } = await supabase
       .from('veiculos')
       .select('id, placa, chassi, marca, modelo, ano_modelo, cor, combustivel, softruck_vehicle_id')
@@ -103,18 +191,25 @@ serve(async (req) => {
       .single();
 
     if (veiculoError || !veiculo) {
+      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', `Veículo não encontrado: ${veiculoError?.message || 'ID inválido'}`, payloadSent);
       throw new Error(`Veículo não encontrado: ${veiculoError?.message || 'ID inválido'}`);
+    }
+
+    if (!veiculo.placa) {
+      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', 'Veículo sem placa cadastrada', payloadSent);
+      throw new Error('Veículo sem placa cadastrada');
     }
 
     console.log('[Softruck Ativar] Veículo encontrado:', veiculo.placa);
 
-    let softruckVehicleId = veiculo.softruck_vehicle_id;
+    let softruckVehicleId = veiculo.softruck_vehicle_id || rastreador.plataforma_veiculo_id;
     let softruckDeviceId = rastreador.plataforma_device_id;
+    let softruckChipId = rastreador.softruck_chip_id;
 
-    // ===== 3. Verificar/criar veículo na Softruck =====
+    // ===== 3. Garantir veículo na Softruck (buscar ou criar) =====
+    console.log('[Softruck Ativar] [3/9] Garantindo veículo na Softruck...');
+    
     if (!softruckVehicleId) {
-      console.log('[Softruck Ativar] Buscando veículo na Softruck por placa...');
-      
       // Buscar veículo por placa
       const buscarVeiculoResult = await callSoftruckApi(
         supabaseUrl,
@@ -168,14 +263,14 @@ serve(async (req) => {
           }
           
           if (!softruckVehicleId) {
+            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', criarVeiculoResult.error, payloadSent, criarVeiculoResult);
             throw new Error(`Erro ao criar veículo na Softruck: ${criarVeiculoResult.error}`);
           }
         } else {
           const responseData = criarVeiculoResult.data as { data?: SoftruckVehicle[] };
           softruckVehicleId = responseData?.data?.[0]?.id;
+          console.log('[Softruck Ativar] Veículo criado na Softruck:', softruckVehicleId);
         }
-
-        console.log('[Softruck Ativar] Veículo criado na Softruck:', softruckVehicleId);
       }
 
       // Atualizar veículo local com ID Softruck
@@ -185,12 +280,84 @@ serve(async (req) => {
           .update({ softruck_vehicle_id: softruckVehicleId })
           .eq('id', veiculoId);
       }
+    } else {
+      console.log('[Softruck Ativar] Veículo já existe na Softruck:', softruckVehicleId);
     }
 
-    // ===== 4. Verificar/buscar dispositivo na Softruck =====
-    if (!softruckDeviceId) {
-      console.log('[Softruck Ativar] Buscando device na Softruck por IMEI...');
+    // ===== 4. Garantir chip na Softruck (se houver dados) =====
+    console.log('[Softruck Ativar] [4/9] Verificando chip...');
+    
+    // Usar dados do request ou do rastreador
+    const chipSerialFinal = chipSerial || rastreador.chip_iccid;
+    const chipNumberFinal = chipNumber || rastreador.chip_number;
+    
+    if (chipSerialFinal && chipNumberFinal && !softruckChipId) {
+      console.log('[Softruck Ativar] Buscando chip na Softruck por serial:', chipSerialFinal);
       
+      // Buscar por serial
+      const buscarChipResult = await callSoftruckApi(
+        supabaseUrl,
+        supabaseAnonKey,
+        'buscar-chip',
+        { serial: chipSerialFinal }
+      );
+
+      if (buscarChipResult.success && buscarChipResult.data) {
+        const chips = (buscarChipResult.data as { data?: SoftruckChip[] })?.data || [];
+        if (chips.length > 0) {
+          softruckChipId = chips[0].id;
+          console.log('[Softruck Ativar] Chip encontrado na Softruck:', softruckChipId);
+        }
+      }
+
+      // Se não encontrou, criar chip
+      if (!softruckChipId) {
+        console.log('[Softruck Ativar] Criando chip na Softruck...');
+        
+        const criarChipResult = await callSoftruckApi(
+          supabaseUrl,
+          supabaseAnonKey,
+          'criar-chip',
+          {
+            serial: chipSerialFinal,
+            numero: chipNumberFinal,
+            operadora: chipOperadora || 'Softruck',
+            provedor: chipOperadora || 'Softruck',
+          }
+        );
+
+        if (criarChipResult.success && criarChipResult.data) {
+          const responseData = criarChipResult.data as { data?: SoftruckChip[] };
+          softruckChipId = responseData?.data?.[0]?.id;
+          console.log('[Softruck Ativar] Chip criado na Softruck:', softruckChipId);
+        } else if (criarChipResult.error?.includes('Already Exists')) {
+          // Buscar novamente
+          const retryBuscar = await callSoftruckApi(
+            supabaseUrl,
+            supabaseAnonKey,
+            'buscar-chip',
+            { serial: chipSerialFinal }
+          );
+          const chips = (retryBuscar.data as { data?: SoftruckChip[] })?.data || [];
+          if (chips.length > 0) {
+            softruckChipId = chips[0].id;
+          }
+        } else {
+          console.warn('[Softruck Ativar] Erro ao criar chip (não crítico):', criarChipResult.error);
+          // Não bloquear - chip é opcional
+        }
+      }
+    } else if (softruckChipId) {
+      console.log('[Softruck Ativar] Chip já existe na Softruck:', softruckChipId);
+    } else {
+      console.log('[Softruck Ativar] Dados de chip não informados, pulando...');
+    }
+
+    // ===== 5. Garantir dispositivo na Softruck (buscar ou criar) =====
+    console.log('[Softruck Ativar] [5/9] Garantindo dispositivo na Softruck...');
+    
+    if (!softruckDeviceId) {
+      // Buscar device por IMEI
       const buscarDeviceResult = await callSoftruckApi(
         supabaseUrl,
         supabaseAnonKey,
@@ -206,14 +373,57 @@ serve(async (req) => {
         }
       }
 
-      // Se não encontrou, erro - device deve estar pré-cadastrado
+      // NOVO: Se não encontrou, CRIAR o device
       if (!softruckDeviceId) {
-        throw new Error(`Dispositivo com IMEI ${imei} não encontrado na plataforma Softruck. O dispositivo deve estar cadastrado na Softruck antes de ser ativado.`);
+        console.log('[Softruck Ativar] Criando device na Softruck...');
+        
+        const deviceName = `${veiculo.placa} - ${veiculo.modelo || 'Veículo'}`.substring(0, 21);
+        
+        const criarDeviceResult = await callSoftruckApi(
+          supabaseUrl,
+          supabaseAnonKey,
+          'criar-device',
+          {
+            imei,
+            nome: deviceName,
+            veiculoId: softruckVehicleId,
+            chipId: softruckChipId, // Vincular chip se existir
+          }
+        );
+
+        if (!criarDeviceResult.success) {
+          // Verificar se é erro de duplicidade
+          if (criarDeviceResult.error?.includes('Already Exists')) {
+            // Tentar buscar novamente
+            const retryBuscar = await callSoftruckApi(
+              supabaseUrl,
+              supabaseAnonKey,
+              'buscar-device-imei',
+              { imei }
+            );
+            const devices = (retryBuscar.data as { data?: SoftruckDevice[] })?.data || [];
+            if (devices.length > 0) {
+              softruckDeviceId = devices[0].id;
+              console.log('[Softruck Ativar] Device encontrado após retry:', softruckDeviceId);
+            }
+          }
+          
+          if (!softruckDeviceId) {
+            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_DEVICE', criarDeviceResult.error, payloadSent, criarDeviceResult);
+            throw new Error(`Erro ao criar device na Softruck: ${criarDeviceResult.error}`);
+          }
+        } else {
+          const responseData = criarDeviceResult.data as { data?: SoftruckDevice[] };
+          softruckDeviceId = responseData?.data?.[0]?.id;
+          console.log('[Softruck Ativar] Device criado na Softruck:', softruckDeviceId);
+        }
       }
+    } else {
+      console.log('[Softruck Ativar] Device já existe na Softruck:', softruckDeviceId);
     }
 
-    // ===== 5. Associar dispositivo ao veículo na Softruck (via POST formal) =====
-    console.log('[Softruck Ativar] Associando device ao veículo via POST /v2/vehicles/associations/devices...');
+    // ===== 6. Associar dispositivo ao veículo (is_main_device: true) =====
+    console.log('[Softruck Ativar] [6/9] Associando device ao veículo via POST formal...');
     
     const associarResult = await callSoftruckApi(
       supabaseUrl,
@@ -228,11 +438,13 @@ serve(async (req) => {
 
     if (!associarResult.success) {
       console.warn('[Softruck Ativar] Aviso ao associar:', associarResult.error);
-      // Se falhou, tentar via PATCH (fallback)
-      if (associarResult.error?.includes('Already Exists') || associarResult.error?.includes('already associated')) {
+      
+      if (associarResult.error?.includes('Already Exists') || 
+          associarResult.error?.includes('already associated') ||
+          associarResult.error?.includes('Already Has Main Device')) {
         console.log('[Softruck Ativar] Device já associado, continuando...');
       } else {
-        // Tentar fallback com vincular-device-veiculo
+        // Tentar fallback com vincular-device-veiculo (PATCH)
         console.log('[Softruck Ativar] Tentando fallback com PATCH...');
         const vincularResult = await callSoftruckApi(
           supabaseUrl,
@@ -245,28 +457,48 @@ serve(async (req) => {
         );
         if (!vincularResult.success) {
           console.warn('[Softruck Ativar] Fallback também falhou:', vincularResult.error);
+          // Não bloquear - continuar com ativação
         }
       }
     } else {
       console.log('[Softruck Ativar] Device associado com sucesso via POST formal');
     }
 
-    // ===== 6. Ativar dispositivo na Softruck =====
-    console.log('[Softruck Ativar] Ativando device na Softruck...');
+    // ===== 7. Ativar dispositivo na Softruck =====
+    console.log('[Softruck Ativar] [7/9] Ativando device na Softruck...');
     
-    const ativarResult = await callSoftruckApi(
+    const ativarDeviceResult = await callSoftruckApi(
       supabaseUrl,
       supabaseAnonKey,
       'ativar-device',
       { deviceId: softruckDeviceId }
     );
 
-    if (!ativarResult.success) {
-      console.warn('[Softruck Ativar] Aviso ao ativar:', ativarResult.error);
-      // Continuar mesmo com erro (pode já estar ativo)
+    if (!ativarDeviceResult.success) {
+      console.warn('[Softruck Ativar] Aviso ao ativar device:', ativarDeviceResult.error);
+      // Continuar - device pode já estar ativo
+    } else {
+      console.log('[Softruck Ativar] Device ativado com sucesso');
     }
 
-    // ===== 6.5. Verificar primeira posição (polling curto) =====
+    // ===== 8. Ativar veículo na Softruck (opcional) =====
+    console.log('[Softruck Ativar] [8/9] Ativando veículo na Softruck...');
+    
+    const ativarVeiculoResult = await callSoftruckApi(
+      supabaseUrl,
+      supabaseAnonKey,
+      'ativar-veiculo',
+      { veiculoId: softruckVehicleId }
+    );
+
+    if (!ativarVeiculoResult.success) {
+      console.warn('[Softruck Ativar] Aviso ao ativar veículo:', ativarVeiculoResult.error);
+      // Não bloquear - veículo pode já estar ativo
+    } else {
+      console.log('[Softruck Ativar] Veículo ativado com sucesso');
+    }
+
+    // ===== 8.5. Verificar primeira posição (polling curto) =====
     console.log('[Softruck Ativar] Verificando primeira posição GPS...');
     
     let primeiraPos = null;
@@ -311,32 +543,37 @@ serve(async (req) => {
       }
     }
     
-    // Atualizar rastreador com posição se recebida
-    if (primeiraPos) {
-      await supabase
-        .from('rastreadores')
-        .update({
-          ultima_comunicacao: primeiraPos.data_posicao,
-          ultima_posicao_lat: primeiraPos.latitude,
-          ultima_posicao_lng: primeiraPos.longitude,
-          ultima_velocidade: primeiraPos.velocidade,
-          ultima_ignicao: primeiraPos.ignicao,
-        })
-        .eq('id', rastreador.id);
-      console.log('[Softruck Ativar] Posição atualizada no rastreador');
-    } else {
-      console.warn('[Softruck Ativar] Primeira posição não recebida após 30s - verificação assíncrona será necessária');
-    }
-    console.log('[Softruck Ativar] Atualizando rastreador local com IDs Softruck...');
+    // ===== 9. Atualizar rastreador local com todos os IDs e status =====
+    console.log('[Softruck Ativar] [9/9] Atualizando rastreador local...');
     
-    // Só atualizar campos de vínculo se não estiver já instalado
+    const responseRaw = {
+      softruckVehicleId,
+      softruckDeviceId,
+      softruckChipId,
+      primeiraPos,
+    };
+    
     const updateData: Record<string, unknown> = {
       plataforma_device_id: softruckDeviceId,
       plataforma_veiculo_id: softruckVehicleId,
+      softruck_chip_id: softruckChipId || null,
+      softruck_integration_status: 'SUCCESS',
+      softruck_last_attempt_at: new Date().toISOString(),
+      softruck_payload_sent: payloadSent,
+      softruck_response_raw: responseRaw,
       updated_at: new Date().toISOString(),
     };
     
-    // Se ainda não estava instalado, atualizar também vínculo
+    // Se recebeu posição, atualizar também
+    if (primeiraPos) {
+      updateData.ultima_comunicacao = primeiraPos.data_posicao;
+      updateData.ultima_posicao_lat = primeiraPos.latitude;
+      updateData.ultima_posicao_lng = primeiraPos.longitude;
+      updateData.ultima_velocidade = primeiraPos.velocidade;
+      updateData.ultima_ignicao = primeiraPos.ignicao;
+    }
+    
+    // Se ainda não estava instalado, atualizar vínculo
     if (rastreador.status !== 'instalado') {
       updateData.veiculo_id = veiculoId;
       updateData.associado_id = associadoId;
@@ -353,7 +590,7 @@ serve(async (req) => {
       throw new Error(`Erro ao atualizar rastreador: ${updateError.message}`);
     }
 
-    // ===== 7.5. Atualizar status do associado para 'ativo' =====
+    // ===== 10. Atualizar status do associado para 'ativo' =====
     console.log('[Softruck Ativar] Atualizando status do associado para ativo...');
     
     const { error: updateAssociadoError } = await supabase
@@ -371,7 +608,7 @@ serve(async (req) => {
       console.log('[Softruck Ativar] Associado ativado com sucesso');
     }
 
-    // ===== 7.6. Liberar cobertura total no veículo =====
+    // ===== 11. Liberar cobertura total no veículo =====
     console.log('[Softruck Ativar] Liberando cobertura total do veículo...');
     
     const { error: updateVeiculoError } = await supabase
@@ -388,8 +625,8 @@ serve(async (req) => {
       console.log('[Softruck Ativar] Cobertura total liberada');
     }
 
-    // ===== 8. Chamar ativar-associado para criar acesso do cliente =====
-    console.log('[Softruck Ativar] Ativando associado...');
+    // ===== 12. Chamar ativar-associado para criar acesso do cliente =====
+    console.log('[Softruck Ativar] Ativando associado (criando acesso)...');
     
     try {
       const ativarAssociadoResponse = await fetch(`${supabaseUrl}/functions/v1/ativar-associado`, {
@@ -411,23 +648,19 @@ serve(async (req) => {
       console.warn('[Softruck Ativar] Erro ao ativar associado (não crítico):', ativarError);
     }
 
-    // ===== 9. Registrar log de sucesso =====
+    // ===== 13. Registrar log de sucesso =====
     await supabase
       .from('rastreadores_api_logs')
       .insert({
         rastreador_id: rastreador.id,
         plataforma: 'softruck',
-        operacao: 'ativar_dispositivo',
-        request: { imei, veiculoId, associadoId },
-        response: { 
-          softruckVehicleId, 
-          softruckDeviceId,
-          success: true 
-        },
+        operacao: 'ativar_dispositivo_completo',
+        request: payloadSent,
+        response: responseRaw,
         status: 'sucesso',
       });
 
-    console.log('[Softruck Ativar] Ativação concluída com sucesso!');
+    console.log('[Softruck Ativar] ===== ATIVAÇÃO CONCLUÍDA COM SUCESSO! =====');
 
     return new Response(
       JSON.stringify({
@@ -435,6 +668,8 @@ serve(async (req) => {
         rastreador_id: rastreador.id,
         softruck_device_id: softruckDeviceId,
         softruck_vehicle_id: softruckVehicleId,
+        softruck_chip_id: softruckChipId,
+        primeira_posicao: primeiraPos,
         message: 'Dispositivo ativado com sucesso na Softruck',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -443,15 +678,33 @@ serve(async (req) => {
   } catch (error) {
     console.error('[Softruck Ativar] Erro:', error);
 
+    // Atualizar status de integração se temos o ID do rastreador
+    if (rastreadorId) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      let status: IntegrationStatus = 'FAILED_DEVICE';
+      
+      if (errorMessage.includes('autenticação') || errorMessage.includes('auth')) {
+        status = 'FAILED_AUTH';
+      } else if (errorMessage.includes('veículo') || errorMessage.includes('vehicle')) {
+        status = 'FAILED_VEHICLE';
+      } else if (errorMessage.includes('chip')) {
+        status = 'FAILED_CHIP';
+      } else if (errorMessage.includes('associar') || errorMessage.includes('association')) {
+        status = 'FAILED_ASSOCIATION';
+      }
+      
+      await updateIntegrationStatus(supabase, rastreadorId, status, errorMessage, payloadSent);
+    }
+
     // Tentar registrar log de erro
     try {
-      const body = await req.clone().json() as Partial<RequestBody>;
       await supabase
         .from('rastreadores_api_logs')
         .insert({
+          rastreador_id: rastreadorId,
           plataforma: 'softruck',
-          operacao: 'ativar_dispositivo',
-          request: body,
+          operacao: 'ativar_dispositivo_completo',
+          request: payloadSent,
           response: { error: error instanceof Error ? error.message : 'Erro desconhecido' },
           status: 'erro',
           erro_mensagem: error instanceof Error ? error.message : 'Erro desconhecido',
