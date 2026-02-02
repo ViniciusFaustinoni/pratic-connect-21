@@ -1,294 +1,149 @@
 
-# Plano: Unificação das Tabelas 'planos' e 'plans'
+# Plano: Validação Completa da Unificação de Tabelas (planos/plans)
 
-## Contexto Atual
+## Diagnóstico Realizado
 
-O sistema possui **duas estruturas paralelas** para gerenciar planos:
+### Verificações Concluídas com Sucesso ✅
 
-### Tabela `planos` (Operacional/Legacy)
-- **18 registros** no banco
-- **13 tabelas dependentes** com FK:
-  - `associados.plano_id`
-  - `contratos.plano_id`
-  - `cotacoes.plano_id` e `plano_escolhido_id`
-  - `leads.plano_escolhido_id`
-  - `leads_interesse_planos.plano_id`
-  - `tabelas_preco.plano_id`
-  - `planos_coberturas.plano_id`
-  - `planos_regioes.plano_id`
-  - `planos_restricoes.plano_id`
-  - `planos_beneficios.plano_id`
-  - `rateios_detalhes.plano_id`
-- **Usada em**: cotações, contratos, associados, cobranças, cálculo de preços
-- **16 arquivos** fazem queries nessa tabela
+| Verificação | Resultado |
+|-------------|-----------|
+| Migração de dados comerciais para `planos` | 14 planos atualizados com `product_line_id`, `slug`, `badge_text`, etc. |
+| Migração de `plan_benefits` → `planos_beneficios` | 147 registros migrados corretamente |
+| VIEW de compatibilidade `vw_plans_compat` | Funcionando, retorna dados formatados |
+| Hooks refatorados para usar `planos` | Sem queries diretas a `plans` ou `plan_benefits` |
+| Integridade de FKs (cotações/contratos) | Todas as referências válidas |
 
-### Tabela `plans` (Comercial/Vendas)
-- **14 registros** no banco
-- **1 tabela dependente**: `plan_benefits.plan_id`
-- **Usada em**: exibição comercial, catálogo de planos para vendas
-- **2 arquivos** fazem queries nessa tabela
+### Problemas Identificados
 
-### Correspondência Atual
-Verificação mostra que **12 de 14 planos** na tabela `plans` têm correspondência por slug com `planos.codigo`:
-- `select-basic` ↔ `select-basic` ✅
-- `select-premium` ↔ `select-premium` ✅
-- `select-exclusive` ↔ `select-exclusive` ✅
-- `especial` ↔ `especial` ✅
-- etc.
+| Problema | Impacto | Prioridade |
+|----------|---------|------------|
+| 1. Tipos em `src/types/plans.ts` referenciam tabelas deprecated | Pode causar erros de tipagem | Alta |
+| 2. Plano "ELÉTRICOS" ativo sem `product_line_id` | Não aparece na UI de vendas | Média |
+| 3. Interfaces `ProductLineWithPlans` e `PlansGroupedByLine` usam tipo `Plan` errado | Inconsistência de tipos | Baixa |
+| 4. Tabelas `plans` e `plan_benefits` ainda existem no banco | Duplicação de dados | Baixa (não impacta runtime) |
 
-Planos em `planos` **sem correspondência** em `plans`: `BASICO`, `TOTAL`, `PREMIUM`, `ELETRICOS`
+## Correções Necessárias
 
-## Decisão de Arquitetura
+### 1. Atualizar Tipos em `src/types/plans.ts`
 
-**Manter a tabela `planos` como fonte única de verdade**, pois:
-1. Tem mais registros e dados operacionais
-2. Possui 13 dependências críticas (associados, contratos, cotações)
-3. É usada em todo o sistema operacional
-4. A tabela `plans` foi criada posteriormente para exibição comercial
+**Problema**: Os tipos `Plan` e `PlanBenefit` ainda referenciam as tabelas deprecated.
 
-**Estratégia**: Enriquecer `planos` com campos comerciais e criar uma VIEW para compatibilidade com código existente que usa `plans`.
-
-## Estrutura Proposta
-
-### Fase 1: Adicionar Campos Comerciais à Tabela `planos`
-
-```sql
-ALTER TABLE planos ADD COLUMN IF NOT EXISTS product_line_id UUID REFERENCES product_lines(id);
-ALTER TABLE planos ADD COLUMN IF NOT EXISTS slug VARCHAR(100);
-ALTER TABLE planos ADD COLUMN IF NOT EXISTS badge_text VARCHAR(50);
-ALTER TABLE planos ADD COLUMN IF NOT EXISTS badge_color VARCHAR(20);
-ALTER TABLE planos ADD COLUMN IF NOT EXISTS coverage_type VARCHAR(50);
-ALTER TABLE planos ADD COLUMN IF NOT EXISTS restriction_alert TEXT;
-ALTER TABLE planos ADD COLUMN IF NOT EXISTS footer_note TEXT;
-```
-
-### Fase 2: Migrar Dados de `plans` para `planos`
-
-```sql
--- Atualizar planos existentes com dados comerciais
-UPDATE planos p
-SET 
-  product_line_id = pl.product_line_id,
-  slug = pl.slug,
-  badge_text = pl.badge_text,
-  badge_color = pl.badge_color,
-  coverage_type = pl.coverage_type,
-  restriction_alert = pl.restriction_alert,
-  footer_note = pl.footer_note
-FROM plans pl
-WHERE LOWER(p.codigo) = LOWER(pl.slug);
-```
-
-### Fase 3: Migrar `plan_benefits` para `planos_beneficios`
-
-A tabela `planos_beneficios` já existe. Precisamos:
-1. Verificar estrutura atual
-2. Migrar dados de `plan_benefits` usando o mapeamento de IDs
-
-```sql
--- Migrar vínculos de benefícios
-INSERT INTO planos_beneficios (plano_id, benefit_id, custom_text, custom_value, display_order)
-SELECT 
-  p.id as plano_id,
-  pb.benefit_id,
-  pb.custom_text,
-  pb.custom_value,
-  pb.display_order
-FROM plan_benefits pb
-JOIN plans pl ON pb.plan_id = pl.id
-JOIN planos p ON LOWER(p.codigo) = LOWER(pl.slug)
-ON CONFLICT DO NOTHING;
-```
-
-### Fase 4: Criar VIEW de Compatibilidade
-
-```sql
-CREATE OR REPLACE VIEW vw_plans_compat AS
-SELECT 
-  p.id,
-  p.product_line_id,
-  p.nome as name,
-  p.codigo as slug,
-  p.badge_text,
-  p.badge_color,
-  p.coverage_type,
-  CASE WHEN p.ano_minimo IS NOT NULL 
-       THEN '> ' || p.ano_minimo::text 
-       ELSE NULL 
-  END as min_vehicle_year,
-  p.cota_participacao as cota_passeio_percent,
-  p.cota_minima as cota_passeio_min,
-  p.cota_desagio as cota_desagio_percent,
-  p.cota_minima_desagio as cota_desagio_min,
-  p.adicional_mensal as additional_price,
-  p.restriction_alert,
-  p.footer_note,
-  p.ordem as display_order,
-  p.ativo as is_active,
-  p.created_at,
-  p.updated_at,
-  p.tipo_uso
-FROM planos p
-WHERE p.ativo = true;
-```
-
-### Fase 5: Refatorar Hooks e Componentes
-
-#### Arquivos a Modificar:
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/usePlans.ts` | Alterar queries de `plans` para `planos` + joins |
-| `src/hooks/usePlansAdmin.ts` | Alterar CRUD para usar `planos` |
-| `src/components/admin/planos/PlanosTab.tsx` | Usar hooks refatorados |
-| `src/components/admin/planos/PlanFormModal.tsx` | Ajustar campos do formulário |
-| `src/pages/vendas/PlanosBeneficios.tsx` | Usar dados unificados |
-
-## Mapeamento de Campos
-
-| Campo `plans` | Campo `planos` (existente ou novo) |
-|---------------|-----------------------------------|
-| `id` | `id` |
-| `product_line_id` | `product_line_id` (NOVO) |
-| `name` | `nome` |
-| `slug` | `slug` (NOVO) ou usar `codigo` |
-| `badge_text` | `badge_text` (NOVO) |
-| `badge_color` | `badge_color` (NOVO) |
-| `coverage_type` | `coverage_type` (NOVO) ou inferir de `cobertura_fipe` |
-| `min_vehicle_year` | `ano_minimo` (já existe) |
-| `cota_passeio_percent` | `cota_participacao` |
-| `cota_passeio_min` | `cota_minima` |
-| `cota_desagio_percent` | `cota_desagio` |
-| `cota_desagio_min` | `cota_minima_desagio` |
-| `additional_price` | `adicional_mensal` |
-| `restriction_alert` | `restriction_alert` (NOVO) |
-| `footer_note` | `footer_note` (NOVO) |
-| `display_order` | `ordem` |
-| `is_active` | `ativo` |
-| `tipo_uso` | `tipo_uso` |
-
-## Fluxo de Migração
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                       FASE 1: PREPARAÇÃO                            │
-├─────────────────────────────────────────────────────────────────────┤
-│  1. Backup das tabelas envolvidas                                   │
-│  2. Adicionar colunas comerciais à tabela 'planos'                  │
-│  3. Popular product_line_id baseado em linha existente              │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                       FASE 2: MIGRAÇÃO DE DADOS                     │
-├─────────────────────────────────────────────────────────────────────┤
-│  1. Copiar dados comerciais de 'plans' → 'planos'                   │
-│  2. Migrar 'plan_benefits' → 'planos_beneficios'                    │
-│  3. Validar integridade dos dados                                   │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                       FASE 3: REFATORAÇÃO DE CÓDIGO                 │
-├─────────────────────────────────────────────────────────────────────┤
-│  1. Criar hooks unificados                                          │
-│  2. Atualizar componentes de admin                                  │
-│  3. Atualizar área de vendas                                        │
-│  4. Testar fluxos completos                                         │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                       FASE 4: DEPRECAÇÃO                            │
-├─────────────────────────────────────────────────────────────────────┤
-│  1. Marcar tabela 'plans' como deprecated                           │
-│  2. Criar VIEW para retrocompatibilidade                            │
-│  3. Remover tabela 'plans' após validação (fase futura)             │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## Hooks Unificados Propostos
-
-### `src/hooks/usePlanosUnificado.ts`
+**Solução**: Atualizar para usar a estrutura unificada:
 
 ```typescript
-// Hook principal que substitui tanto usePlanos quanto usePlans
-export function usePlanosUnificado(options?: {
-  productLineSlug?: string;
-  tipoVeiculo?: 'carro' | 'moto';
-  apenasAtivos?: boolean;
-}) {
-  return useQuery({
-    queryKey: ['planos_unificado', options],
-    queryFn: async () => {
-      let query = supabase
-        .from('planos')
-        .select(`
-          *,
-          product_lines (*),
-          planos_beneficios (
-            *,
-            benefits (*)
-          )
-        `)
-        .order('ordem');
-      
-      if (options?.apenasAtivos !== false) {
-        query = query.eq('ativo', true);
-      }
-      
-      if (options?.productLineSlug) {
-        query = query.eq('product_lines.slug', options.productLineSlug);
-      }
-      
-      if (options?.tipoVeiculo) {
-        query = query.eq('tipo_veiculo', options.tipoVeiculo);
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    },
-  });
+// ANTES (deprecated)
+export type Plan = Tables<'plans'>;
+export type PlanBenefit = Tables<'plan_benefits'>;
+
+// DEPOIS (unificado)
+export type Plan = Tables<'planos'>;
+export type PlanBenefit = Tables<'planos_beneficios'>;
+
+// Atualizar interfaces para usar PlanWithDetails
+export interface ProductLineWithPlans extends ProductLine {
+  plans: PlanWithDetails[];
+}
+
+export interface PlansGroupedByLine {
+  productLine: ProductLine;
+  plans: PlanWithDetails[];
 }
 ```
 
-## Riscos e Mitigações
+### 2. Corrigir Plano "ELÉTRICOS" Órfão
 
-| Risco | Probabilidade | Impacto | Mitigação |
-|-------|---------------|---------|-----------|
-| Perda de dados na migração | Baixa | Alto | Backup antes da migração + transação única |
-| Quebra de FKs existentes | Baixa | Alto | Manter IDs originais da tabela `planos` |
-| Inconsistência de dados | Média | Médio | Scripts de validação pós-migração |
-| Downtime durante migração | Baixa | Médio | Migração pode ser feita em etapas |
+**Problema**: O plano "ELÉTRICOS" (id: `ab31c6c6-2d01-4690-9507-3ea535b4a629`) está ativo mas:
+- Não tem `product_line_id` (não aparece em nenhuma linha)
+- Não tem benefícios associados
+- Não tem `coverage_type` definido
 
-## Resumo de Arquivos a Modificar
+**Opções de Solução**:
 
-### Banco de Dados
-1. **Migration**: Adicionar colunas comerciais à `planos`
-2. **Migration**: Migrar dados de `plans` e `plan_benefits`
-3. **Migration**: Criar VIEW de compatibilidade
+a) **Desativar temporariamente** até criar uma linha de produto para ele:
+```sql
+UPDATE planos SET ativo = false WHERE codigo = 'eletricos';
+```
 
-### Frontend
-1. `src/hooks/usePlans.ts` → Refatorar para usar `planos`
-2. `src/hooks/usePlansAdmin.ts` → Refatorar CRUD
-3. `src/types/plans.ts` → Unificar tipos
-4. `src/components/admin/planos/*.tsx` → Ajustar para nova estrutura
-5. `src/pages/vendas/PlanosBeneficios.tsx` → Usar dados unificados
+b) **Criar linha de produto "Veículos Elétricos"** e associar:
+```sql
+-- Criar linha de produto
+INSERT INTO product_lines (name, slug, vehicle_type, icon, color, display_order)
+VALUES ('Linha Elétricos', 'eletricos', 'car', '⚡', 'blue', 5);
 
-## Dados Preservados
+-- Associar plano à nova linha
+UPDATE planos 
+SET product_line_id = (SELECT id FROM product_lines WHERE slug = 'eletricos')
+WHERE codigo = 'eletricos';
+```
 
-| Origem | Destino | Registros |
-|--------|---------|-----------|
-| `planos` | `planos` (mantido) | 18 |
-| `plans` comerciais | Campos em `planos` | 14 (merge) |
-| `plan_benefits` | `planos_beneficios` | 147 |
-| `product_lines` | `product_lines` (mantido) | 4 |
-| `benefits` | `benefits` (mantido) | 16 |
+### 3. Limpeza de Tipos Não Utilizados
+
+**Arquivo**: `src/types/plans.ts`
+
+Remover ou atualizar tipos deprecated que não são mais utilizados:
+- `PlanBenefitWithDetails` → já existe `PlanBenefitItem` no hook
+
+## Arquivos a Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/types/plans.ts` | Modificar | Atualizar tipos para usar tabela unificada |
+| `configuracoes` (DB) | Decisão | Desativar ou criar linha para plano "ELÉTRICOS" |
+
+## Validações Pós-Correção
+
+Após aplicar as correções, validar:
+
+1. **Área de Vendas** (`/vendas/planos-beneficios`):
+   - Carrega planos por linha de produto
+   - Exibe benefícios corretamente
+   - Filtros funcionam (Carros/Motos)
+
+2. **Área da Diretoria** (`/diretoria/planos-beneficios`):
+   - CRUD de planos funciona
+   - Benefícios são salvos em `planos_beneficios`
+   - Duplicar/excluir planos funciona
+
+3. **Cotações e Contratos**:
+   - Seleção de planos continua funcionando
+   - Dados históricos preservados
+
+## Decisão Necessária
+
+Para o plano "ELÉTRICOS", qual abordagem preferir?
+
+**Opção A**: Desativar temporariamente (mais rápido)
+**Opção B**: Criar nova linha de produto "Veículos Elétricos" (mais completo)
+
+## Resumo das Alterações
+
+```text
+┌────────────────────────────────────────────────────────────────┐
+│                    CORREÇÕES DE TIPOS                          │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  src/types/plans.ts                                            │
+│  ├── Plan = Tables<'planos'>        (antes: Tables<'plans'>)  │
+│  ├── PlanBenefit = Tables<'planos_beneficios'>                │
+│  └── Interfaces atualizadas para PlanWithDetails              │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│                    DADOS ÓRFÃOS                                 │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Plano "ELÉTRICOS"                                             │
+│  ├── Sem product_line_id                                       │
+│  ├── Sem benefícios                                            │
+│  └── Opção: Desativar ou criar linha de produto               │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+```
 
 ## Observações Técnicas
 
-1. **Não quebra dependências**: Todas as 13 tabelas que referenciam `planos` continuarão funcionando
-2. **Retrocompatibilidade**: VIEW `vw_plans_compat` permite migração gradual
-3. **Validação de slug**: Garantir unicidade de `codigo/slug` após merge
-4. **RLS**: Manter políticas existentes, adicionar para novos campos
+1. **Tabelas deprecated mantidas**: As tabelas `plans` e `plan_benefits` continuam no banco por segurança, mas não são mais usadas pelo código
+2. **VIEW funcional**: `vw_plans_compat` permite rollback se necessário
+3. **Sem breaking changes**: Todas as correções são retrocompatíveis
