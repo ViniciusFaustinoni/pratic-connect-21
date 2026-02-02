@@ -65,7 +65,6 @@ export default function CotacaoDetalhe() {
   const [showContratoWizard, setShowContratoWizard] = useState(false);
   const [showEditarModal, setShowEditarModal] = useState(false);
   const [planoDetalhesModal, setPlanoDetalhesModal] = useState<PlanoComparativo | null>(null);
-  const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
   const [isGerando, setIsGerando] = useState(false);
 
   // Hooks de dados
@@ -272,9 +271,6 @@ Ficou com alguma dúvida? Estou à disposição!
     }
   };
 
-  const handleSelecionarPlano = (plano: PlanoComparativo) => {
-    setPlanoSelecionado(plano.id === planoSelecionado ? null : plano.id);
-  };
 
   // ============================================
   // LOADING STATE
@@ -424,10 +420,9 @@ Ficou com alguma dúvida? Estou à disposição!
                       plano={plano}
                       valorAdesao={cotacao.valor_adesao || 0}
                       isRecomendado={plano.id === planoRecomendadoId}
-                      isSelecionado={plano.id === planoSelecionado}
+                      isSelecionado={false}
                       indice={planosExibir.length > 1 ? idx : undefined}
                       categoriaVeiculo={categoriaVeiculo}
-                      onSelecionar={handleSelecionarPlano}
                       onVerDetalhes={setPlanoDetalhesModal}
                       isCoberturaRemovida={isCoberturaRemovida}
                     />
@@ -486,7 +481,6 @@ Ficou com alguma dúvida? Estou à disposição!
         plano={planoDetalhesModal}
         valorAdesao={cotacao.valor_adesao || 0}
         categoriaVeiculo={categoriaVeiculo}
-        onSelecionar={(plano) => handleSelecionarPlano(plano as PlanoComparativo)}
         isCoberturaRemovida={isCoberturaRemovida}
       />
 
