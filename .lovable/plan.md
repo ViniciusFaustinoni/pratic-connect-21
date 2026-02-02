@@ -1,156 +1,201 @@
 
 
-# Análise: Integração Rede Veículos na Conclusão de Instalação
+# Plano: Verificação Crítica do Nome no Comprovante de Residência
 
-## Resumo da Análise
+## Resumo
 
-Após investigar o codebase, identifiquei que **a integração já está implementada** de forma mais robusta do que o PRD sugere.
+Atualizar a Edge Function `document-ocr` para que a IA realize uma **verificação crítica obrigatória**: comparar o nome do titular no comprovante de residência com o nome do associado (fornecido via `nomeEsperado`), permitindo abreviações.
 
-## Comparação: PRD vs. Implementação Atual
+## Análise do Estado Atual
 
-| Aspecto | PRD Sugere | Já Implementado |
-|---------|-----------|-----------------|
-| Edge Function | `rede-veiculos-ativar` (nova) | `rede-veiculos-vincular-cliente` ✅ |
-| Endpoint API | `/preCadastroAgendamento/` | `/vincularClienteVeiculo/` ✅ |
-| Dados enviados | CPF + Chassi + Placa + IMEI | Cliente + Veículo + Equipamento + Permissões ✅ |
-| Gatilho | Conclusão de instalação | Conclusão de instalação ✅ |
-| Tabela de log | `rastreadores_ativacoes` (não existe) | `rastreadores_logs` ✅ |
+### O que já existe
 
-## O que já funciona
+| Componente | Status |
+|------------|--------|
+| Parâmetro `nomeEsperado` enviado para IA | ✅ Existe (linha 79) |
+| Campo `nome_titular` extraído do comprovante | ✅ Existe no prompt |
+| Instrução básica para verificar nome | ⚠️ Fraca (linha 261) |
+| Regra de aprovação automática por endereço legível | ❌ Conflita (linha 140) |
 
-### 1. Hook `useAprovarVeiculoServico` (src/hooks/useServicos.ts)
+### Problema Atual
 
-Linhas 952-961 já chamam a integração Rede Veículos:
+A linha 140 do `systemPrompt` diz:
+```
+Se o endereço estiver completo e legível, SEMPRE sugerir "aprovar"
+```
+
+Isso faz com que a IA aprove comprovantes mesmo quando o nome do titular **não confere** com o nome do associado.
+
+## Solução
+
+Adicionar uma **verificação crítica de nome** no `systemPrompt` com as seguintes regras:
+
+### 1. Regra Principal (CRÍTICA)
+
+```
+Se o nome_titular do comprovante NÃO corresponder ao nomeEsperado do associado:
+→ sugestao: "reprovar"
+→ motivo: "Nome do titular ({nome_titular}) não corresponde ao associado ({nomeEsperado})"
+```
+
+### 2. Tolerância para Abreviações
+
+A IA deve aceitar como correspondência válida:
+
+| Nome no Comprovante | Nome do Associado | Resultado |
+|---------------------|-------------------|-----------|
+| MARIO DA SILVA | Mario da Silva | ✅ Aceitar |
+| M. DA SILVA | Mario da Silva | ✅ Aceitar |
+| MARIO D. SILVA | Mario da Silva | ✅ Aceitar |
+| M. D. SILVA | Mario da Silva | ✅ Aceitar |
+| MARIA DA SILVA | Mario da Silva | ❌ Reprovar |
+| JOSE SILVA | Mario da Silva | ❌ Reprovar |
+| (vazio/ilegível) | Mario da Silva | ⚠️ Revisar |
+
+### 3. Casos Especiais
+
+- **Cônjuge**: Se o comprovante estiver em nome de cônjuge, sugerir "revisar" (não reprovar automaticamente)
+- **Nome ilegível**: Sugerir "revisar" com motivo explicativo
+- **Mesmo sobrenome**: Se pelo menos o sobrenome coincidir, sugerir "revisar" ao invés de reprovar
+
+## Alterações no Arquivo
+
+**Arquivo:** `supabase/functions/document-ocr/index.ts`
+
+### Atualização do systemPrompt (seção Comprovante de Residência)
+
+Adicionar após a linha 143 (REGRAS ESPECIAIS para Comprovante de Residência):
 
 ```typescript
-} else if (rastreadorInfo?.plataforma === 'rede_veiculos') {
-  await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
-    body: {
-      imei: data.imeiRastreador,
-      veiculoId: data.veiculoId,
-      associadoId: data.associadoId,
-    },
-  });
-  console.log('[useAprovarVeiculoServico] Rastreador vinculado na Rede Veículos com sucesso');
+// Novas regras a adicionar no systemPrompt:
+
+**⚠️ VERIFICAÇÃO CRÍTICA DE TITULARIDADE ⚠️**
+
+Esta é a verificação MAIS IMPORTANTE para comprovantes de residência:
+
+1. COMPARE o nome_titular extraído do comprovante com o nomeEsperado fornecido no contexto
+
+2. REGRAS DE COMPARAÇÃO DE NOMES (permitir abreviações):
+   - Ignore diferenças de maiúsculas/minúsculas
+   - Ignore acentos e caracteres especiais
+   - Aceite abreviações válidas:
+     * "M." ou "M " como abreviação de "Mario", "Maria", "Marcos", etc.
+     * "D." ou "Da" ou "De" como conectivos abreviados
+     * Iniciais seguidas de ponto são válidas para qualquer nome
+   - O SOBRENOME deve corresponder (é obrigatório)
+   - Pelo menos a primeira letra do primeiro nome deve corresponder
+
+3. EXEMPLOS DE CORRESPONDÊNCIA:
+   - "M. SILVA" corresponde a "Mario Silva" ✓
+   - "MARIO D. SILVA" corresponde a "Mario da Silva" ✓
+   - "M. D. S." corresponde a "Mario da Silva" ✓
+   - "MARIO SILVA" corresponde a "Mario da Silva" ✓
+   - "MARIA SILVA" NÃO corresponde a "Mario Silva" ✗
+   - "JOSE SANTOS" NÃO corresponde a "Mario Silva" ✗
+
+4. DECISÕES:
+   - Se nome_titular CORRESPONDE ao nomeEsperado (incluindo abreviações): pode aprovar
+   - Se nome_titular NÃO CORRESPONDE ao nomeEsperado: 
+     * sugestao: "reprovar"
+     * motivo: "Titular do comprovante ({nome_titular}) diverge do associado ({nomeEsperado})"
+   - Se nome_titular está ILEGÍVEL ou VAZIO:
+     * sugestao: "revisar"
+     * motivo: "Nome do titular não pôde ser lido no documento"
+   - Se MESMO SOBRENOME mas primeiro nome diferente (possível cônjuge):
+     * sugestao: "revisar"
+     * motivo: "Titular pode ser cônjuge/familiar - verificar manualmente"
+
+5. PRIORIDADE: Esta verificação tem prioridade sobre a regra de "endereço legível = aprovar"
+```
+
+### Atualização do userPrompt
+
+Modificar a construção do prompt quando `nomeEsperado` está presente para enfatizar a criticidade:
+
+```typescript
+// Linha ~260-262, modificar para:
+if (nomeEsperado) {
+  userPrompt += ` 
+
+⚠️ VERIFICAÇÃO CRÍTICA DE TITULARIDADE ⚠️
+Nome do associado no cadastro: "${nomeEsperado}"
+Se for COMPROVANTE DE RESIDÊNCIA: compare o nome do titular com este nome.
+REPROVE se os nomes não corresponderem (permitindo abreviações válidas).`;
 }
 ```
 
-### 2. Edge Function `rede-veiculos-vincular-cliente`
+### Atualização da Resposta da IA
 
-Faz o fluxo completo:
-- Busca dados do associado, veículo e rastreador
-- Autentica na API Rede Veículos via `rastreador-auth`
-- Chama endpoint `/vincularClienteVeiculo/` com payload completo
-- Atualiza IDs da plataforma no banco local
-- Chama `/ativarVeiculo/` automaticamente após vinculação
-- Registra logs em `rastreadores_logs`
-
-### 3. Tabela de Logs
-
-`rastreadores_logs` já existe com campos:
-- `rastreador_id`, `plataforma`, `operacao`, `request`, `response`, `status`, `erro_mensagem`, `created_at`
-
-## Diferença entre Endpoints da API Rede Veículos
-
-| Endpoint | Propósito |
-|----------|-----------|
-| `/preCadastroAgendamento/` | Pré-cadastro simplificado (sem vincular) |
-| `/vincularClienteVeiculo/` | **Cadastro completo** (cliente + veículo + equipamento vinculados) ✅ |
-
-## Recomendação
-
-**Não criar nova Edge Function**. O sistema já está implementado corretamente com uma abordagem mais robusta.
-
-## Ajustes Necessários
-
-Apenas pequenos ajustes para garantir funcionamento correto:
-
-### 1. Garantir que a chamada não está bloqueada pelo if
-
-**Problema identificado**: O código só chama a integração **se** o veículo já tinha `cobertura_roubo_furto` (linha 913):
+Adicionar campos específicos para a validação de titularidade:
 
 ```typescript
-if (veiculoAtual?.cobertura_roubo_furto && !veiculoAtual?.cobertura_total) {
-  // ... chama integração Rede Veículos
+// Na estrutura de resposta esperada, adicionar para comprovante_residencia:
+{
+  "tipo_detectado": "comprovante_residencia",
+  "dados": {
+    "nome_titular": "...",
+    "nome_titular_validado": true | false,  // NOVO: indica se nome confere
+    // ... outros campos
+  },
+  "validacao_titularidade": {  // NOVO: detalhes da comparação
+    "nome_titular_extraido": "M. DA SILVA",
+    "nome_esperado": "Mario da Silva",
+    "correspondencia": true | false,
+    "tipo_correspondencia": "exata" | "abreviacao" | "nenhuma" | "possivel_conjuge",
+    "observacao": "Abreviação válida detectada"
+  }
 }
 ```
 
-Isso significa que se a vistoria não foi aprovada previamente, a integração **não é chamada**.
+## Fluxo Visual
 
-**Solução**: Sempre tentar chamar a integração quando o rastreador for Rede Veículos, independente do status de cobertura.
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  ANÁLISE DE COMPROVANTE DE RESIDÊNCIA                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. Extrair nome_titular do documento                           │
+│     └─> "M. DA SILVA"                                           │
+│                                                                 │
+│  2. Receber nomeEsperado do associado                           │
+│     └─> "Mario da Silva"                                        │
+│                                                                 │
+│  3. Comparar nomes (com tolerância a abreviações)               │
+│     ├─> Normalizar: remover acentos, lowercase                  │
+│     ├─> Verificar sobrenome: "SILVA" = "Silva" ✓                │
+│     └─> Verificar primeiro nome: "M." ~ "Mario" ✓               │
+│                                                                 │
+│  4. Decisão                                                     │
+│     ├─> Correspondência: SIM                                    │
+│     ├─> sugestao: "aprovar"                                     │
+│     └─> motivo: "Documento válido, titular corresponde"         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-### 2. Não bloquear fluxo em caso de erro
+## Tabela de Decisões
 
-Já está implementado com try/catch (linha 962-965).
+| Cenário | nome_titular | nomeEsperado | Decisão | Motivo |
+|---------|--------------|--------------|---------|--------|
+| Match exato | Mario Silva | Mario Silva | ✅ Aprovar | Nomes conferem |
+| Abreviação 1ª letra | M. Silva | Mario Silva | ✅ Aprovar | Abreviação válida |
+| Abreviação completa | M. D. S. | Mario da Silva | ✅ Aprovar | Abreviação válida |
+| Caixa diferente | MARIO SILVA | mario silva | ✅ Aprovar | Ignora caixa |
+| Nome diferente | Maria Silva | Mario Silva | ⚠️ Revisar | Possível cônjuge |
+| Sobrenome diferente | Mario Santos | Mario Silva | ❌ Reprovar | Nomes divergentes |
+| Nome ilegível | (null) | Mario Silva | ⚠️ Revisar | Não foi possível ler |
+| Completamente diferente | Jose Santos | Mario Silva | ❌ Reprovar | Titular diverge |
 
 ## Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useServicos.ts` | Mover chamada da integração para FORA do if de cobertura |
+| `supabase/functions/document-ocr/index.ts` | Atualizar systemPrompt e userPrompt |
 
-## Código Proposto
+## Benefícios
 
-```typescript
-// Linha ~891 - Após vincular rastreador ao veículo
-// SEMPRE tentar ativar na plataforma, independente de cobertura
-try {
-  const { data: rastreadorInfo } = await supabase
-    .from('rastreadores')
-    .select('plataforma')
-    .eq('imei', data.imeiRastreador)
-    .single();
-
-  if (rastreadorInfo?.plataforma === 'rede_veiculos') {
-    console.log('[useAprovarVeiculoServico] Ativando rastreador na Rede Veículos...');
-    await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
-      body: {
-        imei: data.imeiRastreador,
-        veiculoId: data.veiculoId,
-        associadoId: data.associadoId,
-      },
-    });
-    console.log('[useAprovarVeiculoServico] Rastreador vinculado na Rede Veículos com sucesso');
-  } else if (rastreadorInfo?.plataforma === 'softruck') {
-    // ... código softruck existente ...
-  }
-} catch (err) {
-  console.warn('[useAprovarVeiculoServico] Ativação na plataforma falhou:', err);
-  // Não bloquear fluxo
-}
-```
-
-## Por que NÃO criar Edge Function nova?
-
-1. **Redundância** - Já existe `rede-veiculos-vincular-cliente` funcionando
-2. **Endpoint inferior** - `/preCadastroAgendamento/` é mais limitado que `/vincularClienteVeiculo/`
-3. **Tabela inexistente** - PRD menciona `rastreadores_ativacoes` que não existe
-4. **Manutenção** - Ter duas funções fazendo coisas similares complica manutenção
-
-## Resumo da Implementação
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  FLUXO ATUAL (CORRETO)                                          │
-├─────────────────────────────────────────────────────────────────┤
-│  1. Instalador conclui checklist                                │
-│  2. handleConcluirInstalacao() é chamado                        │
-│  3. aprovarVeiculoMutation.mutateAsync() executa                │
-│  4. Verifica se plataforma === 'rede_veiculos'                  │
-│  5. Chama rede-veiculos-vincular-cliente                        │ ← JÁ EXISTE
-│  6. Edge Function faz cadastro completo na API                  │
-│  7. Registra log em rastreadores_logs                           │
-│  8. Atualiza rastreador com status 'instalado'                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Única Modificação Necessária
-
-Mover a chamada da integração Rede Veículos para **sempre executar** quando o rastreador for dessa plataforma, não apenas quando há cobertura prévia.
-
-Isso garante que:
-- ✅ Rastreador é cadastrado na plataforma
-- ✅ Logs são registrados
-- ✅ IDs da plataforma são salvos localmente
-- ✅ Fluxo não é bloqueado em caso de erro
+1. **Segurança**: Impede aprovação de comprovantes em nome de terceiros
+2. **Flexibilidade**: Aceita abreviações comuns em documentos
+3. **Clareza**: Motivo de reprovação é explícito para o analista
+4. **Auditoria**: Registra a comparação feita pela IA
 
