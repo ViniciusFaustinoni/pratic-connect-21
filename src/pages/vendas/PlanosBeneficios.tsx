@@ -1,37 +1,25 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { 
-  AlertTriangle, MapPin, Settings, Plus, Loader2, Pencil, Trash2
+  AlertTriangle, MapPin, Settings, Loader2, Info
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { toast } from 'sonner';
 
 // Hooks para dados do Supabase
 import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
-import { useDeletePlan } from '@/hooks/usePlansAdmin';
-import { useBeneficiosAtivos, useDeleteBeneficio } from '@/hooks/useBeneficiosAdmin';
+import { useBeneficiosAtivos } from '@/hooks/useBeneficiosAdmin';
 import { useResumoSaudeBeneficios, useCustoBeneficios, type CustoBeneficio } from '@/hooks/useCustoBeneficios';
 import { ResumoSaudeCard } from '@/components/beneficios/ResumoSaudeCard';
 import { BadgeIndicador } from '@/components/beneficios/IndicadorSaude';
 
 // Componentes
-import { TabelaPrecosCarros, TabelaPrecosMotos, TabelaPrecosEletricos } from '@/components/planos/TabelaPrecos';
+import { TabelaPrecosCarros, TabelaPrecosMotos } from '@/components/planos/TabelaPrecos';
 import { VeiculosAceitosCarros, VeiculosAceitosMotos } from '@/components/planos/VeiculosAceitos';
 import { CalculadoraPreco } from '@/components/planos/CalculadoraPreco';
 import { GlossarioTermos, RegrasImportantes, TabelaCotasTaxas } from '@/components/planos/GlossarioSection';
@@ -40,17 +28,7 @@ import { BuscaPlanos } from '@/components/planos/BuscaPlanos';
 import { ComparadorNiveisSelect, ComparadorNiveisMotos } from '@/components/planos/ComparadorNiveis';
 import { RankingVendedores } from '@/components/planos/RankingVendedores';
 import { RegioesConfig } from '@/components/planos/RegioesConfig';
-import { PlanosConfig } from '@/components/planos/PlanosConfig';
-import { BeneficiosAdicionaisConfig } from '@/components/planos/BeneficiosAdicionaisConfig';
 import { PlanoLineSection } from '@/components/planos/PlanoLineSection';
-import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
-import { BeneficioAdicionalModal } from '@/components/planos/BeneficioAdicionalModal';
-
-// Types
-import type { PlanWithDetails } from '@/types/plans';
-import type { Tables } from '@/integrations/supabase/types';
-
-type BeneficioAdicional = Tables<'beneficios_adicionais'>;
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -81,24 +59,11 @@ export default function PlanosBeneficios() {
   const [activeTab, setActiveTab] = useState('visao-geral');
   const [searchTerm, setSearchTerm] = useState('');
   const { isDiretor, isDesenvolvedor, isGerente, isSupervisor, isAdminMaster } = usePermissions();
-  const podeEditar = isDiretor || isDesenvolvedor;
   const podeVerConfigAvancada = isDiretor || isGerente || isSupervisor || isDesenvolvedor || isAdminMaster;
 
-  // Estados para edição de planos
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [planToEdit, setPlanToEdit] = useState<PlanWithDetails | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [planToDelete, setPlanToDelete] = useState<PlanWithDetails | null>(null);
-
-  // Estados para edição de benefícios adicionais
-  const [beneficioModalOpen, setBeneficioModalOpen] = useState(false);
-  const [beneficioToEdit, setBeneficioToEdit] = useState<BeneficioAdicional | null>(null);
-  const [deleteBeneficioDialogOpen, setDeleteBeneficioDialogOpen] = useState(false);
-  const [beneficioToDelete, setBeneficioToDelete] = useState<BeneficioAdicional | null>(null);
-
   // Hooks para dados do Supabase
-  const { data: productLines, isLoading: loadingLines, error: errorLines, refetch: refetchLines } = useProductLines();
-  const { data: plans, isLoading: loadingPlans, error: errorPlans, refetch: refetchPlans } = usePlans();
+  const { data: productLines, isLoading: loadingLines, error: errorLines } = useProductLines();
+  const { data: plans, isLoading: loadingPlans, error: errorPlans } = usePlans();
   const { data: mainCoverages, isLoading: loadingCoverages } = useMainCoverages();
   const { data: beneficiosAdicionais, isLoading: loadingBeneficios } = useBeneficiosAtivos();
   const { data: resumoSaude, isLoading: loadingResumo } = useResumoSaudeBeneficios();
@@ -109,76 +74,9 @@ export default function PlanosBeneficios() {
     acc[custo.beneficio_id] = custo;
     return acc;
   }, {} as Record<string, CustoBeneficio>) || {};
-  const deletePlan = useDeletePlan();
-  const deleteBeneficio = useDeleteBeneficio();
 
   const isLoading = loadingLines || loadingPlans;
   const hasError = errorLines || errorPlans;
-
-  // Handlers para edição/exclusão de planos
-  const handleEditPlan = (plan: PlanWithDetails) => {
-    setPlanToEdit(plan);
-    setEditModalOpen(true);
-  };
-
-  const handleCreatePlan = () => {
-    setPlanToEdit(null);
-    setEditModalOpen(true);
-  };
-
-  const handleDeletePlan = (plan: PlanWithDetails) => {
-    setPlanToDelete(plan);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!planToDelete) return;
-    
-    try {
-      await deletePlan.mutateAsync(planToDelete.id);
-      toast.success('Plano excluído com sucesso!');
-      setDeleteDialogOpen(false);
-      setPlanToDelete(null);
-      refetchPlans();
-    } catch (error) {
-      toast.error('Erro ao excluir plano');
-    }
-  };
-
-  const handleModalClose = (open: boolean) => {
-    setEditModalOpen(open);
-    if (!open) {
-      refetchPlans();
-    }
-  };
-
-  // Handlers para benefícios adicionais
-  const handleEditBeneficio = (beneficio: BeneficioAdicional) => {
-    setBeneficioToEdit(beneficio);
-    setBeneficioModalOpen(true);
-  };
-
-  const handleCreateBeneficio = () => {
-    setBeneficioToEdit(null);
-    setBeneficioModalOpen(true);
-  };
-
-  const handleDeleteBeneficio = (beneficio: BeneficioAdicional) => {
-    setBeneficioToDelete(beneficio);
-    setDeleteBeneficioDialogOpen(true);
-  };
-
-  const confirmDeleteBeneficio = async () => {
-    if (!beneficioToDelete) return;
-    
-    try {
-      await deleteBeneficio.mutateAsync(beneficioToDelete.id);
-      setDeleteBeneficioDialogOpen(false);
-      setBeneficioToDelete(null);
-    } catch (error) {
-      // Erro já tratado no hook
-    }
-  };
 
   const handleSearch = (term: string) => {
     setSearchTerm(term.toLowerCase());
@@ -206,24 +104,28 @@ export default function PlanosBeneficios() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Planos e Benefícios</h1>
-          {podeEditar && (
-            <p className="text-sm text-muted-foreground mt-1">
-              <Settings className="h-3.5 w-3.5 inline mr-1" />
-              Modo Diretor: Você pode editar configurações
-            </p>
-          )}
+          <p className="text-sm text-muted-foreground mt-1">
+            Consulte planos, coberturas e benefícios disponíveis
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          {podeEditar && (
-            <Button onClick={handleCreatePlan}>
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Plano
-            </Button>
-          )}
           <BuscaPlanos onSearch={handleSearch} />
           <CalculadoraPreco />
         </div>
       </div>
+
+      {/* Banner informativo para diretores */}
+      {isDiretor && (
+        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertDescription className="text-blue-700 dark:text-blue-300">
+            Para criar ou editar planos e benefícios, acesse{' '}
+            <Link to="/diretoria/planos-beneficios" className="font-medium underline hover:text-blue-800 dark:hover:text-blue-200">
+              Diretoria → Planos/Benefícios
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -275,9 +177,6 @@ export default function PlanosBeneficios() {
               key={line.id}
               productLine={line}
               plans={getPlansByLineId(line.id)}
-              canEdit={podeEditar}
-              onEditPlan={handleEditPlan}
-              onDeletePlan={handleDeletePlan}
             />
           ))}
 
@@ -320,9 +219,6 @@ export default function PlanosBeneficios() {
               key={line.id}
               productLine={line}
               plans={getPlansByLineId(line.id)}
-              canEdit={podeEditar}
-              onEditPlan={handleEditPlan}
-              onDeletePlan={handleDeletePlan}
             />
           ))}
 
@@ -341,9 +237,6 @@ export default function PlanosBeneficios() {
               key={line.id}
               productLine={line}
               plans={getPlansByLineId(line.id)}
-              canEdit={podeEditar}
-              onEditPlan={handleEditPlan}
-              onDeletePlan={handleDeletePlan}
             />
           ))}
 
@@ -356,8 +249,8 @@ export default function PlanosBeneficios() {
         {/* Tab Adicionais - Apenas para gestores */}
         {podeVerConfigAvancada && (
         <TabsContent value="adicionais" className="space-y-4">
-          {/* Resumo de Saúde Financeira */}
-          {podeEditar && (
+          {/* Resumo de Saúde Financeira - apenas visualização para diretor */}
+          {isDiretor && (
             <ResumoSaudeCard
               superavit={resumoSaude?.superavit || 0}
               equilibrio={resumoSaude?.equilibrio || 0}
@@ -369,19 +262,11 @@ export default function PlanosBeneficios() {
 
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Benefícios Adicionais</CardTitle>
-                  <CardDescription>
-                    Complemente seu plano com benefícios extras conforme sua necessidade
-                  </CardDescription>
-                </div>
-                {podeEditar && (
-                  <Button onClick={handleCreateBeneficio}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Novo Adicional
-                  </Button>
-                )}
+              <div>
+                <CardTitle>Benefícios Adicionais</CardTitle>
+                <CardDescription>
+                  Complemente seu plano com benefícios extras conforme sua necessidade
+                </CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -398,7 +283,7 @@ export default function PlanosBeneficios() {
                   {beneficiosFiltrados.map((beneficio) => (
                     <div 
                       key={beneficio.id}
-                      className="group relative flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                      className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -406,7 +291,7 @@ export default function PlanosBeneficios() {
                             {beneficio.categoria}
                           </Badge>
                           {/* Badge de indicador de saúde (visível para Diretor) */}
-                          {podeEditar && custosPorBeneficio[beneficio.id] && (
+                          {isDiretor && custosPorBeneficio[beneficio.id] && (
                             <BadgeIndicador 
                               indicador={custosPorBeneficio[beneficio.id].indicador} 
                               size="sm" 
@@ -419,28 +304,6 @@ export default function PlanosBeneficios() {
                       <Badge className="text-lg font-bold whitespace-nowrap ml-4 bg-primary shrink-0">
                         {formatCurrency(beneficio.preco)}/mês
                       </Badge>
-                      
-                      {/* Botões de ação - visíveis no hover */}
-                      {podeEditar && (
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 bg-background/80 hover:bg-background"
-                            onClick={(e) => { e.stopPropagation(); handleEditBeneficio(beneficio); }}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-destructive bg-background/80 hover:bg-background"
-                            onClick={(e) => { e.stopPropagation(); handleDeleteBeneficio(beneficio); }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -474,80 +337,6 @@ export default function PlanosBeneficios() {
           <ContatosInline />
         </TabsContent>
       </Tabs>
-
-      {/* Modal de Edição de Plano */}
-      <PlanFormModal
-        open={editModalOpen}
-        onOpenChange={handleModalClose}
-        plan={planToEdit}
-      />
-
-      {/* Modal de Edição de Benefício Adicional */}
-      <BeneficioAdicionalModal
-        open={beneficioModalOpen}
-        onOpenChange={setBeneficioModalOpen}
-        beneficio={beneficioToEdit}
-      />
-
-      {/* Dialog de Confirmação de Exclusão de Plano */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Plano</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir o plano "{planToDelete?.name}"?
-              Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDelete} 
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deletePlan.isPending}
-            >
-              {deletePlan.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Excluindo...
-                </>
-              ) : (
-                'Excluir'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Dialog de Confirmação de Exclusão de Benefício */}
-      <AlertDialog open={deleteBeneficioDialogOpen} onOpenChange={setDeleteBeneficioDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Benefício Adicional</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir o benefício "{beneficioToDelete?.nome}"?
-              Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDeleteBeneficio} 
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteBeneficio.isPending}
-            >
-              {deleteBeneficio.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Excluindo...
-                </>
-              ) : (
-                'Excluir'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

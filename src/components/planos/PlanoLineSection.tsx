@@ -5,9 +5,6 @@ import type { ProductLine, PlanWithDetails } from '@/types/plans';
 interface PlanoLineSectionProps {
   productLine: ProductLine;
   plans: PlanWithDetails[];
-  canEdit?: boolean;
-  onEditPlan?: (plan: PlanWithDetails) => void;
-  onDeletePlan?: (plan: PlanWithDetails) => void;
 }
 
 // Mapeamento de ícones das linhas
@@ -27,7 +24,7 @@ const SLUG_ICONS: Record<string, React.ReactNode> = {
   advanced: <Bike className="h-5 w-5 text-red-600" />,
 };
 
-export function PlanoLineSection({ productLine, plans, canEdit, onEditPlan, onDeletePlan }: PlanoLineSectionProps) {
+export function PlanoLineSection({ productLine, plans }: PlanoLineSectionProps) {
   // Não renderizar se não houver planos
   if (!plans || plans.length === 0) {
     return null;
@@ -56,9 +53,6 @@ export function PlanoLineSection({ productLine, plans, canEdit, onEditPlan, onDe
           <PlanoCardDynamic 
             key={plan.id} 
             plan={plan}
-            canEdit={canEdit}
-            onEdit={onEditPlan}
-            onDelete={onDeletePlan}
           />
         ))}
       </div>
