@@ -28,8 +28,10 @@ import {
 import { 
   agruparFotosPorCategoriaCompleta, 
   TOTAL_FOTOS_OBRIGATORIAS,
-  FOTOS_VISTORIA_COMPLETA
+  FOTOS_VISTORIA_COMPLETA,
+  agruparFotosFiltradas
 } from '@/data/vistoriaConfigCompleta';
+import { useConfigFipeRastreador, precisaRastreador } from '@/hooks/useConfigRastreador';
 
 export default function ExecutarVistoriaCompleta() {
   const { id: instalacaoId } = useParams<{ id: string }>();
@@ -37,6 +39,7 @@ export default function ExecutarVistoriaCompleta() {
 
   // Hooks - busca por instalacao_id
   const { data: vistoria, isLoading, error } = useVistoriaCompleta(instalacaoId || null);
+  const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
   const uploadFoto = useUploadFotoVistoriaCompleta();
   const uploadVideo = useUploadVideo360();
   const aprovarVeiculo = useAprovarVeiculoVistoria();
@@ -62,7 +65,18 @@ export default function ExecutarVistoriaCompleta() {
   const associado = vistoria?.associado || vistoria?.veiculo?.associado;
   const fotosEnviadas = vistoria?.fotos || [];
   const video360Url = (vistoria as any)?.video_360_url;
-  const categorias = useMemo(() => agruparFotosPorCategoriaCompleta(), []);
+  
+  // Verificar se precisa de rastreador baseado no valor FIPE
+  const valorFipeVeiculo = useMemo(() => {
+    return (veiculo as any)?.valor_fipe || null;
+  }, [veiculo]);
+  
+  const veiculoPrecisaRastreador = useMemo(() => {
+    return precisaRastreador(valorFipeVeiculo, fipeMinRastreador);
+  }, [valorFipeVeiculo, fipeMinRastreador]);
+  
+  // Categorias filtradas baseado na necessidade de rastreador
+  const categorias = useMemo(() => agruparFotosFiltradas('automovel', veiculoPrecisaRastreador), [veiculoPrecisaRastreador]);
 
   // Mapa de fotos
   const fotosMap = useMemo(() => {
