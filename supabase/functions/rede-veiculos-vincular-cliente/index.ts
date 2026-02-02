@@ -37,7 +37,7 @@ interface Veiculo {
   cor: string | null;
   chassi: string | null;
   renavam: string | null;
-  tipo: string | null;
+  combustivel: string | null;
   rede_veiculos_cliente_id: string | null;
   rede_veiculos_veiculo_id: string | null;
 }
@@ -68,24 +68,11 @@ interface VincularResponse {
   idEquipamento?: number;
 }
 
-// Mapear tipo de veículo para código da API
-function mapTipoVeiculo(tipo: string | null): string {
-  const tipoUpper = (tipo || 'carro').toLowerCase();
-  switch (tipoUpper) {
-    case 'moto':
-    case 'motocicleta':
-      return 'moto';
-    case 'caminhao':
-    case 'caminhão':
-      return 'caminhao';
-    case 'van':
-      return 'van';
-    case 'onibus':
-    case 'ônibus':
-      return 'onibus';
-    default:
-      return 'carro';
-  }
+// Mapear combustível para tipo de veículo (inferência básica)
+// Como não há coluna 'tipo', assumimos 'carro' como padrão
+function mapTipoVeiculo(_combustivel: string | null): string {
+  // Por padrão retorna 'carro' - o tipo real pode ser inferido pelo modelo no futuro
+  return 'carro';
 }
 
 // Formatar CPF/CNPJ
@@ -161,7 +148,7 @@ serve(async (req) => {
         cor, 
         chassi, 
         renavam, 
-        tipo,
+        combustivel,
         rede_veiculos_cliente_id,
         rede_veiculos_veiculo_id
       `)
@@ -245,7 +232,7 @@ serve(async (req) => {
       },
       // Dados do Veículo
       veiculo: {
-        tipo: mapTipoVeiculo(veiculo.tipo),
+        tipo: mapTipoVeiculo(veiculo.combustivel),
         marca: veiculo.marca || 'NI',
         modelo: veiculo.modelo || 'NI',
         placa: veiculo.placa,
