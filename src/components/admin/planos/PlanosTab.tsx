@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Car, Bike } from 'lucide-react';
-import { useProductLines, usePlans } from '@/hooks/usePlans';
+import { useProductLines, usePlans, PlanWithDetails } from '@/hooks/usePlans';
 import { PlanCard } from './PlanCard';
 import { PlanFormModal } from './PlanFormModal';
 import { useDeletePlan, useDuplicatePlan, useReorderPlans } from '@/hooks/usePlansAdmin';
@@ -32,7 +32,6 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import type { PlanWithDetails } from '@/types/plans';
 
 const LINE_COLORS: Record<string, { active: string; inactive: string }> = {
   green: { 

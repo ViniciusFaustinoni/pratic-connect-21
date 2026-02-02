@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { Plan, Benefit, MainCoverage, ProductLine } from '@/types/plans';
+import type { Benefit, MainCoverage, ProductLine } from '@/types/plans';
 import { clearExclusionsCache } from '@/data/restricoesCategorias';
 
 // ==================== PLAN TYPES ====================
@@ -47,29 +47,56 @@ export function useCreatePlan() {
     mutationFn: async (input: PlanInput) => {
       const { benefits, ...planData } = input;
 
+      // Mapear para campos da tabela planos
+      const planoData = {
+        codigo: planData.slug,
+        nome: planData.name,
+        slug: planData.slug,
+        product_line_id: planData.product_line_id,
+        tipo_uso: planData.tipo_uso || 'passeio',
+        badge_text: planData.badge_text,
+        badge_color: planData.badge_color,
+        coverage_type: planData.coverage_type,
+        ano_minimo: planData.min_vehicle_year ? parseInt(planData.min_vehicle_year.replace(/\D/g, '')) : null,
+        adicional_mensal: planData.additional_price || 0,
+        cota_participacao: planData.cota_passeio_percent,
+        cota_minima: planData.cota_passeio_min,
+        cota_desagio: planData.cota_desagio_percent,
+        cota_minima_desagio: planData.cota_desagio_min,
+        cota_app_percent: planData.cota_app_percent,
+        cota_app_min: planData.cota_app_min,
+        restriction_alert: planData.restriction_alert,
+        footer_note: planData.footer_note,
+        ordem: planData.display_order || 0,
+        ativo: planData.is_active ?? true,
+        valor_adesao: 0,
+      };
+
       // Create plan
       const { data: plan, error: planError } = await supabase
-        .from('plans')
-        .insert(planData)
+        .from('planos')
+        .insert(planoData)
         .select()
         .single();
 
       if (planError) throw planError;
 
-      // Create plan_benefits if provided
+      // Create planos_beneficios if provided
       if (benefits && benefits.length > 0) {
         const planBenefits = benefits.map((b, index) => ({
-          plan_id: plan.id,
+          plano_id: plan.id,
           benefit_id: b.benefit_id,
+          beneficio: '', // Will be filled from benefits table
           custom_text: b.custom_text,
           custom_value: b.custom_value,
           additional_info: b.additional_info,
           is_highlighted: b.is_highlighted ?? false,
           display_order: b.display_order ?? index,
+          incluso: true,
         }));
 
         const { error: benefitsError } = await supabase
-          .from('plan_benefits')
+          .from('planos_beneficios')
           .insert(planBenefits);
 
         if (benefitsError) throw benefitsError;
@@ -79,6 +106,7 @@ export function useCreatePlan() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
+      queryClient.invalidateQueries({ queryKey: ['planos'] });
       toast.success('Plano criado com sucesso!');
     },
     onError: (error: Error) => {
@@ -94,40 +122,66 @@ export function useUpdatePlan() {
     mutationFn: async ({ id, ...input }: PlanInput & { id: string }) => {
       const { benefits, ...planData } = input;
 
+      // Mapear para campos da tabela planos
+      const planoData = {
+        codigo: planData.slug,
+        nome: planData.name,
+        slug: planData.slug,
+        product_line_id: planData.product_line_id,
+        tipo_uso: planData.tipo_uso || 'passeio',
+        badge_text: planData.badge_text,
+        badge_color: planData.badge_color,
+        coverage_type: planData.coverage_type,
+        ano_minimo: planData.min_vehicle_year ? parseInt(planData.min_vehicle_year.replace(/\D/g, '')) : null,
+        adicional_mensal: planData.additional_price || 0,
+        cota_participacao: planData.cota_passeio_percent,
+        cota_minima: planData.cota_passeio_min,
+        cota_desagio: planData.cota_desagio_percent,
+        cota_minima_desagio: planData.cota_desagio_min,
+        cota_app_percent: planData.cota_app_percent,
+        cota_app_min: planData.cota_app_min,
+        restriction_alert: planData.restriction_alert,
+        footer_note: planData.footer_note,
+        ordem: planData.display_order || 0,
+        ativo: planData.is_active ?? true,
+      };
+
       // Update plan
       const { data: plan, error: planError } = await supabase
-        .from('plans')
-        .update(planData)
+        .from('planos')
+        .update(planoData)
         .eq('id', id)
         .select()
         .single();
 
       if (planError) throw planError;
 
-      // Update plan_benefits - delete old and insert new
+      // Update planos_beneficios - delete old and insert new
       if (benefits !== undefined) {
         // Delete existing benefits
         const { error: deleteError } = await supabase
-          .from('plan_benefits')
+          .from('planos_beneficios')
           .delete()
-          .eq('plan_id', id);
+          .eq('plano_id', id);
 
         if (deleteError) throw deleteError;
 
         // Insert new benefits
         if (benefits.length > 0) {
           const planBenefits = benefits.map((b, index) => ({
-            plan_id: id,
+            plano_id: id,
             benefit_id: b.benefit_id,
+            beneficio: '',
             custom_text: b.custom_text,
             custom_value: b.custom_value,
             additional_info: b.additional_info,
             is_highlighted: b.is_highlighted ?? false,
             display_order: b.display_order ?? index,
+            incluso: true,
           }));
 
           const { error: insertError } = await supabase
-            .from('plan_benefits')
+            .from('planos_beneficios')
             .insert(planBenefits);
 
           if (insertError) throw insertError;
@@ -138,6 +192,7 @@ export function useUpdatePlan() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
+      queryClient.invalidateQueries({ queryKey: ['planos'] });
       toast.success('Plano atualizado!');
     },
     onError: (error: Error) => {
@@ -152,17 +207,18 @@ export function useTogglePlanStatus() {
   return useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
       const { data, error } = await supabase
-        .from('plans')
-        .update({ is_active })
+        .from('planos')
+        .update({ ativo: is_active })
         .eq('id', id)
         .select()
         .single();
       
       if (error) throw error;
-      return data;
+      return { ...data, is_active: data.ativo };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
+      queryClient.invalidateQueries({ queryKey: ['planos'] });
       toast.success(`Plano ${data.is_active ? 'ativado' : 'desativado'}`);
     },
     onError: (error: Error) => {
@@ -176,14 +232,15 @@ export function useDeletePlan() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Delete plan_benefits first (cascade should handle, but being safe)
-      await supabase.from('plan_benefits').delete().eq('plan_id', id);
+      // Delete planos_beneficios first
+      await supabase.from('planos_beneficios').delete().eq('plano_id', id);
 
-      const { error } = await supabase.from('plans').delete().eq('id', id);
+      const { error } = await supabase.from('planos').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
+      queryClient.invalidateQueries({ queryKey: ['planos'] });
       toast.success('Plano excluído!');
     },
     onError: (error: Error) => {
@@ -199,24 +256,25 @@ export function useDuplicatePlan() {
     mutationFn: async (id: string) => {
       // Get original plan with benefits
       const { data: original, error: fetchError } = await supabase
-        .from('plans')
-        .select('*, plan_benefits(*)')
+        .from('planos')
+        .select('*, planos_beneficios(*)')
         .eq('id', id)
         .single();
 
       if (fetchError) throw fetchError;
 
       // Create new plan
-      const { id: _, created_at, plan_benefits, ...planData } = original;
+      const { id: _, created_at, updated_at, planos_beneficios, ...planData } = original;
       const newPlan = {
         ...planData,
-        name: `${planData.name} (cópia)`,
-        slug: `${planData.slug}-copia-${Date.now()}`,
-        is_active: false,
+        nome: `${planData.nome} (cópia)`,
+        codigo: `${planData.codigo}-copia-${Date.now()}`,
+        slug: `${planData.slug || planData.codigo}-copia-${Date.now()}`,
+        ativo: false,
       };
 
       const { data: createdPlan, error: createError } = await supabase
-        .from('plans')
+        .from('planos')
         .insert(newPlan)
         .select()
         .single();
@@ -224,24 +282,27 @@ export function useDuplicatePlan() {
       if (createError) throw createError;
 
       // Duplicate benefits
-      if (plan_benefits && plan_benefits.length > 0) {
-        const newBenefits = plan_benefits.map((pb: any) => ({
-          plan_id: createdPlan.id,
+      if (planos_beneficios && planos_beneficios.length > 0) {
+        const newBenefits = planos_beneficios.map((pb: any) => ({
+          plano_id: createdPlan.id,
           benefit_id: pb.benefit_id,
+          beneficio: pb.beneficio,
           custom_text: pb.custom_text,
           custom_value: pb.custom_value,
           additional_info: pb.additional_info,
           is_highlighted: pb.is_highlighted,
           display_order: pb.display_order,
+          incluso: pb.incluso,
         }));
 
-        await supabase.from('plan_benefits').insert(newBenefits);
+        await supabase.from('planos_beneficios').insert(newBenefits);
       }
 
       return createdPlan;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
+      queryClient.invalidateQueries({ queryKey: ['planos'] });
       toast.success('Plano duplicado!');
     },
     onError: (error: Error) => {
@@ -256,12 +317,13 @@ export function useReorderPlans() {
   return useMutation({
     mutationFn: async (items: { id: string; display_order: number }[]) => {
       const updates = items.map(({ id, display_order }) =>
-        supabase.from('plans').update({ display_order }).eq('id', id)
+        supabase.from('planos').update({ ordem: display_order }).eq('id', id)
       );
       await Promise.all(updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
+      queryClient.invalidateQueries({ queryKey: ['planos'] });
       toast.success('Ordem atualizada!');
     },
     onError: (error: Error) => {

@@ -2,12 +2,70 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { 
   ProductLine, 
-  Plan, 
   Benefit, 
   MainCoverage,
-  PlanWithDetails,
-  ProductLineWithPlans
 } from '@/types/plans';
+
+// Tipo para benefícios de plano
+export interface PlanBenefitItem {
+  id: string;
+  plan_id: string;
+  benefit_id: string | null;
+  custom_text: string | null;
+  custom_value: string | null;
+  additional_info: string | null;
+  is_highlighted: boolean;
+  display_order: number;
+  benefits: Benefit | null;
+}
+
+// Tipo unificado para planos com campos compatíveis para componentes
+export interface PlanWithDetails {
+  id: string;
+  codigo: string;
+  nome: string;
+  name: string; // alias para compatibilidade
+  slug: string | null;
+  descricao: string | null;
+  tipo_uso: string;
+  tipo_veiculo: string | null;
+  product_line_id: string | null;
+  cobertura_fipe: number | null;
+  ano_minimo: number | null;
+  linha: string | null;
+  ordem: number | null;
+  ordem_exibicao: number | null;
+  display_order: number; // alias para compatibilidade
+  valor_adesao: number;
+  adicional_mensal: number | null;
+  additional_price: number | null; // alias para compatibilidade
+  ativo: boolean;
+  is_active: boolean; // alias para compatibilidade
+  destaque: boolean | null;
+  badge_text: string | null;
+  badge_color: string | null;
+  coverage_type: string | null;
+  min_vehicle_year: string | null; // alias para compatibilidade
+  restriction_alert: string | null;
+  footer_note: string | null;
+  cota_participacao: number | null;
+  cota_passeio_percent: number | null; // alias para compatibilidade
+  cota_minima: number | null;
+  cota_passeio_min: number | null; // alias para compatibilidade
+  cota_desagio: number | null;
+  cota_desagio_percent: number | null; // alias para compatibilidade
+  cota_minima_desagio: number | null;
+  cota_desagio_min: number | null; // alias para compatibilidade
+  cota_app_percent: number | null;
+  cota_app_min: number | null;
+  created_at: string;
+  updated_at: string;
+  product_lines?: ProductLine | null;
+  plan_benefits: PlanBenefitItem[]; // compatibilidade com componentes existentes
+}
+
+// Alias antigo para compatibilidade
+export type PlanoUnificado = PlanWithDetails;
 
 /**
  * Hook para buscar todas as linhas de produtos ativas
@@ -35,17 +93,27 @@ export function useProductLinesWithPlans() {
   return useQuery({
     queryKey: ['product_lines', 'with_plans'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: lines, error: linesError } = await supabase
         .from('product_lines')
-        .select(`
-          *,
-          plans (*)
-        `)
+        .select('*')
         .eq('is_active', true)
         .order('display_order');
       
-      if (error) throw error;
-      return data as ProductLineWithPlans[];
+      if (linesError) throw linesError;
+
+      const { data: planos, error: planosError } = await supabase
+        .from('planos')
+        .select('*')
+        .eq('ativo', true)
+        .order('ordem');
+
+      if (planosError) throw planosError;
+
+      // Agrupar planos por product_line_id
+      return (lines || []).map(line => ({
+        ...line,
+        plans: (planos || []).filter(p => p.product_line_id === line.id)
+      }));
     },
   });
 }
@@ -59,32 +127,61 @@ export function usePlans(productLineSlug?: string) {
     queryKey: ['plans', productLineSlug],
     queryFn: async () => {
       let query = supabase
-        .from('plans')
+        .from('planos')
         .select(`
           *,
-          product_lines!inner (*),
-          plan_benefits (
+          product_lines (*),
+          planos_beneficios (
             *,
-            benefits (*)
+            benefits:benefit_id (*)
           )
         `)
-        .eq('is_active', true)
-        .order('display_order');
+        .eq('ativo', true)
+        .order('ordem');
       
       if (productLineSlug) {
-        query = query.eq('product_lines.slug', productLineSlug);
+        // Primeiro buscar o product_line_id pelo slug
+        const { data: line } = await supabase
+          .from('product_lines')
+          .select('id')
+          .eq('slug', productLineSlug)
+          .single();
+        
+        if (line) {
+          query = query.eq('product_line_id', line.id);
+        }
       }
       
       const { data, error } = await query;
       if (error) throw error;
       
-      // Ordenar plan_benefits por display_order
-      return (data as PlanWithDetails[]).map(plan => ({
-        ...plan,
-        plan_benefits: plan.plan_benefits?.sort((a, b) => 
-          (a.display_order || 0) - (b.display_order || 0)
-        ) || []
-      }));
+      // Mapear para formato esperado pelos componentes
+      return (data || []).map(plano => ({
+        ...plano,
+        name: plano.nome,
+        slug: plano.slug || plano.codigo?.toLowerCase(),
+        is_active: plano.ativo,
+        display_order: plano.ordem || plano.ordem_exibicao || 0,
+        additional_price: plano.adicional_mensal,
+        min_vehicle_year: plano.ano_minimo ? `${plano.ano_minimo}+` : null,
+        cota_passeio_percent: plano.cota_participacao,
+        cota_passeio_min: plano.cota_minima,
+        cota_desagio_percent: plano.cota_desagio,
+        cota_desagio_min: plano.cota_minima_desagio,
+        plan_benefits: (plano.planos_beneficios || [])
+          .map((pb: any) => ({
+            id: pb.id,
+            plan_id: pb.plano_id,
+            benefit_id: pb.benefit_id,
+            custom_text: pb.custom_text,
+            custom_value: pb.custom_value,
+            additional_info: pb.additional_info,
+            is_highlighted: pb.is_highlighted || false,
+            display_order: pb.display_order || pb.ordem || 0,
+            benefits: pb.benefits,
+          }))
+          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
+      })) as PlanWithDetails[];
     },
   });
 }
@@ -100,13 +197,13 @@ export function usePlanById(id: string | undefined) {
       if (!id) throw new Error('ID é obrigatório');
       
       const { data, error } = await supabase
-        .from('plans')
+        .from('planos')
         .select(`
           *,
           product_lines (*),
-          plan_benefits (
+          planos_beneficios (
             *,
-            benefits (*)
+            benefits:benefit_id (*)
           )
         `)
         .eq('id', id)
@@ -114,12 +211,32 @@ export function usePlanById(id: string | undefined) {
       
       if (error) throw error;
       
-      // Ordenar plan_benefits por display_order
+      // Mapear para formato esperado
       return {
         ...data,
-        plan_benefits: data.plan_benefits?.sort((a: any, b: any) => 
-          (a.display_order || 0) - (b.display_order || 0)
-        ) || []
+        name: data.nome,
+        slug: data.slug || data.codigo?.toLowerCase(),
+        is_active: data.ativo,
+        display_order: data.ordem || data.ordem_exibicao || 0,
+        additional_price: data.adicional_mensal,
+        min_vehicle_year: data.ano_minimo ? `${data.ano_minimo}+` : null,
+        cota_passeio_percent: data.cota_participacao,
+        cota_passeio_min: data.cota_minima,
+        cota_desagio_percent: data.cota_desagio,
+        cota_desagio_min: data.cota_minima_desagio,
+        plan_benefits: (data.planos_beneficios || [])
+          .map((pb: any) => ({
+            id: pb.id,
+            plan_id: pb.plano_id,
+            benefit_id: pb.benefit_id,
+            custom_text: pb.custom_text,
+            custom_value: pb.custom_value,
+            additional_info: pb.additional_info,
+            is_highlighted: pb.is_highlighted || false,
+            display_order: pb.display_order || pb.ordem || 0,
+            benefits: pb.benefits,
+          }))
+          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
       } as PlanWithDetails;
     },
     enabled: !!id,
@@ -137,25 +254,45 @@ export function usePlanBySlug(slug: string | undefined) {
       if (!slug) throw new Error('Slug é obrigatório');
       
       const { data, error } = await supabase
-        .from('plans')
+        .from('planos')
         .select(`
           *,
           product_lines (*),
-          plan_benefits (
+          planos_beneficios (
             *,
-            benefits (*)
+            benefits:benefit_id (*)
           )
         `)
-        .eq('slug', slug)
+        .or(`slug.eq.${slug},codigo.ilike.${slug}`)
         .single();
       
       if (error) throw error;
       
       return {
         ...data,
-        plan_benefits: data.plan_benefits?.sort((a: any, b: any) => 
-          (a.display_order || 0) - (b.display_order || 0)
-        ) || []
+        name: data.nome,
+        slug: data.slug || data.codigo?.toLowerCase(),
+        is_active: data.ativo,
+        display_order: data.ordem || data.ordem_exibicao || 0,
+        additional_price: data.adicional_mensal,
+        min_vehicle_year: data.ano_minimo ? `${data.ano_minimo}+` : null,
+        cota_passeio_percent: data.cota_participacao,
+        cota_passeio_min: data.cota_minima,
+        cota_desagio_percent: data.cota_desagio,
+        cota_desagio_min: data.cota_minima_desagio,
+        plan_benefits: (data.planos_beneficios || [])
+          .map((pb: any) => ({
+            id: pb.id,
+            plan_id: pb.plano_id,
+            benefit_id: pb.benefit_id,
+            custom_text: pb.custom_text,
+            custom_value: pb.custom_value,
+            additional_info: pb.additional_info,
+            is_highlighted: pb.is_highlighted || false,
+            display_order: pb.display_order || pb.ordem || 0,
+            benefits: pb.benefits,
+          }))
+          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
       } as PlanWithDetails;
     },
     enabled: !!slug,
@@ -239,32 +376,52 @@ export function usePlansGroupedByLine() {
       if (linesError) throw linesError;
       
       // Buscar planos com benefícios
-      const { data: plans, error: plansError } = await supabase
-        .from('plans')
+      const { data: planos, error: planosError } = await supabase
+        .from('planos')
         .select(`
           *,
           product_lines (*),
-          plan_benefits (
+          planos_beneficios (
             *,
-            benefits (*)
+            benefits:benefit_id (*)
           )
         `)
-        .eq('is_active', true)
-        .order('display_order');
+        .eq('ativo', true)
+        .order('ordem');
       
-      if (plansError) throw plansError;
+      if (planosError) throw planosError;
       
-      // Agrupar planos por linha
+      // Mapear e agrupar planos por linha
+      const planosFormatados = (planos || []).map(plano => ({
+        ...plano,
+        name: plano.nome,
+        slug: plano.slug || plano.codigo?.toLowerCase(),
+        is_active: plano.ativo,
+        display_order: plano.ordem || plano.ordem_exibicao || 0,
+        additional_price: plano.adicional_mensal,
+        min_vehicle_year: plano.ano_minimo ? `${plano.ano_minimo}+` : null,
+        cota_passeio_percent: plano.cota_participacao,
+        cota_passeio_min: plano.cota_minima,
+        cota_desagio_percent: plano.cota_desagio,
+        cota_desagio_min: plano.cota_minima_desagio,
+        plan_benefits: (plano.planos_beneficios || [])
+          .map((pb: any) => ({
+            id: pb.id,
+            plan_id: pb.plano_id,
+            benefit_id: pb.benefit_id,
+            custom_text: pb.custom_text,
+            custom_value: pb.custom_value,
+            additional_info: pb.additional_info,
+            is_highlighted: pb.is_highlighted || false,
+            display_order: pb.display_order || pb.ordem || 0,
+            benefits: pb.benefits,
+          }))
+          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
+      }));
+
       return (lines as ProductLine[]).map(line => ({
         productLine: line,
-        plans: (plans as PlanWithDetails[])
-          .filter(plan => plan.product_line_id === line.id)
-          .map(plan => ({
-            ...plan,
-            plan_benefits: plan.plan_benefits?.sort((a, b) => 
-              (a.display_order || 0) - (b.display_order || 0)
-            ) || []
-          }))
+        plans: planosFormatados.filter(plan => plan.product_line_id === line.id)
       }));
     },
   });
