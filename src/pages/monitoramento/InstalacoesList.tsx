@@ -114,15 +114,9 @@ export default function InstalacoesList() {
       </nav>
 
       {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Instalações</h1>
-          <p className="text-muted-foreground">Gerencie as instalações de rastreadores</p>
-        </div>
-        <Button size="sm" onClick={() => navigate('/monitoramento/instalacoes/agendar')}>
-          <Plus className="h-4 w-4 mr-2" />
-          Agendar
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Instalações</h1>
+        <p className="text-muted-foreground">Gerencie as instalações de rastreadores</p>
       </div>
 
       {/* CARDS DE RESUMO */}
