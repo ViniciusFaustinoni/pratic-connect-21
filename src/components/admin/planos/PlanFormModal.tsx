@@ -26,7 +26,7 @@ import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlans
 import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
-import type { PlanWithDetails } from '@/types/plans';
+import type { PlanWithDetails } from '@/hooks/usePlans';
 
 interface PlanFormModalProps {
   open: boolean;

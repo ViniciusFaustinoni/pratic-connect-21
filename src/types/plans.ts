@@ -1,5 +1,12 @@
 import type { Tables } from '@/integrations/supabase/types';
 
+// Re-exportar tipos do hook para uso consistente
+export type { 
+  PlanWithDetails, 
+  PlanoUnificado, 
+  PlanBenefitItem 
+} from '@/hooks/usePlans';
+
 // Tipos base das tabelas
 export type ProductLine = Tables<'product_lines'>;
 export type Plan = Tables<'plans'>;
@@ -20,14 +27,9 @@ export interface BenefitWithExclusions extends Benefit {
   excluded_categories?: string[];
 }
 
-// Tipos com relacionamentos
+// Tipos com relacionamentos (deprecated - use PlanWithDetails do hook)
 export interface PlanBenefitWithDetails extends PlanBenefit {
   benefits: Benefit;
-}
-
-export interface PlanWithDetails extends Plan {
-  product_lines: ProductLine;
-  plan_benefits: PlanBenefitWithDetails[];
 }
 
 export interface ProductLineWithPlans extends ProductLine {
@@ -37,5 +39,5 @@ export interface ProductLineWithPlans extends ProductLine {
 // Tipo para lista de planos agrupados por linha
 export interface PlansGroupedByLine {
   productLine: ProductLine;
-  plans: PlanWithDetails[];
+  plans: Plan[];
 }

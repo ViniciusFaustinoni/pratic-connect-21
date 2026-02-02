@@ -19,7 +19,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { useTogglePlanStatus } from '@/hooks/usePlansAdmin';
-import type { PlanWithDetails } from '@/types/plans';
+import type { PlanWithDetails } from '@/hooks/usePlans';
 
 interface PlanCardProps {
   plan: PlanWithDetails;

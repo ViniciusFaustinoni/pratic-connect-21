@@ -1689,6 +1689,13 @@ export type Database = {
             referencedRelation: "planos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "associados_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
         ]
       }
       associados_historico: {
@@ -5239,6 +5246,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contratos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "contratos_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
@@ -5781,10 +5795,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cotacoes_plano_escolhido_id_fkey"
+            columns: ["plano_escolhido_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cotacoes_plano_id_fkey"
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
             referencedColumns: ["id"]
           },
           {
@@ -10052,6 +10080,13 @@ export type Database = {
             referencedRelation: "planos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "leads_plano_escolhido_id_fkey"
+            columns: ["plano_escolhido_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
         ]
       }
       leads_historico: {
@@ -10147,6 +10182,13 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_interesse_planos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
             referencedColumns: ["id"]
           },
         ]
@@ -12050,25 +12092,34 @@ export type Database = {
           ano_minimo: number | null
           ano_minimo_veiculo: number | null
           ativo: boolean
+          badge_color: string | null
+          badge_text: string | null
           categoria: string | null
           cobertura_fipe: number | null
           coberturas: string[] | null
           codigo: string
+          cota_app_min: number | null
+          cota_app_percent: number | null
           cota_desagio: number | null
           cota_minima: number | null
           cota_minima_desagio: number | null
           cota_participacao: number | null
+          coverage_type: string | null
           created_at: string
           descricao: string | null
           destaque: boolean | null
           fipe_maxima: number | null
           fipe_minima: number | null
+          footer_note: string | null
           id: string
           linha: string | null
           nivel: string | null
           nome: string
           ordem: number | null
           ordem_exibicao: number | null
+          product_line_id: string | null
+          restriction_alert: string | null
+          slug: string | null
           tipo_uso: string
           tipo_veiculo: string | null
           updated_at: string
@@ -12082,25 +12133,34 @@ export type Database = {
           ano_minimo?: number | null
           ano_minimo_veiculo?: number | null
           ativo?: boolean
+          badge_color?: string | null
+          badge_text?: string | null
           categoria?: string | null
           cobertura_fipe?: number | null
           coberturas?: string[] | null
           codigo: string
+          cota_app_min?: number | null
+          cota_app_percent?: number | null
           cota_desagio?: number | null
           cota_minima?: number | null
           cota_minima_desagio?: number | null
           cota_participacao?: number | null
+          coverage_type?: string | null
           created_at?: string
           descricao?: string | null
           destaque?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
+          footer_note?: string | null
           id?: string
           linha?: string | null
           nivel?: string | null
           nome: string
           ordem?: number | null
           ordem_exibicao?: number | null
+          product_line_id?: string | null
+          restriction_alert?: string | null
+          slug?: string | null
           tipo_uso?: string
           tipo_veiculo?: string | null
           updated_at?: string
@@ -12114,70 +12174,126 @@ export type Database = {
           ano_minimo?: number | null
           ano_minimo_veiculo?: number | null
           ativo?: boolean
+          badge_color?: string | null
+          badge_text?: string | null
           categoria?: string | null
           cobertura_fipe?: number | null
           coberturas?: string[] | null
           codigo?: string
+          cota_app_min?: number | null
+          cota_app_percent?: number | null
           cota_desagio?: number | null
           cota_minima?: number | null
           cota_minima_desagio?: number | null
           cota_participacao?: number | null
+          coverage_type?: string | null
           created_at?: string
           descricao?: string | null
           destaque?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
+          footer_note?: string | null
           id?: string
           linha?: string | null
           nivel?: string | null
           nome?: string
           ordem?: number | null
           ordem_exibicao?: number | null
+          product_line_id?: string | null
+          restriction_alert?: string | null
+          slug?: string | null
           tipo_uso?: string
           tipo_veiculo?: string | null
           updated_at?: string
           uso?: string | null
           valor_adesao?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "planos_product_line_id_fkey"
+            columns: ["product_line_id"]
+            isOneToOne: false
+            referencedRelation: "product_lines"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       planos_beneficios: {
         Row: {
+          additional_info: string | null
           beneficio: string
+          benefit_id: string | null
           created_at: string | null
+          custom_text: string | null
+          custom_value: string | null
           descricao: string | null
+          display_order: number | null
           id: string
           incluso: boolean | null
+          is_highlighted: boolean | null
           observacao: string | null
           ordem: number | null
           plano_id: string
         }
         Insert: {
+          additional_info?: string | null
           beneficio: string
+          benefit_id?: string | null
           created_at?: string | null
+          custom_text?: string | null
+          custom_value?: string | null
           descricao?: string | null
+          display_order?: number | null
           id?: string
           incluso?: boolean | null
+          is_highlighted?: boolean | null
           observacao?: string | null
           ordem?: number | null
           plano_id: string
         }
         Update: {
+          additional_info?: string | null
           beneficio?: string
+          benefit_id?: string | null
           created_at?: string | null
+          custom_text?: string | null
+          custom_value?: string | null
           descricao?: string | null
+          display_order?: number | null
           id?: string
           incluso?: boolean | null
+          is_highlighted?: boolean | null
           observacao?: string | null
           ordem?: number | null
           plano_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "planos_beneficios_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "benefits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_beneficios_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_real_benefits"
+            referencedColumns: ["beneficio_id"]
+          },
+          {
             foreignKeyName: "planos_beneficios_plano_id_fkey"
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_beneficios_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
             referencedColumns: ["id"]
           },
         ]
@@ -12234,6 +12350,13 @@ export type Database = {
             referencedRelation: "planos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "planos_coberturas_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
         ]
       }
       planos_regioes: {
@@ -12264,6 +12387,13 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_regioes_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
             referencedColumns: ["id"]
           },
           {
@@ -12309,6 +12439,13 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_restricoes_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
             referencedColumns: ["id"]
           },
         ]
@@ -14445,6 +14582,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "rateios_detalhes_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "rateios_detalhes_rateio_id_fkey"
             columns: ["rateio_id"]
             isOneToOne: false
@@ -16335,6 +16479,13 @@ export type Database = {
             referencedRelation: "planos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "tabela_precos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
         ]
       }
       tabelas_preco: {
@@ -16404,6 +16555,13 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tabelas_preco_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
             referencedColumns: ["id"]
           },
         ]
@@ -18470,6 +18628,89 @@ export type Database = {
           vendedor_nome: string | null
         }
         Relationships: []
+      }
+      vw_plans_compat: {
+        Row: {
+          additional_price: number | null
+          badge_color: string | null
+          badge_text: string | null
+          cota_app_min: number | null
+          cota_app_percent: number | null
+          cota_desagio_min: number | null
+          cota_desagio_percent: number | null
+          cota_passeio_min: number | null
+          cota_passeio_percent: number | null
+          coverage_type: string | null
+          created_at: string | null
+          display_order: number | null
+          footer_note: string | null
+          id: string | null
+          is_active: boolean | null
+          min_vehicle_year: string | null
+          name: string | null
+          product_line_id: string | null
+          restriction_alert: string | null
+          slug: string | null
+          tipo_uso: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          additional_price?: number | null
+          badge_color?: string | null
+          badge_text?: string | null
+          cota_app_min?: number | null
+          cota_app_percent?: number | null
+          cota_desagio_min?: number | null
+          cota_desagio_percent?: number | null
+          cota_passeio_min?: number | null
+          cota_passeio_percent?: number | null
+          coverage_type?: string | null
+          created_at?: string | null
+          display_order?: never
+          footer_note?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          min_vehicle_year?: never
+          name?: string | null
+          product_line_id?: string | null
+          restriction_alert?: string | null
+          slug?: never
+          tipo_uso?: never
+          updated_at?: string | null
+        }
+        Update: {
+          additional_price?: number | null
+          badge_color?: string | null
+          badge_text?: string | null
+          cota_app_min?: number | null
+          cota_app_percent?: number | null
+          cota_desagio_min?: number | null
+          cota_desagio_percent?: number | null
+          cota_passeio_min?: number | null
+          cota_passeio_percent?: number | null
+          coverage_type?: string | null
+          created_at?: string | null
+          display_order?: never
+          footer_note?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          min_vehicle_year?: never
+          name?: string | null
+          product_line_id?: string | null
+          restriction_alert?: string | null
+          slug?: never
+          tipo_uso?: never
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_product_line_id_fkey"
+            columns: ["product_line_id"]
+            isOneToOne: false
+            referencedRelation: "product_lines"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vw_vendedores_conflito: {
         Row: {

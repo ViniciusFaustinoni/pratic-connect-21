@@ -1,6 +1,7 @@
 import { Car, Star, Shield, Zap, Bike } from 'lucide-react';
 import { PlanoCardDynamic } from './PlanoCardDynamic';
-import type { ProductLine, PlanWithDetails } from '@/types/plans';
+import type { ProductLine } from '@/types/plans';
+import type { PlanWithDetails } from '@/hooks/usePlans';
 
 interface PlanoLineSectionProps {
   productLine: ProductLine;
