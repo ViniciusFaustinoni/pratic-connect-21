@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 import { 
   useCotacaoPublica, 
@@ -289,6 +290,35 @@ export default function CotacaoPublicaCompleta() {
       newDocs[index] = { ...doc, url: result.url, status: 'enviado' };
       setDocumentos(newDocs);
       toast.success(`${doc.nome} enviado!`);
+
+      // Se for CRLV, chamar OCR para extrair dados do veículo (cor, chassi, etc.)
+      if (doc.tipo === 'crlv' && result.url && token) {
+        try {
+          const { data: ocrData } = await supabase.functions.invoke('document-ocr', {
+            body: { url: result.url }
+          });
+
+          // Se conseguiu extrair dados do CRLV
+          if (ocrData?.sucesso && ocrData?.tipo_detectado === 'crlv' && ocrData?.dados) {
+            const dados = ocrData.dados;
+            
+            // Atualizar cotação com dados extraídos (cor principalmente)
+            await atualizarCotacao.mutateAsync({
+              token,
+              updates: {
+                veiculo_cor: dados.cor || undefined,
+              },
+            });
+            
+            if (dados.cor) {
+              toast.success(`Cor do veículo detectada: ${dados.cor}`);
+            }
+          }
+        } catch (ocrError) {
+          // Não bloquear o fluxo se OCR falhar
+          console.warn('OCR do CRLV falhou, continuando sem extração automática:', ocrError);
+        }
+      }
     } catch {
       newDocs[index] = { ...doc, status: 'erro' };
       setDocumentos(newDocs);
