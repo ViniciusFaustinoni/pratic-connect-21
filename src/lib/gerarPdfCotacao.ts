@@ -69,6 +69,11 @@ export interface CotacaoComparativaParaPdf {
   veiculo_placa: string | null;
   valor_fipe: number | null;
   planosComparar: PlanoParaPdf[];
+  // Dados do vendedor para botão WhatsApp
+  vendedor?: {
+    nome: string;
+    whatsapp?: string | null;
+  } | null;
 }
 
 // ============= PALETA DE CORES PREMIUM =============
@@ -661,9 +666,45 @@ const desenharRodapeCompacto = (
   pageHeight: number,
   margin: number,
   paginaAtual: number,
-  totalPaginas: number
+  totalPaginas: number,
+  isUltimaPagina: boolean = false
 ) => {
+  // Cor do WhatsApp
+  const whatsappGreen = { r: 37, g: 211, b: 102 };
+  
+  // Verificar se deve exibir botão de WhatsApp (última página + vendedor com whatsapp)
+  const vendedorWhatsapp = cotacao.vendedor?.whatsapp;
+  const mostrarBotaoWhatsapp = isUltimaPagina && vendedorWhatsapp;
+  
+  // Ajustar Y do rodapé se tiver botão de WhatsApp
   const footerY = pageHeight - 20;
+  
+  // Botão de WhatsApp (se aplicável)
+  if (mostrarBotaoWhatsapp) {
+    const btnWidth = 80;
+    const btnHeight = 14;
+    const btnX = (pageWidth - btnWidth) / 2;
+    const btnY = footerY - 22;
+    
+    // Limpar número de telefone (apenas dígitos)
+    const numeroLimpo = vendedorWhatsapp.replace(/\D/g, '');
+    const mensagem = encodeURIComponent(`Olá! Vi a cotação #${cotacao.numero || 'N/A'} e gostaria de mais informações.`);
+    const whatsappUrl = `https://wa.me/55${numeroLimpo}?text=${mensagem}`;
+    
+    // Desenhar botão
+    doc.setFillColor(whatsappGreen.r, whatsappGreen.g, whatsappGreen.b);
+    doc.roundedRect(btnX, btnY, btnWidth, btnHeight, 3, 3, 'F');
+    
+    // Texto do botão
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    const vendedorNome = cotacao.vendedor?.nome?.split(' ')[0] || 'Vendedor';
+    doc.text(`💬 Falar com ${vendedorNome}`, pageWidth / 2, btnY + 9, { align: 'center' });
+    
+    // Adicionar link clicável
+    doc.link(btnX, btnY, btnWidth, btnHeight, { url: whatsappUrl });
+  }
 
   // Linha gradiente
   drawGradientRect(doc, margin, footerY - 4, pageWidth - margin * 2, 1.5, glowBlue, brandRed, 40);
@@ -703,7 +744,8 @@ const desenharPaginaCapa = (
   pageWidth: number,
   pageHeight: number,
   margin: number,
-  totalPaginas: number
+  totalPaginas: number,
+  isUltimaPagina: boolean = false
 ) => {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
@@ -968,8 +1010,8 @@ const desenharPaginaCapa = (
     });
   }
 
-  // Rodapé
-  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas);
+  // Rodapé (se for única página, passa isUltimaPagina)
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas, isUltimaPagina);
 };
 
 // Função para desenhar página de detalhes de um plano
@@ -1420,8 +1462,8 @@ const desenharPaginaComparativa = (
     y += 12;
   });
 
-  // Rodapé
-  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas);
+  // Rodapé (esta é a última página, então passa true)
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas, true);
 };
 
 export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf): Promise<void> {
@@ -1440,7 +1482,9 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   const totalPaginas = numPlanos > 1 ? 2 : 1;
 
   // ============= PÁGINA 1: CAPA COM CARDS DOS PLANOS =============
-  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas);
+  // Se só tem 1 plano, esta é a última página
+  const isCapaUltimaPagina = numPlanos <= 1;
+  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, isCapaUltimaPagina);
 
   // ============= PÁGINA 2: TABELA COMPARATIVA (se mais de 1 plano) =============
   if (numPlanos > 1) {

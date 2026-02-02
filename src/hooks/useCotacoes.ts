@@ -91,7 +91,7 @@ export function useCotacoes(options?: UseCotacoesOptions) {
             associados:associados!fk_contratos_associado(id, status)
           ),
           instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada),
-          vendedor:profiles!cotacoes_vendedor_profiles_fkey(user_id, nome, email)
+          vendedor:profiles!cotacoes_vendedor_profiles_fkey(user_id, nome, email, whatsapp, full_name)
         `)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -105,13 +105,20 @@ export function useCotacoes(options?: UseCotacoesOptions) {
       
       if (error) throw error;
       
-      // Mapear vendedor para formato esperado
+      // Mapear vendedor para formato esperado (incluindo whatsapp para PDF)
       const mapped = (data || []).map((cotacao: any) => ({
         ...cotacao,
         vendedor: cotacao.vendedor ? {
           id: cotacao.vendedor.user_id,
           nome: cotacao.vendedor.nome,
           email: cotacao.vendedor.email,
+          whatsapp: cotacao.vendedor.whatsapp,
+          full_name: cotacao.vendedor.full_name || cotacao.vendedor.nome,
+        } : null,
+        // Mapear profiles para componente de PDF
+        profiles: cotacao.vendedor ? {
+          full_name: cotacao.vendedor.full_name || cotacao.vendedor.nome,
+          whatsapp: cotacao.vendedor.whatsapp,
         } : null,
         // Garantir que contrato seja objeto ou null (não array)
         contrato: Array.isArray(cotacao.contrato) 
