@@ -49,6 +49,7 @@ interface Rastreador {
   plataforma: string;
   id_plataforma: string;
   plataforma_device_id?: string;
+  plataforma_veiculo_id?: string;
 }
 
 interface Posicao {
@@ -170,94 +171,103 @@ async function syncSoftruck(
     return { posicoes, result };
   }
 
-  let tokenRenovado = false;
-  let token: string;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-  try {
-    // Obter token inicial
-    token = await getSoftruckToken(supabase, config, false);
-
-    // Para cada rastreador, buscar posição com retry em 401
-    for (const rast of rastreadores) {
-      let tentativas = 0;
-      const maxTentativas = 2;
+  // Para cada rastreador, buscar posição via softruck-api
+  for (const rast of rastreadores) {
+    try {
+      // Usar IDs corretos da plataforma (endpoint v2 requer ambos)
+      const vehicleId = rast.plataforma_veiculo_id;
+      const deviceId = rast.plataforma_device_id;
       
-      while (tentativas < maxTentativas) {
-        tentativas++;
-        
-        try {
-          const deviceId = rast.plataforma_device_id || rast.id_plataforma;
-          
-          const response = await fetch(
-            `${config.baseUrl}/tracking/gps-data?device_id=${deviceId}`,
-            {
-              method: "GET",
-              headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-            }
-          );
-
-          // Erro 401 - renovar token e tentar novamente
-          if (response.status === 401) {
-            console.warn(`[Softruck] Erro 401 para ${rast.codigo}, tentativa ${tentativas}/${maxTentativas}`);
-            
-            if (tentativas < maxTentativas) {
-              token = await getSoftruckToken(supabase, config, true);
-              tokenRenovado = true;
-              continue;
-            }
-            
-            throw new Error(`Token inválido após ${maxTentativas} tentativas`);
-          }
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-
-          const data = await response.json();
-          const gpsData = Array.isArray(data.data) ? data.data[0] : data.data;
-
-          if (gpsData && gpsData.latitude && gpsData.longitude) {
-            posicoes.push({
-              rastreador_id: rast.id,
-              latitude: parseFloat(gpsData.latitude),
-              longitude: parseFloat(gpsData.longitude),
-              velocidade: parseInt(gpsData.speed || gpsData.velocidade || 0),
-              ignicao: Boolean(gpsData.ignition || gpsData.ignicao),
-              data_posicao: gpsData.timestamp || gpsData.datetime || new Date().toISOString(),
-              odometro: gpsData.odometer || undefined,
-              direcao: gpsData.heading || gpsData.direction || undefined,
-            });
-            result.sucesso++;
-          } else {
-            result.falhas++;
-            result.erros.push(`${rast.codigo}: Sem dados de posição`);
-          }
-          
-          break; // Sucesso, sair do loop de tentativas
-          
-        } catch (error: unknown) {
-          if (tentativas >= maxTentativas) {
-            result.falhas++;
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            result.erros.push(`${rast.codigo}: ${errorMessage}`);
-            console.error(`[Softruck] Erro no rastreador ${rast.codigo}:`, error);
-          }
-        }
+      if (!vehicleId || !deviceId) {
+        result.falhas++;
+        result.erros.push(`${rast.codigo}: IDs de veículo/device não configurados`);
+        continue;
       }
+      
+      console.log(`[Softruck] Buscando posição: ${rast.codigo}`);
+      
+      // Chamar softruck-api que já tem autenticação funcionando
+      const response = await fetch(`${supabaseUrl}/functions/v1/softruck-api`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({
+          operation: "tracking",
+          data: {
+            veiculoId: vehicleId,
+            deviceId: deviceId,
+          },
+        }),
+      });
+
+      const responseData = await response.json();
+
+      if (!responseData.success) {
+        throw new Error(responseData.error || "Falha ao buscar tracking");
+      }
+
+      const trackingData = responseData.data;
+      
+      // Formato da API v2 Softruck:
+      // - data.type = "Feature" (GeoJSON)
+      // - data.attributes contém: ign, dir, spd, bl (bateria)
+      // - data.attributes.geometry.coordinates = [longitude, latitude]
+      const gpsFeature = trackingData?.data?.attributes || trackingData?.data || trackingData;
+      
+      // Extrair coordenadas do GeoJSON (coordinates = [lng, lat])
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      
+      if (gpsFeature?.geometry?.coordinates) {
+        // GeoJSON: coordinates = [longitude, latitude]
+        longitude = parseFloat(gpsFeature.geometry.coordinates[0]);
+        latitude = parseFloat(gpsFeature.geometry.coordinates[1]);
+      } else if (gpsFeature?.latitude && gpsFeature?.longitude) {
+        // Formato alternativo com lat/lng direto
+        latitude = parseFloat(gpsFeature.latitude);
+        longitude = parseFloat(gpsFeature.longitude);
+      }
+
+      if (latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
+        // Converter timestamp Unix para ISO string se necessário
+        const actTimestamp = gpsFeature?.act;
+        const dataPosicao = actTimestamp 
+          ? new Date(actTimestamp * 1000).toISOString() 
+          : (gpsFeature?.timestamp || new Date().toISOString());
+        
+        posicoes.push({
+          rastreador_id: rast.id,
+          latitude,
+          longitude,
+          velocidade: parseInt(gpsFeature?.spd || gpsFeature?.speed || 0),
+          ignicao: Boolean(gpsFeature?.ign || gpsFeature?.ignition),
+          data_posicao: dataPosicao,
+          odometro: gpsFeature?.odometer || undefined,
+          direcao: gpsFeature?.dir || gpsFeature?.heading || undefined,
+          bateria_nivel: gpsFeature?.bl || gpsFeature?.battery || undefined,
+        });
+        result.sucesso++;
+        console.log(`[Softruck] ${rast.codigo}: lat=${latitude}, lng=${longitude}, spd=${gpsFeature?.spd || 0}`);
+      } else {
+        result.falhas++;
+        result.erros.push(`${rast.codigo}: Sem dados de posição na resposta`);
+        console.warn(`[Softruck] ${rast.codigo}: Resposta sem lat/lng:`, JSON.stringify(trackingData).slice(0, 200));
+      }
+      
+    } catch (error: unknown) {
+      result.falhas++;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      result.erros.push(`${rast.codigo}: ${errorMessage}`);
+      console.error(`[Softruck] Erro no rastreador ${rast.codigo}:`, error);
     }
     
-    if (tokenRenovado) {
-      console.log("[Softruck] Token foi renovado durante a sincronização");
-    }
-    
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    result.erros.push(`Erro geral: ${errorMessage}`);
-    result.falhas = rastreadores.length;
-    console.error("[Softruck] Erro geral:", error);
+    // Rate limiting: delay entre requisições (Softruck limita 50 req/min)
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
   return { posicoes, result };
@@ -367,12 +377,11 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Buscar rastreadores instalados com id_plataforma
+    // Buscar rastreadores instalados com IDs de plataforma (device ou veículo)
     let query = supabase
       .from("rastreadores")
-      .select("id, codigo, plataforma, id_plataforma, plataforma_device_id")
-      .eq("status", "instalado")
-      .not("id_plataforma", "is", null);
+      .select("id, codigo, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id")
+      .eq("status", "instalado");
 
     if (plataformaFiltro) {
       query = query.eq("plataforma", plataformaFiltro);
@@ -384,10 +393,15 @@ serve(async (req) => {
       throw new Error(`Erro ao buscar rastreadores: ${errRast.message}`);
     }
 
-    // Filtrar rastreadores com id_plataforma vazio
-    const rastreadoresValidos = (rastreadores || []).filter(
-      (r) => r.id_plataforma && r.id_plataforma.trim() !== ""
-    );
+    // Filtrar rastreadores que possuem IDs de plataforma válidos
+    // Para Softruck: precisa de plataforma_device_id E plataforma_veiculo_id
+    // Para outras: precisa de id_plataforma
+    const rastreadoresValidos = (rastreadores || []).filter((r) => {
+      if (r.plataforma === 'softruck') {
+        return r.plataforma_device_id && r.plataforma_veiculo_id;
+      }
+      return r.id_plataforma && r.id_plataforma.trim() !== "";
+    });
 
     if (rastreadoresValidos.length === 0) {
       console.log("[sync-rastreadores] Nenhum rastreador para sincronizar");
