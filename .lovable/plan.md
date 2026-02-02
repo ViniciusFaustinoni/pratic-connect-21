@@ -1,252 +1,294 @@
 
-# Plano: Configuração de Valor FIPE Mínimo para Exigência de Rastreador
+# Plano: Unificação das Tabelas 'planos' e 'plans'
 
-## Objetivo
+## Contexto Atual
 
-Adicionar uma configuração na área de Configurações da Diretoria que define o **valor FIPE mínimo** para exigir a instalação de rastreador. Veículos com FIPE abaixo desse valor terão a **instalação do rastreador dispensada** durante a vistoria, mas mantendo a vistoria completa.
+O sistema possui **duas estruturas paralelas** para gerenciar planos:
 
-## Regra de Negócio
+### Tabela `planos` (Operacional/Legacy)
+- **18 registros** no banco
+- **13 tabelas dependentes** com FK:
+  - `associados.plano_id`
+  - `contratos.plano_id`
+  - `cotacoes.plano_id` e `plano_escolhido_id`
+  - `leads.plano_escolhido_id`
+  - `leads_interesse_planos.plano_id`
+  - `tabelas_preco.plano_id`
+  - `planos_coberturas.plano_id`
+  - `planos_regioes.plano_id`
+  - `planos_restricoes.plano_id`
+  - `planos_beneficios.plano_id`
+  - `rateios_detalhes.plano_id`
+- **Usada em**: cotações, contratos, associados, cobranças, cálculo de preços
+- **16 arquivos** fazem queries nessa tabela
 
-Se o valor FIPE do veículo for **menor** que o valor configurado:
-- A vistoria completa continua sendo obrigatória
-- O campo para foto do "Local de Instalação do Rastreador" é **ocultado**
-- A categoria "Instalação" não aparece na listagem de fotos
-- O vistoriador não precisa selecionar/registrar rastreador
+### Tabela `plans` (Comercial/Vendas)
+- **14 registros** no banco
+- **1 tabela dependente**: `plan_benefits.plan_id`
+- **Usada em**: exibição comercial, catálogo de planos para vendas
+- **2 arquivos** fazem queries nessa tabela
 
-## Alterações Necessárias
+### Correspondência Atual
+Verificação mostra que **12 de 14 planos** na tabela `plans` têm correspondência por slug com `planos.codigo`:
+- `select-basic` ↔ `select-basic` ✅
+- `select-premium` ↔ `select-premium` ✅
+- `select-exclusive` ↔ `select-exclusive` ✅
+- `especial` ↔ `especial` ✅
+- etc.
 
-### 1. Banco de Dados - Nova Configuração
+Planos em `planos` **sem correspondência** em `plans`: `BASICO`, `TOTAL`, `PREMIUM`, `ELETRICOS`
 
-Inserir nova configuração na tabela `configuracoes`:
+## Decisão de Arquitetura
+
+**Manter a tabela `planos` como fonte única de verdade**, pois:
+1. Tem mais registros e dados operacionais
+2. Possui 13 dependências críticas (associados, contratos, cotações)
+3. É usada em todo o sistema operacional
+4. A tabela `plans` foi criada posteriormente para exibição comercial
+
+**Estratégia**: Enriquecer `planos` com campos comerciais e criar uma VIEW para compatibilidade com código existente que usa `plans`.
+
+## Estrutura Proposta
+
+### Fase 1: Adicionar Campos Comerciais à Tabela `planos`
 
 ```sql
-INSERT INTO configuracoes (chave, valor, tipo, categoria, descricao, editavel)
-VALUES (
-  'operacional_fipe_minimo_rastreador',
-  '30000',
-  'moeda',
-  'operacional',
-  'Valor FIPE mínimo para exigir instalação de rastreador. Veículos abaixo deste valor dispensam rastreador.',
-  true
-);
+ALTER TABLE planos ADD COLUMN IF NOT EXISTS product_line_id UUID REFERENCES product_lines(id);
+ALTER TABLE planos ADD COLUMN IF NOT EXISTS slug VARCHAR(100);
+ALTER TABLE planos ADD COLUMN IF NOT EXISTS badge_text VARCHAR(50);
+ALTER TABLE planos ADD COLUMN IF NOT EXISTS badge_color VARCHAR(20);
+ALTER TABLE planos ADD COLUMN IF NOT EXISTS coverage_type VARCHAR(50);
+ALTER TABLE planos ADD COLUMN IF NOT EXISTS restriction_alert TEXT;
+ALTER TABLE planos ADD COLUMN IF NOT EXISTS footer_note TEXT;
 ```
 
-### 2. `src/hooks/useServicos.ts`
+### Fase 2: Migrar Dados de `plans` para `planos`
 
-**Alteração:** Adicionar `valor_fipe` ao select de veículos no `useServicoDetalhes`
-
-```typescript
-// Linha ~750: Alterar o select de veiculos
-veiculos:veiculo_id (
-  id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe
-),
+```sql
+-- Atualizar planos existentes com dados comerciais
+UPDATE planos p
+SET 
+  product_line_id = pl.product_line_id,
+  slug = pl.slug,
+  badge_text = pl.badge_text,
+  badge_color = pl.badge_color,
+  coverage_type = pl.coverage_type,
+  restriction_alert = pl.restriction_alert,
+  footer_note = pl.footer_note
+FROM plans pl
+WHERE LOWER(p.codigo) = LOWER(pl.slug);
 ```
 
-### 3. `src/hooks/useConfigRastreador.ts` (NOVO)
+### Fase 3: Migrar `plan_benefits` para `planos_beneficios`
 
-Criar hook para buscar a configuração de FIPE mínimo para rastreador:
+A tabela `planos_beneficios` já existe. Precisamos:
+1. Verificar estrutura atual
+2. Migrar dados de `plan_benefits` usando o mapeamento de IDs
 
-```typescript
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-
-const FIPE_MINIMO_RASTREADOR_PADRAO = 30000;
-
-export function useConfigFipeRastreador() {
-  return useQuery({
-    queryKey: ['config-fipe-minimo-rastreador'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'operacional_fipe_minimo_rastreador')
-        .single();
-      
-      if (error) {
-        console.warn('[useConfigFipeRastreador] Erro ao buscar:', error);
-        return FIPE_MINIMO_RASTREADOR_PADRAO;
-      }
-      
-      return Number(data?.valor) || FIPE_MINIMO_RASTREADOR_PADRAO;
-    },
-    staleTime: 1000 * 60 * 10, // 10 minutos
-  });
-}
-
-/**
- * Verifica se o veículo precisa de rastreador
- * @returns true se precisa, false se dispensa
- */
-export function precisaRastreador(valorFipe: number | null, fipeMinimo: number): boolean {
-  if (!valorFipe) return true; // Se não tem FIPE, exige por segurança
-  return valorFipe >= fipeMinimo;
-}
+```sql
+-- Migrar vínculos de benefícios
+INSERT INTO planos_beneficios (plano_id, benefit_id, custom_text, custom_value, display_order)
+SELECT 
+  p.id as plano_id,
+  pb.benefit_id,
+  pb.custom_text,
+  pb.custom_value,
+  pb.display_order
+FROM plan_benefits pb
+JOIN plans pl ON pb.plan_id = pl.id
+JOIN planos p ON LOWER(p.codigo) = LOWER(pl.slug)
+ON CONFLICT DO NOTHING;
 ```
 
-### 4. `src/data/vistoriaConfigCompleta.ts`
+### Fase 4: Criar VIEW de Compatibilidade
 
-**Alteração:** Exportar função para filtrar categorias baseado na necessidade de rastreador
-
-```typescript
-// Adicionar nova função helper
-export function getCategoriasFiltradas(
-  tipo: TipoVeiculo, 
-  incluirInstalacao: boolean
-): VistoriaCategoriaConfig[] {
-  const categorias = getCategoriasByTipoVeiculo(tipo);
-  if (!incluirInstalacao) {
-    return categorias.filter(c => c.id !== 'instalacao');
-  }
-  return categorias;
-}
-
-export function getFotosFiltradasPorCategoria(
-  tipo: TipoVeiculo,
-  incluirInstalacao: boolean
-): VistoriaFotoConfig[] {
-  const fotos = getFotosByTipoVeiculo(tipo);
-  if (!incluirInstalacao) {
-    return fotos.filter(f => f.categoria !== 'instalacao');
-  }
-  return fotos;
-}
+```sql
+CREATE OR REPLACE VIEW vw_plans_compat AS
+SELECT 
+  p.id,
+  p.product_line_id,
+  p.nome as name,
+  p.codigo as slug,
+  p.badge_text,
+  p.badge_color,
+  p.coverage_type,
+  CASE WHEN p.ano_minimo IS NOT NULL 
+       THEN '> ' || p.ano_minimo::text 
+       ELSE NULL 
+  END as min_vehicle_year,
+  p.cota_participacao as cota_passeio_percent,
+  p.cota_minima as cota_passeio_min,
+  p.cota_desagio as cota_desagio_percent,
+  p.cota_minima_desagio as cota_desagio_min,
+  p.adicional_mensal as additional_price,
+  p.restriction_alert,
+  p.footer_note,
+  p.ordem as display_order,
+  p.ativo as is_active,
+  p.created_at,
+  p.updated_at,
+  p.tipo_uso
+FROM planos p
+WHERE p.ativo = true;
 ```
 
-### 5. `src/pages/instalador/InstaladorChecklist.tsx`
+### Fase 5: Refatorar Hooks e Componentes
 
-**Alterações principais:**
+#### Arquivos a Modificar:
 
-a) **Importar o novo hook:**
-```typescript
-import { useConfigFipeRastreador, precisaRastreador } from '@/hooks/useConfigRastreador';
-```
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/usePlans.ts` | Alterar queries de `plans` para `planos` + joins |
+| `src/hooks/usePlansAdmin.ts` | Alterar CRUD para usar `planos` |
+| `src/components/admin/planos/PlanosTab.tsx` | Usar hooks refatorados |
+| `src/components/admin/planos/PlanFormModal.tsx` | Ajustar campos do formulário |
+| `src/pages/vendas/PlanosBeneficios.tsx` | Usar dados unificados |
 
-b) **Buscar configuração e valor FIPE:**
-```typescript
-const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
+## Mapeamento de Campos
 
-// Verificar se veículo precisa de rastreador
-const valorFipeVeiculo = useMemo(() => {
-  const veiculoData = servico?.veiculos as { valor_fipe?: number } | undefined;
-  return veiculoData?.valor_fipe || null;
-}, [servico?.veiculos]);
+| Campo `plans` | Campo `planos` (existente ou novo) |
+|---------------|-----------------------------------|
+| `id` | `id` |
+| `product_line_id` | `product_line_id` (NOVO) |
+| `name` | `nome` |
+| `slug` | `slug` (NOVO) ou usar `codigo` |
+| `badge_text` | `badge_text` (NOVO) |
+| `badge_color` | `badge_color` (NOVO) |
+| `coverage_type` | `coverage_type` (NOVO) ou inferir de `cobertura_fipe` |
+| `min_vehicle_year` | `ano_minimo` (já existe) |
+| `cota_passeio_percent` | `cota_participacao` |
+| `cota_passeio_min` | `cota_minima` |
+| `cota_desagio_percent` | `cota_desagio` |
+| `cota_desagio_min` | `cota_minima_desagio` |
+| `additional_price` | `adicional_mensal` |
+| `restriction_alert` | `restriction_alert` (NOVO) |
+| `footer_note` | `footer_note` (NOVO) |
+| `display_order` | `ordem` |
+| `is_active` | `ativo` |
+| `tipo_uso` | `tipo_uso` |
 
-const veiculoPrecisaRastreador = useMemo(() => {
-  return precisaRastreador(valorFipeVeiculo, fipeMinRastreador);
-}, [valorFipeVeiculo, fipeMinRastreador]);
-```
-
-c) **Filtrar categorias de fotos:**
-```typescript
-// Linha ~135: Alterar categoriasComFotos
-const categoriasComFotos = useMemo(() => {
-  const categorias = agruparFotosPorCategoriaCompleta(tipoVeiculo);
-  if (!veiculoPrecisaRastreador) {
-    return categorias.filter(c => c.id !== 'instalacao');
-  }
-  return categorias;
-}, [tipoVeiculo, veiculoPrecisaRastreador]);
-```
-
-d) **Ocultar seção de seleção de rastreador (se não precisa):**
-```typescript
-// Na etapa 5 (Decisão), condicionar a exibição do campo de rastreador
-{veiculoPrecisaRastreador && (
-  <div className="space-y-3">
-    <Label>Rastreador Utilizado</Label>
-    {/* ... campos de IMEI e seleção de rastreador */}
-  </div>
-)}
-```
-
-e) **Ajustar validação de aprovação:**
-```typescript
-// Remover validação de rastreador se não precisa
-const podeAprovar = useMemo(() => {
-  const checklistOk = checklistCompleto;
-  const fotosOk = fotosObrigatoriasCompletas;
-  const videoOk = video360Enviado;
-  const assinaturaOk = !!assinaturaUrl;
-  
-  // Rastreador só é obrigatório se veículo precisa
-  const rastreadorOk = !veiculoPrecisaRastreador || !!imeiRastreador;
-  
-  return checklistOk && fotosOk && videoOk && assinaturaOk && rastreadorOk;
-}, [/* deps */]);
-```
-
-f) **Mostrar alerta informativo quando dispensado:**
-```typescript
-{!veiculoPrecisaRastreador && (
-  <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
-    <Router className="h-4 w-4 text-blue-600" />
-    <AlertDescription className="text-blue-800 dark:text-blue-200">
-      <strong>Rastreador dispensado</strong>
-      <br />
-      Veículo com FIPE abaixo de R$ {fipeMinRastreador.toLocaleString('pt-BR')} 
-      não requer instalação de rastreador.
-    </AlertDescription>
-  </Alert>
-)}
-```
-
-### 6. `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
-
-**Alterações similares:**
-- Importar hook e verificar se precisa de rastreador
-- Filtrar categoria "instalacao" das fotos quando dispensado
-- Remover exigência de foto do rastreador nas validações
-
-## Fluxo Resumido
+## Fluxo de Migração
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    CONFIGURAÇÕES DIRETORIA                          │
-│  Tab: Operacional                                                   │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │ FIPE Mínimo para Rastreador                                  │   │
-│  │ R$ [30.000,00]                                              │   │
-│  │ Veículos abaixo dispensam instalação de rastreador          │   │
-│  └─────────────────────────────────────────────────────────────┘   │
+│                       FASE 1: PREPARAÇÃO                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  1. Backup das tabelas envolvidas                                   │
+│  2. Adicionar colunas comerciais à tabela 'planos'                  │
+│  3. Popular product_line_id baseado em linha existente              │
 └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    VISTORIA / INSTALAÇÃO                            │
+│                       FASE 2: MIGRAÇÃO DE DADOS                     │
 ├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  Valor FIPE do Veículo: R$ 25.000                                   │
-│  Configuração: R$ 30.000                                            │
-│                                                                      │
-│  ⚠️ FIPE < Mínimo → Rastreador DISPENSADO                           │
-│                                                                      │
-│  Fotos obrigatórias:                                                │
-│  ✅ Identificação e Motor (6 fotos)                                 │
-│  ✅ Exterior 360° (9 fotos)                                         │
-│  ✅ Pneus (4 fotos)                                                 │
-│  ✅ Interior (5 fotos)                                              │
-│  ✅ Bancos e Forrações (7 fotos)                                    │
-│  ❌ Instalação (OCULTO - não aparece)                               │
-│                                                                      │
-│  Vídeo 360°: ✅ Obrigatório (mantido)                               │
-│                                                                      │
+│  1. Copiar dados comerciais de 'plans' → 'planos'                   │
+│  2. Migrar 'plan_benefits' → 'planos_beneficios'                    │
+│  3. Validar integridade dos dados                                   │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       FASE 3: REFATORAÇÃO DE CÓDIGO                 │
+├─────────────────────────────────────────────────────────────────────┤
+│  1. Criar hooks unificados                                          │
+│  2. Atualizar componentes de admin                                  │
+│  3. Atualizar área de vendas                                        │
+│  4. Testar fluxos completos                                         │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       FASE 4: DEPRECAÇÃO                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  1. Marcar tabela 'plans' como deprecated                           │
+│  2. Criar VIEW para retrocompatibilidade                            │
+│  3. Remover tabela 'plans' após validação (fase futura)             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Arquivos a Modificar
+## Hooks Unificados Propostos
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `configuracoes` (DB) | INSERT | Adicionar configuração `operacional_fipe_minimo_rastreador` |
-| `src/hooks/useServicos.ts` | Modificar | Incluir `valor_fipe` no select de veículos |
-| `src/hooks/useConfigRastreador.ts` | Criar | Hook para buscar configuração |
-| `src/data/vistoriaConfigCompleta.ts` | Modificar | Adicionar funções de filtragem |
-| `src/pages/instalador/InstaladorChecklist.tsx` | Modificar | Condicionar exibição da categoria instalação |
-| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Modificar | Mesma lógica de filtragem |
+### `src/hooks/usePlanosUnificado.ts`
 
-## Observações Importantes
+```typescript
+// Hook principal que substitui tanto usePlanos quanto usePlans
+export function usePlanosUnificado(options?: {
+  productLineSlug?: string;
+  tipoVeiculo?: 'carro' | 'moto';
+  apenasAtivos?: boolean;
+}) {
+  return useQuery({
+    queryKey: ['planos_unificado', options],
+    queryFn: async () => {
+      let query = supabase
+        .from('planos')
+        .select(`
+          *,
+          product_lines (*),
+          planos_beneficios (
+            *,
+            benefits (*)
+          )
+        `)
+        .order('ordem');
+      
+      if (options?.apenasAtivos !== false) {
+        query = query.eq('ativo', true);
+      }
+      
+      if (options?.productLineSlug) {
+        query = query.eq('product_lines.slug', options.productLineSlug);
+      }
+      
+      if (options?.tipoVeiculo) {
+        query = query.eq('tipo_veiculo', options.tipoVeiculo);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+```
 
-1. **Segurança:** Se o valor FIPE não estiver disponível, o sistema exige rastreador por segurança
-2. **Configuração padrão:** R$ 30.000,00 (pode ser alterado na área de configurações)
-3. **Vistoria mantida:** Apenas o rastreador é dispensado, a vistoria completa permanece obrigatória
-4. **Retroatividade:** Vistorias/instalações já concluídas não são afetadas
+## Riscos e Mitigações
+
+| Risco | Probabilidade | Impacto | Mitigação |
+|-------|---------------|---------|-----------|
+| Perda de dados na migração | Baixa | Alto | Backup antes da migração + transação única |
+| Quebra de FKs existentes | Baixa | Alto | Manter IDs originais da tabela `planos` |
+| Inconsistência de dados | Média | Médio | Scripts de validação pós-migração |
+| Downtime durante migração | Baixa | Médio | Migração pode ser feita em etapas |
+
+## Resumo de Arquivos a Modificar
+
+### Banco de Dados
+1. **Migration**: Adicionar colunas comerciais à `planos`
+2. **Migration**: Migrar dados de `plans` e `plan_benefits`
+3. **Migration**: Criar VIEW de compatibilidade
+
+### Frontend
+1. `src/hooks/usePlans.ts` → Refatorar para usar `planos`
+2. `src/hooks/usePlansAdmin.ts` → Refatorar CRUD
+3. `src/types/plans.ts` → Unificar tipos
+4. `src/components/admin/planos/*.tsx` → Ajustar para nova estrutura
+5. `src/pages/vendas/PlanosBeneficios.tsx` → Usar dados unificados
+
+## Dados Preservados
+
+| Origem | Destino | Registros |
+|--------|---------|-----------|
+| `planos` | `planos` (mantido) | 18 |
+| `plans` comerciais | Campos em `planos` | 14 (merge) |
+| `plan_benefits` | `planos_beneficios` | 147 |
+| `product_lines` | `product_lines` (mantido) | 4 |
+| `benefits` | `benefits` (mantido) | 16 |
+
+## Observações Técnicas
+
+1. **Não quebra dependências**: Todas as 13 tabelas que referenciam `planos` continuarão funcionando
+2. **Retrocompatibilidade**: VIEW `vw_plans_compat` permite migração gradual
+3. **Validação de slug**: Garantir unicidade de `codigo/slug` após merge
+4. **RLS**: Manter políticas existentes, adicionar para novos campos
