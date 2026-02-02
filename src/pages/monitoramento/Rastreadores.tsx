@@ -17,9 +17,23 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server, UserPlus, X } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server, UserPlus, X, Trash2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { AtribuirPortadorDialog } from '@/components/monitoramento/estoque/AtribuirPortadorDialog';
 import { AtribuirPortadorLoteDialog } from '@/components/monitoramento/estoque/AtribuirPortadorLoteDialog';
 import {
@@ -188,6 +202,7 @@ function RastreadoresContent({
   getPlataformaLabel,
 }: RastreadoresContentProps) {
   const queryClient = useQueryClient();
+  const { isDiretor } = usePermissions();
   const [portadorDialogOpen, setPortadorDialogOpen] = useState(false);
   const [loteDialogOpen, setLoteDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -197,6 +212,32 @@ function RastreadoresContent({
     portador_id: string | null;
     portador_nome: string | null;
   } | null>(null);
+  const [dialogExcluirAberto, setDialogExcluirAberto] = useState(false);
+  const [rastreadorParaExcluir, setRastreadorParaExcluir] = useState<{ id: string; codigo: string } | null>(null);
+
+  const deleteRastreadorMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('rastreadores').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Rastreador excluído com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['lista-rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
+      setDialogExcluirAberto(false);
+      setRastreadorParaExcluir(null);
+    },
+    onError: (error: any) => {
+      console.error('Erro ao excluir rastreador:', error);
+      toast.error(error.message || 'Erro ao excluir rastreador');
+    },
+  });
+
+  const handleExcluirRastreador = (rastreador: NonNullable<typeof rastreadores>[number]) => {
+    setRastreadorParaExcluir({ id: rastreador.id, codigo: rastreador.codigo });
+    setDialogExcluirAberto(true);
+  };
 
   // Rastreadores elegíveis para seleção (apenas status = 'estoque')
   const rastreadoresEstoque = rastreadores?.filter(r => r.status === 'estoque') || [];
@@ -478,6 +519,19 @@ function RastreadoresContent({
                                 Ver Estoque
                               </DropdownMenuItem>
                             )}
+                            {isDiretor && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handleExcluirRastreador(rastreador)}
+                                  disabled={deleteRastreadorMutation.isPending}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -530,6 +584,28 @@ function RastreadoresContent({
         rastreadorIds={Array.from(selectedIds)}
         onSuccess={handleLoteSuccess}
       />
+
+      <AlertDialog open={dialogExcluirAberto} onOpenChange={setDialogExcluirAberto}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o rastreador <strong>{rastreadorParaExcluir?.codigo}</strong>?
+              Esta ação é irreversível e removerá todos os dados relacionados a este rastreador.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => rastreadorParaExcluir && deleteRastreadorMutation.mutate(rastreadorParaExcluir.id)}
+              disabled={deleteRastreadorMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteRastreadorMutation.isPending ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
