@@ -48,6 +48,7 @@ export interface DocumentoUnificado {
 interface UnifiedDocumentUploaderProps {
   cotacaoId?: string;
   contratoId?: string;
+  veiculoId?: string; // ID do veículo para atualização automática de CRLV
   onDocumentsChange: (docs: DocumentoUnificado[]) => void;
   onOcrDataExtracted: (dados: Record<string, string>, tipoDocumento?: string) => void;
   cpfEsperado?: string;
@@ -71,6 +72,7 @@ const documentosEsperados = [
 export function UnifiedDocumentUploader({
   cotacaoId,
   contratoId,
+  veiculoId,
   onDocumentsChange,
   onOcrDataExtracted,
   cpfEsperado,
@@ -233,6 +235,32 @@ export function UnifiedDocumentUploader({
         
         console.log('[OCR] Dados limpos para mapeamento:', dadosLimpos);
         onOcrDataExtracted(dadosLimpos, ocrResult.tipo_detectado);
+        
+        // NOVO: Se for CRLV e temos veiculoId, atualizar renavam/chassi automaticamente
+        if (ocrResult.tipo_detectado === 'crlv' && veiculoId) {
+          const updateData: Record<string, string> = {};
+          
+          // Mapear campos do OCR para o veículo
+          if (dadosLimpos.renavam) updateData.renavam = dadosLimpos.renavam;
+          if (dadosLimpos.chassi) updateData.chassi = dadosLimpos.chassi;
+          
+          if (Object.keys(updateData).length > 0) {
+            console.log('[OCR] Atualizando veículo com dados do CRLV:', updateData);
+            
+            const { error: updateError } = await supabase
+              .from('veiculos')
+              .update(updateData)
+              .eq('id', veiculoId);
+            
+            if (updateError) {
+              console.error('[OCR] Erro ao atualizar veículo:', updateError);
+            } else {
+              toast.success('Dados do veículo atualizados automaticamente', {
+                description: `${Object.keys(updateData).join(' e ').toUpperCase()} extraídos do CRLV`,
+              });
+            }
+          }
+        }
       }
 
       toast.success(`${tipoLabels[ocrResult.tipo_detectado]?.label || 'Documento'} identificado com sucesso!`);
@@ -248,7 +276,7 @@ export function UnifiedDocumentUploader({
       });
       toast.error(error.message || 'Erro ao processar documento');
     }
-  }, [cotacaoId, contratoId, onDocumentsChange, onOcrDataExtracted, cpfEsperado, nomeEsperado]);
+  }, [cotacaoId, contratoId, veiculoId, onDocumentsChange, onOcrDataExtracted, cpfEsperado, nomeEsperado]);
 
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;

@@ -96,6 +96,16 @@ export function BotaoEnviarSGA({
           });
           return;
         }
+        
+        // Tratar erro de campo faltante (RENAVAM/CHASSI)
+        if (data?.campo_faltante) {
+          toast.error('Campo obrigatório não preenchido', {
+            description: `${data.campo_faltante.toUpperCase()} é obrigatório para enviar ao SGA. Edite o veículo e preencha este campo.`,
+            duration: 10000,
+          });
+          return;
+        }
+        
         throw new Error(data?.error || 'Falha na sincronização com o SGA');
       }
 
