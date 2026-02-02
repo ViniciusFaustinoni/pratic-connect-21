@@ -1,140 +1,80 @@
 
-# Plano: Corrigir Endpoint de Posição para Rede Veículos
+# Plano: Configurar Credenciais Softruck/Rede Veículos via Interface
 
-## Problema Identificado
+## Contexto
+Atualmente, a tela de configuração de rastreadores (Softruck e Rede Veículos) exibe os nomes dos secrets necessários e direciona o diretor para configurá-los manualmente no painel do Supabase. Isso é confuso e fora do padrão do sistema, onde outras integrações como Hinova permitem inserir credenciais diretamente pela interface.
 
-As Edge Functions `rastreador-posicao` e `sync-rastreadores` usam o endpoint incorreto para buscar a última posição dos rastreadores Rede Veículos:
-
-**Atual (incorreto):**
-```
-GET /veiculos/{codigo}/posicao
-```
-
-**Correto (conforme documentação):**
-```
-POST /obterUltimaPosicaoValida/
-Content-Type: application/x-www-form-urlencoded
-Body: json={"chassi":"","placa":"","imei":"","cpfCnpjCliente":""}
-```
+## Objetivo
+Permitir que diretores configurem as credenciais da Softruck e Rede Veículos diretamente na tela de Integrações, da mesma forma que já funciona para Hinova, Asaas e outras integrações.
 
 ---
 
-## Dados Necessários
+## Mudanças Propostas
 
-Para usar o endpoint correto, precisamos:
-- **imei** do rastreador (disponível na tabela `rastreadores`)
-- **placa** do veículo (disponível via join com `veiculos`)
-- **cpfCnpjCliente** do associado (disponível via join com `associados`)
+### 1. Remover `ConfigurarRastreadorSheet` (arquivo separado)
+O sheet atual apenas exibe informações e não permite inserir credenciais. Vamos reutilizar o `ConfigurarIntegracaoSheet` que já tem toda a lógica de formulário, criptografia e testes.
+
+### 2. Atualizar `ServicosTab.tsx`
+- Remover a importação e uso do `ConfigurarRastreadorSheet`
+- Para Softruck e Rede Veículos, usar o mesmo `ConfigurarIntegracaoSheet` que já funciona para outras integrações
+- Os campos já estão definidos no schema (`softruck`, `rede_veiculos`)
+
+### 3. Atualizar Edge Function `rastreador-auth`
+Modificar para buscar credenciais com prioridade:
+1. **Primeiro**: Banco de dados (`integracoes_credenciais`) - criptografado
+2. **Fallback**: Supabase Secrets (variáveis de ambiente)
+
+Isso permite manter compatibilidade com secrets existentes enquanto dá prioridade às credenciais configuradas pela interface.
+
+### 4. Atualizar Edge Function `rastreador-testar-conexao`
+Modificar para também buscar credenciais do banco primeiro, garantindo que o botão "Testar Conexão" funcione corretamente.
+
+### 5. Atualizar Edge Function `rastreador-posicao`
+Mesma lógica de busca de credenciais híbrida para garantir consistência.
 
 ---
 
-## Arquivos a Modificar
+## Detalhes Técnicos
 
-### 1. `supabase/functions/rastreador-posicao/index.ts`
-
-Alterar a função `getPosicaoRedeVeiculos` para:
-
-```typescript
-async function getPosicaoRedeVeiculos(
-  token: string,
-  imei: string,
-  placa: string,
-  cpfCnpj: string,
-  baseUrl: string
-): Promise<PosicaoResponse> {
-  console.log(`[Rede Veículos] Buscando posição: imei=${imei}, placa=${placa}`);
-  
-  const url = `${baseUrl}/obterUltimaPosicaoValida/`;
-  
-  const payload = JSON.stringify({
-    chassi: "",
-    placa: placa || "",
-    imei: imei || "",
-    cpfCnpjCliente: cpfCnpj || ""
-  });
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `json=${encodeURIComponent(payload)}`
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Erro Rede Veículos ${response.status}: ${error}`);
-  }
-
-  const data = await response.json();
-  
-  // Mapear campos da resposta documentada
-  return {
-    latitude: parseFloat(data.latitude),
-    longitude: parseFloat(data.longitude),
-    velocidade: parseInt(data.velocidade || 0),
-    direcao: data.direcao,
-    ignicao: data.ignicaoLigada === 'S',
-    data_posicao: data.dataGPRS || data.dataGPS || new Date().toISOString(),
-    endereco: data.endereco,
-    dados_extras: {
-      voltagemBateria: data.voltagemBateria,
-      movimento: data.movimento,
-      bloqueado: data.bloqueado,
-      statusGPRS: data.statusGPRS,
-      statusGPS: data.statusGPS,
-    }
-  };
-}
+### Função auxiliar para buscar credenciais (reutilizada)
+```text
+async function getCredenciais(supabase, integracao, serviceKey):
+  1. Buscar da tabela integracoes_credenciais
+  2. Se encontrar e configurado=true:
+     - Descriptografar com AES-256-GCM
+     - Retornar objeto de credenciais
+  3. Se não encontrar, retornar null (para usar secrets como fallback)
 ```
 
-Também ajustar o select do rastreador para incluir dados do veículo e associado:
-
-```typescript
-// Buscar rastreador com veículo e associado
-const { data: rastreador } = await supabase
-  .from('rastreadores')
-  .select(`
-    *,
-    plataforma:rastreadores_config_plataformas(*),
-    veiculo:veiculos(
-      id, placa, modelo, marca, chassi,
-      associado:associados(cpf, cnpj)
-    )
-  `)
-  .eq('id', rastreador_id)
-  .single();
+### Lógica de autenticação Softruck atualizada
+```text
+1. Tentar buscar credenciais do banco (getCredenciais('softruck'))
+2. Se não encontrar, usar Deno.env.get() como fallback
+3. Usar credenciais para autenticar
 ```
 
-### 2. `supabase/functions/sync-rastreadores/index.ts`
-
-Alterar a função `syncRedeVeiculos` de forma similar:
-- Mudar de GET para POST
-- Usar o endpoint `/obterUltimaPosicaoValida/`
-- Enviar body com formato urlencoded
-- Mapear a resposta corretamente
+### Campos por integração (já definidos)
+- **Softruck**: `public_key`, `username`, `password`, `enterprise_id` (opcional)
+- **Rede Veículos**: `bearer_token`
 
 ---
 
-## Mapeamento de Resposta
+## Arquivos a serem modificados
 
-| Campo API Rede Veículos | Campo Sistema |
-|------------------------|---------------|
-| `latitude` | `latitude` |
-| `longitude` | `longitude` |
-| `velocidade` | `velocidade` |
-| `ignicaoLigada` ("S"/"N") | `ignicao` (boolean) |
-| `dataGPRS` | `data_posicao` |
-| `movimento` | `dados_extras.movimento` |
-| `bloqueado` | `dados_extras.bloqueado` |
-| `statusGPRS` | `dados_extras.statusGPRS` |
-| `voltagemBateria` | `dados_extras.voltagemBateria` |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/integracoes/ServicosTab.tsx` | Usar `ConfigurarIntegracaoSheet` para rastreadores |
+| `src/components/integracoes/ConfigurarRastreadorSheet.tsx` | Remover (não mais necessário) |
+| `supabase/functions/rastreador-auth/index.ts` | Adicionar busca de credenciais do banco |
+| `supabase/functions/rastreador-testar-conexao/index.ts` | Adicionar busca de credenciais do banco |
+| `supabase/functions/rastreador-posicao/index.ts` | Adicionar busca de credenciais do banco |
 
 ---
 
-## Resultado Esperado
+## Benefícios
 
-1. Rastreadores Rede Veículos terão sua posição atualizada corretamente
-2. O botão de "Atualizar" no mapa funcionará para veículos desta plataforma
-3. A sincronização automática (cron) também funcionará corretamente
+1. **Experiência unificada**: Todas as integrações são configuradas da mesma forma
+2. **Sem acesso ao Supabase**: Diretores não precisam acessar o painel técnico
+3. **Segurança mantida**: Credenciais continuam criptografadas com AES-256-GCM
+4. **Compatibilidade**: Secrets existentes continuam funcionando como fallback
+5. **Auditoria**: Histórico de quem alterou credenciais via `updated_by`
