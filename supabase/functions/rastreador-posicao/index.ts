@@ -138,22 +138,35 @@ async function getPosicaoSoftruckComRetry(
 
 /**
  * Busca posição do rastreador na Rede Veículos
+ * Usa o endpoint POST /obterUltimaPosicaoValida/ conforme documentação
  */
 async function getPosicaoRedeVeiculos(
   token: string,
-  codigo: string,
+  imei: string,
+  placa: string,
+  cpfCnpj: string,
   baseUrl: string
 ): Promise<PosicaoResponse> {
-  console.log(`[Rede Veículos] Buscando posição para código: ${codigo}`);
+  console.log(`[Rede Veículos] Buscando posição: imei=${imei}, placa=${placa}, cpfCnpj=${cpfCnpj?.slice(0, 4)}***`);
   
-  const url = `${baseUrl}/veiculos/${codigo}/posicao`;
+  const url = `${baseUrl}/obterUltimaPosicaoValida/`;
+  
+  const payload = JSON.stringify({
+    chassi: "",
+    placa: placa || "",
+    imei: imei || "",
+    cpfCnpjCliente: cpfCnpj || ""
+  });
+  
+  console.log(`[Rede Veículos] POST ${url} payload=${payload}`);
   
   const response = await fetch(url, {
-    method: 'GET',
+    method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    }
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `json=${encodeURIComponent(payload)}`
   });
 
   if (!response.ok) {
@@ -163,24 +176,30 @@ async function getPosicaoRedeVeiculos(
 
   const data = await response.json();
   
-  // Formato esperado da Rede Veículos
-  // { latitude, longitude, velocidade, ignicao, data_hora, ... }
+  console.log(`[Rede Veículos] Resposta:`, JSON.stringify(data).slice(0, 300));
+  
+  // Verificar se tem coordenadas válidas
   if (!data.latitude || !data.longitude) {
     throw new Error('Resposta Rede Veículos inválida - coordenadas ausentes');
   }
 
   return {
-    latitude: data.latitude,
-    longitude: data.longitude,
-    velocidade: data.velocidade || 0,
-    direcao: data.direcao,
-    ignicao: data.ignicao ?? false,
-    data_posicao: data.data_hora || data.dataHora || new Date().toISOString(),
+    latitude: parseFloat(data.latitude),
+    longitude: parseFloat(data.longitude),
+    velocidade: parseInt(data.velocidade || '0', 10),
+    direcao: data.direcao ? parseInt(data.direcao, 10) : undefined,
+    ignicao: data.ignicaoLigada === 'S',
+    data_posicao: data.dataGPRS || data.dataGPS || new Date().toISOString(),
     endereco: data.endereco,
     dados_extras: {
-      odometro: data.odometro,
-      bateria: data.bateria,
-      tensao: data.tensao,
+      voltagemBateria: data.voltagemBateria,
+      movimento: data.movimento,
+      bloqueado: data.bloqueado,
+      statusGPRS: data.statusGPRS,
+      statusGPS: data.statusGPS,
+      imei: data.imei,
+      placa: data.placa,
+      chassi: data.chassi,
     }
   };
 }
@@ -204,13 +223,16 @@ serve(async (req) => {
       throw new Error('rastreador_id é obrigatório');
     }
 
-    // Buscar rastreador com plataforma
+    // Buscar rastreador com plataforma, veículo e associado (para Rede Veículos)
     const { data: rastreador, error: rastError } = await supabase
       .from('rastreadores')
       .select(`
         *,
         plataforma:rastreadores_config_plataformas(*),
-        veiculo:veiculos(id, placa, modelo, marca)
+        veiculo:veiculos(
+          id, placa, modelo, marca, chassi,
+          associado:associados(cpf, cnpj)
+        )
       `)
       .eq('id', rastreador_id)
       .single();
@@ -280,15 +302,22 @@ serve(async (req) => {
         throw new Error('Token Rede Veículos não configurado');
       }
       
-      const codigo = rastreador.codigo || rastreador.id_plataforma;
+      // Obter dados necessários para a API
+      const imei = rastreador.imei || rastreador.codigo || '';
+      const placa = rastreador.veiculo?.placa || '';
+      const cpfCnpj = rastreador.veiculo?.associado?.cnpj || rastreador.veiculo?.associado?.cpf || '';
       
-      if (!codigo) {
-        throw new Error('Código do veículo não configurado para Rede Veículos');
+      if (!imei && !placa) {
+        throw new Error('IMEI ou Placa do veículo não configurados para Rede Veículos');
       }
       
-      console.log(`[Rede Veículos] Usando código=${codigo}`);
+      if (!cpfCnpj) {
+        throw new Error('CPF/CNPJ do associado não encontrado para Rede Veículos');
+      }
       
-      posicao = await getPosicaoRedeVeiculos(redeToken, codigo, baseUrl);
+      console.log(`[Rede Veículos] Usando imei=${imei}, placa=${placa}`);
+      
+      posicao = await getPosicaoRedeVeiculos(redeToken, imei, placa, cpfCnpj, baseUrl);
     } else {
       throw new Error(`Plataforma ${plataformaCodigo} não suportada`);
     }
