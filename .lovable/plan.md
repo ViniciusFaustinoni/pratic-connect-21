@@ -1,137 +1,98 @@
 
-# Plano: Ajustar Calendário de Instalações
+# Plano: Corrigir Alinhamento de Cards no PDF
 
-## Contexto
+## Problema Identificado
 
-A página de Calendário de Instalações (`/monitoramento/calendario`) precisa de ajustes:
-1. **Remover** o botão "Agendar"
-2. **Mostrar** todas as instalações independente do status
-3. **Agrupar visualmente** as instalações por horário/período
+Na página de capa do PDF comparativo, os cards dos planos têm os seguintes problemas:
+1. O badge **"RECOMENDADO"** (vermelho) não deve existir
+2. O badge azul **"100% FIPE"** está desalinhado entre os cards porque a posição Y depende da existência do badge recomendado
+
+## Solução
+
+Remover o badge "RECOMENDADO" e fixar a posição do badge FIPE para que fique sempre na mesma altura em todos os cards.
+
+---
 
 ## Alterações
 
-### Arquivo: `src/pages/monitoramento/CalendarioInstalacoes.tsx`
+### Arquivo: `src/lib/gerarPdfCotacao.ts`
 
-#### 1. Remover botão "Agendar" (linhas 135-138)
+#### 1. Remover badge "RECOMENDADO" e alinhar elementos (linhas 889-936)
 
-Remover completamente o botão de agendamento do header:
-
+**Antes:**
 ```typescript
-// ANTES
-<div className="flex gap-2">
-  <Button variant="outline" onClick={() => navigate('/monitoramento/instalacoes')}>
-    Ver Lista
-  </Button>
-  <Button onClick={() => navigate('/monitoramento/instalacoes/agendar')}>
-    <Plus className="mr-2 h-4 w-4" />
-    Agendar
-  </Button>
-</div>
+let innerY = cardY + 5;
 
-// DEPOIS
-<Button variant="outline" onClick={() => navigate('/monitoramento/instalacoes')}>
-  Ver Lista
-</Button>
+// Badge de recomendado
+if (isRecommended) {
+  doc.setFillColor(brandRed.r, brandRed.g, brandRed.b);
+  const badgeWidth = cardWidth - 8;
+  doc.roundedRect(cardX + 4, innerY - 2, badgeWidth, 9, 2, 2, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('⭐ RECOMENDADO', centerX, innerY + 4, { align: 'center' });
+  innerY += 12;
+} else {
+  innerY += 3;
+}
+
+// Nome do plano...
+```
+
+**Depois:**
+```typescript
+let innerY = cardY + 8; // Posição fixa para todos os cards (sem variação)
+
+// Nome do plano (imediatamente, sem badge RECOMENDADO)
 ```
 
 ---
 
-#### 2. Agrupar instalações por horário no useMemo (linhas 41-50)
+#### 2. Ajustar posicionamento fixo para elementos
 
-Modificar a lógica para agrupar por período (manhã/tarde/noite):
+O layout de cada card será:
+- **Y+8**: Nome do plano (até 2 linhas)
+- **Y+22**: Valor mensal (verde)
+- **Y+30**: "médio mensal"
+- **Y+40**: Badge FIPE azul (posição fixa)
 
-```typescript
-// Agrupar instalações por data E período
-const instalacoesPorData = useMemo(() => {
-  const map = new Map<string, { manha: typeof instalacoes; tarde: typeof instalacoes; noite: typeof instalacoes }>();
-  
-  instalacoes.forEach((inst) => {
-    const dataStr = inst.data_agendada;
-    if (!dataStr) return;
-    
-    if (!map.has(dataStr)) {
-      map.set(dataStr, { manha: [], tarde: [], noite: [] });
-    }
-    
-    const grupo = map.get(dataStr)!;
-    const periodo = inst.periodo || 'manha';
-    grupo[periodo as 'manha' | 'tarde' | 'noite'].push(inst);
-  });
-  
-  return map;
-}, [instalacoes]);
-```
+Isso garante que todos os cards tenham o badge azul **alinhado horizontalmente**.
 
 ---
 
-#### 3. Atualizar a renderização das células do calendário (linhas 178-226)
-
-Exibir instalações separadas por período com labels visuais:
-
-```typescript
-{/* Instalações do dia - agrupadas por período */}
-{temInstalacoes && (
-  <div className="mt-1 space-y-1.5">
-    {/* Manhã */}
-    {instalacoesDia.manha.length > 0 && (
-      <div className="space-y-0.5">
-        <span className="text-[10px] text-muted-foreground font-medium">☀️ Manhã</span>
-        {instalacoesDia.manha.slice(0, 2).map((inst) => (
-          <Badge key={inst.id} variant="secondary" className={cn(...)}>
-            {inst.veiculos?.placa || ...}
-          </Badge>
-        ))}
-        {instalacoesDia.manha.length > 2 && (
-          <span className="text-[10px] text-muted-foreground">+{instalacoesDia.manha.length - 2}</span>
-        )}
-      </div>
-    )}
-    
-    {/* Tarde */}
-    {instalacoesDia.tarde.length > 0 && (
-      <div className="space-y-0.5">
-        <span className="text-[10px] text-muted-foreground font-medium">🌅 Tarde</span>
-        {/* Similar ao manhã */}
-      </div>
-    )}
-    
-    {/* Noite */}
-    {instalacoesDia.noite.length > 0 && (
-      <div className="space-y-0.5">
-        <span className="text-[10px] text-muted-foreground font-medium">🌙 Noite</span>
-        {/* Similar ao manhã */}
-      </div>
-    )}
-  </div>
-)}
-```
-
----
-
-## Resumo Visual
+## Visual Esperado
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│  Calendário de Instalações          [Ver Lista]             │
-│  Visualize as instalações agendadas por dia                 │
-├─────────────────────────────────────────────────────────────┤
-│    <   Fevereiro 2026   [Hoje]   >                          │
-├──────┬──────┬──────┬──────┬──────┬──────┬──────────────────┤
-│ Dom  │ Seg  │ Ter  │ Qua  │ Qui  │ Sex  │ Sáb              │
-├──────┼──────┼──────┼──────┼──────┼──────┼──────────────────┤
-│      │  2   │      │      │      │      │                  │
-│      │☀️Manhã│     │      │      │      │                  │
-│      │QOO5C17│     │      │      │      │                  │
-│      │      │      │      │      │      │                  │
-│      │🌅Tarde│     │      │      │      │                  │
-│      │ABC1234│     │      │      │      │                  │
-└──────┴──────┴──────┴──────┴──────┴──────┴──────────────────┘
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│                 │  │                 │  │                 │
+│ SELECT EXCLUSIVE│  │  SELECT ONE     │  │  SELECT PLUS    │
+│   APLICATIVO    │  │   APLICATIVO    │  │   APLICATIVO    │
+│                 │  │                 │  │                 │
+│   R$ 169,00     │  │   R$ 169,00     │  │   R$ 189,00     │
+│  médio mensal   │  │  médio mensal   │  │  médio mensal   │
+│                 │  │                 │  │                 │
+│  ┌──────────┐   │  │  ┌──────────┐   │  │  ┌──────────┐   │
+│  │100% FIPE │   │  │  │100% FIPE │   │  │  │100% FIPE │   │
+│  └──────────┘   │  │  └──────────┘   │  │  └──────────┘   │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+        ↑                   ↑                   ↑
+     ALINHADOS HORIZONTALMENTE (mesma posição Y)
 ```
 
 ---
 
-## Arquivos a Modificar
+## Detalhes Técnicos
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/monitoramento/CalendarioInstalacoes.tsx` | Remover botão, agrupar por período, ajustar renderização |
+| `src/lib/gerarPdfCotacao.ts` | Remover lógica do badge "RECOMENDADO" (linhas 892-904), fixar posição Y do badge FIPE para todos os cards |
+
+---
+
+## Comportamento Após Alteração
+
+- Todos os cards de plano terão layout idêntico
+- O nome do plano será exibido no topo (com quebra de linha se necessário)
+- O badge azul "X% FIPE" ficará na mesma posição vertical em todos os cards
+- A borda vermelha do card recomendado será mantida (apenas o badge é removido)
