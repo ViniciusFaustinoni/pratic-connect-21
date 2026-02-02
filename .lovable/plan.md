@@ -1,91 +1,79 @@
 
-# Plano: Corrigir Rastreadores Órfãos e Ajustar Lógica de Exclusão
+# Plano: Corrigir Tratamento de Erro na Criação de Conta
 
 ## Diagnóstico
 
-### Problema 1: Rastreador "Sem placa" Aparecendo na Lista
-- **IMEI**: `862667083403686`
-- **Status atual**: `instalado` 
-- **veiculo_id**: `null`
-- **Causa raiz**: A função `delete-associado` desvincula o `veiculo_id` do rastreador, mas mantém o `status = instalado`. Como a view `view_rastreadores_posicao` filtra por `status = 'instalado'`, esse rastreador órfão continua aparecendo.
+### Situação do MARCUS VINICIUS:
+- **Email**: `viniciusfaustinoni@gmail.com`
+- **Associado ID**: `ee96a1d7-d591-4906-829a-168e25dbc49c` → `user_id = null`
+- **Profile existente**: `user_id = 6f834291-b3c8-44e6-a96d-3c7a79fb50b5`
+- **Role**: `associado` já atribuída
 
-### Problema 2: LTB4J74 com Badge "Atenção"  
-- **Não é um bug** - comportamento esperado
-- O badge "Atenção" indica comunicação entre 1-24h atrás
-- Última comunicação: 16:29 (há ~3 horas)
-- Isso não tem relação com o status de ativação do rastreador
+### Problema Técnico:
+A Edge Function retorna corretamente `{ success: false, error: 'Este email já está em uso...' }` com status 400, mas o frontend não extrai essa mensagem corretamente.
+
+Quando `functions.invoke` recebe um status não-2xx:
+- `data` retorna `null`
+- `error` é uma instância de `FunctionsHttpError`
+- O corpo da resposta está em `error.context` (precisa ser lido com `.json()`)
+
+O código atual (linha 61-64) interpreta isso como "erro de conexão" porque verifica apenas se há `error` sem `data`.
 
 ---
 
 ## Correções
 
-### 1. Edge Function `delete-associado` - Voltar rastreador para estoque
+### 1. Frontend: Tratamento correto do erro HTTP
 
-**Arquivo:** `supabase/functions/delete-associado/index.ts`
+**Arquivo:** `src/components/public/CriarContaAssociadoForm.tsx`
 
-**Mudança (linha ~251):**
+Importar tipos de erro do Supabase e extrair mensagem corretamente:
 
 ```typescript
-// ANTES (só desvincula):
-await supabaseAdmin
-  .from("rastreadores")
-  .update({ veiculo_id: null })
-  .eq("veiculo_id", veiculo.id);
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
-// DEPOIS (desvincula E volta para estoque):
-await supabaseAdmin
-  .from("rastreadores")
-  .update({ 
-    veiculo_id: null,
-    associado_id: null,
-    associado_email: null,
-    status: 'estoque',  // Volta para estoque
-    updated_at: new Date().toISOString()
-  })
-  .eq("veiculo_id", veiculo.id);
+// No try/catch:
+const { data, error } = await supabase.functions.invoke('app-criar-conta-cliente', {...});
+
+// Tratar erro HTTP da Edge Function
+if (error) {
+  if (error instanceof FunctionsHttpError) {
+    // Extrair corpo da resposta de erro
+    const errorData = await error.context.json();
+    throw new Error(errorData.error || 'Erro ao criar conta');
+  }
+  // Erro de rede/conexão real
+  throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
+}
+
+// Verificar sucesso
+if (!data?.success) {
+  throw new Error(data?.error || 'Resposta inválida do servidor.');
+}
 ```
 
-### 2. Script de Correção Manual - Limpar rastreador órfão atual
+### 2. Banco de Dados: Vincular associado ao usuário existente
 
-Executar no banco de dados para corrigir o rastreador existente:
+Executar SQL para corrigir o caso do MARCUS:
 
 ```sql
-UPDATE rastreadores 
-SET 
-  status = 'estoque',
-  veiculo_id = null,
-  associado_id = null,
-  associado_email = null,
-  updated_at = now()
-WHERE 
-  imei = '862667083403686'
-  AND veiculo_id IS NULL 
-  AND status = 'instalado';
+UPDATE associados 
+SET user_id = '6f834291-b3c8-44e6-a96d-3c7a79fb50b5'
+WHERE id = 'ee96a1d7-d591-4906-829a-168e25dbc49c'
+  AND user_id IS NULL;
 ```
 
 ---
+
+## Resumo de Mudanças
+
+| Local | Mudança |
+|-------|---------|
+| `CriarContaAssociadoForm.tsx` | Usar `FunctionsHttpError` para extrair mensagem de erro corretamente |
+| Banco de dados | Vincular associado ao usuário existente |
 
 ## Resultado Esperado
 
-1. O rastreador `862667083403686` ("Sem placa") desaparecerá da lista de veículos em tempo real
-2. O rastreador voltará para o estoque, disponível para nova instalação
-3. Futuras exclusões de associados voltarão os rastreadores automaticamente para estoque
-4. O badge "Atenção" do LTB4J74 é comportamento normal - indica apenas que não comunicou na última hora (pode ajustar regra se desejado)
-
----
-
-## Detalhes Técnicos
-
-### View `view_rastreadores_posicao`
-```sql
--- Lógica atual de status_comunicacao:
-CASE
-  WHEN ultima_comunicacao IS NULL THEN 'sem_dados'
-  WHEN ultima_comunicacao > (now() - '01:00:00') THEN 'online'
-  WHEN ultima_comunicacao > (now() - '24:00:00') THEN 'atencao'  -- 1-24h
-  ELSE 'offline'
-END
-```
-
-### Opcional: Ajustar período de "Atenção"
-Se desejar que o veículo fique "online" por mais tempo antes de ir para "Atenção", posso alterar o intervalo de 1 hora para 2 ou 3 horas.
+1. Mensagens de erro específicas serão exibidas (ex: "Este email já está em uso")
+2. O MARCUS poderá fazer login normalmente após a correção no banco
+3. Futuros erros da Edge Function serão exibidos corretamente
