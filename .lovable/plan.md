@@ -1,98 +1,131 @@
 
-# Plano: Envio Automático para SGA na Aprovação da Proposta
+# Plano: Ajustar Calendário de Instalações
 
 ## Contexto
 
-Atualmente, o fluxo de aprovação de proposta e o envio para o SGA Hinova são ações separadas:
-1. Analista clica em "Aprovar Proposta" → proposta aprovada
-2. Analista clica em "Enviar para SGA" → dados enviados para Hinova
-
-O usuário deseja que o envio para o SGA seja **automático** ao aprovar, eliminando o botão separado.
-
----
+A página de Calendário de Instalações (`/monitoramento/calendario`) precisa de ajustes:
+1. **Remover** o botão "Agendar"
+2. **Mostrar** todas as instalações independente do status
+3. **Agrupar visualmente** as instalações por horário/período
 
 ## Alterações
 
-### 1. Hook `useAprovarProposta` (src/hooks/usePropostasPendentes.ts)
+### Arquivo: `src/pages/monitoramento/CalendarioInstalacoes.tsx`
 
-**Adicionar chamada automática para SGA após aprovação bem-sucedida:**
+#### 1. Remover botão "Agendar" (linhas 135-138)
 
-Na mutation `useAprovarProposta`, após a etapa 9 (notificação WhatsApp), adicionar uma nova etapa:
+Remover completamente o botão de agendamento do header:
 
 ```typescript
-// 10. ENVIAR AUTOMATICAMENTE PARA SGA HINOVA
-// Executar sincronização em background (não bloqueia fluxo principal)
-try {
-  const { data: veiculoParaSGA } = await supabase
-    .from('veiculos')
-    .select('id')
-    .eq('associado_id', associadoId)
-    .limit(1)
-    .single();
+// ANTES
+<div className="flex gap-2">
+  <Button variant="outline" onClick={() => navigate('/monitoramento/instalacoes')}>
+    Ver Lista
+  </Button>
+  <Button onClick={() => navigate('/monitoramento/instalacoes/agendar')}>
+    <Plus className="mr-2 h-4 w-4" />
+    Agendar
+  </Button>
+</div>
 
-  if (veiculoParaSGA?.id) {
-    console.log('[useAprovarProposta] Iniciando envio automático para SGA...');
-    const { data: sgaResult, error: sgaError } = await supabase.functions.invoke('sga-hinova-sync', {
-      body: { 
-        veiculo_id: veiculoParaSGA.id, 
-        associado_id: associadoId 
-      }
-    });
-    
-    if (sgaError) {
-      console.warn('[useAprovarProposta] Erro no envio SGA (não crítico):', sgaError);
-    } else if (sgaResult?.success) {
-      console.log('[useAprovarProposta] Enviado para SGA com sucesso:', sgaResult);
-    } else {
-      console.warn('[useAprovarProposta] SGA retornou falha:', sgaResult?.error);
-    }
-  }
-} catch (sgaErr) {
-  console.warn('[useAprovarProposta] Erro ao enviar para SGA (não crítico):', sgaErr);
-}
+// DEPOIS
+<Button variant="outline" onClick={() => navigate('/monitoramento/instalacoes')}>
+  Ver Lista
+</Button>
 ```
 
-| Aspecto | Decisão |
-|---------|---------|
-| Tratamento de erro | **Não-bloqueante** - Se falhar, loga warning mas não impede aprovação |
-| Feedback ao usuário | Sucesso no toast principal; erro apenas no console |
-| Retry | Pode ser feito manualmente via banco se necessário |
+---
+
+#### 2. Agrupar instalações por horário no useMemo (linhas 41-50)
+
+Modificar a lógica para agrupar por período (manhã/tarde/noite):
+
+```typescript
+// Agrupar instalações por data E período
+const instalacoesPorData = useMemo(() => {
+  const map = new Map<string, { manha: typeof instalacoes; tarde: typeof instalacoes; noite: typeof instalacoes }>();
+  
+  instalacoes.forEach((inst) => {
+    const dataStr = inst.data_agendada;
+    if (!dataStr) return;
+    
+    if (!map.has(dataStr)) {
+      map.set(dataStr, { manha: [], tarde: [], noite: [] });
+    }
+    
+    const grupo = map.get(dataStr)!;
+    const periodo = inst.periodo || 'manha';
+    grupo[periodo as 'manha' | 'tarde' | 'noite'].push(inst);
+  });
+  
+  return map;
+}, [instalacoes]);
+```
 
 ---
 
-### 2. Página PropostaAnalise.tsx
+#### 3. Atualizar a renderização das células do calendário (linhas 178-226)
 
-**Remover:**
-- Estado `enviandoSGA` (linha ~147)
-- Função `handleEnviarSGA` (linhas 254-286)
-- Botão "Enviar para SGA" (linhas 779-800)
+Exibir instalações separadas por período com labels visuais:
+
+```typescript
+{/* Instalações do dia - agrupadas por período */}
+{temInstalacoes && (
+  <div className="mt-1 space-y-1.5">
+    {/* Manhã */}
+    {instalacoesDia.manha.length > 0 && (
+      <div className="space-y-0.5">
+        <span className="text-[10px] text-muted-foreground font-medium">☀️ Manhã</span>
+        {instalacoesDia.manha.slice(0, 2).map((inst) => (
+          <Badge key={inst.id} variant="secondary" className={cn(...)}>
+            {inst.veiculos?.placa || ...}
+          </Badge>
+        ))}
+        {instalacoesDia.manha.length > 2 && (
+          <span className="text-[10px] text-muted-foreground">+{instalacoesDia.manha.length - 2}</span>
+        )}
+      </div>
+    )}
+    
+    {/* Tarde */}
+    {instalacoesDia.tarde.length > 0 && (
+      <div className="space-y-0.5">
+        <span className="text-[10px] text-muted-foreground font-medium">🌅 Tarde</span>
+        {/* Similar ao manhã */}
+      </div>
+    )}
+    
+    {/* Noite */}
+    {instalacoesDia.noite.length > 0 && (
+      <div className="space-y-0.5">
+        <span className="text-[10px] text-muted-foreground font-medium">🌙 Noite</span>
+        {/* Similar ao manhã */}
+      </div>
+    )}
+  </div>
+)}
+```
 
 ---
 
-## Fluxo Atualizado
+## Resumo Visual
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│  ANALISTA DE CADASTRO                                        │
-│                                                              │
-│  [Analisar Proposta] ──▶ Revisar dados                       │
-│                           │                                  │
-│                           ▼                                  │
-│                      [✓ Aprovar]                             │
-│                           │                                  │
-│        ┌──────────────────┼──────────────────┐               │
-│        ▼                  ▼                  ▼               │
-│   1. Ativar         2. Atualizar       3. Notificar          │
-│      Contrato          Docs               WhatsApp           │
-│        │                                     │               │
-│        └─────────────────┬───────────────────┘               │
-│                          ▼                                   │
-│              4. ENVIAR PARA SGA (automático)                 │
-│                          │                                   │
-│                          ▼                                   │
-│                 ✅ Aprovação Completa                        │
-│                 (Navega para próxima proposta)               │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Calendário de Instalações          [Ver Lista]             │
+│  Visualize as instalações agendadas por dia                 │
+├─────────────────────────────────────────────────────────────┤
+│    <   Fevereiro 2026   [Hoje]   >                          │
+├──────┬──────┬──────┬──────┬──────┬──────┬──────────────────┤
+│ Dom  │ Seg  │ Ter  │ Qua  │ Qui  │ Sex  │ Sáb              │
+├──────┼──────┼──────┼──────┼──────┼──────┼──────────────────┤
+│      │  2   │      │      │      │      │                  │
+│      │☀️Manhã│     │      │      │      │                  │
+│      │QOO5C17│     │      │      │      │                  │
+│      │      │      │      │      │      │                  │
+│      │🌅Tarde│     │      │      │      │                  │
+│      │ABC1234│     │      │      │      │                  │
+└──────┴──────┴──────┴──────┴──────┴──────┴──────────────────┘
 ```
 
 ---
@@ -101,14 +134,4 @@ try {
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/usePropostasPendentes.ts` | Adicionar etapa 10 (envio SGA automático) na mutation |
-| `src/pages/cadastro/PropostaAnalise.tsx` | Remover botão, estado e função do envio SGA manual |
-
----
-
-## Resultado Esperado
-
-1. Ao clicar em **"Aprovar Proposta"**, o sistema automaticamente envia para o SGA Hinova
-2. O botão **"Enviar para SGA"** não aparece mais na interface
-3. Se o envio SGA falhar, a aprovação **não é bloqueada** (apenas logado no console)
-4. A flag `sincronizado_hinova` é atualizada automaticamente pelo edge function
+| `src/pages/monitoramento/CalendarioInstalacoes.tsx` | Remover botão, agrupar por período, ajustar renderização |
