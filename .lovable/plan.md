@@ -1,150 +1,183 @@
 
-# Plano: Reformular Ativações para Layout de Tabela com Ícones de Progresso
+# Plano: Centralizar Gestão de Planos e Benefícios na Diretoria
 
 ## Objetivo
 
-Transformar a visualização de ativações de cards (grid) para uma tabela com linhas, incluindo 4 ícones de progresso com tooltips explicativos.
+Unificar a criação, edição e exclusão de planos, benefícios, coberturas e linhas de produtos **exclusivamente na área da Diretoria**, mantendo a área de Vendas apenas para **visualização/consulta**.
 
-## Design Proposto
+## Situação Atual
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│ Cliente              │ Veículo           │ Vendedor    │ Progresso           │ Ações    │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
-│ Marcus Vinicius      │ Toyota Corolla    │ João Silva  │ ✍️  💳  🔍  📡       │ [Ativar] │
-│ 21992593830          │ LTB4J74           │             │ 🟢  🟡  🟢  🟡       │ [...]    │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
-│ Ana Costa            │ Honda Civic       │ Maria       │ ✍️  💳  🔍  📡       │ [Ativar] │
-│ 21999888777          │ ABC1D23           │             │ 🟢  🟢  🟢  🟢       │          │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-```
+Existem **duas estruturas paralelas** que precisam ser correlacionadas:
 
-## Ícones de Progresso
+| Aspecto | Diretoria (Operacional) | Vendas (Comercial) |
+|---------|------------------------|-------------------|
+| Tabela principal | `planos` (18 registros) | `plans` (14 registros) |
+| Tabelas relacionadas | `tabelas_preco`, `planos_coberturas` | `product_lines`, `benefits`, `plan_benefits` |
+| Rota atual | `/diretoria/produtos` | `/vendas/planos-beneficios` |
+| Funcionalidade | Criar/editar preços e coberturas | Exibir + editar (se diretor) |
 
-| Ícone | Campo | Descrição | Condição para Verde |
-|-------|-------|-----------|---------------------|
-| `FileSignature` | Assinatura | Proposta assinada pelo cliente | `contrato.data_assinatura != null` |
-| `CreditCard` | Pagamento | Adesão paga | `contrato.adesao_paga === true` |
-| `ClipboardCheck` | Vistoria | Vistoria realizada | Status `em_analise` ou `aprovada` |
-| `Radio` | SGA | Sincronizado com SGA Hinova | `veiculo.sincronizado_hinova === true` |
+O sistema comercial (`plans`, `benefits`, etc.) já possui **dados criados** que devem ser preservados. A área de Vendas já permite edição para diretores, mas isso será movido para uma área dedicada na Diretoria.
 
-## Cores
+## Estratégia
 
-- **Amarelo** (`text-amber-500`): Pendente
-- **Verde** (`text-emerald-500`): Concluído
+1. **Criar nova rota na Diretoria** para gestão comercial de planos
+2. **Adicionar item no menu** da Diretoria
+3. **Remover funções de edição** da área de Vendas
+4. **Manter dados existentes** nas tabelas `plans`, `benefits`, etc.
 
 ## Arquivos a Modificar
 
-### 1. `src/hooks/useAtivacoes.ts`
+### 1. `src/components/layout/AppSidebar.tsx`
 
-**Alterações:**
-- Adicionar campo `adesao_paga` à interface `AtivacaoContrato`
-- Buscar `adesao_paga` na query de contratos
-- Incluir no mapeamento de resultado
+**Alteração:** Adicionar item "Planos e Benefícios" no menu Diretoria
 
 ```typescript
-// Interface - adicionar linha 18
-adesao_paga: boolean;
-
-// No mapeamento (linha ~157)
-adesao_paga: contrato.adesao_paga ?? false,
+// Linha ~343: Após "Produtos"
+{ title: 'Planos/Benefícios', url: '/diretoria/planos-beneficios', icon: Gift },
 ```
 
-### 2. `src/components/ativacao/AtivacaoProgressIcons.tsx` (NOVO)
+### 2. `src/App.tsx`
 
-Criar componente reutilizável para os 4 ícones de progresso:
+**Alteração:** Adicionar rota para página de gestão na Diretoria
 
 ```typescript
-interface ProgressIconsProps {
-  assinaturaOk: boolean;
-  pagamentoOk: boolean;
-  vistoriaOk: boolean;
-  sgaOk: boolean;
+// Após linha 494 (/diretoria/produtos)
+<Route path="/diretoria/planos-beneficios" element={<PlanosAdmin />} />
+```
+
+Isso reutiliza a página `PlanosAdmin` que já existe e contém:
+- Tab Planos (gestão de `plans`)
+- Tab Benefícios (gestão de `benefits`)
+- Tab Coberturas (gestão de `main_coverages`)
+- Tab Linhas de Produtos (gestão de `product_lines`)
+
+### 3. `src/pages/vendas/PlanosBeneficios.tsx`
+
+**Alterações principais:**
+
+a) **Remover variável de permissão para edição:**
+```typescript
+// Remover ou mudar para sempre false
+const podeEditar = false; // Antes: isDiretor || isDesenvolvedor
+```
+
+b) **Remover estados de edição** (linhas 88-97):
+- `editModalOpen`, `planToEdit`
+- `beneficioModalOpen`, `beneficioToEdit`
+- `deleteDialogOpen`, `planToDelete`, etc.
+
+c) **Remover botões de ação no header** (linha 217-221):
+- Remover botão "Novo Plano"
+
+d) **Remover handlers de edição/exclusão** (linhas 118-181):
+- `handleEditPlan`, `handleCreatePlan`, `handleDeletePlan`
+- `handleEditBeneficio`, `handleCreateBeneficio`, `handleDeleteBeneficio`
+- `confirmDelete`, `confirmDeleteBeneficio`
+
+e) **Atualizar componentes filhos** para não passar props de edição:
+```typescript
+// PlanoLineSection - remover props canEdit, onEditPlan, onDeletePlan
+<PlanoLineSection
+  key={line.id}
+  productLine={line}
+  plans={getPlansByLineId(line.id)}
+/>
+```
+
+f) **Remover modais de edição** (linhas 478-520):
+- `PlanFormModal`
+- `BeneficioAdicionalModal`
+- `AlertDialog` de exclusão
+
+g) **Adicionar banner informativo** para diretores:
+```typescript
+{isDiretor && (
+  <Alert className="border-blue-200 bg-blue-50">
+    <Settings className="h-4 w-4 text-blue-600" />
+    <AlertDescription>
+      Para criar ou editar planos, acesse{' '}
+      <Link to="/diretoria/planos-beneficios" className="font-medium underline">
+        Diretoria → Planos/Benefícios
+      </Link>
+    </AlertDescription>
+  </Alert>
+)}
+```
+
+### 4. `src/components/planos/PlanoLineSection.tsx`
+
+**Alteração:** Remover props de edição e botões de ação
+
+```typescript
+// Interface simplificada
+interface PlanoLineSectionProps {
+  productLine: ProductLine;
+  plans: PlanWithDetails[];
+  // Remover: canEdit, onEditPlan, onDeletePlan
 }
-
-// Cada ícone com Tooltip que aparece ao passar o mouse
-// Exemplo: "Assinatura pendente" ou "Assinatura realizada em 31/01/2026"
 ```
 
-**Ícones do Lucide:**
-- `FileSignature` para Assinatura
-- `CreditCard` para Pagamento
-- `ClipboardCheck` para Vistoria
-- `Radio` para SGA
-
-### 3. `src/components/ativacao/AtivacaoTableRow.tsx` (NOVO)
-
-Criar componente para cada linha da tabela:
-
-- Coluna Cliente: Nome + Telefone
-- Coluna Veículo: Marca/Modelo + Placa
-- Coluna Vendedor: Nome do vendedor
-- Coluna Progresso: Componente `AtivacaoProgressIcons`
-- Coluna Ações: Badge de status + Botões (Ativar, SGA, Excluir)
-
-### 4. `src/pages/vendas/AtivacoesList.tsx`
-
-**Alterações:**
-- Substituir grid de cards por tabela
-- Usar componentes `Table`, `TableHeader`, `TableBody`, etc.
-- Renderizar `AtivacaoTableRow` para cada item
-- Manter header com métricas e filtros
-- Manter responsividade (em mobile, pode usar scroll horizontal)
-
-```typescript
-// Substituir linhas 236-249
-<Table>
-  <TableHeader>
-    <TableRow>
-      <TableHead>Cliente</TableHead>
-      <TableHead>Veículo</TableHead>
-      <TableHead>Vendedor</TableHead>
-      <TableHead className="text-center">Progresso</TableHead>
-      <TableHead>Ações</TableHead>
-    </TableRow>
-  </TableHeader>
-  <TableBody>
-    {filteredItems.map((contrato) => (
-      <AtivacaoTableRow key={contrato.id} contrato={contrato} ... />
-    ))}
-  </TableBody>
-</Table>
-```
-
-### 5. `src/App.tsx`
-
-**Alteração:**
-- Adicionar `TooltipProvider` no root da aplicação (se não existir)
-
-## Tooltips Explicativos
-
-| Ícone | Pendente (Amarelo) | Concluído (Verde) |
-|-------|-------------------|-------------------|
-| Assinatura | "Assinatura pendente" | "Assinado em DD/MM/YYYY" |
-| Pagamento | "Pagamento de adesão pendente" | "Adesão paga" |
-| Vistoria | "Vistoria não realizada" | "Vistoria em análise" ou "Vistoria aprovada" |
-| SGA | "Aguardando envio ao SGA" | "Sincronizado - Código #XXXX" |
-
-## Estrutura Visual da Linha
+## Fluxo Resultante
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  [Avatar]  Nome Cliente         Toyota Corolla      Vendedor   [✍️][💳][🔍][📡]  [Badge] [Btns] │
-│            📞 Telefone          🚗 Placa                                                         │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                           DIRETORIA                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  [Produtos]                    [Planos/Benefícios]                  │
+│  /diretoria/produtos           /diretoria/planos-beneficios          │
+│  ├── Tabela planos             ├── Tab Planos (plans)               │
+│  ├── Tabela de Preços          ├── Tab Benefícios (benefits)        │
+│  └── Coberturas operacionais   ├── Tab Coberturas (main_coverages)  │
+│                                └── Tab Linhas (product_lines)       │
+│                                                                      │
+│  [Criar] [Editar] [Excluir]    [Criar] [Editar] [Excluir]          │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              │ Dados fluem para
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                            VENDAS                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  [Planos e Benefícios]         (Somente visualização)               │
+│  /vendas/planos-beneficios                                          │
+│  ├── Visão Geral                                                    │
+│  ├── Carros                                                         │
+│  ├── Motos                                                          │
+│  ├── Adicionais (consulta)                                          │
+│  ├── Ranking                                                        │
+│  └── Glossário                                                      │
+│                                                                      │
+│  [Consultar] [Calcular] [Comparar]  ← Funcionalidades mantidas      │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Responsividade
+## Dados Preservados
 
-- Desktop: Tabela completa
-- Mobile: Scroll horizontal ou layout empilhado
+| Tabela | Registros | Ação |
+|--------|-----------|------|
+| `plans` | 14 | Mantidos, gerenciados via `/diretoria/planos-beneficios` |
+| `product_lines` | 4 | Mantidos |
+| `benefits` | 16 | Mantidos |
+| `plan_benefits` | 147 | Mantidos (vínculos plano-benefício) |
+| `beneficios_adicionais` | 14 | Mantidos |
+| `planos` | 18 | Mantidos, gerenciados via `/diretoria/produtos` |
 
 ## Resumo de Arquivos
 
-| Arquivo | Ação |
-|---------|------|
-| `src/hooks/useAtivacoes.ts` | Modificar - adicionar `adesao_paga` |
-| `src/components/ativacao/AtivacaoProgressIcons.tsx` | Criar - ícones com tooltips |
-| `src/components/ativacao/AtivacaoTableRow.tsx` | Criar - linha da tabela |
-| `src/pages/vendas/AtivacoesList.tsx` | Modificar - substituir grid por tabela |
-| `src/App.tsx` | Verificar/adicionar `TooltipProvider` |
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/layout/AppSidebar.tsx` | Modificar | Adicionar item "Planos/Benefícios" no menu Diretoria |
+| `src/App.tsx` | Modificar | Adicionar rota `/diretoria/planos-beneficios` |
+| `src/pages/vendas/PlanosBeneficios.tsx` | Modificar | Remover toda lógica de edição, manter apenas visualização |
+| `src/components/planos/PlanoLineSection.tsx` | Modificar | Remover props de edição |
+
+## Observações Técnicas
+
+- A página `PlanosAdmin` (já existente) será reutilizada na nova rota da Diretoria
+- O acesso é controlado por permissões (`isDiretor`, `isDesenvolvedor`, `isAdminMaster`)
+- As tabelas comerciais (`plans`, `benefits`) permanecem separadas das operacionais (`planos`)
+- Se futuramente quiser unificar as tabelas, será necessário uma migração de dados
