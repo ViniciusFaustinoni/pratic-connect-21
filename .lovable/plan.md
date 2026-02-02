@@ -1,37 +1,79 @@
 
-# Plano: Corrigir Envio para SGA - Campos RENAVAM e CHASSI Obrigatórios
+# Plano: Corrigir Cobertura do Veículo do Marcus Vinicius
 
-## ✅ IMPLEMENTADO
+## Problema
 
-### Alterações Realizadas
+A IA do WhatsApp mostra cobertura parcial porque o veículo está com dados incorretos no banco:
 
-#### 1. PropostaAnalise.tsx
-- Adicionados campos editáveis para RENAVAM e CHASSI no card de dados do veículo
-- Alerta visual quando esses campos estão vazios (border-warning)
-- Salvamento automático dos dados no veículo antes de aprovar
+| Campo | Valor Atual | Valor Correto |
+|-------|-------------|---------------|
+| `cobertura_total` | `false` | `true` |
+| `status` | `em_analise` | `ativo` |
 
-#### 2. BotaoEnviarSGA.tsx
-- Tratamento de erro específico `campo_faltante` com mensagem clara para o usuário
-
-#### 3. UnifiedDocumentUploader.tsx
-- Novo prop `veiculoId` para atualização automática
-- Após OCR de CRLV, atualiza automaticamente renavam/chassi no veículo
-
-#### 4. usePropostasPendentes.ts
-- Adicionados campos `veiculo_renavam` e `veiculo_chassi` à interface PropostaPendente
-- Query de veículo agora busca renavam e chassi
+**Causa**: A migration anterior (`20260202204328`) atualizou um ID de veículo antigo (`05a11b11...`) que já foi deletado junto com o associado original. O veículo atual tem ID diferente (`9dba80a3...`).
 
 ---
 
-## Solução Imediata para o Caso Atual
+## Solução
 
-Executar SQL no Cloud View para preencher os dados faltantes manualmente:
+### Parte 1: Corrigir Dados do Veículo Atual
+
+Criar nova migration para atualizar o veículo correto:
 
 ```sql
+-- Corrigir cobertura do veículo do Marcus Vinicius (ID correto)
 UPDATE veiculos 
-SET renavam = 'VALOR_REAL_AQUI',
-    chassi = 'VALOR_REAL_AQUI'
-WHERE id = '05a11b11-3eb0-48a3-9d7c-120d68f035e9';
+SET cobertura_total = true, 
+    status = 'ativo'
+WHERE id = '9dba80a3-a344-4290-9643-b00689d01d7d';
 ```
 
-Após isso, o botão "Enviar para SGA" funcionará normalmente.
+**Dados do veículo:**
+- **ID**: `9dba80a3-a344-4290-9643-b00689d01d7d`
+- **Placa**: LTB4J74
+- **Associado**: MARCUS VINICIUS FAUSTINONI DE FREITAS
+
+---
+
+### Parte 2: Remover Migration Obsoleta
+
+A migration `20260202204328` atualiza um veículo que não existe mais e pode ser removida ou mantida (não causa problemas).
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| Nova migration SQL | **CRIAR** | Atualizar cobertura_total e status do veículo correto |
+
+---
+
+## Resultado Esperado
+
+Após a correção:
+1. A IA do WhatsApp reconhecerá cobertura total
+2. O associado poderá abrir sinistros de colisão
+3. O associado terá acesso à assistência 24h
+
+---
+
+## Detalhes Técnicos
+
+A Edge Function `assistente-chat` monta o contexto do veículo assim (linhas 628-638):
+
+```typescript
+const veiculosTexto = veiculos.map((v) => {
+  const coberturas = [];
+  if (v.cobertura_roubo_furto) coberturas.push('Roubo/Furto');
+  if (v.cobertura_total) coberturas.push('Total (inclui Assistência 24h)');
+  // ...
+});
+```
+
+Quando `cobertura_total = true`, a IA receberá no contexto:
+```
+Coberturas: Roubo/Furto, Total (inclui Assistência 24h)
+```
+
+E permitirá sinistros de colisão e assistência 24h.
