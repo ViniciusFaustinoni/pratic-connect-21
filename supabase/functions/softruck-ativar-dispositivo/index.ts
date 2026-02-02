@@ -726,17 +726,22 @@ serve(async (req) => {
   }
 });
 
-// Mapear tipo de veículo local para Softruck
+// Mapear tipo de veículo local para Softruck (valores em inglês)
 function mapVehicleType(combustivel: string | null): string {
   const mapping: Record<string, string> = {
-    'gasolina': 'carro',
-    'etanol': 'carro',
-    'flex': 'carro',
-    'diesel': 'caminhao',
-    'eletrico': 'carro',
-    'hibrido': 'carro',
-    'gnv': 'carro',
+    'gasolina': 'car',
+    'etanol': 'car',
+    'flex': 'car',
+    'diesel': 'truck',
+    'eletrico': 'car',
+    'hibrido': 'car',
+    'gnv': 'car',
+    'carro': 'car',
+    'caminhao': 'truck',
+    'caminhão': 'truck',
+    'moto': 'motorcycle',
+    'motocicleta': 'motorcycle',
   };
   
-  return mapping[combustivel?.toLowerCase() || ''] || 'carro';
+  return mapping[combustivel?.toLowerCase() || ''] || 'car';
 }
