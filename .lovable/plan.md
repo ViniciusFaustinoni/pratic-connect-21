@@ -1,80 +1,150 @@
 
-# Plano: Configurar Credenciais Softruck/Rede Veículos via Interface
+# Plano: Corrigir Redirecionamento após Criação de Conta do Associado
 
-## Contexto
-Atualmente, a tela de configuração de rastreadores (Softruck e Rede Veículos) exibe os nomes dos secrets necessários e direciona o diretor para configurá-los manualmente no painel do Supabase. Isso é confuso e fora do padrão do sistema, onde outras integrações como Hinova permitem inserir credenciais diretamente pela interface.
+## Diagnóstico
 
-## Objetivo
-Permitir que diretores configurem as credenciais da Softruck e Rede Veículos diretamente na tela de Integrações, da mesma forma que já funciona para Hinova, Asaas e outras integrações.
+Identificamos uma **race condition** no fluxo de criação de conta do associado:
 
----
-
-## Mudanças Propostas
-
-### 1. Remover `ConfigurarRastreadorSheet` (arquivo separado)
-O sheet atual apenas exibe informações e não permite inserir credenciais. Vamos reutilizar o `ConfigurarIntegracaoSheet` que já tem toda a lógica de formulário, criptografia e testes.
-
-### 2. Atualizar `ServicosTab.tsx`
-- Remover a importação e uso do `ConfigurarRastreadorSheet`
-- Para Softruck e Rede Veículos, usar o mesmo `ConfigurarIntegracaoSheet` que já funciona para outras integrações
-- Os campos já estão definidos no schema (`softruck`, `rede_veiculos`)
-
-### 3. Atualizar Edge Function `rastreador-auth`
-Modificar para buscar credenciais com prioridade:
-1. **Primeiro**: Banco de dados (`integracoes_credenciais`) - criptografado
-2. **Fallback**: Supabase Secrets (variáveis de ambiente)
-
-Isso permite manter compatibilidade com secrets existentes enquanto dá prioridade às credenciais configuradas pela interface.
-
-### 4. Atualizar Edge Function `rastreador-testar-conexao`
-Modificar para também buscar credenciais do banco primeiro, garantindo que o botão "Testar Conexão" funcione corretamente.
-
-### 5. Atualizar Edge Function `rastreador-posicao`
-Mesma lógica de busca de credenciais híbrida para garantir consistência.
-
----
-
-## Detalhes Técnicos
-
-### Função auxiliar para buscar credenciais (reutilizada)
-```text
-async function getCredenciais(supabase, integracao, serviceKey):
-  1. Buscar da tabela integracoes_credenciais
-  2. Se encontrar e configurado=true:
-     - Descriptografar com AES-256-GCM
-     - Retornar objeto de credenciais
-  3. Se não encontrar, retornar null (para usar secrets como fallback)
+### Fluxo Atual (com bug)
+```
+CriarContaAssociadoForm.tsx
+    │
+    ├─ 1. Cria conta via Edge Function ✓
+    ├─ 2. signInWithPassword() ✓
+    └─ 3. navigate('/app/home') ❌ (imediato, sem aguardar profile)
+            │
+            └─► /app/home (ProtectedRoute)
+                    │
+                    ├─ user existe ✓
+                    ├─ profile?.tipo = undefined (ainda carregando!)
+                    └─ Redireciona para /app/login ❌
 ```
 
-### Lógica de autenticação Softruck atualizada
-```text
-1. Tentar buscar credenciais do banco (getCredenciais('softruck'))
-2. Se não encontrar, usar Deno.env.get() como fallback
-3. Usar credenciais para autenticar
-```
+### Causa Raiz
+O `navigate('/app/home')` na linha 91 do `CriarContaAssociadoForm.tsx` é executado imediatamente após o login, **sem aguardar** que o `AuthContext` termine de carregar o `profile` do usuário recém-logado.
 
-### Campos por integração (já definidos)
-- **Softruck**: `public_key`, `username`, `password`, `enterprise_id` (opcional)
-- **Rede Veículos**: `bearer_token`
+O `ProtectedRoute` (linha 56-66) verifica `profile?.tipo`, e quando este é `undefined`, redireciona o usuário de volta para `/app/login`.
 
 ---
 
-## Arquivos a serem modificados
+## Solução Proposta
+
+Modificar o `CriarContaAssociadoForm.tsx` para **aguardar a confirmação de que o profile está carregado** antes de redirecionar.
+
+### Abordagem: Polling Otimizado
+Após o login bem-sucedido, fazer um polling curto verificando se o `AuthContext` já carregou o profile com `tipo === 'associado'` antes de navegar.
+
+### Código da Correção
+
+**Arquivo: `src/components/public/CriarContaAssociadoForm.tsx`**
+
+```typescript
+// Após signInWithPassword bem-sucedido (linha 88-91)
+
+// Aguardar profile estar disponível no AuthContext
+// Polling com timeout para evitar loop infinito
+const maxAttempts = 20; // 20 tentativas x 150ms = 3 segundos max
+let attempts = 0;
+
+const waitForProfile = async (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    const checkProfile = async () => {
+      attempts++;
+      
+      // Verificar se profile foi carregado consultando o Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('tipo')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        
+        if (profile?.tipo === 'associado') {
+          resolve(true);
+          return;
+        }
+      }
+      
+      if (attempts >= maxAttempts) {
+        resolve(false);
+        return;
+      }
+      
+      setTimeout(checkProfile, 150);
+    };
+    
+    checkProfile();
+  });
+};
+
+const profileReady = await waitForProfile();
+
+if (profileReady) {
+  toast.success('Bem-vindo ao PRATIC!');
+  navigate('/app/home');
+} else {
+  // Fallback: redirecionar para login mesmo assim
+  toast.success('Conta criada! Faça login para continuar.');
+  navigate('/app/login');
+}
+```
+
+### Alternativa Mais Simples (Recomendada)
+Verificar diretamente no banco se o profile já existe antes de redirecionar:
+
+```typescript
+// Após signInWithPassword bem-sucedido (linhas 77-91)
+if (loginError) {
+  toast.success('Conta criada! Faça login com seu email.');
+  navigate('/app/login');
+  return;
+}
+
+// Verificar que o profile foi criado corretamente
+const { data: { session } } = await supabase.auth.getSession();
+if (session?.user) {
+  const { data: verifiedProfile } = await supabase
+    .from('profiles')
+    .select('id, tipo')
+    .eq('user_id', session.user.id)
+    .single();
+
+  if (verifiedProfile?.tipo === 'associado') {
+    toast.success('Bem-vindo ao PRATIC!');
+    // Pequeno delay para AuthContext sincronizar
+    await new Promise(r => setTimeout(r, 300));
+    navigate('/app/home');
+    return;
+  }
+}
+
+// Fallback se algo der errado
+toast.success('Conta criada! Faça login para continuar.');
+navigate('/app/login');
+```
+
+---
+
+## Arquivo a ser Modificado
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/integracoes/ServicosTab.tsx` | Usar `ConfigurarIntegracaoSheet` para rastreadores |
-| `src/components/integracoes/ConfigurarRastreadorSheet.tsx` | Remover (não mais necessário) |
-| `supabase/functions/rastreador-auth/index.ts` | Adicionar busca de credenciais do banco |
-| `supabase/functions/rastreador-testar-conexao/index.ts` | Adicionar busca de credenciais do banco |
-| `supabase/functions/rastreador-posicao/index.ts` | Adicionar busca de credenciais do banco |
+| `src/components/public/CriarContaAssociadoForm.tsx` | Adicionar verificação de profile antes de redirecionar |
 
 ---
 
 ## Benefícios
 
-1. **Experiência unificada**: Todas as integrações são configuradas da mesma forma
-2. **Sem acesso ao Supabase**: Diretores não precisam acessar o painel técnico
-3. **Segurança mantida**: Credenciais continuam criptografadas com AES-256-GCM
-4. **Compatibilidade**: Secrets existentes continuam funcionando como fallback
-5. **Auditoria**: Histórico de quem alterou credenciais via `updated_by`
+1. **Elimina race condition**: O redirecionamento só ocorre após confirmação de que os dados estão prontos
+2. **Melhor UX**: Usuário é redirecionado corretamente para o app na primeira tentativa
+3. **Fallback seguro**: Se algo falhar, usuário é direcionado para login manual (funcionalidade existente)
+4. **Sem mudanças no AuthContext**: Mantém a arquitetura atual intacta
+
+---
+
+## Detalhes Técnicos
+
+A solução segue o padrão recomendado no "Stack Overflow" de verificar a leitura dos dados antes de redirecionar:
+
+> "Verify data readability: Use the ID of the newly created profile to perform a separate select query. This step confirms that the data is readable, taking into account RLS policies and any triggers that may have executed."
