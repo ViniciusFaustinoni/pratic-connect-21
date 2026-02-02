@@ -1558,6 +1558,37 @@ export function useAprovarProposta() {
         }
       }
 
+      // 10. ENVIAR AUTOMATICAMENTE PARA SGA HINOVA
+      // Executar sincronização em background (não bloqueia fluxo principal)
+      try {
+        const { data: veiculoParaSGA } = await supabase
+          .from('veiculos')
+          .select('id')
+          .eq('associado_id', associadoId)
+          .limit(1)
+          .single();
+
+        if (veiculoParaSGA?.id) {
+          console.log('[useAprovarProposta] Iniciando envio automático para SGA...');
+          const { data: sgaResult, error: sgaError } = await supabase.functions.invoke('sga-hinova-sync', {
+            body: { 
+              veiculo_id: veiculoParaSGA.id, 
+              associado_id: associadoId 
+            }
+          });
+          
+          if (sgaError) {
+            console.warn('[useAprovarProposta] Erro no envio SGA (não crítico):', sgaError);
+          } else if (sgaResult?.success) {
+            console.log('[useAprovarProposta] Enviado para SGA com sucesso:', sgaResult);
+          } else {
+            console.warn('[useAprovarProposta] SGA retornou falha:', sgaResult?.error);
+          }
+        }
+      } catch (sgaErr) {
+        console.warn('[useAprovarProposta] Erro ao enviar para SGA (não crítico):', sgaErr);
+      }
+
       const mensagemRetorno = jaTemInstalacaoConcluida
         ? 'Proposta aprovada! Instalação já concluída. Aguardando ativação do rastreador.'
         : 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.';
