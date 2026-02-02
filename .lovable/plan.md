@@ -1,35 +1,53 @@
-# Plano: Correções nos Fluxos Softruck e SGA Hinova
 
-## ✅ Correções Implementadas
+# Plano: Exibir Botão de Contato do Vendedor no PDF
 
-### 1. Fluxo Softruck (`softruck-ativar-dispositivo`)
+## Problema Identificado
 
-| Problema | Correção |
-|----------|----------|
-| **Ativação duplicada** do associado (status = 'ativo') | Removida atualização redundante - delegada ao chamador |
-| **Cobertura total** duplicada (`veiculos.cobertura_total = true`) | Removida atualização redundante - delegada ao chamador |
-| **Chamada HTTP com anon key** para `ativar-associado` | Corrigido para usar `supabaseServiceKey` |
-| **Não verificava** se device já estava ativado | Adicionada verificação de `plataforma_device_id` antes de criar |
+O botão de WhatsApp não aparece no PDF porque a coluna `whatsapp` na tabela `profiles` está **vazia (null)** para todos os vendedores.
 
-### 2. Fluxo SGA Hinova (`sga-hinova-sync`)
+```
+Consulta no banco:
+| nome               | whatsapp |
+|--------------------|----------|
+| ALINE DE SOUZA     | null     |
+| DB CAR RIO         | null     |
+| DIEGO PEREIRA      | null     |
+| ... (todos null)   | null     |
+```
 
-| Problema | Correção |
-|----------|----------|
-| **RENAVAM e CHASSI** não validados | Adicionada validação obrigatória antes de enviar |
-| **Placa duplicada** não tratada | Implementada busca por placa existente (similar ao CPF) |
-| **Erro genérico** em duplicidade | Retorna mensagem específica com campo faltante |
+O código atual em `BotaoGerarPdf.tsx` só adiciona os dados do vendedor se `whatsapp` estiver preenchido:
+```typescript
+vendedor: cotacao.profiles?.whatsapp ? { nome, whatsapp } : null
+```
+
+## Solução
+
+### 1. Permitir edição do WhatsApp no perfil do vendedor
+
+Verificar se existe um campo para o vendedor cadastrar seu WhatsApp no sistema e, se não existir, adicionar.
+
+### 2. Alternativa: Usar telefone do vendedor como fallback
+
+Se o campo telefone do vendedor existir, usar como fallback quando WhatsApp não estiver preenchido.
 
 ---
 
-## Arquivos Modificados
+## Próximos Passos
 
-- `supabase/functions/softruck-ativar-dispositivo/index.ts`
-- `supabase/functions/sga-hinova-sync/index.ts`
+1. Verificar a página de perfil do usuário para adicionar/editar campo WhatsApp
+2. Popular os WhatsApps existentes (ex: via SQL ou formulário)
+3. Ajustar a lógica para usar telefone como fallback se necessário
 
 ---
 
-## Próximos Passos (Opcional)
+## Pergunta
 
-1. **Timeout para status "sincronizando"**: Implementar job que reseta status travados
-2. **Centralizar hook de ativação**: Unificar `useAtivarRastreador`, `useVistoriaCompletaAnalise`, etc.
-3. **Feedback visual SGA**: Mostrar toast quando sincronização background falhar
+Para o botão de WhatsApp aparecer, preciso de uma das seguintes ações:
+
+**Opção A**: Adicionar um campo no perfil do vendedor para ele cadastrar seu WhatsApp
+
+**Opção B**: Usar o telefone do vendedor como número de WhatsApp (se existir)
+
+**Opção C**: Popular manualmente os WhatsApps via SQL para os vendedores
+
+Qual abordagem você prefere?
