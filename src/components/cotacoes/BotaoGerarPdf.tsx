@@ -43,6 +43,7 @@ interface CotacaoComPlanosExtras extends Omit<CotacaoParaPdf, 'valor_adesao'> {
   profiles?: {
     full_name?: string | null;
     whatsapp?: string | null;
+    phone?: string | null;
   } | null;
 }
 
@@ -102,10 +103,10 @@ export function BotaoGerarPdf({
           veiculo_placa: cotacao.veiculo_placa,
           valor_fipe: cotacao.valor_fipe,
           planosComparar: planosParaPdf,
-          // Dados do vendedor para botão WhatsApp
-          vendedor: cotacao.profiles?.whatsapp ? {
+          // Dados do vendedor para botão WhatsApp (usa telefone como fallback)
+          vendedor: (cotacao.profiles?.whatsapp || cotacao.profiles?.phone) ? {
             nome: cotacao.profiles.full_name || 'Vendedor',
-            whatsapp: cotacao.profiles.whatsapp,
+            whatsapp: cotacao.profiles.whatsapp || cotacao.profiles.phone || '',
           } : null,
         };
 
