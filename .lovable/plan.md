@@ -1,183 +1,252 @@
 
-# Plano: Centralizar Gestão de Planos e Benefícios na Diretoria
+# Plano: Configuração de Valor FIPE Mínimo para Exigência de Rastreador
 
 ## Objetivo
 
-Unificar a criação, edição e exclusão de planos, benefícios, coberturas e linhas de produtos **exclusivamente na área da Diretoria**, mantendo a área de Vendas apenas para **visualização/consulta**.
+Adicionar uma configuração na área de Configurações da Diretoria que define o **valor FIPE mínimo** para exigir a instalação de rastreador. Veículos com FIPE abaixo desse valor terão a **instalação do rastreador dispensada** durante a vistoria, mas mantendo a vistoria completa.
 
-## Situação Atual
+## Regra de Negócio
 
-Existem **duas estruturas paralelas** que precisam ser correlacionadas:
+Se o valor FIPE do veículo for **menor** que o valor configurado:
+- A vistoria completa continua sendo obrigatória
+- O campo para foto do "Local de Instalação do Rastreador" é **ocultado**
+- A categoria "Instalação" não aparece na listagem de fotos
+- O vistoriador não precisa selecionar/registrar rastreador
 
-| Aspecto | Diretoria (Operacional) | Vendas (Comercial) |
-|---------|------------------------|-------------------|
-| Tabela principal | `planos` (18 registros) | `plans` (14 registros) |
-| Tabelas relacionadas | `tabelas_preco`, `planos_coberturas` | `product_lines`, `benefits`, `plan_benefits` |
-| Rota atual | `/diretoria/produtos` | `/vendas/planos-beneficios` |
-| Funcionalidade | Criar/editar preços e coberturas | Exibir + editar (se diretor) |
+## Alterações Necessárias
 
-O sistema comercial (`plans`, `benefits`, etc.) já possui **dados criados** que devem ser preservados. A área de Vendas já permite edição para diretores, mas isso será movido para uma área dedicada na Diretoria.
+### 1. Banco de Dados - Nova Configuração
 
-## Estratégia
+Inserir nova configuração na tabela `configuracoes`:
 
-1. **Criar nova rota na Diretoria** para gestão comercial de planos
-2. **Adicionar item no menu** da Diretoria
-3. **Remover funções de edição** da área de Vendas
-4. **Manter dados existentes** nas tabelas `plans`, `benefits`, etc.
-
-## Arquivos a Modificar
-
-### 1. `src/components/layout/AppSidebar.tsx`
-
-**Alteração:** Adicionar item "Planos e Benefícios" no menu Diretoria
-
-```typescript
-// Linha ~343: Após "Produtos"
-{ title: 'Planos/Benefícios', url: '/diretoria/planos-beneficios', icon: Gift },
+```sql
+INSERT INTO configuracoes (chave, valor, tipo, categoria, descricao, editavel)
+VALUES (
+  'operacional_fipe_minimo_rastreador',
+  '30000',
+  'moeda',
+  'operacional',
+  'Valor FIPE mínimo para exigir instalação de rastreador. Veículos abaixo deste valor dispensam rastreador.',
+  true
+);
 ```
 
-### 2. `src/App.tsx`
+### 2. `src/hooks/useServicos.ts`
 
-**Alteração:** Adicionar rota para página de gestão na Diretoria
+**Alteração:** Adicionar `valor_fipe` ao select de veículos no `useServicoDetalhes`
 
 ```typescript
-// Após linha 494 (/diretoria/produtos)
-<Route path="/diretoria/planos-beneficios" element={<PlanosAdmin />} />
+// Linha ~750: Alterar o select de veiculos
+veiculos:veiculo_id (
+  id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe
+),
 ```
 
-Isso reutiliza a página `PlanosAdmin` que já existe e contém:
-- Tab Planos (gestão de `plans`)
-- Tab Benefícios (gestão de `benefits`)
-- Tab Coberturas (gestão de `main_coverages`)
-- Tab Linhas de Produtos (gestão de `product_lines`)
+### 3. `src/hooks/useConfigRastreador.ts` (NOVO)
 
-### 3. `src/pages/vendas/PlanosBeneficios.tsx`
+Criar hook para buscar a configuração de FIPE mínimo para rastreador:
+
+```typescript
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+const FIPE_MINIMO_RASTREADOR_PADRAO = 30000;
+
+export function useConfigFipeRastreador() {
+  return useQuery({
+    queryKey: ['config-fipe-minimo-rastreador'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'operacional_fipe_minimo_rastreador')
+        .single();
+      
+      if (error) {
+        console.warn('[useConfigFipeRastreador] Erro ao buscar:', error);
+        return FIPE_MINIMO_RASTREADOR_PADRAO;
+      }
+      
+      return Number(data?.valor) || FIPE_MINIMO_RASTREADOR_PADRAO;
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutos
+  });
+}
+
+/**
+ * Verifica se o veículo precisa de rastreador
+ * @returns true se precisa, false se dispensa
+ */
+export function precisaRastreador(valorFipe: number | null, fipeMinimo: number): boolean {
+  if (!valorFipe) return true; // Se não tem FIPE, exige por segurança
+  return valorFipe >= fipeMinimo;
+}
+```
+
+### 4. `src/data/vistoriaConfigCompleta.ts`
+
+**Alteração:** Exportar função para filtrar categorias baseado na necessidade de rastreador
+
+```typescript
+// Adicionar nova função helper
+export function getCategoriasFiltradas(
+  tipo: TipoVeiculo, 
+  incluirInstalacao: boolean
+): VistoriaCategoriaConfig[] {
+  const categorias = getCategoriasByTipoVeiculo(tipo);
+  if (!incluirInstalacao) {
+    return categorias.filter(c => c.id !== 'instalacao');
+  }
+  return categorias;
+}
+
+export function getFotosFiltradasPorCategoria(
+  tipo: TipoVeiculo,
+  incluirInstalacao: boolean
+): VistoriaFotoConfig[] {
+  const fotos = getFotosByTipoVeiculo(tipo);
+  if (!incluirInstalacao) {
+    return fotos.filter(f => f.categoria !== 'instalacao');
+  }
+  return fotos;
+}
+```
+
+### 5. `src/pages/instalador/InstaladorChecklist.tsx`
 
 **Alterações principais:**
 
-a) **Remover variável de permissão para edição:**
+a) **Importar o novo hook:**
 ```typescript
-// Remover ou mudar para sempre false
-const podeEditar = false; // Antes: isDiretor || isDesenvolvedor
+import { useConfigFipeRastreador, precisaRastreador } from '@/hooks/useConfigRastreador';
 ```
 
-b) **Remover estados de edição** (linhas 88-97):
-- `editModalOpen`, `planToEdit`
-- `beneficioModalOpen`, `beneficioToEdit`
-- `deleteDialogOpen`, `planToDelete`, etc.
-
-c) **Remover botões de ação no header** (linha 217-221):
-- Remover botão "Novo Plano"
-
-d) **Remover handlers de edição/exclusão** (linhas 118-181):
-- `handleEditPlan`, `handleCreatePlan`, `handleDeletePlan`
-- `handleEditBeneficio`, `handleCreateBeneficio`, `handleDeleteBeneficio`
-- `confirmDelete`, `confirmDeleteBeneficio`
-
-e) **Atualizar componentes filhos** para não passar props de edição:
+b) **Buscar configuração e valor FIPE:**
 ```typescript
-// PlanoLineSection - remover props canEdit, onEditPlan, onDeletePlan
-<PlanoLineSection
-  key={line.id}
-  productLine={line}
-  plans={getPlansByLineId(line.id)}
-/>
+const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
+
+// Verificar se veículo precisa de rastreador
+const valorFipeVeiculo = useMemo(() => {
+  const veiculoData = servico?.veiculos as { valor_fipe?: number } | undefined;
+  return veiculoData?.valor_fipe || null;
+}, [servico?.veiculos]);
+
+const veiculoPrecisaRastreador = useMemo(() => {
+  return precisaRastreador(valorFipeVeiculo, fipeMinRastreador);
+}, [valorFipeVeiculo, fipeMinRastreador]);
 ```
 
-f) **Remover modais de edição** (linhas 478-520):
-- `PlanFormModal`
-- `BeneficioAdicionalModal`
-- `AlertDialog` de exclusão
-
-g) **Adicionar banner informativo** para diretores:
+c) **Filtrar categorias de fotos:**
 ```typescript
-{isDiretor && (
-  <Alert className="border-blue-200 bg-blue-50">
-    <Settings className="h-4 w-4 text-blue-600" />
-    <AlertDescription>
-      Para criar ou editar planos, acesse{' '}
-      <Link to="/diretoria/planos-beneficios" className="font-medium underline">
-        Diretoria → Planos/Benefícios
-      </Link>
+// Linha ~135: Alterar categoriasComFotos
+const categoriasComFotos = useMemo(() => {
+  const categorias = agruparFotosPorCategoriaCompleta(tipoVeiculo);
+  if (!veiculoPrecisaRastreador) {
+    return categorias.filter(c => c.id !== 'instalacao');
+  }
+  return categorias;
+}, [tipoVeiculo, veiculoPrecisaRastreador]);
+```
+
+d) **Ocultar seção de seleção de rastreador (se não precisa):**
+```typescript
+// Na etapa 5 (Decisão), condicionar a exibição do campo de rastreador
+{veiculoPrecisaRastreador && (
+  <div className="space-y-3">
+    <Label>Rastreador Utilizado</Label>
+    {/* ... campos de IMEI e seleção de rastreador */}
+  </div>
+)}
+```
+
+e) **Ajustar validação de aprovação:**
+```typescript
+// Remover validação de rastreador se não precisa
+const podeAprovar = useMemo(() => {
+  const checklistOk = checklistCompleto;
+  const fotosOk = fotosObrigatoriasCompletas;
+  const videoOk = video360Enviado;
+  const assinaturaOk = !!assinaturaUrl;
+  
+  // Rastreador só é obrigatório se veículo precisa
+  const rastreadorOk = !veiculoPrecisaRastreador || !!imeiRastreador;
+  
+  return checklistOk && fotosOk && videoOk && assinaturaOk && rastreadorOk;
+}, [/* deps */]);
+```
+
+f) **Mostrar alerta informativo quando dispensado:**
+```typescript
+{!veiculoPrecisaRastreador && (
+  <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
+    <Router className="h-4 w-4 text-blue-600" />
+    <AlertDescription className="text-blue-800 dark:text-blue-200">
+      <strong>Rastreador dispensado</strong>
+      <br />
+      Veículo com FIPE abaixo de R$ {fipeMinRastreador.toLocaleString('pt-BR')} 
+      não requer instalação de rastreador.
     </AlertDescription>
   </Alert>
 )}
 ```
 
-### 4. `src/components/planos/PlanoLineSection.tsx`
+### 6. `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
 
-**Alteração:** Remover props de edição e botões de ação
+**Alterações similares:**
+- Importar hook e verificar se precisa de rastreador
+- Filtrar categoria "instalacao" das fotos quando dispensado
+- Remover exigência de foto do rastreador nas validações
 
-```typescript
-// Interface simplificada
-interface PlanoLineSectionProps {
-  productLine: ProductLine;
-  plans: PlanWithDetails[];
-  // Remover: canEdit, onEditPlan, onDeletePlan
-}
-```
-
-## Fluxo Resultante
+## Fluxo Resumido
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│                           DIRETORIA                                  │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  [Produtos]                    [Planos/Benefícios]                  │
-│  /diretoria/produtos           /diretoria/planos-beneficios          │
-│  ├── Tabela planos             ├── Tab Planos (plans)               │
-│  ├── Tabela de Preços          ├── Tab Benefícios (benefits)        │
-│  └── Coberturas operacionais   ├── Tab Coberturas (main_coverages)  │
-│                                └── Tab Linhas (product_lines)       │
-│                                                                      │
-│  [Criar] [Editar] [Excluir]    [Criar] [Editar] [Excluir]          │
-│                                                                      │
+│                    CONFIGURAÇÕES DIRETORIA                          │
+│  Tab: Operacional                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ FIPE Mínimo para Rastreador                                  │   │
+│  │ R$ [30.000,00]                                              │   │
+│  │ Veículos abaixo dispensam instalação de rastreador          │   │
+│  └─────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
                               │
-                              │ Dados fluem para
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                            VENDAS                                    │
+│                    VISTORIA / INSTALAÇÃO                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  [Planos e Benefícios]         (Somente visualização)               │
-│  /vendas/planos-beneficios                                          │
-│  ├── Visão Geral                                                    │
-│  ├── Carros                                                         │
-│  ├── Motos                                                          │
-│  ├── Adicionais (consulta)                                          │
-│  ├── Ranking                                                        │
-│  └── Glossário                                                      │
+│  Valor FIPE do Veículo: R$ 25.000                                   │
+│  Configuração: R$ 30.000                                            │
 │                                                                      │
-│  [Consultar] [Calcular] [Comparar]  ← Funcionalidades mantidas      │
+│  ⚠️ FIPE < Mínimo → Rastreador DISPENSADO                           │
+│                                                                      │
+│  Fotos obrigatórias:                                                │
+│  ✅ Identificação e Motor (6 fotos)                                 │
+│  ✅ Exterior 360° (9 fotos)                                         │
+│  ✅ Pneus (4 fotos)                                                 │
+│  ✅ Interior (5 fotos)                                              │
+│  ✅ Bancos e Forrações (7 fotos)                                    │
+│  ❌ Instalação (OCULTO - não aparece)                               │
+│                                                                      │
+│  Vídeo 360°: ✅ Obrigatório (mantido)                               │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Dados Preservados
-
-| Tabela | Registros | Ação |
-|--------|-----------|------|
-| `plans` | 14 | Mantidos, gerenciados via `/diretoria/planos-beneficios` |
-| `product_lines` | 4 | Mantidos |
-| `benefits` | 16 | Mantidos |
-| `plan_benefits` | 147 | Mantidos (vínculos plano-benefício) |
-| `beneficios_adicionais` | 14 | Mantidos |
-| `planos` | 18 | Mantidos, gerenciados via `/diretoria/produtos` |
-
-## Resumo de Arquivos
+## Arquivos a Modificar
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/components/layout/AppSidebar.tsx` | Modificar | Adicionar item "Planos/Benefícios" no menu Diretoria |
-| `src/App.tsx` | Modificar | Adicionar rota `/diretoria/planos-beneficios` |
-| `src/pages/vendas/PlanosBeneficios.tsx` | Modificar | Remover toda lógica de edição, manter apenas visualização |
-| `src/components/planos/PlanoLineSection.tsx` | Modificar | Remover props de edição |
+| `configuracoes` (DB) | INSERT | Adicionar configuração `operacional_fipe_minimo_rastreador` |
+| `src/hooks/useServicos.ts` | Modificar | Incluir `valor_fipe` no select de veículos |
+| `src/hooks/useConfigRastreador.ts` | Criar | Hook para buscar configuração |
+| `src/data/vistoriaConfigCompleta.ts` | Modificar | Adicionar funções de filtragem |
+| `src/pages/instalador/InstaladorChecklist.tsx` | Modificar | Condicionar exibição da categoria instalação |
+| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Modificar | Mesma lógica de filtragem |
 
-## Observações Técnicas
+## Observações Importantes
 
-- A página `PlanosAdmin` (já existente) será reutilizada na nova rota da Diretoria
-- O acesso é controlado por permissões (`isDiretor`, `isDesenvolvedor`, `isAdminMaster`)
-- As tabelas comerciais (`plans`, `benefits`) permanecem separadas das operacionais (`planos`)
-- Se futuramente quiser unificar as tabelas, será necessário uma migração de dados
+1. **Segurança:** Se o valor FIPE não estiver disponível, o sistema exige rastreador por segurança
+2. **Configuração padrão:** R$ 30.000,00 (pode ser alterado na área de configurações)
+3. **Vistoria mantida:** Apenas o rastreador é dispensado, a vistoria completa permanece obrigatória
+4. **Retroatividade:** Vistorias/instalações já concluídas não são afetadas
