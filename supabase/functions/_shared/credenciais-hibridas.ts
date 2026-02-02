@@ -4,7 +4,7 @@
  * Módulo de Credenciais Híbridas
  * 
  * Busca credenciais com prioridade:
- * 1. Banco de dados (integracoes_credenciais) - criptografado com AES-256-GCM
+ * 1. Banco de dados (integracoes_credenciais) - criptografado com AES-256-GCM + PBKDF2
  * 2. Supabase Secrets (variáveis de ambiente) - fallback
  */
 
@@ -20,32 +20,51 @@ interface CredenciaisRedeVeiculos {
 }
 
 /**
- * Descriptografar credenciais usando AES-256-GCM
+ * Deriva chave usando PBKDF2 (mesmo método do integracoes-credenciais)
  */
-async function descriptografar(encryptedData: string, key: string): Promise<Record<string, string>> {
+async function deriveKey(secret: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  );
+  
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: encoder.encode('integracoes_credenciais_salt'),
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+}
+
+/**
+ * Descriptografar credenciais usando AES-256-GCM + PBKDF2
+ * Formato compatível com integracoes-credenciais (base64 separado)
+ */
+async function descriptografar(
+  encryptedBase64: string, 
+  ivBase64: string, 
+  secret: string
+): Promise<Record<string, string>> {
   try {
-    const [ivHex, encryptedHex] = encryptedData.split(':');
+    const key = await deriveKey(secret);
     
-    if (!ivHex || !encryptedHex) {
-      throw new Error('Formato de dados criptografados inválido');
-    }
-
-    const iv = new Uint8Array(ivHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-    const encrypted = new Uint8Array(encryptedHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    // Decodificar base64
+    const encrypted = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+    const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
     
-    // Importar chave
-    const keyBuffer = new TextEncoder().encode(key.slice(0, 32).padEnd(32, '0'));
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyBuffer,
-      { name: 'AES-GCM' },
-      false,
-      ['decrypt']
-    );
-
     const decrypted = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv },
-      cryptoKey,
+      key,
       encrypted
     );
 
@@ -64,17 +83,21 @@ export async function getCredenciaisSoftruck(supabase: any): Promise<Credenciais
   const encryptionKey = Deno.env.get('INTEGRACOES_ENCRYPTION_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   
   try {
-    // 1. Tentar buscar do banco de dados
+    // 1. Tentar buscar do banco de dados (incluindo campo iv)
     const { data: credencial, error } = await supabase
       .from('integracoes_credenciais')
-      .select('credenciais_encrypted, configurado')
+      .select('credenciais_encrypted, iv, configurado')
       .eq('integracao', 'softruck')
       .eq('configurado', true)
       .maybeSingle();
 
-    if (!error && credencial?.credenciais_encrypted) {
+    if (!error && credencial?.credenciais_encrypted && credencial?.iv) {
       console.log('[Credenciais] Softruck: usando credenciais do banco de dados');
-      const decrypted = await descriptografar(credencial.credenciais_encrypted, encryptionKey);
+      const decrypted = await descriptografar(
+        credencial.credenciais_encrypted, 
+        credencial.iv, 
+        encryptionKey
+      );
       
       // Validar campos obrigatórios
       if (decrypted.public_key && decrypted.username && decrypted.password) {
@@ -118,17 +141,21 @@ export async function getCredenciaisRedeVeiculos(supabase: any): Promise<Credenc
   const encryptionKey = Deno.env.get('INTEGRACOES_ENCRYPTION_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   
   try {
-    // 1. Tentar buscar do banco de dados
+    // 1. Tentar buscar do banco de dados (incluindo campo iv)
     const { data: credencial, error } = await supabase
       .from('integracoes_credenciais')
-      .select('credenciais_encrypted, configurado')
+      .select('credenciais_encrypted, iv, configurado')
       .eq('integracao', 'rede_veiculos')
       .eq('configurado', true)
       .maybeSingle();
 
-    if (!error && credencial?.credenciais_encrypted) {
+    if (!error && credencial?.credenciais_encrypted && credencial?.iv) {
       console.log('[Credenciais] Rede Veículos: usando credenciais do banco de dados');
-      const decrypted = await descriptografar(credencial.credenciais_encrypted, encryptionKey);
+      const decrypted = await descriptografar(
+        credencial.credenciais_encrypted, 
+        credencial.iv, 
+        encryptionKey
+      );
       
       // Validar campo obrigatório
       if (decrypted.bearer_token) {

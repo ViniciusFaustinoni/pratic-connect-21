@@ -18,8 +18,9 @@ interface AuthResult {
  * Autenticação Softruck (OAuth JWT)
  * Usa credenciais híbridas (banco > ENV)
  */
+// deno-lint-ignore no-explicit-any
 async function authSoftruck(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   baseUrl: string, 
   existingRefreshToken?: string | null
 ): Promise<AuthResult> {
@@ -110,7 +111,8 @@ async function authSoftruck(
  * RedeVeículos usa token fixo (Bearer)
  * Usa credenciais híbridas (banco > ENV)
  */
-async function authRedeVeiculos(supabase: ReturnType<typeof createClient>): Promise<AuthResult> {
+// deno-lint-ignore no-explicit-any
+async function authRedeVeiculos(supabase: any): Promise<AuthResult> {
   const credenciais = await getCredenciaisRedeVeiculos(supabase);
   
   if (!credenciais) {
