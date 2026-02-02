@@ -950,7 +950,7 @@ const desenharPaginaCapa = (
   
   planosExibidos.forEach((plano, index) => {
     const valorX = tabelaX + labelWidth + valorWidth * index + valorWidth / 2;
-    const primeiroPagamento = plano.valorAdesao; // Primeiro pagamento = apenas adesão
+    const primeiroPagamento = plano.valorAdesao + plano.valorMensal; // Primeiro pagamento = adesão + mensalidade
 
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(7);
@@ -984,7 +984,7 @@ const desenharPaginaCapa = (
     
     planosRestantes.forEach((plano, index) => {
       const valorX = tabelaX2 + labelWidth + valorWidth2 * index + valorWidth2 / 2;
-      const primeiroPagamento = plano.valorAdesao; // Primeiro pagamento = apenas adesão
+      const primeiroPagamento = plano.valorAdesao + plano.valorMensal; // Primeiro pagamento = adesão + mensalidade
 
       doc.setTextColor(textLight.r, textLight.g, textLight.b);
       doc.setFontSize(7);
