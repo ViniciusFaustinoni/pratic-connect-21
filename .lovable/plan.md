@@ -1,201 +1,252 @@
 
 
-# Plano: Verificação Crítica do Nome no Comprovante de Residência
+# Plano: Correção da Integração Softruck
 
-## Resumo
+## Resumo dos Erros
 
-Atualizar a Edge Function `document-ocr` para que a IA realize uma **verificação crítica obrigatória**: comparar o nome do titular no comprovante de residência com o nome do associado (fornecido via `nomeEsperado`), permitindo abreviações.
+A API Softruck está rejeitando a criação de veículos com 3 erros de validação:
 
-## Análise do Estado Atual
+| Campo | Valor Enviado | Valor Correto |
+|-------|---------------|---------------|
+| `type` | `carro` (PT) | `car` (EN) |
+| `color` | `Azul` (texto) | `#2196F3` (hex) |
+| `enterprise.id` | UUID 36 chars | `oydMqwmvgeLJ1kB` |
 
-### O que já existe
+## Correções Necessárias
 
-| Componente | Status |
-|------------|--------|
-| Parâmetro `nomeEsperado` enviado para IA | ✅ Existe (linha 79) |
-| Campo `nome_titular` extraído do comprovante | ✅ Existe no prompt |
-| Instrução básica para verificar nome | ⚠️ Fraca (linha 261) |
-| Regra de aprovação automática por endereço legível | ❌ Conflita (linha 140) |
+### 1. Enterprise ID Fixo
 
-### Problema Atual
+O Enterprise ID será **sempre** `oydMqwmvgeLJ1kB` (hardcoded nas Edge Functions).
 
-A linha 140 do `systemPrompt` diz:
-```
-Se o endereço estiver completo e legível, SEMPRE sugerir "aprovar"
-```
+Isso elimina a dependência do secret `SOFTRUCK_ENTERPRISE_ID` e garante consistência.
 
-Isso faz com que a IA aprove comprovantes mesmo quando o nome do titular **não confere** com o nome do associado.
+### 2. Mapeamento de Tipo de Veículo (PT → EN)
 
-## Solução
-
-Adicionar uma **verificação crítica de nome** no `systemPrompt` com as seguintes regras:
-
-### 1. Regra Principal (CRÍTICA)
-
-```
-Se o nome_titular do comprovante NÃO corresponder ao nomeEsperado do associado:
-→ sugestao: "reprovar"
-→ motivo: "Nome do titular ({nome_titular}) não corresponde ao associado ({nomeEsperado})"
-```
-
-### 2. Tolerância para Abreviações
-
-A IA deve aceitar como correspondência válida:
-
-| Nome no Comprovante | Nome do Associado | Resultado |
-|---------------------|-------------------|-----------|
-| MARIO DA SILVA | Mario da Silva | ✅ Aceitar |
-| M. DA SILVA | Mario da Silva | ✅ Aceitar |
-| MARIO D. SILVA | Mario da Silva | ✅ Aceitar |
-| M. D. SILVA | Mario da Silva | ✅ Aceitar |
-| MARIA DA SILVA | Mario da Silva | ❌ Reprovar |
-| JOSE SILVA | Mario da Silva | ❌ Reprovar |
-| (vazio/ilegível) | Mario da Silva | ⚠️ Revisar |
-
-### 3. Casos Especiais
-
-- **Cônjuge**: Se o comprovante estiver em nome de cônjuge, sugerir "revisar" (não reprovar automaticamente)
-- **Nome ilegível**: Sugerir "revisar" com motivo explicativo
-- **Mesmo sobrenome**: Se pelo menos o sobrenome coincidir, sugerir "revisar" ao invés de reprovar
-
-## Alterações no Arquivo
-
-**Arquivo:** `supabase/functions/document-ocr/index.ts`
-
-### Atualização do systemPrompt (seção Comprovante de Residência)
-
-Adicionar após a linha 143 (REGRAS ESPECIAIS para Comprovante de Residência):
+**Arquivo:** `supabase/functions/softruck-api/index.ts`
 
 ```typescript
-// Novas regras a adicionar no systemPrompt:
-
-**⚠️ VERIFICAÇÃO CRÍTICA DE TITULARIDADE ⚠️**
-
-Esta é a verificação MAIS IMPORTANTE para comprovantes de residência:
-
-1. COMPARE o nome_titular extraído do comprovante com o nomeEsperado fornecido no contexto
-
-2. REGRAS DE COMPARAÇÃO DE NOMES (permitir abreviações):
-   - Ignore diferenças de maiúsculas/minúsculas
-   - Ignore acentos e caracteres especiais
-   - Aceite abreviações válidas:
-     * "M." ou "M " como abreviação de "Mario", "Maria", "Marcos", etc.
-     * "D." ou "Da" ou "De" como conectivos abreviados
-     * Iniciais seguidas de ponto são válidas para qualquer nome
-   - O SOBRENOME deve corresponder (é obrigatório)
-   - Pelo menos a primeira letra do primeiro nome deve corresponder
-
-3. EXEMPLOS DE CORRESPONDÊNCIA:
-   - "M. SILVA" corresponde a "Mario Silva" ✓
-   - "MARIO D. SILVA" corresponde a "Mario da Silva" ✓
-   - "M. D. S." corresponde a "Mario da Silva" ✓
-   - "MARIO SILVA" corresponde a "Mario da Silva" ✓
-   - "MARIA SILVA" NÃO corresponde a "Mario Silva" ✗
-   - "JOSE SANTOS" NÃO corresponde a "Mario Silva" ✗
-
-4. DECISÕES:
-   - Se nome_titular CORRESPONDE ao nomeEsperado (incluindo abreviações): pode aprovar
-   - Se nome_titular NÃO CORRESPONDE ao nomeEsperado: 
-     * sugestao: "reprovar"
-     * motivo: "Titular do comprovante ({nome_titular}) diverge do associado ({nomeEsperado})"
-   - Se nome_titular está ILEGÍVEL ou VAZIO:
-     * sugestao: "revisar"
-     * motivo: "Nome do titular não pôde ser lido no documento"
-   - Se MESMO SOBRENOME mas primeiro nome diferente (possível cônjuge):
-     * sugestao: "revisar"
-     * motivo: "Titular pode ser cônjuge/familiar - verificar manualmente"
-
-5. PRIORIDADE: Esta verificação tem prioridade sobre a regra de "endereço legível = aprovar"
-```
-
-### Atualização do userPrompt
-
-Modificar a construção do prompt quando `nomeEsperado` está presente para enfatizar a criticidade:
-
-```typescript
-// Linha ~260-262, modificar para:
-if (nomeEsperado) {
-  userPrompt += ` 
-
-⚠️ VERIFICAÇÃO CRÍTICA DE TITULARIDADE ⚠️
-Nome do associado no cadastro: "${nomeEsperado}"
-Se for COMPROVANTE DE RESIDÊNCIA: compare o nome do titular com este nome.
-REPROVE se os nomes não corresponderem (permitindo abreviações válidas).`;
+function mapVehicleType(combustivel: string | null): string {
+  const mapping: Record<string, string> = {
+    'gasolina': 'car',
+    'etanol': 'car',
+    'flex': 'car',
+    'diesel': 'truck',
+    'eletrico': 'car',
+    'hibrido': 'car',
+    'gnv': 'car',
+    'carro': 'car',
+    'caminhao': 'truck',
+    'moto': 'motorcycle',
+  };
+  return mapping[combustivel?.toLowerCase() || ''] || 'car';
 }
 ```
 
-### Atualização da Resposta da IA
+### 3. Mapeamento de Cores (Texto → Hexadecimal)
 
-Adicionar campos específicos para a validação de titularidade:
+**Arquivo:** `supabase/functions/softruck-api/index.ts`
 
 ```typescript
-// Na estrutura de resposta esperada, adicionar para comprovante_residencia:
-{
-  "tipo_detectado": "comprovante_residencia",
-  "dados": {
-    "nome_titular": "...",
-    "nome_titular_validado": true | false,  // NOVO: indica se nome confere
-    // ... outros campos
-  },
-  "validacao_titularidade": {  // NOVO: detalhes da comparação
-    "nome_titular_extraido": "M. DA SILVA",
-    "nome_esperado": "Mario da Silva",
-    "correspondencia": true | false,
-    "tipo_correspondencia": "exata" | "abreviacao" | "nenhuma" | "possivel_conjuge",
-    "observacao": "Abreviação válida detectada"
-  }
+const SOFTRUCK_COLORS: Record<string, string> = {
+  'branco': '#FFFFFF',
+  'preto': '#212121',
+  'prata': '#9E9E9E',
+  'cinza': '#9E9E9E',
+  'vermelho': '#FF5722',
+  'azul': '#2196F3',
+  'verde': '#8BC34A',
+  'amarelo': '#FFC107',
+  'laranja': '#FF9800',
+  'marrom': '#795548',
+  'bege': '#E1C699',
+  'rosa': '#F8BBD0',
+  'roxo': '#9C27B0',
+  'vinho': '#C2185B',
+  'dourado': '#FFC107',
+  'champagne': '#E1C699',
+};
+
+function mapVehicleColor(cor: string | null): string {
+  if (!cor) return '#9E9E9E';
+  const normalized = cor.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return SOFTRUCK_COLORS[normalized] || '#9E9E9E';
 }
 ```
 
-## Fluxo Visual
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/softruck-api/index.ts` | Corrigir mapeamentos e usar Enterprise ID fixo |
+| `supabase/functions/softruck-ativar-dispositivo/index.ts` | Corrigir mapeamentos e usar Enterprise ID fixo |
+| `src/types/softruck.ts` | Atualizar constantes para valores em inglês |
+
+## Detalhes das Alterações
+
+### Arquivo: `supabase/functions/softruck-api/index.ts`
+
+**Alteração 1** - Substituir mapeamento de tipo (linha ~192-203):
+
+```typescript
+function mapVehicleType(combustivel: string | null): string {
+  const mapping: Record<string, string> = {
+    'gasolina': 'car',
+    'etanol': 'car',
+    'flex': 'car',
+    'diesel': 'truck',
+    'eletrico': 'car',
+    'hibrido': 'car',
+    'gnv': 'car',
+    'carro': 'car',
+    'caminhao': 'truck',
+    'caminhão': 'truck',
+    'moto': 'motorcycle',
+    'motocicleta': 'motorcycle',
+  };
+  return mapping[combustivel?.toLowerCase() || ''] || 'car';
+}
+```
+
+**Alteração 2** - Adicionar mapeamento de cor:
+
+```typescript
+const SOFTRUCK_COLORS: Record<string, string> = {
+  'branco': '#FFFFFF',
+  'preto': '#212121',
+  'prata': '#9E9E9E',
+  'cinza': '#9E9E9E',
+  'vermelho': '#FF5722',
+  'azul': '#2196F3',
+  'verde': '#8BC34A',
+  'amarelo': '#FFC107',
+  'laranja': '#FF9800',
+  'marrom': '#795548',
+  'bege': '#E1C699',
+  'rosa': '#F8BBD0',
+  'roxo': '#9C27B0',
+  'vinho': '#C2185B',
+  'dourado': '#FFC107',
+  'champagne': '#E1C699',
+};
+
+function mapVehicleColor(cor: string | null): string {
+  if (!cor) return '#9E9E9E';
+  if (/^#[0-9A-Fa-f]{6}$/.test(cor)) return cor.toUpperCase();
+  const normalized = cor.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return SOFTRUCK_COLORS[normalized] || '#9E9E9E';
+}
+```
+
+**Alteração 3** - Usar Enterprise ID fixo na criação de veículo:
+
+```typescript
+// Substituir qualquer referência a enterpriseId dinâmico por:
+const SOFTRUCK_ENTERPRISE_ID = 'oydMqwmvgeLJ1kB';
+```
+
+**Alteração 4** - Usar `mapVehicleColor` na criação de veículo:
+
+```typescript
+// ANTES
+color: cor?.substring(0, 7),
+
+// DEPOIS  
+color: mapVehicleColor(cor),
+```
+
+### Arquivo: `supabase/functions/softruck-ativar-dispositivo/index.ts`
+
+**Mesmas alterações:**
+- Corrigir `mapVehicleType` para retornar valores em inglês
+- Adicionar `mapVehicleColor` para converter cores
+- Usar Enterprise ID fixo: `oydMqwmvgeLJ1kB`
+
+### Arquivo: `src/types/softruck.ts`
+
+Atualizar constantes para refletir valores corretos:
+
+```typescript
+export const SOFTRUCK_VEHICLE_TYPES = [
+  'car', 'utility', 'van', 'scooter', 'motorcycle', 
+  'tricycle', 'quadricycle', 'pickup truck', 'truck', 
+  'bus', 'micro bus', 'other', 'implement', 
+  'agricultural machine', 'tractor truck', 'tractor'
+] as const;
+
+export const COMBUSTIVEL_TO_VEHICLE_TYPE: Record<string, string> = {
+  'gasolina': 'car',
+  'etanol': 'car',
+  'flex': 'car',
+  'diesel': 'truck',
+  'eletrico': 'car',
+  'hibrido': 'car',
+  'gnv': 'car',
+};
+```
+
+## Fluxo Corrigido
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  ANÁLISE DE COMPROVANTE DE RESIDÊNCIA                           │
+│  CRIAÇÃO DE VEÍCULO NA SOFTRUCK (CORRIGIDO)                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  1. Extrair nome_titular do documento                           │
-│     └─> "M. DA SILVA"                                           │
+│  1. Recebe dados do veículo local                               │
+│     └─> { placa: "LTB4J74", cor: "Azul", combustivel: null }    │
 │                                                                 │
-│  2. Receber nomeEsperado do associado                           │
-│     └─> "Mario da Silva"                                        │
+│  2. Aplica mapeamentos corrigidos                               │
+│     ├─> tipo: "car" (padrão em inglês) ✅                       │
+│     ├─> cor: "#2196F3" (azul → hex) ✅                          │
+│     └─> enterpriseId: "oydMqwmvgeLJ1kB" (fixo) ✅               │
 │                                                                 │
-│  3. Comparar nomes (com tolerância a abreviações)               │
-│     ├─> Normalizar: remover acentos, lowercase                  │
-│     ├─> Verificar sobrenome: "SILVA" = "Silva" ✓                │
-│     └─> Verificar primeiro nome: "M." ~ "Mario" ✓               │
+│  3. Envia para API Softruck                                     │
+│     └─> POST /v2/vehicles → 201 Created ✅                      │
 │                                                                 │
-│  4. Decisão                                                     │
-│     ├─> Correspondência: SIM                                    │
-│     ├─> sugestao: "aprovar"                                     │
-│     └─> motivo: "Documento válido, titular corresponde"         │
+│  4. Continua fluxo de ativação                                  │
+│     └─> Cria device, associa, ativa ✅                          │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Tabela de Decisões
+## Tabela de Mapeamentos
 
-| Cenário | nome_titular | nomeEsperado | Decisão | Motivo |
-|---------|--------------|--------------|---------|--------|
-| Match exato | Mario Silva | Mario Silva | ✅ Aprovar | Nomes conferem |
-| Abreviação 1ª letra | M. Silva | Mario Silva | ✅ Aprovar | Abreviação válida |
-| Abreviação completa | M. D. S. | Mario da Silva | ✅ Aprovar | Abreviação válida |
-| Caixa diferente | MARIO SILVA | mario silva | ✅ Aprovar | Ignora caixa |
-| Nome diferente | Maria Silva | Mario Silva | ⚠️ Revisar | Possível cônjuge |
-| Sobrenome diferente | Mario Santos | Mario Silva | ❌ Reprovar | Nomes divergentes |
-| Nome ilegível | (null) | Mario Silva | ⚠️ Revisar | Não foi possível ler |
-| Completamente diferente | Jose Santos | Mario Silva | ❌ Reprovar | Titular diverge |
+### Tipos de Veículo
 
-## Arquivo a Modificar
+| Português/Combustível | Inglês (API) |
+|-----------------------|--------------|
+| gasolina, etanol, flex, elétrico, híbrido, gnv | car |
+| diesel, caminhão | truck |
+| moto, motocicleta | motorcycle |
+| (padrão) | car |
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/document-ocr/index.ts` | Atualizar systemPrompt e userPrompt |
+### Cores
 
-## Benefícios
+| Português | Hexadecimal |
+|-----------|-------------|
+| Branco | #FFFFFF |
+| Preto | #212121 |
+| Prata/Cinza | #9E9E9E |
+| Vermelho | #FF5722 |
+| Azul | #2196F3 |
+| Verde | #8BC34A |
+| Amarelo | #FFC107 |
+| Laranja | #FF9800 |
+| Marrom | #795548 |
+| Bege/Champagne | #E1C699 |
+| Rosa | #F8BBD0 |
+| Roxo | #9C27B0 |
+| Vinho | #C2185B |
+| Dourado | #FFC107 |
+| (padrão) | #9E9E9E |
 
-1. **Segurança**: Impede aprovação de comprovantes em nome de terceiros
-2. **Flexibilidade**: Aceita abreviações comuns em documentos
-3. **Clareza**: Motivo de reprovação é explícito para o analista
-4. **Auditoria**: Registra a comparação feita pela IA
+## Resumo
+
+| Item | Valor |
+|------|-------|
+| **Enterprise ID** | `oydMqwmvgeLJ1kB` (fixo, hardcoded) |
+| **Tipo padrão** | `car` (em inglês) |
+| **Cor padrão** | `#9E9E9E` (cinza) |
+| **Arquivos modificados** | 3 |
 
