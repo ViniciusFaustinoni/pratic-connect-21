@@ -274,22 +274,12 @@ function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean 
   return (
     <Card className="border-border bg-card">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              Funil de Vendas
-            </CardTitle>
-            <CardDescription>Distribuição de leads por etapa</CardDescription>
-          </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="border-border hover:border-border-hover hover:bg-card-hover"
-            onClick={() => navigate('/vendas/kanban')}
-          >
-            Ver Kanban <ArrowRight className="ml-1 h-4 w-4" />
-          </Button>
+        <div>
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Funil de Vendas
+          </CardTitle>
+          <CardDescription>Distribuição de leads por etapa</CardDescription>
         </div>
       </CardHeader>
       <CardContent>
