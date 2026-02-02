@@ -512,62 +512,166 @@ serve(async (req) => {
         if (isCpfDuplicado) {
           console.log('[SGA Sync] CPF já existe no Hinova, buscando código do associado existente...');
           
-          // Tentar buscar associado pelo CPF no Hinova
           const buscaCpf = cleanCPF(associado.cpf);
-          const buscaResponse = await fetchWithRetry(
-            `${hinovaApiUrl}/associado/consultar/cpf/${buscaCpf}`,
-            {
-              method: 'GET',
-              headers: operationHeaders,
-            }
-          );
+          let codigoExistente: number | null = null;
           
-          if (buscaResponse.ok) {
-            const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_associado_cpf');
-            console.log('[SGA Sync] Resposta busca CPF:', JSON.stringify(buscaData));
+          // ========================================
+          // ESTRATÉGIA 1: Buscar código em logs anteriores de cadastro bem-sucedido
+          // ========================================
+          console.log('[SGA Sync] Estratégia 1: Buscando código em logs anteriores...');
+          try {
+            const { data: logAnterior } = await supabase
+              .from('sga_sync_logs')
+              .select('response_payload')
+              .eq('action', 'cadastrar_associado')
+              .eq('status', 'success')
+              .not('response_payload', 'is', null)
+              .order('created_at', { ascending: false })
+              .limit(50);
             
-            // Tentar extrair codigo_associado da resposta
-            const codigoExistente = buscaData?.codigo_associado || buscaData?.codigo || buscaData?.data?.codigo_associado;
+            // Procurar log que tenha codigo_associado na resposta
+            if (logAnterior && logAnterior.length > 0) {
+              for (const log of logAnterior) {
+                const respPayload = log.response_payload as any;
+                if (respPayload?.codigo_associado) {
+                  console.log(`[SGA Sync] Encontrado log com codigo_associado: ${respPayload.codigo_associado}`);
+                  codigoExistente = respPayload.codigo_associado;
+                  break;
+                }
+              }
+            }
             
             if (codigoExistente) {
-              console.log(`[SGA Sync] Associado encontrado no Hinova - Código: ${codigoExistente}`);
-              
-              // Atualizar o associado local com o código do Hinova
-              await supabase
-                .from('associados')
-                .update({ 
-                  codigo_hinova: codigoExistente,
-                  sincronizado_hinova: true,
-                  sincronizado_hinova_em: new Date().toISOString()
-                })
-                .eq('id', associado_id);
-              
-              // Usar o código encontrado para continuar o fluxo
-              codigoAssociadoHinova = codigoExistente;
-              console.log(`[SGA Sync] Usando código existente: ${codigoAssociadoHinova}`);
-            } else {
-              console.log('[SGA Sync] Busca retornou sucesso mas sem codigo_associado:', buscaData);
-              await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-              return new Response(
-                JSON.stringify({ 
-                  success: false, 
-                  error: 'CPF já cadastrado no Hinova mas não foi possível obter o código. Verifique manualmente.',
-                  step: 'associado',
-                  details: { cadastro: associadoData, busca: buscaData }
-                }),
-                { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              );
+              console.log(`[SGA Sync] Código recuperado de log anterior: ${codigoExistente}`);
             }
+          } catch (logError) {
+            console.log('[SGA Sync] Erro ao buscar logs anteriores:', logError);
+          }
+          
+          // ========================================
+          // ESTRATÉGIA 2: Tentar endpoints alternativos da API Hinova
+          // ========================================
+          if (!codigoExistente) {
+            console.log('[SGA Sync] Estratégia 2: Tentando endpoints alternativos da API...');
+            
+            // Endpoint 2a: POST /associado/consultar com body { cpf }
+            try {
+              console.log('[SGA Sync] Tentando POST /associado/consultar...');
+              const buscaResponse1 = await fetchWithRetry(
+                `${hinovaApiUrl}/associado/consultar`,
+                {
+                  method: 'POST',
+                  headers: operationHeaders,
+                  body: JSON.stringify({ cpf: buscaCpf })
+                }
+              );
+              
+              if (buscaResponse1.ok) {
+                const buscaData1 = await safeJsonParse<any>(buscaResponse1, 'buscar_associado_post');
+                console.log('[SGA Sync] Resposta POST /associado/consultar:', JSON.stringify(buscaData1));
+                codigoExistente = buscaData1?.codigo_associado || buscaData1?.codigo || buscaData1?.data?.codigo_associado || null;
+              }
+            } catch (e) {
+              console.log('[SGA Sync] POST /associado/consultar falhou:', e);
+            }
+            
+            // Endpoint 2b: GET /associado?cpf=xxx (query param)
+            if (!codigoExistente) {
+              try {
+                console.log('[SGA Sync] Tentando GET /associado?cpf=...');
+                const buscaResponse2 = await fetchWithRetry(
+                  `${hinovaApiUrl}/associado?cpf=${buscaCpf}`,
+                  {
+                    method: 'GET',
+                    headers: operationHeaders,
+                  }
+                );
+                
+                if (buscaResponse2.ok) {
+                  const buscaData2 = await safeJsonParse<any>(buscaResponse2, 'buscar_associado_query');
+                  console.log('[SGA Sync] Resposta GET /associado?cpf=:', JSON.stringify(buscaData2));
+                  codigoExistente = buscaData2?.codigo_associado || buscaData2?.codigo || buscaData2?.data?.codigo_associado || null;
+                }
+              } catch (e) {
+                console.log('[SGA Sync] GET /associado?cpf= falhou:', e);
+              }
+            }
+            
+            // Endpoint 2c: GET /associados/cpf/{cpf} (rota alternativa)
+            if (!codigoExistente) {
+              try {
+                console.log('[SGA Sync] Tentando GET /associados/cpf/...');
+                const buscaResponse3 = await fetchWithRetry(
+                  `${hinovaApiUrl}/associados/cpf/${buscaCpf}`,
+                  {
+                    method: 'GET',
+                    headers: operationHeaders,
+                  }
+                );
+                
+                if (buscaResponse3.ok) {
+                  const buscaData3 = await safeJsonParse<any>(buscaResponse3, 'buscar_associado_path');
+                  console.log('[SGA Sync] Resposta GET /associados/cpf/:', JSON.stringify(buscaData3));
+                  codigoExistente = buscaData3?.codigo_associado || buscaData3?.codigo || buscaData3?.data?.codigo_associado || null;
+                }
+              } catch (e) {
+                console.log('[SGA Sync] GET /associados/cpf/ falhou:', e);
+              }
+            }
+          }
+          
+          // ========================================
+          // ESTRATÉGIA 3: Buscar diretamente no banco local se já foi sincronizado antes
+          // ========================================
+          if (!codigoExistente) {
+            console.log('[SGA Sync] Estratégia 3: Buscando código no banco local pelo CPF...');
+            const { data: associadoLocal } = await supabase
+              .from('associados')
+              .select('codigo_hinova')
+              .eq('cpf', associado.cpf)
+              .not('codigo_hinova', 'is', null)
+              .limit(1)
+              .single();
+            
+            if (associadoLocal?.codigo_hinova) {
+              codigoExistente = associadoLocal.codigo_hinova;
+              console.log(`[SGA Sync] Código encontrado no banco local: ${codigoExistente}`);
+            }
+          }
+          
+          // Verificar se conseguimos encontrar o código
+          if (codigoExistente) {
+            console.log(`[SGA Sync] Associado encontrado - Código: ${codigoExistente}`);
+            
+            // Atualizar o associado local com o código do Hinova
+            await supabase
+              .from('associados')
+              .update({ 
+                codigo_hinova: codigoExistente,
+                sincronizado_hinova: true,
+                sincronizado_hinova_em: new Date().toISOString()
+              })
+              .eq('id', associado_id);
+            
+            // Usar o código encontrado para continuar o fluxo
+            codigoAssociadoHinova = codigoExistente;
+            console.log(`[SGA Sync] Usando código existente: ${codigoAssociadoHinova}`);
+            
+            await logSync(veiculo_id, associado_id, 'recuperar_codigo_existente', 'success', 
+              { cpf: '***', estrategia: 'fallback' }, { codigo_associado: codigoExistente }, null);
           } else {
-            const buscaError = await safeJsonParse<any>(buscaResponse, 'buscar_associado_cpf_error');
-            console.log('[SGA Sync] Erro ao buscar CPF existente:', buscaError);
+            console.log('[SGA Sync] Não foi possível recuperar o código do associado por nenhuma estratégia');
             await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+            
+            await logSync(veiculo_id, associado_id, 'recuperar_codigo_existente', 'error', 
+              { cpf: '***' }, null, 'Não foi possível recuperar código do associado existente');
+            
             return new Response(
               JSON.stringify({ 
                 success: false, 
-                error: 'CPF já cadastrado no Hinova. Não foi possível recuperar o código automaticamente.',
+                error: 'CPF já cadastrado no Hinova mas não foi possível recuperar o código automaticamente. Entre em contato com o suporte ou informe o código manualmente.',
                 step: 'associado',
-                details: { cadastro: associadoData, busca: buscaError }
+                details: { cadastro: associadoData }
               }),
               { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
@@ -585,20 +689,21 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+      } else {
+        // Sucesso no cadastro - extrair código
+        codigoAssociadoHinova = associadoData.codigo_associado;
+        console.log(`[SGA Sync] Associado cadastrado - Código Hinova: ${codigoAssociadoHinova}`);
+
+        // Atualizar código no banco local
+        await supabase
+          .from('associados')
+          .update({ 
+            codigo_hinova: codigoAssociadoHinova,
+            sincronizado_hinova: true,
+            sincronizado_hinova_em: new Date().toISOString()
+          })
+          .eq('id', associado_id);
       }
-
-      codigoAssociadoHinova = associadoData.codigo_associado;
-      console.log(`[SGA Sync] Associado cadastrado - Código Hinova: ${codigoAssociadoHinova}`);
-
-      // Atualizar código no banco local
-      await supabase
-        .from('associados')
-        .update({ 
-          codigo_hinova: codigoAssociadoHinova,
-          sincronizado_hinova: true,
-          sincronizado_hinova_em: new Date().toISOString()
-        })
-        .eq('id', associado_id);
     } else {
       console.log(`[SGA Sync] Associado já sincronizado - Código Hinova: ${codigoAssociadoHinova}`);
     }
