@@ -249,6 +249,9 @@ verify_jwt = false
 [functions.confirmar-agendamento-cron]
 verify_jwt = false
 
+[functions.confirmar-vistorias-manha-cron]
+verify_jwt = false
+
 [functions.acionar-roubo-furto]
 verify_jwt = false
 

@@ -166,7 +166,9 @@ serve(async (req) => {
         .gte('data_agendada', hoje)
         .lte('data_agendada', amanha)
         .not('latitude', 'is', null)
-        .not('longitude', 'is', null);
+        .not('longitude', 'is', null)
+        // FILTRO DE CONFIRMAÇÃO: Só atribuir serviços confirmados ou sem fluxo de confirmação
+        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada,permite_encaixe.eq.true');
 
       if (servicosNormaisError) {
         console.error('[cron-atribuir-tarefas] Erro ao buscar serviços normais:', servicosNormaisError);
@@ -199,7 +201,9 @@ serve(async (req) => {
         .gt('data_agendada', amanha) // DATAS FUTURAS (> amanhã)
         .eq('permite_encaixe', true)  // APENAS os que aceitam encaixe
         .not('latitude', 'is', null)
-        .not('longitude', 'is', null);
+        .not('longitude', 'is', null)
+        // FILTRO DE CONFIRMAÇÃO: Encaixes também precisam de confirmação se entraram no fluxo
+        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada');
 
       if (servicosEncaixeError) {
         console.error('[cron-atribuir-tarefas] Erro ao buscar serviços encaixe:', servicosEncaixeError);

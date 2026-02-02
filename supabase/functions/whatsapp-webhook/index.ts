@@ -2604,9 +2604,10 @@ serve(async (req) => {
     // ========================================
     // VERIFICAR SE É RESPOSTA DE CONFIRMAÇÃO
     // ========================================
+    // Buscar confirmação pendente - incluindo status 'aguardando_confirmacao_manha' do disparo matinal
     const { data: confirmacaoPendente } = await supabase
       .from('confirmacoes_agendamento')
-      .select('*, servico:servicos(id, profissional_id, hora_agendada)')
+      .select('*, servico:servicos(id, profissional_id, hora_agendada, confirmacao_whatsapp)')
       .in('telefone', telefonesBusca)
       .in('status', ['enviada', 'reagendando'])
       .order('created_at', { ascending: false })
