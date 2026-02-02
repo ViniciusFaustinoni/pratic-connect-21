@@ -137,9 +137,58 @@ REGRAS ESPECIAIS para Comprovante de Residência:
 - ACEITE como válido mesmo que o documento não tenha data de emissão visível
 - Para IPTU/IPVA, aceitar se for do ano vigente ou anterior
 - Para contratos de aluguel, NÃO exigir firma reconhecida
-- Se o endereço estiver completo e legível, SEMPRE sugerir "aprovar"
 - Para correspondências/cartas, extrair o destinatário como nome_titular
 - CLASSIFIQUE como "comprovante_residencia" qualquer documento que contenha endereço residencial claro
+
+**⚠️ VERIFICAÇÃO CRÍTICA DE TITULARIDADE ⚠️**
+
+Esta é a verificação MAIS IMPORTANTE para comprovantes de residência quando nomeEsperado for fornecido:
+
+1. COMPARE o nome_titular extraído do comprovante com o nomeEsperado fornecido no contexto
+
+2. REGRAS DE COMPARAÇÃO DE NOMES (permitir abreviações):
+   - Ignore diferenças de maiúsculas/minúsculas
+   - Ignore acentos e caracteres especiais
+   - Aceite abreviações válidas:
+     * "M." ou "M " como abreviação de "Mario", "Maria", "Marcos", etc.
+     * "D." ou "Da" ou "De" como conectivos abreviados
+     * Iniciais seguidas de ponto são válidas para qualquer nome
+   - O SOBRENOME deve corresponder (é obrigatório)
+   - Pelo menos a primeira letra do primeiro nome deve corresponder
+
+3. EXEMPLOS DE CORRESPONDÊNCIA:
+   - "M. SILVA" corresponde a "Mario Silva" ✓
+   - "MARIO D. SILVA" corresponde a "Mario da Silva" ✓
+   - "M. D. S." corresponde a "Mario da Silva" ✓
+   - "MARIO SILVA" corresponde a "Mario da Silva" ✓
+   - "MARIA SILVA" NÃO corresponde a "Mario Silva" ✗
+   - "JOSE SANTOS" NÃO corresponde a "Mario Silva" ✗
+
+4. DECISÕES BASEADAS NA COMPARAÇÃO:
+   - Se nome_titular CORRESPONDE ao nomeEsperado (incluindo abreviações): pode aprovar (se endereço legível)
+   - Se nome_titular NÃO CORRESPONDE ao nomeEsperado: 
+     * sugestao: "reprovar"
+     * motivo: "Titular do comprovante ({nome_titular}) diverge do associado ({nomeEsperado})"
+   - Se nome_titular está ILEGÍVEL ou VAZIO:
+     * sugestao: "revisar"
+     * motivo: "Nome do titular não pôde ser lido no documento"
+   - Se MESMO SOBRENOME mas primeiro nome diferente (possível cônjuge):
+     * sugestao: "revisar"
+     * motivo: "Titular pode ser cônjuge/familiar - verificar manualmente"
+
+5. PRIORIDADE: Esta verificação de titularidade tem PRIORIDADE sobre a regra de "endereço legível = aprovar"
+   Se o endereço está perfeito MAS o nome não confere, deve REPROVAR ou REVISAR conforme regras acima.
+
+6. INCLUIR na resposta JSON um campo "validacao_titularidade" com detalhes da comparação:
+   {
+     "validacao_titularidade": {
+       "nome_titular_extraido": "M. DA SILVA",
+       "nome_esperado": "Mario da Silva",
+       "correspondencia": true | false,
+       "tipo_correspondencia": "exata" | "abreviacao" | "nenhuma" | "possivel_conjuge" | "ilegivel",
+       "observacao": "Explicação da decisão"
+     }
+   }
 
 ### Outro documento
 Identificar e extrair o que for possível
@@ -258,7 +307,15 @@ serve(async (req) => {
       userPrompt += ` CPF esperado no cadastro: ${cpfEsperado}. Verifique se confere.`;
     }
     if (nomeEsperado) {
-      userPrompt += ` Nome esperado no cadastro: ${nomeEsperado}. Verifique se confere.`;
+      userPrompt += `
+
+⚠️ VERIFICAÇÃO CRÍTICA DE TITULARIDADE ⚠️
+Nome do associado no cadastro: "${nomeEsperado}"
+Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular com este nome.
+- REPROVE se os nomes não corresponderem (permitindo abreviações válidas como "M. Silva" para "Mario Silva").
+- Se mesmo sobrenome mas primeiro nome diferente, sugira REVISAR (possível cônjuge).
+- Se nome ilegível, sugira REVISAR.
+- Inclua o campo "validacao_titularidade" na resposta com os detalhes da comparação.`;
     }
 
     console.log('Calling Lovable AI Gateway for document OCR:', url);
