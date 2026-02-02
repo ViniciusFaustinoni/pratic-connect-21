@@ -1,320 +1,416 @@
 
-# Plano: Mover Ações para Propostas Pendentes
+# Plano: Ativação Automática Softruck na Conclusão de Vistoria
 
-## Contexto do Problema
+## Resumo Executivo
 
-Os botões de **"Enviar para SGA"**, **"Ativar Rastreador"** e **"Excluir Associado"** estão distribuídos incorretamente:
-- O botão SGA foi adicionado à página de Ativações (`/vendas/ativacoes`)
-- O botão de ativar rastreador está só na seção de instalações pendentes
-- O botão de excluir associado não existe na página de propostas
+Implementar o fluxo completo de ativação automática do rastreador Softruck quando uma instalação é concluída, garantindo que veículo, chip e dispositivo sejam criados na plataforma Softruck se não existirem.
 
-O usuário precisa que **todas essas ações** estejam disponíveis na página de **Propostas Pendentes** (`/cadastro/propostas-pendentes`).
+## Análise do Estado Atual
 
-## Solução
+### O que já existe ✅
 
-Refatorar a página `PropostasPendentes.tsx` para:
+| Componente | Status | Localização |
+|------------|--------|-------------|
+| Edge Function API Softruck | Completa | `supabase/functions/softruck-api/index.ts` |
+| Operação criar-device | Implementada | softruck-api linha 447-489 |
+| Operação criar-chip | Implementada | softruck-api linha 598-628 |
+| Operação buscar-chip | Implementada | softruck-api linha 583-595 |
+| Função ativar-dispositivo | Parcial | `supabase/functions/softruck-ativar-dispositivo/index.ts` |
+| Secrets configurados | Completos | SOFTRUCK_PUBLIC_KEY, USERNAME, PASSWORD, ENTERPRISE_ID |
+| Gatilho no hook | Funcional | `src/hooks/useServicos.ts` linha 942-951 |
+| Tabela de logs | Existe | `rastreadores_logs` |
 
-1. **Substituir o botão "Analisar"** por um **menu dropdown** com múltiplas ações
-2. **Adicionar as seguintes ações**:
-   - Analisar (navegar para detalhes)
-   - Enviar para SGA (se não sincronizado)
-   - Ativar Rastreador (se instalação concluída mas não ativado)
-   - Excluir Associado (apenas para diretores, com confirmação)
+### O que precisa ser implementado 🔧
+
+| Item | Descrição | Impacto |
+|------|-----------|---------|
+| Criar device se não existir | Atualmente falha com erro | **Crítico** |
+| Criar chip se informado | Não busca/cria chip | **Médio** |
+| Campos de status integração | Não persiste status detalhado | **Médio** |
+| Campo chip_number | Não armazena número do chip | **Baixo** |
 
 ## Arquivos a Modificar
 
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/cadastro/PropostasPendentes.tsx` | Adicionar dropdown e funções de ação |
+### 1. Edge Function `softruck-ativar-dispositivo/index.ts`
 
-## Alterações Detalhadas
-
-### 1. Novos Imports
-
-```typescript
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Upload, Zap, Trash2, Loader2 } from 'lucide-react';
-import { usePermissions } from '@/hooks/usePermissions';
-import { useDeleteAssociado } from '@/hooks/useAssociados';
-import { supabase } from '@/integrations/supabase/client';
-import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
-```
-
-### 2. Novos Estados e Hooks
-
-```typescript
-const { isDiretor } = usePermissions();
-const { mutate: deleteAssociado, isPending: isExcluindo } = useDeleteAssociado();
-
-const [enviandoSGAId, setEnviandoSGAId] = useState<string | null>(null);
-const [ativandoRastreadorId, setAtivandoRastreadorId] = useState<string | null>(null);
-const [dialogExcluirAberto, setDialogExcluirAberto] = useState(false);
-const [associadoParaExcluir, setAssociadoParaExcluir] = useState<{ id: string; nome: string } | null>(null);
-```
-
-### 3. Função: Enviar para SGA
-
-```typescript
-const handleEnviarSGA = async (proposta: PropostaPendente) => {
-  if (!proposta.veiculo_id || !proposta.associado_id) {
-    toast.error('Veículo ou associado não encontrado');
-    return;
-  }
-  
-  setEnviandoSGAId(proposta.id);
-  try {
-    // Buscar veiculo_id real da proposta
-    const { data: veiculo } = await supabase
-      .from('veiculos')
-      .select('id')
-      .eq('associado_id', proposta.associado_id)
-      .eq('placa', proposta.veiculo_placa)
-      .single();
-    
-    if (!veiculo) throw new Error('Veículo não encontrado');
-    
-    const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
-      body: { veiculo_id: veiculo.id, associado_id: proposta.associado_id }
-    });
-    
-    if (error) throw error;
-    if (data.success) {
-      toast.success('Enviado para SGA com sucesso!');
-      refetch();
-    } else {
-      throw new Error(data.error);
-    }
-  } catch (err: any) {
-    toast.error(err.message || 'Erro ao enviar para SGA');
-  } finally {
-    setEnviandoSGAId(null);
-  }
-};
-```
-
-### 4. Função: Ativar Rastreador
-
-```typescript
-const handleAtivarRastreador = async (proposta: PropostaPendente) => {
-  if (!proposta.instalacao_info?.rastreador_id || !proposta.associado_id) {
-    toast.error('Dados insuficientes para ativação');
-    return;
-  }
-  
-  setAtivandoRastreadorId(proposta.id);
-  try {
-    // Buscar veiculo_id
-    const { data: veiculo } = await supabase
-      .from('veiculos')
-      .select('id')
-      .eq('associado_id', proposta.associado_id)
-      .eq('placa', proposta.veiculo_placa)
-      .single();
-    
-    if (!veiculo) throw new Error('Veículo não encontrado');
-    
-    // Ativar baseado na plataforma
-    const plataforma = proposta.instalacao_info.rastreador_plataforma;
-    let endpoint = '';
-    
-    if (plataforma === 'softruck') {
-      endpoint = 'softruck-ativar-dispositivo';
-    } else if (plataforma === 'rede_veiculos') {
-      endpoint = 'rede-veiculos-vincular-cliente';
-    } else {
-      // Ativação local
-      await supabase.from('rastreadores')
-        .update({ status: 'instalado', veiculo_id: veiculo.id })
-        .eq('id', proposta.instalacao_info.rastreador_id);
-      
-      toast.success('Rastreador ativado!');
-      refetch();
-      return;
-    }
-    
-    const { data, error } = await supabase.functions.invoke(endpoint, {
-      body: { 
-        imei: proposta.instalacao_info.rastreador_imei,
-        veiculoId: veiculo.id,
-        associadoId: proposta.associado_id,
-      }
-    });
-    
-    if (error) throw error;
-    if (data.success) {
-      toast.success('Rastreador ativado na plataforma!');
-      refetch();
-    }
-  } catch (err: any) {
-    toast.error(err.message || 'Erro ao ativar rastreador');
-  } finally {
-    setAtivandoRastreadorId(null);
-  }
-};
-```
-
-### 5. Função: Excluir Associado
-
-```typescript
-const handleExcluirAssociado = async (motivo: string) => {
-  if (!associadoParaExcluir) return;
-  
-  try {
-    deleteAssociado(associadoParaExcluir.id);
-    setDialogExcluirAberto(false);
-    setAssociadoParaExcluir(null);
-    refetch();
-  } catch (err) {
-    // Erro tratado pelo hook
-  }
-};
-```
-
-### 6. Novo Componente de Menu de Ações
-
-Substituir o botão atual por um dropdown:
-
-```tsx
-<TableCell className="text-right">
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button variant="ghost" size="sm">
-        {(enviandoSGAId === proposta.id || ativandoRastreadorId === proposta.id) ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <MoreHorizontal className="h-4 w-4" />
-        )}
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end">
-      {/* Analisar */}
-      <DropdownMenuItem onClick={() => navigate(`/cadastro/propostas/${proposta.id}`)}>
-        <Eye className="mr-2 h-4 w-4" />
-        Analisar Proposta
-      </DropdownMenuItem>
-
-      {/* Enviar para SGA - se não sincronizado */}
-      {!proposta.associado?.sincronizado_hinova && proposta.associado_id && (
-        <DropdownMenuItem 
-          onClick={(e) => { e.stopPropagation(); handleEnviarSGA(proposta); }}
-          disabled={enviandoSGAId === proposta.id}
-        >
-          <Upload className="mr-2 h-4 w-4" />
-          Enviar para SGA
-        </DropdownMenuItem>
-      )}
-
-      {/* Ativar Rastreador - se instalação concluída mas não ativado */}
-      {proposta.instalacao_info && 
-       !proposta.instalacao_info.rastreador_ativado && 
-       proposta.instalacao_info.rastreador_id && (
-        <DropdownMenuItem 
-          onClick={(e) => { e.stopPropagation(); handleAtivarRastreador(proposta); }}
-          disabled={ativandoRastreadorId === proposta.id}
-        >
-          <Zap className="mr-2 h-4 w-4" />
-          Ativar Rastreador
-        </DropdownMenuItem>
-      )}
-
-      {/* Excluir Associado - apenas diretores */}
-      {isDiretor && proposta.associado_id && (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem 
-            className="text-destructive"
-            onClick={(e) => {
-              e.stopPropagation();
-              setAssociadoParaExcluir({ 
-                id: proposta.associado_id!, 
-                nome: proposta.cliente_nome || 'Associado' 
-              });
-              setDialogExcluirAberto(true);
-            }}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Excluir Associado
-          </DropdownMenuItem>
-        </>
-      )}
-    </DropdownMenuContent>
-  </DropdownMenu>
-</TableCell>
-```
-
-### 7. Dialog de Confirmação de Exclusão
-
-Adicionar no final do componente, antes do fechamento da div principal:
-
-```tsx
-<ConfirmacaoAcaoDialog
-  open={dialogExcluirAberto}
-  onOpenChange={setDialogExcluirAberto}
-  acao="excluir"
-  nomeAssociado={associadoParaExcluir?.nome || ''}
-  onConfirm={handleExcluirAssociado}
-/>
-```
-
-## Fluxo Visual
+Atualizar para implementar o fluxo completo do PRD:
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  PROPOSTAS PENDENTES - Tabela de Propostas                      │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Cliente        │ Veículo    │ Plano  │ Status  │ Ações (...)   │
-│  ───────────────┼────────────┼────────┼─────────┼───────────────│
-│  Marcus Vinicius│ LTB4J74    │ Elite  │ Assinado│ [...]         │
-│                 │            │        │         │    │          │
-│                 │            │        │         │    ▼          │
-│                 │            │        │         │ ┌───────────────────┐
-│                 │            │        │         │ │ 👁️ Analisar       │
-│                 │            │        │         │ │ 📤 Enviar para SGA│
-│                 │            │        │         │ │ ⚡ Ativar Rastread.│
-│                 │            │        │         │ │ ────────────────  │
-│                 │            │        │         │ │ 🗑️ Excluir (dir.) │
-│                 │            │        │         │ └───────────────────┘
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  FLUXO ATUAL (PROBLEMÁTICO)                                      │
+├──────────────────────────────────────────────────────────────────┤
+│  1. Buscar rastreador local ✅                                   │
+│  2. Buscar veículo local ✅                                      │
+│  3. Buscar/Criar veículo Softruck ✅                             │
+│  4. Buscar device Softruck → ❌ FALHA SE NÃO EXISTIR             │
+│  5. Associar device ao veículo                                   │
+│  6. Ativar device                                                │
+│  7. Atualizar local                                              │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│  NOVO FLUXO (CONFORME PRD)                                       │
+├──────────────────────────────────────────────────────────────────┤
+│  1. Buscar rastreador local                                      │
+│  2. Buscar veículo local                                         │
+│  3. Buscar/Criar veículo Softruck                                │
+│  4. Buscar/Criar chip Softruck (se chip_iccid informado)         │ ← NOVO
+│  5. Buscar/Criar device Softruck (vinculando chip se existir)    │ ← ALTERADO
+│  6. Associar device ao veículo (is_main_device: true)            │
+│  7. Ativar device                                                │
+│  8. Ativar veículo (opcional)                                    │ ← NOVO
+│  9. Atualizar local com IDs e status                             │
+│  10. Registrar log detalhado                                     │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## Condições de Exibição das Ações
+### 2. Migração SQL
 
-| Ação | Condição |
-|------|----------|
-| Analisar | Sempre visível |
-| Enviar para SGA | `!associado.sincronizado_hinova && associado_id` |
-| Ativar Rastreador | `instalacao_info && !rastreador_ativado && rastreador_id` |
-| Excluir Associado | `isDiretor && associado_id` |
+Adicionar campos de rastreamento na tabela `rastreadores`:
 
-## Atualização de Dados
+```sql
+ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS chip_number VARCHAR(50);
+ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS softruck_chip_id VARCHAR(50);
+ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS softruck_integration_status VARCHAR(50) DEFAULT 'pending';
+ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS softruck_last_attempt_at TIMESTAMPTZ;
+ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS softruck_payload_sent JSONB;
+ALTER TABLE rastreadores ADD COLUMN IF NOT EXISTS softruck_response_raw JSONB;
+```
 
-Para que o botão "Enviar para SGA" funcione corretamente, precisamos garantir que a query em `usePropostasPendentes` busque o campo `sincronizado_hinova` do associado. O campo já está disponível via `proposta.associado?.sincronizado_hinova`.
+## Implementação Detalhada
 
-## Remoção de Código Duplicado
+### Passo 1: Atualizar `softruck-ativar-dispositivo`
 
-Após esta implementação, **remover** a lógica de SGA adicionada anteriormente em `AtivacoesList.tsx`:
-- Estado `enviandoSGAId`
-- Função `handleEnviarSGA`
-- Props `onEnviarSGA` e `isEnviandoSGA` do `AtivacaoTableRow`
+Alterações no arquivo `supabase/functions/softruck-ativar-dispositivo/index.ts`:
 
-## Validação
+**1.1 Adicionar interface para request com dados de chip:**
+
+```typescript
+interface RequestBody {
+  imei: string;
+  veiculoId: string;
+  associadoId: string;
+  associadoEmail?: string;
+  // Novos campos para chip
+  chipSerial?: string;      // ICCID do chip
+  chipNumber?: string;      // Número de telefone do chip
+  chipOperadora?: string;   // Operadora (Vivo, Claro, Tim)
+}
+```
+
+**1.2 Novo fluxo - Garantir Chip (se informado):**
+
+```typescript
+// ===== 4. Garantir chip na Softruck (se houver dados) =====
+let softruckChipId: string | undefined;
+
+const chipSerial = chipSerialParam || rastreador.chip_iccid;
+const chipNumber = chipNumberParam || rastreador.chip_number;
+
+if (chipSerial && chipNumber) {
+  console.log('[Softruck Ativar] Buscando chip na Softruck...');
+  
+  // Buscar por serial
+  const buscarChipResult = await callSoftruckApi(
+    supabaseUrl, supabaseAnonKey,
+    'buscar-chip',
+    { serial: chipSerial }
+  );
+
+  if (buscarChipResult.success && buscarChipResult.data) {
+    const chips = buscarChipResult.data?.data || [];
+    if (chips.length > 0) {
+      softruckChipId = chips[0].id;
+      console.log('[Softruck Ativar] Chip encontrado:', softruckChipId);
+    }
+  }
+
+  // Se não encontrou, criar
+  if (!softruckChipId) {
+    console.log('[Softruck Ativar] Criando chip na Softruck...');
+    
+    const criarChipResult = await callSoftruckApi(
+      supabaseUrl, supabaseAnonKey,
+      'criar-chip',
+      {
+        serial: chipSerial,
+        numero: chipNumber,
+        operadora: chipOperadora || 'Softruck',
+        provedor: chipOperadora || 'Softruck',
+      }
+    );
+
+    if (criarChipResult.success && criarChipResult.data) {
+      softruckChipId = criarChipResult.data?.data?.[0]?.id;
+      console.log('[Softruck Ativar] Chip criado:', softruckChipId);
+    }
+  }
+}
+```
+
+**1.3 Alterar busca/criação de device:**
+
+```typescript
+// ===== 5. Garantir dispositivo na Softruck =====
+if (!softruckDeviceId) {
+  console.log('[Softruck Ativar] Buscando device na Softruck por IMEI...');
+  
+  const buscarDeviceResult = await callSoftruckApi(
+    supabaseUrl, supabaseAnonKey,
+    'buscar-device-imei',
+    { imei }
+  );
+
+  if (buscarDeviceResult.success && buscarDeviceResult.data) {
+    const devices = buscarDeviceResult.data?.data || [];
+    if (devices.length > 0) {
+      softruckDeviceId = devices[0].id;
+      console.log('[Softruck Ativar] Device encontrado:', softruckDeviceId);
+    }
+  }
+
+  // NOVO: Se não encontrou, CRIAR o device
+  if (!softruckDeviceId) {
+    console.log('[Softruck Ativar] Criando device na Softruck...');
+    
+    const deviceName = `${veiculo.placa} - ${veiculo.modelo || 'Veículo'}`;
+    
+    const criarDeviceResult = await callSoftruckApi(
+      supabaseUrl, supabaseAnonKey,
+      'criar-device',
+      {
+        imei,
+        nome: deviceName,
+        veiculoId: softruckVehicleId,
+        chipId: softruckChipId, // Vincular chip se existir
+      }
+    );
+
+    if (!criarDeviceResult.success) {
+      // Tentar buscar novamente (caso já exista)
+      if (criarDeviceResult.error?.includes('Already Exists')) {
+        const retryBuscar = await callSoftruckApi(
+          supabaseUrl, supabaseAnonKey,
+          'buscar-device-imei',
+          { imei }
+        );
+        const devices = retryBuscar.data?.data || [];
+        if (devices.length > 0) {
+          softruckDeviceId = devices[0].id;
+        }
+      }
+      
+      if (!softruckDeviceId) {
+        // Registrar falha mas não bloquear
+        await updateIntegrationStatus(supabase, rastreador.id, 'FAILED_DEVICE_CREATE', criarDeviceResult.error);
+        throw new Error(`Erro ao criar device: ${criarDeviceResult.error}`);
+      }
+    } else {
+      softruckDeviceId = criarDeviceResult.data?.data?.[0]?.id;
+      console.log('[Softruck Ativar] Device criado:', softruckDeviceId);
+    }
+  }
+}
+```
+
+**1.4 Adicionar função de atualização de status:**
+
+```typescript
+async function updateIntegrationStatus(
+  supabase: any,
+  rastreadorId: string,
+  status: string,
+  errorMessage?: string,
+  payloadSent?: unknown,
+  responseRaw?: unknown
+) {
+  await supabase
+    .from('rastreadores')
+    .update({
+      softruck_integration_status: status,
+      softruck_last_attempt_at: new Date().toISOString(),
+      softruck_payload_sent: payloadSent,
+      softruck_response_raw: responseRaw,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', rastreadorId);
+}
+```
+
+**1.5 Adicionar ativação do veículo (opcional):**
+
+```typescript
+// ===== 8. Ativar veículo na Softruck (opcional) =====
+console.log('[Softruck Ativar] Ativando veículo na Softruck...');
+
+const ativarVeiculoResult = await callSoftruckApi(
+  supabaseUrl, supabaseAnonKey,
+  'ativar-veiculo',
+  { veiculoId: softruckVehicleId }
+);
+
+if (!ativarVeiculoResult.success) {
+  console.warn('[Softruck Ativar] Aviso ao ativar veículo:', ativarVeiculoResult.error);
+  // Não bloquear - veículo pode já estar ativo
+}
+```
+
+**1.6 Atualizar registro local com todos os IDs:**
+
+```typescript
+const updateData = {
+  plataforma_device_id: softruckDeviceId,
+  plataforma_veiculo_id: softruckVehicleId,
+  softruck_chip_id: softruckChipId,
+  softruck_integration_status: 'SUCCESS',
+  softruck_last_attempt_at: new Date().toISOString(),
+  softruck_payload_sent: { imei, veiculoId, associadoId },
+  softruck_response_raw: { softruckVehicleId, softruckDeviceId, softruckChipId },
+  updated_at: new Date().toISOString(),
+};
+
+// Se ainda não instalado, vincular
+if (rastreador.status !== 'instalado') {
+  updateData.veiculo_id = veiculoId;
+  updateData.associado_id = associadoId;
+  updateData.status = 'instalado';
+}
+
+await supabase.from('rastreadores').update(updateData).eq('id', rastreador.id);
+```
+
+### Passo 2: Migração de Banco de Dados
+
+```sql
+-- Adicionar campos de integração Softruck na tabela rastreadores
+ALTER TABLE rastreadores 
+ADD COLUMN IF NOT EXISTS chip_number VARCHAR(50),
+ADD COLUMN IF NOT EXISTS softruck_chip_id VARCHAR(50),
+ADD COLUMN IF NOT EXISTS softruck_integration_status VARCHAR(50) DEFAULT 'pending',
+ADD COLUMN IF NOT EXISTS softruck_last_attempt_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS softruck_payload_sent JSONB,
+ADD COLUMN IF NOT EXISTS softruck_response_raw JSONB;
+
+-- Comentários para documentação
+COMMENT ON COLUMN rastreadores.softruck_integration_status IS 
+  'Status: PENDING | SUCCESS | FAILED_AUTH | FAILED_VEHICLE | FAILED_CHIP | FAILED_DEVICE | FAILED_ASSOCIATION | CREATED_BUT_NOT_ACTIVATED';
+
+COMMENT ON COLUMN rastreadores.chip_number IS 'Número de telefone/linha do chip SIM';
+COMMENT ON COLUMN rastreadores.softruck_chip_id IS 'ID do chip na plataforma Softruck';
+```
+
+### Passo 3: Atualizar Hook (Opcional)
+
+O hook `useAprovarVeiculoServico` já envia os dados corretos. Opcionalmente, podemos adicionar os dados do chip:
+
+```typescript
+// Em useAprovarVeiculoServico, após buscar rastreador:
+const rastreadorCompleto = await supabase
+  .from('rastreadores')
+  .select('id, plataforma, chip_iccid, chip_number')
+  .eq('imei', data.imeiRastreador)
+  .single();
+
+// Passar para a edge function:
+if (rastreadorCompleto?.plataforma === 'softruck') {
+  await supabase.functions.invoke('softruck-ativar-dispositivo', {
+    body: {
+      imei: data.imeiRastreador,
+      veiculoId: data.veiculoId,
+      associadoId: data.associadoId,
+      associadoEmail: associadoData?.email,
+      chipSerial: rastreadorCompleto.chip_iccid,
+      chipNumber: rastreadorCompleto.chip_number,
+    },
+  });
+}
+```
+
+## Status de Integração
+
+| Status | Descrição |
+|--------|-----------|
+| `PENDING` | Aguardando integração |
+| `SUCCESS` | Integração concluída com sucesso |
+| `FAILED_AUTH` | Erro de autenticação Softruck |
+| `FAILED_VEHICLE` | Erro ao criar/buscar veículo |
+| `FAILED_CHIP` | Erro ao criar/buscar chip |
+| `FAILED_DEVICE` | Erro ao criar/buscar device |
+| `FAILED_ASSOCIATION` | Erro ao associar device ao veículo |
+| `CREATED_BUT_NOT_ACTIVATED` | Criado mas ativação falhou |
+
+## Validações Implementadas
+
+| Validação | Ação |
+|-----------|------|
+| IMEI vazio | Retorna erro antes de chamar API |
+| Placa vazia | Retorna erro antes de chamar API |
+| Plataforma != softruck | Não chama API, registra "não aplicável" |
+| Enterprise ID | Usa secret `SOFTRUCK_ENTERPRISE_ID` (fixo: 1Ndzlwjm7NZagyv) |
+
+## Retries e Observabilidade
+
+| Cenário | Comportamento |
+|---------|---------------|
+| Timeout | Retry automático (já implementado) |
+| 5xx | Retry automático |
+| 429 Rate Limit | Aguardar e retry |
+| 400 Validação | Não retry, registrar erro |
+| 401 Auth | Renovar token e retry (já implementado) |
+
+## Testes e Validação
 
 Após implementação:
 
-1. Acessar `/cadastro/propostas-pendentes`
-2. Encontrar proposta do MARCUS VINICIUS FAUSTINONI DE FREITAS
-3. Clicar no menu (...)
-4. Verificar opções disponíveis:
-   - ✅ Analisar Proposta
-   - ✅ Enviar para SGA (se não sincronizado)
-   - ✅ Ativar Rastreador (se instalação concluída sem ativação)
-   - ✅ Excluir Associado (só para diretores)
-5. Testar envio para SGA e verificar `codigo_conta: 2`
+1. **Criar rastreador de teste** com plataforma `softruck`
+2. **Concluir instalação** via checklist do instalador
+3. **Verificar logs** em `rastreadores_logs`
+4. **Verificar campos** `softruck_integration_status`, `plataforma_device_id`, etc.
+5. **Verificar na Softruck** se veículo, chip e device foram criados
+
+## Arquivos Modificados
+
+| Arquivo | Tipo de Alteração |
+|---------|-------------------|
+| `supabase/functions/softruck-ativar-dispositivo/index.ts` | Refatoração completa |
+| Migração SQL | Novos campos na tabela `rastreadores` |
+| `src/hooks/useServicos.ts` | Opcional - adicionar dados de chip |
+
+## Diagrama de Sequência
+
+```text
+Instalador          Sistema          Softruck API
+    │                  │                  │
+    │  Concluir        │                  │
+    │  Instalação      │                  │
+    ├─────────────────>│                  │
+    │                  │                  │
+    │                  │  1. Buscar/Criar │
+    │                  │     Veículo      │
+    │                  ├─────────────────>│
+    │                  │<─────────────────┤
+    │                  │                  │
+    │                  │  2. Buscar/Criar │
+    │                  │     Chip         │
+    │                  ├─────────────────>│
+    │                  │<─────────────────┤
+    │                  │                  │
+    │                  │  3. Buscar/Criar │
+    │                  │     Device       │
+    │                  ├─────────────────>│
+    │                  │<─────────────────┤
+    │                  │                  │
+    │                  │  4. Associar     │
+    │                  │     Device→Veíc  │
+    │                  ├─────────────────>│
+    │                  │<─────────────────┤
+    │                  │                  │
+    │                  │  5. Ativar       │
+    │                  │     Device       │
+    │                  ├─────────────────>│
+    │                  │<─────────────────┤
+    │                  │                  │
+    │  Sucesso!        │                  │
+    │<─────────────────┤                  │
+    │                  │                  │
+```
