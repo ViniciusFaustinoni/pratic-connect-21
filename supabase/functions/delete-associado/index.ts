@@ -247,10 +247,16 @@ Deno.serve(async (req) => {
         await supabaseAdmin.from("sinistros").delete().eq("veiculo_id", veiculo.id);
         await supabaseAdmin.from("chamados_assistencia").delete().eq("veiculo_id", veiculo.id);
         
-        // Update rastreadores to unlink
+        // Update rastreadores - desvincular E voltar para estoque
         await supabaseAdmin
           .from("rastreadores")
-          .update({ veiculo_id: null })
+          .update({ 
+            veiculo_id: null,
+            associado_id: null,
+            associado_email: null,
+            status: 'estoque',
+            updated_at: new Date().toISOString()
+          })
           .eq("veiculo_id", veiculo.id);
       }
       
