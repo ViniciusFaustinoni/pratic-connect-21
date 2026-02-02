@@ -78,13 +78,26 @@ Deno.serve(async (req) => {
       .from('cotacoes')
       .select('numero, lead_id, vistoria_id')
       .eq('id', cotacaoId)
-      .single()
+      .maybeSingle()
 
-    if (cotacaoError || !cotacao) {
-      console.error('Cotação não encontrada:', cotacaoError)
+    // Se cotação não existe, retornar sucesso (idempotente - já foi excluída)
+    if (cotacaoError) {
+      console.error('Erro ao buscar cotação:', cotacaoError)
       return new Response(
-        JSON.stringify({ success: false, error: 'Cotação não encontrada' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Erro ao buscar cotação' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (!cotacao) {
+      console.log(`[delete-cotacao] Cotação ${cotacaoId} já foi excluída anteriormente`)
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Cotação já foi excluída anteriormente',
+          alreadyDeleted: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
