@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, ChevronRight, Calendar, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_COLORS } from '@/types/monitoramento';
 
@@ -37,15 +37,23 @@ export default function CalendarioInstalacoesPage() {
   // Normalizar dados: hook retorna array diretamente quando sem paginação
   const instalacoes = Array.isArray(data) ? data : (data?.instalacoes || []);
 
-  // Agrupar instalações por data
+  // Agrupar instalações por data E período
   const instalacoesPorData = useMemo(() => {
-    const map = new Map<string, typeof instalacoes>();
+    const map = new Map<string, { manha: typeof instalacoes; tarde: typeof instalacoes; noite: typeof instalacoes }>();
+    
     instalacoes.forEach((inst) => {
       const dataStr = inst.data_agendada;
       if (!dataStr) return;
-      if (!map.has(dataStr)) map.set(dataStr, []);
-      map.get(dataStr)!.push(inst);
+      
+      if (!map.has(dataStr)) {
+        map.set(dataStr, { manha: [], tarde: [], noite: [] });
+      }
+      
+      const grupo = map.get(dataStr)!;
+      const periodo = (inst.periodo || 'manha') as 'manha' | 'tarde' | 'noite';
+      grupo[periodo].push(inst);
     });
+    
     return map;
   }, [instalacoes]);
 
@@ -128,15 +136,9 @@ export default function CalendarioInstalacoesPage() {
           <h1 className="text-2xl font-bold tracking-tight">Calendário de Instalações</h1>
           <p className="text-muted-foreground">Visualize as instalações agendadas por dia</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/monitoramento/instalacoes')}>
-            Ver Lista
-          </Button>
-          <Button onClick={() => navigate('/monitoramento/instalacoes/agendar')}>
-            <Plus className="mr-2 h-4 w-4" />
-            Agendar
-          </Button>
-        </div>
+        <Button variant="outline" onClick={() => navigate('/monitoramento/instalacoes')}>
+          Ver Lista
+        </Button>
       </div>
 
       {/* NAVEGAÇÃO DO MÊS */}
@@ -177,8 +179,32 @@ export default function CalendarioInstalacoesPage() {
           <div className="grid grid-cols-7">
             {diasCalendario.map((dia, index) => {
               const dataStr = dia.data.toISOString().split('T')[0];
-              const instalacoesDia = instalacoesPorData.get(dataStr) || [];
-              const temInstalacoes = instalacoesDia.length > 0;
+              const instalacoesDia = instalacoesPorData.get(dataStr) || { manha: [], tarde: [], noite: [] };
+              const temInstalacoes = instalacoesDia.manha.length > 0 || instalacoesDia.tarde.length > 0 || instalacoesDia.noite.length > 0;
+
+              const renderPeriodo = (items: typeof instalacoes, label: string, emoji: string) => {
+                if (items.length === 0) return null;
+                return (
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground font-medium">{emoji} {label}</span>
+                    {items.slice(0, 2).map((inst) => (
+                      <Badge
+                        key={inst.id}
+                        variant="secondary"
+                        className={cn(
+                          'w-full justify-start truncate text-xs font-normal',
+                          STATUS_INSTALACAO_COLORS[inst.status as keyof typeof STATUS_INSTALACAO_COLORS]
+                        )}
+                      >
+                        {inst.veiculos?.placa || inst.associados?.nome?.split(' ')[0] || 'Instalação'}
+                      </Badge>
+                    ))}
+                    {items.length > 2 && (
+                      <span className="text-[10px] text-muted-foreground">+{items.length - 2}</span>
+                    )}
+                  </div>
+                );
+              };
 
               return (
                 <div
@@ -201,26 +227,12 @@ export default function CalendarioInstalacoesPage() {
                     {dia.data.getDate()}
                   </span>
 
-                  {/* Instalações do dia */}
+                  {/* Instalações do dia - agrupadas por período */}
                   {temInstalacoes && (
-                    <div className="mt-1 space-y-1">
-                      {instalacoesDia.slice(0, 3).map((inst) => (
-                        <Badge
-                          key={inst.id}
-                          variant="secondary"
-                          className={cn(
-                            'w-full justify-start truncate text-xs font-normal',
-                            STATUS_INSTALACAO_COLORS[inst.status as keyof typeof STATUS_INSTALACAO_COLORS]
-                          )}
-                        >
-                          {inst.veiculos?.placa || inst.associados?.nome?.split(' ')[0] || 'Instalação'}
-                        </Badge>
-                      ))}
-                      {instalacoesDia.length > 3 && (
-                        <span className="text-xs text-muted-foreground">
-                          +{instalacoesDia.length - 3} mais
-                        </span>
-                      )}
+                    <div className="mt-1 space-y-1.5">
+                      {renderPeriodo(instalacoesDia.manha, 'Manhã', '☀️')}
+                      {renderPeriodo(instalacoesDia.tarde, 'Tarde', '🌅')}
+                      {renderPeriodo(instalacoesDia.noite, 'Noite', '🌙')}
                     </div>
                   )}
                 </div>
