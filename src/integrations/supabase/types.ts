@@ -13406,6 +13406,7 @@ export type Database = {
           created_by: string | null
           data_ultimo_acesso: string | null
           email: string
+          full_name: string | null
           id: string
           motivo_bloqueio: string | null
           nome: string
@@ -13418,6 +13419,7 @@ export type Database = {
           updated_at: string
           updated_by: string | null
           user_id: string
+          whatsapp: string | null
         }
         Insert: {
           ativo?: boolean
@@ -13429,6 +13431,7 @@ export type Database = {
           created_by?: string | null
           data_ultimo_acesso?: string | null
           email: string
+          full_name?: string | null
           id?: string
           motivo_bloqueio?: string | null
           nome: string
@@ -13441,6 +13444,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           user_id: string
+          whatsapp?: string | null
         }
         Update: {
           ativo?: boolean
@@ -13452,6 +13456,7 @@ export type Database = {
           created_by?: string | null
           data_ultimo_acesso?: string | null
           email?: string
+          full_name?: string | null
           id?: string
           motivo_bloqueio?: string | null
           nome?: string
@@ -13464,6 +13469,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           user_id?: string
+          whatsapp?: string | null
         }
         Relationships: [
           {
