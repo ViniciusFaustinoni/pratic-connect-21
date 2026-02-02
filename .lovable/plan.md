@@ -1,252 +1,341 @@
 
+# Plano: Buscar Localização Softruck Para Rastreadores Já Ativados
 
-# Plano: Correção da Integração Softruck
+## Diagnóstico do Problema
 
-## Resumo dos Erros
+O rastreador `862667083494305` está **ativado com sucesso** na Softruck (`softruck_integration_status = SUCCESS`), mas o sistema mostra "Veículo sem posição GPS" porque:
 
-A API Softruck está rejeitando a criação de veículos com 3 erros de validação:
+| Problema | Causa |
+|----------|-------|
+| `ultima_posicao_lat = NULL` | Posição nunca foi sincronizada após ativação |
+| `ultima_comunicacao = NULL` | Sincronização não está buscando posição |
 
-| Campo | Valor Enviado | Valor Correto |
-|-------|---------------|---------------|
-| `type` | `carro` (PT) | `car` (EN) |
-| `color` | `Azul` (texto) | `#2196F3` (hex) |
-| `enterprise.id` | UUID 36 chars | `oydMqwmvgeLJ1kB` |
+### Problema Principal: Endpoint Incorreto
+
+A função `sync-rastreadores` está usando o **endpoint errado** para buscar posição:
+
+```
+INCORRETO: GET /v2/tracking/gps-data?device_id={deviceId}
+CORRETO:   GET /v2/vehicles/{vehicle_id}/tracking/{device_id}
+```
+
+Além disso:
+1. Falta o header `public-key` obrigatório
+2. Falta o `plataforma_veiculo_id` na query (só usa `plataforma_device_id`)
 
 ## Correções Necessárias
 
-### 1. Enterprise ID Fixo
+### 1. Corrigir `sync-rastreadores` para Softruck
 
-O Enterprise ID será **sempre** `oydMqwmvgeLJ1kB` (hardcoded nas Edge Functions).
+**Arquivo:** `supabase/functions/sync-rastreadores/index.ts`
 
-Isso elimina a dependência do secret `SOFTRUCK_ENTERPRISE_ID` e garante consistência.
-
-### 2. Mapeamento de Tipo de Veículo (PT → EN)
-
-**Arquivo:** `supabase/functions/softruck-api/index.ts`
+**Alteração na função `syncSoftruck`:**
 
 ```typescript
-function mapVehicleType(combustivel: string | null): string {
-  const mapping: Record<string, string> = {
-    'gasolina': 'car',
-    'etanol': 'car',
-    'flex': 'car',
-    'diesel': 'truck',
-    'eletrico': 'car',
-    'hibrido': 'car',
-    'gnv': 'car',
-    'carro': 'car',
-    'caminhao': 'truck',
-    'moto': 'motorcycle',
-  };
-  return mapping[combustivel?.toLowerCase() || ''] || 'car';
+// ANTES (linha 191-199)
+const response = await fetch(
+  `${config.baseUrl}/tracking/gps-data?device_id=${deviceId}`,
+  {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  }
+);
+
+// DEPOIS - Usar endpoint correto da documentação
+const vehicleId = rast.plataforma_veiculo_id || rast.id_plataforma;
+const deviceId = rast.plataforma_device_id || rast.id_plataforma;
+
+const response = await fetch(
+  `${config.baseUrl}/vehicles/${vehicleId}/tracking/${deviceId}?format=JSON`,
+  {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "public-key": config.publicKey || "",
+      "Content-Type": "application/json",
+    },
+  }
+);
+```
+
+**Alteração na interface `Rastreador`:**
+
+```typescript
+// ANTES (linha 46-52)
+interface Rastreador {
+  id: string;
+  codigo: string;
+  plataforma: string;
+  id_plataforma: string;
+  plataforma_device_id?: string;
+}
+
+// DEPOIS - Adicionar plataforma_veiculo_id
+interface Rastreador {
+  id: string;
+  codigo: string;
+  plataforma: string;
+  id_plataforma: string;
+  plataforma_device_id?: string;
+  plataforma_veiculo_id?: string;
 }
 ```
 
-### 3. Mapeamento de Cores (Texto → Hexadecimal)
-
-**Arquivo:** `supabase/functions/softruck-api/index.ts`
+**Alteração no parsing da resposta:**
 
 ```typescript
-const SOFTRUCK_COLORS: Record<string, string> = {
-  'branco': '#FFFFFF',
-  'preto': '#212121',
-  'prata': '#9E9E9E',
-  'cinza': '#9E9E9E',
-  'vermelho': '#FF5722',
-  'azul': '#2196F3',
-  'verde': '#8BC34A',
-  'amarelo': '#FFC107',
-  'laranja': '#FF9800',
-  'marrom': '#795548',
-  'bege': '#E1C699',
-  'rosa': '#F8BBD0',
-  'roxo': '#9C27B0',
-  'vinho': '#C2185B',
-  'dourado': '#FFC107',
-  'champagne': '#E1C699',
-};
+// ANTES (linha 219-232)
+const data = await response.json();
+const gpsData = Array.isArray(data.data) ? data.data[0] : data.data;
 
-function mapVehicleColor(cor: string | null): string {
-  if (!cor) return '#9E9E9E';
-  const normalized = cor.toLowerCase().trim()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  return SOFTRUCK_COLORS[normalized] || '#9E9E9E';
+// DEPOIS - Formato correto da API v2
+const data = await response.json();
+const gpsData = data.data?.attributes || data.data;
+
+if (gpsData && gpsData.latitude && gpsData.longitude) {
+  posicoes.push({
+    rastreador_id: rast.id,
+    latitude: parseFloat(gpsData.latitude),
+    longitude: parseFloat(gpsData.longitude),
+    velocidade: parseInt(gpsData.speed || 0),
+    ignicao: Boolean(gpsData.ignition),
+    data_posicao: gpsData.timestamp || new Date().toISOString(),
+    odometro: gpsData.odometer || undefined,
+    direcao: gpsData.course || gpsData.heading || undefined,
+    bateria_nivel: gpsData.battery || undefined,
+  });
+  result.sucesso++;
 }
+```
+
+**Alteração na query de rastreadores (na função serve):**
+
+Precisa incluir `plataforma_veiculo_id` no SELECT dos rastreadores.
+
+### 2. Testar Sincronização Manual
+
+Após a correção, chamar a edge function `sync-rastreadores` para popular a posição:
+
+```bash
+POST /functions/v1/sync-rastreadores
+{ "plataforma": "softruck" }
 ```
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/softruck-api/index.ts` | Corrigir mapeamentos e usar Enterprise ID fixo |
-| `supabase/functions/softruck-ativar-dispositivo/index.ts` | Corrigir mapeamentos e usar Enterprise ID fixo |
-| `src/types/softruck.ts` | Atualizar constantes para valores em inglês |
+| `supabase/functions/sync-rastreadores/index.ts` | Corrigir endpoint, headers e parsing |
 
-## Detalhes das Alterações
+## Detalhes Técnicos
 
-### Arquivo: `supabase/functions/softruck-api/index.ts`
+### Comparação: Endpoint Atual vs Correto
 
-**Alteração 1** - Substituir mapeamento de tipo (linha ~192-203):
+| Aspecto | Atual (Errado) | Correto |
+|---------|----------------|---------|
+| URL | `/tracking/gps-data?device_id=X` | `/vehicles/{vehicle_id}/tracking/{device_id}` |
+| Header `public-key` | Ausente | Obrigatório |
+| Query Param | `?device_id=X` | `?format=JSON` |
+| Response Path | `data[0]` ou `data` | `data.attributes` |
 
-```typescript
-function mapVehicleType(combustivel: string | null): string {
-  const mapping: Record<string, string> = {
-    'gasolina': 'car',
-    'etanol': 'car',
-    'flex': 'car',
-    'diesel': 'truck',
-    'eletrico': 'car',
-    'hibrido': 'car',
-    'gnv': 'car',
-    'carro': 'car',
-    'caminhao': 'truck',
-    'caminhão': 'truck',
-    'moto': 'motorcycle',
-    'motocicleta': 'motorcycle',
-  };
-  return mapping[combustivel?.toLowerCase() || ''] || 'car';
-}
+### Campos Necessários do Rastreador
+
+| Campo | Usado Para |
+|-------|-----------|
+| `plataforma_veiculo_id` | `{vehicle_id}` na URL |
+| `plataforma_device_id` | `{device_id}` na URL |
+
+### Dados do Rastreador 862667083494305
+
+| Campo | Valor |
+|-------|-------|
+| `plataforma_veiculo_id` | `Xqn2Qpq6NmZ9OjD` |
+| `plataforma_device_id` | `RY2PZgqeVpLejAx` |
+
+### URL Correta para Este Rastreador
+
 ```
-
-**Alteração 2** - Adicionar mapeamento de cor:
-
-```typescript
-const SOFTRUCK_COLORS: Record<string, string> = {
-  'branco': '#FFFFFF',
-  'preto': '#212121',
-  'prata': '#9E9E9E',
-  'cinza': '#9E9E9E',
-  'vermelho': '#FF5722',
-  'azul': '#2196F3',
-  'verde': '#8BC34A',
-  'amarelo': '#FFC107',
-  'laranja': '#FF9800',
-  'marrom': '#795548',
-  'bege': '#E1C699',
-  'rosa': '#F8BBD0',
-  'roxo': '#9C27B0',
-  'vinho': '#C2185B',
-  'dourado': '#FFC107',
-  'champagne': '#E1C699',
-};
-
-function mapVehicleColor(cor: string | null): string {
-  if (!cor) return '#9E9E9E';
-  if (/^#[0-9A-Fa-f]{6}$/.test(cor)) return cor.toUpperCase();
-  const normalized = cor.toLowerCase().trim()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  return SOFTRUCK_COLORS[normalized] || '#9E9E9E';
-}
-```
-
-**Alteração 3** - Usar Enterprise ID fixo na criação de veículo:
-
-```typescript
-// Substituir qualquer referência a enterpriseId dinâmico por:
-const SOFTRUCK_ENTERPRISE_ID = 'oydMqwmvgeLJ1kB';
-```
-
-**Alteração 4** - Usar `mapVehicleColor` na criação de veículo:
-
-```typescript
-// ANTES
-color: cor?.substring(0, 7),
-
-// DEPOIS  
-color: mapVehicleColor(cor),
-```
-
-### Arquivo: `supabase/functions/softruck-ativar-dispositivo/index.ts`
-
-**Mesmas alterações:**
-- Corrigir `mapVehicleType` para retornar valores em inglês
-- Adicionar `mapVehicleColor` para converter cores
-- Usar Enterprise ID fixo: `oydMqwmvgeLJ1kB`
-
-### Arquivo: `src/types/softruck.ts`
-
-Atualizar constantes para refletir valores corretos:
-
-```typescript
-export const SOFTRUCK_VEHICLE_TYPES = [
-  'car', 'utility', 'van', 'scooter', 'motorcycle', 
-  'tricycle', 'quadricycle', 'pickup truck', 'truck', 
-  'bus', 'micro bus', 'other', 'implement', 
-  'agricultural machine', 'tractor truck', 'tractor'
-] as const;
-
-export const COMBUSTIVEL_TO_VEHICLE_TYPE: Record<string, string> = {
-  'gasolina': 'car',
-  'etanol': 'car',
-  'flex': 'car',
-  'diesel': 'truck',
-  'eletrico': 'car',
-  'hibrido': 'car',
-  'gnv': 'car',
-};
+GET https://api.softruck.com/v2/vehicles/Xqn2Qpq6NmZ9OjD/tracking/RY2PZgqeVpLejAx?format=JSON
+Headers:
+  Authorization: Bearer {token}
+  public-key: {public_key}
 ```
 
 ## Fluxo Corrigido
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  CRIAÇÃO DE VEÍCULO NA SOFTRUCK (CORRIGIDO)                     │
+│  SINCRONIZAÇÃO DE POSIÇÕES SOFTRUCK (CORRIGIDO)                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  1. Recebe dados do veículo local                               │
-│     └─> { placa: "LTB4J74", cor: "Azul", combustivel: null }    │
+│  1. Busca rastreadores com status='instalado' e softruck        │
+│     └─> SELECT id, plataforma_veiculo_id, plataforma_device_id  │
 │                                                                 │
-│  2. Aplica mapeamentos corrigidos                               │
-│     ├─> tipo: "car" (padrão em inglês) ✅                       │
-│     ├─> cor: "#2196F3" (azul → hex) ✅                          │
-│     └─> enterpriseId: "oydMqwmvgeLJ1kB" (fixo) ✅               │
+│  2. Para cada rastreador:                                       │
+│     ├─> GET /v2/vehicles/{veiculo}/tracking/{device}            │
+│     ├─> Headers: Authorization + public-key                     │
+│     └─> Parse: data.attributes.{latitude, longitude, ...}       │
 │                                                                 │
-│  3. Envia para API Softruck                                     │
-│     └─> POST /v2/vehicles → 201 Created ✅                      │
+│  3. Atualiza banco local:                                       │
+│     ├─> ultima_posicao_lat, ultima_posicao_lng                  │
+│     ├─> ultima_velocidade, ultima_ignicao                       │
+│     └─> ultima_comunicacao = data_posicao                       │
 │                                                                 │
-│  4. Continua fluxo de ativação                                  │
-│     └─> Cria device, associa, ativa ✅                          │
+│  4. Mapa exibe veículo com posição ✅                           │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Tabela de Mapeamentos
+## Seção Técnica: Código Completo
 
-### Tipos de Veículo
+### sync-rastreadores/index.ts - syncSoftruck (linhas 153-264)
 
-| Português/Combustível | Inglês (API) |
-|-----------------------|--------------|
-| gasolina, etanol, flex, elétrico, híbrido, gnv | car |
-| diesel, caminhão | truck |
-| moto, motocicleta | motorcycle |
-| (padrão) | car |
+```typescript
+async function syncSoftruck(
+  rastreadores: Rastreador[],
+  config: PlataformaConfig,
+  supabase: any
+): Promise<{ posicoes: Posicao[]; result: SyncResult }> {
+  const result: SyncResult = {
+    plataforma: "softruck",
+    total: rastreadores.length,
+    sucesso: 0,
+    falhas: 0,
+    erros: [],
+  };
+  const posicoes: Posicao[] = [];
 
-### Cores
+  if (!config.enabled) {
+    result.erros.push("API Softruck não configurada (secrets faltando)");
+    result.falhas = rastreadores.length;
+    return { posicoes, result };
+  }
 
-| Português | Hexadecimal |
-|-----------|-------------|
-| Branco | #FFFFFF |
-| Preto | #212121 |
-| Prata/Cinza | #9E9E9E |
-| Vermelho | #FF5722 |
-| Azul | #2196F3 |
-| Verde | #8BC34A |
-| Amarelo | #FFC107 |
-| Laranja | #FF9800 |
-| Marrom | #795548 |
-| Bege/Champagne | #E1C699 |
-| Rosa | #F8BBD0 |
-| Roxo | #9C27B0 |
-| Vinho | #C2185B |
-| Dourado | #FFC107 |
-| (padrão) | #9E9E9E |
+  let tokenRenovado = false;
+  let token: string;
 
-## Resumo
+  try {
+    token = await getSoftruckToken(supabase, config, false);
 
-| Item | Valor |
-|------|-------|
-| **Enterprise ID** | `oydMqwmvgeLJ1kB` (fixo, hardcoded) |
-| **Tipo padrão** | `car` (em inglês) |
-| **Cor padrão** | `#9E9E9E` (cinza) |
-| **Arquivos modificados** | 3 |
+    for (const rast of rastreadores) {
+      let tentativas = 0;
+      const maxTentativas = 2;
+      
+      while (tentativas < maxTentativas) {
+        tentativas++;
+        
+        try {
+          // Usar IDs corretos da plataforma
+          const vehicleId = rast.plataforma_veiculo_id || rast.id_plataforma;
+          const deviceId = rast.plataforma_device_id || rast.id_plataforma;
+          
+          if (!vehicleId || !deviceId) {
+            throw new Error("IDs de veículo/device não configurados");
+          }
+          
+          // Endpoint correto conforme documentação Softruck
+          const url = `${config.baseUrl}/vehicles/${vehicleId}/tracking/${deviceId}?format=JSON`;
+          
+          console.log(`[Softruck] Buscando posição: ${rast.codigo} (tentativa ${tentativas})`);
+          
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "public-key": config.publicKey || "",
+              "Content-Type": "application/json",
+            },
+          });
 
+          if (response.status === 401) {
+            console.warn(`[Softruck] Erro 401 para ${rast.codigo}`);
+            
+            if (tentativas < maxTentativas) {
+              token = await getSoftruckToken(supabase, config, true);
+              tokenRenovado = true;
+              continue;
+            }
+            
+            throw new Error(`Token inválido após ${maxTentativas} tentativas`);
+          }
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          
+          // Formato correto da API v2: data.attributes
+          const gpsData = data.data?.attributes || data.data;
+
+          if (gpsData && gpsData.latitude && gpsData.longitude) {
+            posicoes.push({
+              rastreador_id: rast.id,
+              latitude: parseFloat(gpsData.latitude),
+              longitude: parseFloat(gpsData.longitude),
+              velocidade: parseInt(gpsData.speed || 0),
+              ignicao: Boolean(gpsData.ignition),
+              data_posicao: gpsData.timestamp || new Date().toISOString(),
+              odometro: gpsData.odometer || undefined,
+              direcao: gpsData.course || gpsData.heading || undefined,
+              bateria_nivel: gpsData.battery || undefined,
+            });
+            result.sucesso++;
+            console.log(`[Softruck] ${rast.codigo}: lat=${gpsData.latitude}, lng=${gpsData.longitude}`);
+          } else {
+            result.falhas++;
+            result.erros.push(`${rast.codigo}: Sem dados de posição na resposta`);
+          }
+          
+          break;
+          
+        } catch (error: unknown) {
+          if (tentativas >= maxTentativas) {
+            result.falhas++;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            result.erros.push(`${rast.codigo}: ${errorMessage}`);
+            console.error(`[Softruck] Erro ${rast.codigo}:`, error);
+          }
+        }
+      }
+      
+      // Rate limiting: delay entre requisições
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    if (tokenRenovado) {
+      console.log("[Softruck] Token foi renovado durante sincronização");
+    }
+    
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    result.erros.push(`Erro geral: ${errorMessage}`);
+    result.falhas = rastreadores.length;
+    console.error("[Softruck] Erro geral:", error);
+  }
+
+  return { posicoes, result };
+}
+```
+
+## Resumo das Alterações
+
+| Item | Alteração |
+|------|-----------|
+| **Endpoint** | `/tracking/gps-data` → `/vehicles/{id}/tracking/{id}` |
+| **Header** | Adicionar `public-key` obrigatório |
+| **Query** | Adicionar `?format=JSON` |
+| **Response** | Parse `data.attributes` em vez de `data[0]` |
+| **Interface** | Adicionar `plataforma_veiculo_id` |
+| **Rate limit** | Adicionar delay de 200ms entre requisições |
+
+## Resultado Esperado
+
+Após as correções:
+1. `sync-rastreadores` buscará posição corretamente da API Softruck
+2. Banco local será atualizado com `ultima_posicao_lat/lng`
+3. Mapa exibirá o veículo Toyota Corolla LTB4J74 com posição real
+4. Status mudará de "Sem dados" para "Online"
