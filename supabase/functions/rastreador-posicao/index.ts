@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCredenciaisSoftruck, getCredenciaisRedeVeiculos } from '../_shared/credenciais-hibridas.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,6 +22,7 @@ interface PosicaoResponse {
  * Obtém token Softruck com suporte a retry em caso de erro 401
  */
 async function getSoftruckTokenComRetry(
+  supabase: ReturnType<typeof createClient>,
   supabaseUrl: string,
   supabaseKey: string,
   forceRefresh = false
@@ -42,9 +44,13 @@ async function getSoftruckTokenComRetry(
     throw new Error('Falha na autenticação: ' + authData.error);
   }
 
+  // Buscar public_key das credenciais híbridas
+  const credenciais = await getCredenciaisSoftruck(supabase);
+  const publicKey = credenciais?.public_key || '';
+
   return {
     token: authData.token,
-    publicKey: Deno.env.get('SOFTRUCK_PUBLIC_KEY') || '',
+    publicKey,
   };
 }
 
@@ -52,6 +58,7 @@ async function getSoftruckTokenComRetry(
  * Busca posição do rastreador na Softruck com retry em erro 401
  */
 async function getPosicaoSoftruckComRetry(
+  supabase: ReturnType<typeof createClient>,
   supabaseUrl: string,
   supabaseKey: string,
   vehicleId: string,
@@ -64,6 +71,7 @@ async function getPosicaoSoftruckComRetry(
   for (let tentativa = 1; tentativa <= maxRetries; tentativa++) {
     try {
       const { token, publicKey } = await getSoftruckTokenComRetry(
+        supabase,
         supabaseUrl, 
         supabaseKey, 
         tokenRenovado // força refresh se já teve erro 401
@@ -299,6 +307,7 @@ serve(async (req) => {
       console.log(`[Softruck] Usando vehicleId=${vehicleId}, deviceId=${deviceId}`);
       
       posicao = await getPosicaoSoftruckComRetry(
+        supabase,
         supabaseUrl,
         supabaseKey,
         vehicleId,
@@ -306,9 +315,10 @@ serve(async (req) => {
         baseUrl
       );
     } else if (plataformaCodigo === 'rede_veiculos') {
-      const redeToken = Deno.env.get('REDE_VEICULOS_TOKEN');
+      // Buscar credenciais híbridas
+      const credenciais = await getCredenciaisRedeVeiculos(supabase);
       
-      if (!redeToken) {
+      if (!credenciais) {
         throw new Error('Token Rede Veículos não configurado');
       }
       
@@ -327,7 +337,7 @@ serve(async (req) => {
       
       console.log(`[Rede Veículos] Usando imei=${imei}, placa=${placa}`);
       
-      posicao = await getPosicaoRedeVeiculos(redeToken, imei, placa, cpfCnpj, baseUrl);
+      posicao = await getPosicaoRedeVeiculos(credenciais.bearer_token, imei, placa, cpfCnpj, baseUrl);
     } else {
       throw new Error(`Plataforma ${plataformaCodigo} não suportada`);
     }

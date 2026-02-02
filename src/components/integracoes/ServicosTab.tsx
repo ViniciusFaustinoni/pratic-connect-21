@@ -3,7 +3,6 @@ import { CreditCard, MessageSquare, MapPin, FileSignature, Zap, CheckCircle, Mai
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ConfigurarRastreadorSheet } from './ConfigurarRastreadorSheet';
 import { ConfigurarIntegracaoSheet } from './ConfigurarIntegracaoSheet';
 import { useIntegracoesStatus } from '@/hooks/useIntegracoesStatus';
 import { useTodasIntegracoesCredenciais, IntegracaoTipo } from '@/hooks/useIntegracaoCredenciais';
@@ -262,12 +261,10 @@ function ServicoCard({ servico, status, onConfigurar, isLoading }: ServicoCardPr
 type DraftValues = Partial<Record<IntegracaoTipo, Record<string, string>>>;
 
 export function ServicosTab() {
-  // Sheets
-  const [rastreadorSheetOpen, setRastreadorSheetOpen] = useState(false);
+  // Sheet para todas as integrações (incluindo rastreadores)
   const [integracaoSheetOpen, setIntegracaoSheetOpen] = useState(false);
   
   // Seleções
-  const [plataformaSelecionada, setPlataformaSelecionada] = useState<'softruck' | 'rede_veiculos'>('softruck');
   const [integracaoSelecionada, setIntegracaoSelecionada] = useState<IntegracaoTipo>('hinova');
   const [nomeIntegracao, setNomeIntegracao] = useState('');
   
@@ -349,24 +346,12 @@ export function ServicosTab() {
   }
 
   function handleConfigurar(servico: Servico) {
-    // Para rastreadores, usar o sheet específico
-    if (servico.plataformaCodigo) {
-      setPlataformaSelecionada(servico.plataformaCodigo);
-      setRastreadorSheetOpen(true);
-      return;
-    }
-
-    // Para outras integrações, usar o sheet genérico
+    // Todas as integrações usam o mesmo sheet genérico (incluindo rastreadores)
     if (servico.integracaoTipo) {
       setIntegracaoSelecionada(servico.integracaoTipo);
       setNomeIntegracao(servico.nome);
       setIntegracaoSheetOpen(true);
     }
-  }
-
-  function handleRastreadorSuccess() {
-    integracoes.refetch();
-    setRastreadorSheetOpen(false);
   }
 
   function handleIntegracaoSuccess() {
@@ -403,14 +388,6 @@ export function ServicosTab() {
           </div>
         ))}
       </div>
-
-      {/* Sheet para rastreadores (mantido para compatibilidade) */}
-      <ConfigurarRastreadorSheet
-        open={rastreadorSheetOpen}
-        onOpenChange={setRastreadorSheetOpen}
-        plataforma={plataformaSelecionada}
-        onSuccess={handleRastreadorSuccess}
-      />
 
       {/* Sheet para outras integrações */}
       <ConfigurarIntegracaoSheet

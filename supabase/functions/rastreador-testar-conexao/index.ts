@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getCredenciaisSoftruck, getCredenciaisRedeVeiculos } from '../_shared/credenciais-hibridas.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -80,17 +81,16 @@ serve(async (req) => {
     let mensagem = '';
     let enterpriseInfo: { id: string; nome: string; cnpj?: string } | null = null;
 
-    // Testar conexão usando secrets
+    // Testar conexão usando credenciais híbridas
     if (plataforma_codigo === 'softruck') {
-      const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY');
-      const username = Deno.env.get('SOFTRUCK_USERNAME');
-      const password = Deno.env.get('SOFTRUCK_PASSWORD');
-      const configuredEnterpriseId = Deno.env.get('SOFTRUCK_ENTERPRISE_ID');
+      const credenciais = await getCredenciaisSoftruck(supabase);
 
-      if (!publicKey || !username || !password) {
-        mensagem = 'Credenciais Softruck não configuradas nos secrets (SOFTRUCK_PUBLIC_KEY, SOFTRUCK_USERNAME, SOFTRUCK_PASSWORD)';
+      if (!credenciais) {
+        mensagem = 'Credenciais Softruck não configuradas. Configure em Configurações > Integrações.';
       } else {
         try {
+          const { public_key: publicKey, username, password, enterprise_id: configuredEnterpriseId } = credenciais;
+          
           // Autenticar
           const authResponse = await fetch(`${baseUrl}/v2/auth/login`, {
             method: 'POST',
@@ -110,7 +110,7 @@ serve(async (req) => {
             
             // Tentar descobrir Enterprise ID se não estiver configurado
             if (!configuredEnterpriseId) {
-              console.log('[Testar Conexão] SOFTRUCK_ENTERPRISE_ID não configurado, tentando descobrir...');
+              console.log('[Testar Conexão] Enterprise ID não configurado, tentando descobrir...');
               enterpriseInfo = await descobrirEnterpriseId(token, publicKey);
               
               if (enterpriseInfo) {
@@ -132,9 +132,9 @@ serve(async (req) => {
                   })
                   .eq('id', plataforma.id);
                   
-                mensagem += ' | ⚠️ Configure SOFTRUCK_ENTERPRISE_ID nos secrets para melhor performance.';
+                mensagem += ' | Configure o Enterprise ID nas credenciais para melhor performance.';
               } else {
-                mensagem += ' | ⚠️ Não foi possível descobrir Enterprise ID. Configure SOFTRUCK_ENTERPRISE_ID manualmente.';
+                mensagem += ' | ⚠️ Não foi possível descobrir Enterprise ID.';
               }
             } else {
               mensagem += ` | Enterprise ID configurado: ${configuredEnterpriseId}`;
@@ -148,11 +148,11 @@ serve(async (req) => {
       }
 
     } else if (plataforma_codigo === 'rede_veiculos') {
-      const token = Deno.env.get('REDE_VEICULOS_TOKEN');
+      const credenciais = await getCredenciaisRedeVeiculos(supabase);
 
-      if (!token) {
-        mensagem = 'Token Rede Veículos não configurado nos secrets (REDE_VEICULOS_TOKEN)';
-      } else if (token.length < 10) {
+      if (!credenciais) {
+        mensagem = 'Token Rede Veículos não configurado. Configure em Configurações > Integrações.';
+      } else if (credenciais.bearer_token.length < 10) {
         mensagem = 'Token parece inválido (muito curto)';
       } else {
         testeSucesso = true;
@@ -165,17 +165,15 @@ serve(async (req) => {
     // Atualizar status do teste na tabela de credenciais (se existir)
     try {
       await supabase
-        .from('rastreadores_credenciais')
-        .upsert({
-          plataforma_id: plataforma.id,
+        .from('integracoes_credenciais')
+        .update({
           testado_em: new Date().toISOString(),
           teste_sucesso: testeSucesso,
           teste_mensagem: mensagem,
-          configurado: testeSucesso,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'plataforma_id' });
+        })
+        .eq('integracao', plataforma_codigo);
     } catch (credError) {
-      console.log('[Testar Conexão] Tabela rastreadores_credenciais não existe, ignorando...');
+      console.log('[Testar Conexão] Erro ao atualizar status:', credError);
     }
 
     return new Response(
