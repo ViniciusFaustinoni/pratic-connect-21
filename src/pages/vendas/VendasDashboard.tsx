@@ -381,16 +381,9 @@ export default function VendasDashboard() {
         {/* FUNIL DE VENDAS */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Funil de Vendas</CardTitle>
-                <CardDescription>Distribuição de leads por etapa</CardDescription>
-              </div>
-              <Link to="/vendas/acompanhamento">
-                <Button variant="ghost" size="sm">
-                  Ver Kanban <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </Link>
+            <div>
+              <CardTitle>Funil de Vendas</CardTitle>
+              <CardDescription>Distribuição de leads por etapa</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
