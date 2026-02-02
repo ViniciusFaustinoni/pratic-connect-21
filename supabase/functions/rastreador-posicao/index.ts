@@ -223,28 +223,40 @@ serve(async (req) => {
       throw new Error('rastreador_id é obrigatório');
     }
 
-    // Buscar rastreador com plataforma, veículo e associado (para Rede Veículos)
+    // Buscar rastreador com veículo e associado
     const { data: rastreador, error: rastError } = await supabase
       .from('rastreadores')
       .select(`
         *,
-        plataforma:rastreadores_config_plataformas(*),
         veiculo:veiculos(
           id, placa, modelo, marca, chassi,
-          associado:associados(cpf, cnpj)
+          associado:associados(cpf)
         )
       `)
       .eq('id', rastreador_id)
       .single();
 
     if (rastError || !rastreador) {
+      console.error('[rastreador-posicao] Erro ao buscar rastreador:', rastError);
       throw new Error('Rastreador não encontrado');
     }
 
-    const plataforma = rastreador.plataforma;
+    const plataformaCodigo = rastreador.plataforma;
 
-    if (!plataforma) {
+    if (!plataformaCodigo) {
       throw new Error('Plataforma não configurada para este rastreador');
+    }
+
+    // Buscar configuração da plataforma
+    const { data: plataforma, error: platError } = await supabase
+      .from('rastreadores_config_plataformas')
+      .select('*')
+      .eq('plataforma', plataformaCodigo)
+      .single();
+
+    if (platError || !plataforma) {
+      console.error('[rastreador-posicao] Plataforma não encontrada:', plataformaCodigo, platError);
+      throw new Error(`Configuração da plataforma ${plataformaCodigo} não encontrada`);
     }
 
     // Verificar se plataforma suporta posição tempo real
@@ -279,8 +291,6 @@ serve(async (req) => {
     let posicao: PosicaoResponse;
 
     // Roteamento por plataforma
-    const plataformaCodigo = plataforma.codigo || plataforma.plataforma;
-    
     if (plataformaCodigo === 'softruck') {
       if (!vehicleId || !deviceId) {
         throw new Error('Rastreador não configurado com IDs da plataforma');
@@ -302,10 +312,10 @@ serve(async (req) => {
         throw new Error('Token Rede Veículos não configurado');
       }
       
-      // Obter dados necessários para a API
+      // Obter dados necessários para a API (associados só tem CPF)
       const imei = rastreador.imei || rastreador.codigo || '';
       const placa = rastreador.veiculo?.placa || '';
-      const cpfCnpj = rastreador.veiculo?.associado?.cnpj || rastreador.veiculo?.associado?.cpf || '';
+      const cpfCnpj = rastreador.veiculo?.associado?.cpf || '';
       
       if (!imei && !placa) {
         throw new Error('IMEI ou Placa do veículo não configurados para Rede Veículos');
