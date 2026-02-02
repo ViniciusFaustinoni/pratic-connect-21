@@ -604,16 +604,47 @@ serve(async (req) => {
     }
 
     // ========================================
-    // PASSO 6: Cadastrar veículo
+    // PASSO 6: Validar campos obrigatórios e cadastrar veículo
     // ========================================
+    console.log('[SGA Sync] Validando campos obrigatórios do veículo...');
+
+    // CORREÇÃO: Validar RENAVAM e CHASSI antes de enviar (campos obrigatórios na Hinova)
+    if (!veiculo.renavam || veiculo.renavam.trim() === '') {
+      await logSync(veiculo_id, associado_id, 'validar_veiculo', 'error', null, null, 'RENAVAM não informado');
+      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'RENAVAM é obrigatório para sincronização com SGA. Preencha o campo e tente novamente.',
+          step: 'validacao_veiculo',
+          campo_faltante: 'renavam'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!veiculo.chassi || veiculo.chassi.trim() === '') {
+      await logSync(veiculo_id, associado_id, 'validar_veiculo', 'error', null, null, 'CHASSI não informado');
+      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'CHASSI é obrigatório para sincronização com SGA. Preencha o campo e tente novamente.',
+          step: 'validacao_veiculo',
+          campo_faltante: 'chassi'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
 
     // Payload SEM credenciais - autenticação já está no header com token_usuario
     const veiculoPayload = {
       codigo_associado: codigoAssociadoHinova,
       placa: veiculo.placa || '',
-      chassi: veiculo.chassi || '',
-      renavam: veiculo.renavam || '',
+      chassi: veiculo.chassi.trim(),
+      renavam: veiculo.renavam.trim(),
       ano_fabricacao: veiculo.ano_fabricacao || veiculo.ano_modelo,
       ano_modelo: veiculo.ano_modelo,
       codigo_fipe: veiculo.codigo_fipe || '',
@@ -643,21 +674,80 @@ serve(async (req) => {
     await logSync(veiculo_id, associado_id, 'cadastrar_veiculo', veiculoResponse.ok ? 'success' : 'error',
       veiculoPayload, veiculoData, veiculoResponse.ok ? null : veiculoData.mensagem);
 
+    let codigoVeiculoHinova = veiculoData.codigo_veiculo;
+
+    // CORREÇÃO: Tratar placa duplicada similar ao CPF
     if (!veiculoResponse.ok) {
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Falha ao cadastrar veículo: ${veiculoData.mensagem}`,
-          step: 'veiculo',
-          details: veiculoData
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      const statusCode = veiculoResponse.status;
+      const mensagem = veiculoData.mensagem?.toLowerCase() || '';
+      
+      // Verificar se é erro de duplicidade (placa já existe)
+      if (statusCode === 406 || mensagem.includes('já cadastrad') || mensagem.includes('duplicad') || mensagem.includes('existe')) {
+        console.log('[SGA Sync] Placa já cadastrada no Hinova, tentando buscar código existente...');
+        
+        // Tentar buscar veículo por placa
+        const buscaResponse = await fetchWithRetry(
+          `${hinovaApiUrl}/veiculo/consultar/placa/${veiculo.placa}`,
+          {
+            method: 'GET',
+            headers: operationHeaders
+          }
+        );
+
+        if (buscaResponse.ok) {
+          const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_veiculo_placa');
+          console.log('[SGA Sync] Resultado busca por placa:', buscaData);
+          
+          // Tentar extrair código do veículo da resposta
+          codigoVeiculoHinova = buscaData.codigo_veiculo || buscaData.codigo || 
+                                (buscaData.data && buscaData.data[0]?.codigo_veiculo);
+          
+          if (codigoVeiculoHinova) {
+            console.log(`[SGA Sync] Código do veículo existente recuperado: ${codigoVeiculoHinova}`);
+            await logSync(veiculo_id, associado_id, 'buscar_veiculo_existente', 'success', 
+              { placa: veiculo.placa }, buscaData, null);
+          } else {
+            console.warn('[SGA Sync] Veículo encontrado mas código não identificado na resposta');
+            await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+            return new Response(
+              JSON.stringify({ 
+                success: false, 
+                error: 'Placa já cadastrada no Hinova mas não foi possível obter o código. Verifique manualmente.',
+                step: 'veiculo',
+                details: { cadastro: veiculoData, busca: buscaData }
+              }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        } else {
+          // Não conseguiu buscar veículo existente
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Placa já cadastrada no Hinova. Não foi possível recuperar o código automaticamente.',
+              step: 'veiculo',
+              details: veiculoData
+            }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } else {
+        // Erro genérico (não é placa duplicada)
+        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: `Falha ao cadastrar veículo: ${veiculoData.mensagem}`,
+            step: 'veiculo',
+            details: veiculoData
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
-    const codigoVeiculoHinova = veiculoData.codigo_veiculo;
-    console.log(`[SGA Sync] Veículo cadastrado - Código Hinova: ${codigoVeiculoHinova}`);
+    console.log(`[SGA Sync] Veículo processado - Código Hinova: ${codigoVeiculoHinova}`);
 
     // Atualizar veículo no banco local
     await supabase
