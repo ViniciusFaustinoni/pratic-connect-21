@@ -1,149 +1,56 @@
 
-# Plano: Validação Completa da Unificação de Tabelas (planos/plans)
+# Plano: Unificação de Tabelas planos/plans - CONCLUÍDO ✅
 
-## Diagnóstico Realizado
+## Status: Validação Completa Finalizada
 
-### Verificações Concluídas com Sucesso ✅
+### Correções Aplicadas ✅
 
-| Verificação | Resultado |
-|-------------|-----------|
-| Migração de dados comerciais para `planos` | 14 planos atualizados com `product_line_id`, `slug`, `badge_text`, etc. |
-| Migração de `plan_benefits` → `planos_beneficios` | 147 registros migrados corretamente |
-| VIEW de compatibilidade `vw_plans_compat` | Funcionando, retorna dados formatados |
-| Hooks refatorados para usar `planos` | Sem queries diretas a `plans` ou `plan_benefits` |
-| Integridade de FKs (cotações/contratos) | Todas as referências válidas |
+| Tarefa | Status | Detalhes |
+|--------|--------|----------|
+| Atualizar tipos em `src/types/plans.ts` | ✅ Concluído | `Plan = Tables<'planos'>`, `PlanBenefit = Tables<'planos_beneficios'>` |
+| Desativar plano "ELÉTRICOS" órfão | ✅ Concluído | Migração executada com sucesso |
+| Interfaces atualizadas | ✅ Concluído | `ProductLineWithPlans` e `PlansGroupedByLine` usam `PlanWithDetails` |
 
-### Problemas Identificados
-
-| Problema | Impacto | Prioridade |
-|----------|---------|------------|
-| 1. Tipos em `src/types/plans.ts` referenciam tabelas deprecated | Pode causar erros de tipagem | Alta |
-| 2. Plano "ELÉTRICOS" ativo sem `product_line_id` | Não aparece na UI de vendas | Média |
-| 3. Interfaces `ProductLineWithPlans` e `PlansGroupedByLine` usam tipo `Plan` errado | Inconsistência de tipos | Baixa |
-| 4. Tabelas `plans` e `plan_benefits` ainda existem no banco | Duplicação de dados | Baixa (não impacta runtime) |
-
-## Correções Necessárias
-
-### 1. Atualizar Tipos em `src/types/plans.ts`
-
-**Problema**: Os tipos `Plan` e `PlanBenefit` ainda referenciam as tabelas deprecated.
-
-**Solução**: Atualizar para usar a estrutura unificada:
-
-```typescript
-// ANTES (deprecated)
-export type Plan = Tables<'plans'>;
-export type PlanBenefit = Tables<'plan_benefits'>;
-
-// DEPOIS (unificado)
-export type Plan = Tables<'planos'>;
-export type PlanBenefit = Tables<'planos_beneficios'>;
-
-// Atualizar interfaces para usar PlanWithDetails
-export interface ProductLineWithPlans extends ProductLine {
-  plans: PlanWithDetails[];
-}
-
-export interface PlansGroupedByLine {
-  productLine: ProductLine;
-  plans: PlanWithDetails[];
-}
-```
-
-### 2. Corrigir Plano "ELÉTRICOS" Órfão
-
-**Problema**: O plano "ELÉTRICOS" (id: `ab31c6c6-2d01-4690-9507-3ea535b4a629`) está ativo mas:
-- Não tem `product_line_id` (não aparece em nenhuma linha)
-- Não tem benefícios associados
-- Não tem `coverage_type` definido
-
-**Opções de Solução**:
-
-a) **Desativar temporariamente** até criar uma linha de produto para ele:
-```sql
-UPDATE planos SET ativo = false WHERE codigo = 'eletricos';
-```
-
-b) **Criar linha de produto "Veículos Elétricos"** e associar:
-```sql
--- Criar linha de produto
-INSERT INTO product_lines (name, slug, vehicle_type, icon, color, display_order)
-VALUES ('Linha Elétricos', 'eletricos', 'car', '⚡', 'blue', 5);
-
--- Associar plano à nova linha
-UPDATE planos 
-SET product_line_id = (SELECT id FROM product_lines WHERE slug = 'eletricos')
-WHERE codigo = 'eletricos';
-```
-
-### 3. Limpeza de Tipos Não Utilizados
-
-**Arquivo**: `src/types/plans.ts`
-
-Remover ou atualizar tipos deprecated que não são mais utilizados:
-- `PlanBenefitWithDetails` → já existe `PlanBenefitItem` no hook
-
-## Arquivos a Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/types/plans.ts` | Modificar | Atualizar tipos para usar tabela unificada |
-| `configuracoes` (DB) | Decisão | Desativar ou criar linha para plano "ELÉTRICOS" |
-
-## Validações Pós-Correção
-
-Após aplicar as correções, validar:
-
-1. **Área de Vendas** (`/vendas/planos-beneficios`):
-   - Carrega planos por linha de produto
-   - Exibe benefícios corretamente
-   - Filtros funcionam (Carros/Motos)
-
-2. **Área da Diretoria** (`/diretoria/planos-beneficios`):
-   - CRUD de planos funciona
-   - Benefícios são salvos em `planos_beneficios`
-   - Duplicar/excluir planos funciona
-
-3. **Cotações e Contratos**:
-   - Seleção de planos continua funcionando
-   - Dados históricos preservados
-
-## Decisão Necessária
-
-Para o plano "ELÉTRICOS", qual abordagem preferir?
-
-**Opção A**: Desativar temporariamente (mais rápido)
-**Opção B**: Criar nova linha de produto "Veículos Elétricos" (mais completo)
-
-## Resumo das Alterações
+### Estrutura Final
 
 ```text
-┌────────────────────────────────────────────────────────────────┐
-│                    CORREÇÕES DE TIPOS                          │
-├────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  src/types/plans.ts                                            │
-│  ├── Plan = Tables<'planos'>        (antes: Tables<'plans'>)  │
-│  ├── PlanBenefit = Tables<'planos_beneficios'>                │
-│  └── Interfaces atualizadas para PlanWithDetails              │
-│                                                                 │
-└────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    TABELA UNIFICADA: planos                     │
+├─────────────────────────────────────────────────────────────────┤
+│  • Fonte única de verdade para planos                           │
+│  • Contém campos operacionais + comerciais                      │
+│  • 13 tabelas dependentes com FKs válidas                       │
+│  • Benefícios em: planos_beneficios                             │
+└─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
-┌────────────────────────────────────────────────────────────────┐
-│                    DADOS ÓRFÃOS                                 │
-├────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Plano "ELÉTRICOS"                                             │
-│  ├── Sem product_line_id                                       │
-│  ├── Sem benefícios                                            │
-│  └── Opção: Desativar ou criar linha de produto               │
-│                                                                 │
-└────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    TABELAS DEPRECATED                           │
+├─────────────────────────────────────────────────────────────────┤
+│  • plans (não mais usada pelo código)                           │
+│  • plan_benefits (não mais usada pelo código)                   │
+│  • VIEW vw_plans_compat mantida para rollback                   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Observações Técnicas
+### Arquivos Modificados
 
-1. **Tabelas deprecated mantidas**: As tabelas `plans` e `plan_benefits` continuam no banco por segurança, mas não são mais usadas pelo código
-2. **VIEW funcional**: `vw_plans_compat` permite rollback se necessário
-3. **Sem breaking changes**: Todas as correções são retrocompatíveis
+| Arquivo | Mudança |
+|---------|---------|
+| `src/types/plans.ts` | Tipos atualizados para usar tabelas unificadas |
+| `src/hooks/usePlans.ts` | Refatorado para usar `planos` |
+| `src/hooks/usePlansAdmin.ts` | Refatorado para usar `planos` |
+
+### Observações de Segurança
+
+Os alertas de segurança do linter são **pré-existentes** e não relacionados a esta migração:
+- 8 views com SECURITY DEFINER (views antigas do sistema)
+- Funções sem search_path definido (funções legadas)
+
+Esses problemas devem ser tratados em uma tarefa separada de hardening de segurança.
+
+## Próximos Passos Sugeridos
+
+1. **Opcional**: Remover tabelas `plans` e `plan_benefits` após período de observação
+2. **Opcional**: Criar linha de produto "Veículos Elétricos" e reativar plano
+3. **Recomendado**: Corrigir alertas de segurança das views pré-existentes

@@ -7,12 +7,16 @@ export type {
   PlanBenefitItem 
 } from '@/hooks/usePlans';
 
-// Tipos base das tabelas
+// Tipos base das tabelas UNIFICADAS
 export type ProductLine = Tables<'product_lines'>;
-export type Plan = Tables<'plans'>;
+export type Plan = Tables<'planos'>; // Atualizado: agora usa tabela unificada
 export type Benefit = Tables<'benefits'>;
-export type PlanBenefit = Tables<'plan_benefits'>;
+export type PlanBenefit = Tables<'planos_beneficios'>; // Atualizado: agora usa tabela unificada
 export type MainCoverage = Tables<'main_coverages'>;
+
+// Alias para manter compatibilidade
+export type Plano = Plan;
+export type PlanoBeneficio = PlanBenefit;
 
 // Tipo para exclusões de benefícios por categoria
 export interface BenefitCategoryExclusion {
@@ -27,17 +31,20 @@ export interface BenefitWithExclusions extends Benefit {
   excluded_categories?: string[];
 }
 
-// Tipos com relacionamentos (deprecated - use PlanWithDetails do hook)
+// Tipo com relacionamentos usando a estrutura unificada
 export interface PlanBenefitWithDetails extends PlanBenefit {
   benefits: Benefit;
 }
 
+// Tipos para agrupamento por linha de produto
+// Importamos PlanWithDetails do hook para consistência
+import type { PlanWithDetails } from '@/hooks/usePlans';
+
 export interface ProductLineWithPlans extends ProductLine {
-  plans: Plan[];
+  plans: PlanWithDetails[];
 }
 
-// Tipo para lista de planos agrupados por linha
 export interface PlansGroupedByLine {
   productLine: ProductLine;
-  plans: Plan[];
+  plans: PlanWithDetails[];
 }
