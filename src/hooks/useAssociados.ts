@@ -314,13 +314,22 @@ export function useVeiculosDoAssociado(associadoId: string | undefined) {
         .from('veiculos')
         .select(`
           *,
-          rastreador:rastreadores(id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status, ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao)
+          rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status, ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao)
         `)
         .eq('associado_id', associadoId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []) as unknown as VeiculoComRelacoes[];
+      
+      // Transformar array em objeto único (pegar primeiro rastreador de cada veículo)
+      const veiculosTransformados = (data || []).map(v => ({
+        ...v,
+        rastreador: Array.isArray(v.rastreador) && v.rastreador.length > 0 
+          ? v.rastreador[0] 
+          : (v.rastreador || null)
+      }));
+      
+      return veiculosTransformados as unknown as VeiculoComRelacoes[];
     },
     enabled: !!associadoId,
   });
