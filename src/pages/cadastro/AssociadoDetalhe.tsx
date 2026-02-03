@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { 
   ArrowLeft, Phone, Mail, MessageCircle, MapPin, Calendar, User, Car, 
   FileCheck, FileText, Clock, Edit, AlertTriangle, Loader2,
@@ -315,34 +317,39 @@ export default function AssociadoDetalhe() {
     window.open(`mailto:${associado.email}`, '_blank');
   };
   
+  // Encontrar veículo com rastreador e posição disponível
+  const veiculoComRastreador = useMemo(() => {
+    return veiculos?.find(
+      v => v.rastreador?.status === 'instalado' && 
+           v.rastreador?.ultima_posicao_lat && 
+           v.rastreador?.ultima_posicao_lng
+    );
+  }, [veiculos]);
+
   const handleAbrirMapa = async () => {
-    if (!associado) return;
-    
-    // Se já tem coordenadas, abrir diretamente
-    if (coordenadas.lat && coordenadas.lng) {
+    // Priorizar posição do rastreador
+    if (veiculoComRastreador?.rastreador?.ultima_posicao_lat && veiculoComRastreador?.rastreador?.ultima_posicao_lng) {
+      setCoordenadas({
+        lat: veiculoComRastreador.rastreador.ultima_posicao_lat,
+        lng: veiculoComRastreador.rastreador.ultima_posicao_lng
+      });
       setMapaModalOpen(true);
       return;
     }
 
-    // Se não tem, geocodificar primeiro
-    setGeocodificando(true);
-    const result = await atualizarCoordenadasAssociado(id!, {
-      logradouro: associado.logradouro,
-      numero: associado.numero,
-      bairro: associado.bairro,
-      cidade: associado.cidade,
-      uf: associado.uf,
-      cep: associado.cep,
-    });
-    setGeocodificando(false);
-
-    if (result.success && result.latitude && result.longitude) {
-      setCoordenadas({ lat: result.latitude, lng: result.longitude });
-      setMapaModalOpen(true);
-      refetch(); // Atualizar dados do associado
-    } else {
-      toast.error('Não foi possível localizar o endereço no mapa');
+    // Fallback: Se não tem veículo com rastreador, mostrar erro
+    if (!veiculos || veiculos.length === 0) {
+      toast.error('Nenhum veículo cadastrado para este associado');
+      return;
     }
+
+    const veiculoComRastreadorSemPosicao = veiculos.find(v => v.rastreador?.status === 'instalado');
+    if (veiculoComRastreadorSemPosicao) {
+      toast.error('Rastreador ainda não enviou posição. Aguarde a primeira comunicação.');
+      return;
+    }
+
+    toast.error('Nenhum veículo com rastreador instalado');
   };
 
   const handleSuspender = () => {
@@ -1555,13 +1562,13 @@ export default function AssociadoDetalhe() {
         veiculo={veiculoEditar}
       />
 
-      {/* MODAL MAPA DO ASSOCIADO */}
+      {/* MODAL MAPA DO RASTREADOR */}
       <Dialog open={mapaModalOpen} onOpenChange={setMapaModalOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
-              Localização - {associado.nome}
+              Localização - {veiculoComRastreador?.placa || associado.nome}
             </DialogTitle>
           </DialogHeader>
           
@@ -1579,11 +1586,15 @@ export default function AssociadoDetalhe() {
                 <Marker position={[coordenadas.lat, coordenadas.lng]}>
                   <Popup>
                     <div className="text-center">
-                      <strong>{associado.nome}</strong>
+                      <strong>{veiculoComRastreador?.placa}</strong>
                       <p className="text-xs mt-1">
-                        {associado.logradouro}, {associado.numero}<br/>
-                        {associado.bairro} - {associado.cidade}/{associado.uf}
+                        {veiculoComRastreador?.marca} {veiculoComRastreador?.modelo}
                       </p>
+                      {veiculoComRastreador?.rastreador?.ultima_comunicacao && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Atualizado {formatDistanceToNow(new Date(veiculoComRastreador.rastreador.ultima_comunicacao), { addSuffix: true, locale: ptBR })}
+                        </p>
+                      )}
                     </div>
                   </Popup>
                 </Marker>
@@ -1591,9 +1602,16 @@ export default function AssociadoDetalhe() {
             </div>
           )}
           
-          <p className="text-sm text-muted-foreground text-center">
-            📍 {associado.logradouro}, {associado.numero} - {associado.bairro}, {associado.cidade}/{associado.uf}
-          </p>
+          {veiculoComRastreador?.rastreador && (
+            <p className="text-sm text-muted-foreground text-center">
+              🚗 {veiculoComRastreador.placa} • 
+              {veiculoComRastreador.rastreador.ultima_ignicao ? ' 🟢 Ligado' : ' 🔴 Desligado'} • 
+              {veiculoComRastreador.rastreador.ultima_velocidade !== null && ` ${veiculoComRastreador.rastreador.ultima_velocidade} km/h • `}
+              Atualizado {veiculoComRastreador.rastreador.ultima_comunicacao 
+                ? formatDistanceToNow(new Date(veiculoComRastreador.rastreador.ultima_comunicacao), { addSuffix: true, locale: ptBR })
+                : 'sem dados'}
+            </p>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -49,6 +49,11 @@ export interface VeiculoComRelacoes extends Tables<'veiculos'> {
     plataforma: string | null;
     plataforma_device_id: string | null;
     status: string | null;
+    ultima_posicao_lat: number | null;
+    ultima_posicao_lng: number | null;
+    ultima_velocidade: number | null;
+    ultima_ignicao: boolean | null;
+    ultima_comunicacao: string | null;
   } | null;
 }
 
@@ -309,7 +314,7 @@ export function useVeiculosDoAssociado(associadoId: string | undefined) {
         .from('veiculos')
         .select(`
           *,
-          rastreador:rastreadores(id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status)
+          rastreador:rastreadores(id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status, ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao)
         `)
         .eq('associado_id', associadoId)
         .order('created_at', { ascending: false });
