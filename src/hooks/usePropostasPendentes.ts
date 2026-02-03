@@ -1396,19 +1396,81 @@ export function useAprovarProposta() {
         const veiculoId = veiculos[0].id;
         
         // Status do veículo depende se instalação foi concluída
-        const statusVeiculo = jaTemInstalacaoConcluida ? 'em_analise' : 'instalacao_pendente';
+        // Se já tem instalação concluída, veículo vai para 'ativo' com cobertura_total
+        const statusVeiculo = jaTemInstalacaoConcluida ? 'ativo' : 'instalacao_pendente';
+        
+        // Se instalação já está concluída, ativar cobertura total imediatamente
+        // Caso contrário, aguardar instalação para ativar
+        const coberturaTotal = jaTemInstalacaoConcluida;
         
         const { error: veiculoError } = await supabase
           .from('veiculos')
           .update({
             status: statusVeiculo,
             cobertura_roubo_furto: true,
-            cobertura_total: false,
+            cobertura_total: coberturaTotal,
           })
           .eq('id', veiculoId);
 
         if (veiculoError) {
           console.error('Erro ao atualizar veículo:', veiculoError);
+        }
+
+        // Se instalação já foi concluída, ativar rastreador na plataforma e criar acesso do associado
+        if (jaTemInstalacaoConcluida && instalacaoConcluida?.rastreador_id) {
+          try {
+            // Buscar dados do rastreador para ativação
+            const { data: rastreadorData } = await supabase
+              .from('rastreadores')
+              .select('imei, plataforma')
+              .eq('id', instalacaoConcluida.rastreador_id)
+              .single();
+            
+            if (rastreadorData?.imei) {
+              const { data: associadoEmail } = await supabase
+                .from('associados')
+                .select('email')
+                .eq('id', associadoId)
+                .single();
+
+              // Ativar na plataforma do rastreador
+              if (rastreadorData.plataforma === 'softruck') {
+                console.log('[useAprovarProposta] Ativando rastreador na Softruck...');
+                await supabase.functions.invoke('softruck-ativar-dispositivo', {
+                  body: {
+                    imei: rastreadorData.imei,
+                    veiculoId: veiculoId,
+                    associadoId: associadoId,
+                    associadoEmail: associadoEmail?.email,
+                  },
+                });
+              } else if (rastreadorData.plataforma === 'rede_veiculos') {
+                console.log('[useAprovarProposta] Ativando rastreador na Rede Veículos...');
+                await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+                  body: {
+                    imei: rastreadorData.imei,
+                    veiculoId: veiculoId,
+                    associadoId: associadoId,
+                  },
+                });
+              }
+              
+              // Criar acesso do associado
+              console.log('[useAprovarProposta] Criando acesso do associado...');
+              await supabase.functions.invoke('ativar-associado', {
+                body: {
+                  veiculo_id: veiculoId,
+                  rastreador_id: instalacaoConcluida.rastreador_id,
+                  associado_id: associadoId,
+                },
+              });
+              
+              console.log('[useAprovarProposta] Cobertura total ativada - instalação já concluída');
+            }
+          } catch (ativacaoError) {
+            console.warn('[useAprovarProposta] Erro na ativação automática:', ativacaoError);
+            // Não lançar erro - a ativação pode ser feita manualmente depois
+          }
         }
 
         // Criar INSTALAÇÃO APENAS se:
