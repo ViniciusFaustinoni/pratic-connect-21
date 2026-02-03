@@ -1,196 +1,132 @@
 
-# Plano: Mostrar Localização do Rastreador no Modal de Mapa
+# Plano: Corrigir Query de Rastreador na Listagem de Veículos
 
-## Contexto
+## Problema Identificado
 
-Atualmente, o modal "Abrir no Mapa" mostra a **localização do endereço do associado** (geocodificação). O usuário quer que mostre a **localização em tempo real do rastreador do veículo**.
+O botão "Abrir no Mapa" mostra **"Nenhum veículo com rastreador instalado"** mesmo quando existe um rastreador instalado com posição válida no banco de dados.
 
----
+### Causa Raiz
 
-## Situação Atual
+A relação entre `veiculos` e `rastreadores` no Supabase tem `isOneToOne: false`, o que significa que:
+- A query `rastreador:rastreadores(...)` retorna um **ARRAY** `[ {...} ]`
+- Mas o código TypeScript espera um **OBJETO** `{ ... }`
 
-| Modal atual | Problema |
-|-------------|----------|
-| Mostra endereço do associado (EST CAFUNDA, 725) | Não é a posição real do veículo |
-| Usa coordenadas geocodificadas | Deveria usar posição do rastreador |
+### Evidência no Banco
 
-### Dados Disponíveis
-
-O associado tem um veículo com rastreador instalado:
-- **Veículo**: LTB4J74
-- **Rastreador**: instalado, com posição real
-- **Última posição**: lat -22.79677300 / lng -43.29465800
-- **Última comunicação**: 02/02/2026 20:02
+```sql
+-- Existe rastreador com posição válida:
+codigo: RAT-862667083494305
+status: instalado
+ultima_posicao_lat: -22.79677300
+ultima_posicao_lng: -43.29465800
+```
 
 ---
 
 ## Solução
 
-### 1. Expandir Query de Veículos
-
-Adicionar campos de posição do rastreador na query do `useVeiculosDoAssociado`:
-
-```typescript
-rastreador:rastreadores(
-  id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status,
-  ultima_posicao_lat,     // ADICIONAR
-  ultima_posicao_lng,     // ADICIONAR
-  ultima_comunicacao      // ADICIONAR
-)
-```
-
-### 2. Atualizar Interface
-
-Expandir `VeiculoComRelacoes` para incluir os novos campos:
-
-```typescript
-export interface VeiculoComRelacoes extends Tables<'veiculos'> {
-  rastreador?: {
-    id: string;
-    codigo: string;
-    // ... campos existentes
-    ultima_posicao_lat: number | null;
-    ultima_posicao_lng: number | null;
-    ultima_comunicacao: string | null;
-  } | null;
-}
-```
-
-### 3. Modificar Modal no AssociadoDetalhe
-
-Alterar a lógica para usar a posição do rastreador:
-
-- **Fonte de dados**: Primeiro veículo com rastreador instalado e posição disponível
-- **Fallback**: Se não houver rastreador/posição, exibir mensagem informativa
-- **Display**: Mostrar placa do veículo, última atualização e velocidade (se disponível)
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/hooks/useAssociados.ts` | **MODIFICAR** | Adicionar campos de posição na query e interface |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | **MODIFICAR** | Alterar modal para usar posição do rastreador |
-
----
-
-## Implementação Detalhada
+Modificar a query para retornar corretamente o primeiro rastreador de cada veículo.
 
 ### Arquivo: `src/hooks/useAssociados.ts`
 
-**Linha 44-52** - Atualizar interface:
-```typescript
-export interface VeiculoComRelacoes extends Tables<'veiculos'> {
-  rastreador?: {
-    id: string;
-    codigo: string;
-    numero_serie: string | null;
-    imei: string | null;
-    plataforma: string | null;
-    plataforma_device_id: string | null;
-    status: string | null;
-    ultima_posicao_lat: number | null;
-    ultima_posicao_lng: number | null;
-    ultima_velocidade: number | null;
-    ultima_ignicao: boolean | null;
-    ultima_comunicacao: string | null;
-  } | null;
-}
-```
+**Alteração na query (linha 317):**
 
-**Linha 310-312** - Expandir query:
 ```typescript
+// DE:
 rastreador:rastreadores(
+  id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status,
+  ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao
+)
+
+// PARA (com hint da foreign key):
+rastreador:rastreadores!rastreadores_veiculo_id_fkey(
   id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status,
   ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao
 )
 ```
 
-### Arquivo: `src/pages/cadastro/AssociadoDetalhe.tsx`
+**Alteração no retorno (linha 323):**
 
-**Nova lógica para buscar veículo com rastreador ativo:**
+Transformar o array em objeto único pegando o primeiro elemento:
+
 ```typescript
-// Encontrar veículo com rastreador e posição disponível
-const veiculoComRastreador = veiculos?.find(
-  v => v.rastreador?.status === 'instalado' && 
-       v.rastreador?.ultima_posicao_lat && 
-       v.rastreador?.ultima_posicao_lng
-);
-```
+// Após buscar os dados:
+const veiculosTransformados = (data || []).map(v => ({
+  ...v,
+  rastreador: Array.isArray(v.rastreador) && v.rastreador.length > 0 
+    ? v.rastreador[0] 
+    : v.rastreador
+})) as VeiculoComRelacoes[];
 
-**Alterar função `handleAbrirMapa`:**
-```typescript
-const handleAbrirMapa = () => {
-  if (!veiculoComRastreador?.rastreador) {
-    toast.error('Nenhum veículo com rastreador e posição disponível');
-    return;
-  }
-  
-  setCoordenadas({
-    lat: veiculoComRastreador.rastreador.ultima_posicao_lat,
-    lng: veiculoComRastreador.rastreador.ultima_posicao_lng
-  });
-  setMapaModalOpen(true);
-};
-```
-
-**Atualizar modal para exibir dados do veículo:**
-```tsx
-<DialogTitle className="flex items-center gap-2">
-  <MapPin className="h-5 w-5" />
-  Localização - {veiculoComRastreador?.placa || associado.nome}
-</DialogTitle>
-
-{/* Popup do marcador */}
-<Popup>
-  <div className="text-center">
-    <strong>{veiculoComRastreador?.placa}</strong>
-    <p className="text-xs mt-1">
-      {veiculoComRastreador?.modelo} - {veiculoComRastreador?.marca}
-    </p>
-    <p className="text-xs text-muted-foreground mt-1">
-      Última atualização: {formatDistanceToNow(...)}
-    </p>
-  </div>
-</Popup>
-
-{/* Rodapé com status do rastreador */}
-<p className="text-sm text-muted-foreground text-center">
-  🚗 {veiculoComRastreador?.placa} • 
-  {veiculoComRastreador?.rastreador?.ultima_ignicao ? '🟢 Ligado' : '🔴 Desligado'} • 
-  Atualizado há {formatDistanceToNow(...)}
-</p>
+return veiculosTransformados;
 ```
 
 ---
 
-## Fluxo do Usuário
+## Implementação Completa
 
-```text
-1. Usuário clica em "Abrir no Mapa"
-2. Sistema busca veículo com rastreador instalado e posição
-   ├─ Encontrou: Abre modal com posição do rastreador
-   └─ Não encontrou: Toast "Nenhum veículo com rastreador"
-3. Modal exibe mapa com posição real do veículo
-4. Marcador mostra placa, modelo, status e última atualização
+### Arquivo: `src/hooks/useAssociados.ts` (linhas 307-327)
+
+```typescript
+export function useVeiculosDoAssociado(associadoId: string | undefined) {
+  return useQuery({
+    queryKey: ['veiculos-associado', associadoId],
+    queryFn: async () => {
+      if (!associadoId) throw new Error('ID do associado não informado');
+
+      const { data, error } = await supabase
+        .from('veiculos')
+        .select(`
+          *,
+          rastreador:rastreadores!rastreadores_veiculo_id_fkey(
+            id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status,
+            ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao
+          )
+        `)
+        .eq('associado_id', associadoId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      // Transformar array em objeto único (pegar primeiro rastreador de cada veículo)
+      const veiculosTransformados = (data || []).map(v => ({
+        ...v,
+        rastreador: Array.isArray(v.rastreador) && v.rastreador.length > 0 
+          ? v.rastreador[0] 
+          : (v.rastreador || null)
+      }));
+      
+      return veiculosTransformados as VeiculoComRelacoes[];
+    },
+    enabled: !!associadoId,
+  });
+}
 ```
+
+---
+
+## Por que isso acontece?
+
+| Configuração | Comportamento |
+|--------------|---------------|
+| `isOneToOne: true` | Retorna objeto único `{ ... }` |
+| `isOneToOne: false` | Retorna array `[ { ... } ]` |
+
+No Supabase, a FK `rastreadores_veiculo_id_fkey` tem `isOneToOne: false` porque tecnicamente um veículo **pode** ter múltiplos rastreadores (histórico, substituições, etc.), mesmo que na prática só tenha um ativo.
 
 ---
 
 ## Resultado Esperado
 
-| Antes | Depois |
-|-------|--------|
-| Endereço do associado | Posição real do rastreador |
-| Coordenadas geocodificadas | Última posição do veículo |
-| Nome do associado no título | Placa do veículo no título |
-| Sem informação de atualização | "Atualizado há X minutos" |
+Após a correção:
+1. O código `v.rastreador?.status === 'instalado'` irá funcionar corretamente
+2. O botão "Abrir no Mapa" irá encontrar o rastreador e mostrar a posição
+3. O mapa exibirá: **LTB4J74** em **-22.79677, -43.29465** (última posição conhecida)
 
 ---
 
-## Tratamento de Erros
+## Arquivos a Modificar
 
-- **Associado sem veículo**: Toast informativo + botão desabilitado
-- **Veículo sem rastreador**: Toast informativo
-- **Rastreador sem posição**: Toast "Aguardando primeira comunicação"
+| Arquivo | Linhas | Alteração |
+|---------|--------|-----------|
+| `src/hooks/useAssociados.ts` | 313-326 | Adicionar hint da FK + transformar array em objeto |
