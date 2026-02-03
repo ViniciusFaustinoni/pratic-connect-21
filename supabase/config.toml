@@ -338,3 +338,15 @@ verify_jwt = false
 
 [functions.integracoes-credenciais]
 verify_jwt = false
+
+[functions.fechamento-mensal]
+verify_jwt = false
+
+[functions.calcular-rateio-completo]
+verify_jwt = false
+
+[functions.gerar-faturas-mensais]
+verify_jwt = false
+
+[functions.gerar-cobrancas-mensais]
+verify_jwt = false
