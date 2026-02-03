@@ -20,16 +20,26 @@ const TIPOS_BENEFICIO = [
 ] as const;
 
 // Mapeamento de tipos de sinistro para benefício
+// Todos os tipos conhecidos devem estar mapeados para garantir cálculo correto
 const SINISTRO_PARA_BENEFICIO: Record<string, string> = {
+  // Colisão
   'colisao_parcial': 'colisao',
   'colisao_total': 'colisao',
   'colisao': 'colisao',
+  'fenomeno_natural': 'colisao', // Granizo, alagamento, queda de árvore
+  'vandalismo': 'colisao',       // Vandalismo entra como colisão
+  'outro': 'colisao',            // Outros tipos não especificados
+  
+  // Roubo/Furto
   'roubo': 'roubo_furto',
   'furto': 'roubo_furto',
   'roubo_furto': 'roubo_furto',
+  
+  // Outros benefícios específicos
   'incendio': 'incendio',
   'vidros': 'vidros',
   'terceiros': 'terceiros',
+  'assistencia': 'assistencia',
 };
 
 interface FechamentoRequest {

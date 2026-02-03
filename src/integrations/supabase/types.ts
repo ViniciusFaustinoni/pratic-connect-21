@@ -270,6 +270,13 @@ export type Database = {
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
           },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       acionamentos_roubo_furto_historico: {
@@ -1343,6 +1350,13 @@ export type Database = {
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
           },
+          {
+            foreignKeyName: "asaas_cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       asaas_config: {
@@ -1891,6 +1905,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "associados_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3723,6 +3744,13 @@ export type Database = {
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
           },
+          {
+            foreignKeyName: "chamados_assistencia_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       chamados_assistencia_atendimentos: {
@@ -4496,6 +4524,13 @@ export type Database = {
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
           },
+          {
+            foreignKeyName: "cobrancas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       cobrancas_composicao: {
@@ -4607,6 +4642,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_composicao_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -5419,6 +5461,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "contratos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "contratos_vendedor_id_fkey"
@@ -7245,6 +7294,13 @@ export type Database = {
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
           },
+          {
+            foreignKeyName: "documentos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       documentos_solicitados: {
@@ -7662,6 +7718,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -9766,6 +9829,13 @@ export type Database = {
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
           },
+          {
+            foreignKeyName: "instalacoes_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       instalacoes_pendentes_criacao: {
@@ -11775,6 +11845,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -14427,6 +14504,13 @@ export type Database = {
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
           },
+          {
+            foreignKeyName: "rastreadores_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       rastreadores_comandos: {
@@ -14595,6 +14679,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_comandos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -15891,6 +15982,13 @@ export type Database = {
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
           },
+          {
+            foreignKeyName: "servicos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       sga_sync_logs: {
@@ -16003,6 +16101,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -16625,6 +16730,13 @@ export type Database = {
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
           },
+          {
+            foreignKeyName: "sinistros_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       softruck_eventos: {
@@ -16730,6 +16842,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "softruck_eventos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -17548,8 +17667,11 @@ export type Database = {
           associado_id: string
           ativo: boolean
           chassi: string | null
+          cobertura_assistencia: boolean | null
           cobertura_roubo_furto: boolean | null
+          cobertura_terceiros: boolean | null
           cobertura_total: boolean | null
+          cobertura_vidros: boolean | null
           codigo_fipe: string | null
           codigo_hinova: number | null
           combustivel: string | null
@@ -17585,8 +17707,11 @@ export type Database = {
           associado_id: string
           ativo?: boolean
           chassi?: string | null
+          cobertura_assistencia?: boolean | null
           cobertura_roubo_furto?: boolean | null
+          cobertura_terceiros?: boolean | null
           cobertura_total?: boolean | null
+          cobertura_vidros?: boolean | null
           codigo_fipe?: string | null
           codigo_hinova?: number | null
           combustivel?: string | null
@@ -17622,8 +17747,11 @@ export type Database = {
           associado_id?: string
           ativo?: boolean
           chassi?: string | null
+          cobertura_assistencia?: boolean | null
           cobertura_roubo_furto?: boolean | null
+          cobertura_terceiros?: boolean | null
           cobertura_total?: boolean | null
+          cobertura_vidros?: boolean | null
           codigo_fipe?: string | null
           codigo_hinova?: number | null
           combustivel?: string | null
@@ -18181,6 +18309,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "vistorias_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vistorias_vistoriador_id_fkey"
@@ -19160,6 +19295,75 @@ export type Database = {
           },
         ]
       }
+      vw_veiculos_com_cotas: {
+        Row: {
+          associado_id: string | null
+          cobertura_assistencia: boolean | null
+          cobertura_roubo_furto: boolean | null
+          cobertura_terceiros: boolean | null
+          cobertura_total: boolean | null
+          cobertura_vidros: boolean | null
+          cotas_calculadas: number | null
+          faixa_cota_id: string | null
+          fipe_ate: number | null
+          fipe_de: number | null
+          id: string | null
+          placa: string | null
+          status: Database["public"]["Enums"]["status_veiculo"] | null
+          valor_fipe: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "veiculos_faixa_cota_id_fkey"
+            columns: ["faixa_cota_id"]
+            isOneToOne: false
+            referencedRelation: "faixas_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_vendedores_conflito: {
         Row: {
           associacoes_envolvidas: string[] | null
@@ -19340,6 +19544,7 @@ export type Database = {
         }[]
       }
       fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
+      fn_get_cotas_veiculo: { Args: { p_veiculo_id: string }; Returns: number }
       fn_limpar_tokens_expirados: { Args: never; Returns: undefined }
       fn_resumo_saude_beneficios: {
         Args: never
