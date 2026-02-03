@@ -133,6 +133,49 @@ serve(async (req) => {
 
     // 2. Para cada profissional, verificar se já tem tarefa e tentar atribuir
     for (const prof of profissionais as ProfissionalDisponivel[]) {
+      // ========== VERIFICAR STATUS DE JORNADA (ALMOÇO) ==========
+      const { data: turnoHoje } = await supabase
+        .from('turnos_profissionais')
+        .select('id, status, inicio_almoco, fim_almoco')
+        .eq('profissional_id', prof.vistoriador_id)
+        .eq('data', hoje)
+        .maybeSingle();
+
+      // Se está em almoço, pular atribuição
+      if (turnoHoje?.status === 'em_almoco') {
+        console.log(`[cron-atribuir-tarefas] ☕ Profissional ${prof.vistoriador_id} em ALMOÇO - pulando`);
+        continue;
+      }
+
+      // Verificar se precisa forçar almoço (4h trabalhadas sem almoço)
+      if (turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco) {
+        const { data: turnoCompleto } = await supabase
+          .from('turnos_profissionais')
+          .select('inicio_turno')
+          .eq('id', turnoHoje.id)
+          .single();
+
+        if (turnoCompleto?.inicio_turno) {
+          const inicioTurno = new Date(turnoCompleto.inicio_turno);
+          const agora = new Date();
+          const minutosTrabalhados = Math.floor((agora.getTime() - inicioTurno.getTime()) / 60000);
+
+          if (minutosTrabalhados >= 240) { // 4 horas
+            console.log(`[cron-atribuir-tarefas] ⏰ Profissional ${prof.vistoriador_id} atingiu 4h - forçando ALMOÇO`);
+            
+            await supabase
+              .from('turnos_profissionais')
+              .update({ 
+                status: 'em_almoco',
+                inicio_almoco: new Date().toISOString()
+              })
+              .eq('id', turnoHoje.id);
+            
+            continue; // Pular atribuição
+          }
+        }
+      }
+
       // Verificar se profissional já tem tarefa em andamento
       const { data: tarefaAtual } = await supabase.rpc('buscar_tarefa_atual_profissional', {
         p_profissional_id: prof.vistoriador_id

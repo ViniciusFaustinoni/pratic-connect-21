@@ -12,12 +12,16 @@ import { useEncaixesUrgentes } from '@/hooks/useEncaixesUrgentes';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { JornadaStatusBar } from '@/components/vistoriador/JornadaStatusBar';
+import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOverlay';
+import { useIniciarServico } from '@/hooks/useIniciarServico';
 
 export default function InstaladorHome() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
+  const { emServico } = useIniciarServico();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Monitorar status online/offline
@@ -62,7 +66,11 @@ export default function InstaladorHome() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <>
+      {/* Overlay de bloqueio durante almoço */}
+      <AlmocoBloqueioOverlay />
+      
+      <div className="min-h-screen bg-slate-900">
       {/* Banner Offline */}
       {!isOnline && (
         <div className="bg-yellow-600 text-yellow-100 px-4 py-2 flex items-center gap-2 text-sm">
@@ -88,6 +96,9 @@ export default function InstaladorHome() {
             </AvatarFallback>
           </Avatar>
         </div>
+
+        {/* Barra de Status da Jornada */}
+        {emServico && <JornadaStatusBar className="mb-4" />}
 
         {/* Conteúdo Principal: Tarefa Atual ou Botão Iniciar */}
         {tarefaAtual ? (
@@ -166,5 +177,6 @@ export default function InstaladorHome() {
         </div>
       </div>
     </div>
+    </>
   );
 }

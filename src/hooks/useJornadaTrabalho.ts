@@ -1,0 +1,376 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+import { getHojeBrasilia } from '@/lib/date-utils';
+
+interface TurnoProfissional {
+  id: string;
+  profissional_id: string;
+  data: string;
+  inicio_turno: string | null;
+  inicio_almoco: string | null;
+  fim_almoco: string | null;
+  fim_turno: string | null;
+  minutos_trabalhados: number;
+  minutos_almoco: number;
+  minutos_extras: number;
+  minutos_faltantes: number;
+  saldo_anterior_minutos: number;
+  status: 'ativo' | 'em_almoco' | 'encerrado';
+  encerrado_automaticamente: boolean;
+}
+
+export interface JornadaState {
+  turno: TurnoProfissional | null;
+  
+  // Tempo calculado em tempo real
+  minutosTrabalhados: number;
+  minutosRestantes: number;
+  percentualJornada: number;
+  
+  // Almoço
+  emAlmoco: boolean;
+  minutosAlmoco: number;
+  minutosAlmocoRestantes: number;
+  deveIniciarAlmoco: boolean;
+  
+  // Saldo
+  saldoAnterior: number;
+  jornadaAjustada: number;
+  
+  // Status
+  status: 'inativo' | 'trabalhando' | 'almoco' | 'encerrado';
+}
+
+const JORNADA_PADRAO_MINUTOS = 480; // 8 horas
+const TEMPO_ATE_ALMOCO_MINUTOS = 240; // 4 horas
+const DURACAO_ALMOCO_MINUTOS = 60; // 1 hora
+
+/**
+ * Hook para controle de jornada de trabalho do vistoriador/instalador
+ * 
+ * Regras:
+ * - Jornada padrão: 8 horas de trabalho efetivo
+ * - Almoço obrigatório: 1 hora, após 4h de trabalho
+ * - Banco de horas: horas extras viram crédito, horas faltantes viram débito
+ */
+export function useJornadaTrabalho() {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+  const [tempoReal, setTempoReal] = useState<{ minutosTrabalhados: number; minutosAlmoco: number }>({
+    minutosTrabalhados: 0,
+    minutosAlmoco: 0
+  });
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const hojeStr = getHojeBrasilia().toISOString().split('T')[0];
+
+  // Query para buscar turno de hoje
+  const { data: turno, refetch: refetchTurno, isLoading } = useQuery({
+    queryKey: ['turno-profissional', profile?.id, hojeStr],
+    queryFn: async () => {
+      if (!profile?.id) return null;
+
+      const { data, error } = await supabase
+        .from('turnos_profissionais')
+        .select('*')
+        .eq('profissional_id', profile.id)
+        .eq('data', hojeStr)
+        .maybeSingle();
+
+      if (error) {
+        console.error('[useJornadaTrabalho] Erro ao buscar turno:', error);
+        return null;
+      }
+
+      return data as TurnoProfissional | null;
+    },
+    enabled: !!profile?.id,
+    staleTime: 30000,
+    refetchInterval: 60000, // Refetch a cada 1 minuto
+  });
+
+  // Buscar saldo do dia anterior
+  const { data: saldoAnterior } = useQuery({
+    queryKey: ['saldo-anterior', profile?.id, hojeStr],
+    queryFn: async () => {
+      if (!profile?.id) return 0;
+
+      const { data, error } = await supabase
+        .from('turnos_profissionais')
+        .select('minutos_extras, minutos_faltantes')
+        .eq('profissional_id', profile.id)
+        .lt('data', hojeStr)
+        .order('data', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) return 0;
+
+      return (data.minutos_extras || 0) - (data.minutos_faltantes || 0);
+    },
+    enabled: !!profile?.id,
+    staleTime: 300000, // 5 minutos
+  });
+
+  // Calcular tempo em tempo real
+  const calcularTempoReal = useCallback(() => {
+    if (!turno?.inicio_turno) {
+      setTempoReal({ minutosTrabalhados: 0, minutosAlmoco: 0 });
+      return;
+    }
+
+    const agora = new Date();
+    const inicio = new Date(turno.inicio_turno);
+    let minutosDesdeInicio = Math.floor((agora.getTime() - inicio.getTime()) / 60000);
+
+    let minutosAlmoco = 0;
+
+    // Se está em almoço, calcular tempo de almoço
+    if (turno.status === 'em_almoco' && turno.inicio_almoco) {
+      const inicioAlmoco = new Date(turno.inicio_almoco);
+      minutosAlmoco = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
+    } else if (turno.fim_almoco && turno.inicio_almoco) {
+      // Almoço já finalizado
+      const inicioAlmoco = new Date(turno.inicio_almoco);
+      const fimAlmoco = new Date(turno.fim_almoco);
+      minutosAlmoco = Math.floor((fimAlmoco.getTime() - inicioAlmoco.getTime()) / 60000);
+    }
+
+    // Descontar almoço do tempo trabalhado
+    const minutosTrabalhados = Math.max(0, minutosDesdeInicio - minutosAlmoco);
+
+    setTempoReal({ minutosTrabalhados, minutosAlmoco });
+  }, [turno]);
+
+  // Atualizar tempo a cada minuto
+  useEffect(() => {
+    if (turno?.status && turno.status !== 'encerrado') {
+      calcularTempoReal();
+      intervalRef.current = setInterval(calcularTempoReal, 60000);
+
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+      };
+    }
+  }, [turno?.status, calcularTempoReal]);
+
+  // Mutation para criar/iniciar turno
+  const iniciarTurnoMutation = useMutation({
+    mutationFn: async () => {
+      if (!profile?.id) throw new Error('Usuário não autenticado');
+
+      const { data, error } = await supabase
+        .from('turnos_profissionais')
+        .upsert({
+          profissional_id: profile.id,
+          data: hojeStr,
+          inicio_turno: new Date().toISOString(),
+          saldo_anterior_minutos: saldoAnterior || 0,
+          status: 'ativo'
+        }, { onConflict: 'profissional_id,data' })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      refetchTurno();
+      queryClient.invalidateQueries({ queryKey: ['turno-profissional'] });
+    },
+    onError: (error) => {
+      console.error('[useJornadaTrabalho] Erro ao iniciar turno:', error);
+      toast.error('Erro ao registrar início do turno');
+    }
+  });
+
+  // Mutation para iniciar almoço
+  const iniciarAlmocoMutation = useMutation({
+    mutationFn: async () => {
+      if (!turno?.id) throw new Error('Turno não encontrado');
+
+      const { data, error } = await supabase
+        .from('turnos_profissionais')
+        .update({
+          status: 'em_almoco',
+          inicio_almoco: new Date().toISOString()
+        })
+        .eq('id', turno.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      refetchTurno();
+      toast.info('Horário de almoço iniciado');
+    },
+    onError: (error) => {
+      console.error('[useJornadaTrabalho] Erro ao iniciar almoço:', error);
+      toast.error('Erro ao registrar almoço');
+    }
+  });
+
+  // Mutation para finalizar almoço
+  const finalizarAlmocoMutation = useMutation({
+    mutationFn: async () => {
+      if (!turno?.id) throw new Error('Turno não encontrado');
+
+      const { data, error } = await supabase
+        .from('turnos_profissionais')
+        .update({
+          status: 'ativo',
+          fim_almoco: new Date().toISOString()
+        })
+        .eq('id', turno.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      refetchTurno();
+      toast.success('Almoço finalizado, bom trabalho!');
+    },
+    onError: (error) => {
+      console.error('[useJornadaTrabalho] Erro ao finalizar almoço:', error);
+      toast.error('Erro ao finalizar almoço');
+    }
+  });
+
+  // Mutation para encerrar turno
+  const encerrarTurnoMutation = useMutation({
+    mutationFn: async () => {
+      if (!turno?.id) throw new Error('Turno não encontrado');
+
+      const { data, error } = await supabase
+        .from('turnos_profissionais')
+        .update({
+          status: 'encerrado',
+          fim_turno: new Date().toISOString()
+        })
+        .eq('id', turno.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      refetchTurno();
+      
+      const extras = data.minutos_extras || 0;
+      const faltantes = data.minutos_faltantes || 0;
+      
+      if (extras > 0) {
+        toast.success(`Turno encerrado! Você acumulou ${formatarMinutos(extras)} de banco de horas`);
+      } else if (faltantes > 0) {
+        toast.warning(`Turno encerrado. Você ficou devendo ${formatarMinutos(faltantes)}`);
+      } else {
+        toast.success('Turno encerrado com sucesso!');
+      }
+    },
+    onError: (error) => {
+      console.error('[useJornadaTrabalho] Erro ao encerrar turno:', error);
+      toast.error('Erro ao encerrar turno');
+    }
+  });
+
+  // Verificar se deve iniciar almoço automaticamente
+  useEffect(() => {
+    if (
+      turno?.status === 'ativo' &&
+      !turno.inicio_almoco &&
+      tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS
+    ) {
+      console.log('[useJornadaTrabalho] 4 horas trabalhadas - iniciando almoço automaticamente');
+      iniciarAlmocoMutation.mutate();
+    }
+  }, [turno?.status, turno?.inicio_almoco, tempoReal.minutosTrabalhados]);
+
+  // Verificar se deve finalizar almoço automaticamente
+  useEffect(() => {
+    if (
+      turno?.status === 'em_almoco' &&
+      turno.inicio_almoco &&
+      !turno.fim_almoco &&
+      tempoReal.minutosAlmoco >= DURACAO_ALMOCO_MINUTOS
+    ) {
+      console.log('[useJornadaTrabalho] 1 hora de almoço - finalizando automaticamente');
+      finalizarAlmocoMutation.mutate();
+    }
+  }, [turno?.status, turno?.inicio_almoco, turno?.fim_almoco, tempoReal.minutosAlmoco]);
+
+  // Calcular estado da jornada
+  const jornadaAjustada = JORNADA_PADRAO_MINUTOS - (saldoAnterior || 0);
+  const minutosRestantes = Math.max(0, jornadaAjustada - tempoReal.minutosTrabalhados);
+  const percentualJornada = Math.min(100, (tempoReal.minutosTrabalhados / jornadaAjustada) * 100);
+  const minutosAlmocoRestantes = Math.max(0, DURACAO_ALMOCO_MINUTOS - tempoReal.minutosAlmoco);
+  const deveIniciarAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco && tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS;
+
+  const getStatus = (): JornadaState['status'] => {
+    if (!turno || !turno.inicio_turno) return 'inativo';
+    if (turno.status === 'encerrado') return 'encerrado';
+    if (turno.status === 'em_almoco') return 'almoco';
+    return 'trabalhando';
+  };
+
+  const jornadaState: JornadaState = {
+    turno,
+    minutosTrabalhados: tempoReal.minutosTrabalhados,
+    minutosRestantes,
+    percentualJornada,
+    emAlmoco: turno?.status === 'em_almoco',
+    minutosAlmoco: tempoReal.minutosAlmoco,
+    minutosAlmocoRestantes,
+    deveIniciarAlmoco,
+    saldoAnterior: saldoAnterior || 0,
+    jornadaAjustada,
+    status: getStatus()
+  };
+
+  return {
+    ...jornadaState,
+    isLoading,
+    
+    // Ações
+    iniciarTurno: iniciarTurnoMutation.mutate,
+    iniciarAlmoco: iniciarAlmocoMutation.mutate,
+    finalizarAlmoco: finalizarAlmocoMutation.mutate,
+    encerrarTurno: encerrarTurnoMutation.mutate,
+    refetchTurno,
+    
+    // Estados de loading
+    isIniciandoTurno: iniciarTurnoMutation.isPending,
+    isIniciandoAlmoco: iniciarAlmocoMutation.isPending,
+    isFinalizandoAlmoco: finalizarAlmocoMutation.isPending,
+    isEncerrando: encerrarTurnoMutation.isPending,
+    
+    // Helpers
+    formatarMinutos,
+    getTempoFormatado: () => formatarTempoJornada(tempoReal.minutosTrabalhados, minutosRestantes)
+  };
+}
+
+// Helpers de formatação
+export function formatarMinutos(minutos: number): string {
+  const horas = Math.floor(Math.abs(minutos) / 60);
+  const mins = Math.abs(minutos) % 60;
+  
+  if (horas === 0) {
+    return `${mins}min`;
+  }
+  
+  return mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
+}
+
+export function formatarTempoJornada(trabalhados: number, restantes: number): string {
+  return `${formatarMinutos(trabalhados)} trabalhadas | ${formatarMinutos(restantes)} restantes`;
+}
