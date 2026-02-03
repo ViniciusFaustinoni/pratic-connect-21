@@ -164,6 +164,7 @@ import Beneficios from "./pages/rh/Beneficios";
 import FolhaPagamento from "./pages/rh/FolhaPagamento";
 import Treinamentos from "./pages/rh/Treinamentos";
 import Recrutamento from "./pages/rh/Recrutamento";
+import JornadasProfissionais from "./pages/rh/JornadasProfissionais";
 
 // Marketing
 import MarketingDashboard from "./pages/marketing/MarketingDashboard";
@@ -443,6 +444,7 @@ const App = () => (
               <Route path="/rh/beneficios" element={<Beneficios />} />
               <Route path="/rh/treinamentos" element={<Treinamentos />} />
               <Route path="/rh/recrutamento" element={<Recrutamento />} />
+              <Route path="/rh/jornadas" element={<JornadasProfissionais />} />
               
               {/* Monitoramento */}
               <Route path="/monitoramento/dashboard" element={<DashboardCoordenador />} />

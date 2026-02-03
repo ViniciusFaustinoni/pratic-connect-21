@@ -16912,6 +16912,85 @@ export type Database = {
           },
         ]
       }
+      turnos_profissionais: {
+        Row: {
+          created_at: string | null
+          data: string
+          encerrado_automaticamente: boolean | null
+          fim_almoco: string | null
+          fim_turno: string | null
+          id: string
+          inicio_almoco: string | null
+          inicio_turno: string | null
+          minutos_almoco: number | null
+          minutos_extras: number | null
+          minutos_faltantes: number | null
+          minutos_trabalhados: number | null
+          profissional_id: string
+          saldo_anterior_minutos: number | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          data: string
+          encerrado_automaticamente?: boolean | null
+          fim_almoco?: string | null
+          fim_turno?: string | null
+          id?: string
+          inicio_almoco?: string | null
+          inicio_turno?: string | null
+          minutos_almoco?: number | null
+          minutos_extras?: number | null
+          minutos_faltantes?: number | null
+          minutos_trabalhados?: number | null
+          profissional_id: string
+          saldo_anterior_minutos?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          data?: string
+          encerrado_automaticamente?: boolean | null
+          fim_almoco?: string | null
+          fim_turno?: string | null
+          id?: string
+          inicio_almoco?: string | null
+          inicio_turno?: string | null
+          minutos_almoco?: number | null
+          minutos_extras?: number | null
+          minutos_faltantes?: number | null
+          minutos_trabalhados?: number | null
+          profissional_id?: string
+          saldo_anterior_minutos?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turnos_profissionais_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turnos_profissionais_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "turnos_profissionais_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -18908,6 +18987,14 @@ export type Database = {
           superavit: number
           total_beneficios: number
         }[]
+      }
+      fn_verificar_almoco_profissional: {
+        Args: { p_profissional_id: string }
+        Returns: boolean
+      }
+      fn_verificar_fim_almoco_profissional: {
+        Args: { p_profissional_id: string }
+        Returns: boolean
       }
       gerar_hash_lancamento: {
         Args: {
