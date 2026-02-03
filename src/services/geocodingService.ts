@@ -156,3 +156,38 @@ export function geocodificarEmBackground(
     }
   }, 100);
 }
+
+/**
+ * Atualiza as coordenadas de um associado
+ * Retorna as coordenadas obtidas para uso imediato
+ */
+export async function atualizarCoordenadasAssociado(
+  associadoId: string,
+  endereco: EnderecoParaGeocodificar
+): Promise<{ latitude: number | null; longitude: number | null; success: boolean }> {
+  const coords = await geocodificarEndereco(endereco);
+  
+  if (!coords.success) {
+    return { latitude: null, longitude: null, success: false };
+  }
+
+  const { error } = await supabase
+    .from("associados")
+    .update({
+      endereco_latitude: coords.latitude,
+      endereco_longitude: coords.longitude,
+    })
+    .eq("id", associadoId);
+
+  if (error) {
+    console.error("[Geocode] Erro ao atualizar associado:", error);
+    return { latitude: null, longitude: null, success: false };
+  }
+
+  console.log("[Geocode] Coordenadas do associado atualizadas:", coords.latitude, coords.longitude);
+  return { 
+    latitude: coords.latitude, 
+    longitude: coords.longitude, 
+    success: true 
+  };
+}
