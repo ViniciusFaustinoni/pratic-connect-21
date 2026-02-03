@@ -115,6 +115,13 @@ const relatorios: ReportConfig[] = [
     descricao: 'Projeção para próximos meses',
     icon: Calculator
   },
+  { 
+    id: 'custos-reparos', 
+    categoria: 'atuarial',
+    titulo: 'Custos de Reparos por Categoria', 
+    descricao: 'Peças, Mão de Obra e Serviços Terceiros',
+    icon: Wrench
+  },
 ];
 
 const categorias = {
@@ -417,6 +424,52 @@ export default function RelatoriosGerenciais() {
             ['Sinistros', formatCurrency(mediaSinistros), formatCurrency(mediaSinistros * 12)],
             ['Resultado', formatCurrency(mediaReceita - mediaSinistros), formatCurrency((mediaReceita - mediaSinistros) * 12)],
           ];
+          break;
+        }
+        
+        case 'custos-reparos': {
+          // Buscar itens de OS vinculadas a sinistros do período
+          const { data: itens } = await supabase
+            .from('ordens_servico_itens')
+            .select(`
+              tipo,
+              valor_total,
+              ordem_servico:ordens_servico!inner(
+                sinistro_id,
+                status,
+                created_at
+              )
+            `)
+            .gte('ordem_servico.created_at', reportFilters.dataInicio)
+            .lte('ordem_servico.created_at', reportFilters.dataFim + 'T23:59:59');
+
+          // Filtrar e agrupar por tipo
+          const agrupado: Record<string, number> = { 
+            peca: 0, 
+            mao_de_obra: 0, 
+            servico_terceiro: 0 
+          };
+          
+          itens?.forEach(item => {
+            const os = item.ordem_servico as any;
+            if (os && ['concluido', 'pago', 'aprovado'].includes(os.status) && os.sinistro_id) {
+              const tipo = item.tipo as string;
+              if (agrupado.hasOwnProperty(tipo)) {
+                agrupado[tipo] += item.valor_total || 0;
+              }
+            }
+          });
+
+          const total = Object.values(agrupado).reduce((s, v) => s + v, 0);
+
+          cabecalhos = ['Categoria', 'Valor', '% Total'];
+          dados = [
+            ['Peças', formatCurrency(agrupado.peca), total > 0 ? `${((agrupado.peca / total) * 100).toFixed(1)}%` : '0%'],
+            ['Mão de Obra', formatCurrency(agrupado.mao_de_obra), total > 0 ? `${((agrupado.mao_de_obra / total) * 100).toFixed(1)}%` : '0%'],
+            ['Serviços Terceiros', formatCurrency(agrupado.servico_terceiro), total > 0 ? `${((agrupado.servico_terceiro / total) * 100).toFixed(1)}%` : '0%'],
+            ['TOTAL', formatCurrency(total), '100%'],
+          ];
+          extras.subtitulo = 'Análise Atuarial de Custos de Oficinas';
           break;
         }
         

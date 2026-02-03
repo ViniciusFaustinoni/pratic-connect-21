@@ -15,7 +15,7 @@ import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { SinistrosPorTipoTable, SinistrosPorFaixaFipeTable } from '@/components/diretoria';
+import { SinistrosPorTipoTable, SinistrosPorFaixaFipeTable, CustosReparosTable, CustosReparosPorTipoSinistro, CustosReparosChart } from '@/components/diretoria';
 
 const formatCurrency = (value: number | null) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -277,6 +277,7 @@ export default function IndicadoresAtuariais() {
         <TabsList>
           <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="sinistralidade">Sinistralidade</TabsTrigger>
+          <TabsTrigger value="custos-reparos">Custos de Reparos</TabsTrigger>
           <TabsTrigger value="crescimento">Crescimento</TabsTrigger>
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
           <TabsTrigger value="projecoes">Projeções</TabsTrigger>
@@ -405,6 +406,16 @@ export default function IndicadoresAtuariais() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Tab Custos de Reparos - NOVA */}
+        <TabsContent value="custos-reparos" className="space-y-4">
+          <CustosReparosTable ano={ano} />
+          
+          <div className="grid grid-cols-2 gap-4">
+            <CustosReparosChart ano={ano} />
+            <CustosReparosPorTipoSinistro ano={ano} />
+          </div>
         </TabsContent>
 
         {/* Tab Crescimento */}
