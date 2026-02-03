@@ -1,136 +1,161 @@
 
-# Plano: Ajustes na Área de RH
+# Plano: Refatorar Área de Cotações
 
-## Objetivos
-1. Alterar o botão "Novo Funcionário" no Dashboard de RH para abrir o modal de criação rápida (igual ao de Configurações)
-2. Adicionar a opção "Jornadas" no submenu de Recursos Humanos
+## Resumo dos Problemas Identificados
+
+1. **Aba "Finalizadas" não deveria existir** - Todas as cotações devem aparecer em uma lista única
+2. **Exibição deve ser em lista** (tabela), não em cards individuais
+3. **Clique na linha** deve abrir modal de detalhes (não navegar para outra página)
+4. **Bug de status**: Quando cliente agenda vistoria presencial, o badge mostra "Realizando Vistoria" ao invés de "Vistoria Agendada"
+
+---
+
+## Análise do Bug de Status
+
+### Código Atual (CotacaoCard.tsx, linha 176):
+```typescript
+if (statusContratacao === 'vistoria_ok') return 'realizando_pagamento';
+```
+
+### Problema:
+Quando o cliente opta por **vistoria presencial** (não autovistoria):
+- O `status_contratacao` é definido como `'vistoria_ok'`
+- O `tipo_vistoria` é definido como `'agendada'`
+- Mas a instalação ainda NÃO existe (é criada somente após pagamento)
+- A função retorna `'realizando_pagamento'`, que está correto para o fluxo de pagamento
+- Porém, na aba Finalizadas, mostra como "Realizando Vistoria" (badge incorreto)
+
+### Correção Proposta:
+Verificar se `tipo_vistoria === 'agendada'` e mostrar "Vistoria Agendada" quando apropriado, mantendo o contexto correto do fluxo.
 
 ---
 
 ## Alterações Necessárias
 
-### 1. Modificar `src/pages/rh/RHDashboard.tsx`
+### 1. Remover Aba "Finalizadas" e Exibir Lista Única
 
-**Situação atual:**
-- O botão "Novo Funcionário" faz `navigate('/rh/funcionarios/novo')` (navega para página de formulário)
+**Arquivo**: `src/pages/vendas/Cotacoes.tsx`
 
-**Alteração:**
-- Importar o componente `NovoFuncionarioModal`
-- Adicionar estado para controlar abertura do modal
-- Trocar `navigate()` por `setShowModal(true)`
-- Renderizar o modal no componente
+**Alterações**:
+- Remover as Tabs (Em Andamento / Finalizadas)
+- Remover lógica de separação `emAndamento` vs `fechadas`
+- Exibir todas as cotações em uma única lista/tabela
+- Ordenar por data de criação (mais recentes primeiro)
 
+### 2. Trocar Cards por Tabela/Lista
+
+**Arquivo**: `src/pages/vendas/Cotacoes.tsx` ou novo componente
+
+**Nova estrutura**:
 ```typescript
-// Adicionar import
-import { NovoFuncionarioModal } from '@/components/usuarios/NovoFuncionarioModal';
-
-// Adicionar estado
-const [showNovoFuncionarioModal, setShowNovoFuncionarioModal] = useState(false);
-
-// Trocar onClick do botão
-<Button onClick={() => setShowNovoFuncionarioModal(true)}>
-  <Plus className="mr-2 h-4 w-4" />
-  Novo Funcionário
-</Button>
-
-// Adicionar modal no final do componente
-<NovoFuncionarioModal
-  open={showNovoFuncionarioModal}
-  onOpenChange={setShowNovoFuncionarioModal}
-  onSuccess={() => {
-    queryClient.invalidateQueries({ queryKey: ['rh-stats'] });
-  }}
-/>
+// Tabela com colunas:
+// - Status/Etapa
+// - Lead/Cliente (nome, telefone)
+// - Veículo (marca, modelo, placa)
+// - Valor FIPE
+// - Consultor
+// - Data
+// - Ações
 ```
 
-**Locais a alterar no arquivo:**
-- Linha 230: Botão principal no header
-- Linha 547-551: Botão na seção de ações rápidas
+### 3. Criar Modal de Detalhes
 
----
+**Novo arquivo**: `src/components/cotacoes/CotacaoDetalhesModal.tsx`
 
-### 2. Modificar `src/components/layout/AppSidebar.tsx`
+**Funcionalidades**:
+- Exibir todos os dados da cotação
+- Mostrar planos comparados
+- Exibir histórico/timeline
+- Botões de ação (PDF, WhatsApp, Aceitar, etc.)
+- Baseado no conteúdo do `CotacaoCard.tsx` atual
 
-**Situação atual:**
-- Seção RH (linhas 291-305) não tem "Jornadas" no menu
+### 4. Corrigir Lógica de Etapa da Venda
 
-**Alteração:**
-- Adicionar item "Jornadas" na lista de itens do grupo RH
+**Arquivo**: `src/components/cotacoes/CotacaoCard.tsx` (função `getEtapaVenda`)
 
+**Correção**:
 ```typescript
-{
-  id: 'rh',
-  label: 'Recursos Humanos',
-  icon: UserCheck,
-  permission: 'canManageRH',
-  color: MENU_COLORS.rh,
-  items: [
-    { title: 'Dashboard', url: '/rh', icon: BarChart3 },
-    { title: 'Funcionários', url: '/rh/funcionarios', icon: Users },
-    { title: 'Jornadas', url: '/rh/jornadas', icon: Clock },  // ADICIONAR
-    { title: 'Folha de Pagamento', url: '/rh/folha-pagamento', icon: DollarSign },
-    { title: 'Ponto', url: '/rh/ponto', icon: Clock },
-    { title: 'Férias', url: '/rh/ferias', icon: Palmtree },
-    { title: 'Organograma', url: '/rh/organograma', icon: GitBranch },
-    { title: 'Departamentos', url: '/rh/departamentos', icon: Building2 },
-    { title: 'Benefícios', url: '/rh/beneficios', icon: Gift },
-  ],
-},
-```
-
-**Nota:** O ícone `Clock` já está importado no arquivo.
-
----
-
-### 3. Atualizar `src/components/layout/GlobalBreadcrumb.tsx`
-
-Adicionar mapeamento para a rota de jornadas:
-
-```typescript
-'/rh/jornadas': { label: 'Jornadas' },
+// Quando status_contratacao = 'vistoria_ok', verificar tipo de vistoria
+if (statusContratacao === 'vistoria_ok') {
+  const tipoVistoria = cotacao.tipo_vistoria;
+  // Se é vistoria agendada e ainda não pagou, mostrar "Aguardando Pagamento"
+  // Se é autovistoria, verificar se já fez a autovistoria
+  return 'realizando_pagamento'; // ou 'vistoria_agendada' conforme contexto
+}
 ```
 
 ---
 
-## Resumo dos Arquivos
+## Estrutura da Nova Tabela
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│ Cotação                                                           [+ Nova Cotação]  │
+│ Gerencie todas as cotações e acompanhe propostas                                     │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│ [Cards de Métricas: Total, Enviadas, Aceitas, Conversão]                             │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│ Buscar...    Status ▼    Período ▼    Consultor ▼                                    │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│  ┌────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ Status      │ Cliente           │ Veículo              │ FIPE      │ Data     │  │
+│  ├────────────────────────────────────────────────────────────────────────────────┤  │
+│  │ ✓ ACEITA    │ Marcus Vinicius   │ Toyota Corolla 2013  │ R$ 70k    │ 01/02    │  │
+│  │   ATIVO     │ 31 9999...        │ LTB4J74              │           │ 12h ago  │  │
+│  ├────────────────────────────────────────────────────────────────────────────────┤  │
+│  │ → ENVIADA   │ Ana Paula         │ Honda Civic 2019     │ R$ 85k    │ 31/01    │  │
+│  │             │ 31 8888...        │ ABC1234              │           │ 2d ago   │  │
+│  └────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                      │
+│  Clique em uma linha para ver detalhes e ações                                       │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Resumo de Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/rh/RHDashboard.tsx` | Importar modal, adicionar estado e renderizar |
-| `src/components/layout/AppSidebar.tsx` | Adicionar item "Jornadas" no submenu RH |
-| `src/components/layout/GlobalBreadcrumb.tsx` | Adicionar breadcrumb para `/rh/jornadas` |
+| `src/pages/vendas/Cotacoes.tsx` | **REFATORAR** - Remover tabs, usar lista/tabela única |
+| `src/components/cotacoes/CotacaoDetalhesModal.tsx` | **CRIAR** - Modal com detalhes e ações |
+| `src/components/cotacoes/CotacoesTable.tsx` | **CRIAR** - Componente de tabela |
+| `src/components/cotacoes/CotacaoCard.tsx` | **EDITAR** - Corrigir função `getEtapaVenda` |
 
 ---
 
 ## Fluxo Após Implementação
 
-```
-RH > Dashboard
-    │
-    ├─ Botão "Novo Funcionário"
-    │   └─ Abre modal com: Nome, Email, CPF, Telefone, Perfil
-    │       └─ Cria usuário via edge function 'create-user'
-    │           └─ Envia email de convite automaticamente
-    │
-    └─ Submenu RH (Sidebar)
-        ├─ Dashboard
-        ├─ Funcionários
-        ├─ Jornadas ← NOVO
-        ├─ Folha de Pagamento
-        ├─ Ponto
-        ├─ Férias
-        ├─ Organograma
-        ├─ Departamentos
-        └─ Benefícios
-```
+1. Usuário acessa `/vendas/cotacoes`
+2. Vê cards de métricas no topo (Total, Enviadas, Aceitas, Conversão)
+3. Aplica filtros (status, período, consultor)
+4. Visualiza todas as cotações em uma única lista ordenada
+5. Clica em uma linha → Abre modal de detalhes
+6. No modal: visualiza dados, baixa PDF, envia WhatsApp, gera contrato, etc.
 
 ---
 
-## Observação sobre Jornadas
+## Correção do Bug de Status (Detalhada)
 
-A página de Jornadas (`JornadasProfissionais.tsx`) já está implementada e funcional:
-- Exibe turnos de profissionais do dia
-- Mostra estatísticas (trabalhando, em almoço, encerrados)
-- Permite filtrar por data
-- Usa a tabela `turnos_profissionais` já existente
-- Cards com informações detalhadas via `JornadaProfissionalCard`
+O problema está na priorização da função `getEtapaVenda`. Quando:
+- `status_contratacao = 'vistoria_ok'` 
+- `tipo_vistoria = 'agendada'`
+- Não há instalação criada ainda
+
+O sistema precisa diferenciar:
+1. **Vistoria Agendada** (aguardando pagamento para criar instalação)
+2. **Realizando Pagamento** (cliente está pagando)
+
+A correção deve verificar `tipo_vistoria` para mostrar o badge correto:
+```typescript
+if (statusContratacao === 'vistoria_ok') {
+  // Se agendou vistoria presencial, mostrar "Vistoria Agendada" 
+  // (pagamento ainda não foi feito, mas vistoria já foi agendada)
+  if (cotacao.tipo_vistoria === 'agendada' && cotacao.vistoria_data_agendada) {
+    return 'vistoria_agendada';
+  }
+  return 'realizando_pagamento';
+}
+```
