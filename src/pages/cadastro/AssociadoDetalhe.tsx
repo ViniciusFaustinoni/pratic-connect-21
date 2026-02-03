@@ -53,9 +53,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { 
   STATUS_ASSOCIADO_LABELS, 
   STATUS_VEICULO_LABELS,
@@ -80,14 +77,8 @@ import { HistoricoConversaWhatsApp } from '@/components/whatsapp/HistoricoConver
 import { atualizarCoordenadasAssociado } from '@/services/geocodingService';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-
-// Fix Leaflet default marker icon
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
+import { useVeiculosComRastreador, getStatusComunicacaoBadgeClass, getStatusComunicacaoLabel } from '@/hooks/useVeiculosComRastreador';
+import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 
 // ============================================
 // UTILITÁRIOS
@@ -250,8 +241,8 @@ export default function AssociadoDetalhe() {
   
   // Estado do modal de mapa
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
-  const [coordenadas, setCoordenadas] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
-  const [geocodificando, setGeocodificando] = useState(false);
+  const [veiculoSelecionadoId, setVeiculoSelecionadoId] = useState<string | null>(null);
+  const [selecionarVeiculoOpen, setSelecionarVeiculoOpen] = useState(false);
 
   // Data fetching
   const { data: associado, isLoading, refetch } = useAssociado(id);
@@ -279,6 +270,9 @@ export default function AssociadoDetalhe() {
   const { data: fotosAutovistoria, isLoading: isLoadingFotos } = useFotosAutovistoriaCotacao(cotacaoId);
   const fotosAgrupadas = fotosAutovistoria ? agruparFotosPorCategoria(fotosAutovistoria) : null;
   
+  // Buscar veículos com rastreador usando a view do monitoramento
+  const { data: veiculosComRastreador } = useVeiculosComRastreador(id);
+  
   // Actions
   const { 
     suspenderAssociado, 
@@ -296,16 +290,6 @@ export default function AssociadoDetalhe() {
   const { data: statusPlataforma, isLoading: isLoadingStatusPlataforma, refetch: refetchStatusPlataforma } = useStatusClienteRedeVeiculos(id);
   const sincronizarStatusMutation = useSincronizarStatusRedeVeiculos();
   
-  // Sincronizar coordenadas quando associado carregar
-  useEffect(() => {
-    if (associado) {
-      setCoordenadas({
-        lat: associado.endereco_latitude,
-        lng: associado.endereco_longitude
-      });
-    }
-  }, [associado]);
-
   // Handlers
   const handleWhatsApp = () => {
     if (!associado?.telefone) return;
@@ -316,40 +300,22 @@ export default function AssociadoDetalhe() {
     if (!associado?.email) return;
     window.open(`mailto:${associado.email}`, '_blank');
   };
-  
-  // Encontrar veículo com rastreador e posição disponível
-  const veiculoComRastreador = useMemo(() => {
-    return veiculos?.find(
-      v => v.rastreador?.status === 'instalado' && 
-           v.rastreador?.ultima_posicao_lat && 
-           v.rastreador?.ultima_posicao_lng
-    );
-  }, [veiculos]);
 
-  const handleAbrirMapa = async () => {
-    // Priorizar posição do rastreador
-    if (veiculoComRastreador?.rastreador?.ultima_posicao_lat && veiculoComRastreador?.rastreador?.ultima_posicao_lng) {
-      setCoordenadas({
-        lat: veiculoComRastreador.rastreador.ultima_posicao_lat,
-        lng: veiculoComRastreador.rastreador.ultima_posicao_lng
-      });
+  const handleAbrirMapa = () => {
+    // Usar veículos da view do monitoramento
+    if (!veiculosComRastreador || veiculosComRastreador.length === 0) {
+      toast.error('Nenhum veículo com rastreador instalado');
+      return;
+    }
+    
+    if (veiculosComRastreador.length === 1) {
+      // Único veículo - abre direto
+      setVeiculoSelecionadoId(veiculosComRastreador[0].rastreador_id);
       setMapaModalOpen(true);
-      return;
+    } else {
+      // Múltiplos veículos - mostra seleção
+      setSelecionarVeiculoOpen(true);
     }
-
-    // Fallback: Se não tem veículo com rastreador, mostrar erro
-    if (!veiculos || veiculos.length === 0) {
-      toast.error('Nenhum veículo cadastrado para este associado');
-      return;
-    }
-
-    const veiculoComRastreadorSemPosicao = veiculos.find(v => v.rastreador?.status === 'instalado');
-    if (veiculoComRastreadorSemPosicao) {
-      toast.error('Rastreador ainda não enviou posição. Aguarde a primeira comunicação.');
-      return;
-    }
-
-    toast.error('Nenhum veículo com rastreador instalado');
   };
 
   const handleSuspender = () => {
@@ -554,13 +520,9 @@ export default function AssociadoDetalhe() {
               <Button 
                 variant="outline" 
                 onClick={handleAbrirMapa}
-                disabled={geocodificando || !associado.logradouro}
+                disabled={!veiculosComRastreador || veiculosComRastreador.length === 0}
               >
-                {geocodificando ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Map className="mr-2 h-4 w-4" />
-                )}
+                <Map className="mr-2 h-4 w-4" />
                 Abrir no Mapa
               </Button>
               {status === 'ativo' && (
@@ -1562,55 +1524,56 @@ export default function AssociadoDetalhe() {
         veiculo={veiculoEditar}
       />
 
+      {/* MODAL SELEÇÃO DE VEÍCULO */}
+      <Dialog open={selecionarVeiculoOpen} onOpenChange={setSelecionarVeiculoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Car className="h-5 w-5" />
+              Selecionar Veículo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {veiculosComRastreador?.map((v) => (
+              <div
+                key={v.rastreador_id}
+                className="p-3 border rounded-lg cursor-pointer hover:bg-muted transition-colors"
+                onClick={() => {
+                  setVeiculoSelecionadoId(v.rastreador_id);
+                  setSelecionarVeiculoOpen(false);
+                  setMapaModalOpen(true);
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold">{v.placa}</span>
+                    <p className="text-sm text-muted-foreground">{v.marca} {v.modelo}</p>
+                  </div>
+                  <Badge className={getStatusComunicacaoBadgeClass(v.status_comunicacao)}>
+                    {getStatusComunicacaoLabel(v.status_comunicacao)}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL MAPA DO RASTREADOR */}
       <Dialog open={mapaModalOpen} onOpenChange={setMapaModalOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
-              Localização - {veiculoComRastreador?.placa || associado.nome}
+              Localização do Veículo
             </DialogTitle>
           </DialogHeader>
-          
-          {coordenadas.lat && coordenadas.lng && (
-            <div className="h-[400px] rounded-lg overflow-hidden">
-              <MapContainer
-                center={[coordenadas.lat, coordenadas.lng]}
-                zoom={16}
-                className="h-full w-full"
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                />
-                <Marker position={[coordenadas.lat, coordenadas.lng]}>
-                  <Popup>
-                    <div className="text-center">
-                      <strong>{veiculoComRastreador?.placa}</strong>
-                      <p className="text-xs mt-1">
-                        {veiculoComRastreador?.marca} {veiculoComRastreador?.modelo}
-                      </p>
-                      {veiculoComRastreador?.rastreador?.ultima_comunicacao && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Atualizado {formatDistanceToNow(new Date(veiculoComRastreador.rastreador.ultima_comunicacao), { addSuffix: true, locale: ptBR })}
-                        </p>
-                      )}
-                    </div>
-                  </Popup>
-                </Marker>
-              </MapContainer>
-            </div>
-          )}
-          
-          {veiculoComRastreador?.rastreador && (
-            <p className="text-sm text-muted-foreground text-center">
-              🚗 {veiculoComRastreador.placa} • 
-              {veiculoComRastreador.rastreador.ultima_ignicao ? ' 🟢 Ligado' : ' 🔴 Desligado'} • 
-              {veiculoComRastreador.rastreador.ultima_velocidade !== null && ` ${veiculoComRastreador.rastreador.ultima_velocidade} km/h • `}
-              Atualizado {veiculoComRastreador.rastreador.ultima_comunicacao 
-                ? formatDistanceToNow(new Date(veiculoComRastreador.rastreador.ultima_comunicacao), { addSuffix: true, locale: ptBR })
-                : 'sem dados'}
-            </p>
+          {veiculoSelecionadoId && (
+            <MapaRastreador
+              rastreadorId={veiculoSelecionadoId}
+              altura="450px"
+              mostrarControles={true}
+            />
           )}
         </DialogContent>
       </Dialog>
