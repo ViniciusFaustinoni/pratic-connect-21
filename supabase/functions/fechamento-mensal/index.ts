@@ -102,7 +102,15 @@ serve(async (req) => {
     // 1. Buscar sinistros aprovados/indenizados do período
     const { data: sinistros, error: sinistrosError } = await supabase
       .from('sinistros')
-      .select('id, tipo, valor_indenizacao, data_ocorrencia, associado_id, veiculo_id')
+      .select(`
+        id, 
+        tipo, 
+        tipo_dano,
+        valor_indenizacao, 
+        data_ocorrencia, 
+        associado_id, 
+        veiculo_id
+      `)
       .in('status', ['aprovado', 'indenizado', 'pago'])
       .gte('data_ocorrencia', inicioMes)
       .lte('data_ocorrencia', fimMes);
@@ -113,19 +121,98 @@ serve(async (req) => {
 
     console.log(`[fechamento-mensal] ${sinistros?.length || 0} sinistros encontrados`);
 
+    // 1.1 Buscar Ordens de Serviço pagas vinculadas aos sinistros do período
+    const sinistrosIds = (sinistros || []).map(s => s.id);
+    let valorPagoPorSinistro: Record<string, number> = {};
+    let ordensServicoIds: Record<string, string[]> = {};
+    
+    if (sinistrosIds.length > 0) {
+      const { data: ordensServico, error: osError } = await supabase
+        .from('ordens_servico')
+        .select('id, sinistro_id, valor_pago, status')
+        .in('sinistro_id', sinistrosIds)
+        .in('status', ['concluido', 'pago', 'aprovado']);
+
+      if (osError) {
+        console.error('[fechamento-mensal] Erro ao buscar OS:', osError);
+      } else {
+        // Criar mapa de valor pago por sinistro
+        for (const os of (ordensServico || [])) {
+          if (os.sinistro_id && os.valor_pago) {
+            valorPagoPorSinistro[os.sinistro_id] = 
+              (valorPagoPorSinistro[os.sinistro_id] || 0) + os.valor_pago;
+            
+            // Guardar IDs das OS para rastreabilidade
+            if (!ordensServicoIds[os.sinistro_id]) {
+              ordensServicoIds[os.sinistro_id] = [];
+            }
+            ordensServicoIds[os.sinistro_id].push(os.id);
+          }
+        }
+        console.log(`[fechamento-mensal] ${ordensServico?.length || 0} ordens de serviço encontradas`);
+      }
+    }
+
     // 2. Agrupar despesas por tipo de benefício
-    const despesasPorBeneficio: Record<string, { valor: number; quantidade: number; sinistros_ids: string[] }> = {};
+    const despesasPorBeneficio: Record<string, { valor: number; quantidade: number; sinistros_ids: string[]; ordens_servico_ids: string[] }> = {};
     
     for (const tipo of TIPOS_BENEFICIO) {
-      despesasPorBeneficio[tipo] = { valor: 0, quantidade: 0, sinistros_ids: [] };
+      despesasPorBeneficio[tipo] = { valor: 0, quantidade: 0, sinistros_ids: [], ordens_servico_ids: [] };
     }
+
+    // Contadores para detalhamento
+    let totalIndenizacoes = 0;
+    let totalReparosOficina = 0;
 
     for (const sinistro of (sinistros || [])) {
       const beneficio = SINISTRO_PARA_BENEFICIO[sinistro.tipo];
       if (beneficio && despesasPorBeneficio[beneficio]) {
-        despesasPorBeneficio[beneficio].valor += sinistro.valor_indenizacao || 0;
+        // Determinar valor do custo baseado no tipo de dano
+        let valorCusto = 0;
+        let fonteValor = 'indenizacao';
+        
+        const valorOS = valorPagoPorSinistro[sinistro.id] || 0;
+        const valorIndenizacao = sinistro.valor_indenizacao || 0;
+        
+        if (sinistro.tipo_dano === 'perda_total') {
+          // Perda total: usar valor de indenização
+          valorCusto = valorIndenizacao;
+          totalIndenizacoes += valorCusto;
+          fonteValor = 'indenizacao';
+        } else if (sinistro.tipo_dano === 'parcial') {
+          // Dano parcial: priorizar valor pago das OS
+          if (valorOS > 0) {
+            valorCusto = valorOS;
+            totalReparosOficina += valorCusto;
+            fonteValor = 'ordem_servico';
+          } else {
+            valorCusto = valorIndenizacao;
+            totalIndenizacoes += valorCusto;
+            fonteValor = 'indenizacao_fallback';
+          }
+        } else {
+          // Fallback (tipo_dano NULL): verificar se há OS paga, senão usar valor_indenizacao
+          if (valorOS > 0) {
+            valorCusto = valorOS;
+            totalReparosOficina += valorCusto;
+            fonteValor = 'ordem_servico';
+          } else {
+            valorCusto = valorIndenizacao;
+            totalIndenizacoes += valorCusto;
+            fonteValor = 'indenizacao';
+          }
+        }
+        
+        console.log(`[fechamento-mensal] Sinistro ${sinistro.id}: tipo=${sinistro.tipo}, tipo_dano=${sinistro.tipo_dano || 'null'}, valor_indenizacao=${valorIndenizacao}, valor_os=${valorOS}, valor_usado=${valorCusto}, fonte=${fonteValor}`);
+        
+        despesasPorBeneficio[beneficio].valor += valorCusto;
         despesasPorBeneficio[beneficio].quantidade += 1;
         despesasPorBeneficio[beneficio].sinistros_ids.push(sinistro.id);
+        
+        // Adicionar IDs das OS usadas
+        if (ordensServicoIds[sinistro.id]) {
+          despesasPorBeneficio[beneficio].ordens_servico_ids.push(...ordensServicoIds[sinistro.id]);
+        }
       }
     }
 
@@ -235,6 +322,11 @@ serve(async (req) => {
         total_despesas: totalDespesasRateio,
         sinistros_apurados: sinistros?.length || 0,
         despesas_por_beneficio: despesasPorBeneficio,
+        custos_detalhados: {
+          indenizacoes: totalIndenizacoes,
+          reparos_oficina: totalReparosOficina,
+          total: totalDespesasRateio,
+        }
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
