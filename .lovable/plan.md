@@ -1,292 +1,181 @@
 
-# Análise do Sistema de Rateio: Problemas e Correções
+# Plano: Adicionar Botão de Localização nos Detalhes de Evento de Roubo/Furto
 
-## Resumo Executivo
-
-Após análise detalhada do código, identifiquei **6 problemas críticos** no sistema de cálculo de rateio que comprometem a precisão das cobranças e a correta distribuição de custos por tipo de benefício.
-
----
-
-## Arquitetura Atual vs. Esperada
-
-O sistema possui **duas implementações paralelas** de rateio que não estão integradas:
-
-| Componente | Página | Status |
-|------------|--------|--------|
-| `RateioSinistros.tsx` | `/diretoria/rateios` | ⚠️ Implementação ANTIGA (usa tabela `rateios`) |
-| `FechamentoMensal.tsx` | `/diretoria/fechamento` | ✅ Implementação NOVA (usa tabela `fechamentos_mensais`) |
-
-### Problema Principal
-As duas implementações usam **lógicas diferentes** e **tabelas diferentes**, causando duplicação e inconsistência.
+## Objetivo
+Quando um evento de **roubo** ou **furto** for gerado, exibir um botão "Abrir Localização" nos detalhes do evento. Este botão abrirá o mesmo modal de mapa que é usado na página de detalhes do associado (`Cadastro > Associados > Detalhes`).
 
 ---
 
-## Problemas Identificados
+## Componentes Envolvidos
 
-### 1. Mapeamento Incompleto de Tipos de Sinistro
-
-**Arquivo:** `supabase/functions/fechamento-mensal/index.ts` (linhas 22-33)
-
-**Mapeamento atual:**
-```typescript
-const SINISTRO_PARA_BENEFICIO = {
-  'colisao_parcial': 'colisao',
-  'colisao_total': 'colisao',
-  'colisao': 'colisao',
-  'roubo': 'roubo_furto',
-  'furto': 'roubo_furto',
-  'roubo_furto': 'roubo_furto',
-  'incendio': 'incendio',
-  'vidros': 'vidros',
-  'terceiros': 'terceiros',
-};
-```
-
-**Tipos faltando no mapeamento:**
-- `fenomeno_natural` → deveria mapear para `colisao` ou categoria própria
-- `vandalismo` → deveria mapear para `colisao`
-- `outro` → sem mapeamento definido
-
-**Impacto:** Sinistros desses tipos são **ignorados** no cálculo do rateio.
+| Componente | Arquivo | Função |
+|------------|---------|--------|
+| Página de Detalhe | `src/pages/eventos/SinistroDetalhe.tsx` | Exibir botão e modal |
+| Modal de Mapa | Reutilizar `Dialog` com `MapaRastreador` | Exibir localização em tempo real |
+| Componente de Mapa | `src/components/rastreadores/MapaRastreador.tsx` | Mapa com telemetria |
+| Hook de Posição | `useRastreadorTempoReal` | Buscar posição via edge function |
 
 ---
 
-### 2. Campo `quantidade_cotas` Não Preenchido nos Veículos
+## Alterações no Arquivo `SinistroDetalhe.tsx`
 
-**Query no banco:**
-```sql
-SELECT quantidade_cotas, faixa_cota_id FROM veiculos WHERE status = 'ativo'
-```
-
-**Resultado:** `quantidade_cotas: null, faixa_cota_id: null`
-
-**Problema:** A tabela `veiculos` não está sendo atualizada com a quantidade de cotas ao cadastrar ou atualizar veículos. O sistema depende de:
-1. `veiculo.quantidade_cotas` (campo direto - **NULL**)
-2. `veiculo.faixas_cotas.quantidade_cotas` (join com tabela de faixas - **NULL porque faixa_cota_id é NULL**)
-3. Fallback: `Math.ceil(valorFipe / 5000)` (cálculo manual)
-
-**Impacto:** Todos os veículos estão usando o fallback, perdendo os ajustes por faixa.
-
----
-
-### 3. Função SQL usa Tabela Errada para Cotas
-
-**Arquivo:** Função `fn_calcular_total_cotas_ativos`
-
-```sql
-SELECT COALESCE(SUM(fn_get_cotas_por_fipe(COALESCE(c.veiculo_valor_fipe, 0))), 0)
-FROM contratos c
-WHERE c.status = 'ativo';
-```
-
-**Problema:** 
-- Busca o valor FIPE da tabela `contratos` (`c.veiculo_valor_fipe`)
-- Não considera a tabela `veiculos` que tem dados mais atualizados
-- Nem todos os contratos têm `veiculo_valor_fipe` preenchido
-
-**Impacto:** Total de cotas pode estar **incorreto ou zerado**.
-
----
-
-### 4. Cálculo de Rateio Não Usa Cobertura Específica
-
-**Arquivo:** `supabase/functions/calcular-rateio-completo/index.ts` (linhas 125-131)
+### 1. Novos Imports
 
 ```typescript
-// Todos esses benefícios verificam apenas cobertura_total
-if (tipoBeneficio === 'colisao' || tipoBeneficio === 'incendio' || 
-    tipoBeneficio === 'vidros' || tipoBeneficio === 'terceiros') {
-  query = query.eq('cobertura_total', true);
-}
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 ```
 
-**Problema:** 
-- `vidros` e `terceiros` são **coberturas adicionais** opcionais, não fazem parte de `cobertura_total`
-- Deveria haver campos específicos como `cobertura_vidros`, `cobertura_terceiros`
-- Sistema assume que quem tem `cobertura_total` tem todos os benefícios
-
-**Impacto:** Associados sem vidros/terceiros podem estar pagando rateio dessas coberturas.
-
----
-
-### 5. Assistência Não Tem Filtro de Cobertura
-
-**Arquivo:** `supabase/functions/gerar-faturas-mensais/index.ts` (linha 215)
+### 2. Novo Estado para o Modal
 
 ```typescript
-rateio_assistencia: (valorPorCotaBeneficio['assistencia'] || 0) * cotas,
+const [mapaLocalizacaoOpen, setMapaLocalizacaoOpen] = useState(false);
 ```
 
-**Problema:** Não há verificação se o associado tem cobertura de assistência 24h.
+### 3. Query para Buscar Rastreador do Veículo
 
-**Impacto:** Todos os associados pagam rateio de assistência, mesmo quem não contratou.
-
----
-
-### 6. Duplicação de Lógica entre Páginas
-
-**Arquivos:**
-- `RateioSinistros.tsx` - Usa tabela `rateios` e `rateios_detalhes_faixas`
-- `FechamentoMensal.tsx` - Usa tabela `fechamentos_mensais` e `despesas_rateio`
-
-**Problema:** Duas páginas calculam rateio de formas diferentes, gerando confusão.
-
----
-
-## Plano de Correções
-
-### Fase 1: Correções no Mapeamento de Tipos
-
-**Arquivo:** `supabase/functions/fechamento-mensal/index.ts`
-
-1. Adicionar tipos faltantes ao mapeamento:
-```typescript
-const SINISTRO_PARA_BENEFICIO = {
-  // Existentes...
-  'fenomeno_natural': 'colisao', // Granizo, alagamento → Colisão
-  'vandalismo': 'colisao',       // Vandalismo → Colisão
-  'outro': 'colisao',            // Outros → Colisão (ou ignorar)
-};
-```
-
----
-
-### Fase 2: Popular Campo `quantidade_cotas` nos Veículos
-
-**Criar migration SQL:**
-
-```sql
--- Atualizar veículos existentes com quantidade de cotas
-UPDATE veiculos v
-SET 
-  quantidade_cotas = fc.quantidade_cotas,
-  faixa_cota_id = fc.id
-FROM faixas_cotas fc
-WHERE v.valor_fipe >= fc.fipe_de 
-  AND v.valor_fipe <= fc.fipe_ate
-  AND fc.ativo = true
-  AND v.quantidade_cotas IS NULL;
-
--- Criar trigger para atualizar automaticamente
-CREATE OR REPLACE FUNCTION fn_atualizar_cotas_veiculo()
-RETURNS TRIGGER AS $$
-BEGIN
-  SELECT id, quantidade_cotas 
-  INTO NEW.faixa_cota_id, NEW.quantidade_cotas
-  FROM faixas_cotas
-  WHERE NEW.valor_fipe >= fipe_de 
-    AND NEW.valor_fipe <= fipe_ate
-    AND ativo = true
-  LIMIT 1;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER tr_veiculos_atualizar_cotas
-  BEFORE INSERT OR UPDATE OF valor_fipe ON veiculos
-  FOR EACH ROW
-  EXECUTE FUNCTION fn_atualizar_cotas_veiculo();
-```
-
----
-
-### Fase 3: Corrigir Função SQL
-
-**Alterar `fn_calcular_total_cotas_ativos`:**
-
-```sql
-CREATE OR REPLACE FUNCTION fn_calcular_total_cotas_ativos()
-RETURNS NUMERIC
-LANGUAGE plpgsql
-STABLE
-AS $$
-DECLARE
-  v_total NUMERIC;
-BEGIN
-  -- Priorizar campo quantidade_cotas preenchido
-  SELECT COALESCE(SUM(
-    COALESCE(
-      v.quantidade_cotas,
-      fc.quantidade_cotas,
-      CEIL(COALESCE(v.valor_fipe, 50000) / 5000)
-    )
-  ), 0)
-  INTO v_total
-  FROM veiculos v
-  LEFT JOIN faixas_cotas fc ON v.faixa_cota_id = fc.id
-  WHERE v.status = 'ativo';
-  
-  RETURN v_total;
-END;
-$$;
-```
-
----
-
-### Fase 4: Adicionar Campos de Cobertura Específica
-
-**Criar migration para veículos:**
-
-```sql
-ALTER TABLE veiculos
-ADD COLUMN IF NOT EXISTS cobertura_vidros BOOLEAN DEFAULT false,
-ADD COLUMN IF NOT EXISTS cobertura_terceiros BOOLEAN DEFAULT false,
-ADD COLUMN IF NOT EXISTS cobertura_assistencia BOOLEAN DEFAULT true;
-```
-
-**Atualizar edge function `calcular-rateio-completo`:**
+Adicionar query para buscar o rastreador instalado no veículo do sinistro:
 
 ```typescript
-// Filtros específicos por benefício
-if (tipoBeneficio === 'colisao') {
-  query = query.eq('cobertura_total', true);
-} else if (tipoBeneficio === 'roubo_furto') {
-  query = query.or('cobertura_roubo_furto.eq.true,cobertura_total.eq.true');
-} else if (tipoBeneficio === 'vidros') {
-  query = query.eq('cobertura_vidros', true);
-} else if (tipoBeneficio === 'terceiros') {
-  query = query.eq('cobertura_terceiros', true);
-} else if (tipoBeneficio === 'assistencia') {
-  query = query.eq('cobertura_assistencia', true);
-}
+const { data: rastreadorVeiculo } = useQuery({
+  queryKey: ['sinistro-rastreador-veiculo', sinistro?.veiculo_id],
+  queryFn: async () => {
+    if (!sinistro?.veiculo_id) return null;
+    
+    const { data, error } = await supabase
+      .from('rastreadores')
+      .select('id, codigo, status, ultima_posicao_lat, ultima_posicao_lng')
+      .eq('veiculo_id', sinistro.veiculo_id)
+      .eq('status', 'instalado')
+      .maybeSingle();
+    
+    if (error) throw error;
+    return data;
+  },
+  enabled: !!sinistro?.veiculo_id && ['roubo', 'furto'].includes(sinistro?.tipo || ''),
+});
+```
+
+### 4. Botão na Seção de Roubo/Furto
+
+Adicionar botão logo após o `CardAcionamentoRoubo`, visível apenas quando:
+- O sinistro é do tipo `roubo` ou `furto`
+- Existe um rastreador instalado no veículo
+
+```tsx
+{/* Botão Abrir Localização - para roubo/furto com rastreador */}
+{['roubo', 'furto'].includes(sinistro.tipo) && rastreadorVeiculo && (
+  <Card>
+    <CardContent className="pt-6">
+      <Button 
+        onClick={() => setMapaLocalizacaoOpen(true)}
+        className="w-full gap-2"
+        variant="outline"
+      >
+        <MapPin className="h-4 w-4" />
+        Abrir Localização do Veículo
+      </Button>
+    </CardContent>
+  </Card>
+)}
+```
+
+### 5. Modal de Mapa no Final do Componente
+
+Adicionar o modal junto com os outros modais existentes:
+
+```tsx
+{/* Modal Localização do Veículo (Roubo/Furto) */}
+<Dialog open={mapaLocalizacaoOpen} onOpenChange={setMapaLocalizacaoOpen}>
+  <DialogContent className="max-w-4xl max-h-[90vh]">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2">
+        <MapPin className="h-5 w-5" />
+        Localização do Veículo - {sinistro?.veiculo?.placa}
+      </DialogTitle>
+    </DialogHeader>
+    {rastreadorVeiculo && (
+      <MapaRastreador
+        rastreadorId={rastreadorVeiculo.id}
+        altura="450px"
+        mostrarControles={true}
+      />
+    )}
+  </DialogContent>
+</Dialog>
 ```
 
 ---
 
-### Fase 5: Unificar Páginas de Rateio
+## Fluxo Visual
 
-**Opção recomendada:** Manter apenas `FechamentoMensal.tsx` como página principal e:
-- Remover ou deprecar `RateioSinistros.tsx`
-- Ou transformar `RateioSinistros.tsx` em visualização histórica apenas
+```text
+┌───────────────────────────────────────────────────────────────┐
+│                    DETALHES DO SINISTRO                       │
+│                       (Roubo/Furto)                           │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │  🚨 Card Acionamento de Recuperação                    │   │
+│  │     Status: Confirmado                                 │   │
+│  │     Protocolo Central: XXXX                            │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                               │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │  📍 [Abrir Localização do Veículo]                     │   │  ← NOVO BOTÃO
+│  └────────────────────────────────────────────────────────┘   │
+│                                                               │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │  📊 Comparação de Posições GPS                         │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+
+                           │
+                           ▼ (Clica no botão)
+
+┌───────────────────────────────────────────────────────────────┐
+│  📍 Localização do Veículo - LTB4J74                     [X]  │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │                                                        │   │
+│  │                  🗺️ MAPA SATÉLITE                      │   │
+│  │              (MapaRastreador component)               │   │
+│  │                                                        │   │
+│  │            📍 Marcador com posição atual               │   │
+│  │                                                        │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                               │
+│  ┌─────────┬─────────┬─────────┬─────────┐                    │
+│  │ 45 km/h │ Ligado  │  180°   │ 2 min   │  ← Telemetria      │
+│  └─────────┴─────────┴─────────┴─────────┘                    │
+│                                                               │
+│  📍 Rua das Flores, 123 - Centro, BH/MG                      │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Resumo de Arquivos a Modificar
+## Resumo Técnico
 
-| Arquivo | Ação | Prioridade |
-|---------|------|------------|
-| Migration SQL nova | Criar trigger para cotas e popular dados | 🔴 Alta |
-| `fechamento-mensal/index.ts` | Adicionar tipos faltantes ao mapeamento | 🔴 Alta |
-| `fn_calcular_total_cotas_ativos` (SQL) | Corrigir query para usar tabela veiculos | 🔴 Alta |
-| `calcular-rateio-completo/index.ts` | Adicionar filtros específicos por cobertura | 🟡 Média |
-| `gerar-faturas-mensais/index.ts` | Verificar cobertura antes de cobrar | 🟡 Média |
-| Migration SQL para coberturas | Adicionar campos `cobertura_vidros`, etc. | 🟡 Média |
-| `RateioSinistros.tsx` | Deprecar ou integrar com FechamentoMensal | 🟢 Baixa |
+| Item | Descrição |
+|------|-----------|
+| **Arquivo** | `src/pages/eventos/SinistroDetalhe.tsx` |
+| **Imports** | `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `MapaRastreador` |
+| **Estados** | `mapaLocalizacaoOpen` (boolean) |
+| **Query** | Buscar rastreador por `veiculo_id` com status `instalado` |
+| **Condição** | Mostrar apenas se `tipo === 'roubo' || tipo === 'furto'` E rastreador existe |
+| **Modal** | Reutiliza `MapaRastreador` com `rastreadorId` |
 
 ---
 
-## Verificação Adicional Necessária
+## Comportamento Esperado
 
-Antes de implementar, é importante verificar:
-
-1. **Como os planos definem coberturas?** 
-   - Os campos `cobertura_total`, `cobertura_roubo_furto` vêm do plano ou do veículo?
-   - Existe tabela de benefícios por plano que deve ser consultada?
-
-2. **Qual página deve ser a oficial?**
-   - `/diretoria/rateios` (antiga, tabela `rateios`)
-   - `/diretoria/fechamento` (nova, tabela `fechamentos_mensais`)
-
-3. **Os dados de sinistros estão corretos?**
-   - Existem sinistros aprovados/indenizados no período atual para testar?
+1. Usuário acessa detalhes de um sinistro de **roubo** ou **furto**
+2. Sistema busca se existe rastreador instalado no veículo
+3. Se existir, exibe botão "Abrir Localização do Veículo"
+4. Ao clicar, abre modal com mapa satélite e posição em tempo real
+5. O mapa mostra telemetria: velocidade, ignição, direção, última atualização
+6. Botão "Atualizar" permite buscar posição mais recente da plataforma
