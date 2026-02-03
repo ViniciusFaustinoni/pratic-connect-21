@@ -31,6 +31,7 @@ import {
   HelpCircle,
   Search,
   Timer,
+  Bot,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -225,6 +226,21 @@ export default function SinistrosDashboard() {
     }
   });
 
+  // Query: Pendências IA (solicitações de sinistro aguardando aprovação)
+  const { data: pendenciasIA } = useQuery({
+    queryKey: ['sinistros-pendencias-ia'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('chat_solicitacoes_ia')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pendente')
+        .eq('tipo', 'sinistro');
+      
+      if (error) throw error;
+      return count || 0;
+    },
+  });
+
   // Query: Últimos 10 sinistros
   const { data: ultimosSinistros, isLoading: loadingUltimos } = useQuery({
     queryKey: ['sinistros-ultimos'],
@@ -267,6 +283,33 @@ export default function SinistrosDashboard() {
           ))}
         </div>
       </div>
+
+      {/* Alerta de Pendências IA */}
+      {pendenciasIA && pendenciasIA > 0 && (
+        <Card className="border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <Bot className="h-8 w-8 text-amber-600" />
+              <div>
+                <p className="font-semibold text-amber-800 dark:text-amber-200">
+                  {pendenciasIA} sinistro(s) aguardando aprovação via IA
+                </p>
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Solicitações geradas via WhatsApp/App precisam ser revisadas
+                </p>
+              </div>
+            </div>
+            <Button 
+              variant="outline"
+              className="border-amber-500 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/50"
+              onClick={() => navigate('/diretoria/solicitacoes-ia')}
+            >
+              <Bot className="mr-2 h-4 w-4" />
+              Revisar
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPIs */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
