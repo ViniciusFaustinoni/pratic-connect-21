@@ -1064,6 +1064,7 @@ export type Database = {
       }
       asaas_cobrancas: {
         Row: {
+          ano_referencia: number | null
           asaas_cliente_id: string | null
           asaas_id: string
           associado_id: string
@@ -1072,6 +1073,7 @@ export type Database = {
           boleto_url: string | null
           cancelado_por: string | null
           competencia: string | null
+          composicao_resumo: Json | null
           contrato_id: string | null
           created_at: string | null
           criado_por: string | null
@@ -1079,6 +1081,9 @@ export type Database = {
           data_pagamento: string | null
           data_vencimento: string
           desconto: number | null
+          enviada_whatsapp: boolean | null
+          enviada_whatsapp_em: string | null
+          fechamento_id: string | null
           forma_pagamento: string | null
           id: string
           juros: number | null
@@ -1087,6 +1092,8 @@ export type Database = {
           lembrete_d5_enviado: boolean | null
           lembrete_vencimento_enviado: boolean | null
           linha_digitavel: string | null
+          mes_referencia: number | null
+          modelo_cobranca: string | null
           motivo_cancelamento: string | null
           multa: number | null
           notificacao_data: string | null
@@ -1108,6 +1115,7 @@ export type Database = {
           veiculo_id: string | null
         }
         Insert: {
+          ano_referencia?: number | null
           asaas_cliente_id?: string | null
           asaas_id: string
           associado_id: string
@@ -1116,6 +1124,7 @@ export type Database = {
           boleto_url?: string | null
           cancelado_por?: string | null
           competencia?: string | null
+          composicao_resumo?: Json | null
           contrato_id?: string | null
           created_at?: string | null
           criado_por?: string | null
@@ -1123,6 +1132,9 @@ export type Database = {
           data_pagamento?: string | null
           data_vencimento: string
           desconto?: number | null
+          enviada_whatsapp?: boolean | null
+          enviada_whatsapp_em?: string | null
+          fechamento_id?: string | null
           forma_pagamento?: string | null
           id?: string
           juros?: number | null
@@ -1131,6 +1143,8 @@ export type Database = {
           lembrete_d5_enviado?: boolean | null
           lembrete_vencimento_enviado?: boolean | null
           linha_digitavel?: string | null
+          mes_referencia?: number | null
+          modelo_cobranca?: string | null
           motivo_cancelamento?: string | null
           multa?: number | null
           notificacao_data?: string | null
@@ -1152,6 +1166,7 @@ export type Database = {
           veiculo_id?: string | null
         }
         Update: {
+          ano_referencia?: number | null
           asaas_cliente_id?: string | null
           asaas_id?: string
           associado_id?: string
@@ -1160,6 +1175,7 @@ export type Database = {
           boleto_url?: string | null
           cancelado_por?: string | null
           competencia?: string | null
+          composicao_resumo?: Json | null
           contrato_id?: string | null
           created_at?: string | null
           criado_por?: string | null
@@ -1167,6 +1183,9 @@ export type Database = {
           data_pagamento?: string | null
           data_vencimento?: string
           desconto?: number | null
+          enviada_whatsapp?: boolean | null
+          enviada_whatsapp_em?: string | null
+          fechamento_id?: string | null
           forma_pagamento?: string | null
           id?: string
           juros?: number | null
@@ -1175,6 +1194,8 @@ export type Database = {
           lembrete_d5_enviado?: boolean | null
           lembrete_vencimento_enviado?: boolean | null
           linha_digitavel?: string | null
+          mes_referencia?: number | null
+          modelo_cobranca?: string | null
           motivo_cancelamento?: string | null
           multa?: number | null
           notificacao_data?: string | null
@@ -1286,6 +1307,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_fechamento_id_fkey"
+            columns: ["fechamento_id"]
+            isOneToOne: false
+            referencedRelation: "fechamentos_mensais"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "asaas_cobrancas_veiculo_id_fkey"
@@ -4470,6 +4498,118 @@ export type Database = {
           },
         ]
       }
+      cobrancas_composicao: {
+        Row: {
+          cobranca_id: string
+          created_at: string | null
+          data_fim_vigencia: string | null
+          data_inicio_vigencia: string | null
+          dias_ativos: number | null
+          faixa_id: string | null
+          fator_prorata: number | null
+          id: string
+          quantidade_cotas: number | null
+          valor_adicionais: number | null
+          valor_adicionais_detalhes: Json | null
+          valor_fipe: number | null
+          valor_rateio_assistencia: number | null
+          valor_rateio_colisao: number | null
+          valor_rateio_incendio: number | null
+          valor_rateio_roubo_furto: number | null
+          valor_rateio_terceiros: number | null
+          valor_rateio_vidros: number | null
+          valor_taxa_administrativa: number | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          cobranca_id: string
+          created_at?: string | null
+          data_fim_vigencia?: string | null
+          data_inicio_vigencia?: string | null
+          dias_ativos?: number | null
+          faixa_id?: string | null
+          fator_prorata?: number | null
+          id?: string
+          quantidade_cotas?: number | null
+          valor_adicionais?: number | null
+          valor_adicionais_detalhes?: Json | null
+          valor_fipe?: number | null
+          valor_rateio_assistencia?: number | null
+          valor_rateio_colisao?: number | null
+          valor_rateio_incendio?: number | null
+          valor_rateio_roubo_furto?: number | null
+          valor_rateio_terceiros?: number | null
+          valor_rateio_vidros?: number | null
+          valor_taxa_administrativa?: number | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          cobranca_id?: string
+          created_at?: string | null
+          data_fim_vigencia?: string | null
+          data_inicio_vigencia?: string | null
+          dias_ativos?: number | null
+          faixa_id?: string | null
+          fator_prorata?: number | null
+          id?: string
+          quantidade_cotas?: number | null
+          valor_adicionais?: number | null
+          valor_adicionais_detalhes?: Json | null
+          valor_fipe?: number | null
+          valor_rateio_assistencia?: number | null
+          valor_rateio_colisao?: number | null
+          valor_rateio_incendio?: number | null
+          valor_rateio_roubo_furto?: number | null
+          valor_rateio_terceiros?: number | null
+          valor_rateio_vidros?: number | null
+          valor_taxa_administrativa?: number | null
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobrancas_composicao_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "asaas_cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_composicao_faixa_id_fkey"
+            columns: ["faixa_id"]
+            isOneToOne: false
+            referencedRelation: "faixas_cotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_composicao_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobrancas_composicao_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_composicao_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_composicao_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
       configuracoes: {
         Row: {
           categoria: string
@@ -6321,6 +6461,53 @@ export type Database = {
           },
         ]
       }
+      despesas_rateio: {
+        Row: {
+          created_at: string | null
+          descricao: string | null
+          fechamento_id: string
+          id: string
+          quantidade_eventos: number | null
+          sinistros_ids: string[] | null
+          tipo_beneficio: string
+          total_cotas_elegivel: number | null
+          valor_por_cota: number | null
+          valor_total: number
+        }
+        Insert: {
+          created_at?: string | null
+          descricao?: string | null
+          fechamento_id: string
+          id?: string
+          quantidade_eventos?: number | null
+          sinistros_ids?: string[] | null
+          tipo_beneficio: string
+          total_cotas_elegivel?: number | null
+          valor_por_cota?: number | null
+          valor_total?: number
+        }
+        Update: {
+          created_at?: string | null
+          descricao?: string | null
+          fechamento_id?: string
+          id?: string
+          quantidade_eventos?: number | null
+          sinistros_ids?: string[] | null
+          tipo_beneficio?: string
+          total_cotas_elegivel?: number | null
+          valor_por_cota?: number | null
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_rateio_fechamento_id_fkey"
+            columns: ["fechamento_id"]
+            isOneToOne: false
+            referencedRelation: "fechamentos_mensais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       disparos_comunicacao: {
         Row: {
           aberto_em: string | null
@@ -7844,6 +8031,136 @@ export type Database = {
           {
             foreignKeyName: "fechamentos_contabeis_reaberto_por_fkey"
             columns: ["reaberto_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      fechamentos_mensais: {
+        Row: {
+          ano: number
+          aprovado_em: string | null
+          aprovado_por: string | null
+          created_at: string | null
+          data_fechamento: string | null
+          fechado_em: string | null
+          fechado_por: string | null
+          id: string
+          mes: number
+          processado_em: string | null
+          processado_por: string | null
+          status: string | null
+          total_adicionais: number | null
+          total_associados_ativos: number | null
+          total_cotas_ativas: number | null
+          total_despesas_rateio: number | null
+          total_geral: number | null
+          total_taxa_administrativa: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ano: number
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string | null
+          data_fechamento?: string | null
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          mes: number
+          processado_em?: string | null
+          processado_por?: string | null
+          status?: string | null
+          total_adicionais?: number | null
+          total_associados_ativos?: number | null
+          total_cotas_ativas?: number | null
+          total_despesas_rateio?: number | null
+          total_geral?: number | null
+          total_taxa_administrativa?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ano?: number
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string | null
+          data_fechamento?: string | null
+          fechado_em?: string | null
+          fechado_por?: string | null
+          id?: string
+          mes?: number
+          processado_em?: string | null
+          processado_por?: string | null
+          status?: string | null
+          total_adicionais?: number | null
+          total_associados_ativos?: number | null
+          total_cotas_ativas?: number | null
+          total_despesas_rateio?: number | null
+          total_geral?: number | null
+          total_taxa_administrativa?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamentos_mensais_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamentos_mensais_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "fechamentos_mensais_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "fechamentos_mensais_fechado_por_fkey"
+            columns: ["fechado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamentos_mensais_fechado_por_fkey"
+            columns: ["fechado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "fechamentos_mensais_fechado_por_fkey"
+            columns: ["fechado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "fechamentos_mensais_processado_por_fkey"
+            columns: ["processado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamentos_mensais_processado_por_fkey"
+            columns: ["processado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "fechamentos_mensais_processado_por_fkey"
+            columns: ["processado_por"]
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
@@ -17238,12 +17555,14 @@ export type Database = {
           combustivel: string | null
           cor: string | null
           created_at: string
+          faixa_cota_id: string | null
           id: string
           marca: string
           modelo: string
           motivo_recusa_veiculo: string | null
           placa: string
           plataforma_app: string | null
+          quantidade_cotas: number | null
           recusado_em: string | null
           recusado_por: string | null
           rede_veiculos_cliente_id: string | null
@@ -17257,6 +17576,8 @@ export type Database = {
           updated_at: string
           uso_aplicativo: boolean | null
           valor_fipe: number | null
+          valor_fipe_atualizado_em: string | null
+          valor_fipe_cache: number | null
         }
         Insert: {
           ano_fabricacao: number
@@ -17271,12 +17592,14 @@ export type Database = {
           combustivel?: string | null
           cor?: string | null
           created_at?: string
+          faixa_cota_id?: string | null
           id?: string
           marca: string
           modelo: string
           motivo_recusa_veiculo?: string | null
           placa: string
           plataforma_app?: string | null
+          quantidade_cotas?: number | null
           recusado_em?: string | null
           recusado_por?: string | null
           rede_veiculos_cliente_id?: string | null
@@ -17290,6 +17613,8 @@ export type Database = {
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null
+          valor_fipe_atualizado_em?: string | null
+          valor_fipe_cache?: number | null
         }
         Update: {
           ano_fabricacao?: number
@@ -17304,12 +17629,14 @@ export type Database = {
           combustivel?: string | null
           cor?: string | null
           created_at?: string
+          faixa_cota_id?: string | null
           id?: string
           marca?: string
           modelo?: string
           motivo_recusa_veiculo?: string | null
           placa?: string
           plataforma_app?: string | null
+          quantidade_cotas?: number | null
           recusado_em?: string | null
           recusado_por?: string | null
           rede_veiculos_cliente_id?: string | null
@@ -17323,6 +17650,8 @@ export type Database = {
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null
+          valor_fipe_atualizado_em?: string | null
+          valor_fipe_cache?: number | null
         }
         Relationships: [
           {
@@ -17366,6 +17695,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "veiculos_faixa_cota_id_fkey"
+            columns: ["faixa_cota_id"]
+            isOneToOne: false
+            referencedRelation: "faixas_cotas"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -18970,6 +19306,15 @@ export type Database = {
           valor_adicional: number
         }[]
       }
+      fn_calcular_prorata: {
+        Args: {
+          p_ano: number
+          p_data_adesao: string
+          p_data_saida: string
+          p_mes: number
+        }
+        Returns: number
+      }
       fn_calcular_rateio_por_cotas: {
         Args: { p_custo_total: number; p_percentual_fundo?: number }
         Returns: {
@@ -18985,6 +19330,15 @@ export type Database = {
         }[]
       }
       fn_calcular_total_cotas_ativos: { Args: never; Returns: number }
+      fn_calcular_valor_por_cota_beneficio: {
+        Args: { p_fechamento_id: string; p_tipo_beneficio: string }
+        Returns: {
+          quantidade_associados: number
+          total_cotas: number
+          valor_por_cota: number
+          valor_total: number
+        }[]
+      }
       fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
       fn_limpar_tokens_expirados: { Args: never; Returns: undefined }
       fn_resumo_saude_beneficios: {
