@@ -113,25 +113,66 @@ async function getPosicaoSoftruckComRetry(
 
       const data = await response.json();
 
-      if (!data.data?.attributes) {
+      // Formato API v2 Softruck:
+      // A resposta pode vir como:
+      // - data.data (objeto GeoJSON Feature) com geometry no nível raiz, OU
+      // - data.data.attributes.geometry (geometry dentro de attributes)
+      // - data.data.attributes contém: ign, spd, act, dir, bl, geometry, etc.
+      const gpsData = data.data || data;
+      if (!gpsData) {
         throw new Error('Resposta Softruck inválida');
       }
 
-      const attrs = data.data.attributes;
+      console.log('[Softruck] Resposta recebida:', JSON.stringify(gpsData).slice(0, 400));
+
+      const attrs = gpsData.attributes || gpsData || {};
+
+      // Extrair coordenadas - pode estar em diferentes locais
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+
+      // Opção 1: geometry no nível raiz do gpsData
+      if (gpsData.geometry?.coordinates) {
+        longitude = parseFloat(gpsData.geometry.coordinates[0]);
+        latitude = parseFloat(gpsData.geometry.coordinates[1]);
+      }
+      // Opção 2: geometry dentro de attributes (formato observado nos logs)
+      else if (attrs.geometry?.coordinates) {
+        longitude = parseFloat(attrs.geometry.coordinates[0]);
+        latitude = parseFloat(attrs.geometry.coordinates[1]);
+      }
+      // Opção 3: lat/lng direto nos attributes
+      else if (attrs.latitude && attrs.longitude) {
+        latitude = parseFloat(attrs.latitude);
+        longitude = parseFloat(attrs.longitude);
+      }
+
+      if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+        console.error('[Softruck] Resposta sem coordenadas válidas:', JSON.stringify(gpsData).slice(0, 500));
+        throw new Error('Coordenadas não encontradas na resposta Softruck');
+      }
+
+      console.log(`[Softruck] Coordenadas extraídas: lat=${latitude}, lng=${longitude}`);
+
+      // Converter timestamp Unix para ISO se necessário
+      const actTimestamp = attrs.act;
+      const dataPosicao = actTimestamp 
+        ? new Date(actTimestamp * 1000).toISOString() 
+        : (attrs.timestamp || new Date().toISOString());
 
       return {
-        latitude: attrs.latitude,
-        longitude: attrs.longitude,
-        velocidade: attrs.speed || 0,
-        direcao: attrs.course,
-        ignicao: attrs.ignition || false,
-        data_posicao: attrs.timestamp || new Date().toISOString(),
+        latitude,
+        longitude,
+        velocidade: parseInt(attrs.spd || attrs.speed || '0', 10),
+        direcao: attrs.dir || attrs.course,
+        ignicao: Boolean(attrs.ign || attrs.ignition),
+        data_posicao: dataPosicao,
         endereco: attrs.address,
         dados_extras: {
           altitude: attrs.altitude,
           satellites: attrs.satellites,
           odometer: attrs.odometer,
-          battery: attrs.battery,
+          battery: attrs.bl || attrs.battery,
         }
       };
 
