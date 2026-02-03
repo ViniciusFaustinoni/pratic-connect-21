@@ -296,6 +296,7 @@ const menuConfig: {
       items: [
         { title: 'Dashboard', url: '/rh', icon: BarChart3 },
         { title: 'Funcionários', url: '/rh/funcionarios', icon: Users },
+        { title: 'Jornadas', url: '/rh/jornadas', icon: Clock },
         { title: 'Folha de Pagamento', url: '/rh/folha-pagamento', icon: DollarSign },
         { title: 'Ponto', url: '/rh/ponto', icon: Clock },
         { title: 'Férias', url: '/rh/ferias', icon: Palmtree },

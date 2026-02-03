@@ -90,6 +90,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/rh/dashboard': { label: 'Dashboard' },
   '/rh/funcionarios': { label: 'Funcionários' },
   '/rh/funcionarios/novo': { label: 'Novo Funcionário' },
+  '/rh/jornadas': { label: 'Jornadas' },
   '/rh/ponto': { label: 'Controle de Ponto' },
   '/rh/ferias': { label: 'Férias' },
   '/rh/organograma': { label: 'Organograma' },
