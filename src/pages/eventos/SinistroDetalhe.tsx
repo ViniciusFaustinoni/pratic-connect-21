@@ -24,6 +24,7 @@ import { ConversaIADialog } from '@/components/sinistros/ConversaIADialog';
 import { AcionarRecuperacaoModal } from '@/components/sinistros/AcionarRecuperacaoModal';
 import { CardAcionamentoRoubo } from '@/components/sinistros/CardAcionamentoRoubo';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
+import { TrajetoColisaoCard } from '@/components/sinistros/TrajetoColisaoCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -242,7 +243,11 @@ export default function SinistroDetalhe() {
     enabled: !!sinistro?.associado_id && !!solicitacaoIA,
   });
 
-  // Query para buscar rastreador do veículo (roubo/furto)
+  // Tipos de sinistro que precisam de rastreador
+  const tiposComRastreador = ['roubo', 'furto', 'colisao', 'colisao_parcial', 'colisao_total'];
+  const tiposColisao = ['colisao', 'colisao_parcial', 'colisao_total'];
+
+  // Query para buscar rastreador do veículo (roubo/furto/colisão)
   const { data: rastreadorVeiculo } = useQuery({
     queryKey: ['sinistro-rastreador-veiculo', sinistro?.veiculo_id],
     queryFn: async () => {
@@ -258,7 +263,7 @@ export default function SinistroDetalhe() {
       if (error) throw error;
       return data;
     },
-    enabled: !!sinistro?.veiculo_id && ['roubo', 'furto'].includes(sinistro?.tipo || ''),
+    enabled: !!sinistro?.veiculo_id && tiposComRastreador.includes(sinistro?.tipo || ''),
   });
 
   const descricaoCliente = useMemo(() => {
@@ -861,8 +866,8 @@ export default function SinistroDetalhe() {
             />
           )}
 
-          {/* Botão Abrir Localização - para roubo/furto com rastreador */}
-          {['roubo', 'furto'].includes(sinistro.tipo) && rastreadorVeiculo && (
+          {/* Botão Abrir Localização - para roubo/furto/colisão com rastreador */}
+          {tiposComRastreador.includes(sinistro.tipo) && rastreadorVeiculo && (
             <Card>
               <CardContent className="pt-6">
                 <Button 
@@ -887,8 +892,22 @@ export default function SinistroDetalhe() {
             localOcorrencia={sinistro.local_ocorrencia}
           />
 
-          {/* Card Trajeto para Auditoria */}
-          {sinistro.veiculo_id && (
+          {/* Card Trajeto para Colisões (4h) */}
+          {sinistro.veiculo_id && tiposColisao.includes(sinistro.tipo) && (
+            <TrajetoColisaoCard
+              veiculoId={sinistro.veiculo_id}
+              dataOcorrencia={sinistro.data_ocorrencia}
+              localOcorrencia={sinistro.local_ocorrencia}
+              sinistroId={sinistro.id}
+              snapshotExistente={!!sinistro.snapshot_trajeto_json}
+              protocolo={sinistro.protocolo}
+              veiculo={sinistro.veiculo}
+              associado={sinistro.associado}
+            />
+          )}
+
+          {/* Card Trajeto para outros tipos (24h) */}
+          {sinistro.veiculo_id && !tiposColisao.includes(sinistro.tipo) && (
             <TrajetoSinistroCard
               veiculoId={sinistro.veiculo_id}
               dataOcorrencia={sinistro.data_ocorrencia}
