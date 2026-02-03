@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { 
   Users, 
   Palmtree, 
@@ -25,14 +26,17 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { format, differenceInDays, isToday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { NovoFuncionarioModal } from '@/components/usuarios/NovoFuncionarioModal';
 
 export default function RHDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [showNovoFuncionarioModal, setShowNovoFuncionarioModal] = useState(false);
 
   // Estatísticas gerais
   const { data: stats, isLoading: loadingStats } = useQuery({
@@ -227,7 +231,7 @@ export default function RHDashboard() {
           <h1 className="text-3xl font-bold tracking-tight">Recursos Humanos</h1>
           <p className="text-muted-foreground">Gestão de colaboradores e departamentos</p>
         </div>
-        <Button onClick={() => navigate('/rh/funcionarios/novo')}>
+        <Button onClick={() => setShowNovoFuncionarioModal(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Funcionário
         </Button>
@@ -675,6 +679,15 @@ export default function RHDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Modal de Novo Funcionário */}
+      <NovoFuncionarioModal
+        open={showNovoFuncionarioModal}
+        onOpenChange={setShowNovoFuncionarioModal}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['rh-stats'] });
+        }}
+      />
     </div>
   );
 }
