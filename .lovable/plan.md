@@ -1,53 +1,24 @@
 
-# Plano: Corrigir Sincronização SGA - Endpoint de Consulta por CPF Inválido
+# Plano: Adicionar Botão "Abrir no Mapa" nos Detalhes do Associado
 
-## Diagnóstico Completo
-
-### O Problema
-Quando o analista conclui a aprovação, o sistema tenta enviar o veículo para o SGA Hinova, mas falha porque:
-
-1. **O associado já existe no SGA** (código 28779) - foi cadastrado anteriormente
-2. **O endpoint de busca por CPF está incorreto**:
-   - Endpoint usado: `/associado/consultar/cpf/{cpf}`
-   - Resposta da API: `"Endpoint não encontrado"`
-
-### Fluxo Atual (com erro)
-```text
-1. Aprovar proposta
-2. Tentar cadastrar associado no SGA
-   └─► Erro: "CPF já existe" (correto, ele já foi cadastrado antes)
-3. Tentar buscar codigo_associado pelo CPF
-   └─► Erro: "Endpoint não encontrado" (endpoint incorreto!)
-4. FALHA - não consegue continuar
-```
-
-### Logs Encontrados
-
-| Etapa | Status | Resposta |
-|-------|--------|----------|
-| Autenticar | Sucesso | OK |
-| Cadastrar Associado | Erro | CPF já existe |
-| Buscar CPF existente | Erro | **Endpoint não encontrado** |
+## Objetivo
+Adicionar um botão "Abrir no Mapa" na área de ações do cabeçalho dos detalhes do associado. Ao clicar, será exibido um modal com mapa Leaflet mostrando a localização do endereço do associado.
 
 ---
 
-## Solução Proposta
+## Análise
 
-### Parte 1: Usar Código Armazenado Localmente (Fallback)
+### Dados Disponíveis
+O associado tem os seguintes campos de endereço:
+- `logradouro`, `numero`, `bairro`, `cidade`, `uf`, `cep`
+- `endereco_latitude`, `endereco_longitude` (podem estar vazios)
 
-Antes de tentar buscar na API, verificar se temos o código armazenado no banco de sincronizações anteriores.
+### Situação Atual
+O associado Marcus Vinicius possui endereço cadastrado (EST CAFUNDA, 725 - TANQUE, RIO DE JANEIRO/RJ), mas `endereco_latitude` e `endereco_longitude` estão nulos.
 
-### Parte 2: Corrigir Endpoint de Consulta
-
-A API Hinova SGA v2 usa endpoints diferentes. Vou implementar uma estratégia de fallback com múltiplos endpoints possíveis:
-
-1. `POST /associado/consultar` com body `{ cpf: "xxx" }` (método mais comum em APIs REST)
-2. `GET /associado?cpf=xxx` (query parameter)
-3. `GET /associados/cpf/{cpf}` (rota alternativa)
-
-### Parte 3: Recuperar Código de Logs Anteriores
-
-Se todos os endpoints falharem, buscar o código do associado em logs de sincronização anteriores bem-sucedidas.
+### Solução
+1. Se coordenadas existirem → mostrar mapa diretamente
+2. Se coordenadas não existirem → geocodificar via edge function, salvar no banco, e mostrar mapa
 
 ---
 
@@ -55,103 +26,200 @@ Se todos os endpoints falharem, buscar o código do associado em logs de sincron
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `supabase/functions/sga-hinova-sync/index.ts` | **MODIFICAR** | Corrigir lógica de busca por CPF existente |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | **MODIFICAR** | Adicionar botão "Abrir no Mapa" e modal com mapa |
+| `src/services/geocodingService.ts` | **MODIFICAR** | Adicionar função para atualizar coordenadas de associado |
 
 ---
 
-## Detalhes Técnicos
+## Implementação Detalhada
 
-### Nova Lógica de Busca (fallback múltiplo)
+### 1. Adicionar Função de Geocodificação para Associados
+
+No arquivo `geocodingService.ts`, adicionar:
 
 ```typescript
-// ESTRATÉGIA 1: Buscar código em logs anteriores
-const { data: logAnterior } = await supabase
-  .from('sga_sync_logs')
-  .select('response_payload')
-  .eq('action', 'cadastrar_associado')
-  .eq('status', 'success')
-  .ilike('request_payload::text', `%${cleanCPF(associado.cpf)}%`)
-  .order('created_at', { ascending: false })
-  .limit(1)
-  .single();
-
-if (logAnterior?.response_payload?.codigo_associado) {
-  codigoAssociadoHinova = logAnterior.response_payload.codigo_associado;
-  console.log(`[SGA Sync] Código recuperado de log anterior: ${codigoAssociadoHinova}`);
-} else {
-  // ESTRATÉGIA 2: Tentar endpoint POST /associado/consultar
-  const buscaResponse = await fetchWithRetry(
-    `${hinovaApiUrl}/associado/consultar`,
-    {
-      method: 'POST',
-      headers: operationHeaders,
-      body: JSON.stringify({ cpf: buscaCpf })
-    }
-  );
+export async function atualizarCoordenadasAssociado(
+  associadoId: string,
+  endereco: EnderecoParaGeocodificar
+): Promise<{ latitude: number | null; longitude: number | null; success: boolean }> {
+  const coords = await geocodificarEndereco(endereco);
   
-  // Se POST falhar, tentar GET com query param
-  if (!buscaResponse.ok) {
-    const buscaResponse2 = await fetchWithRetry(
-      `${hinovaApiUrl}/associado?cpf=${buscaCpf}`,
-      { method: 'GET', headers: operationHeaders }
-    );
-    // ...
+  if (!coords.success) {
+    return { latitude: null, longitude: null, success: false };
   }
+
+  const { error } = await supabase
+    .from("associados")
+    .update({
+      endereco_latitude: coords.latitude,
+      endereco_longitude: coords.longitude,
+    })
+    .eq("id", associadoId);
+
+  if (error) {
+    console.error("[Geocode] Erro ao atualizar associado:", error);
+    return { latitude: null, longitude: null, success: false };
+  }
+
+  return { 
+    latitude: coords.latitude, 
+    longitude: coords.longitude, 
+    success: true 
+  };
 }
 ```
 
-### Correção Imediata para Caso Atual
+### 2. Adicionar Botão e Modal no AssociadoDetalhe
 
-Para desbloquear o Marcus Vinicius imediatamente, executar:
+**Novos imports:**
+```typescript
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { atualizarCoordenadasAssociado } from '@/services/geocodingService';
+```
 
-```sql
--- Atualizar associado com código já existente no SGA
-UPDATE associados 
-SET codigo_hinova = 28779,
-    sincronizado_hinova = true,
-    sincronizado_hinova_em = NOW()
-WHERE id = '3bab27b4-24de-48cd-8d75-758629509825';
+**Novo estado:**
+```typescript
+const [mapaModalOpen, setMapaModalOpen] = useState(false);
+const [coordenadas, setCoordenadas] = useState<{lat: number | null; lng: number | null}>({ 
+  lat: associado.endereco_latitude, 
+  lng: associado.endereco_longitude 
+});
+const [geocodificando, setGeocodificando] = useState(false);
+```
 
--- Resetar status do veículo para tentar novamente
-UPDATE veiculos 
-SET status_sga = 'pendente'
-WHERE id = '9dba80a3-a344-4290-9643-b00689d01d7d';
+**Função para abrir mapa:**
+```typescript
+const handleAbrirMapa = async () => {
+  // Se já tem coordenadas, abrir diretamente
+  if (coordenadas.lat && coordenadas.lng) {
+    setMapaModalOpen(true);
+    return;
+  }
+
+  // Se não tem, geocodificar primeiro
+  setGeocodificando(true);
+  const result = await atualizarCoordenadasAssociado(id!, {
+    logradouro: associado.logradouro,
+    numero: associado.numero,
+    bairro: associado.bairro,
+    cidade: associado.cidade,
+    uf: associado.uf,
+    cep: associado.cep,
+  });
+  setGeocodificando(false);
+
+  if (result.success && result.latitude && result.longitude) {
+    setCoordenadas({ lat: result.latitude, lng: result.longitude });
+    setMapaModalOpen(true);
+    refetch(); // Atualizar dados do associado
+  } else {
+    toast.error('Não foi possível localizar o endereço no mapa');
+  }
+};
+```
+
+**Botão na área de ações (linha ~485):**
+```tsx
+<Button 
+  variant="outline" 
+  onClick={handleAbrirMapa}
+  disabled={geocodificando || !associado.logradouro}
+>
+  {geocodificando ? (
+    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+  ) : (
+    <MapPin className="mr-2 h-4 w-4" />
+  )}
+  Abrir no Mapa
+</Button>
+```
+
+**Modal com mapa:**
+```tsx
+<Dialog open={mapaModalOpen} onOpenChange={setMapaModalOpen}>
+  <DialogContent className="max-w-3xl">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2">
+        <MapPin className="h-5 w-5" />
+        Localização - {associado.nome}
+      </DialogTitle>
+    </DialogHeader>
+    
+    {coordenadas.lat && coordenadas.lng && (
+      <div className="h-[400px] rounded-lg overflow-hidden">
+        <MapContainer
+          center={[coordenadas.lat, coordenadas.lng]}
+          zoom={16}
+          className="h-full w-full"
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; OpenStreetMap'
+          />
+          <Marker position={[coordenadas.lat, coordenadas.lng]}>
+            <Popup>
+              <div className="text-center">
+                <strong>{associado.nome}</strong>
+                <p className="text-xs mt-1">
+                  {associado.logradouro}, {associado.numero}<br/>
+                  {associado.bairro} - {associado.cidade}/{associado.uf}
+                </p>
+              </div>
+            </Popup>
+          </Marker>
+        </MapContainer>
+      </div>
+    )}
+    
+    <p className="text-sm text-muted-foreground text-center">
+      📍 {associado.logradouro}, {associado.numero} - {associado.bairro}, {associado.cidade}/{associado.uf}
+    </p>
+  </DialogContent>
+</Dialog>
 ```
 
 ---
 
-## Fluxo Corrigido
+## Layout do Botão
+
+O botão será posicionado após o botão "Financeiro":
+
+```
+[Editar] [Documentos] [Financeiro] [Abrir no Mapa] [Suspender] [...]
+```
+
+---
+
+## Fluxo do Usuário
 
 ```text
-1. Aprovar proposta
-2. Verificar se associado tem codigo_hinova local
-   └─► SIM: Usar código existente → Pular para etapa 5
-   └─► NÃO: Continuar
-3. Tentar cadastrar associado no SGA
-   └─► Sucesso: Salvar código → Continuar etapa 5
-   └─► Erro CPF existe: Continuar etapa 4
-4. Recuperar código do CPF existente
-   4a. Buscar em logs anteriores
-   4b. Tentar POST /associado/consultar
-   4c. Tentar GET /associado?cpf=xxx
-   └─► Sucesso: Salvar código → Continuar
-5. Validar RENAVAM/CHASSI
-6. Cadastrar veículo no SGA
-7. Enviar fotos
-8. Finalizar com sucesso
+1. Usuário clica em "Abrir no Mapa"
+2. Sistema verifica se há coordenadas salvas
+   ├─ SIM: Abre modal com mapa
+   └─ NÃO: 
+      a. Exibe loading no botão
+      b. Chama edge function para geocodificar
+      c. Salva coordenadas no banco
+      d. Abre modal com mapa
+3. Modal exibe mapa centralizado no endereço
+4. Marcador mostra nome e endereço do associado
 ```
 
 ---
 
-## Benefícios
+## Tratamento de Erros
 
-1. **Recuperação automática** de códigos já cadastrados
-2. **Múltiplas estratégias de fallback** para APIs inconsistentes
-3. **Uso de logs históricos** como fonte de verdade
-4. **Não depende de endpoint específico** que pode não existir
+- **Endereço sem logradouro**: Botão desabilitado
+- **Falha na geocodificação**: Toast de erro "Não foi possível localizar o endereço"
+- **Coordenadas inválidas**: Modal não abre, erro exibido
 
 ---
 
-## Ação Imediata
+## Resultado Esperado
 
-Executar SQL para corrigir o caso atual do Marcus Vinicius e permitir que a sincronização continue.
+1. Novo botão "Abrir no Mapa" visível na barra de ações
+2. Modal com mapa Leaflet mostrando localização exata
+3. Coordenadas salvas no banco para acesso futuro instantâneo
+4. Marcador clicável com popup contendo dados do associado
