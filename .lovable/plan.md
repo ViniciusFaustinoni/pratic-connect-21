@@ -1,181 +1,163 @@
 
-# Plano: Adicionar Botão de Localização nos Detalhes de Evento de Roubo/Furto
+
+# Plano: Localização e Trajeto para Eventos de Colisão
 
 ## Objetivo
-Quando um evento de **roubo** ou **furto** for gerado, exibir um botão "Abrir Localização" nos detalhes do evento. Este botão abrirá o mesmo modal de mapa que é usado na página de detalhes do associado (`Cadastro > Associados > Detalhes`).
+Adicionar funcionalidade para exibir a localização atual e o percurso das últimas **4 horas** nos detalhes de eventos de **colisão**, similar ao que foi feito para roubo/furto.
 
 ---
 
-## Componentes Envolvidos
+## Viabilidade por Plataforma
 
-| Componente | Arquivo | Função |
-|------------|---------|--------|
-| Página de Detalhe | `src/pages/eventos/SinistroDetalhe.tsx` | Exibir botão e modal |
-| Modal de Mapa | Reutilizar `Dialog` com `MapaRastreador` | Exibir localização em tempo real |
-| Componente de Mapa | `src/components/rastreadores/MapaRastreador.tsx` | Mapa com telemetria |
-| Hook de Posição | `useRastreadorTempoReal` | Buscar posição via edge function |
+| Plataforma | Suporte API Histórico | Estratégia |
+|------------|----------------------|------------|
+| **Softruck** | ✅ Sim | Buscar trajeto via API `/vehicles/{id}/trajectories/` |
+| **Rede Veículos** | ❌ Não | Usar dados locais (`rastreador_posicoes`) do banco |
+
+A edge function `rastreador-historico` já implementa esse fallback automaticamente.
 
 ---
 
-## Alterações no Arquivo `SinistroDetalhe.tsx`
+## Alterações Necessárias
 
-### 1. Novos Imports
+### 1. Arquivo `SinistroDetalhe.tsx` - Adicionar para Colisões
 
+Expandir a lógica existente (roubo/furto) para incluir colisões:
+
+**De:**
 ```typescript
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
+['roubo', 'furto'].includes(sinistro.tipo)
 ```
 
-### 2. Novo Estado para o Modal
-
+**Para:**
 ```typescript
-const [mapaLocalizacaoOpen, setMapaLocalizacaoOpen] = useState(false);
+['roubo', 'furto', 'colisao', 'colisao_parcial', 'colisao_total'].includes(sinistro.tipo)
 ```
 
-### 3. Query para Buscar Rastreador do Veículo
+### 2. Adicionar Card de Trajeto Específico (4h)
 
-Adicionar query para buscar o rastreador instalado no veículo do sinistro:
+Criar um novo card que mostre o trajeto das últimas 4 horas para colisões, diferente das 24h para roubo/furto.
 
 ```typescript
-const { data: rastreadorVeiculo } = useQuery({
-  queryKey: ['sinistro-rastreador-veiculo', sinistro?.veiculo_id],
-  queryFn: async () => {
-    if (!sinistro?.veiculo_id) return null;
-    
-    const { data, error } = await supabase
-      .from('rastreadores')
-      .select('id, codigo, status, ultima_posicao_lat, ultima_posicao_lng')
-      .eq('veiculo_id', sinistro.veiculo_id)
-      .eq('status', 'instalado')
-      .maybeSingle();
-    
-    if (error) throw error;
-    return data;
-  },
-  enabled: !!sinistro?.veiculo_id && ['roubo', 'furto'].includes(sinistro?.tipo || ''),
-});
-```
-
-### 4. Botão na Seção de Roubo/Furto
-
-Adicionar botão logo após o `CardAcionamentoRoubo`, visível apenas quando:
-- O sinistro é do tipo `roubo` ou `furto`
-- Existe um rastreador instalado no veículo
-
-```tsx
-{/* Botão Abrir Localização - para roubo/furto com rastreador */}
-{['roubo', 'furto'].includes(sinistro.tipo) && rastreadorVeiculo && (
-  <Card>
-    <CardContent className="pt-6">
-      <Button 
-        onClick={() => setMapaLocalizacaoOpen(true)}
-        className="w-full gap-2"
-        variant="outline"
-      >
-        <MapPin className="h-4 w-4" />
-        Abrir Localização do Veículo
-      </Button>
-    </CardContent>
-  </Card>
+{/* Trajeto 4h - para colisões */}
+{['colisao', 'colisao_parcial', 'colisao_total'].includes(sinistro.tipo) && (
+  <TrajetoColisaoCard
+    veiculoId={sinistro.veiculo_id}
+    dataOcorrencia={sinistro.data_ocorrencia}
+    sinistroId={sinistro.id}
+  />
 )}
 ```
 
-### 5. Modal de Mapa no Final do Componente
+### 3. Criar Componente `TrajetoColisaoCard.tsx`
 
-Adicionar o modal junto com os outros modais existentes:
+Componente similar ao `TrajetoSinistroCard`, mas com:
+- Período de **4 horas** antes do sinistro (ao invés de 24h)
+- Título "Trajeto - 4h Antes da Colisão"
+- Mesma estrutura de mapa com polyline e marcadores
 
-```tsx
-{/* Modal Localização do Veículo (Roubo/Furto) */}
-<Dialog open={mapaLocalizacaoOpen} onOpenChange={setMapaLocalizacaoOpen}>
-  <DialogContent className="max-w-4xl max-h-[90vh]">
-    <DialogHeader>
-      <DialogTitle className="flex items-center gap-2">
-        <MapPin className="h-5 w-5" />
-        Localização do Veículo - {sinistro?.veiculo?.placa}
-      </DialogTitle>
-    </DialogHeader>
-    {rastreadorVeiculo && (
-      <MapaRastreador
-        rastreadorId={rastreadorVeiculo.id}
-        altura="450px"
-        mostrarControles={true}
-      />
-    )}
-  </DialogContent>
-</Dialog>
+### 4. Reutilizar Botão de Localização em Tempo Real
+
+Para colisões, também mostrar o botão "Abrir Localização" se houver rastreador instalado:
+
+```typescript
+{/* Botão Abrir Localização - para tipos com rastreador */}
+{['roubo', 'furto', 'colisao', 'colisao_parcial', 'colisao_total'].includes(sinistro.tipo) && rastreadorVeiculo && (
+  <Button onClick={() => setMapaLocalizacaoOpen(true)}>
+    📍 Abrir Localização do Veículo
+  </Button>
+)}
 ```
 
 ---
 
-## Fluxo Visual
+## Estrutura do Novo Componente
 
 ```text
-┌───────────────────────────────────────────────────────────────┐
-│                    DETALHES DO SINISTRO                       │
-│                       (Roubo/Furto)                           │
-├───────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌────────────────────────────────────────────────────────┐   │
-│  │  🚨 Card Acionamento de Recuperação                    │   │
-│  │     Status: Confirmado                                 │   │
-│  │     Protocolo Central: XXXX                            │   │
-│  └────────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌────────────────────────────────────────────────────────┐   │
-│  │  📍 [Abrir Localização do Veículo]                     │   │  ← NOVO BOTÃO
-│  └────────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌────────────────────────────────────────────────────────┐   │
-│  │  📊 Comparação de Posições GPS                         │   │
-│  └────────────────────────────────────────────────────────┘   │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
-
-                           │
-                           ▼ (Clica no botão)
-
-┌───────────────────────────────────────────────────────────────┐
-│  📍 Localização do Veículo - LTB4J74                     [X]  │
-├───────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌────────────────────────────────────────────────────────┐   │
-│  │                                                        │   │
-│  │                  🗺️ MAPA SATÉLITE                      │   │
-│  │              (MapaRastreador component)               │   │
-│  │                                                        │   │
-│  │            📍 Marcador com posição atual               │   │
-│  │                                                        │   │
-│  └────────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌─────────┬─────────┬─────────┬─────────┐                    │
-│  │ 45 km/h │ Ligado  │  180°   │ 2 min   │  ← Telemetria      │
-│  └─────────┴─────────┴─────────┴─────────┘                    │
-│                                                               │
-│  📍 Rua das Flores, 123 - Centro, BH/MG                      │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  🗺️ Trajeto - 4h Antes da Colisão                      [↗]  │
+│  ⏰ 01/02 08:30 - 01/02 12:30                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│           ┌────────────────────────────────────┐            │
+│           │                                    │            │
+│           │      [MAPA COM POLYLINE]           │            │
+│           │    🟢 Início ─────────→ 🔴 Colisão  │            │
+│           │         ⏸ Paradas                  │            │
+│           │                                    │            │
+│           └────────────────────────────────────┘            │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  [ 45 pontos ]  [ 2 paradas ]  [ 🟢 API | 🟡 Local ]        │
+│                                                             │
+│  [💾 Salvar Evidência]  [📄 Exportar PDF]  [🔍 Consultar]  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Resumo Técnico
+## Fluxo de Dados
 
-| Item | Descrição |
-|------|-----------|
-| **Arquivo** | `src/pages/eventos/SinistroDetalhe.tsx` |
-| **Imports** | `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `MapaRastreador` |
-| **Estados** | `mapaLocalizacaoOpen` (boolean) |
-| **Query** | Buscar rastreador por `veiculo_id` com status `instalado` |
-| **Condição** | Mostrar apenas se `tipo === 'roubo' || tipo === 'furto'` E rastreador existe |
-| **Modal** | Reutiliza `MapaRastreador` com `rastreadorId` |
+```text
+COLISÃO COMUNICADA
+       │
+       ▼
+┌───────────────────────────────┐
+│  Detalhes do Sinistro         │
+│  (SinistroDetalhe.tsx)        │
+└───────────────┬───────────────┘
+                │
+    ┌───────────┴───────────┐
+    ▼                       ▼
+┌──────────────┐    ┌──────────────────┐
+│ TrajetoCard  │    │ Botão Localização│
+│ (4h antes)   │    │ (Tempo Real)     │
+└───────┬──────┘    └────────┬─────────┘
+        │                    │
+        ▼                    ▼
+┌──────────────────────────────────────┐
+│   Edge Function: rastreador-historico │
+│   (ou rastreador-posicao)            │
+└───────────────────┬──────────────────┘
+                    │
+    ┌───────────────┴───────────────┐
+    ▼                               ▼
+┌────────────┐              ┌──────────────┐
+│  Softruck  │              │ Rede Veículos│
+│  API v2    │              │  Banco Local │
+└────────────┘              └──────────────┘
+```
+
+---
+
+## Arquivos a Modificar/Criar
+
+| Arquivo | Ação |
+|---------|------|
+| `src/pages/eventos/SinistroDetalhe.tsx` | Editar - Incluir colisão nos filtros |
+| `src/components/sinistros/TrajetoColisaoCard.tsx` | **Criar** - Componente específico 4h |
+| `supabase/functions/rastreador-historico/index.ts` | Verificar - Já suporta período customizado ✅ |
 
 ---
 
 ## Comportamento Esperado
 
-1. Usuário acessa detalhes de um sinistro de **roubo** ou **furto**
-2. Sistema busca se existe rastreador instalado no veículo
-3. Se existir, exibe botão "Abrir Localização do Veículo"
-4. Ao clicar, abre modal com mapa satélite e posição em tempo real
-5. O mapa mostra telemetria: velocidade, ignição, direção, última atualização
-6. Botão "Atualizar" permite buscar posição mais recente da plataforma
+1. Usuário acessa detalhes de um sinistro de **colisão**
+2. Se veículo tem rastreador instalado:
+   - Exibe **Card de Trajeto** com últimas 4 horas
+   - Exibe **Botão "Abrir Localização"** para posição atual
+3. Se plataforma for **Softruck**: busca trajeto via API
+4. Se plataforma for **Rede Veículos**: exibe dados do banco local
+5. Usuário pode salvar trajeto como evidência, exportar PDF ou fazer consulta avançada
+
+---
+
+## Diferenças: Roubo/Furto vs Colisão
+
+| Aspecto | Roubo/Furto | Colisão |
+|---------|-------------|---------|
+| Período Trajeto | 24 horas | **4 horas** |
+| Foco | Rastrear movimentação do ladrão | Verificar percurso antes do impacto |
+| Prioridade | Localização tempo real | Trajeto histórico |
+| Card Existente | TrajetoSinistroCard (24h) | **TrajetoColisaoCard (4h)** - Novo |
+
