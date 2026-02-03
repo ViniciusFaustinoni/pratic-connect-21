@@ -1,263 +1,277 @@
 
+# Plano: Exibir Solicitações Pendentes da IA no Painel de Sinistros
 
-# Plano: Corrigir Ativação de Cobertura Total Após Instalação
+## Diagnostico do Problema
 
-## Diagnóstico do Problema
-
-### Evidências Coletadas
-
-**Veículo LTB4J74 (ID: a15a1745-bc59-4f18-9f0e-53ecdf966c9c):**
-- `cobertura_roubo_furto: true` - Autovistoria aprovada
-- `cobertura_total: false` - NÃO foi ativado após instalação
-- `status: em_analise` - Incorreto (deveria ser `ativo`)
-- Instalação: `concluida` com rastreador vinculado
-
-**Timeline do Problema:**
-
-| Evento | Horário | O que deveria acontecer |
-|--------|---------|------------------------|
-| Instalação concluída | 16:25:11 | Setar `cobertura_total: true` |
-| Proposta aprovada | 16:25:54 | Manter `cobertura_total: true` |
-
-### Causa Raiz Identificada
-
-O bug está na função `useAprovarProposta` no arquivo `src/hooks/usePropostasPendentes.ts` (linhas 1401-1407):
-
-```typescript
-// CÓDIGO ATUAL (BUG)
-const { error: veiculoError } = await supabase
-  .from('veiculos')
-  .update({
-    status: statusVeiculo,
-    cobertura_roubo_furto: true,
-    cobertura_total: false, // ← SEMPRE SETA FALSE!
-  })
-  .eq('id', veiculoId);
-```
-
-**O problema:** Quando a instalação é concluída ANTES da aprovação do analista, a aprovação sobrescreve `cobertura_total` para `false`, desfazendo a ativação que deveria ter ocorrido na conclusão da instalação.
-
----
-
-## Fluxo do Bug
+### Fluxo Atual do Sistema
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  INSTALAÇÃO CONCLUÍDA (16:25:11)                                    │
-│  useAprovarVeiculoServico                                           │
-├─────────────────────────────────────────────────────────────────────┤
-│  1. Verifica cobertura_roubo_furto = true                          │
-│  2. Verifica cobertura_total = false                               │
-│  3. Tenta setar cobertura_total = true                             │
-│  ✅ Sucesso (mas será sobrescrito!)                                 │
+│  ASSOCIADO - WhatsApp/App                                           │
+│  "Quero registrar uma colisao"                                      │
 └─────────────────────────────────────────────────────────────────────┘
                               │
-                              ▼ (43 segundos depois)
+                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  PROPOSTA APROVADA (16:25:54)                                       │
-│  useAprovarProposta                                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│  1. Atualiza contrato para 'ativo'                                 │
-│  2. Atualiza associado para 'ativo'                                │
-│  3. Atualiza veículo:                                              │
-│     - cobertura_roubo_furto: true                                  │
-│     - cobertura_total: false  ← SOBRESCREVE!                       │
-│  ❌ Bug: Ignora que instalação já foi concluída                     │
+│  IA COLETA INFORMACOES                                              │
+│  - Tipo do sinistro (colisao)                                       │
+│  - Data/hora da ocorrencia                                          │
+│  - Local do evento                                                  │
+│  - Descricao                                                        │
+│  - Fotos do dano                                                    │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  TABELA: chat_solicitacoes_ia                                       │
+│  Status: "pendente"                                                 │
+│  ID: 002bc5c6-bf33-4f9e-b8d9-a139abd426c7                          │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+               ┌──────────────┴──────────────┐
+               │                             │
+               ▼                             ▼
+┌─────────────────────────┐    ┌─────────────────────────────────────┐
+│  DIRETOR APROVA         │    │  PAINEL SINISTROS                   │
+│  /diretoria/            │    │  /eventos/sinistros                 │
+│  solicitacoes-ia        │    │                                     │
+│                         │    │  Busca APENAS tabela "sinistros"    │
+│  Executa edge function  │    │  que esta VAZIA!                    │
+│  "aprovar-solicitacao"  │    │                                     │
+└─────────────────────────┘    │  ❌ "Nenhum sinistro encontrado"    │
+               │               └─────────────────────────────────────┘
+               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  TABELA: sinistros                                                  │
+│  Registro REAL criado                                               │
+│  Status: "comunicado"                                               │
+│  Protocolo: "SIN-20260203-XXXX"                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Problema Identificado
+
+O painel de Sinistros (`SinistrosList.tsx` e `SinistrosDashboard.tsx`) busca dados APENAS da tabela `sinistros`. Porem, as solicitacoes criadas via IA ficam na tabela `chat_solicitacoes_ia` com status "pendente" ate que um diretor as aprove na tela `/diretoria/solicitacoes-ia`.
+
+| Tabela | Dados Atuais |
+|--------|--------------|
+| `sinistros` | 0 registros |
+| `chat_solicitacoes_ia` | 1 registro pendente (colisao do Marcus) |
 
 ---
 
-## Solução
+## Solucao Proposta
 
-### 1. Corrigir `useAprovarProposta` (PRINCIPAL)
+### Opcao A: Adicionar Indicador de Pendencias no Painel (RECOMENDADO)
 
-**Arquivo:** `src/hooks/usePropostasPendentes.ts`
-**Linhas:** 1394-1412
+Modificar o painel de Sinistros para exibir um card de alerta quando existirem solicitacoes pendentes de aprovacao.
 
-Modificar a lógica para:
-- Se instalação já foi concluída (`jaTemInstalacaoConcluida = true`), setar `cobertura_total: true`
-- Caso contrário, manter `cobertura_total: false` (aguardando instalação)
+**Beneficios:**
+- Mantem a separacao de responsabilidades (aprovacao vs gestao)
+- Diretor e informado das pendencias diretamente no painel
+- Nao altera o fluxo de aprovacao existente
+
+**Implementacao:**
+
+1. **Adicionar query para buscar pendencias IA em `SinistrosList.tsx`**
 
 ```typescript
-// CÓDIGO CORRIGIDO
-// Status do veículo depende se instalação foi concluída
-const statusVeiculo = jaTemInstalacaoConcluida ? 'ativo' : 'instalacao_pendente';
-
-// Se instalação já está concluída, ativar cobertura total imediatamente
-const coberturaTotal = jaTemInstalacaoConcluida;
-
-const { error: veiculoError } = await supabase
-  .from('veiculos')
-  .update({
-    status: statusVeiculo,
-    cobertura_roubo_furto: true,
-    cobertura_total: coberturaTotal, // ← DINÂMICO!
-  })
-  .eq('id', veiculoId);
+// Nova query para buscar solicitacoes pendentes da IA
+const { data: pendenciasIA } = useQuery({
+  queryKey: ['sinistros-pendencias-ia'],
+  queryFn: async () => {
+    const { data, count } = await supabase
+      .from('chat_solicitacoes_ia')
+      .select('id, tipo, dados, created_at, associado:associados(nome)', { count: 'exact' })
+      .eq('status', 'pendente')
+      .eq('tipo', 'sinistro')
+      .order('created_at', { ascending: false });
+    return { items: data, count };
+  },
+});
 ```
 
-### 2. Adicionar Ativação do Rastreador na Plataforma (COMPLEMENTAR)
+2. **Adicionar card de alerta no topo da lista**
 
-Quando a instalação já está concluída, a aprovação deve também:
-1. Chamar a ativação na plataforma do rastreador (Softruck/Rede Veículos)
-2. Criar acesso do associado via `ativar-associado`
+```typescript
+{pendenciasIA?.count > 0 && (
+  <Card className="border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/20">
+    <CardContent className="flex items-center justify-between py-4">
+      <div className="flex items-center gap-3">
+        <Bot className="h-8 w-8 text-amber-600" />
+        <div>
+          <p className="font-semibold text-amber-800 dark:text-amber-200">
+            {pendenciasIA.count} sinistro(s) aguardando aprovacao da IA
+          </p>
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            Solicitacoes geradas via WhatsApp/App precisam ser revisadas
+          </p>
+        </div>
+      </div>
+      <Button onClick={() => navigate('/diretoria/solicitacoes-ia')}>
+        Revisar Solicitacoes
+      </Button>
+    </CardContent>
+  </Card>
+)}
+```
+
+3. **Atualizar contador de "Comunicados" para incluir pendencias IA**
+
+```typescript
+// No card de KPI "Comunicados":
+<p className="text-2xl font-bold text-yellow-600">
+  {(contadores?.comunicado || 0) + (pendenciasIA?.count || 0)}
+</p>
+```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Ação | Descrição |
+| Arquivo | Acao | Descricao |
 |---------|------|-----------|
-| `src/hooks/usePropostasPendentes.ts` | Editar | Corrigir lógica de `cobertura_total` na aprovação |
+| `src/pages/eventos/SinistrosList.tsx` | Editar | Adicionar query para pendencias IA e card de alerta |
+| `src/pages/eventos/SinistrosDashboard.tsx` | Editar | Adicionar indicador de pendencias no dashboard |
 
 ---
 
-## Lógica de Decisão Corrigida
+## Fluxo Corrigido
 
 ```text
-┌──────────────────────────────────────────────────────────────────────┐
-│  APROVAÇÃO DE PROPOSTA                                               │
-├──────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  jaTemInstalacaoConcluida?                                           │
-│         │                                                            │
-│    ┌────┴────┐                                                       │
-│    │         │                                                       │
-│    ▼ SIM     ▼ NÃO                                                   │
-│                                                                      │
-│  ┌────────────────┐  ┌────────────────────────────┐                  │
-│  │ veículo.status │  │ veículo.status             │                  │
-│  │ = 'ativo'      │  │ = 'instalacao_pendente'    │                  │
-│  │                │  │                            │                  │
-│  │ cobertura_total│  │ cobertura_total            │                  │
-│  │ = true         │  │ = false                    │                  │
-│  │                │  │                            │                  │
-│  │ + Ativar na    │  │ (Aguardar instalação)      │                  │
-│  │   plataforma   │  │                            │                  │
-│  │ + Criar acesso │  │                            │                  │
-│  └────────────────┘  └────────────────────────────┘                  │
-│                                                                      │
-└──────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  PAINEL SINISTROS (/eventos/sinistros)                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  ⚠️ 1 sinistro(s) aguardando aprovacao da IA               │   │
+│  │  Solicitacoes geradas via WhatsApp/App precisam ser        │   │
+│  │  revisadas                            [Revisar Solicitacoes]│   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐       │
+│  │Comunicados │ │ Em Analise │ │ Aguardando │ │ Aprovados  │       │
+│  │    1 (+IA) │ │     0      │ │  Vistoria  │ │     0      │       │
+│  └────────────┘ └────────────┘ └────────────┘ └────────────┘       │
+│                                                                     │
+│  [Tabela de sinistros]                                             │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Código da Correção
+## Codigo da Implementacao
 
-### usePropostasPendentes.ts (linhas 1394-1477)
+### SinistrosList.tsx - Adicoes
 
 ```typescript
-// 6. Atualizar VEÍCULO e criar instalação SE NECESSÁRIO
-if (veiculos && veiculos.length > 0) {
-  const veiculoId = veiculos[0].id;
-  
-  // Status do veículo depende se instalação foi concluída
-  const statusVeiculo = jaTemInstalacaoConcluida ? 'ativo' : 'instalacao_pendente';
-  
-  // Se instalação já está concluída, ativar cobertura total imediatamente
-  // Caso contrário, aguardar instalação para ativar
-  const coberturaTotal = jaTemInstalacaoConcluida;
-  
-  const { error: veiculoError } = await supabase
-    .from('veiculos')
-    .update({
-      status: statusVeiculo,
-      cobertura_roubo_furto: true,
-      cobertura_total: coberturaTotal,
-    })
-    .eq('id', veiculoId);
+// Imports adicionais
+import { Bot } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-  if (veiculoError) {
-    console.error('Erro ao atualizar veículo:', veiculoError);
-  }
+// Query para pendencias IA (adicionar apos query de contadores)
+const { data: pendenciasIA } = useQuery({
+  queryKey: ['sinistros-pendencias-ia'],
+  queryFn: async () => {
+    const { data, count } = await supabase
+      .from('chat_solicitacoes_ia')
+      .select('id, tipo, dados, created_at, associado:associados!chat_solicitacoes_ia_associado_id_fkey(nome)', { count: 'exact' })
+      .eq('status', 'pendente')
+      .eq('tipo', 'sinistro')
+      .order('created_at', { ascending: false });
+    return { items: data || [], count: count || 0 };
+  },
+});
 
-  // Se instalação já foi concluída, ativar rastreador na plataforma e criar acesso
-  if (jaTemInstalacaoConcluida && instalacaoConcluida?.rastreador_id) {
-    try {
-      // Buscar dados do rastreador para ativação
-      const { data: rastreadorData } = await supabase
-        .from('rastreadores')
-        .select('imei, plataforma')
-        .eq('id', instalacaoConcluida.rastreador_id)
-        .single();
-      
-      if (rastreadorData?.imei) {
-        const { data: associadoEmail } = await supabase
-          .from('associados')
-          .select('email')
-          .eq('id', associadoId)
-          .single();
+// Card de alerta (adicionar entre NovoSinistroModal e KPI Cards)
+{pendenciasIA?.count > 0 && (
+  <Card className="border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/20">
+    <CardContent className="flex items-center justify-between py-4">
+      <div className="flex items-center gap-3">
+        <Bot className="h-8 w-8 text-amber-600" />
+        <div>
+          <p className="font-semibold text-amber-800 dark:text-amber-200">
+            {pendenciasIA.count} sinistro(s) aguardando aprovacao via IA
+          </p>
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            Solicitacoes geradas via WhatsApp/App precisam ser aprovadas
+          </p>
+        </div>
+      </div>
+      <Button 
+        variant="outline" 
+        className="border-amber-500 text-amber-700 hover:bg-amber-100"
+        onClick={() => navigate('/diretoria/solicitacoes-ia')}
+      >
+        <Bot className="mr-2 h-4 w-4" />
+        Revisar Solicitacoes
+      </Button>
+    </CardContent>
+  </Card>
+)}
+```
 
-        // Ativar na plataforma do rastreador
-        if (rastreadorData.plataforma === 'softruck') {
-          console.log('[useAprovarProposta] Ativando rastreador na Softruck...');
-          await supabase.functions.invoke('softruck-ativar-dispositivo', {
-            body: {
-              imei: rastreadorData.imei,
-              veiculoId: veiculoId,
-              associadoId: associadoId,
-              associadoEmail: associadoEmail?.email,
-            },
-          });
-        } else if (rastreadorData.plataforma === 'rede_veiculos') {
-          console.log('[useAprovarProposta] Ativando rastreador na Rede Veículos...');
-          await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
-            body: {
-              imei: rastreadorData.imei,
-              veiculoId: veiculoId,
-              associadoId: associadoId,
-            },
-          });
-        }
-        
-        // Criar acesso do associado
-        await supabase.functions.invoke('ativar-associado', {
-          body: {
-            veiculo_id: veiculoId,
-            rastreador_id: instalacaoConcluida.rastreador_id,
-            associado_id: associadoId,
-          },
-        });
-        
-        console.log('[useAprovarProposta] Cobertura total ativada - instalação já concluída');
-      }
-    } catch (ativacaoError) {
-      console.warn('[useAprovarProposta] Erro na ativação automática:', ativacaoError);
-    }
-  }
-  
-  // Criar INSTALAÇÃO APENAS se:
-  // - NÃO existir instalação concluída para este contrato
-  // - NÃO existir instalação ativa para este veículo (evita duplicatas)
-  if (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva) {
-    // ... código existente de criação de instalação ...
-  }
-}
+### SinistrosDashboard.tsx - Adicoes
+
+```typescript
+// Query para pendencias IA
+const { data: pendenciasIA } = useQuery({
+  queryKey: ['sinistros-pendencias-ia'],
+  queryFn: async () => {
+    const { count } = await supabase
+      .from('chat_solicitacoes_ia')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pendente')
+      .eq('tipo', 'sinistro');
+    return count || 0;
+  },
+});
+
+// Card de alerta no topo do dashboard (antes dos KPIs)
+{pendenciasIA > 0 && (
+  <Card className="border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/20">
+    <CardContent className="flex items-center justify-between py-4">
+      <div className="flex items-center gap-3">
+        <Bot className="h-8 w-8 text-amber-600" />
+        <div>
+          <p className="font-semibold text-amber-800 dark:text-amber-200">
+            {pendenciasIA} sinistro(s) aguardando aprovacao
+          </p>
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            Solicitacoes geradas via IA precisam ser revisadas
+          </p>
+        </div>
+      </div>
+      <Button 
+        variant="outline"
+        className="border-amber-500 text-amber-700 hover:bg-amber-100"
+        onClick={() => navigate('/diretoria/solicitacoes-ia')}
+      >
+        Revisar
+      </Button>
+    </CardContent>
+  </Card>
+)}
 ```
 
 ---
 
-## Validação Pós-Correção
+## Validacao Pos-Implementacao
 
-1. Corrigir o veículo afetado manualmente:
-```sql
-UPDATE veiculos 
-SET cobertura_total = true, status = 'ativo'
-WHERE id = 'a15a1745-bc59-4f18-9f0e-53ecdf966c9c';
-```
-
-2. Testar cenário:
-   - Aprovar proposta ANTES da instalação → `cobertura_total = false`
-   - Aprovar proposta DEPOIS da instalação → `cobertura_total = true`
+1. Acessar `/eventos/sinistros`
+2. Verificar que aparece o card amarelo "1 sinistro(s) aguardando aprovacao via IA"
+3. Clicar em "Revisar Solicitacoes"
+4. Aprovar a solicitacao do Marcus
+5. Voltar ao painel de sinistros
+6. Verificar que o sinistro agora aparece na tabela
 
 ---
 
 ## Resumo
 
-| Problema | Solução |
+| Problema | Solucao |
 |----------|---------|
-| `cobertura_total` sempre `false` na aprovação | Verificar `jaTemInstalacaoConcluida` e setar dinamicamente |
-| Rastreador não ativado na plataforma | Chamar ativação quando instalação já concluída |
-| Acesso do associado não criado | Chamar `ativar-associado` quando apropriado |
-
+| Painel mostra "Nenhum sinistro" | Adicionar indicador de pendencias IA |
+| Diretor nao sabe que tem pendencias | Card de alerta com botao para revisar |
+| Contador de comunicados incompleto | Somar pendencias IA no total |
