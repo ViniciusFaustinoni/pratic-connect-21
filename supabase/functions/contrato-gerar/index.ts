@@ -209,6 +209,9 @@ serve(async (req) => {
               cor: cotacao.veiculo_cor || null,
               valor_fipe: cotacao.valor_fipe || null,
               codigo_fipe: cotacao.codigo_fipe || null,
+              // Dados obrigatórios para SGA Hinova (extraídos do CRLV via OCR)
+              chassi: cotacao.veiculo_chassi || null,
+              renavam: cotacao.veiculo_renavam || null,
               status: 'em_analise',
               cobertura_roubo_furto: false,
               cobertura_total: false,
@@ -262,6 +265,9 @@ serve(async (req) => {
                 cor: cotacao.veiculo_cor || null,
                 valor_fipe: cotacao.valor_fipe || null,
                 codigo_fipe: cotacao.codigo_fipe || null,
+                // Dados obrigatórios para SGA Hinova (extraídos do CRLV via OCR)
+                chassi: cotacao.veiculo_chassi || null,
+                renavam: cotacao.veiculo_renavam || null,
                 status: 'em_analise',
                 cobertura_roubo_furto: false,
                 cobertura_total: false,
@@ -327,6 +333,9 @@ serve(async (req) => {
           cor: cotacao.veiculo_cor || null,
           valor_fipe: cotacao.valor_fipe || null,
           codigo_fipe: cotacao.codigo_fipe || null,
+          // Dados obrigatórios para SGA Hinova (extraídos do CRLV via OCR)
+          chassi: cotacao.veiculo_chassi || null,
+          renavam: cotacao.veiculo_renavam || null,
           status: 'em_analise',
           cobertura_roubo_furto: false,
           cobertura_total: false,

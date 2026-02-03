@@ -162,6 +162,9 @@ export function EtapaDadosPessoaisDocumentos({
       bairro: dadosExtraidos.bairro || '',
       cidade: dadosExtraidos.cidade || '',
       uf: dadosExtraidos.uf || '',
+      // Dados do veículo extraídos do CRLV (para persistir na cotação)
+      veiculo_chassi: dadosExtraidos.veiculo_chassi || undefined,
+      veiculo_renavam: dadosExtraidos.veiculo_renavam || undefined,
     };
     onSubmit(dados);
   };

@@ -343,7 +343,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     mutationFn: async (dados: DadosPessoaisForm) => {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
-      // 1. Salvar dados pessoais
+      // 1. Salvar dados pessoais + dados do veículo extraídos do CRLV
       const { error } = await publicSupabase
         .from('cotacoes')
         .update({
@@ -360,6 +360,9 @@ export function useCotacaoContratacao(token: string | undefined) {
           cliente_cidade: dados.cidade,
           cliente_uf: dados.uf,
           status_contratacao: 'dados_preenchidos',
+          // Dados do veículo extraídos do CRLV via OCR (necessários para SGA Hinova)
+          veiculo_chassi: dados.veiculo_chassi || null,
+          veiculo_renavam: dados.veiculo_renavam || null,
         })
         .eq('id', cotacao.id);
 

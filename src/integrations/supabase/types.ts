@@ -5532,11 +5532,13 @@ export type Database = {
           valor_rastreamento: number
           valor_total_mensal: number
           veiculo_ano: number | null
+          veiculo_chassi: string | null
           veiculo_combustivel: string | null
           veiculo_cor: string | null
           veiculo_marca: string | null
           veiculo_modelo: string | null
           veiculo_placa: string | null
+          veiculo_renavam: string | null
           vendedor_id: string | null
           vistoria_completa_data_agendada: string | null
           vistoria_completa_endereco_bairro: string | null
@@ -5627,11 +5629,13 @@ export type Database = {
           valor_rastreamento?: number
           valor_total_mensal: number
           veiculo_ano?: number | null
+          veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
+          veiculo_renavam?: string | null
           vendedor_id?: string | null
           vistoria_completa_data_agendada?: string | null
           vistoria_completa_endereco_bairro?: string | null
@@ -5722,11 +5726,13 @@ export type Database = {
           valor_rastreamento?: number
           valor_total_mensal?: number
           veiculo_ano?: number | null
+          veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
+          veiculo_renavam?: string | null
           vendedor_id?: string | null
           vistoria_completa_data_agendada?: string | null
           vistoria_completa_endereco_bairro?: string | null

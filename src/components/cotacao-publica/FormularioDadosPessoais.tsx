@@ -22,6 +22,9 @@ const schema = z.object({
   bairro: z.string().min(2, 'Bairro é obrigatório'),
   cidade: z.string().min(2, 'Cidade é obrigatória'),
   uf: z.string().length(2, 'UF deve ter 2 caracteres'),
+  // Dados do veículo extraídos do CRLV
+  veiculo_chassi: z.string().optional(),
+  veiculo_renavam: z.string().optional(),
 });
 
 export type DadosPessoaisForm = z.infer<typeof schema>;
