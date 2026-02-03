@@ -656,19 +656,12 @@ export default function AssociadoDetalhe() {
         {/* ============================================ */}
         <TabsContent value="resumo" className="space-y-6">
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-4 text-center">
                 <Car className="h-8 w-8 mx-auto text-blue-500" />
                 <p className="text-2xl font-bold mt-2">{stats?.veiculos || 0}</p>
                 <p className="text-sm text-muted-foreground">Veículos</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <FileCheck className="h-8 w-8 mx-auto text-green-500" />
-                <p className="text-2xl font-bold mt-2">{docsAprovados}/{documentos?.length || 0}</p>
-                <p className="text-sm text-muted-foreground">Documentos ✓</p>
               </CardContent>
             </Card>
             <Card>
