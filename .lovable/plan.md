@@ -1,251 +1,328 @@
 
-# Plano: Corrigir Cálculo do Rateio para Incluir Custos de Ordens de Serviço
+# Plano: Relatório Analítico de Custos de Reparos
 
-## Resumo do Problema
-
-O sistema atual de fechamento mensal (`fechamento-mensal/index.ts`) calcula as despesas do rateio usando **apenas** o campo `sinistro.valor_indenizacao`. Isso ignora os custos de reparos realizados em oficinas, que são registrados nas Ordens de Serviço (`ordens_servico.valor_pago`).
-
-### Cenários de Custo
-
-| Tipo de Sinistro | tipo_dano | Fonte do Valor |
-|------------------|-----------|----------------|
-| Roubo/Furto não recuperado | `perda_total` | `sinistro.valor_indenizacao` |
-| Colisão com perda total (≥75% FIPE) | `perda_total` | `sinistro.valor_indenizacao` |
-| Colisão com dano parcial (<75% FIPE) | `parcial` | `ordens_servico.valor_pago` |
-| Roubo recuperado com danos | `parcial` | `ordens_servico.valor_pago` |
-| Fenômeno natural/Vandalismo | varia | Depende de `tipo_dano` |
+## Objetivo
+Criar um relatório atuarial que detalhe os custos de reparos de veículos em sinistros, separando por categoria: **Peças**, **Mão de Obra** e **Serviços Terceiros**. Este relatório será fundamental para análise de precificação, provisões técnicas e gestão de custos.
 
 ---
 
-## Arquitetura da Solução
+## Estrutura de Dados Existente
+
+A estrutura já está pronta para suportar este relatório:
+
+| Tabela | Campo | Valores |
+|--------|-------|---------|
+| `ordens_servico_itens` | `tipo` | `peca`, `mao_de_obra`, `servico_terceiro` |
+| `ordens_servico` | `sinistro_id` | Vincula OS ao sinistro |
+| `sinistros` | `tipo` | Tipo de evento (colisão, roubo, etc.) |
+
+---
+
+## Componentes a Criar
+
+### 1. Componente Principal: `CustosReparosTable.tsx`
+
+**Localização:** `src/components/diretoria/CustosReparosTable.tsx`
+
+**Funcionalidades:**
+- Buscar ordens de serviço pagas/concluídas do período
+- Agregar itens por tipo (`peca`, `mao_de_obra`, `servico_terceiro`)
+- Exibir tabela com totais e percentuais
+- Permitir drill-down por tipo de sinistro
+- Calcular ticket médio por categoria
 
 ```text
-┌────────────────────────────────────────────────────────────────────┐
-│                    FECHAMENTO MENSAL                               │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  1. Buscar SINISTROS do período                                    │
-│     └── Status: aprovado, indenizado, pago                         │
-│                                                                    │
-│  2. Para cada sinistro, calcular valor do custo:                   │
-│                                                                    │
-│     ┌─────────────────────────────────────────────────────────┐    │
-│     │  SE tipo_dano = 'perda_total'                           │    │
-│     │  └── valor = sinistro.valor_indenizacao                 │    │
-│     │                                                         │    │
-│     │  SE tipo_dano = 'parcial' (reparo)                      │    │
-│     │  └── valor = SUM(ordens_servico.valor_pago)             │    │
-│     │        WHERE sinistro_id = sinistro.id                  │    │
-│     │        AND status IN ('concluido', 'pago')              │    │
-│     │                                                         │    │
-│     │  FALLBACK (tipo_dano NULL ou indefinido)                │    │
-│     │  └── valor = sinistro.valor_indenizacao                 │    │
-│     │      OU SUM(OS.valor_pago) se existir                   │    │
-│     └─────────────────────────────────────────────────────────┘    │
-│                                                                    │
-│  3. Agrupar despesas por benefício                                 │
-│                                                                    │
-│  4. Inserir em despesas_rateio                                     │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  CUSTOS DE REPAROS - ANÁLISE POR CATEGORIA                         │
+│  Período: Jan/2026 - Dez/2026                                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌────────────┬──────────┬─────────────┬──────────┬─────────────┐   │
+│  │ Categoria  │ Qtd Itens│ Valor Total │ % Total  │ Ticket Médio│   │
+│  ├────────────┼──────────┼─────────────┼──────────┼─────────────┤   │
+│  │ Peças      │ 245      │ R$ 156.780  │ 52,3%    │ R$ 640      │   │
+│  │ Mão de Obra│ 180      │ R$ 89.500   │ 29,9%    │ R$ 497      │   │
+│  │ Serv.Terc. │ 67       │ R$ 53.220   │ 17,8%    │ R$ 794      │   │
+│  ├────────────┼──────────┼─────────────┼──────────┼─────────────┤   │
+│  │ TOTAL      │ 492      │ R$ 299.500  │ 100%     │ R$ 609      │   │
+│  └────────────┴──────────┴─────────────┴──────────┴─────────────┘   │
+│                                                                     │
+│  [===========================] 52,3% Peças                          │
+│  [==================]         29,9% Mão de Obra                     │
+│  [==========]                 17,8% Serviços Terceiros              │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 2. Componente Detalhado: `CustosReparosPorTipoSinistro.tsx`
+
+**Localização:** `src/components/diretoria/CustosReparosPorTipoSinistro.tsx`
+
+**Funcionalidades:**
+- Cruzar custos por tipo de sinistro (colisão, roubo, incêndio, etc.)
+- Mostrar composição de custos para cada tipo
+- Identificar padrões de custo por evento
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│  COMPOSIÇÃO DE CUSTOS POR TIPO DE SINISTRO                              │
+├────────────────┬─────────────┬─────────────┬────────────┬───────────────┤
+│ Tipo Sinistro  │ Peças       │ Mão de Obra │ Serv.Terc. │ Total         │
+├────────────────┼─────────────┼─────────────┼────────────┼───────────────┤
+│ Colisão        │ R$ 98.450   │ R$ 56.200   │ R$ 12.300  │ R$ 166.950    │
+│                │ (59%)       │ (34%)       │ (7%)       │               │
+├────────────────┼─────────────┼─────────────┼────────────┼───────────────┤
+│ Roubo Recup.   │ R$ 45.330   │ R$ 28.100   │ R$ 35.420  │ R$ 108.850    │
+│                │ (42%)       │ (26%)       │ (32%)      │               │
+├────────────────┼─────────────┼─────────────┼────────────┼───────────────┤
+│ Fenôm. Natural │ R$ 12.000   │ R$ 5.200    │ R$ 5.500   │ R$ 22.700     │
+│                │ (53%)       │ (23%)       │ (24%)      │               │
+└────────────────┴─────────────┴─────────────┴────────────┴───────────────┘
+```
+
+### 3. Gráfico de Evolução Mensal: `CustosReparosChart.tsx`
+
+**Localização:** `src/components/diretoria/CustosReparosChart.tsx`
+
+**Funcionalidades:**
+- Gráfico de barras empilhadas (stacked bar chart)
+- Mostrar evolução mensal de cada categoria
+- Linha de tendência do custo total
+
+```text
+          │
+ R$ 50k   │        ▓▓▓
+          │    ▓▓▓ ▓▓▓     ▓▓▓
+ R$ 40k   │    ▓▓▓ ▓▓▓ ▓▓▓ ▓▓▓
+          │▓▓▓ ░░░ ░░░ ░░░ ░░░ ▓▓▓
+ R$ 30k   │▓▓▓ ░░░ ░░░ ░░░ ░░░ ▓▓▓
+          │░░░ ▒▒▒ ▒▒▒ ▒▒▒ ▒▒▒ ░░░
+ R$ 20k   │░░░ ▒▒▒ ▒▒▒ ▒▒▒ ▒▒▒ ░░░
+          │▒▒▒ ▒▒▒ ▒▒▒ ▒▒▒ ▒▒▒ ▒▒▒
+ R$ 10k   │▒▒▒ ▒▒▒ ▒▒▒ ▒▒▒ ▒▒▒ ▒▒▒
+          └─────────────────────────
+           Jan  Fev  Mar  Abr  Mai  Jun
+
+          ▒▒▒ Peças  ░░░ M.O.  ▓▓▓ Serv.Terc.
 ```
 
 ---
 
-## Alterações Técnicas
+## Integração na Página de Indicadores Atuariais
 
-### 1. Modificar Edge Function `fechamento-mensal/index.ts`
+**Arquivo:** `src/pages/diretoria/IndicadoresAtuariais.tsx`
 
-**Localização:** `supabase/functions/fechamento-mensal/index.ts`
+Adicionar nova aba "Custos de Reparos" no componente `Tabs`:
 
-**Alterações:**
+```tsx
+<TabsList>
+  <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
+  <TabsTrigger value="sinistralidade">Sinistralidade</TabsTrigger>
+  <TabsTrigger value="custos-reparos">Custos de Reparos</TabsTrigger>  {/* NOVA */}
+  <TabsTrigger value="crescimento">Crescimento</TabsTrigger>
+  <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
+</TabsList>
+```
 
-#### 1.1 Expandir Query de Sinistros (linhas 102-108)
+---
 
-Adicionar campo `tipo_dano` na seleção e buscar OS vinculadas:
+## Relatório Gerencial para Exportação
+
+**Arquivo:** `src/pages/diretoria/RelatoriosGerenciais.tsx`
+
+Adicionar novo relatório na categoria "Atuarial":
+
+```tsx
+{ 
+  id: 'custos-reparos', 
+  categoria: 'atuarial',
+  titulo: 'Custos de Reparos por Categoria', 
+  descricao: 'Análise de peças, mão de obra e serviços terceiros',
+  icon: Wrench
+},
+```
+
+**Lógica de geração:**
 
 ```typescript
-// ANTES
-const { data: sinistros } = await supabase
-  .from('sinistros')
-  .select('id, tipo, valor_indenizacao, data_ocorrencia, associado_id, veiculo_id')
-  .in('status', ['aprovado', 'indenizado', 'pago'])
-  .gte('data_ocorrencia', inicioMes)
-  .lte('data_ocorrencia', fimMes);
+case 'custos-reparos': {
+  // Buscar itens de OS vinculadas a sinistros do período
+  const { data } = await supabase
+    .from('ordens_servico_itens')
+    .select(`
+      tipo,
+      valor_total,
+      ordem_servico:ordens_servico!inner(
+        sinistro_id,
+        status,
+        created_at
+      )
+    `)
+    .in('ordem_servico.status', ['concluido', 'pago'])
+    .not('ordem_servico.sinistro_id', 'is', null)
+    .gte('ordem_servico.created_at', reportFilters.dataInicio)
+    .lte('ordem_servico.created_at', reportFilters.dataFim + 'T23:59:59');
 
-// DEPOIS
-const { data: sinistros } = await supabase
-  .from('sinistros')
+  // Agrupar por tipo
+  const agrupado = { peca: 0, mao_de_obra: 0, servico_terceiro: 0 };
+  data?.forEach(item => {
+    agrupado[item.tipo] += item.valor_total || 0;
+  });
+
+  const total = Object.values(agrupado).reduce((s, v) => s + v, 0);
+
+  cabecalhos = ['Categoria', 'Valor', '% Total'];
+  dados = [
+    ['Peças', formatCurrency(agrupado.peca), `${((agrupado.peca/total)*100).toFixed(1)}%`],
+    ['Mão de Obra', formatCurrency(agrupado.mao_de_obra), `${((agrupado.mao_de_obra/total)*100).toFixed(1)}%`],
+    ['Serviços Terceiros', formatCurrency(agrupado.servico_terceiro), `${((agrupado.servico_terceiro/total)*100).toFixed(1)}%`],
+    ['TOTAL', formatCurrency(total), '100%'],
+  ];
+  break;
+}
+```
+
+---
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/diretoria/CustosReparosTable.tsx` | **Criar** | Tabela principal com totais por categoria |
+| `src/components/diretoria/CustosReparosPorTipoSinistro.tsx` | **Criar** | Cruzamento custo x tipo sinistro |
+| `src/components/diretoria/CustosReparosChart.tsx` | **Criar** | Gráfico de evolução mensal |
+| `src/components/diretoria/index.ts` | Editar | Exportar novos componentes |
+| `src/pages/diretoria/IndicadoresAtuariais.tsx` | Editar | Adicionar aba "Custos de Reparos" |
+| `src/pages/diretoria/RelatoriosGerenciais.tsx` | Editar | Adicionar relatório exportável |
+
+---
+
+## Fluxo de Dados
+
+```text
+┌─────────────────────┐
+│  ordens_servico     │
+│  (status = pago)    │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐        ┌─────────────────────┐
+│ ordens_servico_itens│───────▶│     sinistros       │
+│  tipo:              │        │  tipo:              │
+│  - peca             │        │  - colisao          │
+│  - mao_de_obra      │        │  - roubo            │
+│  - servico_terceiro │        │  - incendio         │
+└─────────────────────┘        │  - etc.             │
+          │                    └─────────────────────┘
+          ▼
+┌─────────────────────────────────────────────────────┐
+│                    RELATÓRIO                        │
+│                                                     │
+│  ┌────────────┬─────────────┬────────────────────┐  │
+│  │ Por        │ Categoria   │ Por Tipo Sinistro  │  │
+│  │ Período    │ de Custo    │                    │  │
+│  └────────────┴─────────────┴────────────────────┘  │
+│                                                     │
+│  [PDF]  [CSV]  [Gráfico]                           │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## Indicadores Atuariais Derivados
+
+O relatório permitirá calcular métricas importantes:
+
+| Indicador | Fórmula | Uso Atuarial |
+|-----------|---------|--------------|
+| **% Peças** | Peças / Total | Monitorar inflação de autopeças |
+| **% Mão de Obra** | M.O. / Total | Avaliar produtividade oficinas |
+| **Custo Médio Reparo** | Total / Qtd OS | Precificação de cotas |
+| **Ratio Peça/MO** | Peças / M.O. | Comparar com mercado |
+| **Serv.Terc./Total** | Terc. / Total | Avaliar terceirização |
+
+---
+
+## Estrutura Visual da Aba
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│  INDICADORES ATUARIAIS                              [2026 ▼] [🔄]   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │ Visão Geral | Sinistralidade | Custos de Reparos* | ...    │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  RESUMO DE CUSTOS (Ano)                                      │   │
+│  │                                                              │   │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐         │   │
+│  │  │ R$156k  │  │ R$89k   │  │ R$53k   │  │ R$299k  │         │   │
+│  │  │ Peças   │  │ M.O.    │  │ Terc.   │  │ TOTAL   │         │   │
+│  │  │ 52,3%   │  │ 29,9%   │  │ 17,8%   │  │         │         │   │
+│  │  └─────────┘  └─────────┘  └─────────┘  └─────────┘         │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  ┌─────────────────────────┐  ┌─────────────────────────────────┐   │
+│  │  Evolução Mensal        │  │  Composição por Tipo Sinistro   │   │
+│  │  [Gráfico Barras Stack] │  │  [Tabela Detalhada]             │   │
+│  └─────────────────────────┘  └─────────────────────────────────┘   │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  DETALHAMENTO POR OFICINA (Top 10)                           │   │
+│  │  [Tabela com oficina, qtd OS, total peças, total MO, ...]   │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Resumo Técnico
+
+### Query Principal
+
+```typescript
+const { data } = await supabase
+  .from('ordens_servico_itens')
   .select(`
-    id, 
-    tipo, 
-    tipo_dano,
-    valor_indenizacao, 
-    data_ocorrencia, 
-    associado_id, 
-    veiculo_id
+    id,
+    tipo,
+    valor_unitario,
+    quantidade,
+    valor_total,
+    descricao,
+    ordem_servico:ordens_servico!inner(
+      id,
+      numero,
+      status,
+      created_at,
+      sinistro_id,
+      oficina:oficinas(id, nome_fantasia),
+      sinistro:sinistros(id, tipo, tipo_dano)
+    )
   `)
-  .in('status', ['aprovado', 'indenizado', 'pago'])
-  .gte('data_ocorrencia', inicioMes)
-  .lte('data_ocorrencia', fimMes);
+  .in('ordem_servico.status', ['concluido', 'pago', 'aguardando_pagamento'])
+  .not('ordem_servico.sinistro_id', 'is', null)
+  .gte('ordem_servico.created_at', inicioAno)
+  .lte('ordem_servico.created_at', fimAno);
 ```
 
-#### 1.2 Buscar OS Pagas do Período
-
-Adicionar nova query para buscar Ordens de Serviço pagas/concluídas:
+### Agrupamento
 
 ```typescript
-// Buscar OS pagas vinculadas a sinistros do período
-const sinistrosIds = (sinistros || []).map(s => s.id);
+const porCategoria = {
+  peca: { quantidade: 0, valor: 0, itens: 0 },
+  mao_de_obra: { quantidade: 0, valor: 0, itens: 0 },
+  servico_terceiro: { quantidade: 0, valor: 0, itens: 0 },
+};
 
-const { data: ordensServico } = await supabase
-  .from('ordens_servico')
-  .select('id, sinistro_id, valor_pago, status')
-  .in('sinistro_id', sinistrosIds)
-  .in('status', ['concluido', 'pago', 'aguardando_pagamento']);
-
-// Criar mapa de valor pago por sinistro
-const valorPagoPorSinistro: Record<string, number> = {};
-for (const os of (ordensServico || [])) {
-  if (os.sinistro_id && os.valor_pago) {
-    valorPagoPorSinistro[os.sinistro_id] = 
-      (valorPagoPorSinistro[os.sinistro_id] || 0) + os.valor_pago;
-  }
-}
+data?.forEach(item => {
+  const tipo = item.tipo;
+  porCategoria[tipo].valor += item.valor_total || 0;
+  porCategoria[tipo].quantidade += item.quantidade || 0;
+  porCategoria[tipo].itens += 1;
+});
 ```
-
-#### 1.3 Modificar Lógica de Cálculo de Despesas (linhas 123-130)
-
-Usar valor apropriado baseado no tipo_dano:
-
-```typescript
-// ANTES
-for (const sinistro of (sinistros || [])) {
-  const beneficio = SINISTRO_PARA_BENEFICIO[sinistro.tipo];
-  if (beneficio && despesasPorBeneficio[beneficio]) {
-    despesasPorBeneficio[beneficio].valor += sinistro.valor_indenizacao || 0;
-    // ...
-  }
-}
-
-// DEPOIS
-for (const sinistro of (sinistros || [])) {
-  const beneficio = SINISTRO_PARA_BENEFICIO[sinistro.tipo];
-  if (beneficio && despesasPorBeneficio[beneficio]) {
-    // Determinar valor do custo baseado no tipo de dano
-    let valorCusto = 0;
-    
-    if (sinistro.tipo_dano === 'perda_total') {
-      // Perda total: usar valor de indenização
-      valorCusto = sinistro.valor_indenizacao || 0;
-    } else if (sinistro.tipo_dano === 'parcial') {
-      // Dano parcial: priorizar valor pago das OS
-      valorCusto = valorPagoPorSinistro[sinistro.id] || sinistro.valor_indenizacao || 0;
-    } else {
-      // Fallback: verificar se há OS paga, senão usar valor_indenizacao
-      valorCusto = valorPagoPorSinistro[sinistro.id] || sinistro.valor_indenizacao || 0;
-    }
-    
-    despesasPorBeneficio[beneficio].valor += valorCusto;
-    despesasPorBeneficio[beneficio].quantidade += 1;
-    despesasPorBeneficio[beneficio].sinistros_ids.push(sinistro.id);
-  }
-}
-```
-
----
-
-### 2. Adicionar Logging Detalhado
-
-Para auditoria e debug:
-
-```typescript
-console.log(`[fechamento-mensal] Sinistro ${sinistro.id}: tipo=${sinistro.tipo}, tipo_dano=${sinistro.tipo_dano}, valor_indenizacao=${sinistro.valor_indenizacao}, valor_os=${valorPagoPorSinistro[sinistro.id] || 0}, valor_usado=${valorCusto}`);
-```
-
----
-
-### 3. Atualizar Resumo da Resposta
-
-Incluir detalhamento de fontes de custo:
-
-```typescript
-resumo: {
-  // campos existentes...
-  custos_detalhados: {
-    indenizacoes: totalIndenizacoes,
-    reparos_oficina: totalReparos,
-    total: totalDespesasRateio,
-  }
-}
-```
-
----
-
-## Interface para Incluir Custos de OS na Tabela `despesas_rateio`
-
-Considerar adicionar campos para rastreabilidade:
-
-```sql
--- Opcional: adicionar coluna para guardar IDs das OS incluídas
-ALTER TABLE despesas_rateio 
-ADD COLUMN IF NOT EXISTS ordens_servico_ids UUID[] DEFAULT '{}';
-```
-
----
-
-## Resumo das Alterações
-
-| Arquivo | Linha(s) | Alteração |
-|---------|----------|-----------|
-| `fechamento-mensal/index.ts` | 102-108 | Adicionar `tipo_dano` na query |
-| `fechamento-mensal/index.ts` | 109+ | Nova query para buscar OS pagas |
-| `fechamento-mensal/index.ts` | 123-130 | Lógica condicional para determinar valor do custo |
-| `fechamento-mensal/index.ts` | 227-238 | Adicionar detalhamento no resumo |
-
----
-
-## Fluxo de Decisão do Valor
-
-```text
-                    SINISTRO
-                        │
-                        ▼
-              ┌─────────────────┐
-              │   tipo_dano?    │
-              └────────┬────────┘
-                       │
-        ┌──────────────┼──────────────┐
-        │              │              │
-        ▼              ▼              ▼
-  'perda_total'    'parcial'     NULL/undefined
-        │              │              │
-        ▼              ▼              ▼
-┌───────────────┐ ┌──────────────┐ ┌──────────────┐
-│ valor =       │ │ Buscar OS    │ │ Verificar se │
-│ valor_        │ │ vinculadas   │ │ existe OS    │
-│ indenizacao   │ │ ao sinistro  │ │ vinculada    │
-└───────────────┘ └──────┬───────┘ └──────┬───────┘
-                         │                │
-                         ▼                ▼
-                  ┌─────────────┐  ┌─────────────┐
-                  │ valor =     │  │ Sim: usar   │
-                  │ SUM(OS.     │  │ OS.valor_   │
-                  │ valor_pago) │  │ pago        │
-                  └─────────────┘  │ Não: usar   │
-                                   │ valor_      │
-                                   │ indenizacao │
-                                   └─────────────┘
-```
-
----
-
-## Validação
-
-Após implementação:
-
-1. Criar um sinistro de teste com `tipo_dano = 'parcial'`
-2. Vincular uma OS paga a esse sinistro
-3. Executar fechamento mensal
-4. Verificar se o valor da OS aparece nas despesas do rateio
-5. Comparar com comportamento anterior (deveria usar valor_indenizacao)
