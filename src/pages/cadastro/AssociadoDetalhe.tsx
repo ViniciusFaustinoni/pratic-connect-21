@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Phone, Mail, MessageCircle, MapPin, Calendar, User, Car, 
   FileCheck, FileText, Clock, Edit, AlertTriangle, Loader2,
   Receipt, MoreHorizontal, CheckCircle, XCircle, Pause, Play, Plus,
   CreditCard, Shield, Eye, ExternalLink, Wifi, WifiOff, Send, History,
-  TrendingUp, DollarSign, Camera, Image, Radio, RefreshCw, MessagesSquare
+  TrendingUp, DollarSign, Camera, Image, Radio, RefreshCw, MessagesSquare, Map
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +42,8 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import {
   Tooltip,
@@ -49,6 +51,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { 
   STATUS_ASSOCIADO_LABELS, 
   STATUS_VEICULO_LABELS,
@@ -70,7 +75,17 @@ import { VeiculoEditDialog } from '@/components/veiculos/VeiculoEditDialog';
 import { useAtivarRastreadorPlataforma } from '@/hooks/useVistoriaCompletaAnalise';
 import { useStatusClienteRedeVeiculos, useSincronizarStatusRedeVeiculos, getStatusPlataformaLabel, getStatusSincronizacaoCor } from '@/hooks/useRedeVeiculosStatus';
 import { HistoricoConversaWhatsApp } from '@/components/whatsapp/HistoricoConversaWhatsApp';
+import { atualizarCoordenadasAssociado } from '@/services/geocodingService';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+
+// Fix Leaflet default marker icon
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
 
 // ============================================
 // UTILITÁRIOS
@@ -230,6 +245,11 @@ export default function AssociadoDetalhe() {
   const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string }>({ open: false, url: '', tipo: '' });
   const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
   const [veiculoEditar, setVeiculoEditar] = useState<typeof veiculos extends (infer T)[] ? T : never | null>(null);
+  
+  // Estado do modal de mapa
+  const [mapaModalOpen, setMapaModalOpen] = useState(false);
+  const [coordenadas, setCoordenadas] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
+  const [geocodificando, setGeocodificando] = useState(false);
 
   // Data fetching
   const { data: associado, isLoading, refetch } = useAssociado(id);
@@ -273,6 +293,16 @@ export default function AssociadoDetalhe() {
   // Status na plataforma Rede Veículos
   const { data: statusPlataforma, isLoading: isLoadingStatusPlataforma, refetch: refetchStatusPlataforma } = useStatusClienteRedeVeiculos(id);
   const sincronizarStatusMutation = useSincronizarStatusRedeVeiculos();
+  
+  // Sincronizar coordenadas quando associado carregar
+  useEffect(() => {
+    if (associado) {
+      setCoordenadas({
+        lat: associado.endereco_latitude,
+        lng: associado.endereco_longitude
+      });
+    }
+  }, [associado]);
 
   // Handlers
   const handleWhatsApp = () => {
@@ -283,6 +313,36 @@ export default function AssociadoDetalhe() {
   const handleEmail = () => {
     if (!associado?.email) return;
     window.open(`mailto:${associado.email}`, '_blank');
+  };
+  
+  const handleAbrirMapa = async () => {
+    if (!associado) return;
+    
+    // Se já tem coordenadas, abrir diretamente
+    if (coordenadas.lat && coordenadas.lng) {
+      setMapaModalOpen(true);
+      return;
+    }
+
+    // Se não tem, geocodificar primeiro
+    setGeocodificando(true);
+    const result = await atualizarCoordenadasAssociado(id!, {
+      logradouro: associado.logradouro,
+      numero: associado.numero,
+      bairro: associado.bairro,
+      cidade: associado.cidade,
+      uf: associado.uf,
+      cep: associado.cep,
+    });
+    setGeocodificando(false);
+
+    if (result.success && result.latitude && result.longitude) {
+      setCoordenadas({ lat: result.latitude, lng: result.longitude });
+      setMapaModalOpen(true);
+      refetch(); // Atualizar dados do associado
+    } else {
+      toast.error('Não foi possível localizar o endereço no mapa');
+    }
   };
 
   const handleSuspender = () => {
@@ -484,6 +544,18 @@ export default function AssociadoDetalhe() {
                 <DollarSign className="mr-2 h-4 w-4" /> Financeiro
               </Button>
               
+              <Button 
+                variant="outline" 
+                onClick={handleAbrirMapa}
+                disabled={geocodificando || !associado.logradouro}
+              >
+                {geocodificando ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Map className="mr-2 h-4 w-4" />
+                )}
+                Abrir no Mapa
+              </Button>
               {status === 'ativo' && (
                 <Button variant="outline" className="text-yellow-600" onClick={() => setSuspenderDialogOpen(true)}>
                   <Pause className="mr-2 h-4 w-4" /> Suspender
@@ -1489,6 +1561,48 @@ export default function AssociadoDetalhe() {
         onClose={() => setVeiculoEditar(null)}
         veiculo={veiculoEditar}
       />
+
+      {/* MODAL MAPA DO ASSOCIADO */}
+      <Dialog open={mapaModalOpen} onOpenChange={setMapaModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Localização - {associado.nome}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {coordenadas.lat && coordenadas.lng && (
+            <div className="h-[400px] rounded-lg overflow-hidden">
+              <MapContainer
+                center={[coordenadas.lat, coordenadas.lng]}
+                zoom={16}
+                className="h-full w-full"
+              >
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                />
+                <Marker position={[coordenadas.lat, coordenadas.lng]}>
+                  <Popup>
+                    <div className="text-center">
+                      <strong>{associado.nome}</strong>
+                      <p className="text-xs mt-1">
+                        {associado.logradouro}, {associado.numero}<br/>
+                        {associado.bairro} - {associado.cidade}/{associado.uf}
+                      </p>
+                    </div>
+                  </Popup>
+                </Marker>
+              </MapContainer>
+            </div>
+          )}
+          
+          <p className="text-sm text-muted-foreground text-center">
+            📍 {associado.logradouro}, {associado.numero} - {associado.bairro}, {associado.cidade}/{associado.uf}
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
