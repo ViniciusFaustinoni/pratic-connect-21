@@ -79,6 +79,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useVeiculosComRastreador, getStatusComunicacaoBadgeClass, getStatusComunicacaoLabel } from '@/hooks/useVeiculosComRastreador';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
+import { SuspenderAssociadoDialog } from '@/components/associados/SuspenderAssociadoDialog';
+import { AssociadoSuspensoAlert } from '@/components/associados/AssociadoSuspensoAlert';
 
 // ============================================
 // UTILITÁRIOS
@@ -318,10 +320,9 @@ export default function AssociadoDetalhe() {
     }
   };
 
-  const handleSuspender = () => {
+  const handleSuspender = (motivo: string) => {
     if (!id) return;
-    suspenderAssociado({ id });
-    setSuspenderDialogOpen(false);
+    suspenderAssociado({ id, motivo });
   };
 
   const handleReativar = () => {
@@ -437,6 +438,14 @@ export default function AssociadoDetalhe() {
       <Button variant="ghost" size="sm" onClick={() => navigate('/cadastro/associados')}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
       </Button>
+
+      {/* BANNER DE ALERTA - ASSOCIADO SUSPENSO */}
+      {status === 'suspenso' && (
+        <AssociadoSuspensoAlert 
+          motivo={associado.motivo_bloqueio}
+          dataBloqueio={associado.data_bloqueio}
+        />
+      )}
 
       {/* HEADER CARD */}
       <Card>
@@ -1475,22 +1484,13 @@ export default function AssociadoDetalhe() {
       {/* ============================================ */}
       {/* DIALOGS */}
       {/* ============================================ */}
-      <AlertDialog open={suspenderDialogOpen} onOpenChange={setSuspenderDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Suspender Associado</AlertDialogTitle>
-            <AlertDialogDescription>
-              Suspender <strong>{associado.nome}</strong>? O associado perderá acesso aos benefícios até ser reativado.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSuspender} className="bg-yellow-600 hover:bg-yellow-700">
-              {isSuspendendo ? 'Suspendendo...' : 'Suspender'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <SuspenderAssociadoDialog
+        open={suspenderDialogOpen}
+        onClose={() => setSuspenderDialogOpen(false)}
+        associadoNome={associado.nome}
+        onConfirm={handleSuspender}
+        isLoading={isSuspendendo}
+      />
 
       <AlertDialog open={cancelarDialogOpen} onOpenChange={setCancelarDialogOpen}>
         <AlertDialogContent>
