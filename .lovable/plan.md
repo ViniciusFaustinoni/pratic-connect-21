@@ -1,205 +1,103 @@
 
-# Correção: Persistência de CHASSI e RENAVAM do CRLV
+# Correção do Veículo e Envio ao SGA
 
-## Diagnóstico Confirmado
+## Dados Extraídos do CRLV Enviado
 
-O OCR do CRLV extrai corretamente CHASSI e RENAVAM, mas esses dados **não estão sendo persistidos** porque:
+| Campo | Valor Extraído |
+|-------|----------------|
+| **CHASSI** | `9BRBD48E6E2617010` |
+| **RENAVAM** | `00543591115` |
+| **MOTOR** | `M155966` |
+| **PLACA** | `LTB4J74` (já correto no sistema) |
 
-1. A tabela `cotacoes` não tem os campos `veiculo_chassi` e `veiculo_renavam`
-2. A edge function `contrato-gerar` cria o veículo sem esses campos
-3. O `UnifiedDocumentUploader` só atualiza veículo se tiver `veiculoId` (que não existe nesse momento do fluxo)
+## Situação Atual do Veículo
 
-## Arquitetura da Solução
-
-```
-FLUXO ATUAL (quebrado):
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  Upload     │    │  OCR        │    │  Estado     │    │  contrato-  │
-│  CRLV       │───▶│  Extrai     │───▶│  Local      │    │  gerar      │
-│             │    │  Dados      │    │  (perdido)  │    │  (sem dados)│
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-
-FLUXO CORRIGIDO:
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  Upload     │    │  OCR        │    │  Salvar na  │    │  contrato-  │
-│  CRLV       │───▶│  Extrai     │───▶│  Cotação    │───▶│  gerar      │
-│             │    │  Dados      │    │  (banco)    │    │  (com dados)│
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-                                            │
-                                            ▼
-                                     ┌─────────────┐
-                                     │  Veículo    │
-                                     │  criado com │
-                                     │  chassi e   │
-                                     │  renavam    │
-                                     └─────────────┘
-```
+| Campo | Valor no Sistema | Status |
+|-------|------------------|--------|
+| CHASSI | `null` | ❌ Não preenchido |
+| RENAVAM | `null` | ❌ Não preenchido |
+| status_sga | `erro_sincronizacao` | ⚠️ Falhou anteriormente |
 
 ---
 
-## Etapa 1: Adicionar Campos na Tabela `cotacoes`
+## Ações a Executar
 
-Criar migration para adicionar os campos necessários.
+### 1. Atualizar Veículo no Banco
+Executar UPDATE para preencher os dados faltantes:
 
-**SQL:**
 ```sql
-ALTER TABLE cotacoes 
-ADD COLUMN IF NOT EXISTS veiculo_chassi VARCHAR(17),
-ADD COLUMN IF NOT EXISTS veiculo_renavam VARCHAR(11);
-
-COMMENT ON COLUMN cotacoes.veiculo_chassi IS 'Chassi extraído do CRLV via OCR';
-COMMENT ON COLUMN cotacoes.veiculo_renavam IS 'Renavam extraído do CRLV via OCR';
+UPDATE veiculos 
+SET 
+  chassi = '9BRBD48E6E2617010',
+  renavam = '00543591115',
+  status_sga = 'pendente'
+WHERE id = 'f6c176c6-15ef-4868-9178-573d0d4961a5';
 ```
+
+### 2. Chamar Edge Function para Enviar Apenas o Veículo
+Como o associado já existe no SGA (codigo_associado: **28780**), será necessário:
+
+1. Chamar a edge function `sga-hinova-sync` com modo especial para enviar apenas o veículo
+2. OU usar diretamente o endpoint `/veiculo/cadastrar` da API Hinova
 
 ---
 
-## Etapa 2: Persistir Dados do OCR na Cotação
+## Detalhes Técnicos
 
-**Arquivo:** `src/hooks/useCotacaoContratacao.ts`
+### Veículo ID
+`f6c176c6-15ef-4868-9178-573d0d4961a5`
 
-Modificar a mutation `salvarDadosPessoais` para incluir os dados do veículo:
+### Associado no SGA
+O associado **MARCUS VINICIUS FAUSTINONI DE FREITAS** já está cadastrado no SGA com código **28780**.
 
-```typescript
-const salvarDadosPessoais = useMutation({
-  mutationFn: async (dados: DadosPessoaisForm) => {
-    // ... código existente ...
-    
-    const { error } = await publicSupabase
-      .from('cotacoes')
-      .update({
-        // ... campos existentes ...
-        
-        // NOVO: Dados do veículo extraídos do CRLV
-        veiculo_chassi: dados.veiculo_chassi || null,
-        veiculo_renavam: dados.veiculo_renavam || null,
-      })
-      .eq('id', cotacao.id);
-```
+### Payload para API Hinova `/veiculo/cadastrar`
 
-**Arquivo:** `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`
-
-Modificar o `handleSubmit` para incluir os dados do veículo:
-
-```typescript
-const handleSubmit = () => {
-  const dados: DadosPessoaisForm = {
-    // ... campos existentes ...
-    
-    // NOVO: Incluir dados do veículo
-    veiculo_chassi: dadosExtraidos.veiculo_chassi,
-    veiculo_renavam: dadosExtraidos.veiculo_renavam,
-  };
-  onSubmit(dados);
-};
-```
-
----
-
-## Etapa 3: Usar Dados na Criação do Veículo
-
-**Arquivo:** `supabase/functions/contrato-gerar/index.ts`
-
-Modificar a criação do veículo para incluir chassi e renavam:
-
-```typescript
-// Linha ~318 - Criar VEÍCULO vinculado ao novo associado
-const { data: novoVeiculo, error: veiculoError } = await supabase
-  .from('veiculos')
-  .insert({
-    associado_id: associadoId,
-    placa: cotacao.veiculo_placa,
-    marca: cotacao.veiculo_marca,
-    modelo: cotacao.veiculo_modelo,
-    ano_fabricacao: cotacao.veiculo_ano,
-    ano_modelo: cotacao.veiculo_ano,
-    cor: cotacao.veiculo_cor || null,
-    valor_fipe: cotacao.valor_fipe || null,
-    codigo_fipe: cotacao.codigo_fipe || null,
-    // NOVO: Dados obrigatórios para SGA Hinova
-    chassi: cotacao.veiculo_chassi || null,
-    renavam: cotacao.veiculo_renavam || null,
-    status: 'em_analise',
-    cobertura_roubo_furto: false,
-    cobertura_total: false,
-  })
-```
-
-Aplicar a mesma correção nas outras 3 inserções de veículo na função (linhas ~200, ~253, ~318).
-
----
-
-## Etapa 4: Atualizar Tipo do Formulário
-
-**Arquivo:** `src/types/cotacaoPublica.ts` ou tipo inline
-
-Adicionar os campos ao tipo `DadosPessoaisForm`:
-
-```typescript
-interface DadosPessoaisForm {
-  // ... campos existentes ...
-  
-  // Dados do veículo (CRLV)
-  veiculo_chassi?: string;
-  veiculo_renavam?: string;
+```json
+{
+  "codigo_associado": 28780,
+  "placa": "LTB4J74",
+  "chassi": "9BRBD48E6E2617010",
+  "renavam": "00543591115",
+  "numero_motor": "M155966",
+  "ano_fabricacao": 2013,
+  "ano_modelo": 2014,
+  "codigo_tipo_veiculo": 1,
+  "codigo_combustivel": 3,
+  "codigo_cor": 6,
+  "dia_vencimento": 10,
+  "kilometragem": 0,
+  "codigo_voluntario": [configurado]
 }
 ```
 
 ---
 
-## Resumo das Alterações
+## Arquivos a Modificar
 
-| Arquivo | Modificação |
-|---------|-------------|
-| `supabase/migrations/xxx.sql` | Adicionar colunas `veiculo_chassi` e `veiculo_renavam` na tabela `cotacoes` |
-| `src/hooks/useCotacaoContratacao.ts` | Persistir dados do veículo ao salvar dados pessoais |
-| `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` | Incluir dados do veículo no submit |
-| `supabase/functions/contrato-gerar/index.ts` | Usar `chassi` e `renavam` da cotação ao criar veículo |
-| `src/types/cotacaoPublica.ts` | Adicionar campos ao tipo (se aplicável) |
+| Tipo | Ação |
+|------|------|
+| Banco de dados | UPDATE do veículo com chassi e renavam |
+| Edge Function `sga-hinova-sync` | Verificar se precisa ajuste para reenvio de veículo quando associado já existe |
 
 ---
 
-## Fluxo de Dados Corrigido
+## Fluxo de Reenvio
 
 ```
-1. Upload CRLV
-      │
-      ▼
-2. OCR extrai: chassi, renavam, placa
-      │
-      ▼
-3. Frontend armazena em dadosExtraidos
-      │
-      ▼
-4. Usuário clica "Avançar"
-      │
-      ▼
-5. salvarDadosPessoais persiste na cotação:
-   - veiculo_chassi
-   - veiculo_renavam
-      │
-      ▼
-6. contrato-gerar lê da cotação
-      │
-      ▼
-7. Veículo criado com chassi e renavam
-      │
-      ▼
-8. SGA Sync funciona corretamente ✓
+1. Atualizar veículo no banco
+         │
+         ▼
+2. Verificar se associado já tem codigo_hinova
+         │
+         ▼
+3. Se sim, usar codigo_associado existente
+         │
+         ▼
+4. Chamar API Hinova /veiculo/cadastrar
+         │
+         ▼
+5. Salvar codigo_veiculo_hinova no banco
+         │
+         ▼
+6. Marcar sincronizado_hinova = true ✓
 ```
-
----
-
-## Caso Imediato do Associado MARCUS VINICIUS
-
-Após implementar as correções, será necessário atualizar manualmente o veículo existente:
-
-```sql
-UPDATE veiculos 
-SET 
-  chassi = 'EXTRAIR_DO_CRLV',
-  renavam = 'EXTRAIR_DO_CRLV',
-  status_sga = 'pendente'
-WHERE id = 'f6c176c6-15ef-4868-9178-573d0d4961a5';
-```
-
-Depois, clicar em "Enviar para SGA" novamente para reprocessar.
