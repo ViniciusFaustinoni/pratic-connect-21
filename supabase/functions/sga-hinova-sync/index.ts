@@ -742,7 +742,23 @@ serve(async (req) => {
       );
     }
 
+    // VALIDAÇÃO: Código Voluntário é obrigatório para cadastrar veículos no Hinova
+    if (!hinovaCodigoVoluntario) {
+      await logSync(veiculo_id, associado_id, 'validar_config', 'error', null, null, 'Código Voluntário não configurado');
+      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Código Voluntário é obrigatório para sincronização com SGA. Configure em Configurações > Integrações > SGA Hinova.',
+          step: 'validacao_config',
+          campo_faltante: 'codigo_voluntario'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
+    console.log(`[SGA Sync] codigo_voluntario configurado: ${hinovaCodigoVoluntario}`);
 
     // Payload SEM credenciais - autenticação já está no header com token_usuario
     const veiculoPayload = {
@@ -761,7 +777,7 @@ serve(async (req) => {
       codigo_cor: getMapeamento('cor', veiculo.cor),
       codigo_combustivel: getMapeamento('combustivel', veiculo.combustivel),
       codigo_tipo_veiculo: getMapeamento('tipo_veiculo', veiculo.tipo) || 1,
-      ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
+      codigo_voluntario: parseInt(hinovaCodigoVoluntario), // OBRIGATÓRIO
       ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
     };
 
