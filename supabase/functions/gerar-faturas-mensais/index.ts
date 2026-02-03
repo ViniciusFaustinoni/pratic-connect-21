@@ -125,6 +125,9 @@ serve(async (req) => {
           valor_fipe,
           cobertura_total,
           cobertura_roubo_furto,
+          cobertura_vidros,
+          cobertura_terceiros,
+          cobertura_assistencia,
           faixas_cotas:faixa_cota_id (
             id,
             quantidade_cotas,
@@ -204,15 +207,22 @@ serve(async (req) => {
         // Calcular composição da fatura
         const proRata = calcularProRata(associado.data_adesao, fechamento.mes, fechamento.ano);
         
+        // Calcular composição da fatura verificando cobertura específica de cada benefício
         const composicao: ComposicaoFatura = {
           taxa_administrativa: getTaxaAdministrativa(valorFipe),
+          // Colisão e incêndio requerem cobertura total
           rateio_colisao: veiculo.cobertura_total ? (valorPorCotaBeneficio['colisao'] || 0) * cotas : 0,
+          rateio_incendio: veiculo.cobertura_total ? (valorPorCotaBeneficio['incendio'] || 0) * cotas : 0,
+          // Roubo/furto: cobertura específica OU cobertura total
           rateio_roubo_furto: (veiculo.cobertura_roubo_furto || veiculo.cobertura_total) 
             ? (valorPorCotaBeneficio['roubo_furto'] || 0) * cotas : 0,
-          rateio_incendio: veiculo.cobertura_total ? (valorPorCotaBeneficio['incendio'] || 0) * cotas : 0,
-          rateio_vidros: veiculo.cobertura_total ? (valorPorCotaBeneficio['vidros'] || 0) * cotas : 0,
-          rateio_terceiros: veiculo.cobertura_total ? (valorPorCotaBeneficio['terceiros'] || 0) * cotas : 0,
-          rateio_assistencia: (valorPorCotaBeneficio['assistencia'] || 0) * cotas,
+          // Vidros: cobertura específica (não depende de cobertura_total)
+          rateio_vidros: veiculo.cobertura_vidros ? (valorPorCotaBeneficio['vidros'] || 0) * cotas : 0,
+          // Terceiros: cobertura específica (não depende de cobertura_total)
+          rateio_terceiros: veiculo.cobertura_terceiros ? (valorPorCotaBeneficio['terceiros'] || 0) * cotas : 0,
+          // Assistência 24h: cobertura específica (true por padrão)
+          rateio_assistencia: veiculo.cobertura_assistencia !== false 
+            ? (valorPorCotaBeneficio['assistencia'] || 0) * cotas : 0,
           adicionais: 0, // TODO: buscar adicionais do contrato (rastreador, etc)
           adicionais_detalhes: {},
           fator_prorata: proRata,
