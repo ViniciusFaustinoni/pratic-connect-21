@@ -10,7 +10,7 @@ import {
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle, AlertTriangle,
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
-  Bot, Wrench, Radio, Lock
+  Bot, Wrench, Radio, Lock, Navigation
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteSinistro } from '@/hooks/useSinistros';
@@ -25,6 +25,8 @@ import { AcionarRecuperacaoModal } from '@/components/sinistros/AcionarRecuperac
 import { CardAcionamentoRoubo } from '@/components/sinistros/CardAcionamentoRoubo';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
+import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -121,6 +123,7 @@ export default function SinistroDetalhe() {
   const [modalConversaOpen, setModalConversaOpen] = useState(false);
   const [modalSolicitarDocsOpen, setModalSolicitarDocsOpen] = useState(false);
   const [modalAcionamentoOpen, setModalAcionamentoOpen] = useState(false);
+  const [mapaLocalizacaoOpen, setMapaLocalizacaoOpen] = useState(false);
   const { isDiretor } = usePermissions();
   const deleteSinistro = useDeleteSinistro();
 
@@ -239,7 +242,25 @@ export default function SinistroDetalhe() {
     enabled: !!sinistro?.associado_id && !!solicitacaoIA,
   });
 
-  // Extrair descrição original do cliente das mensagens
+  // Query para buscar rastreador do veículo (roubo/furto)
+  const { data: rastreadorVeiculo } = useQuery({
+    queryKey: ['sinistro-rastreador-veiculo', sinistro?.veiculo_id],
+    queryFn: async () => {
+      if (!sinistro?.veiculo_id) return null;
+      
+      const { data, error } = await supabase
+        .from('rastreadores')
+        .select('id, codigo, status, ultima_posicao_lat, ultima_posicao_lng')
+        .eq('veiculo_id', sinistro.veiculo_id)
+        .eq('status', 'instalado')
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!sinistro?.veiculo_id && ['roubo', 'furto'].includes(sinistro?.tipo || ''),
+  });
+
   const descricaoCliente = useMemo(() => {
     if (!mensagensChat || mensagensChat.length === 0) return null;
     
@@ -840,6 +861,22 @@ export default function SinistroDetalhe() {
             />
           )}
 
+          {/* Botão Abrir Localização - para roubo/furto com rastreador */}
+          {['roubo', 'furto'].includes(sinistro.tipo) && rastreadorVeiculo && (
+            <Card>
+              <CardContent className="pt-6">
+                <Button 
+                  onClick={() => setMapaLocalizacaoOpen(true)}
+                  className="w-full gap-2"
+                  variant="outline"
+                >
+                  <Navigation className="h-4 w-4" />
+                  Abrir Localização do Veículo
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Card Comparação de Posições GPS */}
           <ComparacaoPosicoes
             latitudeInformada={sinistro.latitude_informada}
@@ -1020,6 +1057,25 @@ export default function SinistroDetalhe() {
           }}
         />
       )}
+
+      {/* Modal Localização do Veículo (Roubo/Furto) */}
+      <Dialog open={mapaLocalizacaoOpen} onOpenChange={setMapaLocalizacaoOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Navigation className="h-5 w-5" />
+              Localização do Veículo - {sinistro?.veiculo?.placa}
+            </DialogTitle>
+          </DialogHeader>
+          {rastreadorVeiculo && (
+            <MapaRastreador
+              rastreadorId={rastreadorVeiculo.id}
+              altura="450px"
+              mostrarControles={true}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
