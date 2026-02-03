@@ -58,6 +58,9 @@ async function getSoftruckTokenComRetry(
 /**
  * Busca posição do rastreador na Softruck com retry em erro 401
  */
+// Função de delay para retry
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 // deno-lint-ignore no-explicit-any
 async function getPosicaoSoftruckComRetry(
   supabase: any,
@@ -66,9 +69,10 @@ async function getPosicaoSoftruckComRetry(
   vehicleId: string,
   deviceId: string,
   baseUrl: string,
-  maxRetries = 2
+  maxRetries = 3 // Aumentado para 3 tentativas
 ): Promise<PosicaoResponse> {
   let tokenRenovado = false;
+  let lastError: Error | null = null;
   
   for (let tentativa = 1; tentativa <= maxRetries; tentativa++) {
     try {
@@ -95,15 +99,32 @@ async function getPosicaoSoftruckComRetry(
       // Erro 401 - tentar renovar token
       if (response.status === 401) {
         console.warn(`[Softruck] Erro 401 na tentativa ${tentativa}/${maxRetries}`);
+        await response.text(); // Consumir body
         
         if (tentativa < maxRetries) {
           console.log('[Softruck] Forçando renovação de token...');
           tokenRenovado = true;
+          await delay(500); // Pequeno delay antes de retry
           continue;
         }
         
+        throw new Error(`Token inválido após ${maxRetries} tentativas`);
+      }
+
+      // Erro 503 - serviço temporariamente indisponível, tentar novamente
+      if (response.status === 503 || response.status === 502 || response.status === 504) {
         const errorText = await response.text();
-        throw new Error(`Token inválido após ${maxRetries} tentativas: ${errorText}`);
+        console.warn(`[Softruck] Erro ${response.status} na tentativa ${tentativa}/${maxRetries}: API temporariamente indisponível`);
+        lastError = new Error(`API Softruck temporariamente indisponível (${response.status})`);
+        
+        if (tentativa < maxRetries) {
+          const delayMs = tentativa * 1000; // Backoff: 1s, 2s, 3s
+          console.log(`[Softruck] Aguardando ${delayMs}ms antes de nova tentativa...`);
+          await delay(delayMs);
+          continue;
+        }
+        
+        throw lastError;
       }
 
       if (!response.ok) {
