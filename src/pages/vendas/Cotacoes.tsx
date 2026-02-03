@@ -1,14 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search, FileText, Send, Check, X, Loader2, MessageCircle, FileDown, Mail, FileSignature, Eye, Link2, Copy, Trash2, MoreHorizontal, Car, Calendar as CalendarIcon, User, Phone, RefreshCw, Clock, CheckCircle, TrendingUp, CalendarDays } from 'lucide-react';
-import { formatDistanceToNow, format, startOfDay, endOfDay, isSameDay } from 'date-fns';
+import { Plus, Search, FileText, Send, Check, Loader2, CheckCircle, TrendingUp, Calendar as CalendarIcon, User, RefreshCw, CalendarDays } from 'lucide-react';
+import { formatDistanceToNow, format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -16,13 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +30,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import type { StatusCotacao } from '@/types/database';
 import { useCotacoes, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,14 +41,13 @@ import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { gerarPdfCotacao, gerarPdfCotacaoComparativa, type PlanoParaPdf, type CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
-import { CotacaoCard, type CotacaoCardPermissions } from '@/components/cotacoes/CotacaoCard';
+import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
+import { CotacaoDetalhesModal } from '@/components/cotacoes/CotacaoDetalhesModal';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
-
-type StatusCotacaoExtended = StatusCotacao | 'visualizada';
 
 // Mapeamento de coberturas para categorias
 const CATEGORIAS_BENEFICIOS: Record<string, 'cobertura' | 'assistencia' | 'extra'> = {
@@ -109,9 +98,8 @@ const categorizarBeneficios = (coberturas: string[]) => {
   
   coberturas.forEach(cob => {
     const cobLower = cob.toLowerCase();
-    let categoriaEncontrada: 'cobertura' | 'assistencia' | 'extra' = 'cobertura'; // default
+    let categoriaEncontrada: 'cobertura' | 'assistencia' | 'extra' = 'cobertura';
     
-    // Buscar categoria pelo mapeamento usando includes
     for (const [termo, cat] of Object.entries(CATEGORIAS_BENEFICIOS)) {
       if (cobLower.includes(termo)) {
         categoriaEncontrada = cat;
@@ -119,7 +107,6 @@ const categorizarBeneficios = (coberturas: string[]) => {
       }
     }
     
-    // Adicionar à categoria correta
     if (categoriaEncontrada === 'cobertura') {
       resultado.coberturas.push(cob);
     } else if (categoriaEncontrada === 'assistencia') {
@@ -130,57 +117,6 @@ const categorizarBeneficios = (coberturas: string[]) => {
   });
   
   return resultado;
-};
-
-const statusConfig: Record<StatusCotacaoExtended, { 
-  label: string; 
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  icon: typeof FileText 
-}> = {
-  rascunho: { 
-    label: 'Rascunho', 
-    color: 'text-yellow-600 dark:text-yellow-400', 
-    bgColor: 'bg-yellow-500/20',
-    borderColor: 'border-l-yellow-500',
-    icon: FileText 
-  },
-  enviada: { 
-    label: 'Enviada', 
-    color: 'text-blue-600 dark:text-blue-400', 
-    bgColor: 'bg-blue-500/20',
-    borderColor: 'border-l-blue-500',
-    icon: Send 
-  },
-  visualizada: { 
-    label: 'Visualizada', 
-    color: 'text-cyan-600 dark:text-cyan-400', 
-    bgColor: 'bg-cyan-500/20',
-    borderColor: 'border-l-cyan-500',
-    icon: Eye 
-  },
-  aceita: { 
-    label: 'Aceita', 
-    color: 'text-green-600 dark:text-green-400', 
-    bgColor: 'bg-green-500/20',
-    borderColor: 'border-l-green-500',
-    icon: Check 
-  },
-  recusada: { 
-    label: 'Recusada', 
-    color: 'text-red-600 dark:text-red-400', 
-    bgColor: 'bg-red-500/20',
-    borderColor: 'border-l-red-500',
-    icon: X 
-  },
-  expirada: { 
-    label: 'Expirada', 
-    color: 'text-muted-foreground', 
-    bgColor: 'bg-muted',
-    borderColor: 'border-l-muted-foreground',
-    icon: FileText 
-  },
 };
 
 export default function Cotacoes() {
@@ -201,18 +137,19 @@ export default function Cotacoes() {
   const [cotacaoParaDuplicar, setCotacaoParaDuplicar] = useState<CotacaoWithRelations | null>(null);
   const [copiandoWhatsApp, setCopiandoWhatsApp] = useState<string | null>(null);
   
-  // Novos filtros para finalizadas
+  // Filtros
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
+  
+  // Modal de detalhes
+  const [showDetalhesModal, setShowDetalhesModal] = useState(false);
+  const [cotacaoSelecionada, setCotacaoSelecionada] = useState<CotacaoWithRelations | null>(null);
 
-  // Permissões
   const permissions = usePermissions();
   const { profile, user } = useAuth();
   
-  // Buscar vendedores para filtro de consultor (só para gestores)
   const { data: vendedores } = useVendedores();
   
-  // Buscar cotações com filtro baseado em permissão
   const { data: cotacoes, isLoading } = useCotacoes({
     vendedorId: permissions.userId,
     viewScope: permissions.cotacao.viewScope,
@@ -224,10 +161,8 @@ export default function Cotacoes() {
   const excluirCotacao = useExcluirCotacao();
   const queryClient = useQueryClient();
   
-  // Ativar realtime para atualizações automáticas
   useCotacoesRealtime();
 
-  // Detectar parâmetro ?lead=xxx para abrir modal com dados do lead
   useEffect(() => {
     const leadParam = searchParams.get('lead');
     if (leadParam) {
@@ -238,21 +173,8 @@ export default function Cotacoes() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Helper functions
   const formatRelativeTime = (dateStr: string) => {
     return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR });
-  };
-
-  const formatPhone = (phone?: string | null) => {
-    if (!phone) return null;
-    const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length === 11) {
-      return `(${cleaned.slice(0,2)}) ${cleaned.slice(2,7)}-${cleaned.slice(7)}`;
-    }
-    if (cleaned.length === 10) {
-      return `(${cleaned.slice(0,2)}) ${cleaned.slice(2,6)}-${cleaned.slice(6)}`;
-    }
-    return phone;
   };
 
   const formatCurrency = (value: number) => {
@@ -262,49 +184,64 @@ export default function Cotacoes() {
     }).format(value);
   };
 
-  const filteredCotacoes = (cotacoes || []).filter((cotacao) => {
-    const searchLower = search.toLowerCase();
-    const matchesSearch =
-      cotacao.numero.toLowerCase().includes(searchLower) ||
-      (cotacao.leads?.nome?.toLowerCase().includes(searchLower) ?? false) ||
-      (cotacao.veiculo_placa?.toLowerCase().includes(searchLower) ?? false) ||
-      (cotacao.veiculo_marca?.toLowerCase().includes(searchLower) ?? false) ||
-      (cotacao.veiculo_modelo?.toLowerCase().includes(searchLower) ?? false);
-    const matchesStatus = statusFilter === 'all' || cotacao.status === statusFilter;
-    
-    let matchesMes = true;
-    if (mesFilter !== 'all') {
-      const cotacaoDate = new Date(cotacao.created_at);
-      const [year, month] = mesFilter.split('-').map(Number);
-      matchesMes = cotacaoDate.getFullYear() === year && cotacaoDate.getMonth() === month - 1;
-    }
-    
-    return matchesSearch && matchesStatus && matchesMes;
-  });
+  // Filtrar cotações
+  const filteredCotacoes = useMemo(() => {
+    return (cotacoes || []).filter((cotacao) => {
+      const searchLower = search.toLowerCase();
+      const matchesSearch =
+        cotacao.numero.toLowerCase().includes(searchLower) ||
+        (cotacao.leads?.nome?.toLowerCase().includes(searchLower) ?? false) ||
+        (cotacao.veiculo_placa?.toLowerCase().includes(searchLower) ?? false) ||
+        (cotacao.veiculo_marca?.toLowerCase().includes(searchLower) ?? false) ||
+        (cotacao.veiculo_modelo?.toLowerCase().includes(searchLower) ?? false);
+      const matchesStatus = statusFilter === 'all' || cotacao.status === statusFilter;
+      
+      let matchesMes = true;
+      if (mesFilter !== 'all') {
+        const cotacaoDate = new Date(cotacao.created_at);
+        const [year, month] = mesFilter.split('-').map(Number);
+        matchesMes = cotacaoDate.getFullYear() === year && cotacaoDate.getMonth() === month - 1;
+      }
+      
+      let matchesData = true;
+      if (dataFilter) {
+        const cotacaoDate = new Date(cotacao.created_at);
+        matchesData = isSameDay(cotacaoDate, dataFilter);
+      }
+      
+      let matchesConsultor = true;
+      if (consultorFilter !== 'all') {
+        matchesConsultor = cotacao.vendedor_id === consultorFilter;
+      }
+      
+      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor;
+    });
+  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter]);
 
   // Ordenação inteligente
-  const sortedCotacoes = [...filteredCotacoes].sort((a, b) => {
-    // Prioridade 1: Sem lead vinculado (precisam de ação urgente)
-    if (!a.lead_id && b.lead_id) return -1;
-    if (a.lead_id && !b.lead_id) return 1;
-    
-    // Prioridade 2: Por status
-    const statusOrder: Record<string, number> = {
-      rascunho: 1,
-      enviada: 2,
-      visualizada: 3,
-      aceita: 4,
-      recusada: 5,
-      expirada: 6,
-    };
-    const statusDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
-    if (statusDiff !== 0) return statusDiff;
-    
-    // Prioridade 3: Mais recentes primeiro
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  const sortedCotacoes = useMemo(() => {
+    return [...filteredCotacoes].sort((a, b) => {
+      // Prioridade 1: Sem lead vinculado
+      if (!a.lead_id && b.lead_id) return -1;
+      if (a.lead_id && !b.lead_id) return 1;
+      
+      // Prioridade 2: Por status
+      const statusOrder: Record<string, number> = {
+        rascunho: 1,
+        enviada: 2,
+        visualizada: 3,
+        aceita: 4,
+        recusada: 5,
+        expirada: 6,
+      };
+      const statusDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+      if (statusDiff !== 0) return statusDiff;
+      
+      // Prioridade 3: Mais recentes primeiro
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [filteredCotacoes]);
   
-  // Gerar lista de meses disponíveis
   const mesesDisponiveis = [...new Set((cotacoes || []).map(c => {
     const date = new Date(c.created_at);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -314,6 +251,11 @@ export default function Cotacoes() {
     const [year, month] = mes.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1);
     return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  };
+
+  const handleRowClick = (cotacao: CotacaoWithRelations) => {
+    setCotacaoSelecionada(cotacao);
+    setShowDetalhesModal(true);
   };
 
   const handleDuplicar = (cotacao: CotacaoWithRelations) => {
@@ -355,7 +297,6 @@ export default function Cotacoes() {
     try {
       const planosComparacao = cotacao.dados_extras?.planos_comparacao;
       
-      // Se há planos em dados_extras (1 ou mais), usar PDF comparativo
       if (planosComparacao && planosComparacao.length > 0) {
         const valorAdesao = cotacao.valor_adesao || 0;
         
@@ -394,7 +335,6 @@ export default function Cotacoes() {
 
         await gerarPdfCotacaoComparativa(cotacaoComparativa);
       } else {
-        // Fallback: sem dados_extras, usar PDF padrão
         await gerarPdfCotacao(cotacao);
       }
       
@@ -408,9 +348,9 @@ export default function Cotacoes() {
   const handleOpenContratoWizard = (cotacaoId: string) => {
     setSelectedCotacaoId(cotacaoId);
     setShowContratoWizard(true);
+    setShowDetalhesModal(false);
   };
 
-  // Handler para quando contrato for criado - redirecionar para contratos com drawer aberto
   const handleContratoCreated = (contratoId: string) => {
     navigate('/vendas/contratos', { 
       state: { openContrato: contratoId } 
@@ -422,35 +362,7 @@ export default function Cotacoes() {
     setShowEmailModal(true);
   };
 
-  const enviarWhatsApp = (cotacao: CotacaoWithRelations) => {
-    const telefone = cotacao.leads?.telefone?.replace(/\D/g, '');
-    if (!telefone) {
-      toast.error('Lead sem telefone cadastrado');
-      return;
-    }
-
-    const coberturas = cotacao.planos?.coberturas as string[] | undefined;
-    const beneficiosTexto = coberturas?.slice(0, 5).map(c => `✓ ${c}`).join('\n') || '✓ Proteção completa';
-    
-    const mensagem = encodeURIComponent(
-      `Olá ${cotacao.leads?.nome || 'Cliente'}! 🚗\n\n` +
-      `Segue sua cotação de proteção veicular:\n\n` +
-      `📋 *Cotação Nº:* ${cotacao.numero}\n` +
-      `📦 *Plano:* ${cotacao.planos?.nome || 'Proteção Veicular'}\n` +
-      `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n` +
-      `💵 *VALOR MENSAL: R$ ${cotacao.valor_total_mensal?.toFixed(2)}*\n\n` +
-      `✅ *Principais Benefícios:*\n` +
-      `${beneficiosTexto}\n\n` +
-      `📝 Taxa de Adesão: R$ ${cotacao.valor_adesao?.toFixed(2)}\n\n` +
-      `⏰ Cotação válida por ${cotacao.validade_dias || 7} dias.\n\n` +
-      `Posso te ajudar com mais alguma informação?`
-    );
-
-    window.open(`https://wa.me/55${telefone}?text=${mensagem}`, '_blank');
-    handleMarkAsEnviada(cotacao.id, cotacao.lead_id);
-  };
-
-  // Função de fallback para gerar mensagem localmente (caso IA falhe)
+  // Função de fallback para gerar mensagem localmente
   const gerarMensagemFallback = (
     cotacao: CotacaoWithRelations,
     planos: Array<{ nome: string; valorMensal: number; coberturas: string[]; naoInclui?: string[] }>
@@ -463,7 +375,6 @@ export default function Cotacoes() {
     mensagem += `Preparamos uma cotação especial para seu *${veiculo}*.\n\n`;
     mensagem += `💰 *Valor FIPE:* R$ ${cotacao.valor_fipe?.toLocaleString('pt-BR')}\n\n`;
     
-    // Listar cada plano com benefícios categorizados
     planos.forEach((plano, index) => {
       if (planos.length > 1) {
         mensagem += `━━━━━━━━━━━━━━━━━━\n`;
@@ -473,10 +384,8 @@ export default function Cotacoes() {
       }
       mensagem += `💵 *Mensalidade:* R$ ${plano.valorMensal.toFixed(2)}/mês\n\n`;
       
-      // Categorizar benefícios
       const beneficios = categorizarBeneficios(plano.coberturas || []);
       
-      // Coberturas principais
       if (beneficios.coberturas.length > 0) {
         mensagem += `🛡️ *Coberturas:*\n`;
         beneficios.coberturas.forEach(c => {
@@ -485,7 +394,6 @@ export default function Cotacoes() {
         mensagem += `\n`;
       }
       
-      // Assistência 24h
       if (beneficios.assistencia.length > 0) {
         mensagem += `🚗 *Assistência 24h:*\n`;
         beneficios.assistencia.forEach(c => {
@@ -494,7 +402,6 @@ export default function Cotacoes() {
         mensagem += `\n`;
       }
       
-      // Benefícios extras
       if (beneficios.extras.length > 0) {
         mensagem += `✨ *Benefícios Extras:*\n`;
         beneficios.extras.forEach(c => {
@@ -503,7 +410,6 @@ export default function Cotacoes() {
         mensagem += `\n`;
       }
       
-      // Se nenhuma categoria tiver itens, listar tudo como benefícios
       if (beneficios.coberturas.length === 0 && beneficios.assistencia.length === 0 && beneficios.extras.length === 0 && plano.coberturas && plano.coberturas.length > 0) {
         mensagem += `✅ *Benefícios inclusos:*\n`;
         plano.coberturas.forEach(c => {
@@ -539,7 +445,6 @@ export default function Cotacoes() {
   };
 
   const copiarParaWhatsApp = async (cotacao: CotacaoWithRelations) => {
-    // Extrair planos de dados_extras ou usar plano principal
     const planosComparacao = cotacao.dados_extras?.planos_comparacao as Array<{
       nome: string;
       valorMensal: number;
@@ -564,7 +469,6 @@ export default function Cotacoes() {
       }];
     }
     
-    // Se não há planos, usar fallback simples
     if (planos.length === 0) {
       const mensagemSimples = 
         `Olá! 🚗\n\n` +
@@ -582,13 +486,11 @@ export default function Cotacoes() {
       return;
     }
     
-    // Enriquecer planos com benefícios categorizados
     const planosEnriquecidos = planos.map(p => ({
       ...p,
       beneficiosPorCategoria: categorizarBeneficios(p.coberturas || []),
     }));
     
-    // Montar dados para a IA
     const dadosCotacao = {
       cliente: { nome: cotacao.leads?.nome || cotacao.nome_solicitante || 'Cliente' },
       veiculo: {
@@ -606,7 +508,6 @@ export default function Cotacoes() {
         : undefined,
     };
     
-    // Chamar Edge Function com IA
     setCopiandoWhatsApp(cotacao.id);
     try {
       const { data, error } = await supabase.functions.invoke('gerar-mensagem-whatsapp', {
@@ -623,7 +524,6 @@ export default function Cotacoes() {
       }
     } catch (error) {
       console.warn('Erro ao gerar mensagem com IA, usando fallback:', error);
-      // Fallback: usar mensagem padrão se IA falhar
       const mensagemFallback = gerarMensagemFallback(cotacao, planos);
       await navigator.clipboard.writeText(mensagemFallback);
       toast.success('Mensagem copiada! Cole no WhatsApp.');
@@ -657,51 +557,17 @@ export default function Cotacoes() {
       : 0,
   };
 
-  // Separar cotações em andamento e fechadas
-  const emAndamento = sortedCotacoes.filter(c => 
-    ['rascunho', 'enviada', 'visualizada'].includes(c.status)
-  );
-  
-  // Aplicar filtros adicionais nas fechadas
-  const fechadasBase = sortedCotacoes.filter(c => 
-    ['aceita', 'recusada', 'expirada'].includes(c.status)
-  );
-  
-  const fechadas = fechadasBase.filter(cotacao => {
-    // Filtrar por data específica
-    let matchesData = true;
-    if (dataFilter) {
-      const cotacaoDate = new Date(cotacao.created_at);
-      matchesData = isSameDay(cotacaoDate, dataFilter);
-    }
-    
-    // Filtrar por consultor
-    let matchesConsultor = true;
-    if (consultorFilter !== 'all') {
-      matchesConsultor = cotacao.vendedor_id === consultorFilter;
-    }
-    
-    return matchesData && matchesConsultor;
-  });
-  
-  // Agrupar finalizadas por data para exibição
-  const finalizadasPorData = useMemo(() => {
-    const grupos: Record<string, CotacaoWithRelations[]> = {};
-    
-    fechadas.forEach(cotacao => {
-      const data = format(new Date(cotacao.created_at), 'yyyy-MM-dd');
-      if (!grupos[data]) grupos[data] = [];
-      grupos[data].push(cotacao);
-    });
-    
-    return Object.entries(grupos)
-      .sort(([a], [b]) => b.localeCompare(a)) // Mais recente primeiro
-      .map(([data, cotacoes]) => ({
-        data,
-        dataFormatada: format(new Date(data), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
-        cotacoes,
-      }));
-  }, [fechadas]);
+  // Função para obter permissões de cada cotação
+  const getPermissions = (cotacao: CotacaoWithRelations): CotacoesTablePermissions => {
+    const isOwner = cotacao.vendedor_id === permissions.userId;
+    return {
+      canEdit: permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner),
+      canDelete: permissions.cotacao.canDelete,
+      canSend: permissions.cotacao.canSend && (!permissions.cotacao.canEditOwnOnly || isOwner),
+      canDuplicate: permissions.cotacao.canDuplicate,
+      canGenerateContract: permissions.cotacao.canGenerateContract && (!permissions.cotacao.canEditOwnOnly || isOwner),
+    };
+  };
 
   if (isLoading) {
     return (
@@ -716,7 +582,7 @@ export default function Cotacoes() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Cotação</h1>
+          <h1 className="text-2xl font-bold">Cotações</h1>
           <p className="text-muted-foreground">
             {permissions.cotacao.viewScope === 'all' 
               ? 'Gerencie todas as cotações e acompanhe propostas'
@@ -731,7 +597,7 @@ export default function Cotacoes() {
         </PermissionGate>
       </div>
 
-      {/* Stats Cards - Mais chamativo */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
           <CardContent className="p-4">
@@ -837,7 +703,6 @@ export default function Cotacoes() {
           </Select>
         </div>
         
-        {/* Filtro de Data Específica (para finalizadas) */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-muted-foreground">Data</label>
           <Popover>
@@ -877,7 +742,6 @@ export default function Cotacoes() {
           </Popover>
         </div>
 
-        {/* Filtro de Consultor (apenas para gestores) */}
         {permissions.cotacao.viewScope !== 'own' && (
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-muted-foreground">Consultor</label>
@@ -903,154 +767,40 @@ export default function Cotacoes() {
         )}
       </div>
 
-      {/* Tabs de Em Andamento e Fechadas */}
-      <Tabs defaultValue="andamento" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
-          <TabsTrigger value="andamento" className="gap-2">
-            <Clock className="h-4 w-4" />
-            Em Andamento
-            <Badge variant="secondary" className="ml-1 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400">
-              {emAndamento.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="fechadas" className="gap-2">
-            <CheckCircle className="h-4 w-4" />
-            Finalizadas
-            <Badge variant="secondary" className="ml-1 bg-green-500/20 text-green-600 dark:text-green-400">
-              {fechadas.length}
-            </Badge>
-          </TabsTrigger>
-        </TabsList>
+      {/* Tabela de Cotações */}
+      <CotacoesTable 
+        cotacoes={sortedCotacoes}
+        onRowClick={handleRowClick}
+        onCopiarWhatsApp={copiarParaWhatsApp}
+        onPdf={handleBaixarPdf}
+        onDuplicar={handleDuplicar}
+        onExcluir={handleExcluir}
+        copiandoWhatsAppId={copiandoWhatsApp}
+        getPermissions={getPermissions}
+      />
+      
+      {/* Hint de clique */}
+      {sortedCotacoes.length > 0 && (
+        <p className="text-sm text-muted-foreground text-center">
+          Clique em uma linha para ver detalhes e ações
+        </p>
+      )}
 
-        <TabsContent value="andamento" className="mt-4 space-y-3">
-          {emAndamento.length === 0 ? (
-            <Card className="border-dashed border-yellow-500/50">
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <Clock className="h-12 w-12 mx-auto mb-4 opacity-50 text-yellow-500" />
-                <p className="font-medium">Nenhuma cotação em andamento</p>
-                <p className="text-sm">Crie uma nova cotação para começar</p>
-              </CardContent>
-            </Card>
-          ) : (
-            emAndamento.map((cotacao) => {
-              // Calcular permissões específicas para cada cotação
-              const isOwner = cotacao.vendedor_id === permissions.userId;
-              const cardPermissions: CotacaoCardPermissions = {
-                canEdit: permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner),
-                canDelete: permissions.cotacao.canDelete,
-                canSend: permissions.cotacao.canSend && (!permissions.cotacao.canEditOwnOnly || isOwner),
-                canDuplicate: permissions.cotacao.canDuplicate,
-                canGenerateContract: permissions.cotacao.canGenerateContract && (!permissions.cotacao.canEditOwnOnly || isOwner),
-              };
-
-              return (
-                <CotacaoCard 
-                  key={cotacao.id}
-                  cotacao={cotacao}
-                  tipo="andamento"
-                  navigate={navigate}
-                  formatRelativeTime={formatRelativeTime}
-                  formatPhone={formatPhone}
-                  formatCurrency={formatCurrency}
-                  onVincular={(c) => {
-                    setCotacaoParaVincular(c);
-                    setShowVincularModal(true);
-                  }}
-                  onWhatsApp={enviarWhatsApp}
-                  onEmail={handleOpenEmailModal}
-                  onAceitar={(id) => {
-                    updateCotacao.mutate({ id, status: 'aceita' });
-                  }}
-                  onPdf={handleBaixarPdf}
-                  onDuplicar={handleDuplicar}
-                  onExcluir={handleExcluir}
-                  onCopiarWhatsApp={copiarParaWhatsApp}
-                  onGerarContrato={handleOpenContratoWizard}
-                  isGerandoContrato={gerarContrato.isPending}
-                  isCopiandoWhatsApp={copiandoWhatsApp === cotacao.id}
-                  permissions={cardPermissions}
-                />
-              );
-            })
-          )}
-        </TabsContent>
-
-        <TabsContent value="fechadas" className="mt-4 space-y-6">
-          {fechadas.length === 0 ? (
-            <Card className="border-dashed border-green-500/50">
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50 text-green-500" />
-                <p className="font-medium">
-                  {dataFilter || consultorFilter !== 'all' 
-                    ? 'Nenhuma proposta encontrada com os filtros aplicados' 
-                    : 'Nenhuma proposta finalizada'}
-                </p>
-                <p className="text-sm">
-                  {dataFilter || consultorFilter !== 'all' 
-                    ? 'Tente ajustar os filtros de data ou consultor' 
-                    : 'As propostas aceitas ou recusadas aparecerão aqui'}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            finalizadasPorData.map((grupo) => (
-              <div key={grupo.data} className="space-y-3">
-                {/* Cabeçalho do grupo por data */}
-                <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-lg">
-                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-sm">{grupo.dataFormatada}</span>
-                  <Badge variant="secondary" className="ml-auto">
-                    {grupo.cotacoes.length} {grupo.cotacoes.length === 1 ? 'cotação' : 'cotações'}
-                  </Badge>
-                </div>
-                
-                {/* Cards das cotações do dia */}
-                <div className="space-y-3 pl-2 border-l-2 border-muted">
-                  {grupo.cotacoes.map((cotacao) => {
-                    const isOwner = cotacao.vendedor_id === permissions.userId;
-                    const cardPermissions: CotacaoCardPermissions = {
-                      canEdit: permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner),
-                      canDelete: permissions.cotacao.canDelete,
-                      canSend: permissions.cotacao.canSend && (!permissions.cotacao.canEditOwnOnly || isOwner),
-                      canDuplicate: permissions.cotacao.canDuplicate,
-                      canGenerateContract: permissions.cotacao.canGenerateContract && (!permissions.cotacao.canEditOwnOnly || isOwner),
-                    };
-
-                    return (
-                      <CotacaoCard 
-                        key={cotacao.id}
-                        cotacao={cotacao}
-                        tipo="fechada"
-                        navigate={navigate}
-                        formatRelativeTime={formatRelativeTime}
-                        formatPhone={formatPhone}
-                        formatCurrency={formatCurrency}
-                        onVincular={(c) => {
-                          setCotacaoParaVincular(c);
-                          setShowVincularModal(true);
-                        }}
-                        onWhatsApp={enviarWhatsApp}
-                        onEmail={handleOpenEmailModal}
-                        onAceitar={(id) => {
-                          updateCotacao.mutate({ id, status: 'aceita' });
-                        }}
-                        onPdf={handleBaixarPdf}
-                        onDuplicar={handleDuplicar}
-                        onExcluir={handleExcluir}
-                        onCopiarWhatsApp={copiarParaWhatsApp}
-                        onGerarContrato={handleOpenContratoWizard}
-                        isGerandoContrato={gerarContrato.isPending}
-                        isCopiandoWhatsApp={copiandoWhatsApp === cotacao.id}
-                        permissions={cardPermissions}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
+      {/* Modal de Detalhes */}
+      <CotacaoDetalhesModal 
+        open={showDetalhesModal}
+        onOpenChange={setShowDetalhesModal}
+        cotacao={cotacaoSelecionada}
+        onCopiarWhatsApp={copiarParaWhatsApp}
+        onPdf={handleBaixarPdf}
+        onEmail={handleOpenEmailModal}
+        onGerarContrato={handleOpenContratoWizard}
+        onAceitar={(id) => updateCotacao.mutate({ id, status: 'aceita' })}
+        isCopiandoWhatsApp={copiandoWhatsApp === cotacaoSelecionada?.id}
+        isGerandoContrato={gerarContrato.isPending}
+        canGenerateContract={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canGenerateContract : false}
+        canSend={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canSend : false}
+      />
 
       {/* Dialogs */}
       <CotacaoFormDialog 
@@ -1098,7 +848,6 @@ export default function Cotacoes() {
         />
       )}
       
-      {/* Modal Vincular Lead */}
       <VincularLeadModal
         open={showVincularModal}
         onOpenChange={setShowVincularModal}
@@ -1109,7 +858,6 @@ export default function Cotacoes() {
         }}
       />
       
-      {/* Dialog de Confirmação de Exclusão */}
       <AlertDialog open={!!cotacaoParaExcluir} onOpenChange={(open) => !open && setCotacaoParaExcluir(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
