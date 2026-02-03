@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Users, Calendar, LayoutGrid, List, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Users, Calendar, LayoutGrid, List, Search, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +18,7 @@ import { toast } from 'sonner';
 const PAGE_SIZE = 12;
 
 export default function Propostas() {
+  const navigate = useNavigate();
   const [periodo, setPeriodo] = useState<PeriodoFiltro>('mes');
   const [selectedConsultorId, setSelectedConsultorId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -104,6 +106,15 @@ export default function Propostas() {
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
+          {/* Botão Gerenciar Consultores */}
+          <Button
+            variant="outline"
+            onClick={() => navigate('/vendas/consultores')}
+            className="gap-2"
+          >
+            <Settings className="h-4 w-4" />
+            <span className="hidden sm:inline">Gerenciar Consultores</span>
+          </Button>
           {/* Campo de Busca */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

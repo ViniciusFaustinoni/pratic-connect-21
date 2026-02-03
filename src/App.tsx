@@ -36,6 +36,7 @@ import Cotacoes from "./pages/vendas/Cotacoes";
 import CotacaoDetalhe from "./pages/vendas/CotacaoDetalhe";
 import Contratos from "./pages/vendas/Contratos";
 import Propostas from "./pages/vendas/Propostas";
+import Consultores from "./pages/vendas/Consultores";
 import ContratoDetalhe from "./pages/vendas/ContratoDetalhe";
 import VendasDashboard from "./pages/vendas/VendasDashboard";
 import RelatoriosVendas from "./pages/vendas/RelatoriosVendas";
@@ -351,6 +352,7 @@ const App = () => (
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
               <Route path="/vendas/propostas" element={<Propostas />} />
+              <Route path="/vendas/consultores" element={<Consultores />} />
               <Route path="/vendas/contratos/:id" element={<ContratoRedirect />} />
               <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />
               <Route path="/vendas/vendedores" element={<Vendedores />} />
