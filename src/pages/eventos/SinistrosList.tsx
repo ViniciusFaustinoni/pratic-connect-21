@@ -38,6 +38,7 @@ import {
   Plus,
   Search,
   ClipboardCheck,
+  Bot,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -132,6 +133,22 @@ export default function SinistrosList() {
     },
   });
 
+  // Query para pendências IA (solicitações de sinistro aguardando aprovação)
+  const { data: pendenciasIA } = useQuery({
+    queryKey: ['sinistros-pendencias-ia'],
+    queryFn: async () => {
+      const { data, count, error } = await supabase
+        .from('chat_solicitacoes_ia')
+        .select('id, tipo, dados, created_at, associado:associados!chat_solicitacoes_ia_associado_id_fkey(nome)', { count: 'exact' })
+        .eq('status', 'pendente')
+        .eq('tipo', 'sinistro')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return { items: data || [], count: count || 0 };
+    },
+  });
+
   const formatCurrency = (value: number | null) => {
     if (!value) return '-';
     return new Intl.NumberFormat('pt-BR', {
@@ -165,6 +182,33 @@ export default function SinistrosList() {
         onSuccess={(sinistro) => navigate(`/eventos/sinistros/${sinistro.id}`)}
       />
 
+      {/* Alerta de Pendências IA */}
+      {pendenciasIA && pendenciasIA.count > 0 && (
+        <Card className="border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <Bot className="h-8 w-8 text-amber-600" />
+              <div>
+                <p className="font-semibold text-amber-800 dark:text-amber-200">
+                  {pendenciasIA.count} sinistro(s) aguardando aprovação via IA
+                </p>
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Solicitações geradas via WhatsApp/App precisam ser aprovadas
+                </p>
+              </div>
+            </div>
+            <Button 
+              variant="outline" 
+              className="border-amber-500 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/50"
+              onClick={() => navigate('/diretoria/solicitacoes-ia')}
+            >
+              <Bot className="mr-2 h-4 w-4" />
+              Revisar Solicitações
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Card>
@@ -173,8 +217,13 @@ export default function SinistrosList() {
               <div>
                 <p className="text-sm text-muted-foreground">Comunicados</p>
                 <p className="text-2xl font-bold text-yellow-600">
-                  {contadores?.comunicado || 0}
+                  {(contadores?.comunicado || 0) + (pendenciasIA?.count || 0)}
                 </p>
+                {pendenciasIA && pendenciasIA.count > 0 && (
+                  <p className="text-xs text-amber-600">
+                    (+{pendenciasIA.count} via IA)
+                  </p>
+                )}
               </div>
               <AlertCircle className="h-8 w-8 text-yellow-500" />
             </div>
