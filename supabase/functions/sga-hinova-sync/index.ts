@@ -356,6 +356,41 @@ serve(async (req) => {
     };
 
     // ========================================
+    // PASSO 3.5: Buscar código voluntário do vendedor responsável
+    // Prioridade: código do vendedor > código global da integração
+    // ========================================
+    console.log('[SGA Sync] Buscando código voluntário do vendedor...');
+    
+    // Primeiro, buscar o contrato associado para encontrar o vendedor_id
+    const { data: contrato } = await supabase
+      .from('contratos')
+      .select('vendedor_id')
+      .eq('associado_id', associado_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (contrato?.vendedor_id) {
+      console.log(`[SGA Sync] Vendedor do contrato: ${contrato.vendedor_id}`);
+      
+      // Buscar o código SGA do vendedor
+      const { data: vendedor } = await supabase
+        .from('profiles')
+        .select('codigo_sga_voluntario, nome')
+        .eq('id', contrato.vendedor_id)
+        .single();
+      
+      if (vendedor?.codigo_sga_voluntario) {
+        hinovaCodigoVoluntario = vendedor.codigo_sga_voluntario;
+        console.log(`[SGA Sync] Usando código voluntário do vendedor ${vendedor.nome}: ${hinovaCodigoVoluntario}`);
+      } else {
+        console.log(`[SGA Sync] Vendedor ${vendedor?.nome || 'desconhecido'} não possui código SGA configurado, usando fallback global`);
+      }
+    } else {
+      console.log('[SGA Sync] Contrato sem vendedor_id, usando código global da integração');
+    }
+
+    // ========================================
     // PASSO 4: Autenticar na API Hinova
     // ========================================
     console.log('[SGA Sync] Autenticando na API Hinova...');

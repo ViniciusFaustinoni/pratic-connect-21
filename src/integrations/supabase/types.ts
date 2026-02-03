@@ -13407,6 +13407,7 @@ export type Database = {
           avatar_url: string | null
           bloqueado: boolean | null
           categoria_profissional: string | null
+          codigo_sga_voluntario: string | null
           cpf: string | null
           created_at: string
           created_by: string | null
@@ -13432,6 +13433,7 @@ export type Database = {
           avatar_url?: string | null
           bloqueado?: boolean | null
           categoria_profissional?: string | null
+          codigo_sga_voluntario?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
@@ -13457,6 +13459,7 @@ export type Database = {
           avatar_url?: string | null
           bloqueado?: boolean | null
           categoria_profissional?: string | null
+          codigo_sga_voluntario?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
