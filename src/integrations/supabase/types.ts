@@ -5124,12 +5124,22 @@ export type Database = {
           autentique_documento_id: string | null
           autentique_status: string | null
           autentique_url: string | null
+          cliente_bairro: string | null
           cliente_cep: string | null
           cliente_cidade: string | null
+          cliente_cnh: string | null
+          cliente_cnh_categoria: string | null
+          cliente_cnh_validade: string | null
+          cliente_complemento: string | null
           cliente_cpf: string | null
+          cliente_data_nascimento: string | null
           cliente_email: string | null
           cliente_endereco: string | null
+          cliente_logradouro: string | null
           cliente_nome: string | null
+          cliente_numero: string | null
+          cliente_rg: string | null
+          cliente_rg_orgao: string | null
           cliente_telefone: string | null
           cliente_uf: string | null
           cotacao_id: string | null
@@ -5161,7 +5171,9 @@ export type Database = {
           valor_adesao: number
           valor_mensal: number
           veiculo_ano: number | null
+          veiculo_ano_fabricacao: number | null
           veiculo_chassi: string | null
+          veiculo_combustivel: string | null
           veiculo_cor: string | null
           veiculo_id: string | null
           veiculo_marca: string | null
@@ -5198,12 +5210,22 @@ export type Database = {
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
+          cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cidade?: string | null
+          cliente_cnh?: string | null
+          cliente_cnh_categoria?: string | null
+          cliente_cnh_validade?: string | null
+          cliente_complemento?: string | null
           cliente_cpf?: string | null
+          cliente_data_nascimento?: string | null
           cliente_email?: string | null
           cliente_endereco?: string | null
+          cliente_logradouro?: string | null
           cliente_nome?: string | null
+          cliente_numero?: string | null
+          cliente_rg?: string | null
+          cliente_rg_orgao?: string | null
           cliente_telefone?: string | null
           cliente_uf?: string | null
           cotacao_id?: string | null
@@ -5235,7 +5257,9 @@ export type Database = {
           valor_adesao: number
           valor_mensal: number
           veiculo_ano?: number | null
+          veiculo_ano_fabricacao?: number | null
           veiculo_chassi?: string | null
+          veiculo_combustivel?: string | null
           veiculo_cor?: string | null
           veiculo_id?: string | null
           veiculo_marca?: string | null
@@ -5272,12 +5296,22 @@ export type Database = {
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
+          cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cidade?: string | null
+          cliente_cnh?: string | null
+          cliente_cnh_categoria?: string | null
+          cliente_cnh_validade?: string | null
+          cliente_complemento?: string | null
           cliente_cpf?: string | null
+          cliente_data_nascimento?: string | null
           cliente_email?: string | null
           cliente_endereco?: string | null
+          cliente_logradouro?: string | null
           cliente_nome?: string | null
+          cliente_numero?: string | null
+          cliente_rg?: string | null
+          cliente_rg_orgao?: string | null
           cliente_telefone?: string | null
           cliente_uf?: string | null
           cotacao_id?: string | null
@@ -5309,7 +5343,9 @@ export type Database = {
           valor_adesao?: number
           valor_mensal?: number
           veiculo_ano?: number | null
+          veiculo_ano_fabricacao?: number | null
           veiculo_chassi?: string | null
+          veiculo_combustivel?: string | null
           veiculo_cor?: string | null
           veiculo_id?: string | null
           veiculo_marca?: string | null
@@ -5671,11 +5707,16 @@ export type Database = {
           cliente_bairro: string | null
           cliente_cep: string | null
           cliente_cidade: string | null
+          cliente_cnh: string | null
+          cliente_cnh_categoria: string | null
+          cliente_cnh_validade: string | null
           cliente_complemento: string | null
           cliente_cpf: string | null
           cliente_data_nascimento: string | null
           cliente_logradouro: string | null
           cliente_numero: string | null
+          cliente_rg: string | null
+          cliente_rg_orgao: string | null
           cliente_uf: string | null
           codigo_fipe: string | null
           combustivel: string | null
@@ -5721,6 +5762,7 @@ export type Database = {
           valor_rastreamento: number
           valor_total_mensal: number
           veiculo_ano: number | null
+          veiculo_ano_fabricacao: number | null
           veiculo_chassi: string | null
           veiculo_combustivel: string | null
           veiculo_cor: string | null
@@ -5768,11 +5810,16 @@ export type Database = {
           cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cidade?: string | null
+          cliente_cnh?: string | null
+          cliente_cnh_categoria?: string | null
+          cliente_cnh_validade?: string | null
           cliente_complemento?: string | null
           cliente_cpf?: string | null
           cliente_data_nascimento?: string | null
           cliente_logradouro?: string | null
           cliente_numero?: string | null
+          cliente_rg?: string | null
+          cliente_rg_orgao?: string | null
           cliente_uf?: string | null
           codigo_fipe?: string | null
           combustivel?: string | null
@@ -5818,6 +5865,7 @@ export type Database = {
           valor_rastreamento?: number
           valor_total_mensal: number
           veiculo_ano?: number | null
+          veiculo_ano_fabricacao?: number | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null
@@ -5865,11 +5913,16 @@ export type Database = {
           cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cidade?: string | null
+          cliente_cnh?: string | null
+          cliente_cnh_categoria?: string | null
+          cliente_cnh_validade?: string | null
           cliente_complemento?: string | null
           cliente_cpf?: string | null
           cliente_data_nascimento?: string | null
           cliente_logradouro?: string | null
           cliente_numero?: string | null
+          cliente_rg?: string | null
+          cliente_rg_orgao?: string | null
           cliente_uf?: string | null
           codigo_fipe?: string | null
           combustivel?: string | null
@@ -5915,6 +5968,7 @@ export type Database = {
           valor_rastreamento?: number
           valor_total_mensal?: number
           veiculo_ano?: number | null
+          veiculo_ano_fabricacao?: number | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null

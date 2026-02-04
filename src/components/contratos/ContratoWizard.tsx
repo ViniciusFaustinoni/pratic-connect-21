@@ -40,11 +40,17 @@ const wizardSchema = z.object({
   nome: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
   cpf: z.string().min(11, "CPF inválido"),
   rg: z.string().optional(),
+  rg_orgao: z.string().optional(),
+  cnh: z.string().optional(),
+  cnh_validade: z.string().optional(),
+  cnh_categoria: z.string().optional(),
+  data_nascimento: z.string().optional(),
   email: z.string().email("E-mail inválido"),
   telefone: z.string().min(10, "Telefone inválido"),
   cep: z.string().optional(),
   logradouro: z.string().optional(),
   numero: z.string().optional(),
+  complemento: z.string().optional(),
   bairro: z.string().optional(),
   cidade: z.string().optional(),
   uf: z.string().optional(),
@@ -102,8 +108,9 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
   const form = useForm<WizardFormData>({
     resolver: zodResolver(wizardSchema),
     defaultValues: {
-      nome: '', cpf: '', rg: '', email: '', telefone: '',
-      cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '',
+      nome: '', cpf: '', rg: '', rg_orgao: '', cnh: '', cnh_validade: '', cnh_categoria: '', 
+      data_nascimento: '', email: '', telefone: '',
+      cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '',
       placa: '', marca: '', modelo: '', ano_fabricacao: new Date().getFullYear(),
       ano_modelo: new Date().getFullYear(), cor: '', combustivel: '', chassi: '', renavam: '',
     },
@@ -296,6 +303,41 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         form.setValue('rg', dados.rg);
         const fonteRg = tipoDocumento === 'cnh' ? 'CNH' : 'RG';
         setDadosExtraidos(prev => ({ ...prev, rg: { value: dados.rg, fonte: fonteRg } }));
+      }
+      
+      // Órgão emissor do RG
+      const orgaoEmissor = dados.orgao_emissor || dados.orgao;
+      if (orgaoEmissor && !form.getValues('rg_orgao')) {
+        form.setValue('rg_orgao', orgaoEmissor);
+        setDadosExtraidos(prev => ({ ...prev, rg_orgao: { value: orgaoEmissor, fonte: tipoDocumento === 'cnh' ? 'CNH' : 'RG' } }));
+      }
+      
+      // Data de nascimento
+      if (dados.data_nascimento && !form.getValues('data_nascimento')) {
+        form.setValue('data_nascimento', dados.data_nascimento);
+        setDadosExtraidos(prev => ({ ...prev, data_nascimento: { value: dados.data_nascimento, fonte: tipoDocumento === 'cnh' ? 'CNH' : 'RG' } }));
+      }
+      
+      // CAMPOS ESPECÍFICOS DA CNH
+      if (tipoDocumento === 'cnh') {
+        // Número de registro da CNH
+        const numeroCnh = dados.numero_registro || dados.registro;
+        if (numeroCnh && !form.getValues('cnh')) {
+          form.setValue('cnh', numeroCnh);
+          setDadosExtraidos(prev => ({ ...prev, cnh: { value: numeroCnh, fonte: 'CNH' } }));
+        }
+        
+        // Validade da CNH
+        if (dados.validade && !form.getValues('cnh_validade')) {
+          form.setValue('cnh_validade', dados.validade);
+          setDadosExtraidos(prev => ({ ...prev, cnh_validade: { value: dados.validade, fonte: 'CNH' } }));
+        }
+        
+        // Categoria da CNH (A, B, AB, etc.)
+        if (dados.categoria && !form.getValues('cnh_categoria')) {
+          form.setValue('cnh_categoria', dados.categoria);
+          setDadosExtraidos(prev => ({ ...prev, cnh_categoria: { value: dados.categoria, fonte: 'CNH' } }));
+        }
       }
     }
     

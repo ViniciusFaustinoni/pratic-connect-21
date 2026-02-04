@@ -22,9 +22,18 @@ const schema = z.object({
   bairro: z.string().min(2, 'Bairro é obrigatório'),
   cidade: z.string().min(2, 'Cidade é obrigatória'),
   uf: z.string().length(2, 'UF deve ter 2 caracteres'),
+  // Dados de documentos pessoais (CNH/RG) - extraídos via OCR
+  rg: z.string().optional(),
+  rg_orgao: z.string().optional(),
+  cnh: z.string().optional(),
+  cnh_validade: z.string().optional(),
+  cnh_categoria: z.string().optional(),
   // Dados do veículo extraídos do CRLV
   veiculo_chassi: z.string().optional(),
   veiculo_renavam: z.string().optional(),
+  veiculo_cor: z.string().optional(),
+  veiculo_combustivel: z.string().optional(),
+  veiculo_ano_fabricacao: z.number().optional(),
 });
 
 export type DadosPessoaisForm = z.infer<typeof schema>;
