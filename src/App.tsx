@@ -47,6 +47,7 @@ import Vendedores from "./pages/vendas/Vendedores";
 import VendedorHistorico from "./pages/vendas/VendedorHistorico";
 import Associados from "./pages/cadastro/Associados";
 import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
+import GerarTermo from "./pages/cadastro/GerarTermo";
 import Veiculos from "./pages/cadastro/Veiculos";
 import Documentos from "./pages/cadastro/Documentos";
 import FilaDocumentos from "./pages/cadastro/FilaDocumentos";
@@ -374,6 +375,7 @@ const App = () => (
               <Route path="/cadastro/propostas" element={<PropostasPendentes />} />
               <Route path="/cadastro/propostas/:id" element={<PropostaAnalise />} />
               <Route path="/cadastro/instalacoes/:id/ativar" element={<VistoriaCompletaAnalise />} />
+              <Route path="/cadastro/gerar-termo" element={<GerarTermo />} />
               
               {/* Eventos */}
               <Route path="/eventos/dashboard" element={<SinistrosDashboard />} />
