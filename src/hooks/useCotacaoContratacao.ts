@@ -360,9 +360,20 @@ export function useCotacaoContratacao(token: string | undefined) {
           cliente_cidade: dados.cidade,
           cliente_uf: dados.uf,
           status_contratacao: 'dados_preenchidos',
-          // Dados do veículo extraídos do CRLV via OCR (necessários para SGA Hinova)
+          
+          // Dados de documentos pessoais (RG/CNH) extraídos via OCR
+          cliente_rg: dados.rg || null,
+          cliente_rg_orgao: dados.rg_orgao || null,
+          cliente_cnh: dados.cnh || null,
+          cliente_cnh_validade: dados.cnh_validade || null,
+          cliente_cnh_categoria: dados.cnh_categoria || null,
+          
+          // Dados do veículo extraídos do CRLV via OCR (necessários para SGA Hinova e Termo)
           veiculo_chassi: dados.veiculo_chassi || null,
           veiculo_renavam: dados.veiculo_renavam || null,
+          veiculo_cor: dados.veiculo_cor || null,
+          veiculo_combustivel: dados.veiculo_combustivel || null,
+          veiculo_ano_fabricacao: dados.veiculo_ano_fabricacao || null,
         })
         .eq('id', cotacao.id);
 
