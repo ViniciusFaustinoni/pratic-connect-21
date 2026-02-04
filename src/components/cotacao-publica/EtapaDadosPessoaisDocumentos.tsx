@@ -29,7 +29,12 @@ interface DadosExtraidos {
   nome?: string;
   cpf?: string;
   rg?: string;
+  rg_orgao?: string;
   data_nascimento?: string;
+  // Dados da CNH (extraídos automaticamente)
+  cnh?: string;
+  cnh_validade?: string;
+  cnh_categoria?: string;
   // Endereço (de Comprovante)
   cep?: string;
   logradouro?: string;
@@ -42,6 +47,10 @@ interface DadosExtraidos {
   veiculo_placa?: string;
   veiculo_chassi?: string;
   veiculo_renavam?: string;
+  veiculo_cor?: string;
+  veiculo_combustivel?: string;
+  veiculo_ano_fabricacao?: number;
+  veiculo_ano_modelo?: number;
 }
 
 interface EtapaDadosPessoaisDocumentosProps {
@@ -113,12 +122,29 @@ export function EtapaDadosPessoaisDocumentos({
     setDadosExtraidos(prev => {
       const novosDados = { ...prev };
       
-      // De CNH ou RG: dados pessoais
+      // De CNH ou RG: dados pessoais + dados de documentos
       if (tipoDocumento === 'cnh' || tipoDocumento === 'rg') {
         if (dados.nome) novosDados.nome = dados.nome;
         if (dados.cpf) novosDados.cpf = dados.cpf;
         if (dados.rg) novosDados.rg = dados.rg;
         if (dados.data_nascimento) novosDados.data_nascimento = dados.data_nascimento;
+        
+        // NOVOS CAMPOS - Dados da CNH
+        if (tipoDocumento === 'cnh') {
+          // Número de registro da CNH (pode vir como numero_registro ou registro)
+          if (dados.numero_registro) novosDados.cnh = dados.numero_registro;
+          else if (dados.registro) novosDados.cnh = dados.registro;
+          
+          // Validade da CNH
+          if (dados.validade) novosDados.cnh_validade = dados.validade;
+          
+          // Categoria da CNH (A, B, AB, etc.)
+          if (dados.categoria) novosDados.cnh_categoria = dados.categoria;
+        }
+        
+        // Órgão emissor do RG (pode vir de CNH ou RG)
+        if (dados.orgao_emissor) novosDados.rg_orgao = dados.orgao_emissor;
+        else if (dados.orgao) novosDados.rg_orgao = dados.orgao;
       }
       
       // De Comprovante de Residência: endereço
@@ -132,11 +158,34 @@ export function EtapaDadosPessoaisDocumentos({
         if (dados.uf) novosDados.uf = dados.uf;
       }
       
-      // De CRLV: dados do veículo
+      // De CRLV: dados do veículo (expandido)
       if (tipoDocumento === 'crlv') {
         if (dados.placa) novosDados.veiculo_placa = dados.placa;
         if (dados.chassi) novosDados.veiculo_chassi = dados.chassi;
         if (dados.renavam) novosDados.veiculo_renavam = dados.renavam;
+        
+        // NOVOS CAMPOS - Dados do veículo extraídos do CRLV
+        if (dados.cor) novosDados.veiculo_cor = dados.cor;
+        if (dados.combustivel) novosDados.veiculo_combustivel = dados.combustivel;
+        
+        // Ano de fabricação e modelo
+        if (dados.ano_fabricacao) {
+          const anoFab = parseInt(dados.ano_fabricacao);
+          if (!isNaN(anoFab)) novosDados.veiculo_ano_fabricacao = anoFab;
+        } else if (dados.ano && dados.ano.includes('/')) {
+          const [fab] = dados.ano.split('/');
+          const anoFab = parseInt(fab);
+          if (!isNaN(anoFab)) novosDados.veiculo_ano_fabricacao = anoFab;
+        }
+        
+        if (dados.ano_modelo) {
+          const anoMod = parseInt(dados.ano_modelo);
+          if (!isNaN(anoMod)) novosDados.veiculo_ano_modelo = anoMod;
+        } else if (dados.ano && dados.ano.includes('/')) {
+          const [, mod] = dados.ano.split('/');
+          const anoMod = parseInt(mod);
+          if (!isNaN(anoMod)) novosDados.veiculo_ano_modelo = anoMod;
+        }
       }
       
       return novosDados;
@@ -162,9 +211,18 @@ export function EtapaDadosPessoaisDocumentos({
       bairro: dadosExtraidos.bairro || '',
       cidade: dadosExtraidos.cidade || '',
       uf: dadosExtraidos.uf || '',
-      // Dados do veículo extraídos do CRLV (para persistir na cotação)
+      // Dados de documentos pessoais (CNH/RG) - NOVOS
+      rg: dadosExtraidos.rg || undefined,
+      rg_orgao: dadosExtraidos.rg_orgao || undefined,
+      cnh: dadosExtraidos.cnh || undefined,
+      cnh_validade: dadosExtraidos.cnh_validade || undefined,
+      cnh_categoria: dadosExtraidos.cnh_categoria || undefined,
+      // Dados do veículo extraídos do CRLV (expandido)
       veiculo_chassi: dadosExtraidos.veiculo_chassi || undefined,
       veiculo_renavam: dadosExtraidos.veiculo_renavam || undefined,
+      veiculo_cor: dadosExtraidos.veiculo_cor || undefined,
+      veiculo_combustivel: dadosExtraidos.veiculo_combustivel || undefined,
+      veiculo_ano_fabricacao: dadosExtraidos.veiculo_ano_fabricacao || undefined,
     };
     onSubmit(dados);
   };

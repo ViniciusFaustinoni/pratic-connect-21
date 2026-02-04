@@ -204,9 +204,10 @@ serve(async (req) => {
               placa: placaLimpa,
               marca: cotacao.veiculo_marca,
               modelo: cotacao.veiculo_modelo,
-              ano_fabricacao: cotacao.veiculo_ano,
+              ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
               ano_modelo: cotacao.veiculo_ano,
               cor: cotacao.veiculo_cor || null,
+              combustivel: cotacao.veiculo_combustivel || null,
               valor_fipe: cotacao.valor_fipe || null,
               codigo_fipe: cotacao.codigo_fipe || null,
               // Dados obrigatórios para SGA Hinova (extraídos do CRLV via OCR)
@@ -253,16 +254,17 @@ serve(async (req) => {
             veiculoId = veiculoExistente.id;
             console.log('Veículo existente encontrado pela placa:', veiculoId);
           } else {
-            const { data: novoVeiculoEmail, error: veiculoEmailError } = await supabase
+          const { data: novoVeiculoEmail, error: veiculoEmailError } = await supabase
               .from('veiculos')
               .insert({
                 associado_id: associadoId,
                 placa: placaLimpa,
                 marca: cotacao.veiculo_marca,
                 modelo: cotacao.veiculo_modelo,
-                ano_fabricacao: cotacao.veiculo_ano,
+                ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
                 ano_modelo: cotacao.veiculo_ano,
                 cor: cotacao.veiculo_cor || null,
+                combustivel: cotacao.veiculo_combustivel || null,
                 valor_fipe: cotacao.valor_fipe || null,
                 codigo_fipe: cotacao.codigo_fipe || null,
                 // Dados obrigatórios para SGA Hinova (extraídos do CRLV via OCR)
@@ -328,9 +330,10 @@ serve(async (req) => {
           placa: cotacao.veiculo_placa,
           marca: cotacao.veiculo_marca,
           modelo: cotacao.veiculo_modelo,
-          ano_fabricacao: cotacao.veiculo_ano,
+          ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
           ano_modelo: cotacao.veiculo_ano,
           cor: cotacao.veiculo_cor || null,
+          combustivel: cotacao.veiculo_combustivel || null,
           valor_fipe: cotacao.valor_fipe || null,
           codigo_fipe: cotacao.codigo_fipe || null,
           // Dados obrigatórios para SGA Hinova (extraídos do CRLV via OCR)
@@ -374,19 +377,35 @@ serve(async (req) => {
             vendedor_id: vendedorIdFinal, // CORREÇÃO: Usar profile.id validado
             status: 'rascunho',
             
-            // Dados do veículo
+            // Dados do veículo (snapshot completo)
             veiculo_marca: cotacao.veiculo_marca,
             veiculo_modelo: cotacao.veiculo_modelo,
             veiculo_ano: cotacao.veiculo_ano,
             veiculo_placa: cotacao.veiculo_placa,
             veiculo_valor_fipe: cotacao.valor_fipe,
             veiculo_cor: cotacao.veiculo_cor,
+            veiculo_combustivel: cotacao.veiculo_combustivel || null,
+            veiculo_ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano || null,
             
-            // Dados do cliente
+            // Dados do cliente (snapshot completo)
             cliente_nome: nomeFinal,
             cliente_email: emailFinal,
             cliente_telefone: telefoneFinal,
             cliente_cpf: cpfFinal,
+            
+            // NOVOS CAMPOS: Dados de documentos pessoais (extraídos via OCR)
+            cliente_rg: cotacao.cliente_rg || null,
+            cliente_rg_orgao: cotacao.cliente_rg_orgao || null,
+            cliente_cnh: cotacao.cliente_cnh || null,
+            cliente_cnh_validade: cotacao.cliente_cnh_validade || null,
+            cliente_cnh_categoria: cotacao.cliente_cnh_categoria || null,
+            cliente_data_nascimento: cotacao.cliente_data_nascimento || null,
+            
+            // NOVOS CAMPOS: Endereço detalhado (snapshot)
+            cliente_logradouro: cotacao.cliente_logradouro || null,
+            cliente_numero: cotacao.cliente_numero || null,
+            cliente_bairro: cotacao.cliente_bairro || null,
+            cliente_complemento: cotacao.cliente_complemento || null,
             
             // Link público para satisfazer RLS em acesso anônimo
             link_token: linkToken,
