@@ -1,5 +1,12 @@
+// ============================================
+// EDGE FUNCTION: autentique-create-by-token
+// Cria documento Autentique a partir de link_token (uso público)
+// ============================================
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { generateTermoAfiliacao } from "../_shared/termo-afiliacao-template.ts";
+import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,375 +16,6 @@ const corsHeaders = {
 const AUTENTIQUE_API_URL = "https://api.autentique.com.br/v2/graphql";
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-interface ContratoTemplateData {
-  numero: string;
-  clienteNome: string;
-  clienteCpf: string;
-  clienteEmail: string;
-  clienteTelefone: string;
-  planoNome: string;
-  planoCodigo: string;
-  planoDescricao: string;
-  tipoUso: string;
-  valorAdesao: number;
-  valorMensal: number;
-  diaVencimento: number;
-  dataInicio: string;
-  veiculoMarca?: string;
-  veiculoModelo?: string;
-  veiculoPlaca?: string;
-  veiculoAno?: number;
-  valorFipe?: number;
-}
-
-// ============= UTILIDADES =============
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("pt-BR");
-};
-
-// ============= SEÇÕES COMUNS =============
-
-const generateStyles = () => `
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      font-size: 12px;
-      line-height: 1.6;
-      color: #333;
-      padding: 40px;
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-      border-bottom: 2px solid #1e40af;
-      padding-bottom: 20px;
-    }
-    .header h1 {
-      font-size: 24px;
-      margin: 0;
-      color: #1e40af;
-    }
-    .header .plano-badge {
-      display: inline-block;
-      background-color: #1e40af;
-      color: white;
-      padding: 4px 12px;
-      border-radius: 4px;
-      font-size: 12px;
-      margin-top: 8px;
-    }
-    .header p {
-      margin: 5px 0;
-      color: #666;
-    }
-    .section {
-      margin-bottom: 25px;
-    }
-    .section h2 {
-      font-size: 14px;
-      color: #1e40af;
-      border-bottom: 1px solid #e5e7eb;
-      padding-bottom: 5px;
-      margin-bottom: 15px;
-    }
-    .field {
-      margin-bottom: 8px;
-    }
-    .field-label {
-      font-weight: bold;
-      display: inline-block;
-      width: 150px;
-    }
-    .values-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 15px 0;
-    }
-    .values-table th, .values-table td {
-      border: 1px solid #e5e7eb;
-      padding: 10px;
-      text-align: left;
-    }
-    .values-table th {
-      background-color: #f9fafb;
-    }
-    .coverage-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 15px 0;
-    }
-    .coverage-table td {
-      border: 1px solid #e5e7eb;
-      padding: 8px 12px;
-    }
-    .coverage-table tr:nth-child(even) {
-      background-color: #f9fafb;
-    }
-    .coverage-check {
-      color: #16a34a;
-      font-weight: bold;
-    }
-    .coverage-x {
-      color: #dc2626;
-    }
-    .terms {
-      font-size: 10px;
-      text-align: justify;
-    }
-    .terms h3 {
-      font-size: 12px;
-      margin-top: 15px;
-    }
-    .signature-area {
-      margin-top: 50px;
-      padding-top: 20px;
-      border-top: 1px solid #e5e7eb;
-    }
-    .signature-line {
-      margin-top: 60px;
-      border-top: 1px solid #333;
-      width: 300px;
-      text-align: center;
-      padding-top: 5px;
-    }
-    .footer {
-      margin-top: 40px;
-      text-align: center;
-      font-size: 10px;
-      color: #666;
-    }
-    .highlight-box {
-      background-color: #eff6ff;
-      border: 1px solid #1e40af;
-      border-radius: 8px;
-      padding: 15px;
-      margin: 15px 0;
-    }
-  </style>
-`;
-
-const generateHeader = (data: ContratoTemplateData) => `
-  <div class="header">
-    <h1>CONTRATO DE ADESÃO</h1>
-    <span class="plano-badge">${data.planoNome.toUpperCase()}</span>
-    <p><strong>Nº ${data.numero}</strong></p>
-    <p>Data de Emissão: ${formatDate(new Date().toISOString())}</p>
-  </div>
-`;
-
-const generateDadosContratante = (data: ContratoTemplateData) => `
-  <div class="section">
-    <h2>1. DADOS DO CONTRATANTE</h2>
-    <div class="field">
-      <span class="field-label">Nome Completo:</span>
-      ${data.clienteNome}
-    </div>
-    <div class="field">
-      <span class="field-label">CPF:</span>
-      ${data.clienteCpf || "Não informado"}
-    </div>
-    <div class="field">
-      <span class="field-label">Email:</span>
-      ${data.clienteEmail}
-    </div>
-    <div class="field">
-      <span class="field-label">Telefone:</span>
-      ${data.clienteTelefone || "Não informado"}
-    </div>
-  </div>
-`;
-
-const generateDadosVeiculo = (data: ContratoTemplateData) => {
-  if (!data.veiculoMarca) return "";
-  
-  return `
-    <div class="section">
-      <h2>2. DADOS DO VEÍCULO</h2>
-      <div class="field">
-        <span class="field-label">Marca/Modelo:</span>
-        ${data.veiculoMarca} ${data.veiculoModelo || ""}
-      </div>
-      <div class="field">
-        <span class="field-label">Placa:</span>
-        ${data.veiculoPlaca || "Não informado"}
-      </div>
-      <div class="field">
-        <span class="field-label">Ano:</span>
-        ${data.veiculoAno || "Não informado"}
-      </div>
-      ${data.valorFipe ? `
-      <div class="field">
-        <span class="field-label">Valor FIPE:</span>
-        ${formatCurrency(data.valorFipe)}
-      </div>
-      ` : ""}
-    </div>
-  `;
-};
-
-const generateValoresContrato = (data: ContratoTemplateData) => `
-  <div class="section">
-    <h2>3. VALORES DO CONTRATO</h2>
-    <table class="values-table">
-      <tr>
-        <th>Descrição</th>
-        <th>Valor</th>
-      </tr>
-      <tr>
-        <td>Plano</td>
-        <td>${data.planoNome}</td>
-      </tr>
-      <tr>
-        <td>Taxa de Adesão</td>
-        <td>${formatCurrency(data.valorAdesao)}</td>
-      </tr>
-      <tr>
-        <td>Mensalidade</td>
-        <td>${formatCurrency(data.valorMensal)}</td>
-      </tr>
-      <tr>
-        <td>Dia de Vencimento</td>
-        <td>Todo dia ${data.diaVencimento}</td>
-      </tr>
-      <tr>
-        <td>Data de Início</td>
-        <td>${formatDate(data.dataInicio)}</td>
-      </tr>
-    </table>
-  </div>
-`;
-
-const generateAssinatura = (data: ContratoTemplateData) => `
-  <div class="signature-area">
-    <p>Ao assinar eletronicamente este documento, o CONTRATANTE declara estar ciente e de acordo com todas as condições estabelecidas neste contrato, incluindo as coberturas, carências e exclusões do plano ${data.planoNome}.</p>
-    
-    <div class="signature-line">
-      ${data.clienteNome}<br>
-      <small>Contratante</small>
-    </div>
-  </div>
-`;
-
-const generateFooter = () => `
-  <div class="footer">
-    <p>Documento gerado eletronicamente e assinado digitalmente via plataforma Autentique.</p>
-    <p>Este contrato tem validade jurídica conforme Lei nº 14.063/2020.</p>
-  </div>
-`;
-
-// ============= TEMPLATE PADRÃO =============
-
-/**
- * Gera HTML dinâmico com as coberturas do plano
- */
-const gerarCoberturasHTML = (coberturas: string[] | null | undefined): string => {
-  if (!coberturas || coberturas.length === 0) {
-    // Fallback para coberturas básicas
-    return `
-      <table class="coverage-table">
-        <tr><td><span class="coverage-check">✓</span> Roubo e Furto</td></tr>
-        <tr><td><span class="coverage-check">✓</span> Assistência 24h</td></tr>
-        <tr><td><span class="coverage-check">✓</span> Rastreamento Veicular</td></tr>
-      </table>
-    `;
-  }
-  
-  const rows = coberturas.map(cobertura => 
-    `<tr><td><span class="coverage-check">✓</span> ${cobertura}</td></tr>`
-  ).join('\n      ');
-  
-  return `
-    <table class="coverage-table">
-      ${rows}
-    </table>
-  `;
-};
-
-/**
- * Formata a cota de participação com percentual e mínimo
- */
-const formatarCotaParticipacao = (plano: any): string => {
-  const percentual = plano?.cota_participacao;
-  const minimo = plano?.cota_minima;
-  
-  if (percentual && minimo) {
-    return `${percentual}% (mínimo ${formatCurrency(minimo)})`;
-  } else if (percentual) {
-    return `${percentual}%`;
-  }
-  return "Conforme condições do plano contratado";
-};
-
-const generateCoberturasDefault = (data: ContratoTemplateData, plano?: any) => `
-  <div class="section">
-    <h2>4. COBERTURAS CONTRATADAS - ${data.planoNome.toUpperCase()}</h2>
-    ${gerarCoberturasHTML(plano?.coberturas)}
-    
-    <div class="highlight-box">
-      <strong>Cota de Participação:</strong> ${formatarCotaParticipacao(plano)}<br>
-      <strong>Carência:</strong> ${plano?.carencia || "90 dias após instalação do rastreador"}
-    </div>
-  </div>
-`;
-
-const generateTermosGerais = (data: ContratoTemplateData) => `
-  <div class="section terms">
-    <h2>5. TERMOS E CONDIÇÕES GERAIS</h2>
-    
-    <h3>5.1. Objeto do Contrato</h3>
-    <p>O presente contrato tem por objeto a prestação de serviços de proteção veicular para o veículo descrito neste instrumento, conforme as coberturas do plano ${data.planoNome}.</p>
-    
-    <h3>5.2. Obrigações do Contratante</h3>
-    <p>O CONTRATANTE se compromete a: manter os pagamentos em dia; permitir a instalação do rastreador; comunicar imediatamente qualquer sinistro; não utilizar o veículo para fins ilícitos.</p>
-    
-    <h3>5.3. Carência</h3>
-    <p>O período de carência começa a contar a partir da data de instalação do equipamento rastreador no veículo.</p>
-    
-    <h3>5.4. Exclusões</h3>
-    <p>Não estão cobertas: participação em competições; uso do veículo por pessoa não habilitada; embriaguez ou uso de substâncias; desgaste natural; danos estéticos.</p>
-    
-    <h3>5.5. Vigência</h3>
-    <p>Este contrato tem vigência de 12 (doze) meses, renovável automaticamente por igual período.</p>
-    
-    <h3>5.6. Rescisão</h3>
-    <p>Qualquer das partes pode rescindir o contrato mediante aviso prévio de 30 dias. A inadimplência por mais de 30 dias autoriza a suspensão imediata das coberturas.</p>
-    
-    <h3>5.7. Foro</h3>
-    <p>Fica eleito o foro da comarca onde se localiza a sede da CONTRATADA para dirimir quaisquer questões oriundas deste contrato.</p>
-  </div>
-`;
-
-function generateTemplateDefault(data: ContratoTemplateData, plano?: any): string {
-  return `
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Contrato de Adesão - ${data.numero}</title>
-      ${generateStyles()}
-    </head>
-    <body>
-      ${generateHeader(data)}
-      ${generateDadosContratante(data)}
-      ${generateDadosVeiculo(data)}
-      ${generateValoresContrato(data)}
-      ${generateCoberturasDefault(data, plano)}
-      ${generateTermosGerais(data)}
-      ${generateAssinatura(data)}
-      ${generateFooter()}
-    </body>
-    </html>
-  `;
-}
-
-// ============= HANDLER PRINCIPAL =============
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -419,7 +57,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Buscar contrato por link_token com embeds explícitos (evita erro de relacionamento ambíguo)
+    // Buscar contrato por link_token com embeds explícitos
     const { data: contrato, error: contratoError } = await supabase
       .from("contratos")
       .select(`
@@ -435,7 +73,6 @@ serve(async (req) => {
 
     if (contratoError) {
       console.error('[autentique-create-by-token] Erro ao buscar contrato:', contratoError.message, contratoError.details);
-      // Verificar se é erro de formato UUID
       if (contratoError.message?.includes('invalid input syntax for type uuid')) {
         return new Response(
           JSON.stringify({ success: false, error: 'Token inválido', errorCode: 'TOKEN_INVALID' }),
@@ -483,6 +120,9 @@ serve(async (req) => {
       );
     }
 
+    // ============= BUSCAR CONFIGURAÇÕES DA EMPRESA =============
+    const empresaConfig = await buscarConfiguracoesEmpresa(supabase);
+
     // Obter dados do cliente (associado tem prioridade, depois lead)
     const cliente = contrato.associados || contrato.leads;
     const clienteNome = cliente?.nome || 'Cliente';
@@ -494,34 +134,27 @@ serve(async (req) => {
       throw new Error('Email do cliente não encontrado');
     }
 
-    // Preparar dados do template
-    const templateData: ContratoTemplateData = {
-      numero: contrato.numero,
-      clienteNome,
-      clienteCpf,
-      clienteEmail,
-      clienteTelefone,
-      planoNome: contrato.planos?.nome || "Plano Padrão",
-      planoCodigo: contrato.planos?.codigo || "",
-      planoDescricao: contrato.planos?.descricao || "",
-      tipoUso: contrato.planos?.tipo_uso || "particular",
-      valorAdesao: contrato.valor_adesao,
-      valorMensal: contrato.valor_mensal,
-      diaVencimento: contrato.dia_vencimento || 10,
-      dataInicio: contrato.data_inicio,
-      veiculoMarca: contrato.leads?.veiculo_marca,
-      veiculoModelo: contrato.leads?.veiculo_modelo,
-      veiculoPlaca: contrato.leads?.veiculo_placa,
-      veiculoAno: contrato.leads?.veiculo_ano,
-      valorFipe: contrato.leads?.veiculo_fipe,
-    };
+    // ============= MAPEAR DADOS PARA O TEMPLATE =============
+    const templateData = mapearDadosParaTemplate(
+      {
+        ...contrato,
+        cliente_nome: clienteNome,
+        cliente_cpf: clienteCpf,
+        cliente_email: clienteEmail,
+        cliente_telefone: clienteTelefone,
+      },
+      contrato.planos,
+      empresaConfig,
+      contrato.leads,
+      contrato.associados
+    );
 
-    // Gerar HTML do contrato - passar plano para gerar coberturas dinâmicas
-    const contratoHTML = generateTemplateDefault(templateData, contrato.planos);
+    // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============
+    const contratoHTML = generateTermoAfiliacao(templateData);
 
     console.log('[autentique-create-by-token] HTML gerado, tamanho:', contratoHTML.length, 'bytes');
 
-    // Criar documento no Autentique via GraphQL Multipart Request Spec
+    // ============= ENVIAR PARA AUTENTIQUE =============
     const mutation = `
       mutation CreateDocumentMutation(
         $document: DocumentInput!
@@ -551,12 +184,11 @@ serve(async (req) => {
       }
     `;
 
-    timings.generateHtml = Date.now() - t0 - (timings.fetchContrato || 0);
+    timings.generateHtml = Date.now() - t0 - (timings.fetchContrato as number || 0);
     
-    const documentName = `Contrato ${contrato.numero} - ${clienteNome} - ${contrato.planos?.nome || 'Plano'}`;
+    const documentName = `Termo de Afiliação ${contrato.numero} - ${clienteNome}`;
     
-    // Preparar operations JSON (com file: null como placeholder)
-    // Usando delivery_method: "DELIVERY_METHOD_LINK" para tentar obter o short_link direto
+    // Preparar operations JSON
     const operations = {
       query: mutation,
       variables: {
@@ -568,18 +200,18 @@ serve(async (req) => {
             name: clienteNome,
             email: clienteEmail,
             action: "SIGN",
-            delivery_method: "DELIVERY_METHOD_LINK", // Força geração de link na criação
+            delivery_method: "DELIVERY_METHOD_LINK",
             positions: [
               {
                 x: "65.0",
-                y: "80.0",
+                y: "85.0",
                 z: "1",
                 element: "SIGNATURE",
               },
             ],
           },
         ],
-        file: null, // Placeholder - será mapeado pelo FormData
+        file: null,
       },
     };
 
@@ -595,7 +227,7 @@ serve(async (req) => {
     
     // Criar Blob do HTML e anexar ao FormData
     const htmlBlob = new Blob([contratoHTML], { type: "text/html" });
-    formData.append("0", htmlBlob, `contrato-${contrato.numero}.html`);
+    formData.append("0", htmlBlob, `termo-afiliacao-${contrato.numero}.html`);
 
     console.log("[autentique-create-by-token] Enviando para Autentique via multipart/form-data...");
     console.log("[autentique-create-by-token] Document name:", documentName);
@@ -606,14 +238,13 @@ serve(async (req) => {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${autentiqueApiKey}`,
-        // NÃO definir Content-Type - FormData define automaticamente com boundary
       },
       body: formData,
     });
 
     const autentiqueData = await autentiqueResponse.json();
     
-    timings.createDocument = Date.now() - t0 - (timings.fetchContrato || 0) - (timings.generateHtml || 0);
+    timings.createDocument = Date.now() - t0 - (timings.fetchContrato as number || 0) - (timings.generateHtml as number || 0);
     
     console.log("[autentique-create-by-token] Resposta Autentique:", JSON.stringify(autentiqueData, null, 2));
 
@@ -645,7 +276,6 @@ serve(async (req) => {
         dados: { error_code: errorCode, raw: autentiqueData }
       });
       
-      // Retornar erro tratado (HTTP 200 com success: false)
       return new Response(JSON.stringify({
         success: false,
         error: userMessage,
@@ -676,7 +306,7 @@ serve(async (req) => {
 
     console.log("[autentique-create-by-token] Public ID da assinatura:", signerSignature.public_id);
 
-    // Tentar obter o link diretamente da resposta do createDocument (otimização)
+    // Tentar obter o link diretamente da resposta do createDocument
     let signatureLink = signerSignature.link?.short_link;
     
     if (signatureLink) {
@@ -705,7 +335,7 @@ serve(async (req) => {
 
       const linkData = await linkResponse.json();
       
-      timings.createLinkToSignature = Date.now() - t0 - (timings.fetchContrato || 0) - (timings.generateHtml || 0) - (timings.createDocument || 0);
+      timings.createLinkToSignature = Date.now() - t0 - (timings.fetchContrato as number || 0) - (timings.generateHtml as number || 0) - (timings.createDocument as number || 0);
       
       console.log("[autentique-create-by-token] Resposta createLinkToSignature:", JSON.stringify(linkData, null, 2));
 
@@ -745,10 +375,11 @@ serve(async (req) => {
     await supabase.from("contratos_historico").insert({
       contrato_id: contrato.id,
       evento: "enviado_assinatura",
-      descricao: `Contrato enviado para assinatura via link público`,
+      descricao: `Termo de Afiliação enviado para assinatura via link público`,
       dados: { 
         autentique_id: document.id, 
-        link: signatureLink 
+        link: signatureLink,
+        template_usado: "Termo de Afiliação v2"
       },
     });
 
@@ -757,7 +388,7 @@ serve(async (req) => {
       await supabase.from("leads_historico").insert({
         lead_id: contrato.lead_id,
         acao: "contrato_enviado",
-        descricao: `Contrato ${contrato.numero} (${contrato.planos?.nome}) enviado para assinatura via link público`,
+        descricao: `Termo de Afiliação ${contrato.numero} (${contrato.planos?.nome}) enviado para assinatura via link público`,
         etapa_anterior: "contrato_enviado",
         etapa_nova: "contrato_enviado",
       });
@@ -780,7 +411,7 @@ serve(async (req) => {
         success: true,
         documentId: document.id,
         signatureLink,
-        message: "Contrato enviado para assinatura com sucesso",
+        message: "Termo de Afiliação enviado para assinatura com sucesso",
         timingsMs: timings,
       }),
       {

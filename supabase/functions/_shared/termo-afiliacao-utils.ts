@@ -1,0 +1,326 @@
+// ============================================
+// TERMO DE AFILIAÇÃO - UTILITÁRIOS
+// ============================================
+
+// ============= INTERFACES =============
+
+export interface ClienteData {
+  nome: string;
+  cpf: string;
+  rg?: string;
+  rg_orgao?: string;
+  data_nascimento?: string;
+  estado_civil?: string;
+  profissao?: string;
+  email: string;
+  telefone: string;
+  telefone_secundario?: string;
+  logradouro: string;
+  numero: string;
+  complemento?: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  cep: string;
+}
+
+export interface VeiculoData {
+  placa: string;
+  chassi?: string;
+  renavam?: string;
+  marca: string;
+  modelo: string;
+  ano: number;
+  ano_fabricacao?: number;
+  cor?: string;
+  combustivel?: string;
+  categoria?: string;
+  tipo_uso?: string;
+  codigo_fipe?: string;
+  valor_fipe: number;
+  alienado?: boolean;
+  financeira?: string;
+  procedencia?: string;
+}
+
+export interface PlanoData {
+  nome: string;
+  codigo?: string;
+  tipo?: string;
+  linha?: string;
+  coberturas?: string[];
+  cota_participacao?: number;
+  cota_minima?: number;
+  carencia?: string;
+}
+
+export interface ContratoData {
+  numero: string;
+  valor_adesao: number;
+  valor_mensal: number;
+  dia_vencimento: number;
+  data_inicio?: string;
+  forma_pagamento?: string;
+}
+
+export interface EmpresaData {
+  nome: string;
+  razao_social?: string;
+  cnpj: string;
+  logradouro: string;
+  numero: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  cep: string;
+  telefone?: string;
+  email?: string;
+  lgpd_email?: string;
+}
+
+export interface TermoAfiliacaoData {
+  cliente: ClienteData;
+  veiculo: VeiculoData;
+  plano: PlanoData;
+  contrato: ContratoData;
+  empresa: EmpresaData;
+}
+
+// ============= FORMATADORES =============
+
+/**
+ * Formata CPF: 123.456.789-00
+ */
+export const formatCPF = (cpf: string | null | undefined): string => {
+  if (!cpf) return "—";
+  const cleaned = cpf.replace(/\D/g, "");
+  if (cleaned.length !== 11) return cpf;
+  return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+};
+
+/**
+ * Formata telefone: (11) 99999-8888 ou (11) 9999-8888
+ */
+export const formatPhone = (phone: string | null | undefined): string => {
+  if (!phone) return "—";
+  const cleaned = phone.replace(/\D/g, "");
+  if (cleaned.length === 11) {
+    return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  }
+  if (cleaned.length === 10) {
+    return cleaned.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+  }
+  return phone;
+};
+
+/**
+ * Formata CEP: 00000-000
+ */
+export const formatCEP = (cep: string | null | undefined): string => {
+  if (!cep) return "—";
+  const cleaned = cep.replace(/\D/g, "");
+  if (cleaned.length !== 8) return cep;
+  return cleaned.replace(/(\d{5})(\d{3})/, "$1-$2");
+};
+
+/**
+ * Formata valor monetário: R$ 1.234,56
+ */
+export const formatCurrency = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return "R$ 0,00";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+};
+
+/**
+ * Formata data: DD/MM/AAAA
+ */
+export const formatDate = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return "—";
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("pt-BR");
+  } catch {
+    return dateStr;
+  }
+};
+
+/**
+ * Formata data por extenso: 04 de fevereiro de 2026
+ */
+export const formatDateExtended = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return "—";
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
+// ============= CÁLCULOS =============
+
+/**
+ * Calcula a cota de participação (% do valor FIPE)
+ */
+export const calcularCotaParticipacao = (
+  valorFipe: number | null | undefined,
+  percentual: number | null | undefined
+): number => {
+  const fipe = valorFipe || 0;
+  const pct = percentual || 10;
+  return (fipe * pct) / 100;
+};
+
+/**
+ * Calcula a data da primeira mensalidade baseado no dia de vencimento
+ */
+export const calcularPrimeiraMensalidade = (diaVencimento: number): string => {
+  const hoje = new Date();
+  let ano = hoje.getFullYear();
+  let mes = hoje.getMonth() + 1; // próximo mês
+  
+  // Se estamos muito próximos do vencimento, vai para o mês seguinte
+  if (hoje.getDate() >= diaVencimento - 5) {
+    mes += 1;
+  }
+  
+  // Ajustar virada de ano
+  if (mes > 12) {
+    mes = 1;
+    ano += 1;
+  }
+  
+  // Formatar como DD/MM/AAAA
+  const dia = String(diaVencimento).padStart(2, "0");
+  const mesStr = String(mes).padStart(2, "0");
+  
+  return `${dia}/${mesStr}/${ano}`;
+};
+
+/**
+ * Gera número do termo no formato AAAA-NNNNNN
+ */
+export const gerarNumeroTermo = (numeroContrato: string): string => {
+  const ano = new Date().getFullYear();
+  // Extrai apenas números do contrato e pega os últimos 6 dígitos
+  const numeros = numeroContrato.replace(/\D/g, "").slice(-6).padStart(6, "0");
+  return `${ano}-${numeros}`;
+};
+
+// ============= MAPPERS =============
+
+/**
+ * Mapeia dados do contrato/cotação para a interface do template
+ */
+export function mapearDadosParaTemplate(
+  contrato: any,
+  plano: any,
+  empresa: any,
+  lead?: any,
+  associado?: any
+): TermoAfiliacaoData {
+  // Usar dados do associado se existir, senão do lead
+  const cliente = associado || lead || {};
+  const veiculo = lead || contrato || {};
+  
+  return {
+    cliente: {
+      nome: contrato.cliente_nome || cliente.nome || "",
+      cpf: contrato.cliente_cpf || cliente.cpf || "",
+      rg: contrato.cliente_rg || cliente.rg || "",
+      rg_orgao: contrato.cliente_rg_orgao || cliente.rg_orgao || "",
+      data_nascimento: contrato.cliente_data_nascimento || cliente.data_nascimento || "",
+      estado_civil: contrato.cliente_estado_civil || cliente.estado_civil || "",
+      profissao: contrato.cliente_profissao || cliente.profissao || "",
+      email: contrato.cliente_email || cliente.email || "",
+      telefone: contrato.cliente_telefone || cliente.telefone || "",
+      telefone_secundario: contrato.cliente_telefone_secundario || cliente.telefone_secundario || "",
+      logradouro: contrato.cliente_logradouro || cliente.logradouro || "",
+      numero: contrato.cliente_numero || cliente.numero || "",
+      complemento: contrato.cliente_complemento || cliente.complemento || "",
+      bairro: contrato.cliente_bairro || cliente.bairro || "",
+      cidade: contrato.cliente_cidade || cliente.cidade || "",
+      uf: contrato.cliente_uf || cliente.uf || "",
+      cep: contrato.cliente_cep || cliente.cep || "",
+    },
+    veiculo: {
+      placa: contrato.veiculo_placa || veiculo.veiculo_placa || "",
+      chassi: contrato.veiculo_chassi || veiculo.veiculo_chassi || "",
+      renavam: contrato.veiculo_renavam || veiculo.veiculo_renavam || "",
+      marca: contrato.veiculo_marca || veiculo.veiculo_marca || "",
+      modelo: contrato.veiculo_modelo || veiculo.veiculo_modelo || "",
+      ano: contrato.veiculo_ano || veiculo.veiculo_ano || 0,
+      ano_fabricacao: contrato.veiculo_ano_fabricacao || veiculo.veiculo_ano_fabricacao || 0,
+      cor: contrato.veiculo_cor || veiculo.veiculo_cor || "",
+      combustivel: contrato.veiculo_combustivel || veiculo.veiculo_combustivel || "",
+      categoria: contrato.veiculo_categoria || veiculo.veiculo_categoria || "Automóvel",
+      tipo_uso: contrato.veiculo_tipo_uso || veiculo.veiculo_tipo_uso || "Particular",
+      codigo_fipe: veiculo.codigo_fipe || "",
+      valor_fipe: contrato.veiculo_valor_fipe || veiculo.veiculo_fipe || 0,
+      alienado: contrato.veiculo_alienado || veiculo.veiculo_alienado || false,
+      financeira: contrato.veiculo_financeira || veiculo.veiculo_financeira || "",
+      procedencia: contrato.veiculo_procedencia || veiculo.veiculo_procedencia || "Usado de particular",
+    },
+    plano: {
+      nome: plano?.nome || "Plano Padrão",
+      codigo: plano?.codigo || "",
+      tipo: plano?.tipo_uso || "Normal",
+      linha: plano?.linha || "Normal",
+      coberturas: plano?.coberturas || [],
+      cota_participacao: plano?.cota_participacao || 10,
+      cota_minima: plano?.cota_minima || 3000,
+      carencia: plano?.carencia || "90 dias após instalação do rastreador",
+    },
+    contrato: {
+      numero: contrato.numero || "",
+      valor_adesao: contrato.valor_adesao || 0,
+      valor_mensal: contrato.valor_mensal || 0,
+      dia_vencimento: contrato.dia_vencimento || 10,
+      data_inicio: contrato.data_inicio || "",
+      forma_pagamento: "Boleto Bancário",
+    },
+    empresa: {
+      nome: empresa?.empresa_nome || "ABP PraticCar",
+      razao_social: empresa?.empresa_razao_social || "Associação de Benefícios PraticCar",
+      cnpj: empresa?.empresa_cnpj || "XX.XXX.XXX/0001-XX",
+      logradouro: empresa?.empresa_logradouro || "Av. das Américas",
+      numero: empresa?.empresa_numero || "19.005",
+      bairro: empresa?.empresa_bairro || "Recreio dos Bandeirantes",
+      cidade: empresa?.empresa_cidade || "Rio de Janeiro",
+      uf: empresa?.empresa_uf || "RJ",
+      cep: empresa?.empresa_cep || "22790-703",
+      telefone: empresa?.empresa_telefone || "",
+      email: empresa?.empresa_email || "",
+      lgpd_email: empresa?.empresa_lgpd_email || "lgpd@praticcar.com.br",
+    },
+  };
+}
+
+/**
+ * Busca configurações da empresa do banco de dados
+ */
+export async function buscarConfiguracoesEmpresa(supabase: any): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from("configuracoes")
+    .select("chave, valor")
+    .like("chave", "empresa_%");
+  
+  if (error || !data) {
+    console.warn("[termo-afiliacao] Erro ao buscar configs empresa:", error);
+    return {};
+  }
+  
+  const configs: Record<string, string> = {};
+  for (const row of data) {
+    configs[row.chave] = row.valor;
+  }
+  
+  return configs;
+}
