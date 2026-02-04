@@ -387,6 +387,10 @@ serve(async (req) => {
             veiculo_combustivel: cotacao.veiculo_combustivel || null,
             veiculo_ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano || null,
             
+            // Dados obrigatórios para SGA Hinova e Termo de Afiliação (extraídos do CRLV via OCR)
+            veiculo_chassi: cotacao.veiculo_chassi || null,
+            veiculo_renavam: cotacao.veiculo_renavam || null,
+            
             // Dados do cliente (snapshot completo)
             cliente_nome: nomeFinal,
             cliente_email: emailFinal,

@@ -777,6 +777,73 @@ const generateFooter = (data: TermoAfiliacaoData): string => `
 </div>
 `;
 
+// ============= SEÇÃO CONDICIONAL: TERMO ADITIVO VEÍCULO 0KM =============
+
+const generateSecaoCarroZero = (data: TermoAfiliacaoData): string => {
+  // Verifica se é carro zero (sem placa, placa temporária ou procedência 0km)
+  const isCarroZero = 
+    !data.veiculo.placa || 
+    data.veiculo.placa === '' || 
+    data.veiculo.placa.startsWith('000') ||
+    data.veiculo.procedencia === 'Novo (zero km)';
+  
+  if (!isCarroZero) return '';
+  
+  return `
+<div class="section" style="margin-top: 30pt; border: 2px solid #dc2626; padding: 15pt; border-radius: 4pt;">
+  <h2 class="section-title" style="color: #dc2626;">
+    TERMO ADITIVO DE VEÍCULO 0KM
+  </h2>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Primeira</p>
+    <p class="declaracao-texto">
+      O presente Termo Aditivo tem por objeto regulamentar a proteção de 
+      veículo zero quilômetro (0 km) que ainda não possua placa no momento 
+      da adesão à Associação.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Segunda</p>
+    <p class="declaracao-texto">
+      O associado compromete-se a providenciar o devido emplacamento do veículo 
+      junto aos órgãos de trânsito competentes, dentro do prazo legal estabelecido 
+      pelo CONTRAN e demais legislações aplicáveis.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Terceira</p>
+    <p class="declaracao-texto">
+      O associado declara, neste ato, estar ciente e de pleno acordo que, caso 
+      não realize o emplacamento no prazo legal, a proteção de roubo e furto será 
+      imediatamente suspensa, não sendo devida qualquer indenização em eventos 
+      ocorridos durante o período de irregularidade.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Quarta</p>
+    <p class="declaracao-texto">
+      A cobertura será restabelecida automaticamente a partir da apresentação, 
+      pelo associado, da documentação comprobatória de emplacamento do veículo 
+      junto à Associação.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Quinta</p>
+    <p class="declaracao-texto">
+      A responsabilidade pelo emplacamento do veículo zero quilômetro é exclusiva 
+      do associado, não cabendo à Associação qualquer obrigação ou interferência 
+      junto aos órgãos de trânsito.
+    </p>
+  </div>
+</div>
+`;
+};
+
 // ============= FUNÇÃO PRINCIPAL =============
 
 /**
@@ -797,6 +864,7 @@ export function generateTermoAfiliacao(data: TermoAfiliacaoData): string {
     ${generateHeader(data)}
     ${generateSecao1(data)}
     ${generateSecao2(data)}
+    ${generateSecaoCarroZero(data)}
     ${generateSecao3(data)}
     ${generateSecao4(data)}
     ${generateSecao5(data)}
