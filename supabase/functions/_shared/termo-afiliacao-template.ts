@@ -844,6 +844,149 @@ const generateSecaoCarroZero = (data: TermoAfiliacaoData): string => {
 `;
 };
 
+// ============= SEÇÃO CONDICIONAL: TERMO RESPONSABILIDADE RASTREADOR =============
+
+/**
+ * Verifica se o rastreador é obrigatório com base nas regras:
+ * - Diesel: SEMPRE obrigatório
+ * - Moto: FIPE > R$ 9.000
+ * - Carro: FIPE > R$ 20.000
+ */
+const exigeRastreador = (veiculo: any): { exige: boolean; motivo: string | null } => {
+  // Diesel sempre exige rastreador
+  if (veiculo.combustivel?.toLowerCase() === 'diesel') {
+    return { exige: true, motivo: 'Veículo a diesel' };
+  }
+  
+  const valorFipe = veiculo.valor_fipe || 0;
+  const categoria = (veiculo.categoria || '').toLowerCase();
+  const isMoto = categoria.includes('moto') || categoria.includes('ciclomotor');
+  
+  // Moto com FIPE > R$ 9.000
+  if (isMoto && valorFipe > 9000) {
+    return { exige: true, motivo: `Valor FIPE acima de R$ 9.000` };
+  }
+  
+  // Carro com FIPE > R$ 20.000
+  if (!isMoto && valorFipe > 20000) {
+    return { exige: true, motivo: `Valor FIPE acima de R$ 20.000` };
+  }
+  
+  return { exige: false, motivo: null };
+};
+
+const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
+  const rastreador = exigeRastreador(data.veiculo);
+  
+  // Só gera a seção se rastreador for obrigatório
+  if (!rastreador.exige) return '';
+  
+  const localAssinatura = `${data.cliente.cidade}/${data.cliente.uf}`;
+  const dataAssinatura = formatDateExtended(new Date().toISOString());
+  
+  return `
+<div class="section page-break" style="margin-top: 30pt; border: 2px solid #7c3aed; padding: 15pt; border-radius: 4pt;">
+  <h2 class="section-title" style="color: #7c3aed;">
+    TERMO DE RESPONSABILIDADE - EQUIPAMENTO RASTREADOR
+  </h2>
+  <p style="text-align: center; font-size: 9pt; color: #666; margin-bottom: 15pt;">
+    (Anexo ao Termo de Afiliação Nº ${data.contrato.numero})
+  </p>
+  
+  <p style="margin-bottom: 15pt; text-align: justify;">
+    Pelo presente termo, o(a) associado(a) abaixo qualificado(a) declara ter 
+    recebido em regime de <strong>COMODATO</strong> o equipamento rastreador para instalação 
+    no veículo cadastrado, assumindo inteira responsabilidade pela sua guarda 
+    e conservação.
+  </p>
+  
+  <table class="table-valores" style="margin-bottom: 15pt;">
+    <tr>
+      <td style="background-color: #f9fafb; font-weight: bold;">Associado:</td>
+      <td>${data.cliente.nome}</td>
+    </tr>
+    <tr>
+      <td style="background-color: #f9fafb; font-weight: bold;">CPF:</td>
+      <td>${formatCPF(data.cliente.cpf)}</td>
+    </tr>
+    <tr>
+      <td style="background-color: #f9fafb; font-weight: bold;">Veículo:</td>
+      <td>${data.veiculo.marca} ${data.veiculo.modelo} - ${data.veiculo.placa || 'ZERO KM'}</td>
+    </tr>
+    <tr>
+      <td style="background-color: #f9fafb; font-weight: bold;">Motivo da Obrigatoriedade:</td>
+      <td>${rastreador.motivo}</td>
+    </tr>
+  </table>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">1. DO EQUIPAMENTO</p>
+    <p class="declaracao-texto">
+      O equipamento rastreador é de propriedade exclusiva da ${data.empresa.nome}, 
+      sendo cedido em comodato ao associado durante a vigência da filiação.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">2. DO RASTREAMENTO</p>
+    <p class="declaracao-texto">
+      O associado tem ciência e <strong>AUTORIZA</strong> o rastreamento 24 (vinte e quatro) horas 
+      do veículo cadastrado, para fins de monitoramento e recuperação em caso de sinistro.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">3. DA DEVOLUÇÃO</p>
+    <p class="declaracao-texto">
+      O associado compromete-se a devolver o equipamento em perfeito estado de 
+      funcionamento quando do desligamento do PSM, no prazo máximo de 15 (quinze) dias.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">4. DA MULTA</p>
+    <p class="declaracao-texto">
+      A não devolução do equipamento no prazo estipulado acarretará multa de 
+      <strong>R$ 400,00 (quatrocentos reais)</strong>, valor que poderá ser cobrado judicialmente.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">5. DO TÍTULO EXECUTIVO</p>
+    <p class="declaracao-texto">
+      O presente termo tem força de <strong>TÍTULO EXECUTIVO EXTRAJUDICIAL</strong>, nos termos 
+      do Art. 784 do Código de Processo Civil.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">6. DA OBRIGATORIEDADE</p>
+    <p class="declaracao-texto">
+      O associado declara estar ciente de que a instalação do rastreador é <strong>CONDIÇÃO OBRIGATÓRIA</strong> 
+      para início da proteção, conforme as regras do PSM para veículos com valor FIPE superior 
+      aos limites estabelecidos ou movidos a diesel.
+    </p>
+  </div>
+  
+  <div class="signature-area" style="margin-top: 30pt; padding-top: 15pt; border-top: 1px solid #e5e7eb;">
+    <p style="text-align: center; margin-bottom: 40pt;">
+      ${localAssinatura}, ${dataAssinatura}
+    </p>
+    
+    <div style="text-align: center;">
+      <div class="signature-block">
+        <div class="signature-line">
+          <p class="signature-name">${data.cliente.nome}</p>
+          <p class="signature-doc">CPF: ${formatCPF(data.cliente.cpf)}</p>
+          <p class="signature-role">ASSOCIADO - COMODATÁRIO</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+};
+
 // ============= FUNÇÃO PRINCIPAL =============
 
 /**
@@ -865,6 +1008,7 @@ export function generateTermoAfiliacao(data: TermoAfiliacaoData): string {
     ${generateSecao1(data)}
     ${generateSecao2(data)}
     ${generateSecaoCarroZero(data)}
+    ${generateSecaoRastreador(data)}
     ${generateSecao3(data)}
     ${generateSecao4(data)}
     ${generateSecao5(data)}
