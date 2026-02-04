@@ -53,6 +53,29 @@ interface DadosExtraidos {
   veiculo_ano_modelo?: number;
 }
 
+// Opções para selects
+const ESTADOS_CIVIS = [
+  { value: 'Solteiro(a)', label: 'Solteiro(a)' },
+  { value: 'Casado(a)', label: 'Casado(a)' },
+  { value: 'Divorciado(a)', label: 'Divorciado(a)' },
+  { value: 'Viúvo(a)', label: 'Viúvo(a)' },
+  { value: 'União Estável', label: 'União Estável' },
+];
+
+const TIPOS_USO_VEICULO = [
+  { value: 'Particular', label: 'Particular' },
+  { value: 'APP', label: 'APP (Uber, 99, etc.)' },
+  { value: 'Comercial', label: 'Comercial' },
+  { value: 'Táxi', label: 'Táxi' },
+];
+
+const PROCEDENCIAS_VEICULO = [
+  { value: 'Novo (zero km)', label: 'Novo (zero km)' },
+  { value: 'Usado de particular', label: 'Usado de particular' },
+  { value: 'Usado de revenda', label: 'Usado de revenda/loja' },
+  { value: 'Leilão', label: 'Leilão' },
+];
+
 interface EtapaDadosPessoaisDocumentosProps {
   cotacaoId: string;
   onSubmit: (dados: DadosPessoaisForm) => void;
@@ -74,6 +97,14 @@ export function EtapaDadosPessoaisDocumentos({
   // Campos manuais (não podem ser extraídos de documentos)
   const [email, setEmail] = useState(defaultValues?.email || '');
   const [telefone, setTelefone] = useState(defaultValues?.telefone || '');
+  
+  // Novos campos obrigatórios para o Termo de Afiliação
+  const [estadoCivil, setEstadoCivil] = useState('');
+  const [profissao, setProfissao] = useState('');
+  const [tipoUsoVeiculo, setTipoUsoVeiculo] = useState('Particular');
+  const [procedenciaVeiculo, setProcedenciaVeiculo] = useState('');
+  const [veiculoAlienado, setVeiculoAlienado] = useState(false);
+  const [veiculoFinanceira, setVeiculoFinanceira] = useState('');
 
   // Sincronizar email e telefone quando defaultValues mudar (dados carregados do banco)
   useEffect(() => {

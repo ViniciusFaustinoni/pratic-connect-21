@@ -5135,12 +5135,15 @@ export type Database = {
           cliente_data_nascimento: string | null
           cliente_email: string | null
           cliente_endereco: string | null
+          cliente_estado_civil: string | null
           cliente_logradouro: string | null
           cliente_nome: string | null
           cliente_numero: string | null
+          cliente_profissao: string | null
           cliente_rg: string | null
           cliente_rg_orgao: string | null
           cliente_telefone: string | null
+          cliente_telefone_secundario: string | null
           cliente_uf: string | null
           cotacao_id: string | null
           cotacao_token_publico: string | null
@@ -5170,16 +5173,21 @@ export type Database = {
           validade_link: string | null
           valor_adesao: number
           valor_mensal: number
+          veiculo_alienado: boolean | null
           veiculo_ano: number | null
           veiculo_ano_fabricacao: number | null
+          veiculo_categoria: string | null
           veiculo_chassi: string | null
           veiculo_combustivel: string | null
           veiculo_cor: string | null
+          veiculo_financeira: string | null
           veiculo_id: string | null
           veiculo_marca: string | null
           veiculo_modelo: string | null
           veiculo_placa: string | null
+          veiculo_procedencia: string | null
           veiculo_renavam: string | null
+          veiculo_tipo_uso: string | null
           veiculo_valor_fipe: number | null
           vendedor_id: string | null
           vistoria_completa_data_agendada: string | null
@@ -5221,12 +5229,15 @@ export type Database = {
           cliente_data_nascimento?: string | null
           cliente_email?: string | null
           cliente_endereco?: string | null
+          cliente_estado_civil?: string | null
           cliente_logradouro?: string | null
           cliente_nome?: string | null
           cliente_numero?: string | null
+          cliente_profissao?: string | null
           cliente_rg?: string | null
           cliente_rg_orgao?: string | null
           cliente_telefone?: string | null
+          cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
           cotacao_id?: string | null
           cotacao_token_publico?: string | null
@@ -5256,16 +5267,21 @@ export type Database = {
           validade_link?: string | null
           valor_adesao: number
           valor_mensal: number
+          veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null
+          veiculo_financeira?: string | null
           veiculo_id?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
+          veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
+          veiculo_tipo_uso?: string | null
           veiculo_valor_fipe?: number | null
           vendedor_id?: string | null
           vistoria_completa_data_agendada?: string | null
@@ -5307,12 +5323,15 @@ export type Database = {
           cliente_data_nascimento?: string | null
           cliente_email?: string | null
           cliente_endereco?: string | null
+          cliente_estado_civil?: string | null
           cliente_logradouro?: string | null
           cliente_nome?: string | null
           cliente_numero?: string | null
+          cliente_profissao?: string | null
           cliente_rg?: string | null
           cliente_rg_orgao?: string | null
           cliente_telefone?: string | null
+          cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
           cotacao_id?: string | null
           cotacao_token_publico?: string | null
@@ -5342,16 +5361,21 @@ export type Database = {
           validade_link?: string | null
           valor_adesao?: number
           valor_mensal?: number
+          veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null
+          veiculo_financeira?: string | null
           veiculo_id?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
+          veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
+          veiculo_tipo_uso?: string | null
           veiculo_valor_fipe?: number | null
           vendedor_id?: string | null
           vistoria_completa_data_agendada?: string | null
@@ -5713,10 +5737,13 @@ export type Database = {
           cliente_complemento: string | null
           cliente_cpf: string | null
           cliente_data_nascimento: string | null
+          cliente_estado_civil: string | null
           cliente_logradouro: string | null
           cliente_numero: string | null
+          cliente_profissao: string | null
           cliente_rg: string | null
           cliente_rg_orgao: string | null
+          cliente_telefone_secundario: string | null
           cliente_uf: string | null
           codigo_fipe: string | null
           combustivel: string | null
@@ -5761,15 +5788,20 @@ export type Database = {
           valor_mensal_promocional: number | null
           valor_rastreamento: number
           valor_total_mensal: number
+          veiculo_alienado: boolean | null
           veiculo_ano: number | null
           veiculo_ano_fabricacao: number | null
+          veiculo_categoria: string | null
           veiculo_chassi: string | null
           veiculo_combustivel: string | null
           veiculo_cor: string | null
+          veiculo_financeira: string | null
           veiculo_marca: string | null
           veiculo_modelo: string | null
           veiculo_placa: string | null
+          veiculo_procedencia: string | null
           veiculo_renavam: string | null
+          veiculo_tipo_uso: string | null
           vendedor_id: string | null
           vistoria_completa_data_agendada: string | null
           vistoria_completa_endereco_bairro: string | null
@@ -5816,10 +5848,13 @@ export type Database = {
           cliente_complemento?: string | null
           cliente_cpf?: string | null
           cliente_data_nascimento?: string | null
+          cliente_estado_civil?: string | null
           cliente_logradouro?: string | null
           cliente_numero?: string | null
+          cliente_profissao?: string | null
           cliente_rg?: string | null
           cliente_rg_orgao?: string | null
+          cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
           codigo_fipe?: string | null
           combustivel?: string | null
@@ -5864,15 +5899,20 @@ export type Database = {
           valor_mensal_promocional?: number | null
           valor_rastreamento?: number
           valor_total_mensal: number
+          veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null
+          veiculo_financeira?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
+          veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
+          veiculo_tipo_uso?: string | null
           vendedor_id?: string | null
           vistoria_completa_data_agendada?: string | null
           vistoria_completa_endereco_bairro?: string | null
@@ -5919,10 +5959,13 @@ export type Database = {
           cliente_complemento?: string | null
           cliente_cpf?: string | null
           cliente_data_nascimento?: string | null
+          cliente_estado_civil?: string | null
           cliente_logradouro?: string | null
           cliente_numero?: string | null
+          cliente_profissao?: string | null
           cliente_rg?: string | null
           cliente_rg_orgao?: string | null
+          cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
           codigo_fipe?: string | null
           combustivel?: string | null
@@ -5967,15 +6010,20 @@ export type Database = {
           valor_mensal_promocional?: number | null
           valor_rastreamento?: number
           valor_total_mensal?: number
+          veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null
+          veiculo_financeira?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
           veiculo_placa?: string | null
+          veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
+          veiculo_tipo_uso?: string | null
           vendedor_id?: string | null
           vistoria_completa_data_agendada?: string | null
           vistoria_completa_endereco_bairro?: string | null
