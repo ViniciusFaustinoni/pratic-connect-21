@@ -19,7 +19,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Criar cliente com token do usuário para verificar permissões
     const supabaseUrl = "https://iyxdgmukrrdkffraptsx.supabase.co";
     const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI";
     
@@ -36,7 +35,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verificar se o usuário tem role de diretor
+    // Verificar se o usuário tem role de diretor ou admin_master
     const { data: roles, error: rolesError } = await supabaseClient
       .from("user_roles")
       .select("role")
@@ -54,13 +53,13 @@ Deno.serve(async (req) => {
 
     if (!isDiretor && !isAdminMaster) {
       return new Response(
-        JSON.stringify({ error: "Apenas diretores e admin master podem redefinir senhas" }),
+        JSON.stringify({ error: "Apenas diretores e admin master podem alterar emails" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Obter dados da requisição
-    const { userId, novaSenha } = await req.json();
+    const { userId, novoEmail } = await req.json();
     
     if (!userId) {
       return new Response(
@@ -69,9 +68,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!novaSenha || novaSenha.length < 8) {
+    // Validar email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!novoEmail || !emailRegex.test(novoEmail)) {
       return new Response(
-        JSON.stringify({ error: "A senha deve ter pelo menos 8 caracteres" }),
+        JSON.stringify({ error: "Email inválido" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -87,36 +88,63 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Atualizar a senha do usuário
+    // Buscar email atual do usuário para log
+    const { data: targetUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const emailAntigo = targetUser?.user?.email;
+
+    // Verificar se o email já está em uso
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+    const emailExists = existingUsers?.users?.some(
+      u => u.email?.toLowerCase() === novoEmail.toLowerCase() && u.id !== userId
+    );
+
+    if (emailExists) {
+      return new Response(
+        JSON.stringify({ error: "Este email já está em uso por outro usuário" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Atualizar o email do usuário (sem confirmação - admin)
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
-      { password: novaSenha }
+      { 
+        email: novoEmail,
+        email_confirm: true  // Confirma automaticamente
+      }
     );
 
     if (updateError) {
-      console.error("Erro ao atualizar senha:", updateError);
+      console.error("Erro ao atualizar email:", updateError);
       return new Response(
-        JSON.stringify({ error: "Erro ao redefinir senha: " + updateError.message }),
+        JSON.stringify({ error: "Erro ao alterar email: " + updateError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Opcionalmente, marcar primeiro_acesso como true para forçar troca
-    // await supabaseAdmin.from("profiles").update({ primeiro_acesso: true }).eq("user_id", userId);
+    // Atualizar email na tabela profiles
+    await supabaseAdmin
+      .from("profiles")
+      .update({ email: novoEmail, updated_at: new Date().toISOString() })
+      .eq("user_id", userId);
 
     // Registrar log de auditoria
     await supabaseAdmin.from("auth_logs").insert({
-      acao: "alterar_senha",
+      acao: "alterar_email",
       email: user.email,
       profile_id: user.id,
       metadata: { 
         usuario_alterado_id: userId,
-        tipo: "reset_administrativo",
+        email_antigo: emailAntigo,
+        email_novo: novoEmail,
+        tipo: "alteracao_administrativa",
       },
     });
 
+    console.log(`Email alterado com sucesso: ${emailAntigo} -> ${novoEmail} por ${user.email}`);
+
     return new Response(
-      JSON.stringify({ success: true, message: "Senha redefinida com sucesso" }),
+      JSON.stringify({ success: true, message: "Email alterado com sucesso" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

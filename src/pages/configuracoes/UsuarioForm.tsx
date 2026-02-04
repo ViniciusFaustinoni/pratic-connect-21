@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { ArrowLeft, Save, Loader2, User, Shield, TrendingUp, History } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, User, Shield, TrendingUp, History, Lock, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,8 +12,9 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
 import { useVendedorStats } from '@/hooks/useVendedorHistorico';
-
+import { usePermissions } from '@/hooks/usePermissions';
 const perfisDisponiveis = [
   { value: 'diretor', label: 'Diretor', desc: 'Acesso total ao sistema' },
   { value: 'gerente_comercial', label: 'Gerente Comercial', desc: 'Vendas, relatórios e equipe' },
@@ -101,6 +102,8 @@ export default function UsuarioForm() {
   const isEditing = !!id;
   const preselectedPerfil = searchParams.get('perfil');
 
+  const { isDiretor, isAdminMaster } = usePermissions();
+
   const [formData, setFormData] = useState({
     nome: '',
     email: '',
@@ -114,6 +117,66 @@ export default function UsuarioForm() {
 
   // Estado para erros de validação de campos específicos
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Estados para alteração de email e senha (admin)
+  const [novoEmail, setNovoEmail] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [alterandoEmail, setAlterandoEmail] = useState(false);
+  const [alterandoSenha, setAlterandoSenha] = useState(false);
+
+  // Função para alterar email (admin)
+  const alterarEmail = async () => {
+    if (!novoEmail) return;
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(novoEmail)) {
+      toast.error('Digite um email válido');
+      return;
+    }
+    
+    setAlterandoEmail(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-update-email', {
+        body: { userId: usuario?.user_id, novoEmail }
+      });
+      
+      if (error || data?.error) throw new Error(data?.error || error.message);
+      
+      toast.success('Email alterado com sucesso!');
+      setNovoEmail('');
+      // Atualizar dados do formulário
+      setFormData(prev => ({ ...prev, email: novoEmail }));
+      queryClient.invalidateQueries({ queryKey: ['usuario-edit', id] });
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alterar email');
+    } finally {
+      setAlterandoEmail(false);
+    }
+  };
+
+  // Função para redefinir senha (admin)
+  const redefinirSenha = async () => {
+    if (novaSenha.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres');
+      return;
+    }
+    
+    setAlterandoSenha(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+        body: { userId: usuario?.user_id, novaSenha }
+      });
+      
+      if (error || data?.error) throw new Error(data?.error || error.message);
+      
+      toast.success('Senha redefinida com sucesso!');
+      setNovaSenha('');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao redefinir senha');
+    } finally {
+      setAlterandoSenha(false);
+    }
+  };
 
   // Buscar usuário existente
   const { data: usuario, isLoading } = useQuery({
@@ -356,7 +419,13 @@ export default function UsuarioForm() {
                     {fieldErrors.email && (
                       <p className="text-xs text-red-500 font-medium">{fieldErrors.email}</p>
                     )}
-                    {isEditing && !fieldErrors.email && <p className="text-xs text-muted-foreground">Email não pode ser alterado</p>}
+                    {isEditing && !fieldErrors.email && (
+                      <p className="text-xs text-muted-foreground">
+                        {(isDiretor || isAdminMaster) 
+                          ? 'Use o painel de Segurança para alterar o email' 
+                          : 'Email não pode ser alterado'}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="telefone">Telefone</Label>
@@ -465,6 +534,71 @@ export default function UsuarioForm() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Card de Segurança - apenas para Diretor/Admin Master em modo edição */}
+            {isEditing && (isDiretor || isAdminMaster) && usuario?.user_id && (
+              <Card className="border-border/50 border-amber-500/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Lock className="w-5 h-5 text-amber-500" />
+                    Segurança
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Alterar Email */}
+                  <div className="space-y-2">
+                    <Label htmlFor="novoEmail">Novo email</Label>
+                    <Input
+                      id="novoEmail"
+                      type="email"
+                      value={novoEmail}
+                      onChange={(e) => setNovoEmail(e.target.value)}
+                      placeholder="novo@email.com"
+                      className="bg-background"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={alterarEmail}
+                      disabled={alterandoEmail || !novoEmail}
+                    >
+                      {alterandoEmail ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
+                      Alterar Email
+                    </Button>
+                  </div>
+
+                  <Separator />
+
+                  {/* Redefinir Senha */}
+                  <div className="space-y-2">
+                    <Label htmlFor="novaSenha">Nova senha</Label>
+                    <Input
+                      id="novaSenha"
+                      type="password"
+                      value={novaSenha}
+                      onChange={(e) => setNovaSenha(e.target.value)}
+                      placeholder="Mínimo 8 caracteres"
+                      className="bg-background"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full border-amber-500 text-amber-700 hover:bg-amber-100 dark:border-amber-500/50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+                      onClick={redefinirSenha}
+                      disabled={alterandoSenha || !novaSenha}
+                    >
+                      {alterandoSenha ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
+                      Redefinir Senha
+                    </Button>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    As alterações são aplicadas imediatamente
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Card de Métricas de Vendas - Só aparece para vendedores */}
             {isEditing && usuario?.roles?.some((r: string) => ['vendedor_clt', 'vendedor_externo'].includes(r)) && (
