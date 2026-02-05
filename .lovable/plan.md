@@ -1,70 +1,141 @@
 
 
-## Remover Filtro Superior de Tabs da Fila de Vistorias
+## Redesign da Página de Cotações
 
-### Problema Identificado
+### Problemas Identificados na Interface Atual
 
-A página **Fila de Vistorias** (`src/pages/monitoramento/FilaVistorias.tsx`) possui um componente de abas (Tabs) na parte superior com os filtros:
-- Pendentes
-- Em Campo
-- Aguard. Análise
-- Auto Vistoria
-- Concluídas
+Analisando a imagem e o código existente, identifico os seguintes pontos a melhorar:
 
-O usuário deseja remover essas abas de filtro.
+1. **Cards de estatísticas muito grandes e espalhados** - ocupam muito espaço vertical
+2. **Área de filtros com muitos campos** - visual poluído e confuso
+3. **Tabela com informações densas** - difícil leitura rápida
+4. **Falta de hierarquia visual clara** - todos elementos parecem ter a mesma importância
+5. **Espaçamento inconsistente** - gaps grandes entre seções
 
 ### Solução Proposta
 
-Remover completamente o componente `TabsList` com as abas de status, mantendo apenas a área de filtros secundários (busca por texto, tipo, região, data, vistoriador) e a tabela de resultados. A listagem mostrará todas as vistorias juntas, sem filtro por status.
+#### 1. Cards de Estatísticas Compactos e Modernos
 
-### Mudanças Técnicas
+Transformar os 4 cards em uma barra horizontal mais compacta e moderna:
 
-**Arquivo:** `src/pages/monitoramento/FilaVistorias.tsx`
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  📄 1                     ✈ 0               ✓ 1               📈 100%  │
+│  Total Cotações           Enviadas          Aceitas           Conversão │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
-1. **Remover a TabsList (linhas 439-460)**
-   - Excluir completamente o bloco de `<TabsList>` com as abas
+**Mudanças:**
+- Cards menores, mais compactos
+- Ícones ao lado dos números, não em círculos separados
+- Gradiente sutil no fundo
+- Bordas arredondadas suaves
+- Valores com cores mais vibrantes
 
-2. **Ajustar o filtro de vistorias**
-   - Modificar a lógica de `vistoriasFiltradas` para não filtrar por `activeTab`
-   - Remover a variável `activeTab` e seu estado
+#### 2. Barra de Filtros Simplificada
 
-3. **Simplificar estrutura**
-   - Manter o componente `Tabs` se necessário para estrutura, ou substituir por `div` simples
-   - Preservar os filtros secundários (busca, tipo, região, data, vistoriador)
-   - Manter a tabela de resultados mostrando todas as vistorias
+Consolidar filtros em uma única linha limpa:
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│ 🔍 Buscar...           │ Status ▾  │ Período ▾  │ 📅 Data │ 👤 Consultor│
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+**Mudanças:**
+- Remover labels acima dos campos (usar placeholders)
+- Filtros em linha única, mais compactos
+- Select triggers menores e com ícones embutidos
+- Remover bordas desnecessárias
+
+#### 3. Tabela Redesenhada
+
+Melhorar legibilidade e interatividade:
+
+**Mudanças na Tabela:**
+- Células com padding mais generoso
+- Status badges mais compactos com cores mais suaves
+- Avatar circular menor e mais elegante
+- Hover row com transição suave
+- Alternância de cor nas linhas para melhor legibilidade
+
+#### 4. Melhorias Visuais Gerais
+
+| Elemento | Antes | Depois |
+|----------|-------|--------|
+| Cards | 4 cards grandes verticais | Barra horizontal compacta |
+| Filtros | Campos com labels acima | Linha única com placeholders |
+| Tabela | Densa, uniforme | Espaçada, com zebra e hover |
+| Badges | Tamanhos inconsistentes | Uniformes e compactos |
+| Cores | Muito saturadas | Mais suaves, gradientes sutis |
+
+### Arquivos a Modificar
+
+| Arquivo | Mudanças |
+|---------|----------|
+| `src/pages/vendas/Cotacoes.tsx` | Cards compactos, filtros inline, espaçamentos |
+| `src/components/cotacoes/CotacoesTable.tsx` | Estilização tabela, hover states, badges |
+
+### Detalhes Técnicos
+
+**Cotacoes.tsx - Cards Estatísticos:**
+```tsx
+// De 4 cards separados para 1 card com 4 métricas inline
+<Card className="bg-gradient-to-r from-card to-muted/30">
+  <CardContent className="p-4">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 divide-x divide-border/50">
+      {/* Cada métrica inline com ícone + valor + label */}
+    </div>
+  </CardContent>
+</Card>
+```
+
+**Filtros Compactos:**
+```tsx
+<div className="flex flex-wrap items-center gap-2">
+  {/* Input com ícone embutido, sem label */}
+  {/* Selects compactos sem labels */}
+</div>
+```
+
+**CotacoesTable.tsx - Estilos da Tabela:**
+```tsx
+// Adicionar zebra striping
+<TableRow className="even:bg-muted/30 hover:bg-muted/50 transition-colors">
+
+// Badges mais compactos
+<Badge className="text-[10px] px-2 py-0.5">
+```
 
 ### Resultado Visual Esperado
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│ Home > Monitoramento > Vistorias                                       │
-│                                                                        │
-│ Fila de Vistorias                                                      │
-│ Gerencie vistorias pendentes, agendadas e em análise                   │
-│                                                                        │
-│ ┌──────────────────────────────────────────────────────────────────┐   │
-│ │ 🔍 Buscar...  │ Todos os tipos │ Todas as regiões │ Data │ Todos │   │
-│ └──────────────────────────────────────────────────────────────────┘   │
-│                                                                        │
-│ ┌──────────────────────────────────────────────────────────────────┐   │
-│ │ Protocolo │ Cliente  │ Veículo │ Status   │ Data    │ Ações    │   │
-│ │ VIS-...   │ Cliente1 │ Fiat... │ Pendente │ ...     │ ...      │   │
-│ │ VIS-...   │ Cliente2 │ VW...   │ Agendada │ ...     │ ...      │   │
-│ └──────────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Cotações                                            [+ Nova Cotação]          │
+│ Gerencie todas as cotações e acompanhe propostas                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ ┌──────────────────────────────────────────────────────────────────────────┐ │
+│ │  📄 1 Total    │   ✈ 0 Enviadas   │   ✓ 1 Aceitas   │   📈 100% Taxa   │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ 🔍 Lead, veículo...  │ Todos status ▾ │ Período ▾ │ Data ▾ │ Consultor ▾   │
+│                                                                              │
+│ ┌──────────────────────────────────────────────────────────────────────────┐ │
+│ │ Status      │ Cliente              │ Veículo        │ FIPE    │ Data    │ │
+│ ├──────────────────────────────────────────────────────────────────────────┤ │
+│ │ ✓ ACEITA    │ M Marcus Vinicius... │ 🚗 Toyota      │ R$ 70k  │ 05/02   │ │
+│ │ Assoc.Ativo │                      │ 2013 • ABC1234 │         │ 2h atrás│ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│                    Clique em uma linha para ver detalhes                     │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Impacto
 
-- As abas de filtro superior (Pendentes, Em Campo, etc.) serão removidas
-- Todas as vistorias serão exibidas em uma única lista
-- Os filtros secundários (busca, tipo, região, data, vistoriador) continuam funcionando
-- Interface mais limpa e simplificada
-- Os badges de contagem por status também serão removidos
-
-### Arquivos Afetados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/monitoramento/FilaVistorias.tsx` | Remover TabsList e ajustar filtros |
+- Interface mais limpa e moderna
+- Melhor aproveitamento do espaço vertical
+- Filtros mais intuitivos e menos poluídos
+- Tabela com melhor legibilidade
+- Experiência visual mais agradável e profissional
+- Mantém todas as funcionalidades existentes
 
