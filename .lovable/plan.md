@@ -1,165 +1,177 @@
 
-# Plano: Corrigir Flicker na Tela de Login
+# Plano: Corrigir Atraso/Delay no Scroll Vertical
 
 ## Problema Identificado
 
-O "piscar" ocorre porque existem **dois fluxos de redirecionamento competindo** após o login bem-sucedido:
+O atraso no scroll ocorre devido a **múltiplos containers com `overflow-auto` aninhados**, criando conflito de scroll entre containers pai e filho. Isso causa o comportamento de "scroll chain" onde o scroll só transfere para o container interno após o scroll do container externo atingir o limite.
 
-1. **handleSubmit** (Login.tsx): Faz navigate() após buscar profile manualmente
-2. **useEffect** (Login.tsx): Faz navigate() quando detecta `user` + `!authLoading`
+### Hierarquia Problemática Atual
 
-Além disso, o `signIn()` no AuthContext seta `loading = false` no `finally`, **antes** do `onAuthStateChange` terminar de carregar os dados do usuário.
+```text
+SidebarProvider (min-h-svh)
+└── div (flex h-screen overflow-x-hidden)
+    └── SidebarInset (main - flex min-h-svh)
+        └── main (overflow-auto) ← SCROLL AQUI
+            └── div (padding + conteúdo)
+                └── Dashboard content
+```
+
+O problema específico:
+1. O `SidebarInset` usa `<main>` com `min-h-svh`
+2. Dentro dele há outro `<main>` com `overflow-auto`
+3. O scroll do navegador fica "preso" no container externo até atingir o limite
 
 ---
 
 ## Solução
 
-### Correção 1: Não fazer navigate() duplicado no handleSubmit
+### Correção 1: AppLayout.tsx - Unificar o container de scroll
 
-O `handleSubmit` não precisa buscar profile e fazer navigate manualmente - o `useEffect` já faz isso. Basta retornar após login bem-sucedido e deixar o useEffect cuidar do redirecionamento.
+Remover o aninhamento duplo de elementos `<main>` e garantir que apenas UM container controle o scroll.
 
-### Correção 2: Aguardar profile no useEffect antes de redirecionar
+**Arquivo:** `src/components/layout/AppLayout.tsx`
 
-O `useEffect` deve verificar não apenas `user`, mas também que o `profile` foi carregado, evitando redirecionamento prematuro.
-
-### Correção 3: Usar flag de "login em andamento"
-
-Adicionar um estado `loginEmAndamento` que permanece `true` até que o fluxo complete totalmente, evitando re-renderizações intermediárias.
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/auth/Login.tsx` | Simplificar handleSubmit e melhorar useEffect |
-
----
-
-## Código Corrigido
-
-### Login.tsx - useEffect para redirecionamento
-
-```typescript
-// ANTES: Redireciona assim que tem user
-useEffect(() => {
-  if (!authLoading && user) {
-    // ...navigate
-  }
-}, [authLoading, user, ...]);
-
-// DEPOIS: Aguarda profile também
-useEffect(() => {
-  // Só redireciona quando tiver user E profile carregado
-  if (!authLoading && user && profile) {
-    if (profile.primeiro_acesso) {
-      navigate('/definir-senha', { replace: true });
-      return;
-    }
-    if (isAssociado) {
-      navigate('/app/home', { replace: true });
-      return;
-    }
-    const params = new URLSearchParams(location.search);
-    const returnTo = params.get('returnTo') || '/dashboard';
-    navigate(returnTo, { replace: true });
-  }
-}, [authLoading, user, profile, isAssociado, navigate, location.search]);
-```
-
-### Login.tsx - handleSubmit simplificado
-
-```typescript
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError(null);
-
-  if (!validateForm() || bloqueado) return;
-
-  setIsSubmitting(true);
-
-  try {
-    const result = await signIn({ 
-      email: formData.email.trim().toLowerCase(), 
-      password: formData.password 
-    });
-
-    if (!result.success) {
-      const errorType = parseSupabaseError(result.error || '');
-      setError(errorType);
-      await registrarTentativaFalha(formData.email, errorType);
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Login bem-sucedido - registrar e aguardar useEffect fazer o redirect
-    await registrarTentativaSucesso(formData.email);
-    // NÃO fazer navigate aqui - o useEffect vai fazer quando profile carregar
-    // Manter isSubmitting = true para mostrar loading até redirecionar
-    
-  } catch (err) {
-    setError('unknown_error');
-    await registrarTentativaFalha(formData.email, 'unknown_error');
-    setIsSubmitting(false);
-  }
-  // NÃO colocar setIsSubmitting(false) no finally!
-};
-```
-
-### Login.tsx - Loading state melhorado
-
-```typescript
-// Adicionar profile nas dependências
-const { signIn, signInWithGoogle, user, profile, loading: authLoading, isAssociado } = useAuth();
-
-// Estado de loading composto
-const showLoadingScreen = authLoading || (user && !profile);
-
-if (showLoadingScreen) {
-  return (
-    <div className="min-h-screen bg-muted/30 flex items-center justify-center">
-      {/* ... loading spinner ... */}
+**Antes:**
+```tsx
+<SidebarInset className="flex flex-1 flex-col min-w-0 min-h-0 overflow-x-hidden">
+  <AppHeader />
+  <main className="flex-1 flex flex-col min-h-0 overflow-auto overflow-x-hidden">
+    <div className="flex-1 px-3 py-4 ...">
+      <Outlet />
     </div>
-  );
+  </main>
+</SidebarInset>
+```
+
+**Depois:**
+```tsx
+<SidebarInset className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
+  <AppHeader />
+  <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+    <div className="px-3 py-4 ...">
+      <Outlet />
+    </div>
+  </main>
+</SidebarInset>
+```
+
+Alterações:
+- `overflow-hidden` no SidebarInset (não `overflow-x-hidden`)
+- `overscroll-contain` no main para isolar o scroll
+- Remover `flex flex-col flex-1` extras que não são necessários
+
+---
+
+### Correção 2: sidebar.tsx - SidebarContent
+
+**Arquivo:** `src/components/ui/sidebar.tsx`
+
+Adicionar `overscroll-contain` ao `SidebarContent` para evitar que o scroll da sidebar interfira:
+
+**Antes (linha 382):**
+```tsx
+"flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-visible"
+```
+
+**Depois:**
+```tsx
+"flex min-h-0 flex-1 flex-col gap-2 overflow-auto overscroll-contain group-data-[collapsible=icon]:overflow-visible"
+```
+
+---
+
+### Correção 3: index.css - Adicionar classe utilitária global
+
+**Arquivo:** `src/index.css`
+
+Adicionar na seção `@layer utilities`:
+
+```css
+/* Isolamento de scroll para containers principais */
+.scroll-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 ```
 
 ---
 
-## Fluxo Corrigido
+### Correção 4: ConfiguracoesLayout.tsx
 
-```text
-1. Usuário digita credenciais → Clica "Entrar"
-2. isSubmitting = true (mostra spinner no botão)
-3. signIn() é chamado → Login bem-sucedido
-4. registrarTentativaSucesso() → return (NÃO faz navigate)
-5. AuthContext: onAuthStateChange(SIGNED_IN)
-   → setUser(user)
-   → setTimeout → loadUserData()
-6. AuthContext: loadUserData()
-   → Busca profile + perfis
-   → setProfile(), setPerfis()
-   → setLoading(false)
-7. Login.tsx: useEffect detecta user + profile
-   → Agora sim faz navigate() UMA VEZ SÓ
-8. Redirecionamento limpo, sem flicker
+**Arquivo:** `src/pages/configuracoes/ConfiguracoesLayout.tsx`
+
+**Antes:**
+```tsx
+<main className="flex-1 min-w-0 h-full overflow-y-auto">
+```
+
+**Depois:**
+```tsx
+<main className="flex-1 min-w-0 h-full overflow-y-auto overscroll-contain">
 ```
 
 ---
 
-## Benefícios
+### Correção 5: AppLayout do App (Associados)
 
-- Elimina a "corrida" entre dois navigates
-- Tela de loading permanece até dados estarem completos
-- Código mais simples e previsível
-- Mensagem de boas-vindas pode usar dados do profile já carregado
+**Arquivo:** `src/components/app/AppLayout.tsx`
+
+**Antes:**
+```tsx
+<main className="flex-1 overflow-auto pb-[56px] md:pb-0">
+```
+
+**Depois:**
+```tsx
+<main className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[56px] md:pb-0">
+```
 
 ---
 
-## Estimativa
+### Correção 6: InstaladorLayout.tsx
+
+**Arquivo:** `src/components/instalador/InstaladorLayout.tsx`
+
+Adicionar `overscroll-contain` em todos os containers de scroll.
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/layout/AppLayout.tsx` | Simplificar aninhamento e adicionar `overscroll-contain` |
+| `src/components/ui/sidebar.tsx` | Adicionar `overscroll-contain` ao SidebarContent |
+| `src/index.css` | Adicionar classe utilitária `.scroll-container` |
+| `src/pages/configuracoes/ConfiguracoesLayout.tsx` | Adicionar `overscroll-contain` |
+| `src/components/app/AppLayout.tsx` | Adicionar `overscroll-contain` |
+| `src/components/instalador/InstaladorLayout.tsx` | Adicionar `overscroll-contain` |
+
+---
+
+## Explicação Técnica
+
+### O que é `overscroll-behavior: contain`?
+
+- Impede o "scroll chaining" (propagação do scroll para containers pai)
+- Quando o scroll atinge o limite, NÃO propaga para o container pai
+- Isso elimina o atraso que você descreveu
+
+### Por que está acontecendo?
+
+O navegador, por padrão, quando você scrolla dentro de um container e atinge o limite, propaga o scroll para o container pai. Com múltiplos containers aninhados, isso cria um "atraso" visível onde o scroll parece "travar" enquanto o navegador decide qual container deve responder.
+
+---
+
+## Estimativa de Tempo
 
 | Tarefa | Tempo |
 |--------|-------|
-| Modificar Login.tsx | 10 min |
-| Testar fluxo | 5 min |
-| **Total** | **~15 min** |
+| Corrigir AppLayout.tsx | 3 min |
+| Corrigir sidebar.tsx | 2 min |
+| Adicionar classe CSS | 1 min |
+| Corrigir outros layouts | 5 min |
+| Testar scroll em todas as páginas | 5 min |
+| **Total** | **~16 min** |
