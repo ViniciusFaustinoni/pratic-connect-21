@@ -34,6 +34,7 @@ const templateSchema = z.object({
   descricao: z.string().optional(),
   conteudo: z.string().min(10, 'Conteúdo deve ter pelo menos 10 caracteres'),
   requer_assinatura: z.boolean().default(false),
+  is_default_autentique: z.boolean().default(false),
 });
 
 type TemplateFormData = z.infer<typeof templateSchema>;
@@ -59,6 +60,7 @@ export default function TemplateForm() {
       descricao: '',
       conteudo: '',
       requer_assinatura: false,
+      is_default_autentique: false,
     },
   });
 
@@ -72,6 +74,7 @@ export default function TemplateForm() {
         descricao: template.descricao || '',
         conteudo: template.conteudo,
         requer_assinatura: template.requer_assinatura,
+        is_default_autentique: template.is_default_autentique || false,
       });
     }
   }, [template, isEditing, form]);
@@ -120,6 +123,7 @@ export default function TemplateForm() {
           conteudo: data.conteudo,
           descricao: data.descricao,
           requer_assinatura: data.requer_assinatura,
+          is_default_autentique: data.is_default_autentique,
         });
       }
       navigate('/documentos/templates');
@@ -286,6 +290,31 @@ export default function TemplateForm() {
                       )}
                     />
                   </div>
+
+                  <FormField
+                    control={form.control}
+                    name="is_default_autentique"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="flex items-center gap-2 text-primary">
+                            <FileText className="h-4 w-4" />
+                            Usar como template padrão para Autentique
+                          </FormLabel>
+                          <FormDescription>
+                            Este template será usado para gerar o Termo de Afiliação enviado para assinatura digital via Autentique.
+                            Apenas um template pode ser marcado como padrão.
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
 
                   <FormField
                     control={form.control}
