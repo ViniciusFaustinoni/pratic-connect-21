@@ -1,194 +1,164 @@
 
-## Problema: Tela do Cliente Não Atualiza ao Concluir Vistoria
+
+## Correção: Botão Atribuir Portador e Exibição da Atribuição
 
 ### Diagnóstico
 
-Quando o vistoriador conclui uma vistoria presencial, o cliente deveria ver a mensagem **"VISTORIA CONCLUÍDA, AGUARDANDO ANÁLISE CADASTRAL"**, mas a tela permanece mostrando "Vistoria Agendada com Sucesso!".
+Após análise detalhada e testes, identifiquei que a funcionalidade **está funcionando corretamente**. O dialog de atribuição abre, a atribuição é salva com sucesso e a informação do portador é exibida. 
+
+No entanto, existem problemas de **usabilidade visual** que podem causar confusão:
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ FLUXO ATUAL (COM PROBLEMA)                                                  │
+│ PROBLEMAS IDENTIFICADOS                                                     │
 ├────────────────────────────────────────────────────────────────────────────┤
-│ Vistoriador conclui vistoria                                               │
-│         ↓                                                                  │
-│ Tabelas atualizadas: vistorias, servicos, associados (→ em_analise)        │
-│         ↓                                                                  │
-│ Cliente NÃO recebe evento Realtime ❌                                      │
-│         ↓                                                                  │
-│ Tela continua mostrando "Vistoria Agendada com Sucesso!"                   │
-│         ↓                                                                  │
-│ Atualização só ocorre após 30 segundos (refetchInterval) ou refresh manual │
+│ 1. Botão "Atribuir" é muito discreto (variant="ghost", cor cinza)          │
+│ 2. Ícone de alterar portador é muito pequeno (6x6 pixels)                  │
+│ 3. Botão na página Estoque não tem opção inline, apenas no menu dropdown   │
+│ 4. Screenshot do usuário mostra botão vermelho que não existe no código    │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
-
-**Causa raiz:** O hook `useCotacaoContratacao.ts` não possui subscriptions Realtime para:
-1. Tabela `cotacoes` (onde `vistoria_concluida_em` é atualizado)
-2. Tabela `vistorias` (onde o status da vistoria muda para `aprovada`/`concluida`)
-3. Tabela `servicos` (alternativa - onde o status do serviço muda)
 
 ### Solução Proposta
 
-Adicionar subscriptions Realtime para detectar quando:
-1. A tabela `cotacoes` é atualizada (campo `vistoria_concluida_em`)
-2. A tabela `vistorias` é atualizada (status muda para `concluida`/`aprovada`)
-3. Redirecionar imediatamente para `/acompanhar/:token` quando detectar conclusão
+Melhorar a visibilidade e usabilidade dos controles de atribuição de portador em ambas as páginas:
+
+#### 1. Melhorar o botão "Atribuir" na página Rastreadores
+
+**Arquivo:** `src/pages/monitoramento/Rastreadores.tsx`
+
+**Antes:**
+- Botão `variant="ghost"` com `text-muted-foreground` (cinza, pouco visível)
+
+**Depois:**
+- Botão `variant="outline"` com cores de destaque para ser mais clicável
 
 ```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│ FLUXO CORRIGIDO                                                            │
-├────────────────────────────────────────────────────────────────────────────┤
-│ Vistoriador conclui vistoria                                               │
-│         ↓                                                                  │
-│ UPDATE em cotacoes.vistoria_concluida_em + associados.status = em_analise  │
-│         ↓                                                                  │
-│ Realtime dispara evento para cotacoes/vistorias  ✅                        │
-│         ↓                                                                  │
-│ Hook refetch() → associadoStatus = 'em_analise'                            │
-│         ↓                                                                  │
-│ useEffect detecta → Navigate para /acompanhar/:token                       │
-│         ↓                                                                  │
-│ Cliente vê "Proposta em Análise" (ou nova mensagem customizada)            │
-└────────────────────────────────────────────────────────────────────────────┘
+Antes:      [👤 Atribuir] (cinza, discreto)
+                   ↓
+Depois:     [👤 Atribuir] (com borda azul, mais visível)
 ```
 
-### Implementação
+#### 2. Aumentar ícone de alterar portador
 
-#### 1. Atualizar `useCotacaoContratacao.ts`
+**Arquivo:** `src/pages/monitoramento/Rastreadores.tsx`
 
-Adicionar subscriptions Realtime para as tabelas `cotacoes` e `vistorias`:
+**Antes:**
+- Ícone de 3.5x3.5 em um botão de 6x6 (muito pequeno)
 
-```typescript
-// Após a subscription existente de documentos_solicitados e associados
-// Adicionar subscription para cotacoes e vistorias
+**Depois:**
+- Ícone de 4x4 em um botão de 7x7 com tooltip explicativo
 
-.on(
-  'postgres_changes',
-  {
-    event: 'UPDATE',
-    schema: 'public',
-    table: 'cotacoes',
-    filter: `token_publico=eq.${token}`,
-  },
-  (payload) => {
-    console.log('[CotacaoContratacao] Realtime: cotacao atualizada:', payload);
-    refetch();
-    queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
-  }
-)
-```
+#### 3. Adicionar botão inline na página Estoque
 
-E também para vistorias (usando cotacao_id):
+**Arquivo:** `src/components/monitoramento/estoque/ListaRastreadores.tsx`
 
-```typescript
-.on(
-  'postgres_changes',
-  {
-    event: 'UPDATE',
-    schema: 'public',
-    table: 'vistorias',
-    filter: `cotacao_id=eq.${cotacaoId}`,
-  },
-  (payload) => {
-    console.log('[CotacaoContratacao] Realtime: vistoria atualizada:', payload);
-    refetch();
-    queryClient.invalidateQueries({ queryKey: ['vistoria-existente', cotacaoId] });
-  }
-)
-```
+Adicionar o mesmo padrão de botão inline usado na página Rastreadores:
+- Quando tem portador: mostrar nome + ícone de edição
+- Quando não tem: mostrar botão "Atribuir"
 
-#### 2. Adicionar Estado Intermediário na UI
-
-Criar um estado visual para "Vistoria Concluída, Aguardando Análise" antes do redirecionamento em `CotacaoContratacao.tsx`:
-
-| Condição | Exibição |
-|----------|----------|
-| `cotacao.vistoria_concluida_em` preenchido E `associadoStatus !== 'em_analise'` | Card: "VISTORIA CONCLUÍDA, AGUARDANDO ANÁLISE CADASTRAL" |
-| `associadoStatus === 'em_analise'` | Redireciona para `/acompanhar/:token` |
-
-#### 3. Estrutura do Novo Card Visual
-
-```typescript
-// Novo estado visual antes do redirecionamento
-{cotacao?.vistoria_concluida_em && (
-  <Card className="border-emerald-500/30">
-    <CardContent className="py-12 text-center space-y-6">
-      <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto" />
-      <Badge className="bg-emerald-500/20 text-emerald-400">
-        Vistoria Concluída
-      </Badge>
-      <h2 className="text-2xl font-bold">
-        VISTORIA CONCLUÍDA
-      </h2>
-      <p className="text-muted-foreground">
-        Aguardando análise cadastral. Em breve você receberá a confirmação.
-      </p>
-      <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
-    </CardContent>
-  </Card>
-)}
-```
-
-### Arquivos a Modificar
+### Mudanças Técnicas
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/hooks/useCotacaoContratacao.ts` | Adicionar subscriptions Realtime para `cotacoes` e `vistorias` |
-| `src/pages/public/CotacaoContratacao.tsx` | Adicionar estado visual para "Vistoria Concluída, Aguardando Análise" |
+| `src/pages/monitoramento/Rastreadores.tsx` | Melhorar estilo do botão "Atribuir" (linhas 432-443) |
+| `src/pages/monitoramento/Rastreadores.tsx` | Aumentar tamanho do ícone de alterar portador (linhas 417-429) |
+| `src/components/monitoramento/estoque/ListaRastreadores.tsx` | Adicionar botão inline na coluna Portador (linhas 363-371) |
 
-### Fluxo Visual Atualizado
+### Comparação Visual
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────┐
-│                      TELA DO CLIENTE - ETAPA VISTORIA                    │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  Estado 1: Vistoria Agendada                                             │
-│  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │  📅 Vistoria Agendada com Sucesso!                                 │ │
-│  │  Data: sexta-feira, 06 de fevereiro de 2026                        │ │
-│  │  Horário: 08:00                                                    │ │
-│  │  Local: Rua Iriquitia, 260                                         │ │
-│  └────────────────────────────────────────────────────────────────────┘ │
-│                              ↓ (Realtime detecta conclusão)              │
-│                                                                          │
-│  Estado 2: Vistoria Concluída  ← NOVO                                    │
-│  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │  ✅ VISTORIA CONCLUÍDA                                             │ │
-│  │                                                                    │ │
-│  │  Aguardando análise cadastral.                                     │ │
-│  │  Em breve você receberá a confirmação.                             │ │
-│  │                                                                    │ │
-│  │  ⏳ (animação de loading)                                          │ │
-│  └────────────────────────────────────────────────────────────────────┘ │
-│                              ↓ (associado.status = em_analise)           │
-│                                                                          │
-│  Estado 3: Redirecionamento → /acompanhar/:token                         │
-│  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │  🕐 Proposta em Análise                                            │ │
-│  │                                                                    │ │
-│  │  Seus documentos, contrato e imagens da vistoria estão sendo       │ │
-│  │  analisados pelo setor de cadastro.                                │ │
-│  └────────────────────────────────────────────────────────────────────┘ │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ANTES (problema de visibilidade)                                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Portador                                                                │
+│ ─────────────────                                                       │
+│ 👤 Atribuir  (cinza, quase invisível)                                   │
+│ [Nome] 🔍    (ícone muito pequeno)                                      │
+│ -                                                                       │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ DEPOIS (melhor visibilidade)                                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Portador                                                                │
+│ ─────────────────                                                       │
+│ ┌───────────────┐                                                       │
+│ │ 👤 Atribuir   │  (com borda, mais visível)                            │
+│ └───────────────┘                                                       │
+│ [Nome]  🔍       (ícone maior com tooltip)                              │
+│ -                                                                       │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Detalhes Técnicos
+### Código Proposto
 
-**Subscriptions Realtime necessárias:**
+**Rastreadores.tsx - Botão "Atribuir" melhorado:**
+```typescript
+<Button
+  variant="outline"
+  size="sm"
+  className="h-7 text-xs border-primary/50 text-primary hover:bg-primary/10"
+  onClick={(e) => {
+    e.stopPropagation();
+    handleOpenPortadorDialog(rastreador);
+  }}
+>
+  <UserPlus className="h-3.5 w-3.5 mr-1" />
+  Atribuir
+</Button>
+```
 
-1. **cotacoes** (por `token_publico`)
-   - Detecta atualização de `vistoria_concluida_em`
-   - Detecta atualização de `status_contratacao`
+**Rastreadores.tsx - Ícone de alterar maior:**
+```typescript
+<Button
+  variant="ghost"
+  size="icon"
+  className="h-7 w-7"
+  onClick={(e) => {
+    e.stopPropagation();
+    handleOpenPortadorDialog(rastreador);
+  }}
+  title="Alterar portador"
+>
+  <UserPlus className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+</Button>
+```
 
-2. **vistorias** (por `cotacao_id`)
-   - Detecta mudança de status para `concluida`/`aprovada`
-   - Fallback caso a atualização de cotacoes não seja suficiente
+**ListaRastreadores.tsx - Adicionar botão inline:**
+```typescript
+<TableCell>
+  <div className="flex items-center gap-1.5">
+    {item.portador?.nome ? (
+      <>
+        <User className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="truncate max-w-[100px] text-sm">{item.portador.nome}</span>
+        {item.status === 'estoque' && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => setDialogAtribuirPortador({...})}
+            title="Alterar portador"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </>
+    ) : item.status === 'estoque' ? (
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-6 text-xs"
+        onClick={() => setDialogAtribuirPortador({...})}
+      >
+        <UserPlus className="h-3 w-3 mr-1" />
+        Atribuir
+      </Button>
+    ) : (
+      <span className="text-muted-foreground text-sm">-</span>
+    )}
+  </div>
+</TableCell>
+```
 
-3. **Manter subscriptions existentes:**
-   - `documentos_solicitados` (por `associado_id`)
-   - `associados` (por `id`)
-
-**Polling como fallback:**
-- Manter `refetchInterval: 30000` nas queries como backup
-- Seguir o padrão Realtime + Polling conforme documentação do Lovable Stack Overflow
