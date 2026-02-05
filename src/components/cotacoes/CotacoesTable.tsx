@@ -266,21 +266,21 @@ export function CotacoesTable({
   }
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-lg border bg-card overflow-hidden">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead className="w-[180px]">Status / Etapa</TableHead>
-            <TableHead>Cliente</TableHead>
-            <TableHead className="hidden md:table-cell">Veículo</TableHead>
-            <TableHead className="hidden lg:table-cell">Valor FIPE</TableHead>
-            <TableHead className="hidden lg:table-cell">Consultor</TableHead>
-            <TableHead className="hidden sm:table-cell">Data</TableHead>
-            <TableHead className="w-[120px]">Ações</TableHead>
+          <TableRow className="bg-muted/30 hover:bg-muted/30">
+            <TableHead className="w-[160px] font-semibold text-xs uppercase tracking-wide">Status</TableHead>
+            <TableHead className="font-semibold text-xs uppercase tracking-wide">Cliente</TableHead>
+            <TableHead className="hidden md:table-cell font-semibold text-xs uppercase tracking-wide">Veículo</TableHead>
+            <TableHead className="hidden lg:table-cell font-semibold text-xs uppercase tracking-wide">FIPE</TableHead>
+            <TableHead className="hidden lg:table-cell font-semibold text-xs uppercase tracking-wide">Consultor</TableHead>
+            <TableHead className="hidden sm:table-cell font-semibold text-xs uppercase tracking-wide">Data</TableHead>
+            <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wide">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {cotacoes.map((cotacao) => {
+          {cotacoes.map((cotacao, index) => {
             const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
             const etapaVenda = getEtapaVenda(cotacao);
             const etapaInfo = etapaVenda ? etapaVendaConfig[etapaVenda] : null;
@@ -290,18 +290,22 @@ export function CotacoesTable({
             return (
               <TableRow 
                 key={cotacao.id}
-                className="cursor-pointer hover:bg-muted/50"
+                className={cn(
+                  "cursor-pointer transition-colors",
+                  index % 2 === 0 ? "bg-background" : "bg-muted/20",
+                  "hover:bg-primary/5"
+                )}
                 onClick={() => onRowClick(cotacao)}
               >
                 {/* Status / Etapa */}
-                <TableCell>
+                <TableCell className="py-3">
                   <div className="flex flex-col gap-1">
-                    <Badge className={cn(status.bgColor, status.color, "font-medium border-0 text-[10px] w-fit")}>
+                    <Badge className={cn(status.bgColor, status.color, "font-medium border-0 text-[10px] px-2 py-0.5 w-fit")}>
                       <status.icon className="h-3 w-3 mr-1" />
                       {status.label.toUpperCase()}
                     </Badge>
                     {etapaInfo && (
-                      <Badge className={cn(etapaInfo.bgColor, etapaInfo.color, "font-medium border-0 text-[10px] w-fit")}>
+                      <Badge className={cn(etapaInfo.bgColor, etapaInfo.color, "font-normal border-0 text-[9px] px-1.5 py-0 w-fit opacity-80")}>
                         {etapaInfo.label}
                       </Badge>
                     )}
@@ -309,21 +313,21 @@ export function CotacoesTable({
                 </TableCell>
                 
                 {/* Cliente */}
-                <TableCell>
-                  <div className="flex items-center gap-2">
+                <TableCell className="py-3">
+                  <div className="flex items-center gap-2.5">
                     <div className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium",
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
                       "bg-primary/10 text-primary"
                     )}>
-                      {cotacao.leads?.nome?.charAt(0).toUpperCase() || cotacao.nome_solicitante?.charAt(0).toUpperCase() || <User className="h-4 w-4" />}
+                      {cotacao.leads?.nome?.charAt(0).toUpperCase() || cotacao.nome_solicitante?.charAt(0).toUpperCase() || <User className="h-3.5 w-3.5" />}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-medium truncate text-sm">
+                      <p className="font-medium truncate text-sm leading-tight">
                         {cotacao.leads?.nome || cotacao.nome_solicitante || 'Sem nome'}
                       </p>
                       {cotacao.leads?.telefone && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Phone className="h-3 w-3" />
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Phone className="h-2.5 w-2.5" />
                           {formatPhone(cotacao.leads.telefone)}
                         </p>
                       )}
@@ -332,17 +336,17 @@ export function CotacoesTable({
                 </TableCell>
                 
                 {/* Veículo */}
-                <TableCell className="hidden md:table-cell">
+                <TableCell className="hidden md:table-cell py-3">
                   <div className="flex items-center gap-2">
-                    <Car className="h-4 w-4 text-muted-foreground" />
+                    <Car className="h-4 w-4 text-muted-foreground/70" />
                     <div className="min-w-0">
-                      <p className="text-sm truncate">
+                      <p className="text-sm truncate leading-tight">
                         {cotacao.veiculo_marca} {cotacao.veiculo_modelo}
                       </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">{cotacao.veiculo_ano}</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[11px] text-muted-foreground">{cotacao.veiculo_ano}</span>
                         {cotacao.veiculo_placa && (
-                          <Badge variant="outline" className="font-mono text-[10px] px-1 py-0">
+                          <Badge variant="outline" className="font-mono text-[9px] px-1 py-0 h-4 border-muted-foreground/30">
                             {cotacao.veiculo_placa}
                           </Badge>
                         )}
@@ -352,44 +356,44 @@ export function CotacoesTable({
                 </TableCell>
                 
                 {/* Valor FIPE */}
-                <TableCell className="hidden lg:table-cell">
-                  <span className="font-medium text-sm">{formatCurrency(cotacao.valor_fipe)}</span>
+                <TableCell className="hidden lg:table-cell py-3">
+                  <span className="font-semibold text-sm">{formatCurrency(cotacao.valor_fipe)}</span>
                 </TableCell>
                 
                 {/* Consultor */}
-                <TableCell className="hidden lg:table-cell">
+                <TableCell className="hidden lg:table-cell py-3">
                   {cotacao.vendedor?.nome && (
-                    <div className="flex items-center gap-2">
-                      <UserAvatar name={cotacao.vendedor.nome} size="sm" />
-                      <span className="text-sm truncate max-w-[100px]">{cotacao.vendedor.nome}</span>
+                    <div className="flex items-center gap-1.5">
+                      <UserAvatar name={cotacao.vendedor.nome} size="sm" className="h-5 w-5 text-[9px]" />
+                      <span className="text-xs truncate max-w-[80px] text-muted-foreground">{cotacao.vendedor.nome}</span>
                     </div>
                   )}
                 </TableCell>
                 
                 {/* Data */}
-                <TableCell className="hidden sm:table-cell">
-                  <div className="text-sm">
-                    <p>{format(new Date(cotacao.created_at), 'dd/MM/yy')}</p>
-                    <p className="text-xs text-muted-foreground">{formatRelativeTime(cotacao.created_at)}</p>
+                <TableCell className="hidden sm:table-cell py-3">
+                  <div>
+                    <p className="text-sm font-medium">{format(new Date(cotacao.created_at), 'dd/MM')}</p>
+                    <p className="text-[10px] text-muted-foreground">{formatRelativeTime(cotacao.created_at)}</p>
                   </div>
                 </TableCell>
                 
                 {/* Ações */}
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-1">
+                <TableCell onClick={(e) => e.stopPropagation()} className="py-3">
+                  <div className="flex items-center gap-0.5">
                     {/* Copiar para WhatsApp */}
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                      className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-500/10"
                       onClick={() => onCopiarWhatsApp(cotacao)}
                       disabled={isCopiando || permissions.canSend === false}
                       title="Copiar para WhatsApp"
                     >
                       {isCopiando ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <ClipboardCopy className="h-4 w-4" />
+                        <ClipboardCopy className="h-3.5 w-3.5" />
                       )}
                     </Button>
                     
@@ -397,18 +401,18 @@ export function CotacoesTable({
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8"
+                      className="h-7 w-7 hover:bg-muted"
                       onClick={() => onPdf(cotacao)}
                       title="Baixar PDF"
                     >
-                      <FileDown className="h-4 w-4" />
+                      <FileDown className="h-3.5 w-3.5" />
                     </Button>
                     
                     {/* Menu de ações extras */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button size="icon" variant="ghost" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
+                        <Button size="icon" variant="ghost" className="h-7 w-7 hover:bg-muted">
+                          <MoreHorizontal className="h-3.5 w-3.5" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
