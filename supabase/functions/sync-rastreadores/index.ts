@@ -57,7 +57,6 @@ interface Rastreador {
     chassi?: string;
     associado?: {
       cpf?: string;
-      cnpj?: string;
     };
   };
 }
@@ -307,7 +306,7 @@ async function syncRedeVeiculos(
       // Obter dados necessários para a API
       const imei = rast.imei || rast.codigo || '';
       const placa = rast.veiculo?.placa || '';
-      const cpfCnpj = rast.veiculo?.associado?.cnpj || rast.veiculo?.associado?.cpf || '';
+      const cpfCnpj = rast.veiculo?.associado?.cpf || '';
       
       if (!imei && !placa) {
         result.falhas++;
@@ -427,7 +426,7 @@ serve(async (req) => {
         id, codigo, imei, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id,
         veiculo:veiculos(
           placa, chassi,
-          associado:associados(cpf, cnpj)
+          associado:associados(cpf)
         )
       `)
       .eq("status", "instalado");
