@@ -1,149 +1,79 @@
 
-
-## Diagnóstico: Erro 500 no OCR de Documentos na Cotação Pública
+## Adicionar Opção de Dark/Light Mode no App do Associado
 
 ### Problema Identificado
 
-O screenshot mostra:
-- **Erro:** `Failed to load resource: the iyxdgmukrrdkffraptsx...s/v1/document-ocr - status 500`
-- **Mensagem:** `Edge Function returned a non-2xx status code`
-- Acontece ao ler o **CRLV** (documento do veículo) após upload
+O app do associado não possui uma opção visível para mudar entre os modos Dark e Light. Enquanto o sistema já tem `ThemeProvider` configurado e um componente `ThemeToggle` pronto, ele não está sendo utilizado na interface do associado.
 
-### Causa Raiz
+### Análise da Arquitetura Atual
 
-Analisando o fluxo, identifiquei **dois cenários** onde o erro pode ocorrer:
+**Infraestrutura existente:**
+- `App.tsx` (linha 296): `ThemeProvider` já configurado com `attribute="class"` e `defaultTheme="system"`
+- `src/components/ui/theme-toggle.tsx`: Componente ThemeToggle totalmente funcional com:
+  - Detecção automática do tema do sistema
+  - Switch visual intuitivo (Sol ☀️ / Lua 🌙)
+  - Textos descritivos em português
+  - Suporte a animações
 
-#### 1. Fluxo `CotacaoPublicaCompleta.tsx` - NÃO converte PDF antes do OCR (linha 295-319)
+**Layout do Associado:**
+- `src/components/app/AppHeader.tsx`: Header fixo com logo, navegação e dropdown de usuário
+- `src/components/app/AppUserDropdown.tsx`: Menu dropdown com opções de perfil, documentos, sinistros, configurações e logout
 
-Quando o upload é feito via `useUploadDocumento` (hook simplificado), o arquivo é enviado diretamente ao storage e depois a URL é passada para o OCR. Se o arquivo for **PDF**, a Edge Function `document-ocr` recebe a URL do PDF (não uma imagem) e pode falhar ao tentar processá-lo.
+### Solução Proposta
 
-**Código atual (problemático):**
-```typescript
-// Linha 295-299 - chama OCR diretamente com URL do PDF
-if (doc.tipo === 'crlv' && result.url && token) {
-  const { data: ocrData } = await supabase.functions.invoke('document-ocr', {
-    body: { url: result.url }  // ❌ URL pode ser de PDF!
-  });
-}
+Adicionar o toggle de tema como um item no dropdown do usuário (`AppUserDropdown.tsx`), mantendo a interface limpa e consistente.
+
+**Por que no dropdown?**
+- Interface mobile-first: espaço limitado no header em mobile
+- Consistência UX: agrupa todas as preferências do usuário em um único menu
+- Padrão visual: similar ao que já existe em layout de colaboradores
+- Fácil acesso: sempre disponível sem poluir a navegação
+
+### Alterações Necessárias
+
+#### Arquivo: `src/components/app/AppUserDropdown.tsx`
+
+**Adições:**
+1. Importar `ThemeToggle` do componente existente
+2. Importar `Separator` do Radix UI (já usado no projeto)
+3. Adicionar o ThemeToggle como seção separada no dropdown, logo abaixo da opção de Configurações
+
+**Estrutura final do dropdown:**
+```
+├── Meus Dados
+├── Documentos
+├── Sinistros
+├── Configurações
+├── ─────────────── (Separator)
+├── [Toggle] Modo Escuro/Claro
+├── ─────────────── (Separator)
+└── Sair
 ```
 
-#### 2. O hook `useUploadDocumento` em `useCotacaoPublica.ts` (linha 140-158) NÃO converte PDFs
+### Comportamento Esperado
 
-```typescript
-// Apenas faz upload, sem conversão de PDF
-const { error: uploadError } = await supabase.storage
-  .from('cotacoes-docs')
-  .upload(path, file, { upsert: true });  // ❌ Envia PDF como está
-```
+**Antes:**
+- Usuário só conseguia mudar tema através de configurações do navegador/SO
+- Sem opção nativa na aplicação
 
-**Enquanto isso**, o `UnifiedDocumentUploader.tsx` (usado nos contratos) **FAZ a conversão** corretamente (linhas 117-137):
-```typescript
-// Converte PDF para imagem antes do upload
-if (isPdf(file)) {
-  toast.info('Convertendo PDF para imagem...');
-  const imageBlob = await convertPdfToImage(file);
-  fileToUpload = new File([imageBlob], finalFileName, { type: 'image/jpeg' });
-}
-```
+**Depois:**
+- Usuário clica no avatar/dropdown
+- Vê a opção de toggle de tema (Sun ☀️ / Moon 🌙)
+- Clica para trocar entre Light e Dark Mode
+- Tema persiste usando localStorage via `next-themes`
+- Tema se aplica imediatamente com transição suave
 
-### Solução
+### Impacto
 
-Adicionar a conversão de PDF para imagem no hook `useUploadDocumento` da cotação pública, similar ao que já existe no `UnifiedDocumentUploader`.
+- ✅ Não requer alterações no banco de dados
+- ✅ Usa componente já pronto e testado
+- ✅ Mantém interface limpa
+- ✅ Acessível em mobile e desktop
+- ✅ Sem mudanças em configurações de tema global
 
----
-
-## Alterações Necessárias
-
-### Arquivo: `src/hooks/useCotacaoPublica.ts`
-
-**Adicionar importação:**
-```typescript
-import { isPdf, convertPdfToImage, getPdfConvertedName } from '@/lib/pdfToImage';
-```
-
-**Atualizar `useUploadDocumento` para converter PDFs:**
-```typescript
-export function useUploadDocumento() {
-  return useMutation({
-    mutationFn: async ({ cotacaoId, tipo, file }: UploadDocumentoParams) => {
-      let fileToUpload = file;
-      let fileName = file.name;
-      
-      // Converter PDF para imagem antes do upload
-      if (isPdf(file)) {
-        try {
-          const imageBlob = await convertPdfToImage(file);
-          fileName = getPdfConvertedName(file.name);
-          fileToUpload = new File([imageBlob], fileName, { type: 'image/jpeg' });
-        } catch (pdfError) {
-          console.error('Erro ao converter PDF:', pdfError);
-          throw new Error('Erro ao converter PDF. Tente enviar como imagem JPG ou PNG.');
-        }
-      }
-      
-      const ext = fileName.split('.').pop() || 'jpg';
-      const path = `cotacoes/${cotacaoId}/${tipo}_${Date.now()}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('cotacoes-docs')
-        .upload(path, fileToUpload, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('cotacoes-docs')
-        .getPublicUrl(path);
-
-      return { url: publicUrl, tipo };
-    },
-  });
-}
-```
-
-### Arquivo: `src/hooks/useCotacaoPublica.ts` - também atualizar `useUploadFotoVistoria`
-
-Aplicar a mesma lógica de conversão de PDF.
-
----
-
-## Resumo das Alterações
+### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useCotacaoPublica.ts` | Adicionar conversão de PDF para imagem nos hooks `useUploadDocumento` e `useUploadFotoVistoria` |
-
----
-
-## Comportamento Esperado Após Correção
-
-**Antes (com erro):**
-1. Cliente faz upload de CRLV em PDF
-2. PDF é enviado ao storage como está
-3. OCR recebe URL do PDF e falha (erro 500)
-
-**Depois (corrigido):**
-1. Cliente faz upload de CRLV em PDF
-2. **Sistema converte PDF para JPG no browser**
-3. JPG é enviado ao storage
-4. OCR recebe URL da imagem e processa normalmente
-
----
-
-## Impacto
-
-- ✅ Corrige erro 500 ao processar documentos PDF
-- ✅ Mantém compatibilidade com imagens (JPG/PNG) que já funcionam
-- ✅ Usa a mesma lógica já validada no `UnifiedDocumentUploader`
-- ✅ Não requer alteração na Edge Function
-
----
-
-## Estimativa
-
-| Tarefa | Tempo |
-|--------|-------|
-| Atualizar `useUploadDocumento` | 2 min |
-| Atualizar `useUploadFotoVistoria` | 1 min |
-| Testar com PDF real | 3 min |
-| **Total** | **~6 min** |
+| `src/components/app/AppUserDropdown.tsx` | Adicionar imports + integrar ThemeToggle no dropdown |
 
