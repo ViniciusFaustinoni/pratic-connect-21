@@ -1,36 +1,52 @@
 
-## ✅ IMPLEMENTADO: Vídeo 360° para Analista de Cadastro
+## Remover Botão "Ver Agenda" do Card do Vistoriador
 
-### Status: CONCLUÍDO
+### Diagnóstico
 
-### Mudanças Realizadas
-
-1. **Interface VistoriaInfo atualizada** (`src/hooks/usePropostasPendentes.ts`)
-   - Adicionado campo `video_360_url?: string | null`
-
-2. **Query de busca atualizada** (`src/hooks/usePropostasPendentes.ts`)
-   - Incluído `video_360_url` no SELECT da tabela `vistorias`
-   - Campo passado para o objeto vistoria
-
-3. **Componente Video360Card criado** (`src/components/cadastro/Video360Card.tsx`)
-   - Player de vídeo HTML5 nativo com controles
-   - Badge "360°" e descrição informativa
-   - Suporte a arquivos `.webm`
-
-4. **Tela de análise integrada** (`src/pages/cadastro/PropostaAnalise.tsx`)
-   - Card de vídeo 360° exibido após as fotos da vistoria
-   - Renderização condicional (só aparece se `video_360_url` existir)
-
-### Fluxo Corrigido
+Na página "Equipe" (`src/pages/monitoramento/Equipe.tsx`), cada card do vistoriador/instalador possui dois botões de ação:
+1. "Ver Agenda" (linhas 508-511) - a ser removido
+2. "Relatório" (linhas 512-515) - a manter
 
 ```text
-Instalador grava vídeo 360° → Salvo no bucket "vistoria-videos"
-         ↓
-Campo "video_360_url" gravado na tabela "vistorias"  ✓
-         ↓
-Hook "usePropostasPendentes" busca COM o campo  ✓
-         ↓
-Componente "Video360Card" exibe o vídeo  ✓
-         ↓
-Analista vê o vídeo 360° na tela de análise  ✓
+┌────────────────────────────────────────────────────────────┐
+│ Card do Vistoriador                                        │
+├────────────────────────────────────────────────────────────┤
+│ ...                                                        │
+│ Última atividade: Há 5 minutos                             │
+│                                                            │
+│ ┌─────────────────┐        ┌──────────────┐               │
+│ │ 📅 Ver Agenda   │        │ 📊 Relatório │               │
+│ └─────────────────┘        └──────────────┘               │
+│         ↓ (REMOVER)         ↓ (MANTER)                     │
+└────────────────────────────────────────────────────────────┘
 ```
+
+### Solução Proposta
+
+Remover apenas o botão "Ver Agenda" (linhas 508-511) e manter apenas o botão "Relatório", que ocupará toda a largura disponível da seção de ações.
+
+**Modificação:**
+- Arquivo: `src/pages/monitoramento/Equipe.tsx`
+- Linhas a remover: 508-511 (botão "Ver Agenda")
+- O botão "Relatório" permanecerá, podendo expandir para preencher o espaço
+
+**Antes:**
+```
+[📅 Ver Agenda]  [📊 Relatório]
+```
+
+**Depois:**
+```
+[📊 Relatório]
+```
+
+Ou, opcionalmente, remover a classe `flex-1` do botão "Relatório" se preferir que ele tenha tamanho natural.
+
+### Detalhes Técnicos
+
+| Aspecto | Detalhe |
+|---------|---------|
+| Arquivo | `src/pages/monitoramento/Equipe.tsx` |
+| Linhas para remover | 508-511 (bloco inteiro do botão) |
+| Impacto | Apenas remoção de UI, sem alterações em lógica |
+| Fallback | Nenhum necessário |
