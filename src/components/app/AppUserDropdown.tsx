@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export function AppUserDropdown() {
   const navigate = useNavigate();
@@ -55,6 +56,11 @@ export function AppUserDropdown() {
           <Settings className="mr-2 h-4 w-4" />
           Configurações
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <div className="px-2 py-1.5 flex items-center justify-between">
+          <span className="text-sm">Tema</span>
+          <ThemeToggle />
+        </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleLogout}
