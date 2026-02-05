@@ -9,6 +9,7 @@ interface NavegacaoEtapasProps {
   onVoltar: () => void;
   onAvancar: () => void;
   navegacaoManual?: boolean;
+  mostrarVoltar?: boolean;
 }
 
 export function NavegacaoEtapas({
@@ -18,8 +19,9 @@ export function NavegacaoEtapas({
   onVoltar,
   onAvancar,
   navegacaoManual = false,
+  mostrarVoltar = false,
 }: NavegacaoEtapasProps) {
-  const podeVoltar = etapaAtual > 0;
+  const podeVoltar = mostrarVoltar && etapaAtual > 0;
   // CORREÇÃO: Em modo manual, permitir avançar até a etapa máxima (para revisar etapas anteriores)
   const podeAvancar = navegacaoManual && etapaAtual < etapaMaxima;
   

@@ -756,16 +756,10 @@ export default function CotacaoPublicaCompleta() {
               );
             })}
 
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep('uso')} className="flex-1 h-12">
-                <ChevronLeft className="h-5 w-5 mr-2" />
-                Voltar
-              </Button>
-              <Button onClick={handleEscolherPlano} disabled={!planoEscolhido || loading} className="flex-1 h-12">
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Continuar'}
-                <ChevronRight className="h-5 w-5 ml-2" />
-              </Button>
-            </div>
+            <Button onClick={handleEscolherPlano} disabled={!planoEscolhido || loading} className="w-full h-12">
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Continuar'}
+              <ChevronRight className="h-5 w-5 ml-2" />
+            </Button>
           </div>
         )}
 
@@ -820,16 +814,10 @@ export default function CotacaoPublicaCompleta() {
               </Label>
             </div>
 
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep('plano')} className="flex-1 h-12">
-                <ChevronLeft className="h-5 w-5 mr-2" />
-                Voltar
-              </Button>
-              <Button onClick={handleAceitarProposta} disabled={!propostaAceita || loading} className="flex-1 h-12">
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Aceitar Proposta'}
-                <ChevronRight className="h-5 w-5 ml-2" />
-              </Button>
-            </div>
+            <Button onClick={handleAceitarProposta} disabled={!propostaAceita || loading} className="w-full h-12">
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Aceitar Proposta'}
+              <ChevronRight className="h-5 w-5 ml-2" />
+            </Button>
           </div>
         )}
 
@@ -896,20 +884,14 @@ export default function CotacaoPublicaCompleta() {
               ))}
             </div>
 
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep('proposta')} className="flex-1 h-12">
-                <ChevronLeft className="h-5 w-5 mr-2" />
-                Voltar
-              </Button>
-              <Button
-                onClick={handleConcluirDocumentos}
-                disabled={!documentos.filter(d => d.obrigatorio).every(d => d.status === 'enviado') || loading}
-                className="flex-1 h-12"
-              >
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Continuar'}
-                <ChevronRight className="h-5 w-5 ml-2" />
-              </Button>
-            </div>
+            <Button
+              onClick={handleConcluirDocumentos}
+              disabled={!documentos.filter(d => d.obrigatorio).every(d => d.status === 'enviado') || loading}
+              className="w-full h-12"
+            >
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Continuar'}
+              <ChevronRight className="h-5 w-5 ml-2" />
+            </Button>
           </div>
         )}
 
@@ -969,16 +951,10 @@ export default function CotacaoPublicaCompleta() {
               </CardContent>
             </Card>
 
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep('documentos')} className="flex-1 h-12">
-                <ChevronLeft className="h-5 w-5 mr-2" />
-                Voltar
-              </Button>
-              <Button onClick={handleConcluirSelfie} disabled={!selfieUrl || loading} className="flex-1 h-12">
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Continuar'}
-                <ChevronRight className="h-5 w-5 ml-2" />
-              </Button>
-            </div>
+            <Button onClick={handleConcluirSelfie} disabled={!selfieUrl || loading} className="w-full h-12">
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Continuar'}
+              <ChevronRight className="h-5 w-5 ml-2" />
+            </Button>
           </div>
         )}
 
@@ -1092,10 +1068,6 @@ export default function CotacaoPublicaCompleta() {
               </div>
             )}
 
-            <Button variant="outline" onClick={() => setTipoVistoria(null)} className="w-full">
-              <ChevronLeft className="h-5 w-5 mr-2" />
-              Voltar
-            </Button>
           </div>
         )}
 
