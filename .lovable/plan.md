@@ -1,87 +1,245 @@
 
+## Funcionalidade: Blacklist de Veículos Reprovados
 
-## Problema Identificado: Área do Cliente Não Atualiza ao Solicitar Documentos
+Este plano implementa um sistema completo de blacklist para veículos reprovados, com ações automáticas de cancelamento de contrato e estorno de pagamento.
 
-### Diagnóstico
+---
 
-O código já implementa **Supabase Realtime** no hook `useCotacaoContratacao.ts` (linhas 189-232), escutando mudanças na tabela `documentos_solicitados`. Porém, a atualização automática não funciona porque:
+## Visão Geral
 
-| Componente | Status |
-|------------|--------|
-| Código de subscription Realtime | ✅ Implementado |
-| Query de fallback com refetchInterval | ✅ 30 segundos |
-| Tabela publicada no Realtime | ❌ **Não configurado** |
+Quando um veículo for recusado pelo vistoriador ou uma proposta for reprovada pelo analista de cadastro:
 
-A consulta ao banco confirmou que `documentos_solicitados` **não está na publicação** `supabase_realtime`, então os eventos nunca chegam ao cliente.
-
-### Solução
-
-Adicionar a tabela `documentos_solicitados` à publicação Realtime do Supabase.
-
-### Implementação
-
-**SQL a executar (uma única query):**
-
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE public.documentos_solicitados;
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ VISTORIADOR RECUSA VEÍCULO   OU   ANALISTA REPROVA PROPOSTA        │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  1. Adiciona veículo/placa na BLACKLIST                             │
+│  2. Cancela documento no Autentique                                 │
+│  3. Estorna pagamento de adesão no ASAAS                            │
+│  4. Bloqueia acesso do associado ao app com mensagem "REPROVADO"    │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Resultado Esperado
+---
 
-Após a alteração:
+## Componentes a Implementar
 
+### 1. Banco de Dados
+
+**Nova tabela `blacklist_veiculos`:**
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| id | uuid | Chave primária |
+| placa | text | Placa do veículo (unique) |
+| chassi | text | Chassi (opcional) |
+| motivo | text | Motivo da inclusão |
+| tipo_reprovacao | enum | 'vistoria_reprovada', 'proposta_reprovada' |
+| veiculo_id | uuid | Referência ao veículo original |
+| associado_id | uuid | Referência ao associado |
+| contrato_id | uuid | Referência ao contrato |
+| adicionado_por | uuid | Usuário que incluiu |
+| created_at | timestamp | Data de inclusão |
+| removido_em | timestamp | Data de remoção (se aplicável) |
+| removido_por | uuid | Usuário que removeu |
+| ativo | boolean | Se está ativo na blacklist |
+
+---
+
+### 2. Menu Lateral - Nova Opção
+
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
+
+Adicionar item no grupo "Diretoria - Cadastro":
+
+```typescript
+{
+  id: 'diretoria',
+  label: 'Diretoria',
+  items: [
+    // ... itens existentes ...
+    { title: 'Blacklist', url: '/diretoria/blacklist', icon: Ban },
+  ],
+}
 ```
-┌───────────────────────────────────────────────────────────────────────┐
-│ ANALISTA                          │  CLIENTE                         │
-├───────────────────────────────────┼──────────────────────────────────┤
-│ Clica em "Solicitar Documentos"   │                                  │
-│ ↓                                 │                                  │
-│ INSERT em documentos_solicitados  │ → Realtime dispara callback      │
-│                                   │ → refetchDocs() é chamado        │
-│                                   │ → UI atualiza instantaneamente   │
-└───────────────────────────────────┴──────────────────────────────────┘
-```
 
-### Fluxo Técnico
+---
 
-```
-Analista solicita docs
+### 3. Página de Blacklist
+
+**Novo arquivo:** `src/pages/diretoria/Blacklist.tsx`
+
+Funcionalidades:
+- Listagem de veículos na blacklist com filtros
+- Busca por placa, chassi, nome do associado
+- Detalhes do motivo da reprovação
+- Opção para remover da blacklist (apenas Diretor)
+- Histórico de inclusões/remoções
+
+---
+
+### 4. Edge Function: Processar Reprovação Completa
+
+**Novo arquivo:** `supabase/functions/processar-reprovacao/index.ts`
+
+Fluxo:
+
+```text
+ENTRADA: { tipo, veiculo_id, contrato_id, motivo, usuario_id }
         │
         ▼
-┌────────────────────────┐
-│ INSERT na tabela       │
-│ documentos_solicitados │
-└────────────────────────┘
-        │
-        ▼ (após ADD TABLE)
-┌────────────────────────┐
-│ Supabase Realtime      │
-│ emite evento postgres_ │
-│ changes                │
-└────────────────────────┘
-        │
-        ▼
-┌────────────────────────┐
-│ Cliente recebe evento  │
-│ useCotacaoContratacao  │
-│ linha 197-208          │
-└────────────────────────┘
-        │
-        ▼
-┌────────────────────────┐
-│ refetchDocs()          │
-│ UI mostra docs         │
-│ pendentes              │
-└────────────────────────┘
+┌───────────────────────────────────────┐
+│ 1. ADICIONAR NA BLACKLIST             │
+│    INSERT INTO blacklist_veiculos     │
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────┐
+│ 2. CANCELAR AUTENTIQUE                │
+│    invoke('autentique-cancel')        │
+│    (se houver documento pendente)     │
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────┐
+│ 3. ESTORNAR PAGAMENTO ASAAS           │
+│    POST /payments/{id}/refund         │
+│    (se pagamento foi realizado)       │
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────┐
+│ 4. ATUALIZAR STATUS ASSOCIADO         │
+│    status = 'bloqueado'               │
+│    motivo_bloqueio = 'REPROVADO'      │
+└───────────────────────────────────────┘
 ```
 
-### Impacto
+---
 
-- **Atualização instantânea**: A área do cliente exibirá os documentos solicitados em tempo real
-- **Sem refresh manual**: O cliente não precisa recarregar a página
-- **Experiência fluida**: Consistente com outras partes do sistema que já usam Realtime (associados, instalacoes)
+### 5. Bloquear Área do Cliente
 
-### Observação Adicional
+**Modificar:** `src/components/auth/AssociadoGuard.tsx`
 
-O código de fallback com `refetchInterval: 30000` (30 segundos) continuará funcionando como backup caso haja algum problema com a conexão WebSocket.
+Adicionar verificação de status "bloqueado" do associado:
 
+```typescript
+// Se associado está bloqueado, mostrar tela de reprovação
+if (associado?.status === 'bloqueado' && associado?.motivo_bloqueio === 'VEICULO_REPROVADO') {
+  return <Navigate to="/app/veiculo-reprovado" replace />;
+}
+```
+
+**Nova página:** `src/pages/app/VeiculoReprovado.tsx`
+
+Tela informativa exibindo:
+- Ícone de alerta vermelho
+- Mensagem: "VEÍCULO REPROVADO"
+- Explicação sobre a reprovação
+- Link para suporte/atendimento
+
+---
+
+### 6. Integrar nos Fluxos Existentes
+
+**A) Recusa pelo Vistoriador**
+
+**Modificar:** `src/hooks/useVistoriaCompleta.ts` (hook `useRecusarVeiculo`)
+
+Após recusar veículo:
+```typescript
+// Chamar edge function para processar reprovação completa
+await supabase.functions.invoke('processar-reprovacao', {
+  body: {
+    tipo: 'vistoria_reprovada',
+    veiculo_id: data.veiculoId,
+    contrato_id: vistoriaData?.contrato_id,
+    motivo: data.motivo,
+    usuario_id: profile?.id,
+  }
+});
+```
+
+**B) Reprovação pelo Analista**
+
+**Modificar:** `src/hooks/usePropostasPendentes.ts` (hook `useReprovarProposta`)
+
+Após reprovar proposta:
+```typescript
+// Chamar edge function para processar reprovação completa
+await supabase.functions.invoke('processar-reprovacao', {
+  body: {
+    tipo: 'proposta_reprovada',
+    veiculo_id: veiculoId,
+    contrato_id: contratoId,
+    associado_id: associadoId,
+    motivo,
+    justificativa,
+    usuario_id: profile?.id,
+  }
+});
+```
+
+---
+
+### 7. Verificar Blacklist ao Criar Cotação
+
+**Modificar:** Fluxo de criação de cotação
+
+Antes de permitir nova cotação, verificar se placa já está na blacklist:
+
+```typescript
+const { data: blacklistCheck } = await supabase
+  .from('blacklist_veiculos')
+  .select('id, motivo')
+  .eq('placa', placa)
+  .eq('ativo', true)
+  .maybeSingle();
+
+if (blacklistCheck) {
+  throw new Error('Veículo não elegível para proteção');
+}
+```
+
+---
+
+## Arquivos a Criar/Modificar
+
+| Tipo | Arquivo | Descrição |
+|------|---------|-----------|
+| 🆕 | `src/pages/diretoria/Blacklist.tsx` | Página de gestão da blacklist |
+| 🆕 | `src/pages/app/VeiculoReprovado.tsx` | Tela de bloqueio para cliente |
+| 🆕 | `supabase/functions/processar-reprovacao/index.ts` | Edge function para fluxo completo |
+| 🆕 | `src/hooks/useBlacklist.ts` | Hook para operações de blacklist |
+| ✏️ | `src/components/layout/AppSidebar.tsx` | Adicionar menu Blacklist |
+| ✏️ | `src/components/auth/AssociadoGuard.tsx` | Verificar bloqueio |
+| ✏️ | `src/hooks/useVistoriaCompleta.ts` | Integrar processamento |
+| ✏️ | `src/hooks/usePropostasPendentes.ts` | Integrar processamento |
+| ✏️ | `src/App.tsx` | Adicionar rotas |
+| 🗄️ | `migration` | Criar tabela blacklist_veiculos |
+
+---
+
+## Detalhes Técnicos
+
+### Estorno ASAAS
+
+A API do ASAAS permite estorno via endpoint:
+- **Boleto:** `POST /payments/{id}/bankSlip/refund`
+- **PIX:** `POST /payments/{id}/refund`
+
+### Status do Associado
+
+Utilizar o valor existente do enum `status_associado`:
+- `bloqueado` - para indicar que está na blacklist
+
+Adicionar campo `motivo_bloqueio` com valor `'VEICULO_REPROVADO'` para identificar o tipo específico de bloqueio.
+
+### Segurança
+
+- Somente Diretor/Desenvolvedor pode remover da blacklist
+- Todas as ações são registradas em logs de auditoria
+- RLS policies para proteger a tabela blacklist_veiculos
