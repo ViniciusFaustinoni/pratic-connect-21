@@ -1,97 +1,116 @@
 
 ## Problema Identificado
 
-Na página de **Propostas** (`src/pages/vendas/Contratos.tsx`), as abas do menu são hardcodeadas:
-- Todos (0)
-- Rascunho (0)
-- Enviados (0)
-- Assinados (0)
-- Ativos (0)
+O PDF comparativo **GERADO CORRETAMENTE** em relação à estrutura (capa + tabela), mas a página de capa (primeira página) com os cards dos planos pode ser **otimizada visualmente** para exibir:
+- **Alinhamento e Centralização**: Cards lado a lado com melhor distribuição
+- **Ordem dos Planos**: Respeitar ordem de exibição e destaque
+- **Espaçamento**: Distribuição uniforme entre os cards
+- **Compatibilidade**: Suportar 1 a 6+ planos na mesma página
 
-O usuário quer que **apenas as abas com dados reais apareçam** no sistema.
+## Situação Atual
+
+Na função `desenharPaginaCapa()` (linhas 852-925), os cards são:
+- ✅ Centralizados horizontalmente
+- ✅ Distribuídos em linhas (máximo 3 por linha)
+- ✅ Com destaque para o "recomendado" (vermelho/glow)
+- ⚠️ Pode melhorar: altura fixa, espaçamento adaptativo
 
 ## Solução Proposta
 
-Tornar as abas dinâmicas filtrando apenas os statuses que existem nos contratos carregados:
+Refatorar a função `desenharPaginaCapa()` para:
 
-### Lógica Implementada
+1. **Cálculo Dinâmico**: Distribuir N planos em linhas de forma mais inteligente
+2. **Altura Responsiva**: Ajustar altura dos cards conforme quantidade
+3. **Espaçamento Uniforme**: Usar gap consistente entre cards
+4. **Alinhamento Central**: Garantir que os 3 cards fiquem centralizados como na imagem
+5. **Suporte a Muitos Planos**: Se houver >3 planos, distribuir em múltiplas linhas
 
-1. **Calcular statuses únicos** presentes nos dados (ex: se não há contratos com status "rascunho", a aba não aparece)
-2. **Manter a aba "Todos"** sempre visível como navegação geral
-3. **Ordenar as abas** por uma sequência lógica de fluxo (novo → enviado → assinado → ativo)
-4. **Filtrar abas com count = 0** a menos que o usuário as solicite
+### Mudanças no Arquivo
 
-### Alterações no Arquivo
+**Arquivo**: `src/lib/gerarPdfCotacao.ts`
 
-**Arquivo:** `src/pages/vendas/Contratos.tsx`
+**Mudanças** (linhas 852-925):
 
-**Mudanças:**
+1. **Cálculo mais inteligente de layout**:
+   - Determinar número de colunas: 1 se só 1 plano, 2 se 2-3 planos, 3 se 3+ planos
+   - Largura dos cards ajustada dinamicamente
 
-1. **Linhas 120-138** - Substituir o array hardcodeado `tabs` por uma versão dinâmica:
+2. **Cards com valores em coluna própria**:
+   - Nome do plano (sem quebra agressiva)
+   - Preço mensal em destaque (maior fonte)
+   - Badge FIPE alinhado
+
+3. **Tabela de valores centralizada**:
+   - Distribuir valores (taxa adesão + mensal) abaixo dos cards
+   - Alinhamento decimal dos valores
+
+### Exemplo do Resultado
+
+Para 3 planos como na imagem:
+```
+┌─────────────────────────────────────────────────────────┐
+│        CARD 1          CARD 2          CARD 3           │
+│   SELECT EXCLUXO    SELECT PREMIUM    SELECT BASIC      │
+│   R$ 214,50/mês     R$ 184,50/mês     R$ 154,50/mês     │
+│   ✓ Roubo e Furto   ✓ Roubo e Furto   ✓ Roubo e Furto   │
+│   ✓ Colisão         ✓ Colisão         ✓ Colisão         │
+│   ...               ...               ...                │
+│   [100% FIPE]       [100% FIPE]       [100% FIPE]       │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ TAXA DE ADESÃO      R$ XXX    R$ XXX    R$ XXX          │
+│ VALOR MÉDIO MENSAL  R$ 214,50 R$ 184,50 R$ 154,50       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Modificações Específicas
+
+**Linhas 852-925**: Refatorar o loop que desenha os cards para:
 
 ```typescript
-// Ordenação lógica do fluxo de contratos
-const statusOrder: Record<StatusContrato, number> = {
-  rascunho: 1,
-  pendente: 2,
-  pendente_assinatura: 3,
-  enviado: 4,
-  visualizado: 5,
-  assinado: 6,
-  ativo: 7,
-  suspenso: 8,
-  cancelado: 9,
-  expirado: 10,
-};
+// Determinar número de colunas baseado na quantidade de planos
+const numPlanos = cotacao.planosComparar.length;
+let MAX_CARDS_POR_LINHA = 3;
+if (numPlanos === 1) MAX_CARDS_POR_LINHA = 1;
+if (numPlanos === 2) MAX_CARDS_POR_LINHA = 2;
 
-// Gerar abas dinamicamente com base nos dados reais
-const getActiveTabs = () => {
-  const uniqueStatuses = new Set(contratos?.map(c => c.status) || []);
+// Largura e altura mais apropriadas
+const cardGap = 8;  // Aumentado de 6
+const baseCardWidth = Math.min(65, (contentWidth - (cardGap * (MAX_CARDS_POR_LINHA - 1))) / MAX_CARDS_POR_LINHA);
+const cardWidth = baseCardWidth;
+const cardHeight = 80;  // Aumentado para melhor distribuição do conteúdo
+
+// Loop refatorado com melhor lógica de centering
+cotacao.planosComparar.forEach((plano, index) => {
+  const linhaAtual = Math.floor(index / MAX_CARDS_POR_LINHA);
+  const posicaoNaLinha = index % MAX_CARDS_POR_LINHA;
+  const planosNestaLinha = Math.min(MAX_CARDS_POR_LINHA, numPlanos - (linhaAtual * MAX_CARDS_POR_LINHA));
   
-  const activeTabs: { value: TabValue; label: string; count: number }[] = [
-    { value: 'all', label: 'Todos', count: stats.total },
-  ];
-
-  // Adicionar abas apenas para statuses que existem
-  const statusesToShow: StatusContrato[] = Array.from(uniqueStatuses)
-    .sort((a, b) => (statusOrder[a] || 999) - (statusOrder[b] || 999));
-
-  statusesToShow.forEach((status) => {
-    const config = statusConfig[status];
-    if (config) {
-      const count = contratos?.filter(c => c.status === status).length || 0;
-      activeTabs.push({
-        value: status,
-        label: config.label,
-        count,
-      });
-    }
-  });
-
-  return activeTabs;
-};
-
-const tabs = getActiveTabs();
+  // Largura total dos cards + gaps nesta linha
+  const larguraLinha = (cardWidth * planosNestaLinha) + (cardGap * Math.max(0, planosNestaLinha - 1));
+  
+  // Centralizar a linha inteira
+  const startX = (pageWidth - larguraLinha) / 2;
+  const cardX = startX + (cardWidth + cardGap) * posicaoNaLinha;
+  const cardY = y + (cardHeight + cardGap) * linhaAtual;
+  
+  // ... resto do código para desenhar card
+});
 ```
+
+### Arquivos Afetados
+
+| Arquivo | Linhas | Modificação |
+|---------|--------|-------------|
+| `src/lib/gerarPdfCotacao.ts` | 852-925 | Refatorar `desenharPaginaCapa()` para centralização dinâmica |
+| `.lovable/plan.md` | — | Atualizar documentação |
 
 ### Impacto
 
-- **Abas vazias desaparecem** - Se não há "Rascunho", a aba não é exibida
-- **Fluxo lógico mantido** - Abas aparecem em ordem de fluxo quando existem
-- **"Todos" sempre visível** - Para visualização geral
-- **Contadores precisos** - Cada aba mostra apenas seus dados reais
+- ✅ PDF comparativo com cards alinhados como na imagem do usuário
+- ✅ Suporte a qualquer número de planos (1, 2, 3, 6+)
+- ✅ Melhor utilização do espaço da página
+- ✅ Distribuição mais equilibrada dos valores
+- ✅ Não quebra funcionalidade existente
 
-### Exemplo de Resultado
-
-Se houver apenas:
-- 2 contratos em "rascunho"
-- 5 contratos em "enviado"
-- 3 contratos em "ativo"
-
-As abas exibidas serão:
-- **Todos (10)**
-- **Rascunho (2)**
-- **Enviados (5)**
-- **Ativos (3)**
-
-(As abas "Assinados", "Pendentes", etc. não aparecem por não terem dados)
