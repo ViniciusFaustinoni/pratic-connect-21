@@ -6221,6 +6221,7 @@ export type Database = {
           vistoria_completa_endereco_logradouro: string | null
           vistoria_completa_endereco_numero: string | null
           vistoria_completa_horario_agendado: string | null
+          vistoria_completa_periodo: string | null
           vistoria_completa_responsavel_eu_mesmo: boolean | null
           vistoria_completa_responsavel_nome: string | null
           vistoria_completa_responsavel_telefone: string | null
@@ -6236,6 +6237,7 @@ export type Database = {
           vistoria_endereco_numero: string | null
           vistoria_horario_agendado: string | null
           vistoria_id: string | null
+          vistoria_periodo: string | null
           vistoria_permite_encaixe: boolean | null
           vistoria_responsavel_eu_mesmo: boolean | null
           vistoria_responsavel_nome: string | null
@@ -6332,6 +6334,7 @@ export type Database = {
           vistoria_completa_endereco_logradouro?: string | null
           vistoria_completa_endereco_numero?: string | null
           vistoria_completa_horario_agendado?: string | null
+          vistoria_completa_periodo?: string | null
           vistoria_completa_responsavel_eu_mesmo?: boolean | null
           vistoria_completa_responsavel_nome?: string | null
           vistoria_completa_responsavel_telefone?: string | null
@@ -6347,6 +6350,7 @@ export type Database = {
           vistoria_endereco_numero?: string | null
           vistoria_horario_agendado?: string | null
           vistoria_id?: string | null
+          vistoria_periodo?: string | null
           vistoria_permite_encaixe?: boolean | null
           vistoria_responsavel_eu_mesmo?: boolean | null
           vistoria_responsavel_nome?: string | null
@@ -6443,6 +6447,7 @@ export type Database = {
           vistoria_completa_endereco_logradouro?: string | null
           vistoria_completa_endereco_numero?: string | null
           vistoria_completa_horario_agendado?: string | null
+          vistoria_completa_periodo?: string | null
           vistoria_completa_responsavel_eu_mesmo?: boolean | null
           vistoria_completa_responsavel_nome?: string | null
           vistoria_completa_responsavel_telefone?: string | null
@@ -6458,6 +6463,7 @@ export type Database = {
           vistoria_endereco_numero?: string | null
           vistoria_horario_agendado?: string | null
           vistoria_id?: string | null
+          vistoria_periodo?: string | null
           vistoria_permite_encaixe?: boolean | null
           vistoria_responsavel_eu_mesmo?: boolean | null
           vistoria_responsavel_nome?: string | null

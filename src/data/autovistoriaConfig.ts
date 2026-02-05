@@ -461,7 +461,30 @@ export function getFotosAutovistoria(tipo: TipoVeiculo): FotoAutovistoria[] {
   return tipo === 'moto' ? FOTOS_AUTOVISTORIA_MOTO : FOTOS_AUTOVISTORIA_CARRO;
 }
 
-// Horários disponíveis para agendamento de vistoria (segunda a sexta)
+// ===== CONFIGURAÇÃO DE PERÍODOS PARA VISTORIA PRESENCIAL =====
+
+// Tipos de período
+export type Periodo = 'manha' | 'tarde';
+
+// Configuração de cada período
+export interface PeriodoConfig {
+  id: Periodo;
+  label: string;
+  horarioInicio: string;
+  horarioFim: string;
+  icone: string;
+}
+
+// Períodos disponíveis
+export const PERIODOS_DISPONIVEIS: PeriodoConfig[] = [
+  { id: 'manha', label: 'Manhã', horarioInicio: '08:00', horarioFim: '12:00', icone: '☀️' },
+  { id: 'tarde', label: 'Tarde', horarioInicio: '14:00', horarioFim: '18:00', icone: '🌅' },
+];
+
+// Limite máximo de vagas por período por dia
+export const LIMITE_VAGAS_POR_PERIODO = 10;
+
+// Horários disponíveis para agendamento de vistoria (segunda a sexta) - LEGADO
 export const HORARIOS_DISPONIVEIS = [
   '08:00',
   '09:00',
@@ -473,7 +496,7 @@ export const HORARIOS_DISPONIVEIS = [
   '17:00',
 ];
 
-// Horários disponíveis para sábado (08:00 às 13:00)
+// Horários disponíveis para sábado (08:00 às 13:00) - LEGADO
 export const HORARIOS_SABADO = [
   '08:00',
   '09:00',
@@ -493,7 +516,16 @@ export const isSabado = (date: Date): boolean => {
   return date.getDay() === 6; // 6 = sábado
 };
 
-// Função para obter horários disponíveis baseado no dia da semana
+// Função para obter períodos disponíveis baseado no dia da semana
+export const getPeriodosParaDia = (date: Date): PeriodoConfig[] => {
+  if (isSabado(date)) {
+    // Sábado: apenas manhã disponível
+    return PERIODOS_DISPONIVEIS.filter(p => p.id === 'manha');
+  }
+  return PERIODOS_DISPONIVEIS;
+};
+
+// Função para obter horários disponíveis baseado no dia da semana (LEGADO - mantido para compatibilidade)
 export const getHorariosParaDia = (date: Date): string[] => {
   if (isSabado(date)) {
     return HORARIOS_SABADO;
