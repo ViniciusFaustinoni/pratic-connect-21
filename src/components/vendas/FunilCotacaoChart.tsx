@@ -1,24 +1,47 @@
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, Info } from 'lucide-react';
+import { TrendingUp, Info, ChevronRight } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useFunilCotacao, type Periodo } from '@/hooks/useFunilCotacao';
+import { useFunilCotacao, type Periodo, type EtapaFunilCotacao } from '@/hooks/useFunilCotacao';
 import { cn } from '@/lib/utils';
 
 interface FunilCotacaoChartProps {
   periodo?: Periodo;
   className?: string;
   compact?: boolean;
+  onEtapaClick?: (etapaId: string) => void;
 }
+
+// Mapeamento de rotas por etapa do funil
+const ETAPA_ROTAS: Record<EtapaFunilCotacao, string> = {
+  novo: '/vendas/leads?etapa=novo',
+  contato: '/vendas/leads?etapa=contato',
+  cotacao_gerada: '/vendas/cotacoes',
+  escolhendo_plano: '/vendas/cotacoes?status_contratacao=escolhendo_plano',
+  enviando_docs: '/vendas/cotacoes?status_contratacao=enviando_documentos',
+  termo_assinado: '/vendas/contratos?status=assinado',
+  pagamento_efetuado: '/vendas/contratos?adesao_paga=true',
+  vistoria_agendada: '/monitoramento/vistorias',
+  proposta_concluida: '/cadastro/associados?status=ativo',
+};
 
 /**
  * Componente de visualização do Funil de Cotação
- * Exibe as 9 etapas reais do processo de cotação
+ * Exibe as 9 etapas reais do processo de cotação com navegação interativa
  */
-export function FunilCotacaoChart({ periodo = '30dias', className, compact = false }: FunilCotacaoChartProps) {
+export function FunilCotacaoChart({ periodo = '30dias', className, compact = false, onEtapaClick }: FunilCotacaoChartProps) {
+  const navigate = useNavigate();
   const { data, isLoading } = useFunilCotacao(periodo);
+
+  const handleEtapaClick = (etapaId: EtapaFunilCotacao) => {
+    if (onEtapaClick) {
+      onEtapaClick(etapaId);
+    } else {
+      navigate(ETAPA_ROTAS[etapaId]);
+    }
+  };
 
   if (isLoading || !data) {
     return (
@@ -52,7 +75,7 @@ export function FunilCotacaoChart({ periodo = '30dias', className, compact = fal
               <TrendingUp className="h-5 w-5 text-primary" />
               Funil de Cotação
             </CardTitle>
-            <CardDescription>Jornada real do cliente no processo de cotação</CardDescription>
+            <CardDescription>Clique em uma etapa para ver detalhes</CardDescription>
           </div>
           {cotacoesSemLead > 0 && (
             <TooltipProvider>
@@ -72,7 +95,7 @@ export function FunilCotacaoChart({ periodo = '30dias', className, compact = fal
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
+        <div className="space-y-1">
           {etapas.map((etapa, index) => {
             // Calcular largura da barra baseada na quantidade relativa
             const maxQuantidade = Math.max(...etapas.map(e => e.quantidade), 1);
@@ -81,34 +104,47 @@ export function FunilCotacaoChart({ periodo = '30dias', className, compact = fal
             return (
               <TooltipProvider key={etapa.id}>
                 <Tooltip>
-                  <TooltipTrigger className="w-full text-left">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <span 
-                            className="w-2.5 h-2.5 rounded-full" 
-                            style={{ backgroundColor: etapa.cor }}
-                          />
-                          <span className="text-muted-foreground">
-                            {index + 1}. {etapa.label}
-                          </span>
-                        </div>
-                        <span className="font-medium text-foreground tabular-nums">
-                          {etapa.quantidade}
-                        </span>
-                      </div>
-                      {!compact && (
-                        <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className="absolute left-0 top-0 h-full rounded-full transition-all duration-500"
-                            style={{ 
-                              width: `${barWidth}%`,
-                              backgroundColor: etapa.cor 
-                            }}
-                          />
-                        </div>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleEtapaClick(etapa.id)}
+                      className={cn(
+                        "w-full text-left rounded-lg p-2 -mx-2 transition-all duration-200",
+                        "hover:bg-primary/10 hover:scale-[1.01] cursor-pointer",
+                        "focus:outline-none focus:ring-2 focus:ring-primary/20",
+                        "group"
                       )}
-                    </div>
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <span 
+                              className="w-2.5 h-2.5 rounded-full transition-transform group-hover:scale-125" 
+                              style={{ backgroundColor: etapa.cor }}
+                            />
+                            <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                              {index + 1}. {etapa.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground tabular-nums">
+                              {etapa.quantidade}
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </div>
+                        {!compact && (
+                          <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="absolute left-0 top-0 h-full rounded-full transition-all duration-500"
+                              style={{ 
+                                width: `${barWidth}%`,
+                                backgroundColor: etapa.cor 
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
                     <p className="font-medium">{etapa.label}</p>
@@ -116,6 +152,7 @@ export function FunilCotacaoChart({ periodo = '30dias', className, compact = fal
                     <p className="text-xs mt-1">
                       {etapa.quantidade} ({etapa.percentual.toFixed(1)}% do total)
                     </p>
+                    <p className="text-xs text-primary mt-1">Clique para ver lista</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -141,9 +178,6 @@ export function FunilCotacaoChart({ periodo = '30dias', className, compact = fal
               Taxa de conversão: {taxaConversao.toFixed(1)}%
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Conversão = Propostas Concluídas ÷ Cotações Geradas
-          </p>
         </div>
       </CardContent>
     </Card>
