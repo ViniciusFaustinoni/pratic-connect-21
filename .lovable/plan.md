@@ -1,79 +1,261 @@
 
-## Adicionar Opção de Dark/Light Mode no App do Associado
 
-### Problema Identificado
+## Sistema de Comissionamento Automático de Vendedores
 
-O app do associado não possui uma opção visível para mudar entre os modos Dark e Light. Enquanto o sistema já tem `ThemeProvider` configurado e um componente `ThemeToggle` pronto, ele não está sendo utilizado na interface do associado.
+### Resumo Executivo
+
+Implementar um módulo completo de cálculo automático de comissões para vendedores, com suporte a diferentes tipos de regras (percentual fixo, escalonado por metas, por tipo de vendedor CLT/Externo), cálculo automático ao ativar contratos e dashboard de acompanhamento.
+
+---
 
 ### Análise da Arquitetura Atual
 
-**Infraestrutura existente:**
-- `App.tsx` (linha 296): `ThemeProvider` já configurado com `attribute="class"` e `defaultTheme="system"`
-- `src/components/ui/theme-toggle.tsx`: Componente ThemeToggle totalmente funcional com:
-  - Detecção automática do tema do sistema
-  - Switch visual intuitivo (Sol ☀️ / Lua 🌙)
-  - Textos descritivos em português
-  - Suporte a animações
+**Estrutura existente utilizada:**
+- `metas_vendas`: Tabela de metas com campos `meta_contratos`, `meta_valor`, `realizado_*`
+- `contratos`: Contratos com `vendedor_id`, `valor_mensal`, `valor_adesao`, `status`, `data_ativacao`
+- `cotacoes`: Cotações com `valor_adesao`, `valor_total_mensal`, `vendedor_id`
+- `user_roles`: Diferenciação entre `vendedor_clt` e `vendedor_externo`
+- `profiles`: Dados dos vendedores
 
-**Layout do Associado:**
-- `src/components/app/AppHeader.tsx`: Header fixo com logo, navegação e dropdown de usuário
-- `src/components/app/AppUserDropdown.tsx`: Menu dropdown com opções de perfil, documentos, sinistros, configurações e logout
+**Valores disponíveis para base de comissão:**
+- `valor_adesao` (taxa de adesão paga na entrada)
+- `valor_mensal` (mensalidade do contrato)
+- `valor_total_mensal` da cotação
 
-### Solução Proposta
+---
 
-Adicionar o toggle de tema como um item no dropdown do usuário (`AppUserDropdown.tsx`), mantendo a interface limpa e consistente.
+### Estrutura de Dados
 
-**Por que no dropdown?**
-- Interface mobile-first: espaço limitado no header em mobile
-- Consistência UX: agrupa todas as preferências do usuário em um único menu
-- Padrão visual: similar ao que já existe em layout de colaboradores
-- Fácil acesso: sempre disponível sem poluir a navegação
+#### Tabela: `comissoes_config` (Configuração de Regras)
 
-### Alterações Necessárias
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | uuid | PK |
+| nome | varchar | Nome da regra (ex: "CLT Padrão") |
+| tipo_vendedor | varchar | 'vendedor_clt', 'vendedor_externo', 'todos' |
+| base_calculo | varchar | 'valor_adesao', 'valor_mensal', 'ambos' |
+| tipo_calculo | varchar | 'percentual_fixo', 'escalonado_metas', 'escalonado_valor' |
+| percentual_base | numeric | Percentual base (ex: 10%) |
+| bonus_meta_atingida | numeric | Bônus adicional ao atingir 100% da meta |
+| bonus_meta_superada | numeric | Bônus ao superar 120% da meta |
+| valor_minimo | numeric | Piso de comissão por contrato |
+| valor_maximo | numeric | Teto de comissão por contrato |
+| ativo | boolean | Se a regra está ativa |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
 
-#### Arquivo: `src/components/app/AppUserDropdown.tsx`
+#### Tabela: `comissoes` (Comissões Calculadas)
 
-**Adições:**
-1. Importar `ThemeToggle` do componente existente
-2. Importar `Separator` do Radix UI (já usado no projeto)
-3. Adicionar o ThemeToggle como seção separada no dropdown, logo abaixo da opção de Configurações
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | uuid | PK |
+| vendedor_id | uuid | FK para profiles |
+| contrato_id | uuid | FK para contratos |
+| config_id | uuid | FK para comissoes_config (regra usada) |
+| mes_referencia | integer | Mês (1-12) |
+| ano_referencia | integer | Ano |
+| valor_base | numeric | Valor usado como base do cálculo |
+| percentual_aplicado | numeric | Percentual efetivamente aplicado |
+| valor_comissao | numeric | Valor calculado da comissão |
+| bonus_meta | numeric | Valor de bônus por meta atingida |
+| valor_total | numeric | valor_comissao + bonus_meta |
+| status | varchar | 'pendente', 'aprovada', 'paga', 'cancelada' |
+| aprovado_por | uuid | Quem aprovou |
+| aprovado_em | timestamptz | |
+| pago_em | timestamptz | |
+| observacoes | text | |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
 
-**Estrutura final do dropdown:**
+#### Tabela: `comissoes_pagamentos` (Histórico de Pagamentos)
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | uuid | PK |
+| vendedor_id | uuid | FK |
+| mes_referencia | integer | |
+| ano_referencia | integer | |
+| valor_total | numeric | Total pago |
+| quantidade_comissoes | integer | Número de comissões no lote |
+| data_pagamento | date | |
+| comprovante_url | text | Link do comprovante |
+| observacoes | text | |
+| created_at | timestamptz | |
+
+---
+
+### Fluxo de Funcionamento
+
+```text
+1. CONFIGURAÇÃO (Gerência)
+   └── Define regras de comissão por tipo de vendedor
+       ├── Vendedor CLT: 5% sobre adesão + bônus por meta
+       └── Vendedor Externo: 10% sobre adesão
+
+2. CÁLCULO AUTOMÁTICO
+   └── Trigger ao ativar contrato (status = 'ativo')
+       ├── Identifica tipo do vendedor
+       ├── Busca regra de comissão aplicável
+       ├── Calcula valor base * percentual
+       ├── Verifica se atingiu meta do mês
+       ├── Aplica bônus se aplicável
+       └── Cria registro em comissoes
+
+3. APROVAÇÃO (Supervisor/Gerente)
+   └── Revisar comissões pendentes
+       ├── Aprovar individualmente
+       └── Aprovar em lote por período
+
+4. PAGAMENTO (Financeiro)
+   └── Processar comissões aprovadas
+       ├── Gerar relatório de pagamento
+       ├── Marcar como pagas
+       └── Registrar comprovante
 ```
-├── Meus Dados
-├── Documentos
-├── Sinistros
-├── Configurações
-├── ─────────────── (Separator)
-├── [Toggle] Modo Escuro/Claro
-├── ─────────────── (Separator)
-└── Sair
+
+---
+
+### Componentes a Criar
+
+#### 1. Páginas
+
+| Componente | Descrição | Acesso |
+|------------|-----------|--------|
+| `ComissoesConfig.tsx` | Configuração de regras de comissão | Gerência/Diretoria |
+| `ComissoesDashboard.tsx` | Visão geral de comissões do mês | Gerência |
+| `MinhasComissoes.tsx` | Vendedor visualiza suas comissões | Vendedores |
+
+#### 2. Hooks
+
+| Hook | Descrição |
+|------|-----------|
+| `useComissoesConfig` | CRUD de configurações de comissão |
+| `useComissoes` | Buscar/filtrar comissões por período e vendedor |
+| `useMinhasComissoes` | Comissões do vendedor logado |
+| `useCalcularComissao` | Função de cálculo automático |
+
+#### 3. Componentes UI
+
+| Componente | Descrição |
+|------------|-----------|
+| `ComissaoCard` | Card com resumo de comissão individual |
+| `ComissaoResumoMensal` | Resumo do mês com totais |
+| `ComissaoAprovacaoList` | Lista para aprovação em lote |
+| `ComissaoRegraBadge` | Badge mostrando regra aplicada |
+
+---
+
+### Regras de Negócio
+
+#### Cálculo Base
+```text
+valor_comissao = valor_base × (percentual_base / 100)
 ```
 
-### Comportamento Esperado
+#### Bônus por Meta
+```text
+Se realizado_contratos >= meta_contratos:
+   bonus = valor_comissao × (bonus_meta_atingida / 100)
+   
+Se realizado_contratos >= meta_contratos × 1.2:
+   bonus = valor_comissao × (bonus_meta_superada / 100)
+```
 
-**Antes:**
-- Usuário só conseguia mudar tema através de configurações do navegador/SO
-- Sem opção nativa na aplicação
+#### Exemplo Prático
 
-**Depois:**
-- Usuário clica no avatar/dropdown
-- Vê a opção de toggle de tema (Sun ☀️ / Moon 🌙)
-- Clica para trocar entre Light e Dark Mode
-- Tema persiste usando localStorage via `next-themes`
-- Tema se aplica imediatamente com transição suave
+**Cenário:** Vendedor CLT fecha contrato com adesão R$ 500,00
+- Percentual base: 5%
+- Meta do mês: 10 contratos
+- Realizado: 12 contratos (120%)
+- Bônus por meta superada: 50%
 
-### Impacto
+**Cálculo:**
+```text
+Comissão base: R$ 500 × 5% = R$ 25,00
+Bônus (meta superada): R$ 25 × 50% = R$ 12,50
+TOTAL: R$ 37,50
+```
 
-- ✅ Não requer alterações no banco de dados
-- ✅ Usa componente já pronto e testado
-- ✅ Mantém interface limpa
-- ✅ Acessível em mobile e desktop
-- ✅ Sem mudanças em configurações de tema global
+---
 
-### Arquivos a Modificar
+### Integração com Sistema Existente
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/app/AppUserDropdown.tsx` | Adicionar imports + integrar ThemeToggle no dropdown |
+#### Trigger ao Ativar Contrato
+
+Adicionar lógica após a ativação em `ativar-associado` ou criar trigger no banco:
+
+```sql
+-- Pseudo-código da lógica
+AFTER UPDATE ON contratos
+WHEN NEW.status = 'ativo' AND OLD.status != 'ativo'
+THEN
+  INSERT INTO comissoes (...)
+  SELECT calcular_comissao(NEW.id);
+```
+
+#### Dashboard do Vendedor
+
+Adicionar card de "Minhas Comissões" no Dashboard quando o usuário é vendedor, mostrando:
+- Total de comissões do mês
+- Comissões pendentes de aprovação
+- Último pagamento recebido
+
+---
+
+### Arquivos a Criar/Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `supabase/migrations/xxx.sql` | Criar | Tabelas comissoes_config, comissoes, comissoes_pagamentos |
+| `src/hooks/useComissoes.ts` | Criar | Hooks de comissões |
+| `src/pages/vendas/ComissoesConfig.tsx` | Criar | Página de configuração |
+| `src/pages/vendas/Comissoes.tsx` | Criar | Dashboard de comissões |
+| `src/pages/MinhasComissoes.tsx` | Criar | Visão do vendedor |
+| `src/components/comissoes/ComissaoCard.tsx` | Criar | Card de comissão |
+| `src/components/comissoes/ComissaoResumoMensal.tsx` | Criar | Resumo mensal |
+| `src/components/comissoes/ConfiguracaoComissaoForm.tsx` | Criar | Form de configuração |
+| `src/App.tsx` | Modificar | Adicionar rotas |
+| `src/components/layout/sidebar-items.ts` | Modificar | Adicionar menu |
+| `supabase/functions/calcular-comissao/index.ts` | Criar | Edge function para cálculo |
+
+---
+
+### Permissões
+
+| Ação | Quem pode |
+|------|-----------|
+| Configurar regras | Diretor, Admin Master, Desenvolvedor |
+| Ver todas comissões | Gerência, Supervisores |
+| Aprovar comissões | Gerente Comercial, Diretor |
+| Marcar como paga | Financeiro, Diretor |
+| Ver próprias comissões | Vendedores |
+
+---
+
+### Estimativa de Implementação
+
+| Fase | Tarefas | Tempo |
+|------|---------|-------|
+| 1 | Criar tabelas e migrations | 10 min |
+| 2 | Hooks e tipos TypeScript | 15 min |
+| 3 | Página de configuração de regras | 20 min |
+| 4 | Dashboard de comissões (gerência) | 25 min |
+| 5 | Página "Minhas Comissões" (vendedor) | 15 min |
+| 6 | Edge function de cálculo automático | 20 min |
+| 7 | Integrar com ativação de contrato | 10 min |
+| 8 | Adicionar rotas e menu | 5 min |
+| **Total** | | **~2 horas** |
+
+---
+
+### Próximos Passos Após Aprovação
+
+1. Criar migrations para as tabelas de comissões
+2. Implementar hooks de gerenciamento
+3. Criar página de configuração de regras
+4. Criar dashboard de comissões
+5. Criar página de comissões do vendedor
+6. Implementar cálculo automático via Edge Function
+7. Integrar com fluxo de ativação de contratos
+8. Testar com dados reais
 
