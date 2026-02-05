@@ -148,6 +148,7 @@ const menuConfig: {
         { title: 'Cotação', url: '/vendas/cotacoes', icon: Calculator },
         { title: 'Propostas', url: '/vendas/contratos', icon: FileCheck },
         { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
+        { title: 'Comissões', url: '/vendas/comissoes', icon: DollarSign, permission: 'isGerencia' },
         { title: 'Consultores', url: '/vendas/propostas', icon: FileText, permission: 'canManageConsultores' },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
       ],
@@ -496,13 +497,19 @@ export function AppSidebar() {
         }));
     }
     
-    // Se é apenas vendedor, remover item "Ativações" do grupo Vendas
+    // Se é apenas vendedor, ajustar menu de Vendas
     if (permissions.isVendedorOnly) {
       return baseGroups.map(group => {
         if (group.id === 'vendas') {
           return {
             ...group,
-            items: group.items.filter(item => item.url !== '/vendas/ativacoes'),
+            items: group.items
+              .filter(item => item.url !== '/vendas/ativacoes')
+              // Substituir "Comissões" por "Minhas Comissões" para vendedores
+              .map(item => item.url === '/vendas/comissoes' 
+                ? { ...item, title: 'Minhas Comissões', url: '/vendas/minhas-comissoes', permission: undefined }
+                : item
+              ),
           };
         }
         return group;
