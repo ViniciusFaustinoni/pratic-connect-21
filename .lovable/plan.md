@@ -1,141 +1,59 @@
 
 
-## Redesign da Página de Cotações
+## Problema Identificado
 
-### Problemas Identificados na Interface Atual
+Na página atual, o menu "Ouvidoria" é exibido para Vendedores/Consultores (vendedor_clt e vendedor_externo), mas não deveria estar visível para eles. 
 
-Analisando a imagem e o código existente, identifico os seguintes pontos a melhorar:
+Analisando o código:
+- **Arquivo:** `src/hooks/usePermissions.ts` (linha 255)
+- **Lógica atual:** `canManageOuvidoria: isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor`
 
-1. **Cards de estatísticas muito grandes e espalhados** - ocupam muito espaço vertical
-2. **Área de filtros com muitos campos** - visual poluído e confuso
-3. **Tabela com informações densas** - difícil leitura rápida
-4. **Falta de hierarquia visual clara** - todos elementos parecem ter a mesma importância
-5. **Espaçamento inconsistente** - gaps grandes entre seções
+Vendedores têm apenas os roles `vendedor_clt` ou `vendedor_externo`, então teoricamente não deveriam ter acesso. Porém, a verificação de permissão está correta.
 
-### Solução Proposta
+**A solução é simples:** Remover a permissão `canManageOuvidoria` da lógica de permissões de Vendedor/Consultor, ou ajustar a permissão para excluir explicitamente esses perfis.
 
-#### 1. Cards de Estatísticas Compactos e Modernos
+## Solução Proposta
 
-Transformar os 4 cards em uma barra horizontal mais compacta e moderna:
+Há duas abordagens possíveis:
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  📄 1                     ✈ 0               ✓ 1               📈 100%  │
-│  Total Cotações           Enviadas          Aceitas           Conversão │
-└─────────────────────────────────────────────────────────────────────────┘
+### Opção 1 (Recomendada): Ajustar Ouvidoria para excluir Vendedor
+Modificar a permissão em `src/hooks/usePermissions.ts` (linha 255) para ser mais explícita e segura, adicionando uma verificação negativa para vendedores.
+
+```typescript
+canManageOuvidoria: (isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao
 ```
 
-**Mudanças:**
-- Cards menores, mais compactos
-- Ícones ao lado dos números, não em círculos separados
-- Gradiente sutil no fundo
-- Bordas arredondadas suaves
-- Valores com cores mais vibrantes
+### Opção 2: Adicionar filtro no AppSidebar
+Adicionar lógica no `src/components/layout/AppSidebar.tsx` para excluir o grupo "Ouvidoria" para vendedores especificamente no método `getVisibleGroups()`.
 
-#### 2. Barra de Filtros Simplificada
+## Recomendação
 
-Consolidar filtros em uma única linha limpa:
+**Opção 1 é melhor** porque:
+1. Fix no nível de permissões (source of truth)
+2. Garante segurança em qualquer lugar que use `canManageOuvidoria`
+3. Mantém a lógica centralizada e reutilizável
+4. Mais simples de manter e debugar
 
-```
-┌───────────────────────────────────────────────────────────────────────────┐
-│ 🔍 Buscar...           │ Status ▾  │ Período ▾  │ 📅 Data │ 👤 Consultor│
-└───────────────────────────────────────────────────────────────────────────┘
-```
+## Mudança Técnica
 
-**Mudanças:**
-- Remover labels acima dos campos (usar placeholders)
-- Filtros em linha única, mais compactos
-- Select triggers menores e com ícones embutidos
-- Remover bordas desnecessárias
+**Arquivo:** `src/hooks/usePermissions.ts` (linha 255)
 
-#### 3. Tabela Redesenhada
-
-Melhorar legibilidade e interatividade:
-
-**Mudanças na Tabela:**
-- Células com padding mais generoso
-- Status badges mais compactos com cores mais suaves
-- Avatar circular menor e mais elegante
-- Hover row com transição suave
-- Alternância de cor nas linhas para melhor legibilidade
-
-#### 4. Melhorias Visuais Gerais
-
-| Elemento | Antes | Depois |
-|----------|-------|--------|
-| Cards | 4 cards grandes verticais | Barra horizontal compacta |
-| Filtros | Campos com labels acima | Linha única com placeholders |
-| Tabela | Densa, uniforme | Espaçada, com zebra e hover |
-| Badges | Tamanhos inconsistentes | Uniformes e compactos |
-| Cores | Muito saturadas | Mais suaves, gradientes sutis |
-
-### Arquivos a Modificar
-
-| Arquivo | Mudanças |
-|---------|----------|
-| `src/pages/vendas/Cotacoes.tsx` | Cards compactos, filtros inline, espaçamentos |
-| `src/components/cotacoes/CotacoesTable.tsx` | Estilização tabela, hover states, badges |
-
-### Detalhes Técnicos
-
-**Cotacoes.tsx - Cards Estatísticos:**
-```tsx
-// De 4 cards separados para 1 card com 4 métricas inline
-<Card className="bg-gradient-to-r from-card to-muted/30">
-  <CardContent className="p-4">
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 divide-x divide-border/50">
-      {/* Cada métrica inline com ícone + valor + label */}
-    </div>
-  </CardContent>
-</Card>
+Modificar:
+```typescript
+canManageOuvidoria: isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor,
 ```
 
-**Filtros Compactos:**
-```tsx
-<div className="flex flex-wrap items-center gap-2">
-  {/* Input com ícone embutido, sem label */}
-  {/* Selects compactos sem labels */}
-</div>
+Para:
+```typescript
+canManageOuvidoria: (isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao,
 ```
 
-**CotacoesTable.tsx - Estilos da Tabela:**
-```tsx
-// Adicionar zebra striping
-<TableRow className="even:bg-muted/30 hover:bg-muted/50 transition-colors">
+Essa mudança:
+- Mantém o acesso para Diretor, Gerente Comercial, Analista de Cadastro, Funcionário e Desenvolvedor
+- **Bloqueia** explicitamente para Vendedor CLT e Vendedor Externo
+- É aplicada globalmente em toda a aplicação
 
-// Badges mais compactos
-<Badge className="text-[10px] px-2 py-0.5">
-```
+## Resultado
 
-### Resultado Visual Esperado
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Cotações                                            [+ Nova Cotação]          │
-│ Gerencie todas as cotações e acompanhe propostas                              │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ ┌──────────────────────────────────────────────────────────────────────────┐ │
-│ │  📄 1 Total    │   ✈ 0 Enviadas   │   ✓ 1 Aceitas   │   📈 100% Taxa   │ │
-│ └──────────────────────────────────────────────────────────────────────────┘ │
-│                                                                              │
-│ 🔍 Lead, veículo...  │ Todos status ▾ │ Período ▾ │ Data ▾ │ Consultor ▾   │
-│                                                                              │
-│ ┌──────────────────────────────────────────────────────────────────────────┐ │
-│ │ Status      │ Cliente              │ Veículo        │ FIPE    │ Data    │ │
-│ ├──────────────────────────────────────────────────────────────────────────┤ │
-│ │ ✓ ACEITA    │ M Marcus Vinicius... │ 🚗 Toyota      │ R$ 70k  │ 05/02   │ │
-│ │ Assoc.Ativo │                      │ 2013 • ABC1234 │         │ 2h atrás│ │
-│ └──────────────────────────────────────────────────────────────────────────┘ │
-│                    Clique em uma linha para ver detalhes                     │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Impacto
-
-- Interface mais limpa e moderna
-- Melhor aproveitamento do espaço vertical
-- Filtros mais intuitivos e menos poluídos
-- Tabela com melhor legibilidade
-- Experiência visual mais agradável e profissional
-- Mantém todas as funcionalidades existentes
+Após a mudança, Vendedores e Consultores não verão o menu "Ouvidoria" no sidebar, mesmo que tenha outras permissões.
 
