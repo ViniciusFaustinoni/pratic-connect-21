@@ -61,6 +61,7 @@ import { DocumentosAnexadosCard } from '@/components/cadastro/DocumentosAnexados
 import { DocumentosSolicitadosCard } from '@/components/cadastro/DocumentosSolicitadosCard';
 import { VistoriaFotosCard } from '@/components/cadastro/VistoriaFotosCard';
 import { VistoriaObservacoesCard } from '@/components/cadastro/VistoriaObservacoesCard';
+import { Video360Card } from '@/components/cadastro/Video360Card';
 import { AssinaturaClienteCard } from '@/components/cadastro/AssinaturaClienteCard';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { format } from 'date-fns';
@@ -749,6 +750,11 @@ export default function PropostaAnalise() {
               vistoriaStatus={proposta.vistoria.status}
               modalidade={proposta.vistoria.modalidade}
             />
+          )}
+
+          {/* Vídeo 360° da Vistoria */}
+          {proposta.vistoria?.video_360_url && (
+            <Video360Card videoUrl={proposta.vistoria.video_360_url} />
           )}
 
           {/* Observações do Vistoriador */}

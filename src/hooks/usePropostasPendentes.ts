@@ -32,6 +32,7 @@ export interface VistoriaInfo {
   fotos: VistoriaFotoInfo[];
   observacoes?: string | null;
   km_atual?: number | null;
+  video_360_url?: string | null;
 }
 
 export interface DocumentoSolicitadoEnviado {
@@ -273,7 +274,7 @@ export function usePropostasPendentes() {
       // 1. Tentar buscar vistoria vinculada ao contrato (nova arquitetura)
       const { data: vistoriaData } = await supabase
         .from('vistorias')
-        .select('id, status, modalidade, observacoes, km_atual')
+        .select('id, status, modalidade, observacoes, km_atual, video_360_url')
         .eq('contrato_id', contrato.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -296,6 +297,7 @@ export function usePropostasPendentes() {
             fotos: fotosVistoria as VistoriaFotoInfo[],
             observacoes: vistoriaData.observacoes,
             km_atual: vistoriaData.km_atual,
+            video_360_url: vistoriaData.video_360_url,
           };
         }
       }
