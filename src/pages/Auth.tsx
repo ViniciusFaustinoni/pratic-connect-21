@@ -47,6 +47,7 @@ export default function Auth() {
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     senha?: string;
@@ -167,6 +168,13 @@ export default function Auth() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevenir múltiplas submissões simultâneas
+    if (isSubmittingLogin || loginLoading) {
+      return;
+    }
+    
+    setIsSubmittingLogin(true);
     setErrors({}); // Limpar erros anteriores
 
     // Validar PRIMEIRO - se falhar, NÃO continua
@@ -278,6 +286,7 @@ export default function Auth() {
       toast.error('Erro ao fazer login');
     } finally {
       setLoginLoading(false);
+      setIsSubmittingLogin(false);
     }
   };
 
@@ -497,7 +506,7 @@ export default function Auth() {
                 <Button 
                   type="submit" 
                   className="w-full"
-                  disabled={loginLoading || !loginEmail || !loginPassword || bloqueio?.bloqueado}
+                  disabled={loginLoading || isSubmittingLogin || !loginEmail || !loginPassword || bloqueio?.bloqueado}
                 >
                   {loginLoading ? (
                     <>
