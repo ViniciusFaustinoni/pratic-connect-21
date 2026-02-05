@@ -89,9 +89,31 @@ export default function PlanosBeneficios() {
     b.descricao?.toLowerCase().includes(searchTerm)
   ) || [];
 
-  // Helper para obter planos de uma linha específica
+  // Helper para obter planos de uma linha específica com filtro de busca
   const getPlansByLineId = (lineId: string) => {
-    return plans?.filter(p => p.product_line_id === lineId) || [];
+    const linePlans = plans?.filter(p => p.product_line_id === lineId) || [];
+    
+    if (!searchTerm) return linePlans;
+    
+    return linePlans.filter(plan => {
+      // Buscar no nome do plano
+      if (plan.name?.toLowerCase().includes(searchTerm)) return true;
+      if (plan.nome?.toLowerCase().includes(searchTerm)) return true;
+      
+      // Buscar na descrição
+      if (plan.descricao?.toLowerCase().includes(searchTerm)) return true;
+      
+      // Buscar no badge
+      if (plan.badge_text?.toLowerCase().includes(searchTerm)) return true;
+      
+      // Buscar nos benefícios
+      if (plan.plan_benefits?.some(b => 
+        b.benefits?.name?.toLowerCase().includes(searchTerm) || 
+        b.custom_text?.toLowerCase().includes(searchTerm)
+      )) return true;
+      
+      return false;
+    });
   };
 
   // Filtrar linhas por tipo de veículo
