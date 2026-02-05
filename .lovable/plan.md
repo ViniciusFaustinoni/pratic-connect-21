@@ -1,83 +1,149 @@
 
 
-## Diagnóstico: Toast de Boas-vindas Duplicado no Login
+## Diagnóstico: Erro 500 no OCR de Documentos na Cotação Pública
 
 ### Problema Identificado
 
-A mensagem de boas-vindas "Bem-vindo, Teste!" está sendo exibida **duas vezes** ao fazer login. Analisando o código, encontrei:
+O screenshot mostra:
+- **Erro:** `Failed to load resource: the iyxdgmukrrdkffraptsx...s/v1/document-ocr - status 500`
+- **Mensagem:** `Edge Function returned a non-2xx status code`
+- Acontece ao ler o **CRLV** (documento do veículo) após upload
 
-**Único local que exibe esta mensagem:**
-- `src/pages/Auth.tsx`, linha 240: `toast.success(\`Bem-vindo, ${primeiroNome}!\`);`
+### Causa Raiz
 
-### Causa Raiz Provável
+Analisando o fluxo, identifiquei **dois cenários** onde o erro pode ocorrer:
 
-Existem **duas causas possíveis**:
+#### 1. Fluxo `CotacaoPublicaCompleta.tsx` - NÃO converte PDF antes do OCR (linha 295-319)
 
-#### **Causa 1: React.StrictMode Duplicando Submissões (Mais Provável)**
-- O projeto usa `React.StrictMode` em `src/main.tsx` (linha 7)
-- Em desenvolvimento, pode causar duplicação de handlers
-- O formulário tem `onSubmit={handleLogin}` que pode estar sendo acionado duas vezes
+Quando o upload é feito via `useUploadDocumento` (hook simplificado), o arquivo é enviado diretamente ao storage e depois a URL é passada para o OCR. Se o arquivo for **PDF**, a Edge Function `document-ocr` recebe a URL do PDF (não uma imagem) e pode falhar ao tentar processá-lo.
 
-#### **Causa 2: Chamada Duplicada a `signIn()`**
-- O `handleLogin` é chamado corretamente via `onSubmit`
-- Mas se há outro código disparando o login simultaneamente, teríamos dois toasts
-
-### Solução Recomendada
-
-**Adicionar um debounce/prevenção de submissão dupla no `handleLogin`:**
-
-1. Criar uma flag (`isSubmitting`) para prevenir múltiplas submissões simultâneas
-2. Validar se o formulário já está em processo de login antes de iniciar outro
-3. Desabilitar o botão e impedir re-submissão enquanto `loginLoading` está ativo
-
-**Arquivo a modificar:**
-- `src/pages/Auth.tsx` - adicionar proteção contra submissão duplicada no `handleLogin`
-
-### Implementação
-
-**Passo 1:** Adicionar flag para rastrear se uma submissão já está em progresso
+**Código atual (problemático):**
 ```typescript
-// Após linha 49, adicionar:
-const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+// Linha 295-299 - chama OCR diretamente com URL do PDF
+if (doc.tipo === 'crlv' && result.url && token) {
+  const { data: ocrData } = await supabase.functions.invoke('document-ocr', {
+    body: { url: result.url }  // ❌ URL pode ser de PDF!
+  });
+}
 ```
 
-**Passo 2:** Modificar o início de `handleLogin` (linha 168) para verificar se já está processando
+#### 2. O hook `useUploadDocumento` em `useCotacaoPublica.ts` (linha 140-158) NÃO converte PDFs
+
 ```typescript
-const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  // Prevenir múltiplas submissões
-  if (isSubmittingLogin || loginLoading) {
-    return;
-  }
-  
-  setIsSubmittingLogin(true);
-  setErrors({});
-  
-  try {
-    // ... resto do código
-  } finally {
-    setLoginLoading(false);
-    setIsSubmittingLogin(false);
-  }
-};
+// Apenas faz upload, sem conversão de PDF
+const { error: uploadError } = await supabase.storage
+  .from('cotacoes-docs')
+  .upload(path, file, { upsert: true });  // ❌ Envia PDF como está
 ```
 
-**Passo 3:** Atualizar a condição `disabled` do botão (linha 500)
+**Enquanto isso**, o `UnifiedDocumentUploader.tsx` (usado nos contratos) **FAZ a conversão** corretamente (linhas 117-137):
 ```typescript
-disabled={loginLoading || isSubmittingLogin || !loginEmail || !loginPassword || bloqueio?.bloqueado}
+// Converte PDF para imagem antes do upload
+if (isPdf(file)) {
+  toast.info('Convertendo PDF para imagem...');
+  const imageBlob = await convertPdfToImage(file);
+  fileToUpload = new File([imageBlob], finalFileName, { type: 'image/jpeg' });
+}
 ```
 
-### Resultado Esperado
+### Solução
 
-- ✅ O toast será exibido apenas uma vez ao fazer login
-- ✅ O botão ficará visualmente indisponível durante o processamento
-- ✅ Múltiplas submissões serão prevenidas
-- ✅ Mantém compatibilidade com `loginLoading` existente
+Adicionar a conversão de PDF para imagem no hook `useUploadDocumento` da cotação pública, similar ao que já existe no `UnifiedDocumentUploader`.
 
-### Impacto
+---
 
-- Arquivo modificado: `src/pages/Auth.tsx`
-- Mudança não invasiva, apenas adiciona proteção
-- Sem alterações em contextos ou componentes
+## Alterações Necessárias
+
+### Arquivo: `src/hooks/useCotacaoPublica.ts`
+
+**Adicionar importação:**
+```typescript
+import { isPdf, convertPdfToImage, getPdfConvertedName } from '@/lib/pdfToImage';
+```
+
+**Atualizar `useUploadDocumento` para converter PDFs:**
+```typescript
+export function useUploadDocumento() {
+  return useMutation({
+    mutationFn: async ({ cotacaoId, tipo, file }: UploadDocumentoParams) => {
+      let fileToUpload = file;
+      let fileName = file.name;
+      
+      // Converter PDF para imagem antes do upload
+      if (isPdf(file)) {
+        try {
+          const imageBlob = await convertPdfToImage(file);
+          fileName = getPdfConvertedName(file.name);
+          fileToUpload = new File([imageBlob], fileName, { type: 'image/jpeg' });
+        } catch (pdfError) {
+          console.error('Erro ao converter PDF:', pdfError);
+          throw new Error('Erro ao converter PDF. Tente enviar como imagem JPG ou PNG.');
+        }
+      }
+      
+      const ext = fileName.split('.').pop() || 'jpg';
+      const path = `cotacoes/${cotacaoId}/${tipo}_${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('cotacoes-docs')
+        .upload(path, fileToUpload, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('cotacoes-docs')
+        .getPublicUrl(path);
+
+      return { url: publicUrl, tipo };
+    },
+  });
+}
+```
+
+### Arquivo: `src/hooks/useCotacaoPublica.ts` - também atualizar `useUploadFotoVistoria`
+
+Aplicar a mesma lógica de conversão de PDF.
+
+---
+
+## Resumo das Alterações
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useCotacaoPublica.ts` | Adicionar conversão de PDF para imagem nos hooks `useUploadDocumento` e `useUploadFotoVistoria` |
+
+---
+
+## Comportamento Esperado Após Correção
+
+**Antes (com erro):**
+1. Cliente faz upload de CRLV em PDF
+2. PDF é enviado ao storage como está
+3. OCR recebe URL do PDF e falha (erro 500)
+
+**Depois (corrigido):**
+1. Cliente faz upload de CRLV em PDF
+2. **Sistema converte PDF para JPG no browser**
+3. JPG é enviado ao storage
+4. OCR recebe URL da imagem e processa normalmente
+
+---
+
+## Impacto
+
+- ✅ Corrige erro 500 ao processar documentos PDF
+- ✅ Mantém compatibilidade com imagens (JPG/PNG) que já funcionam
+- ✅ Usa a mesma lógica já validada no `UnifiedDocumentUploader`
+- ✅ Não requer alteração na Edge Function
+
+---
+
+## Estimativa
+
+| Tarefa | Tempo |
+|--------|-------|
+| Atualizar `useUploadDocumento` | 2 min |
+| Atualizar `useUploadFotoVistoria` | 1 min |
+| Testar com PDF real | 3 min |
+| **Total** | **~6 min** |
 
