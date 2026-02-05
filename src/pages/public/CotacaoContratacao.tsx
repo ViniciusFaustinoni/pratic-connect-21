@@ -349,11 +349,6 @@ export default function CotacaoContratacao() {
                 {cotacao.veiculo_ano}
               </Badge>
             )}
-            {cotacao.valor_fipe && (
-              <span className="text-muted-foreground hidden sm:inline">
-                FIPE: <span className="font-medium text-foreground">{formatarMoeda(cotacao.valor_fipe)}</span>
-              </span>
-            )}
           </div>
         </div>
       </motion.div>

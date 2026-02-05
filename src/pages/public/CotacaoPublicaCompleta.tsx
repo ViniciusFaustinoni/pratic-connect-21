@@ -621,9 +621,6 @@ export default function CotacaoPublicaCompleta() {
                     {cotacao.veiculo_marca} {cotacao.veiculo_modelo}
                   </p>
                   {cotacao.veiculo_ano && <p className="text-sm text-muted-foreground">Ano {cotacao.veiculo_ano}</p>}
-                  {cotacao.valor_fipe && (
-                    <p className="text-sm text-muted-foreground">FIPE: {formatarMoeda(cotacao.valor_fipe)}</p>
-                  )}
                 </div>
               </CardContent>
             </Card>
@@ -792,11 +789,6 @@ export default function CotacaoPublicaCompleta() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Veículo</span>
                     <span className="font-medium">{cotacao.veiculo_marca} {cotacao.veiculo_modelo}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Valor FIPE</span>
-                    <span className="font-medium">{formatarMoeda(cotacao.valor_fipe || 0)}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between">

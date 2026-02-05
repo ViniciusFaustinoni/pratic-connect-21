@@ -154,12 +154,6 @@ export default function CotacaoPublica() {
                       {cotacao.veiculo_combustivel}
                     </Badge>
                   )}
-                  {cotacao.valor_fipe && (
-                    <Badge variant="outline" className="text-xs">
-                      <Tag className="h-3 w-3 mr-1" />
-                      FIPE: {formatarMoeda(cotacao.valor_fipe)}
-                    </Badge>
-                  )}
                 </div>
               </div>
             </div>
