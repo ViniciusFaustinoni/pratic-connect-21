@@ -1,126 +1,165 @@
 
+# Plano: Corrigir Flicker na Tela de Login
 
-# Plano: Corrigir Bug e Habilitar Rastreamento Rede Veículos
+## Problema Identificado
 
-## Problemas Identificados
+O "piscar" ocorre porque existem **dois fluxos de redirecionamento competindo** após o login bem-sucedido:
 
-| Problema | Local | Impacto |
-|----------|-------|---------|
-| Coluna `cnpj` inexistente | `sync-rastreadores` linha 430 | Edge function falha ao executar |
-| `suporta_posicao_tempo_real = false` | Tabela `rastreadores_config_plataformas` | Bloqueia busca de posição em tempo real |
-| `suporta_historico_trajeto = false` | Tabela `rastreadores_config_plataformas` | Bloqueia consulta de histórico |
+1. **handleSubmit** (Login.tsx): Faz navigate() após buscar profile manualmente
+2. **useEffect** (Login.tsx): Faz navigate() quando detecta `user` + `!authLoading`
 
----
-
-## Correção 1: Bug da Coluna `cnpj`
-
-### Arquivo
-`supabase/functions/sync-rastreadores/index.ts`
-
-### Problema
-```typescript
-// Linha 430 - ERRO: coluna 'cnpj' não existe na tabela 'associados'
-veiculo:veiculos(
-  placa, chassi,
-  associado:associados(cpf, cnpj)  // ← cnpj NÃO EXISTE!
-)
-```
-
-### Solução
-```typescript
-// Remover 'cnpj' da query - tabela associados só tem 'cpf'
-veiculo:veiculos(
-  placa, chassi,
-  associado:associados(cpf)  // ← Apenas 'cpf'
-)
-```
-
-### Arquivos a Modificar
-Verificar e corrigir em TODAS as edge functions que fazem essa query incorreta:
-
-1. **sync-rastreadores/index.ts** (linha 430)
-2. Possivelmente outras funções que fazem joins similares
+Além disso, o `signIn()` no AuthContext seta `loading = false` no `finally`, **antes** do `onAuthStateChange` terminar de carregar os dados do usuário.
 
 ---
 
-## Correção 2: Habilitar Posição em Tempo Real
+## Solução
 
-### Tabela
-`rastreadores_config_plataformas`
+### Correção 1: Não fazer navigate() duplicado no handleSubmit
 
-### Query SQL
-```sql
-UPDATE rastreadores_config_plataformas
-SET 
-  suporta_posicao_tempo_real = true,
-  suporta_historico_trajeto = true,
-  updated_at = NOW()
-WHERE plataforma = 'rede_veiculos';
-```
+O `handleSubmit` não precisa buscar profile e fazer navigate manualmente - o `useEffect` já faz isso. Basta retornar após login bem-sucedido e deixar o useEffect cuidar do redirecionamento.
 
-### Impacto
-Após esta atualização, as edge functions `rastreador-posicao` e `rastreador-historico` passarão a fazer chamadas à API da Rede Veículos em vez de retornar apenas dados do cache local.
+### Correção 2: Aguardar profile no useEffect antes de redirecionar
 
----
+O `useEffect` deve verificar não apenas `user`, mas também que o `profile` foi carregado, evitando redirecionamento prematuro.
 
-## Correção 3: Ajustar Lógica de CPF/CNPJ
+### Correção 3: Usar flag de "login em andamento"
 
-### Problema Adicional
-Na linha 310 do `sync-rastreadores`, o código tenta acessar `cnpj` que não existe:
-
-```typescript
-const cpfCnpj = rast.veiculo?.associado?.cnpj || rast.veiculo?.associado?.cpf || '';
-```
-
-### Solução
-```typescript
-// Apenas CPF existe na tabela associados
-const cpfCnpj = rast.veiculo?.associado?.cpf || '';
-```
+Adicionar um estado `loginEmAndamento` que permanece `true` até que o fluxo complete totalmente, evitando re-renderizações intermediárias.
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Ação | Linhas |
-|---------|------|--------|
-| `supabase/functions/sync-rastreadores/index.ts` | Remover `cnpj` da query e da lógica | 430, 310 |
-| Tabela `rastreadores_config_plataformas` | UPDATE via SQL | - |
+| Arquivo | Ação |
+|---------|------|
+| `src/pages/auth/Login.tsx` | Simplificar handleSubmit e melhorar useEffect |
 
 ---
 
-## Fluxo Após Correção
+## Código Corrigido
 
-```text
-1. Edge function sync-rastreadores executa sem erro
-2. Busca rastreadores instalados com associados.cpf
-3. Para cada rastreador Rede Veículos:
-   a. Obtém IMEI/placa do rastreador
-   b. Obtém CPF do associado vinculado
-   c. Chama POST /obterUltimaPosicaoValida/
-   d. Atualiza posição no banco
-4. Posição em tempo real funciona para veículos vinculados
+### Login.tsx - useEffect para redirecionamento
+
+```typescript
+// ANTES: Redireciona assim que tem user
+useEffect(() => {
+  if (!authLoading && user) {
+    // ...navigate
+  }
+}, [authLoading, user, ...]);
+
+// DEPOIS: Aguarda profile também
+useEffect(() => {
+  // Só redireciona quando tiver user E profile carregado
+  if (!authLoading && user && profile) {
+    if (profile.primeiro_acesso) {
+      navigate('/definir-senha', { replace: true });
+      return;
+    }
+    if (isAssociado) {
+      navigate('/app/home', { replace: true });
+      return;
+    }
+    const params = new URLSearchParams(location.search);
+    const returnTo = params.get('returnTo') || '/dashboard';
+    navigate(returnTo, { replace: true });
+  }
+}, [authLoading, user, profile, isAssociado, navigate, location.search]);
+```
+
+### Login.tsx - handleSubmit simplificado
+
+```typescript
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError(null);
+
+  if (!validateForm() || bloqueado) return;
+
+  setIsSubmitting(true);
+
+  try {
+    const result = await signIn({ 
+      email: formData.email.trim().toLowerCase(), 
+      password: formData.password 
+    });
+
+    if (!result.success) {
+      const errorType = parseSupabaseError(result.error || '');
+      setError(errorType);
+      await registrarTentativaFalha(formData.email, errorType);
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Login bem-sucedido - registrar e aguardar useEffect fazer o redirect
+    await registrarTentativaSucesso(formData.email);
+    // NÃO fazer navigate aqui - o useEffect vai fazer quando profile carregar
+    // Manter isSubmitting = true para mostrar loading até redirecionar
+    
+  } catch (err) {
+    setError('unknown_error');
+    await registrarTentativaFalha(formData.email, 'unknown_error');
+    setIsSubmitting(false);
+  }
+  // NÃO colocar setIsSubmitting(false) no finally!
+};
+```
+
+### Login.tsx - Loading state melhorado
+
+```typescript
+// Adicionar profile nas dependências
+const { signIn, signInWithGoogle, user, profile, loading: authLoading, isAssociado } = useAuth();
+
+// Estado de loading composto
+const showLoadingScreen = authLoading || (user && !profile);
+
+if (showLoadingScreen) {
+  return (
+    <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+      {/* ... loading spinner ... */}
+    </div>
+  );
+}
 ```
 
 ---
 
-## Teste Após Correção
+## Fluxo Corrigido
 
-O rastreador com IMEI `865011031150387` está em **estoque** (sem veículo/associado vinculado), então não retornará posição mesmo após a correção.
-
-**Para testar posição em tempo real:**
-1. Vincular o rastreador a um veículo que tenha associado com CPF
-2. OU usar outro rastreador Rede Veículos já instalado
+```text
+1. Usuário digita credenciais → Clica "Entrar"
+2. isSubmitting = true (mostra spinner no botão)
+3. signIn() é chamado → Login bem-sucedido
+4. registrarTentativaSucesso() → return (NÃO faz navigate)
+5. AuthContext: onAuthStateChange(SIGNED_IN)
+   → setUser(user)
+   → setTimeout → loadUserData()
+6. AuthContext: loadUserData()
+   → Busca profile + perfis
+   → setProfile(), setPerfis()
+   → setLoading(false)
+7. Login.tsx: useEffect detecta user + profile
+   → Agora sim faz navigate() UMA VEZ SÓ
+8. Redirecionamento limpo, sem flicker
+```
 
 ---
 
-## Estimativa de Tempo
+## Benefícios
+
+- Elimina a "corrida" entre dois navigates
+- Tela de loading permanece até dados estarem completos
+- Código mais simples e previsível
+- Mensagem de boas-vindas pode usar dados do profile já carregado
+
+---
+
+## Estimativa
 
 | Tarefa | Tempo |
 |--------|-------|
-| Corrigir query sync-rastreadores | 5 min |
-| Atualizar configuração plataforma | 2 min |
-| Deploy edge function | Automático |
-| Testar com rastreador vinculado | 5 min |
-| **Total** | **~12 min** |
-
+| Modificar Login.tsx | 10 min |
+| Testar fluxo | 5 min |
+| **Total** | **~15 min** |
