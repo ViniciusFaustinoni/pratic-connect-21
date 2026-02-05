@@ -4652,6 +4652,235 @@ export type Database = {
           },
         ]
       }
+      comissoes: {
+        Row: {
+          ano_referencia: number
+          aprovado_em: string | null
+          aprovado_por: string | null
+          bonus_meta: number | null
+          config_id: string | null
+          contrato_id: string
+          created_at: string
+          id: string
+          mes_referencia: number
+          observacoes: string | null
+          pago_em: string | null
+          percentual_aplicado: number
+          status: string
+          updated_at: string
+          valor_base: number
+          valor_comissao: number
+          valor_total: number
+          vendedor_id: string
+        }
+        Insert: {
+          ano_referencia: number
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          bonus_meta?: number | null
+          config_id?: string | null
+          contrato_id: string
+          created_at?: string
+          id?: string
+          mes_referencia: number
+          observacoes?: string | null
+          pago_em?: string | null
+          percentual_aplicado?: number
+          status?: string
+          updated_at?: string
+          valor_base?: number
+          valor_comissao?: number
+          valor_total?: number
+          vendedor_id: string
+        }
+        Update: {
+          ano_referencia?: number
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          bonus_meta?: number | null
+          config_id?: string | null
+          contrato_id?: string
+          created_at?: string
+          id?: string
+          mes_referencia?: number
+          observacoes?: string | null
+          pago_em?: string | null
+          percentual_aplicado?: number
+          status?: string
+          updated_at?: string
+          valor_base?: number
+          valor_comissao?: number
+          valor_total?: number
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "comissoes_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: true
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      comissoes_config: {
+        Row: {
+          ativo: boolean
+          base_calculo: string
+          bonus_meta_atingida: number | null
+          bonus_meta_superada: number | null
+          created_at: string
+          id: string
+          nome: string
+          percentual_base: number
+          tipo_calculo: string
+          tipo_vendedor: string
+          updated_at: string
+          valor_maximo: number | null
+          valor_minimo: number | null
+        }
+        Insert: {
+          ativo?: boolean
+          base_calculo?: string
+          bonus_meta_atingida?: number | null
+          bonus_meta_superada?: number | null
+          created_at?: string
+          id?: string
+          nome: string
+          percentual_base?: number
+          tipo_calculo?: string
+          tipo_vendedor?: string
+          updated_at?: string
+          valor_maximo?: number | null
+          valor_minimo?: number | null
+        }
+        Update: {
+          ativo?: boolean
+          base_calculo?: string
+          bonus_meta_atingida?: number | null
+          bonus_meta_superada?: number | null
+          created_at?: string
+          id?: string
+          nome?: string
+          percentual_base?: number
+          tipo_calculo?: string
+          tipo_vendedor?: string
+          updated_at?: string
+          valor_maximo?: number | null
+          valor_minimo?: number | null
+        }
+        Relationships: []
+      }
+      comissoes_pagamentos: {
+        Row: {
+          ano_referencia: number
+          comprovante_url: string | null
+          created_at: string
+          data_pagamento: string
+          id: string
+          mes_referencia: number
+          observacoes: string | null
+          quantidade_comissoes: number
+          valor_total: number
+          vendedor_id: string
+        }
+        Insert: {
+          ano_referencia: number
+          comprovante_url?: string | null
+          created_at?: string
+          data_pagamento?: string
+          id?: string
+          mes_referencia: number
+          observacoes?: string | null
+          quantidade_comissoes?: number
+          valor_total?: number
+          vendedor_id: string
+        }
+        Update: {
+          ano_referencia?: number
+          comprovante_url?: string | null
+          created_at?: string
+          data_pagamento?: string
+          id?: string
+          mes_referencia?: number
+          observacoes?: string | null
+          quantidade_comissoes?: number
+          valor_total?: number
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_pagamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_pagamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_pagamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       configuracoes: {
         Row: {
           categoria: string
@@ -19578,6 +19807,10 @@ export type Database = {
           veiculo_modelo: string
           veiculo_placa: string
         }[]
+      }
+      calcular_comissao_contrato: {
+        Args: { p_contrato_id: string }
+        Returns: string
       }
       calcular_sinistralidade: {
         Args: { p_ano: number; p_mes: number }

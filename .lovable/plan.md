@@ -234,28 +234,47 @@ Adicionar card de "Minhas Comissões" no Dashboard quando o usuário é vendedor
 
 ### Estimativa de Implementação
 
-| Fase | Tarefas | Tempo |
-|------|---------|-------|
-| 1 | Criar tabelas e migrations | 10 min |
-| 2 | Hooks e tipos TypeScript | 15 min |
-| 3 | Página de configuração de regras | 20 min |
-| 4 | Dashboard de comissões (gerência) | 25 min |
-| 5 | Página "Minhas Comissões" (vendedor) | 15 min |
-| 6 | Edge function de cálculo automático | 20 min |
-| 7 | Integrar com ativação de contrato | 10 min |
-| 8 | Adicionar rotas e menu | 5 min |
-| **Total** | | **~2 horas** |
+| Fase | Tarefas | Status |
+|------|---------|--------|
+| 1 | Criar tabelas e migrations | ✅ Concluído |
+| 2 | Hooks e tipos TypeScript | ✅ Concluído |
+| 3 | Página de configuração de regras | ✅ Concluído |
+| 4 | Dashboard de comissões (gerência) | ✅ Concluído |
+| 5 | Página "Minhas Comissões" (vendedor) | ✅ Concluído |
+| 6 | Trigger de cálculo automático (banco) | ✅ Concluído |
+| 7 | Integrar com ativação de contrato | ✅ Concluído |
+| 8 | Adicionar rotas e menu | ✅ Concluído |
 
 ---
 
-### Próximos Passos Após Aprovação
+### Arquivos Criados
 
-1. Criar migrations para as tabelas de comissões
-2. Implementar hooks de gerenciamento
-3. Criar página de configuração de regras
-4. Criar dashboard de comissões
-5. Criar página de comissões do vendedor
-6. Implementar cálculo automático via Edge Function
-7. Integrar com fluxo de ativação de contratos
-8. Testar com dados reais
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/types/comissoes.ts` | Tipos TypeScript para comissões |
+| `src/hooks/useComissoesConfig.ts` | Hook para CRUD de configurações |
+| `src/hooks/useComissoes.ts` | Hook para gerenciar comissões |
+| `src/hooks/useMinhasComissoes.ts` | Hook para vendedor ver próprias comissões |
+| `src/components/comissoes/ComissaoCard.tsx` | Card de comissão |
+| `src/components/comissoes/ComissaoResumoMensal.tsx` | Resumo mensal |
+| `src/pages/vendas/ComissoesConfig.tsx` | Página de configuração de regras |
+| `src/pages/vendas/Comissoes.tsx` | Dashboard de comissões (gerência) |
+| `src/pages/vendas/MinhasComissoes.tsx` | Página do vendedor |
+
+### Rotas Adicionadas
+
+- `/vendas/comissoes` - Dashboard de comissões (gerência)
+- `/vendas/comissoes/config` - Configuração de regras
+- `/vendas/minhas-comissoes` - Visão do vendedor
+
+### Banco de Dados
+
+Tabelas criadas:
+- `comissoes_config` - Regras de comissionamento
+- `comissoes` - Comissões calculadas por contrato
+- `comissoes_pagamentos` - Histórico de pagamentos
+
+Funções criadas:
+- `calcular_comissao_contrato(contrato_id)` - Calcula comissão para um contrato
+- `trigger_calcular_comissao()` - Trigger automático ao ativar contrato
 
