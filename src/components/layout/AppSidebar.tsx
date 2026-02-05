@@ -54,6 +54,7 @@ import {
   FileCode,
   User,
   Puzzle,
+  Ban,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -346,6 +347,7 @@ const menuConfig: {
         { title: 'Tabela de Preços', url: '/diretoria/precos', icon: DollarSign },
         { title: 'Rateio', url: '/diretoria/rateios', icon: PieChart },
         { title: 'Atuarial', url: '/diretoria/indicadores', icon: TrendingUp },
+        { title: 'Blacklist', url: '/diretoria/blacklist', icon: Ban },
         { title: 'Configurações', url: '/diretoria/configuracoes', icon: Settings },
         { title: 'Perfis', url: '/diretoria/perfis', icon: Shield },
         { title: 'Logs', url: '/diretoria/logs', icon: FileText },

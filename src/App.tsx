@@ -213,6 +213,7 @@ import FaixasCotas from "./pages/diretoria/FaixasCotas";
 import SolicitacoesIA from "./pages/diretoria/SolicitacoesIA";
 import CampanhasDesconto from "./pages/diretoria/CampanhasDesconto";
 import FechamentoMensal from "./pages/diretoria/FechamentoMensal";
+import Blacklist from "./pages/diretoria/Blacklist";
 import AuditoriaVendedores from "./pages/auditoria/AuditoriaVendedores";
 
 // Central de Relatórios
@@ -231,6 +232,7 @@ import AppRastreamento from "./pages/app/AppRastreamento";
 import AppRastreamentoHistorico from "./pages/app/AppRastreamentoHistorico";
 import SolicitarAssistencia from "./pages/app/SolicitarAssistencia";
 import HistoricoChamados from "./pages/app/HistoricoChamados";
+import VeiculoReprovado from "./pages/app/VeiculoReprovado";
 
 import AppAssistenciaNova from "./pages/app/AppAssistenciaNova";
 import AppSinistros from "./pages/app/AppSinistros";
@@ -521,6 +523,7 @@ const App = () => (
               <Route path="/diretoria/solicitacoes-ia" element={<SolicitacoesIA />} />
               <Route path="/diretoria/campanhas" element={<CampanhasDesconto />} />
               <Route path="/diretoria/fechamento" element={<FechamentoMensal />} />
+              <Route path="/diretoria/blacklist" element={<Blacklist />} />
               
               {/* Central de Relatórios */}
               <Route path="/relatorios" element={<RelatoriosCentral />} />
@@ -567,6 +570,7 @@ const App = () => (
             <Route path="/app/forgot-password" element={<AppForgotPassword />} />
             <Route path="/app/verificar-codigo" element={<AppVerificarCodigo />} />
             <Route path="/app/redefinir-senha" element={<AppRedefinirSenha />} />
+            <Route path="/app/veiculo-reprovado" element={<VeiculoReprovado />} />
             <Route element={<AssociadoAppLayout />}>
               <Route path="/app/home" element={<AppHome />} />
               <Route path="/app/boletos" element={<MeusBoletos />} />

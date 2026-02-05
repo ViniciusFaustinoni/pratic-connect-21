@@ -2883,6 +2883,187 @@ export type Database = {
         }
         Relationships: []
       }
+      blacklist_veiculos: {
+        Row: {
+          adicionado_por: string | null
+          associado_id: string | null
+          ativo: boolean
+          chassi: string | null
+          contrato_id: string | null
+          cotacao_id: string | null
+          created_at: string
+          id: string
+          justificativa: string | null
+          motivo: string
+          placa: string
+          removido_em: string | null
+          removido_por: string | null
+          tipo_reprovacao: Database["public"]["Enums"]["tipo_reprovacao"]
+          veiculo_id: string | null
+        }
+        Insert: {
+          adicionado_por?: string | null
+          associado_id?: string | null
+          ativo?: boolean
+          chassi?: string | null
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          id?: string
+          justificativa?: string | null
+          motivo: string
+          placa: string
+          removido_em?: string | null
+          removido_por?: string | null
+          tipo_reprovacao: Database["public"]["Enums"]["tipo_reprovacao"]
+          veiculo_id?: string | null
+        }
+        Update: {
+          adicionado_por?: string | null
+          associado_id?: string | null
+          ativo?: boolean
+          chassi?: string | null
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          id?: string
+          justificativa?: string | null
+          motivo?: string
+          placa?: string
+          removido_em?: string | null
+          removido_por?: string | null
+          tipo_reprovacao?: Database["public"]["Enums"]["tipo_reprovacao"]
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blacklist_veiculos_adicionado_por_fkey"
+            columns: ["adicionado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_adicionado_por_fkey"
+            columns: ["adicionado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_adicionado_por_fkey"
+            columns: ["adicionado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_removido_por_fkey"
+            columns: ["removido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_removido_por_fkey"
+            columns: ["removido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_removido_por_fkey"
+            columns: ["removido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campanhas: {
         Row: {
           canal_id: string | null
@@ -20233,6 +20414,7 @@ export type Database = {
       tipo_foto_os: "entrada" | "execucao" | "conclusao"
       tipo_item_os: "peca" | "mao_de_obra" | "servico_terceiro"
       tipo_pix: "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
+      tipo_reprovacao: "vistoria_reprovada" | "proposta_reprovada"
       tipo_servico:
         | "instalacao"
         | "vistoria_entrada"
@@ -20602,6 +20784,7 @@ export const Constants = {
       tipo_foto_os: ["entrada", "execucao", "conclusao"],
       tipo_item_os: ["peca", "mao_de_obra", "servico_terceiro"],
       tipo_pix: ["cpf", "cnpj", "email", "telefone", "aleatoria"],
+      tipo_reprovacao: ["vistoria_reprovada", "proposta_reprovada"],
       tipo_servico: [
         "instalacao",
         "vistoria_entrada",
