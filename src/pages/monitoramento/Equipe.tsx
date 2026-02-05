@@ -52,7 +52,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { ProfissionalModal, Profissional as ProfissionalModalData, ProfissionalFormData } from '@/components/monitoramento/ProfissionalModal';
-import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, ProfissionalEquipe, StatusProfissional, StatusOperacional, FuncaoProfissional } from '@/hooks/useEquipe';
+import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, ProfissionalEquipe, StatusProfissional, StatusOperacional } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
 import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
 
@@ -103,7 +103,6 @@ export default function Equipe() {
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [statusOperacionalFilter, setStatusOperacionalFilter] = useState<string>('todos');
   const [regiaoFilter, setRegiaoFilter] = useState<string>('todas');
-  const [funcaoFilter, setFuncaoFilter] = useState<string>('todos');
   
   // Estado do modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -177,13 +176,9 @@ export default function Equipe() {
       const matchStatus = statusFilter === 'todos' || prof.status === statusFilter;
       const matchStatusOperacional = statusOperacionalFilter === 'todos' || prof.status_operacional === statusOperacionalFilter;
       const matchRegiao = regiaoFilter === 'todas' || prof.regioes_atendimento.includes(regiaoFilter);
-      const matchFuncao =
-        funcaoFilter === 'todos' ||
-        (funcaoFilter === 'ambos' && prof.funcoes.length === 2) ||
-        prof.funcoes.includes(funcaoFilter as FuncaoProfissional);
-      return matchSearch && matchStatus && matchStatusOperacional && matchRegiao && matchFuncao;
+      return matchSearch && matchStatus && matchStatusOperacional && matchRegiao;
     });
-  }, [profissionais, searchTerm, statusFilter, statusOperacionalFilter, regiaoFilter, funcaoFilter]);
+  }, [profissionais, searchTerm, statusFilter, statusOperacionalFilter, regiaoFilter]);
 
   const getInitials = (nome: string) =>
     nome
@@ -255,7 +250,6 @@ export default function Equipe() {
           cidade: profissionalSelecionado.cidade,
           uf: profissionalSelecionado.uf,
           regioes: profissionalSelecionado.regioes_atendimento,
-          funcoes: profissionalSelecionado.funcoes,
           capacidadeDiaria: profissionalSelecionado.capacidade_diaria,
           status: profissionalSelecionado.status === 'ferias' || profissionalSelecionado.status === 'afastado' 
             ? 'indisponivel' 
@@ -330,17 +324,6 @@ export default function Equipe() {
                 {regiao.label}
               </SelectItem>
             ))}
-          </SelectContent>
-        </Select>
-        <Select value={funcaoFilter} onValueChange={setFuncaoFilter}>
-          <SelectTrigger className="w-full sm:w-[160px]">
-            <SelectValue placeholder="Função" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todas Funções</SelectItem>
-            <SelectItem value="vistoriador">Vistoriador</SelectItem>
-            <SelectItem value="instalador">Instalador</SelectItem>
-            <SelectItem value="ambos">Ambos</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -454,25 +437,6 @@ export default function Equipe() {
                           : 'Nenhuma região'
                         }
                       </span>
-                    </div>
-                  </div>
-
-                  {/* Funções */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-sm text-muted-foreground">Funções:</span>
-                    <div className="flex gap-1">
-                      {profissional.funcoes.includes('vistoriador') && (
-                        <Badge variant="secondary" className="gap-1">
-                          <Eye className="h-3 w-3" />
-                          Vistoriador
-                        </Badge>
-                      )}
-                      {profissional.funcoes.includes('instalador') && (
-                        <Badge variant="secondary" className="gap-1">
-                          <Wrench className="h-3 w-3" />
-                          Instalador
-                        </Badge>
-                      )}
                     </div>
                   </div>
 
