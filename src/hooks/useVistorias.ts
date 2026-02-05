@@ -236,6 +236,30 @@ export function useUploadVistoriaFoto() {
         .single();
 
       if (error) throw error;
+      
+      // Se for foto do chassi, validar via IA (OCR)
+      if (data.tipo === 'chassi') {
+        try {
+          const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('chassi-ocr', {
+            body: { url: publicUrl.publicUrl, vistoriaId: data.vistoria_id }
+          });
+          
+          if (!ocrError && ocrResult) {
+            console.log('[Vistoria Presencial] Chassi OCR resultado:', ocrResult);
+            
+            if (ocrResult.validacao === 'diverge') {
+              toast.error('Atenção: O chassi da foto não confere com o cadastrado!');
+            } else if (ocrResult.validacao === 'ilegivel') {
+              toast.warning('Não foi possível ler o chassi na foto. Verifique a imagem.');
+            } else if (ocrResult.validacao === 'confere') {
+              toast.success('Chassi validado com sucesso!');
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao validar chassi:', error);
+        }
+      }
+      
       return result;
     },
     onSuccess: (_, variables) => {
