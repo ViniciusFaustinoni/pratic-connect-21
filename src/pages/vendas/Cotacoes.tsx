@@ -597,172 +597,144 @@ export default function Cotacoes() {
         </PermissionGate>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Cotações</p>
-                <p className="text-3xl font-bold text-primary">{stats.total}</p>
+      {/* Stats Bar - Compacta */}
+      <Card className="bg-gradient-to-r from-card via-card to-muted/20 border shadow-sm">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                <FileText className="h-5 w-5 text-primary" />
               </div>
-              <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center">
-                <FileText className="h-6 w-6 text-primary" />
+              <div>
+                <p className="text-2xl font-bold text-primary">{stats.total}</p>
+                <p className="text-xs text-muted-foreground">Total</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Enviadas</p>
-                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.enviadas}</p>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
+                <Send className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <Send className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <div>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.enviadas}</p>
+                <p className="text-xs text-muted-foreground">Enviadas</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Aceitas</p>
-                <p className="text-3xl font-bold text-green-600 dark:text-green-400">{stats.aceitas}</p>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0">
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
-              <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.aceitas}</p>
+                <p className="text-xs text-muted-foreground">Aceitas</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Taxa Conversão</p>
-                <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{stats.taxa}%</p>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
+                <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
-              <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              <div>
+                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.taxa}%</p>
+                <p className="text-xs text-muted-foreground">Conversão</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
-        <div className="flex-1 min-w-48 space-y-1.5">
-          <label className="text-sm font-medium text-muted-foreground">Buscar</label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Lead, veículo ou número..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Filters - Compactos em linha única */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar lead, veículo ou número..."
+            className="pl-9 h-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-muted-foreground">Status</label>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-40">
-              <SelectValue placeholder="Todos os status" />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px] h-9">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos status</SelectItem>
+            <SelectItem value="rascunho">Rascunho</SelectItem>
+            <SelectItem value="enviada">Enviada</SelectItem>
+            <SelectItem value="visualizada">Visualizada</SelectItem>
+            <SelectItem value="aceita">Aceita</SelectItem>
+            <SelectItem value="recusada">Recusada</SelectItem>
+            <SelectItem value="expirada">Expirada</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={mesFilter} onValueChange={setMesFilter}>
+          <SelectTrigger className="w-[150px] h-9">
+            <CalendarIcon className="h-4 w-4 mr-1.5 text-muted-foreground" />
+            <SelectValue placeholder="Período" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos períodos</SelectItem>
+            {mesesDisponiveis.map((mes) => (
+              <SelectItem key={mes} value={mes}>{formatMesLabel(mes)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className={cn(
+                "h-9 px-3",
+                !dataFilter && "text-muted-foreground"
+              )}
+            >
+              <CalendarDays className="h-4 w-4 mr-1.5" />
+              {dataFilter ? format(dataFilter, 'dd/MM') : 'Data'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dataFilter}
+              onSelect={setDataFilter}
+              initialFocus
+              className="p-3 pointer-events-auto"
+            />
+            {dataFilter && (
+              <div className="p-2 border-t">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full" 
+                  onClick={() => setDataFilter(undefined)}
+                >
+                  Limpar
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+
+        {permissions.cotacao.viewScope !== 'own' && (
+          <Select value={consultorFilter} onValueChange={setConsultorFilter}>
+            <SelectTrigger className="w-[160px] h-9">
+              <User className="h-4 w-4 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Consultor" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              <SelectItem value="rascunho">Rascunho</SelectItem>
-              <SelectItem value="enviada">Enviada</SelectItem>
-              <SelectItem value="visualizada">Visualizada</SelectItem>
-              <SelectItem value="aceita">Aceita</SelectItem>
-              <SelectItem value="recusada">Recusada</SelectItem>
-              <SelectItem value="expirada">Expirada</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-muted-foreground">Período</label>
-          <Select value={mesFilter} onValueChange={setMesFilter}>
-            <SelectTrigger className="w-full sm:w-40">
-              <CalendarIcon className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Todos os períodos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os períodos</SelectItem>
-              {mesesDisponiveis.map((mes) => (
-                <SelectItem key={mes} value={mes}>{formatMesLabel(mes)}</SelectItem>
+              <SelectItem value="all">Todos consultores</SelectItem>
+              {vendedores?.map((v) => (
+                <SelectItem key={v.user_id} value={v.user_id}>{v.nome}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
-        
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-muted-foreground">Data</label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button 
-                variant="outline" 
-                className={cn(
-                  "w-full sm:w-40 justify-start text-left font-normal",
-                  !dataFilter && "text-muted-foreground"
-                )}
-              >
-                <CalendarDays className="h-4 w-4 mr-2" />
-                {dataFilter ? format(dataFilter, 'dd/MM/yyyy') : 'Todos os dias'}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={dataFilter}
-                onSelect={setDataFilter}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
-              {dataFilter && (
-                <div className="p-2 border-t">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="w-full" 
-                    onClick={() => setDataFilter(undefined)}
-                  >
-                    Limpar data
-                  </Button>
-                </div>
-              )}
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        {permissions.cotacao.viewScope !== 'own' && (
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-muted-foreground">Consultor</label>
-            <Select value={consultorFilter} onValueChange={setConsultorFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <User className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Todos os consultores" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os consultores</SelectItem>
-                {vendedores?.map((v) => (
-                  <SelectItem key={v.user_id} value={v.user_id}>{v.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         )}
         
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-10">
-            Limpar filtros
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-muted-foreground hover:text-foreground">
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            Limpar
           </Button>
         )}
       </div>
