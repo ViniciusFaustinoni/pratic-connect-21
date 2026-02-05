@@ -62,6 +62,7 @@ const wizardSchema = z.object({
   ano_modelo: z.coerce.number().min(1900, "Ano inválido"),
   cor: z.string().optional(),
   combustivel: z.string().optional(),
+  motor: z.string().optional(),
   chassi: z.string().optional(),
   renavam: z.string().optional(),
   valor_fipe: z.number().optional().nullable(),
@@ -112,7 +113,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
       data_nascimento: '', email: '', telefone: '',
       cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '',
       placa: '', marca: '', modelo: '', ano_fabricacao: new Date().getFullYear(),
-      ano_modelo: new Date().getFullYear(), cor: '', combustivel: '', chassi: '', renavam: '',
+      ano_modelo: new Date().getFullYear(), cor: '', combustivel: '', motor: '', chassi: '', renavam: '',
     },
   });
 
@@ -479,6 +480,13 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
       if (combustivel && !form.getValues('combustivel')) {
         form.setValue('combustivel', combustivel);
         setDadosExtraidos(prev => ({ ...prev, combustivel: { value: combustivel, fonte: 'CRLV' } }));
+      }
+      
+      // Número do motor
+      const motor = dados.motor || dados.numero_motor || dados.n_motor;
+      if (motor && !form.getValues('motor')) {
+        form.setValue('motor', motor);
+        setDadosExtraidos(prev => ({ ...prev, motor: { value: motor, fonte: 'CRLV' } }));
       }
       
       // Buscar valor FIPE automaticamente se tiver marca, modelo e ano

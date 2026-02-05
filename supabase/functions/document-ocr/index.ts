@@ -18,6 +18,7 @@ Extrair OBRIGATORIAMENTE:
 - nome (nome completo do condutor)
 - cpf (formato 000.000.000-00) - **PRIORIDADE MÁXIMA**
 - rg (número do RG)
+- numero_registro (número de registro da CNH, campo "N° Registro" ou "Registro" - geralmente 11 dígitos)
 - data_nascimento (formato YYYY-MM-DD)
 - validade (formato YYYY-MM-DD)
 - categoria (A, B, AB, etc.)
@@ -75,6 +76,7 @@ Extrair OBRIGATORIAMENTE:
 - ano_modelo (APENAS o número do ano do modelo, ex: 2014)
 - cor (ex: PRATA, PRETO, BRANCO)
 - combustivel (ex: FLEX, GASOLINA, DIESEL)
+- motor (número do motor, ex: M155966, 1234ABC5678)
 - nome_proprietario (nome completo do proprietário)
 
 IMPORTANTE para CRLV:

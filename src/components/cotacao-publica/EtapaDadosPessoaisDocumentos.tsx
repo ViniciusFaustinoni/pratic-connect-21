@@ -49,6 +49,7 @@ interface DadosExtraidos {
   veiculo_renavam?: string;
   veiculo_cor?: string;
   veiculo_combustivel?: string;
+  veiculo_motor?: string;
   veiculo_ano_fabricacao?: number;
   veiculo_ano_modelo?: number;
 }
@@ -198,6 +199,7 @@ export function EtapaDadosPessoaisDocumentos({
         // NOVOS CAMPOS - Dados do veículo extraídos do CRLV
         if (dados.cor) novosDados.veiculo_cor = dados.cor;
         if (dados.combustivel) novosDados.veiculo_combustivel = dados.combustivel;
+        if (dados.motor) novosDados.veiculo_motor = dados.motor;
         
         // Ano de fabricação e modelo
         if (dados.ano_fabricacao) {
