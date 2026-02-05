@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import { Home, Receipt, MapPin, MessageCircle, User, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
 import { useNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias';
@@ -79,15 +80,19 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
               <span className="font-bold text-xl text-blue-600">PRATIC</span>
             </Link>
 
-            {/* NOTIFICAÇÕES */}
-            <Link to="/app/notificacoes" className="relative p-2">
+            {/* THEME TOGGLE + NOTIFICAÇÕES */}
+            <div className="flex items-center gap-2">
+              <ThemeToggle className="scale-90" />
+              
+              <Link to="/app/notificacoes" className="relative p-2">
               <Bell className="h-6 w-6 text-gray-600" />
               {notificacoesNaoLidas > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
                   {notificacoesNaoLidas > 9 ? '9+' : notificacoesNaoLidas}
                 </span>
               )}
-            </Link>
+              </Link>
+            </div>
           </div>
         </header>
 
