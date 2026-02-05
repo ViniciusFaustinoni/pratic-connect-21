@@ -11,6 +11,7 @@ export interface Regiao {
   multiplicador_preco: number;
   ativa: boolean;
   ordem: number;
+  exigir_titularidade_comprovante: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +24,7 @@ export interface RegiaoInput {
   multiplicador_preco?: number;
   ativa?: boolean;
   ordem?: number;
+  exigir_titularidade_comprovante?: boolean;
 }
 
 export function useRegioes() {
@@ -90,6 +92,7 @@ export function useCreateRegiao() {
           multiplicador_preco: input.multiplicador_preco ?? 1.00,
           ativa: input.ativa ?? true,
           ordem: input.ordem ?? 0,
+          exigir_titularidade_comprovante: input.exigir_titularidade_comprovante ?? false,
         })
         .select()
         .single();
@@ -127,6 +130,7 @@ export function useUpdateRegiao() {
           multiplicador_preco: input.multiplicador_preco,
           ativa: input.ativa,
           ordem: input.ordem,
+          exigir_titularidade_comprovante: input.exigir_titularidade_comprovante,
         })
         .eq('id', id)
         .select()
