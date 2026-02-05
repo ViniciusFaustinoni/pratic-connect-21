@@ -141,6 +141,7 @@ export function useCotacaoContratacao(token: string | undefined) {
       return data;
     },
     enabled: !!token,
+    refetchInterval: 30000, // Revalidar a cada 30 segundos para detectar mudanças de status
   });
 
   // Extrair associadoId do contrato vinculado - priorizar embed, usar fallback se necessário
