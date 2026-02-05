@@ -1,185 +1,95 @@
 
-# Plano: Ajustes no Dashboard para Vendedor
+# Plano: Ocultar Botão "Nova Proposta" para Vendedor
 
-## Resumo das Alterações Solicitadas
-
-O Vendedor (perfil `vendedor_clt` ou `vendedor_externo`) deve ter uma visão simplificada do Dashboard, removendo elementos que não são relevantes para sua função.
+## Objetivo
+O vendedor não deve visualizar o botão "Nova Proposta" na tela de Propostas (`/vendas/contratos`). A criação de propostas deve ocorrer exclusivamente a partir de cotações, permitindo ao vendedor apenas visualizar os detalhes de propostas existentes.
 
 ---
 
-## Alterações Necessárias
+## Análise do Código Atual
 
-### 1. Adicionar verificação `isVendedorOnly` no Dashboard
+**Arquivo:** `src/pages/vendas/Contratos.tsx`
 
-**Arquivo:** `src/pages/Dashboard.tsx`
+O botão "Nova Proposta" está localizado nas linhas 298-301:
 
-Criar uma flag `isVendedorOnly` similar às outras flags `*Only`:
+```tsx
+<Button onClick={() => setFormDialogOpen(true)}>
+  <Plus className="mr-2 h-4 w-4" />
+  Nova Proposta
+</Button>
+```
 
-```typescript
-const isVendedorOnly = (hasRole('vendedor_clt') || hasRole('vendedor_externo')) &&
-  !isDiretor &&
-  !isGerencia &&
-  !isDesenvolvedor &&
-  !isAdminMaster &&
-  !isAnalistaCadastroOnly &&
-  !isCoordenadorMonitoramentoOnly;
+O arquivo já importa `usePermissions` (linha 8), mas atualmente só utiliza para verificar permissão de exclusão:
+
+```tsx
+const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+const canDeleteContratos = isDiretor || isDesenvolvedor || isAdminMaster;
 ```
 
 ---
 
-### 2. Ocultar KPI Card "Instalações/Mês"
+## Solução Proposta
 
-**Linhas ~495-500**
+### 1. Utilizar `isVendedorOnly` do hook `usePermissions`
 
-Envolver o card de "Instalações/Mês" em condicional:
+O hook já possui a flag `isVendedorOnly` que foi adicionada recentemente para ajustes no Dashboard.
 
+### 2. Envolver o botão em condicional
+
+Mostrar o botão apenas quando o usuário **não for** um vendedor puro (vendedor sem outros perfis administrativos).
+
+---
+
+## Alteração Necessária
+
+**Arquivo:** `src/pages/vendas/Contratos.tsx`
+
+| Linha | Alteração |
+|-------|-----------|
+| 65 | Adicionar `isVendedorOnly` à desestruturação do `usePermissions()` |
+| 298-301 | Envolver o botão em `{!isVendedorOnly && (...)}` |
+
+### Código Final
+
+**Linha 65 (atualizada):**
+```tsx
+const { isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly } = usePermissions();
+```
+
+**Linhas 298-301 (atualizadas):**
 ```tsx
 {!isVendedorOnly && (
-  <KPICard
-    titulo="Instalações/Mês"
-    valor={instMetricas?.concluidasHoje || 0}
-    emoji="🔧"
-    loading={instalacoesLoading}
-  />
+  <Button onClick={() => setFormDialogOpen(true)}>
+    <Plus className="mr-2 h-4 w-4" />
+    Nova Proposta
+  </Button>
 )}
 ```
 
 ---
 
-### 3. Ajustar KPI Card "Receita Mensal"
+## Comportamento Esperado
 
-**Linhas ~501-506**
-
-Para vendedor, mostrar apenas o somatório de taxas de adesão de propostas concluídas pelo próprio vendedor:
-
-```tsx
-<KPICard
-  titulo="Receita Mensal"
-  valor={`R$ ${(
-    isVendedorOnly 
-      ? // Soma das taxas de adesão de propostas concluídas pelo vendedor
-        contratos?.filter(c => c.status === 'ativo' && c.vendedor_id === user?.id)
-          .reduce((acc, c) => acc + (c.valor_adesao || 0), 0) || 0
-      : // Para outros perfis: soma do valor mensal de todos os contratos ativos
-        contratos?.filter(c => c.status === 'ativo')
-          .reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0
-  ).toLocaleString('pt-BR')}`}
-  emoji="💰"
-  loading={contratosLoading}
-/>
-```
-
-> **Nota:** Precisarei verificar se o hook `useContratos` já retorna o campo `vendedor_id` e `valor_adesao`. Caso contrário, será necessário ajustar a query ou criar uma query específica para vendedores.
+| Perfil | Visualiza Botão "Nova Proposta" |
+|--------|--------------------------------|
+| Vendedor CLT (apenas) | Não |
+| Vendedor Externo (apenas) | Não |
+| Diretor | Sim |
+| Gerente Comercial | Sim |
+| Supervisor de Vendas | Sim |
+| Analista de Cadastro | Sim |
+| Desenvolvedor | Sim |
+| Admin Master | Sim |
 
 ---
 
-### 4. Ocultar Card "Ações Rápidas"
+## Fluxo do Vendedor
 
-**Linhas ~606-616**
-
-Envolver em condicional:
-
-```tsx
-{!isVendedorOnly && (
-  <Card className="border-border bg-card">
-    <CardHeader>
-      <CardTitle className="text-lg text-foreground">Ações Rápidas</CardTitle>
-    </CardHeader>
-    <CardContent>
-      <QuickActions />
-    </CardContent>
-  </Card>
-)}
-```
-
----
-
-### 5. Ocultar Card "Documentos Pendentes"
-
-**Linhas ~621-666**
-
-Envolver em condicional:
-
-```tsx
-{!isVendedorOnly && (
-  <Card className="border-border bg-card">
-    ...Documentos Pendentes...
-  </Card>
-)}
-```
-
----
-
-### 6. Ocultar Card "Instalações Hoje"
-
-**Linhas ~668-725**
-
-Envolver em condicional:
-
-```tsx
-{!isVendedorOnly && (
-  <Card className="border-border bg-card">
-    ...Instalações Hoje...
-  </Card>
-)}
-```
-
----
-
-### 7. (Opcional) Atualizar Hook usePermissions
-
-**Arquivo:** `src/hooks/usePermissions.ts`
-
-Adicionar `isVendedorOnly` ao retorno do hook para reutilização em outros componentes:
-
-```typescript
-// Verifica se é APENAS vendedor (sem perfis de gerência ou admin)
-const isVendedorOnly = isVendedor() && 
-  !isDiretor && 
-  !isGerencia() && 
-  !isDesenvolvedor && 
-  !isAdminMaster &&
-  !isAnalistaCadastro;
-```
-
-E adicionar ao objeto `permissions`:
-```typescript
-isVendedorOnly,
-```
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/usePermissions.ts` | Adicionar flag `isVendedorOnly` |
-| `src/pages/Dashboard.tsx` | Ocultar cards conforme perfil vendedor |
-
----
-
-## Verificação Necessária
-
-Antes de implementar a lógica de "Receita Mensal" para vendedor, preciso verificar:
-1. Se o hook `useContratos` retorna `vendedor_id`
-2. Se existe campo `valor_adesao` nos contratos
-3. Se a filtragem por vendedor logado é viável com os dados atuais
-
----
-
-## Resultado Esperado
-
-**Dashboard do Vendedor terá:**
-- KPIs: Associados Ativos, Leads do Mês, Receita Mensal (apenas suas adesões)
-- Funil de Vendas (leads)
-- Últimos Leads
-- Widget de Follow-ups
-
-**Dashboard do Vendedor NÃO terá:**
-- Card "Instalações/Mês"
-- Card "Ações Rápidas"
-- Card "Documentos Pendentes"
-- Card "Instalações Hoje"
+1. Vendedor acessa `/vendas/contratos` (tela de Propostas)
+2. Visualiza a lista de propostas (suas ou de todos, conforme permissão)
+3. **Não vê** o botão "Nova Proposta"
+4. Pode clicar em uma proposta para ver detalhes no drawer
+5. Para criar nova proposta, deve acessar Cotações e gerar contrato a partir de uma cotação aceita
 
 ---
 
@@ -187,8 +97,7 @@ Antes de implementar a lógica de "Receita Mensal" para vendedor, preciso verifi
 
 | Tarefa | Tempo |
 |--------|-------|
-| Adicionar `isVendedorOnly` ao usePermissions | 3 min |
-| Ajustar KPIs no Dashboard | 5 min |
-| Ocultar cards condicionalmente | 5 min |
-| Testar com perfil vendedor | 5 min |
-| **Total** | **~18 min** |
+| Adicionar `isVendedorOnly` à desestruturação | 1 min |
+| Envolver botão em condicional | 1 min |
+| Testar com perfil vendedor | 3 min |
+| **Total** | **~5 min** |
