@@ -1,12 +1,23 @@
 // ============================================
 // EDGE FUNCTION: autentique-create
 // Cria documento Autentique a partir de contratoId
+// AGORA LÊ O TEMPLATE DO BANCO DE DADOS
 // ============================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao } from "../_shared/termo-afiliacao-template.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
+import { 
+  substituirVariaveis, 
+  generateStyles, 
+  generateHeader, 
+  generateFooter, 
+  generateSecaoAssinatura,
+  markdownParaHTML,
+  ehVeiculoZeroKm,
+  exigeRastreador 
+} from "../_shared/template-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +27,199 @@ const corsHeaders = {
 const AUTENTIQUE_API_URL = "https://api.autentique.com.br/v2/graphql";
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+// ============= GERAR SEÇÕES CONDICIONAIS =============
+
+function generateSecaoCarroZeroDinamico(dados: any): string {
+  if (!ehVeiculoZeroKm(dados.veiculo)) return '';
+  
+  return `
+<div class="section" style="margin-top: 30pt; border: 2px solid #dc2626; padding: 15pt; border-radius: 4pt;">
+  <h2 class="section-title" style="color: #dc2626;">
+    TERMO ADITIVO DE VEÍCULO 0KM
+  </h2>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Primeira</p>
+    <p class="declaracao-texto">
+      O presente Termo Aditivo tem por objeto regulamentar a proteção de 
+      veículo zero quilômetro (0 km) que ainda não possua placa no momento 
+      da adesão à Associação.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Segunda</p>
+    <p class="declaracao-texto">
+      O associado compromete-se a providenciar o devido emplacamento do veículo 
+      junto aos órgãos de trânsito competentes, dentro do prazo legal estabelecido 
+      pelo CONTRAN e demais legislações aplicáveis.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Terceira</p>
+    <p class="declaracao-texto">
+      O associado declara, neste ato, estar ciente e de pleno acordo que, caso 
+      não realize o emplacamento no prazo legal, a proteção de roubo e furto será 
+      imediatamente suspensa, não sendo devida qualquer indenização em eventos 
+      ocorridos durante o período de irregularidade.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Quarta</p>
+    <p class="declaracao-texto">
+      A cobertura será restabelecida automaticamente a partir da apresentação, 
+      pelo associado, da documentação comprobatória de emplacamento do veículo 
+      junto à Associação.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">Cláusula Quinta</p>
+    <p class="declaracao-texto">
+      A responsabilidade pelo emplacamento do veículo zero quilômetro é exclusiva 
+      do associado, não cabendo à Associação qualquer obrigação ou interferência 
+      junto aos órgãos de trânsito.
+    </p>
+  </div>
+</div>
+`;
+}
+
+function generateSecaoRastreadorDinamico(dados: any): string {
+  const rastreador = exigeRastreador(dados.veiculo);
+  if (!rastreador.exige) return '';
+  
+  const formatCPF = (cpf: string) => {
+    if (!cpf) return '—';
+    const clean = cpf.replace(/\D/g, '');
+    return clean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  };
+  
+  return `
+<div class="section page-break" style="margin-top: 30pt; border: 2px solid #7c3aed; padding: 15pt; border-radius: 4pt;">
+  <h2 class="section-title" style="color: #7c3aed;">
+    TERMO DE RESPONSABILIDADE - EQUIPAMENTO RASTREADOR
+  </h2>
+  <p style="text-align: center; font-size: 9pt; color: #666; margin-bottom: 15pt;">
+    (Anexo ao Termo de Afiliação Nº ${dados.contrato.numero})
+  </p>
+  
+  <p style="margin-bottom: 15pt; text-align: justify;">
+    Pelo presente termo, o(a) associado(a) abaixo qualificado(a) declara ter 
+    recebido em regime de <strong>COMODATO</strong> o equipamento rastreador para instalação 
+    no veículo cadastrado, assumindo inteira responsabilidade pela sua guarda 
+    e conservação.
+  </p>
+  
+  <table class="table-valores" style="margin-bottom: 15pt;">
+    <tr>
+      <td style="background-color: #f9fafb; font-weight: bold;">Associado:</td>
+      <td>${dados.cliente.nome}</td>
+    </tr>
+    <tr>
+      <td style="background-color: #f9fafb; font-weight: bold;">CPF:</td>
+      <td>${formatCPF(dados.cliente.cpf)}</td>
+    </tr>
+    <tr>
+      <td style="background-color: #f9fafb; font-weight: bold;">Veículo:</td>
+      <td>${dados.veiculo.marca} ${dados.veiculo.modelo} - ${dados.veiculo.placa || 'ZERO KM'}</td>
+    </tr>
+    <tr>
+      <td style="background-color: #f9fafb; font-weight: bold;">Motivo da Obrigatoriedade:</td>
+      <td>${rastreador.motivo}</td>
+    </tr>
+  </table>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">1. DO EQUIPAMENTO</p>
+    <p class="declaracao-texto">
+      O equipamento rastreador é de propriedade exclusiva da ${dados.empresa.nome}, 
+      sendo cedido em comodato ao associado durante a vigência da filiação.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">2. DO RASTREAMENTO</p>
+    <p class="declaracao-texto">
+      O associado tem ciência e <strong>AUTORIZA</strong> o rastreamento 24 (vinte e quatro) horas 
+      do veículo cadastrado, para fins de monitoramento e recuperação em caso de sinistro.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">3. DA DEVOLUÇÃO</p>
+    <p class="declaracao-texto">
+      O associado compromete-se a devolver o equipamento em perfeito estado de 
+      funcionamento quando do desligamento do PSM, no prazo máximo de 15 (quinze) dias.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">4. DA MULTA</p>
+    <p class="declaracao-texto">
+      A não devolução do equipamento no prazo estipulado acarretará multa de 
+      <strong>R$ 400,00 (quatrocentos reais)</strong>, valor que poderá ser cobrado judicialmente.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">5. DO TÍTULO EXECUTIVO</p>
+    <p class="declaracao-texto">
+      O presente termo tem força de <strong>TÍTULO EXECUTIVO EXTRAJUDICIAL</strong>, nos termos 
+      do Art. 784 do Código de Processo Civil.
+    </p>
+  </div>
+  
+  <div class="declaracao">
+    <p class="declaracao-titulo">6. DA OBRIGATORIEDADE</p>
+    <p class="declaracao-texto">
+      A instalação do rastreador é <strong>CONDIÇÃO OBRIGATÓRIA</strong> para início da proteção, 
+      conforme regras do PSM para veículos com FIPE superior aos limites estabelecidos 
+      ou movidos a diesel.
+    </p>
+  </div>
+</div>
+`;
+}
+
+// ============= GERAR HTML A PARTIR DO TEMPLATE DO BANCO =============
+
+function gerarHTMLDoTemplate(templateConteudo: string, dados: any): string {
+  // 1. Substituir variáveis no conteúdo do banco
+  const conteudoPreenchido = substituirVariaveis(templateConteudo, dados);
+  
+  // 2. Converter markdown para HTML
+  const conteudoHTML = markdownParaHTML(conteudoPreenchido);
+  
+  // 3. Adicionar termos condicionais
+  const termo0km = generateSecaoCarroZeroDinamico(dados);
+  const termoRastreador = generateSecaoRastreadorDinamico(dados);
+  
+  // 4. Montar HTML completo
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Termo de Afiliação - ${dados.contrato.numero}</title>
+  ${generateStyles()}
+</head>
+<body>
+  <div class="page">
+    ${generateHeader(dados)}
+    ${conteudoHTML}
+    ${termo0km}
+    ${termoRastreador}
+    ${generateSecaoAssinatura(dados)}
+    ${generateFooter(dados)}
+  </div>
+</body>
+</html>
+  `;
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -78,6 +282,22 @@ serve(async (req) => {
 
     console.log(`[autentique-create] Nenhum documento existente, criando novo para contrato ${contratoId}`);
 
+    // ============= BUSCAR TEMPLATE DO BANCO DE DADOS =============
+    const { data: templateDB, error: templateError } = await supabase
+      .from("documento_templates")
+      .select("id, codigo, nome, conteudo, config_layout")
+      .eq("is_default_autentique", true)
+      .eq("ativo", true)
+      .single();
+
+    const usandoTemplateBanco = !templateError && templateDB?.conteudo;
+    
+    if (usandoTemplateBanco) {
+      console.log(`[autentique-create] Usando template do banco: ${templateDB.codigo} (${templateDB.nome})`);
+    } else {
+      console.log("[autentique-create] Nenhum template configurado no banco, usando template hardcoded como fallback");
+    }
+
     // ============= BUSCAR CONFIGURAÇÕES DA EMPRESA =============
     const empresaConfig = await buscarConfiguracoesEmpresa(supabase);
     
@@ -97,9 +317,20 @@ serve(async (req) => {
     );
 
     // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============
-    const contratoHTML = generateTermoAfiliacao(templateData);
+    let contratoHTML: string;
+    let templateUsado: string;
     
-    console.log("[autentique-create] Template usado: Termo de Afiliação (v2)");
+    if (usandoTemplateBanco) {
+      // Usar template dinâmico do banco
+      contratoHTML = gerarHTMLDoTemplate(templateDB.conteudo, templateData);
+      templateUsado = `${templateDB.codigo} (banco de dados)`;
+    } else {
+      // Fallback para template hardcoded
+      contratoHTML = generateTermoAfiliacao(templateData);
+      templateUsado = "Termo de Afiliação (hardcoded fallback)";
+    }
+    
+    console.log(`[autentique-create] Template usado: ${templateUsado}`);
     console.log(`[autentique-create] HTML gerado: ${contratoHTML.length} bytes`);
 
     // ============= ENVIAR PARA AUTENTIQUE =============
@@ -236,7 +467,7 @@ serve(async (req) => {
       dados: { 
         autentique_id: document.id, 
         link: signatureLink,
-        template_usado: "Termo de Afiliação v2"
+        template_usado: templateUsado
       },
     });
 
@@ -262,7 +493,7 @@ serve(async (req) => {
         success: true,
         documentId: document.id,
         signatureLink,
-        templateUsed: "Termo de Afiliação v2",
+        templateUsed: templateUsado,
         message: "Termo de Afiliação enviado para assinatura com sucesso",
       }),
       {

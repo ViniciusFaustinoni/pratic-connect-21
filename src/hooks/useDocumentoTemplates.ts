@@ -29,6 +29,9 @@ interface TemplateFromDB {
   is_default?: boolean;
   status?: string;
   thumbnail_url?: string;
+  // Campos para integração com Autentique
+  is_default_autentique?: boolean;
+  template_html?: string;
 }
 
 // Tipo transformado para uso no frontend
@@ -55,6 +58,9 @@ export interface DocumentoTemplateView {
   is_default?: boolean;
   status?: TemplateStatus;
   thumbnail_url?: string;
+  // Campos para integração com Autentique
+  is_default_autentique?: boolean;
+  template_html?: string;
 }
 
 // Função para transformar dados do banco para o tipo do frontend
@@ -74,6 +80,9 @@ function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategori
     is_default: data.is_default || false,
     status: (data.status as TemplateStatus) || 'draft',
     thumbnail_url: data.thumbnail_url || undefined,
+    // Campos Autentique
+    is_default_autentique: data.is_default_autentique || false,
+    template_html: data.template_html || undefined,
   };
 }
 
@@ -153,6 +162,7 @@ interface CreateTemplateInput {
   document_type_id?: string;
   is_default?: boolean;
   status?: TemplateStatus;
+  is_default_autentique?: boolean;
 }
 
 export function useCreateTemplate() {
@@ -178,6 +188,7 @@ export function useCreateTemplate() {
           document_type_id: input.document_type_id || null,
           is_default: input.is_default || false,
           status: input.status || 'draft',
+          is_default_autentique: input.is_default_autentique || false,
         })
         .select()
         .single();
@@ -211,6 +222,7 @@ interface UpdateTemplateInput {
   document_type_id?: string;
   is_default?: boolean;
   status?: TemplateStatus;
+  is_default_autentique?: boolean;
 }
 
 export function useUpdateTemplate() {
@@ -235,6 +247,7 @@ export function useUpdateTemplate() {
       if (input.document_type_id !== undefined) updateData.document_type_id = input.document_type_id;
       if (input.is_default !== undefined) updateData.is_default = input.is_default;
       if (input.status !== undefined) updateData.status = input.status;
+      if (input.is_default_autentique !== undefined) updateData.is_default_autentique = input.is_default_autentique;
 
       const { data, error } = await supabase
         .from('documento_templates')

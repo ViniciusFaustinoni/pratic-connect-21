@@ -7147,11 +7147,13 @@ export type Database = {
           document_type_id: string | null
           id: string
           is_default: boolean | null
+          is_default_autentique: boolean | null
           nome: string
           perfis_permitidos: string[] | null
           requer_assinatura: boolean | null
           rodape_html: string | null
           status: Database["public"]["Enums"]["template_status"] | null
+          template_html: string | null
           thumbnail_url: string | null
           updated_at: string | null
           variaveis: Json | null
@@ -7171,11 +7173,13 @@ export type Database = {
           document_type_id?: string | null
           id?: string
           is_default?: boolean | null
+          is_default_autentique?: boolean | null
           nome: string
           perfis_permitidos?: string[] | null
           requer_assinatura?: boolean | null
           rodape_html?: string | null
           status?: Database["public"]["Enums"]["template_status"] | null
+          template_html?: string | null
           thumbnail_url?: string | null
           updated_at?: string | null
           variaveis?: Json | null
@@ -7195,11 +7199,13 @@ export type Database = {
           document_type_id?: string | null
           id?: string
           is_default?: boolean | null
+          is_default_autentique?: boolean | null
           nome?: string
           perfis_permitidos?: string[] | null
           requer_assinatura?: boolean | null
           rodape_html?: string | null
           status?: Database["public"]["Enums"]["template_status"] | null
+          template_html?: string | null
           thumbnail_url?: string | null
           updated_at?: string | null
           variaveis?: Json | null
