@@ -62,7 +62,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 export default function Associados() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const { isDiretor, isDesenvolvedor, isAdminMaster, isAnalistaCadastroOnly } = usePermissions();
   const canDeleteAssociados = isDiretor || isDesenvolvedor || isAdminMaster;
   
   // State
@@ -337,10 +337,12 @@ export default function Associados() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={() => setFormDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Associado
-          </Button>
+          {!isAnalistaCadastroOnly && (
+            <Button onClick={() => setFormDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Associado
+            </Button>
+          )}
         </div>
       </div>
 
