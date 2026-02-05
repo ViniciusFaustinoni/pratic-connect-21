@@ -331,6 +331,14 @@
   .gradient-banner {
     background: linear-gradient(90deg, hsl(218 80% 24%) 0%, hsl(217 55% 26%) 50%, hsl(218 80% 24%) 100%);
   }
+
+  /* Isolamento de scroll para containers principais */
+  .scroll-container {
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
