@@ -9,6 +9,7 @@ import {
   CreditCard, Shield, Eye, ExternalLink, Wifi, WifiOff, Send, History,
   TrendingUp, DollarSign, Camera, Image, Radio, RefreshCw, MessagesSquare, Map
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -233,6 +234,7 @@ const getStatusCobrancaClass = (status: string) => {
 export default function AssociadoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAnalistaCadastroOnly } = usePermissions();
   
   const [activeTab, setActiveTab] = useState('resumo');
   const [suspenderDialogOpen, setSuspenderDialogOpen] = useState(false);
@@ -513,15 +515,19 @@ export default function AssociadoDetalhe() {
 
             {/* Right: Actions */}
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={() => navigate(`/cadastro/associados/${id}/editar`)}>
-                <Edit className="mr-2 h-4 w-4" /> Editar
-              </Button>
-              <Button variant="outline" onClick={() => setActiveTab('documentos')}>
-                <FileCheck className="mr-2 h-4 w-4" /> Documentos
-                {docsPendentes > 0 && (
-                  <Badge variant="destructive" className="ml-2 h-5 px-1.5">{docsPendentes}</Badge>
-                )}
-              </Button>
+              {!isAnalistaCadastroOnly && (
+                <Button variant="outline" onClick={() => navigate(`/cadastro/associados/${id}/editar`)}>
+                  <Edit className="mr-2 h-4 w-4" /> Editar
+                </Button>
+              )}
+              {!isAnalistaCadastroOnly && (
+                <Button variant="outline" onClick={() => setActiveTab('documentos')}>
+                  <FileCheck className="mr-2 h-4 w-4" /> Documentos
+                  {docsPendentes > 0 && (
+                    <Badge variant="destructive" className="ml-2 h-5 px-1.5">{docsPendentes}</Badge>
+                  )}
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setActiveTab('financeiro')}>
                 <DollarSign className="mr-2 h-4 w-4" /> Financeiro
               </Button>
@@ -585,9 +591,6 @@ export default function AssociadoDetalhe() {
                   <DropdownMenuItem onClick={handleWhatsApp}>
                     <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleEmail}>
-                    <Mail className="mr-2 h-4 w-4" /> Email
-                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
                     onClick={() => setCancelarDialogOpen(true)}
@@ -614,10 +617,12 @@ export default function AssociadoDetalhe() {
           <TabsTrigger value="veiculos">
             <Car className="mr-2 h-4 w-4" /> Veículos {veiculos?.length ? `(${veiculos.length})` : ''}
           </TabsTrigger>
-          <TabsTrigger value="documentos">
-            <FileCheck className="mr-2 h-4 w-4" /> Documentos
-            {docsPendentes > 0 && <Badge variant="destructive" className="ml-2 h-5 px-1.5">{docsPendentes}</Badge>}
-          </TabsTrigger>
+          {!isAnalistaCadastroOnly && (
+            <TabsTrigger value="documentos">
+              <FileCheck className="mr-2 h-4 w-4" /> Documentos
+              {docsPendentes > 0 && <Badge variant="destructive" className="ml-2 h-5 px-1.5">{docsPendentes}</Badge>}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="financeiro">
             <CreditCard className="mr-2 h-4 w-4" /> Financeiro
           </TabsTrigger>
