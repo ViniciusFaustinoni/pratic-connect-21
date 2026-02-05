@@ -14318,6 +14318,7 @@ export type Database = {
           ativo: boolean
           avatar_url: string | null
           bloqueado: boolean | null
+          capacidade_diaria: number | null
           categoria_profissional: string | null
           codigo_sga_voluntario: string | null
           cpf: string | null
@@ -14333,6 +14334,7 @@ export type Database = {
           notif_novos_leads: boolean | null
           notif_resumo_diario: boolean | null
           primeiro_acesso: boolean
+          regioes_atendimento: string[] | null
           telefone: string | null
           tipo: Database["public"]["Enums"]["tipo_usuario"]
           updated_at: string
@@ -14344,6 +14346,7 @@ export type Database = {
           ativo?: boolean
           avatar_url?: string | null
           bloqueado?: boolean | null
+          capacidade_diaria?: number | null
           categoria_profissional?: string | null
           codigo_sga_voluntario?: string | null
           cpf?: string | null
@@ -14359,6 +14362,7 @@ export type Database = {
           notif_novos_leads?: boolean | null
           notif_resumo_diario?: boolean | null
           primeiro_acesso?: boolean
+          regioes_atendimento?: string[] | null
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
           updated_at?: string
@@ -14370,6 +14374,7 @@ export type Database = {
           ativo?: boolean
           avatar_url?: string | null
           bloqueado?: boolean | null
+          capacidade_diaria?: number | null
           categoria_profissional?: string | null
           codigo_sga_voluntario?: string | null
           cpf?: string | null
@@ -14385,6 +14390,7 @@ export type Database = {
           notif_novos_leads?: boolean | null
           notif_resumo_diario?: boolean | null
           primeiro_acesso?: boolean
+          regioes_atendimento?: string[] | null
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
           updated_at?: string

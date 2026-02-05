@@ -4,7 +4,6 @@ import { format, subMinutes } from 'date-fns';
 
 export type StatusProfissional = 'disponivel' | 'indisponivel' | 'ferias' | 'afastado';
 export type StatusOperacional = 'em_andamento' | 'em_rota' | 'disponivel_operacional' | 'offline';
-export type FuncaoProfissional = 'vistoriador' | 'instalador';
 
 export interface ProfissionalEquipe {
   id: string;
@@ -21,7 +20,6 @@ export interface ProfissionalEquipe {
   cidade?: string | null;
   uf?: string | null;
   regioes_atendimento: string[];
-  funcoes: FuncaoProfissional[];
   capacidade_diaria: number;
   status: StatusProfissional;
   status_operacional: StatusOperacional;
@@ -181,7 +179,6 @@ export function useProfissionaisEquipe() {
           cidade: null,
           uf: null,
           regioes_atendimento: (profile as any).regioes_atendimento || [],
-          funcoes: ['vistoriador', 'instalador'] as FuncaoProfissional[],
           capacidade_diaria: (profile as any).capacidade_diaria || 5,
           status: (profile.ativo ? 'disponivel' : 'indisponivel') as StatusProfissional,
           status_operacional,

@@ -40,7 +40,6 @@ import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
 // ============================================
 
 export type StatusProfissional = 'disponivel' | 'indisponivel';
-export type FuncaoProfissional = 'vistoriador' | 'instalador';
 
 export interface Profissional {
   id: string;
@@ -56,7 +55,6 @@ export interface Profissional {
   cidade?: string;
   uf?: string;
   regioes: string[];
-  funcoes: FuncaoProfissional[];
   capacidadeDiaria: number;
   status: StatusProfissional;
   criarAcesso?: boolean;
@@ -75,7 +73,6 @@ export interface ProfissionalFormData {
   cidade: string;
   uf: string;
   regioes: string[];
-  funcoes: FuncaoProfissional[];
   capacidadeDiaria: number;
   status: StatusProfissional;
   criarAcesso: boolean;
@@ -123,11 +120,6 @@ const ESTADOS_BRASIL = [
   { value: 'TO', label: 'Tocantins' },
 ];
 
-const FUNCOES_OPTIONS: { value: FuncaoProfissional; label: string }[] = [
-  { value: 'vistoriador', label: 'Vistoriador' },
-  { value: 'instalador', label: 'Instalador' },
-];
-
 // ============================================
 // SCHEMA DE VALIDAÇÃO
 // ============================================
@@ -147,7 +139,6 @@ const profissionalSchema = z.object({
   cidade: z.string().min(1, 'Cidade obrigatória'),
   uf: z.string().length(2, 'Estado obrigatório'),
   regioes: z.array(z.string()).min(1, 'Selecione pelo menos uma região'),
-  funcoes: z.array(z.string()).min(1, 'Selecione pelo menos uma função'),
   capacidadeDiaria: z.coerce.number().min(1, 'Mínimo 1').max(10, 'Máximo 10'),
   status: z.enum(['disponivel', 'indisponivel']),
   criarAcesso: z.boolean().default(false),
@@ -180,7 +171,6 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
     cidade: '',
     uf: '',
     regioes: [],
-    funcoes: [],
     capacidadeDiaria: 5,
     status: 'disponivel',
     criarAcesso: false,
@@ -194,7 +184,6 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
 
   const criarAcesso = form.watch('criarAcesso');
   const regioesValue = form.watch('regioes');
-  const funcoesValue = form.watch('funcoes');
 
   // Resetar form quando modal abre/fecha ou profissional muda
   useEffect(() => {
@@ -213,7 +202,6 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
           cidade: profissional.cidade || '',
           uf: profissional.uf || '',
           regioes: profissional.regioes || [],
-          funcoes: profissional.funcoes || [],
           capacidadeDiaria: profissional.capacidadeDiaria || 5,
           status: profissional.status || 'disponivel',
           criarAcesso: false,
@@ -243,15 +231,6 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
       form.setValue('regioes', current.filter(r => r !== value));
     } else {
       form.setValue('regioes', [...current, value]);
-    }
-  };
-
-  const toggleFuncao = (value: FuncaoProfissional) => {
-    const current = funcoesValue || [];
-    if (current.includes(value)) {
-      form.setValue('funcoes', current.filter(f => f !== value) as FuncaoProfissional[]);
-    } else {
-      form.setValue('funcoes', [...current, value] as FuncaoProfissional[]);
     }
   };
 
@@ -499,38 +478,6 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                             className="text-sm cursor-pointer"
                           >
                             {regiao.label}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Funções */}
-              <FormField
-                control={form.control}
-                name="funcoes"
-                render={() => (
-                  <FormItem>
-                    <FormLabel>Funções *</FormLabel>
-                    <div className="flex gap-6 mt-2">
-                      {FUNCOES_OPTIONS.map((funcao) => (
-                        <div
-                          key={funcao.value}
-                          className="flex items-center space-x-2"
-                        >
-                          <Checkbox
-                            id={`funcao-${funcao.value}`}
-                            checked={funcoesValue?.includes(funcao.value)}
-                            onCheckedChange={() => toggleFuncao(funcao.value)}
-                          />
-                          <label
-                            htmlFor={`funcao-${funcao.value}`}
-                            className="text-sm cursor-pointer"
-                          >
-                            {funcao.label}
                           </label>
                         </div>
                       ))}
