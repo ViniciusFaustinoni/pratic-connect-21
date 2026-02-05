@@ -506,10 +506,6 @@ export default function Equipe() {
                   {/* Ações */}
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" className="flex-1">
-                      <Calendar className="mr-2 h-4 w-4" />
-                      Ver Agenda
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
                       <BarChart className="mr-2 h-4 w-4" />
                       Relatório
                     </Button>
