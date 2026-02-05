@@ -377,7 +377,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const { isAnalistaCadastroOnly, isCoordenadorMonitoramentoOnly, isInstaladorVistoriador, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const { isAnalistaCadastroOnly, isCoordenadorMonitoramentoOnly, isInstaladorVistoriador, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
 
   // Verificar se é APENAS instalador/vistoriador (sem perfis de gerência ou admin)
   const isInstaladorVistoriadorOnly = isInstaladorVistoriador && 
@@ -492,15 +492,23 @@ export default function Dashboard() {
           variacao={12}
           loading={leadsLoading}
         />
+        {!isVendedorOnly && (
+          <KPICard
+            titulo="Instalações/Mês"
+            valor={instMetricas?.concluidasHoje || 0}
+            emoji="🔧"
+            loading={instalacoesLoading}
+          />
+        )}
         <KPICard
-          titulo="Instalações/Mês"
-          valor={instMetricas?.concluidasHoje || 0}
-          emoji="🔧"
-          loading={instalacoesLoading}
-        />
-        <KPICard
-          titulo="Receita Mensal"
-          valor={`R$ ${(contratos?.filter(c => c.status === 'ativo').reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0).toLocaleString('pt-BR')}`}
+          titulo={isVendedorOnly ? "Minhas Adesões" : "Receita Mensal"}
+          valor={`R$ ${(
+            isVendedorOnly
+              ? contratos?.filter(c => c.status === 'ativo' && c.vendedor_id === userId)
+                  .reduce((acc, c) => acc + (c.cotacoes?.valor_adesao || 0), 0) || 0
+              : contratos?.filter(c => c.status === 'ativo')
+                  .reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0
+          ).toLocaleString('pt-BR')}`}
           emoji="💰"
           loading={contratosLoading}
         />
@@ -605,124 +613,130 @@ export default function Dashboard() {
 
         {/* COLUNA 3: Ações Rápidas + Widgets */}
         <div className="space-y-6">
-          {/* AÇÕES RÁPIDAS */}
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <CardTitle className="text-lg text-foreground">Ações Rápidas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <QuickActions />
-            </CardContent>
-          </Card>
+          {/* AÇÕES RÁPIDAS - Oculto para vendedor */}
+          {!isVendedorOnly && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="text-lg text-foreground">Ações Rápidas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <QuickActions />
+              </CardContent>
+            </Card>
+          )}
 
           {/* WIDGET DE FOLLOW-UPS */}
           <FollowupWidget maxItems={3} />
 
-          {/* DOCUMENTOS PENDENTES */}
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-                  <Clock className="h-5 w-5 text-warning" />
-                  Documentos Pendentes
-                </CardTitle>
-                <Badge variant="secondary" className="bg-muted text-muted-foreground">{docsContagem?.pendente || 0}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {docsLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full bg-muted" />)}
+          {/* DOCUMENTOS PENDENTES - Oculto para vendedor */}
+          {!isVendedorOnly && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                    <Clock className="h-5 w-5 text-warning" />
+                    Documentos Pendentes
+                  </CardTitle>
+                  <Badge variant="secondary" className="bg-muted text-muted-foreground">{docsContagem?.pendente || 0}</Badge>
                 </div>
-              ) : !pendingDocs || pendingDocs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <CheckCircle className="h-8 w-8 text-success" />
-                  <p className="mt-2 text-sm text-muted-foreground">Nenhum documento pendente</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pendingDocs.slice(0, 3).map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-sm text-foreground">{doc.associados?.nome || 'Desconhecido'}</p>
-                        <p className="text-xs text-muted-foreground">{doc.tipo}</p>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {formatTime(doc.created_at)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <Button 
-                variant="ghost" 
-                className="w-full mt-3 hover:bg-card-hover" 
-                size="sm"
-                onClick={() => navigate('/cadastro/documentos')}
-              >
-                Ver todos <ArrowRight className="ml-1 h-4 w-4" />
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* INSTALAÇÕES HOJE */}
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-                  <Car className="h-5 w-5 text-warning" />
-                  Instalações Hoje
-                </CardTitle>
-                <Badge variant="secondary" className="bg-muted text-muted-foreground">{instalacoesDia?.length || 0}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {instalacoesLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full bg-muted" />)}
-                </div>
-              ) : !instalacoesDia || instalacoesDia.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <Calendar className="h-8 w-8 text-muted-foreground/50" />
-                  <p className="mt-2 text-sm text-muted-foreground">Nenhuma instalação hoje</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {instalacoesDia.slice(0, 3).map((inst) => (
-                    <div key={inst.id} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm text-foreground">
-                          {inst.periodo === 'manha' ? '🌅 Manhã' : inst.periodo === 'tarde' ? '☀️ Tarde' : '🌙 Noite'}
+              </CardHeader>
+              <CardContent>
+                {docsLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full bg-muted" />)}
+                  </div>
+                ) : !pendingDocs || pendingDocs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <CheckCircle className="h-8 w-8 text-success" />
+                    <p className="mt-2 text-sm text-muted-foreground">Nenhum documento pendente</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingDocs.slice(0, 3).map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-sm text-foreground">{doc.associados?.nome || 'Desconhecido'}</p>
+                          <p className="text-xs text-muted-foreground">{doc.tipo}</p>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTime(doc.created_at)}
                         </span>
-                        <Badge 
-                          variant={inst.status === 'em_andamento' || inst.status === 'em_rota' ? 'default' : 'outline'}
-                          className={cn(
-                            inst.status === 'em_andamento' || inst.status === 'em_rota' 
-                              ? "bg-primary" 
-                              : "border-border"
-                          )}
-                        >
-                          {statusInstalacaoLabels[inst.status] || inst.status}
-                        </Badge>
                       </div>
-                      <p className="text-sm text-foreground">{inst.associados?.nome}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {inst.veiculos?.marca} {inst.veiculos?.modelo} • {inst.veiculos?.placa}
-                      </p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+                <Button 
+                  variant="ghost" 
+                  className="w-full mt-3 hover:bg-card-hover" 
+                  size="sm"
+                  onClick={() => navigate('/cadastro/documentos')}
+                >
+                  Ver todos <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* INSTALAÇÕES HOJE - Oculto para vendedor */}
+          {!isVendedorOnly && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                    <Car className="h-5 w-5 text-warning" />
+                    Instalações Hoje
+                  </CardTitle>
+                  <Badge variant="secondary" className="bg-muted text-muted-foreground">{instalacoesDia?.length || 0}</Badge>
                 </div>
-              )}
-              <Button 
-                variant="ghost" 
-                className="w-full mt-3 hover:bg-card-hover" 
-                size="sm"
-                onClick={() => navigate('/monitoramento/instalacoes')}
-              >
-                Ver agenda completa <ArrowRight className="ml-1 h-4 w-4" />
-              </Button>
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent>
+                {instalacoesLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full bg-muted" />)}
+                  </div>
+                ) : !instalacoesDia || instalacoesDia.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <Calendar className="h-8 w-8 text-muted-foreground/50" />
+                    <p className="mt-2 text-sm text-muted-foreground">Nenhuma instalação hoje</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {instalacoesDia.slice(0, 3).map((inst) => (
+                      <div key={inst.id} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-sm text-foreground">
+                            {inst.periodo === 'manha' ? '🌅 Manhã' : inst.periodo === 'tarde' ? '☀️ Tarde' : '🌙 Noite'}
+                          </span>
+                          <Badge 
+                            variant={inst.status === 'em_andamento' || inst.status === 'em_rota' ? 'default' : 'outline'}
+                            className={cn(
+                              inst.status === 'em_andamento' || inst.status === 'em_rota' 
+                                ? "bg-primary" 
+                                : "border-border"
+                            )}
+                          >
+                            {statusInstalacaoLabels[inst.status] || inst.status}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-foreground">{inst.associados?.nome}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {inst.veiculos?.marca} {inst.veiculos?.modelo} • {inst.veiculos?.placa}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Button 
+                  variant="ghost" 
+                  className="w-full mt-3 hover:bg-card-hover" 
+                  size="sm"
+                  onClick={() => navigate('/monitoramento/instalacoes')}
+                >
+                  Ver agenda completa <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

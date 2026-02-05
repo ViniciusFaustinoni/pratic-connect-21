@@ -113,6 +113,14 @@ export function usePermissions() {
     !isDesenvolvedor && 
     !isAdminMaster;
 
+  // Verifica se é APENAS vendedor (CLT ou Externo, sem perfis de gerência ou admin)
+  const isVendedorOnly = isVendedor() && 
+    !isDiretor && 
+    !isGerencia() && 
+    !isDesenvolvedor && 
+    !isAdminMaster &&
+    !isAnalistaCadastro;
+
   // Verifica se é APENAS coordenador de monitoramento (sem perfis de gerência ou admin)
   const isCoordenadorMonitoramento = hasRole('coordenador_monitoramento');
   const isCoordenadorMonitoramentoOnly = isCoordenadorMonitoramento && 
@@ -204,6 +212,7 @@ export function usePermissions() {
     isAnalistaCadastro,
     isAnalistaCadastroOnly,
     isVendedorCltOnly,
+    isVendedorOnly,
     isPerfilLimitado,
     isCoordenadorMonitoramento,
     isCoordenadorMonitoramentoOnly,
