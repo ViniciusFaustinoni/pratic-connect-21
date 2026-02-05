@@ -55,12 +55,14 @@ import {
   X,
   User,
   UserPlus,
+  Calendar,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { usePlataformasOptions, usePlataformasLabels } from '@/hooks/usePlataformasCRUD';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { AtribuirPortadorDialog } from './AtribuirPortadorDialog';
+import { EnviarManutencaoModal } from './EnviarManutencaoModal';
 
 interface RastreadorListItem {
   id: string;
@@ -111,6 +113,13 @@ export function ListaRastreadores() {
     codigo: string;
     portador_id: string | null;
     portador_nome: string | null;
+  } | null>(null);
+  const [dialogManutencao, setDialogManutencao] = useState<{
+    id: string;
+    codigo: string;
+    imei: string | null;
+    status: 'estoque' | 'instalado' | 'manutencao' | 'baixado';
+    veiculo: { placa: string; modelo: string | null } | null;
   } | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -442,6 +451,23 @@ export function ListaRastreadores() {
                                 {item.portador_id ? 'Alterar Portador' : 'Atribuir Portador'}
                               </DropdownMenuItem>
                             )}
+                            {item.status === 'instalado' && (
+                              <DropdownMenuItem 
+                                onClick={() => setDialogManutencao({
+                                  id: item.id,
+                                  codigo: item.codigo,
+                                  imei: item.imei,
+                                  status: item.status,
+                                  veiculo: item.veiculos ? { 
+                                    placa: item.veiculos.placa, 
+                                    modelo: item.veiculos.modelo 
+                                  } : null,
+                                })}
+                              >
+                                <Calendar className="h-4 w-4 mr-2" />
+                                Agendar Manutenção
+                              </DropdownMenuItem>
+                            )}
                             {getAcoesDisponiveis(item.status).map((acao) => (
                               <DropdownMenuItem
                                 key={acao.status}
@@ -522,6 +548,13 @@ export function ListaRastreadores() {
         open={!!dialogAtribuirPortador}
         onOpenChange={() => setDialogAtribuirPortador(null)}
         rastreador={dialogAtribuirPortador}
+      />
+
+      {/* Modal de Manutenção */}
+      <EnviarManutencaoModal
+        open={!!dialogManutencao}
+        onOpenChange={() => setDialogManutencao(null)}
+        rastreador={dialogManutencao}
       />
     </div>
   );

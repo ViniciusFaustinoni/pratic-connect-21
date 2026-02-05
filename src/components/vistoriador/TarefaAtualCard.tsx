@@ -21,6 +21,7 @@ import {
 import { TarefaAtual, useIniciarTarefa, useIniciarRota, TarefaAtualComConfirmacao } from '@/hooks/useTarefaAtual';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
+import { isManutencao } from '@/hooks/useCriarManutencao';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -111,8 +112,13 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   };
 
   const handleExecutar = () => {
-    const path = isInstalacao(tarefa.tipo) ? 'instalacao' : 'vistoria';
-    navigate(`/instalador/${path}/${tarefa.id}`);
+    if (isManutencao(tarefa.tipo)) {
+      navigate(`/instalador/manutencao/${tarefa.id}`);
+    } else if (isInstalacao(tarefa.tipo)) {
+      navigate(`/instalador/instalacao/${tarefa.id}`);
+    } else {
+      navigate(`/instalador/vistoria/${tarefa.id}`);
+    }
   };
 
   const isAgendada = tarefa.status === 'agendada';
