@@ -1,112 +1,147 @@
 
-## Plano: Ocultar elementos para Analista de Cadastro
+## Problema Identificado
 
-### Objetivo
+O componente **FunilCotacaoChart** atualmente:
+- Exibe as 9 etapas do funil de cotação apenas como visualização estática
+- Não possui ação de clique para filtrar/navegar
+- Tooltip só mostra informações básicas
+- Interface não indica que é interativo (sem cursor pointer, sem hover states)
 
-Aplicar restrições de visualização na tela de detalhes do associado para o perfil **Analista de Cadastro**, ocultando:
+## Solução Proposta
 
-1. Aba "Documentos" (TabsList)
-2. Botão "Documentos" (Header card)
-3. Botão "Editar" (Header card)
-4. Botão "Email" (Dropdown menu)
+Transformar o funil em um componente **clicável e interativo** que:
+1. Permite clicar em cada etapa para navegar/filtrar
+2. Exibe feedback visual de hover
+3. Redireciona para a página apropriada com filtros aplicados
+4. Opcional: Adiciona um callback `onEtapaClick` para uso em diferentes contextos
 
-### Análise do Sistema de Permissões
+### Mapeamento de Navegação por Etapa
 
-O projeto já possui:
-- Hook `usePermissions` que retorna `isAnalistaCadastroOnly`
-- Essa flag identifica usuários que são **exclusivamente** analistas de cadastro (sem outros perfis de gerência)
+| Etapa | Ação ao Clicar |
+|-------|----------------|
+| 1. Novo | `/vendas/leads?etapa=novo` |
+| 2. Contato | `/vendas/leads?etapa=contato` |
+| 3. Cotação Gerada | `/vendas/cotacoes` |
+| 4. Escolhendo Plano | `/vendas/cotacoes?status_contratacao=escolhendo_plano` |
+| 5. Enviando Docs | `/vendas/cotacoes?status_contratacao=enviando_documentos` |
+| 6. Termo Assinado | `/vendas/contratos?status=assinado` |
+| 7. Pagamento Efetuado | `/vendas/contratos?adesao_paga=true` |
+| 8. Vistoria Agendada | `/monitoramento/vistorias` |
+| 9. Proposta Concluída | `/cadastro/associados?status=ativo` |
 
-### Modificações Técnicas
+### Mudanças Técnicas
 
-**Arquivo:** `src/pages/cadastro/AssociadoDetalhe.tsx`
+**Arquivo 1: `src/components/vendas/FunilCotacaoChart.tsx`**
 
-**1. Importar hook de permissões:**
+1. **Adicionar import do useNavigate**
 ```typescript
-import { usePermissions } from '@/hooks/usePermissions';
+import { useNavigate } from 'react-router-dom';
 ```
 
-**2. Usar o hook no componente:**
+2. **Adicionar prop opcional para callback**
 ```typescript
-const { isAnalistaCadastroOnly } = usePermissions();
+interface FunilCotacaoChartProps {
+  periodo?: Periodo;
+  className?: string;
+  compact?: boolean;
+  onEtapaClick?: (etapaId: string) => void; // Nova prop
+}
 ```
 
-**3. Condicionar botão "Editar" (linha 516-518):**
-- Envolver com verificação `!isAnalistaCadastroOnly`
-- Ocultar para analistas de cadastro
-
-**4. Condicionar botão "Documentos" (linha 519-524):**
-- Envolver com verificação `!isAnalistaCadastroOnly`
-- Ocultar para analistas de cadastro
-
-**5. Condicionar aba "Documentos" (linha 617-620):**
-- Envolver TabsTrigger com verificação `!isAnalistaCadastroOnly`
-- Ocultar aba de Documentos para analistas de cadastro
-
-**6. Remover botão "Email" (linha 588-590):**
-- Remover completamente o DropdownMenuItem de Email para todos os usuários
-- Conforme solicitado pelo usuário
-
-### Estrutura Final dos Botões
-
-| Elemento | Visível para Analista Cadastro? | Visível para Outros? |
-|----------|--------------------------------|---------------------|
-| Editar | Não | Sim |
-| Documentos (botão) | Não | Sim |
-| Documentos (aba) | Não | Sim |
-| Financeiro | Sim | Sim |
-| Email | Removido | Removido |
-| WhatsApp | Sim | Sim |
-
-### Código das Alterações
-
-**Botão Editar (Linha 516):**
+3. **Adicionar mapeamento de rotas**
 ```typescript
-{!isAnalistaCadastroOnly && (
-  <Button variant="outline" onClick={() => navigate(`/cadastro/associados/${id}/editar`)}>
-    <Edit className="mr-2 h-4 w-4" /> Editar
-  </Button>
-)}
+const ETAPA_ROTAS: Record<EtapaFunilCotacao, string> = {
+  novo: '/vendas/leads?etapa=novo',
+  contato: '/vendas/leads?etapa=contato',
+  cotacao_gerada: '/vendas/cotacoes',
+  escolhendo_plano: '/vendas/cotacoes?status_contratacao=escolhendo_plano',
+  enviando_docs: '/vendas/cotacoes?status_contratacao=enviando_documentos',
+  termo_assinado: '/vendas/contratos?status=assinado',
+  pagamento_efetuado: '/vendas/contratos?adesao_paga=true',
+  vistoria_agendada: '/monitoramento/vistorias',
+  proposta_concluida: '/cadastro/associados?status=ativo',
+};
 ```
 
-**Botão Documentos (Linha 519):**
+4. **Adicionar handler de clique**
 ```typescript
-{!isAnalistaCadastroOnly && (
-  <Button variant="outline" onClick={() => setActiveTab('documentos')}>
-    <FileCheck className="mr-2 h-4 w-4" /> Documentos
-    {docsPendentes > 0 && (
-      <Badge variant="destructive" className="ml-2 h-5 px-1.5">{docsPendentes}</Badge>
-    )}
-  </Button>
-)}
+const handleEtapaClick = (etapaId: EtapaFunilCotacao) => {
+  if (onEtapaClick) {
+    onEtapaClick(etapaId);
+  } else {
+    navigate(ETAPA_ROTAS[etapaId]);
+  }
+};
 ```
 
-**Aba Documentos (Linha 617):**
+5. **Transformar linhas em elementos clicáveis**
+- Mudar de `<TooltipTrigger>` para um `<div>` ou `<button>` clicável
+- Adicionar estilos de hover: `hover:bg-primary/10 cursor-pointer rounded-lg p-2 -m-2 transition-colors`
+- Adicionar `onClick={() => handleEtapaClick(etapa.id)}`
+
+6. **Melhorar feedback visual**
+- Adicionar ícone de seta ou indicador visual de ação
+- Mudar cor do texto no hover
+- Adicionar animação sutil de scale no hover
+
+**Arquivo 2: `src/pages/vendas/Leads.tsx`**
+
+1. **Ler filtro de etapa via URL**
 ```typescript
-{!isAnalistaCadastroOnly && (
-  <TabsTrigger value="documentos">
-    <FileCheck className="mr-2 h-4 w-4" /> Documentos
-    {docsPendentes > 0 && <Badge variant="destructive" className="ml-2 h-5 px-1.5">{docsPendentes}</Badge>}
-  </TabsTrigger>
-)}
+// No useEffect inicial
+useEffect(() => {
+  const etapaParam = searchParams.get('etapa');
+  if (etapaParam) {
+    setFilters(prev => ({ ...prev, etapa: [etapaParam as EtapaLead] }));
+  }
+}, []);
 ```
 
-**Email - Remoção Completa (Linha 588-590):**
+**Arquivo 3: `src/pages/vendas/Cotacoes.tsx`** (se necessário)
+
+1. **Ler filtro status_contratacao via URL**
 ```typescript
-// Remover estas linhas:
-<DropdownMenuItem onClick={handleEmail}>
-  <Mail className="mr-2 h-4 w-4" /> Email
-</DropdownMenuItem>
+const statusContratacaoParam = searchParams.get('status_contratacao');
+if (statusContratacaoParam) {
+  // Aplicar filtro
+}
+```
+
+### Interface Final do Funil
+
+```
+┌────────────────────────────────────────────────────────┐
+│ ↗ Funil de Cotação                         ⓘ 1 sem lead│
+│   Jornada real do cliente no processo                  │
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│ ● 1. Novo                                      0    → │
+│   [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]        │
+│                                                        │
+│ ● 2. Contato                                   0    → │  ← Hover: bg-primary/10
+│   [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]        │
+│                                                        │
+│ ● 3. Cotação Gerada                            1    → │  ← Clique: Navega
+│   [████████████████████████████████████████████]      │
+│                                                        │
+│ ...                                                    │
+├────────────────────────────────────────────────────────┤
+│ Total: 1  │  Taxa: 100%  │  Clique para filtrar       │
+└────────────────────────────────────────────────────────┘
 ```
 
 ### Impacto
 
-- Analistas de Cadastro terão acesso restrito a funções de edição e documentos
-- Fluxo de trabalho de análise simplificado para este perfil
-- Botão de Email removido para todos os usuários (conforme solicitado)
-- Não afeta outras funcionalidades ou outros perfis
+- Funil se torna navegável e útil como ponto de partida
+- Usuários podem clicar em qualquer etapa para ver os registros específicos
+- Feedback visual claro indica interatividade
+- Mantém compatibilidade com uso atual (sem breaking changes)
+- Tooltip continua funcionando para informações adicionais
 
 ### Arquivos Afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Adicionar condicionais de permissão e remover botão Email |
+| `src/components/vendas/FunilCotacaoChart.tsx` | Adicionar navegação e estilos hover |
+| `src/pages/vendas/Leads.tsx` | Suportar filtro via URL `?etapa=` |
+| `src/pages/vendas/Cotacoes.tsx` | (Opcional) Suportar filtro `?status_contratacao=` |
