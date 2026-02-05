@@ -496,6 +496,19 @@ export function AppSidebar() {
         }));
     }
     
+    // Se é apenas vendedor, remover item "Ativações" do grupo Vendas
+    if (permissions.isVendedorOnly) {
+      return baseGroups.map(group => {
+        if (group.id === 'vendas') {
+          return {
+            ...group,
+            items: group.items.filter(item => item.url !== '/vendas/ativacoes'),
+          };
+        }
+        return group;
+      });
+    }
+    
     return baseGroups;
   };
 
