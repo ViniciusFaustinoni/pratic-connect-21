@@ -19,6 +19,7 @@ import {
   ComposedChart
 } from 'recharts';
 import { useVendasMetricasExpanded, type Periodo, type LeadRisco } from '@/hooks/useVendasMetricasExpanded';
+import { FunilCotacaoChart } from '@/components/vendas/FunilCotacaoChart';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -378,48 +379,8 @@ export default function VendasDashboard() {
       {/* GRÁFICOS - LINHA 1: FUNIL + EVOLUÇÃO */}
       {/* ============================================ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* FUNIL DE VENDAS */}
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle>Funil de Vendas</CardTitle>
-              <CardDescription>Distribuição de leads por etapa</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-[350px] w-full" />
-            ) : metricas?.funilData && metricas.funilData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={metricas.funilData} layout="vertical" margin={{ left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" />
-                  <YAxis type="category" dataKey="etapa" width={110} tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    formatter={(value: number, name: string, props: any) => [
-                      `${value} leads (${props.payload.percentual.toFixed(1)}%)`,
-                      'Quantidade'
-                    ]}
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--background))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Bar dataKey="quantidade" radius={[0, 4, 4, 0]}>
-                    {metricas.funilData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.cor} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-[350px] items-center justify-center text-muted-foreground">
-                Nenhum dado para o período selecionado
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* FUNIL DE COTAÇÃO - Usando novo componente */}
+        <FunilCotacaoChart periodo={periodo} />
 
         {/* EVOLUÇÃO MENSAL */}
         <Card>

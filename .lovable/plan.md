@@ -1,14 +1,15 @@
 
-## Análise: Discrepância Entre Funil do Dashboard e Jornada Real da Cotação
+## ✅ Implementado: Funil de Cotação com 9 Etapas Corretas
 
-### Problema Identificado
+### Problema Resolvido
 
-O **Funil de Vendas** exibido no Dashboard do Vendedor mostra etapas diferentes das que o lead realmente passa durante o processo de cotação.
+O **Funil de Vendas** no Dashboard agora exibe as 9 etapas corretas da jornada do cliente no processo de cotação.
 
-### Comparativo: Funil Atual vs. Etapas Desejadas
+### Arquivos Criados
+- `src/hooks/useFunilCotacao.ts` - Hook dedicado para buscar dados do funil de cotação
+- `src/components/vendas/FunilCotacaoChart.tsx` - Componente reutilizável para visualização do funil
 
-| Dashboard Atual | Etapas Desejadas | Status |
-|-----------------|------------------|--------|
+### Etapas Implementadas
 | Novo | Novo | ✅ Correto |
 | Contato | Contato | ✅ Correto |
 | Qualificado | — | ❌ Não desejado |

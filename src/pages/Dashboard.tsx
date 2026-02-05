@@ -47,15 +47,19 @@ import { cn } from '@/lib/utils';
 // ============================================
 // CONFIGURAÇÕES E MAPEAMENTOS
 // ============================================
+// Importar componente do funil de cotação
+import { FunilCotacaoChart } from '@/components/vendas/FunilCotacaoChart';
+
 const etapaConfig: Record<string, { label: string; cor: string }> = {
   novo: { label: 'Novo', cor: 'bg-info' },
-  contato_inicial: { label: 'Contato', cor: 'bg-warning' },
-  apresentacao: { label: 'Apresentação', cor: 'bg-purple-500' },
-  cotacao_enviada: { label: 'Cotação', cor: 'bg-primary' },
-  negociacao: { label: 'Negociação', cor: 'bg-pink-500' },
-  contrato_enviado: { label: 'Contrato Env.', cor: 'bg-indigo-500' },
-  ganho: { label: 'Ganho', cor: 'bg-success' },
-  perdido: { label: 'Perdido', cor: 'bg-destructive' },
+  contato: { label: 'Contato', cor: 'bg-warning' },
+  cotacao_gerada: { label: 'Cotação Gerada', cor: 'bg-primary' },
+  escolhendo_plano: { label: 'Escolhendo Plano', cor: 'bg-cyan-500' },
+  enviando_docs: { label: 'Enviando Docs', cor: 'bg-pink-500' },
+  termo_assinado: { label: 'Termo Assinado', cor: 'bg-emerald-500' },
+  pagamento_efetuado: { label: 'Pagamento Efetuado', cor: 'bg-green-500' },
+  vistoria_agendada: { label: 'Vistoria Agendada', cor: 'bg-orange-500' },
+  proposta_concluida: { label: 'Proposta Concluída', cor: 'bg-success' },
 };
 
 const statusInstalacaoLabels: Record<string, string> = {
@@ -236,86 +240,6 @@ function AlertaBanner({ alertas }: { alertas: Alerta[] }) {
 }
 
 // ============================================
-// COMPONENTE: FUNIL DE VENDAS
-// ============================================
-interface FunilItem {
-  etapa: string;
-  count: number;
-}
-
-function FunilVendas({ dados, loading }: { dados: FunilItem[]; loading: boolean }) {
-  const navigate = useNavigate();
-  const totalLeads = dados.reduce((acc, item) => acc + item.count, 0);
-  const taxaConversao = totalLeads > 0 
-    ? Math.round((dados.find(d => d.etapa === 'ganho')?.count || 0) / totalLeads * 100) 
-    : 0;
-
-  if (loading) {
-    return (
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <Skeleton className="h-6 w-40 bg-muted" />
-          <Skeleton className="h-4 w-60 bg-muted" />
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-24 bg-muted" />
-                <Skeleton className="h-2 w-full bg-muted" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="border-border bg-card">
-      <CardHeader>
-        <div>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            Funil de Vendas
-          </CardTitle>
-          <CardDescription>Distribuição de leads por etapa</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {dados.filter(item => item.etapa !== 'perdido').map((item) => {
-            const config = etapaConfig[item.etapa] || { label: item.etapa, cor: 'bg-muted' };
-            const percentual = totalLeads > 0 ? Math.round((item.count / totalLeads) * 100) : 0;
-            
-            return (
-              <div key={item.etapa} className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{config.label}</span>
-                  <span className="font-medium text-foreground">{item.count}</span>
-                </div>
-                <Progress 
-                  value={percentual} 
-                  className="h-2 bg-muted" 
-                  indicatorClassName={config.cor}
-                />
-              </div>
-            );
-          })}
-        </div>
-        
-        <div className="mt-4 pt-4 border-t border-border flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Total de leads: {totalLeads}</span>
-          <Badge variant="outline" className="text-success border-success">
-            Taxa de conversão: {taxaConversao}%
-          </Badge>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ============================================
 // COMPONENTE: AÇÕES RÁPIDAS
 // ============================================
 function QuickActions() {
@@ -427,18 +351,7 @@ export default function Dashboard() {
 
   const isLoading = leadsLoading || contratosLoading;
 
-  // Calcular dados do funil a partir do hook otimizado
-  const funnelData: FunilItem[] = [
-    { etapa: 'novo', count: leadsFunnel?.novo || 0 },
-    { etapa: 'contato_inicial', count: leadsFunnel?.contato_inicial || 0 },
-    { etapa: 'apresentacao', count: leadsFunnel?.apresentacao || 0 },
-    { etapa: 'cotacao_enviada', count: leadsFunnel?.cotacao_enviada || 0 },
-    { etapa: 'negociacao', count: leadsFunnel?.negociacao || 0 },
-    { etapa: 'contrato_enviado', count: leadsFunnel?.contrato_enviado || 0 },
-    { etapa: 'ganho', count: leadsFunnel?.ganho || 0 },
-    { etapa: 'perdido', count: leadsFunnel?.perdido || 0 },
-  ];
-  
+  // Total de leads para KPI (mantido para compatibilidade)
   const totalLeads = Object.values(leadsFunnel || {}).reduce((acc, count) => acc + count, 0);
 
   // Calcular alertas
@@ -519,7 +432,7 @@ export default function Dashboard() {
         {/* COLUNA 1-2: Funil + Leads */}
         <div className="lg:col-span-2 space-y-6">
           {/* FUNIL DE VENDAS */}
-          <FunilVendas dados={funnelData} loading={leadsLoading} />
+          <FunilCotacaoChart periodo="30dias" />
 
           {/* ÚLTIMOS LEADS */}
           <Card className="border-border bg-card">

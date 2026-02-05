@@ -5,18 +5,17 @@ import { ptBR } from 'date-fns/locale';
 
 export type Periodo = 'hoje' | '7dias' | '30dias' | 'ano';
 
-// Etapas oficiais do funil conforme PRD
+// Etapas do funil de cotação (9 etapas conforme jornada real do cliente)
 export const ETAPAS_FUNIL_CONFIG = [
   { id: 'novo', label: 'Novo', cor: '#3B82F6', ordem: 1 },
-  { id: 'contato', label: 'Contato', cor: '#EAB308', ordem: 2 },
-  { id: 'qualificado', label: 'Qualificado', cor: '#A855F7', ordem: 3 },
-  { id: 'cotacao_enviada', label: 'Cotação Enviada', cor: '#F97316', ordem: 4 },
-  { id: 'negociacao', label: 'Negociação', cor: '#EC4899', ordem: 5 },
-  { id: 'vistoria_agendada', label: 'Vistoria', cor: '#06B6D4', ordem: 6 },
-  { id: 'contrato_enviado', label: 'Contrato Enviado', cor: '#6366F1', ordem: 7 },
-  { id: 'contrato_assinado', label: 'Assinado', cor: '#14B8A6', ordem: 8 },
-  { id: 'instalacao_agendada', label: 'Instalação', cor: '#10B981', ordem: 9 },
-  { id: 'ganho', label: 'Ganho', cor: '#22C55E', ordem: 10 },
+  { id: 'contato', label: 'Contato', cor: '#8B5CF6', ordem: 2 },
+  { id: 'cotacao_gerada', label: 'Cotação Gerada', cor: '#F59E0B', ordem: 3 },
+  { id: 'escolhendo_plano', label: 'Escolhendo Plano', cor: '#06B6D4', ordem: 4 },
+  { id: 'enviando_docs', label: 'Enviando Docs', cor: '#EC4899', ordem: 5 },
+  { id: 'termo_assinado', label: 'Termo Assinado', cor: '#10B981', ordem: 6 },
+  { id: 'pagamento_efetuado', label: 'Pagamento Efetuado', cor: '#22C55E', ordem: 7 },
+  { id: 'vistoria_agendada', label: 'Vistoria Agendada', cor: '#F97316', ordem: 8 },
+  { id: 'proposta_concluida', label: 'Proposta Concluída', cor: '#14B8A6', ordem: 9 },
 ] as const;
 
 export const ORIGEM_CORES: Record<string, string> = {
