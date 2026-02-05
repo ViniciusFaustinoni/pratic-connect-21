@@ -22,13 +22,17 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
+    console.log('[CONTRATO-GERAR] ====== INICIANDO FUNÇÃO ======');
+    console.log('[CONTRATO-GERAR] Timestamp:', new Date().toISOString());
+    
     const { cotacao_id, vendedor_id } = await req.json() as GerarContratoPayload;
+    console.log('[CONTRATO-GERAR] Payload recebido:', { cotacao_id, vendedor_id });
 
     if (!cotacao_id) {
       throw new Error('cotacao_id é obrigatório');
     }
 
-    console.log('Gerando contrato para cotação:', cotacao_id);
+    console.log('[CONTRATO-GERAR] Gerando contrato para cotação:', cotacao_id);
 
     // 1. Buscar dados da cotação com lead
     const { data: cotacao, error: cotacaoError } = await supabase
@@ -132,7 +136,65 @@ serve(async (req) => {
       .maybeSingle();
 
     if (contratoExistente) {
-      console.log('Contrato já existe para esta cotação:', contratoExistente.numero);
+      console.log('[CONTRATO-GERAR] Contrato já existe para esta cotação:', contratoExistente.numero);
+      
+      // ═══════════════════════════════════════════════════════════════
+      // IMPORTANTE: Mesmo com contrato existente, sincronizar email/telefone do associado
+      // Isso corrige casos onde o associado foi criado com dados desatualizados
+      // ═══════════════════════════════════════════════════════════════
+      const lead = cotacao.lead;
+      const clienteEmail = lead?.email || cotacao.email_solicitante;
+      const clienteTelefone = lead?.telefone || cotacao.telefone1_solicitante;
+      const clienteCpf = lead?.cpf || cotacao.cliente_cpf;
+      
+      if (clienteCpf) {
+        const cpfLimpo = clienteCpf.replace(/\D/g, '');
+        console.log('[SYNC-EXISTENTE] Verificando sincronização para CPF:', cpfLimpo);
+        
+        const { data: associadoExistente } = await supabase
+          .from('associados')
+          .select('id, email, telefone')
+          .eq('cpf', cpfLimpo)
+          .maybeSingle();
+        
+        if (associadoExistente) {
+          console.log('[SYNC-EXISTENTE] Associado encontrado:', {
+            id: associadoExistente.id,
+            email_banco: associadoExistente.email,
+            email_cotacao: clienteEmail,
+            telefone_banco: associadoExistente.telefone,
+            telefone_cotacao: clienteTelefone,
+          });
+          
+          const updateData: Record<string, string> = {};
+          
+          if (clienteEmail && clienteEmail.trim() !== '' && clienteEmail !== associadoExistente.email) {
+            updateData.email = clienteEmail;
+            console.log(`[SYNC-EXISTENTE] Email será atualizado: "${associadoExistente.email}" → "${clienteEmail}"`);
+          }
+          
+          if (clienteTelefone && clienteTelefone.trim() !== '' && clienteTelefone !== associadoExistente.telefone) {
+            updateData.telefone = clienteTelefone;
+            console.log(`[SYNC-EXISTENTE] Telefone será atualizado: "${associadoExistente.telefone}" → "${clienteTelefone}"`);
+          }
+          
+          if (Object.keys(updateData).length > 0) {
+            const { error: updateError } = await supabase
+              .from('associados')
+              .update(updateData)
+              .eq('id', associadoExistente.id);
+            
+            if (updateError) {
+              console.error('[SYNC-EXISTENTE] Erro ao sincronizar:', updateError);
+            } else {
+              console.log('[SYNC-EXISTENTE] ✅ Dados sincronizados com sucesso:', Object.keys(updateData));
+            }
+          } else {
+            console.log('[SYNC-EXISTENTE] Nenhuma atualização necessária (dados iguais)');
+          }
+        }
+      }
+      
       return new Response(
         JSON.stringify({
           success: true,
@@ -179,7 +241,22 @@ serve(async (req) => {
     
     if (associadoExistente) {
       associadoId = associadoExistente.id;
-      console.log('Associado existente encontrado pelo CPF:', associadoId);
+      console.log('[CONTRATO-GERAR] Associado existente encontrado pelo CPF:', associadoId);
+      
+      // ═══════════════════════════════════════════════════════════════
+      // DEBUG: Valores para comparação de sincronização
+      // ═══════════════════════════════════════════════════════════════
+      console.log('[DEBUG-SYNC] Dados para sincronização:', {
+        associadoId,
+        email_banco: associadoExistente.email,
+        email_cotacao: emailFinal,
+        email_cotacao_length: emailFinal?.length,
+        email_cotacao_trimmed: emailFinal?.trim(),
+        emails_diferentes: emailFinal !== associadoExistente.email,
+        telefone_banco: associadoExistente.telefone,
+        telefone_cotacao: telefoneFinal,
+        telefones_diferentes: telefoneFinal !== associadoExistente.telefone,
+      });
 
       // ═══════════════════════════════════════════════════════════════
       // SINCRONIZAÇÃO SEGURA: Atualiza email e telefone se diferentes
@@ -195,6 +272,12 @@ serve(async (req) => {
           `"${associadoExistente.email || '(vazio)'}" → "${emailFinal}" ` +
           `(cotação ${cotacao_id})`
         );
+      } else {
+        console.log('[DEBUG-SYNC] Email NÃO será atualizado:', {
+          motivo: !emailFinal ? 'emailFinal vazio/null' : 
+                  emailFinal.trim() === '' ? 'emailFinal só whitespace' : 
+                  emailFinal === associadoExistente.email ? 'emails iguais' : 'desconhecido'
+        });
       }
 
       // TELEFONE: só atualiza se cotação tem valor novo e diferente
@@ -207,19 +290,32 @@ serve(async (req) => {
         );
       }
 
+      console.log('[DEBUG-SYNC] updateData a ser aplicado:', updateData);
+
       // Executar atualização se houver mudanças
       if (Object.keys(updateData).length > 0) {
+        console.log('[DEBUG-SYNC] Executando UPDATE no associado...');
         const { error: updateAssociadoError } = await supabase
           .from('associados')
           .update(updateData)
           .eq('id', associadoId);
 
         if (updateAssociadoError) {
-          console.error('[ERRO] Falha ao sincronizar dados do associado:', updateAssociadoError);
+          console.error('[ERRO] Falha ao sincronizar dados do associado:', {
+            error: updateAssociadoError,
+            message: updateAssociadoError.message,
+            code: updateAssociadoError.code,
+            details: updateAssociadoError.details,
+            hint: updateAssociadoError.hint,
+            updateData,
+            associadoId
+          });
           // ⚠️ Não interrompe o fluxo — apenas loga
         } else {
-          console.log('[OK] Dados do associado sincronizados:', Object.keys(updateData).join(', '));
+          console.log('[OK] Dados do associado sincronizados com sucesso:', Object.keys(updateData).join(', '));
         }
+      } else {
+        console.log('[DEBUG-SYNC] Nenhum dado para atualizar (updateData vazio)');
       }
       
       // CORREÇÃO: Buscar ou criar veículo para associado existente
