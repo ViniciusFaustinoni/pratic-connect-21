@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -44,6 +44,7 @@ export function useLeads(options?: UseLeadsOptions) {
 
   return useQuery({
     queryKey: ['leads', filters, page, perPage],
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<LeadsResult> => {
       let query = supabase
         .from('leads')
@@ -108,6 +109,7 @@ export function useLeads(options?: UseLeadsOptions) {
 export function useAllLeads(filters?: UseLeadsOptions['filters']) {
   return useQuery({
     queryKey: ['leads', 'all', filters],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       let query = supabase.from('leads').select('*');
 
