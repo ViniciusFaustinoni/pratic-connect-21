@@ -7,7 +7,7 @@ import {
   Clock, Camera, CheckCircle, XCircle, Eye, CalendarDays,
   UserPlus, Send, RotateCcw, Trash2, Loader2, LinkIcon
 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { 
   Table, TableBody, TableCell, TableHead, 
   TableHeader, TableRow 
@@ -132,7 +132,7 @@ const mapTipo = (modalidade?: string): TipoVistoria => {
 
 export default function FilaVistorias() {
   // Estados
-  const [activeTab, setActiveTab] = useState('pendentes');
+  // Estado activeTab removido - exibe todas as vistorias em uma única lista
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState('todos');
   const [regiaoFilter, setRegiaoFilter] = useState('todas');
@@ -217,29 +217,9 @@ export default function FilaVistorias() {
     };
   }, [vistorias]);
 
-  // Filtrar vistorias por tab - Pendentes agora inclui 'pendente' + 'agendada'
+  // Filtrar vistorias - exibe todas sem filtro por tab
   const vistoriasFiltradas = useMemo(() => {
     let result = vistorias;
-
-    // Filtrar por tab
-    switch (activeTab) {
-      case 'pendentes':
-        // Consolidar pendentes e agendadas em uma única tab
-        result = result.filter(v => v.status === 'pendente' || v.status === 'agendada');
-        break;
-      case 'em_campo':
-        result = result.filter(v => v.status === 'em_rota' || v.status === 'em_andamento');
-        break;
-      case 'aguardando_analise':
-        result = result.filter(v => v.status === 'aguardando_analise');
-        break;
-      case 'auto_vistoria':
-        result = result.filter(v => v.status === 'auto_vistoria_pendente');
-        break;
-      case 'concluidas':
-        result = result.filter(v => v.status === 'aprovada' || v.status === 'reprovada');
-        break;
-    }
 
     // Busca
     if (search) {
@@ -277,7 +257,7 @@ export default function FilaVistorias() {
     }
 
     return result;
-  }, [vistorias, activeTab, search, tipoFilter, regiaoFilter, dataFilter, vistoriadorFilter]);
+  }, [vistorias, search, tipoFilter, regiaoFilter, dataFilter, vistoriadorFilter]);
 
   // Limpar filtros
   const limparFiltros = () => {
@@ -434,32 +414,7 @@ export default function FilaVistorias() {
         </p>
       </div>
 
-      {/* Tabs - Removida tab "Agendadas" separada, consolidada em "Pendentes" */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex-wrap h-auto gap-2">
-          <TabsTrigger value="pendentes" className="gap-2">
-            Pendentes
-            <Badge variant="secondary" className="ml-1">{contadores.pendentes}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="em_campo" className="gap-2">
-            Em Campo
-            <Badge variant="secondary" className="ml-1">{contadores.emCampo}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="aguardando_analise" className="gap-2">
-            Aguard. Análise
-            <Badge variant="secondary" className="ml-1">{contadores.aguardandoAnalise}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="auto_vistoria" className="gap-2">
-            Auto Vistoria
-            <Badge variant="secondary" className="ml-1">{contadores.autoVistoria}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="concluidas" className="gap-2">
-            Concluídas
-            <Badge variant="secondary" className="ml-1">{contadores.concluidasHoje}</Badge>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Filtros */}
+      {/* Filtros */}
         <div className="flex flex-wrap gap-3 mt-4">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -622,7 +577,7 @@ export default function FilaVistorias() {
             </Table>
           )}
         </div>
-      </Tabs>
+      
 
       {/* Modal de Agendamento */}
       <AgendarVistoriaModal
