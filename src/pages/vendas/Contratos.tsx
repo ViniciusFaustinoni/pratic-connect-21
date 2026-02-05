@@ -62,7 +62,7 @@ export default function Contratos() {
   const [prefilledData, setPrefilledData] = useState<PrefilledCotacaoData | null>(null);
   const [enviandoPDF, setEnviandoPDF] = useState<string | null>(null);
 
-  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const { isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly } = usePermissions();
   const canDeleteContratos = isDiretor || isDesenvolvedor || isAdminMaster;
 
   // Ativar listener realtime para atualizações automáticas
@@ -295,10 +295,12 @@ export default function Contratos() {
             Visualize e gerencie propostas de filiação
           </p>
         </div>
-        <Button onClick={() => setFormDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Proposta
-        </Button>
+        {!isVendedorOnly && (
+          <Button onClick={() => setFormDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Proposta
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
