@@ -129,13 +129,48 @@ export default function Contratos() {
       .reduce((acc, c) => acc + c.valor_mensal, 0) || 0,
   };
 
-  const tabs: { value: TabValue; label: string; count: number }[] = [
-    { value: 'all', label: 'Todos', count: stats.total },
-    { value: 'rascunho', label: 'Rascunho', count: stats.rascunho },
-    { value: 'enviado', label: 'Enviados', count: stats.enviado },
-    { value: 'assinado', label: 'Assinados', count: stats.assinado },
-    { value: 'ativo', label: 'Ativos', count: stats.ativo },
-  ];
+  // Ordenação lógica do fluxo de contratos
+  const statusOrder: Record<StatusContrato, number> = {
+    rascunho: 1,
+    pendente: 2,
+    pendente_assinatura: 3,
+    enviado: 4,
+    visualizado: 5,
+    assinado: 6,
+    ativo: 7,
+    suspenso: 8,
+    cancelado: 9,
+    expirado: 10,
+  };
+
+  // Gerar abas dinamicamente com base nos dados reais
+  const getActiveTabs = (): { value: TabValue; label: string; count: number }[] => {
+    const uniqueStatuses = new Set(contratos?.map(c => c.status) || []);
+    
+    const activeTabs: { value: TabValue; label: string; count: number }[] = [
+      { value: 'all', label: 'Todos', count: stats.total },
+    ];
+
+    // Adicionar abas apenas para statuses que existem
+    const statusesToShow: StatusContrato[] = Array.from(uniqueStatuses)
+      .sort((a, b) => (statusOrder[a] || 999) - (statusOrder[b] || 999));
+
+    statusesToShow.forEach((status) => {
+      const config = statusConfig[status];
+      if (config) {
+        const count = contratos?.filter(c => c.status === status).length || 0;
+        activeTabs.push({
+          value: status,
+          label: config.label,
+          count,
+        });
+      }
+    });
+
+    return activeTabs;
+  };
+
+  const tabs = getActiveTabs();
 
   // Ação de enviar para Autentique
   const handleEnviar = async (contratoId: string) => {
