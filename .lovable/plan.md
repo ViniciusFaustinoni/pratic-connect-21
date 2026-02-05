@@ -1,153 +1,97 @@
 
-## ✅ Implementado: Funil de Cotação com 9 Etapas Corretas
+## Problema Identificado
 
-### Problema Resolvido
+Na página de **Propostas** (`src/pages/vendas/Contratos.tsx`), as abas do menu são hardcodeadas:
+- Todos (0)
+- Rascunho (0)
+- Enviados (0)
+- Assinados (0)
+- Ativos (0)
 
-O **Funil de Vendas** no Dashboard agora exibe as 9 etapas corretas da jornada do cliente no processo de cotação.
+O usuário quer que **apenas as abas com dados reais apareçam** no sistema.
 
-### Arquivos Criados
-- `src/hooks/useFunilCotacao.ts` - Hook dedicado para buscar dados do funil de cotação
-- `src/components/vendas/FunilCotacaoChart.tsx` - Componente reutilizável para visualização do funil
+## Solução Proposta
 
-### Etapas Implementadas
-| Novo | Novo | ✅ Correto |
-| Contato | Contato | ✅ Correto |
-| Qualificado | — | ❌ Não desejado |
-| Cotação Enviada | Cotação Gerada | ⚠️ Precisa incluir cotações sem lead |
-| Negociação | — | ❌ Não desejado |
-| — | Escolhendo Plano | ❌ Falta no funil |
-| — | Enviando Documentação | ❌ Falta no funil |
-| — | Termo Assinado | ❌ Falta no funil |
-| — | Pagamento Efetuado | ❌ Falta no funil |
-| Vistoria Agendada | Vistoria Agendada | ✅ Correto |
-| Contrato Env. | — | ❌ Não desejado |
-| Assinado | — | ❌ Não desejado (duplica termo) |
-| Instalação | — | ❌ Não desejado |
-| Ganho | Proposta Concluída | ⚠️ Renomear (marca conversão) |
+Tornar as abas dinâmicas filtrando apenas os statuses que existem nos contratos carregados:
 
-### Descoberta Importante
+### Lógica Implementada
 
-O sistema **já possui** as etapas corretas implementadas para o fluxo de cotação nos componentes:
-- `CotacaoCard.tsx`
-- `CotacoesTable.tsx`
-- `CotacaoDetalhesModal.tsx`
+1. **Calcular statuses únicos** presentes nos dados (ex: se não há contratos com status "rascunho", a aba não aparece)
+2. **Manter a aba "Todos"** sempre visível como navegação geral
+3. **Ordenar as abas** por uma sequência lógica de fluxo (novo → enviado → assinado → ativo)
+4. **Filtrar abas com count = 0** a menos que o usuário as solicite
 
-Essas etapas são usadas internamente para acompanhar o progresso da cotação:
+### Alterações no Arquivo
 
-| Etapa Interna (já existe) | Correspondente Desejada |
-|---------------------------|-------------------------|
-| `cotacao_realizada` | Cotação Gerada |
-| `escolhendo_plano` | Escolhendo Plano |
-| `enviando_documentos` | Enviando Documentação |
-| `assinando_contrato` | Termo Assinado |
-| `realizando_pagamento` | Pagamento Efetuado |
-| `vistoria_agendada` | Vistoria Agendada |
-| `associado_ativo` | Proposta Concluída |
+**Arquivo:** `src/pages/vendas/Contratos.tsx`
 
-### Solução Proposta
+**Mudanças:**
 
-Refatorar o funil de vendas do Dashboard para usar as **9 etapas desejadas**:
-
-```text
-1. Novo              → Lead recebido, não contactado
-2. Contato           → Primeiro contato realizado
-3. Cotação Gerada    → Cotação criada (incluir sem lead)
-4. Escolhendo Plano  → Cliente analisando opções
-5. Enviando Docs     → Cliente enviando documentação
-6. Termo Assinado    → Contrato assinado digitalmente
-7. Pagamento Efetuado→ Adesão paga
-8. Vistoria Agendada → Aguardando vistoria
-9. Proposta Concluída→ Associado ativo (conversão)
-```
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/types/database.ts` | Atualizar `EtapaLead` com novas etapas |
-| `src/lib/lead-transitions.ts` | Refatorar `ETAPAS_FUNIL` com 9 etapas |
-| `src/hooks/useVendasMetricasExpanded.ts` | Atualizar `ETAPAS_FUNIL_CONFIG` |
-| `src/hooks/useVendasMetricas.ts` | Atualizar `ETAPA_LABELS` e `ETAPA_CORES` |
-| `src/pages/Dashboard.tsx` | Atualizar `etapaConfig` com novas etapas |
-| `src/pages/vendas/VendasDashboard.tsx` | Atualizar visualização do funil |
-| `src/pages/vendas/LeadKanban.tsx` | Atualizar colunas do Kanban |
-
-### Lógica de Contagem para o Funil
-
-Para contar leads/cotações por etapa, a lógica será:
+1. **Linhas 120-138** - Substituir o array hardcodeado `tabs` por uma versão dinâmica:
 
 ```typescript
-const NOVO_FUNIL_CONFIG = [
-  { 
-    id: 'novo', 
-    label: 'Novo',
-    // Leads com etapa='novo' (sem contato)
-  },
-  { 
-    id: 'contato', 
-    label: 'Contato',
-    // Leads com etapa='contato' ou 'contato_inicial'
-  },
-  { 
-    id: 'cotacao_gerada', 
-    label: 'Cotação Gerada',
-    // Contar COTAÇÕES (não leads) com status != 'rascunho'
-    // Inclui cotações SEM lead vinculado
-  },
-  { 
-    id: 'escolhendo_plano', 
-    label: 'Escolhendo Plano',
-    // Cotações com status_contratacao = 'plano_escolhido'
-  },
-  { 
-    id: 'enviando_docs', 
-    label: 'Enviando Docs',
-    // Cotações com status_contratacao = 'dados_preenchidos'
-  },
-  { 
-    id: 'termo_assinado', 
-    label: 'Termo Assinado',
-    // Cotações com status_contratacao = 'contrato_assinado'
-    // OU contratos com status = 'assinado'
-  },
-  { 
-    id: 'pagamento_efetuado', 
-    label: 'Pagamento Efetuado',
-    // Contratos com adesao_paga = true
-  },
-  { 
-    id: 'vistoria_agendada', 
-    label: 'Vistoria Agendada',
-    // Instalações/Vistorias com status = 'agendada'
-  },
-  { 
-    id: 'proposta_concluida', 
-    label: 'Proposta Concluída',
-    // Associados com status = 'ativo'
-    // Esta etapa define a taxa de conversão
-  },
-];
+// Ordenação lógica do fluxo de contratos
+const statusOrder: Record<StatusContrato, number> = {
+  rascunho: 1,
+  pendente: 2,
+  pendente_assinatura: 3,
+  enviado: 4,
+  visualizado: 5,
+  assinado: 6,
+  ativo: 7,
+  suspenso: 8,
+  cancelado: 9,
+  expirado: 10,
+};
+
+// Gerar abas dinamicamente com base nos dados reais
+const getActiveTabs = () => {
+  const uniqueStatuses = new Set(contratos?.map(c => c.status) || []);
+  
+  const activeTabs: { value: TabValue; label: string; count: number }[] = [
+    { value: 'all', label: 'Todos', count: stats.total },
+  ];
+
+  // Adicionar abas apenas para statuses que existem
+  const statusesToShow: StatusContrato[] = Array.from(uniqueStatuses)
+    .sort((a, b) => (statusOrder[a] || 999) - (statusOrder[b] || 999));
+
+  statusesToShow.forEach((status) => {
+    const config = statusConfig[status];
+    if (config) {
+      const count = contratos?.filter(c => c.status === status).length || 0;
+      activeTabs.push({
+        value: status,
+        label: config.label,
+        count,
+      });
+    }
+  });
+
+  return activeTabs;
+};
+
+const tabs = getActiveTabs();
 ```
 
-### Taxa de Conversão
+### Impacto
 
-A taxa de conversão será calculada como:
+- **Abas vazias desaparecem** - Se não há "Rascunho", a aba não é exibida
+- **Fluxo lógico mantido** - Abas aparecem em ordem de fluxo quando existem
+- **"Todos" sempre visível** - Para visualização geral
+- **Contadores precisos** - Cada aba mostra apenas seus dados reais
 
-```
-Taxa = (Propostas Concluídas / Total de Cotações Geradas) × 100%
-```
+### Exemplo de Resultado
 
-### Considerações Importantes
+Se houver apenas:
+- 2 contratos em "rascunho"
+- 5 contratos em "enviado"
+- 3 contratos em "ativo"
 
-1. **Migração de dados:** Leads existentes precisam ser mapeados para as novas etapas
-2. **Cotações sem lead:** O funil deve contar cotações independentemente de terem lead vinculado
-3. **Backwards compatibility:** Manter etapas antigas como aliases para não quebrar dados históricos
-4. **Kanban:** O Kanban de vendas também precisará ser atualizado para refletir as novas etapas
+As abas exibidas serão:
+- **Todos (10)**
+- **Rascunho (2)**
+- **Enviados (5)**
+- **Ativos (3)**
 
-### Resumo da Implementação
-
-1. Redefinir as 9 etapas do funil em `src/lib/lead-transitions.ts`
-2. Atualizar hooks de métricas para usar lógica híbrida (leads + cotações + contratos)
-3. Refatorar Dashboard e VendasDashboard para exibir novo funil
-4. Atualizar Kanban com as novas colunas
-5. Adicionar contador de "Cotações sem Lead" na etapa "Cotação Gerada"
+(As abas "Assinados", "Pendentes", etc. não aparecem por não terem dados)
