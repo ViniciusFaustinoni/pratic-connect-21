@@ -252,7 +252,7 @@ export function usePermissions() {
     canManageJuridico: isDiretor || hasRole('gerente_comercial') || hasRole('analista_juridico') || isDesenvolvedor,
     canManageRH: isDiretor || hasRole('gerente_comercial') || isDesenvolvedor,
     canManageMarketing: isDiretor || hasRole('gerente_comercial') || hasRole('analista_marketing') || isDesenvolvedor,
-    canManageOuvidoria: isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor,
+    canManageOuvidoria: (isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao,
     canManageConsultores: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
     canViewReports: (isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster || isAnalistaCadastro) && !isVendedorCotacao,
     // Permissão para editar rotas (coordenador só pode visualizar)
