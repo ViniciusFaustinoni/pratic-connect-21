@@ -23,6 +23,13 @@ interface AutovistoriaProps {
   onVoltar: () => void;
 }
 
+// Interface para resultado da validação do chassi
+interface ChassiResultado {
+  chassi: string | null;
+  validacao: 'confere' | 'diverge' | 'ilegivel' | null;
+  confianca: number;
+}
+
 export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, readOnly, onComplete, onVoltar }: AutovistoriaProps) {
   const fotos = getFotosAutovistoria(tipoVeiculo);
   const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
@@ -34,6 +41,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [hidratado, setHidratado] = useState(false);
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
   const [coordenadas, setCoordenadas] = useState<Coordenadas | null>(null);
+  const [chassiResultado, setChassiResultado] = useState<ChassiResultado | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Buscar autovistoria existente para reidratar fotos após refresh
@@ -199,6 +207,27 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       if (fotoAtual.id === 'odometro' && result.kmExtraido) {
         setKmIdentificado(result.kmExtraido);
         toast.success(`Quilometragem identificada: ${result.kmExtraido.toLocaleString('pt-BR')} km`);
+      } 
+      // Se for chassi e validação foi realizada, mostrar feedback ao cliente
+      else if (fotoAtual.id === 'chassi' && result.chassiValidacao) {
+        setChassiResultado(result.chassiValidacao);
+        
+        if (result.chassiValidacao.validacao === 'confere') {
+          toast.success('✅ Chassi validado automaticamente!', {
+            duration: 5000,
+            description: 'O número confere com o cadastro.',
+          });
+        } else if (result.chassiValidacao.validacao === 'diverge') {
+          toast.error('⚠️ Atenção: O chassi da foto não confere com o cadastro!', {
+            duration: 8000,
+            description: 'Verifique se a foto está correta ou tire novamente.',
+          });
+        } else if (result.chassiValidacao.validacao === 'ilegivel') {
+          toast.warning('Não foi possível ler o chassi na foto.', {
+            duration: 6000,
+            description: 'Tente tirar uma nova foto com melhor iluminação.',
+          });
+        }
       } else {
         toast.success(`Foto "${fotoAtual.label}" enviada com sucesso!`);
       }
@@ -273,6 +302,68 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
                 <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
                   {kmIdentificado.toLocaleString('pt-BR')} km
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Resultado da Validação do Chassi */}
+          {chassiResultado && chassiResultado.validacao && (
+            <div className={`p-4 rounded-lg flex items-center gap-3 border ${
+              chassiResultado.validacao === 'confere'
+                ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900'
+                : chassiResultado.validacao === 'diverge'
+                ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900'
+                : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900'
+            }`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                chassiResultado.validacao === 'confere'
+                  ? 'bg-green-500'
+                  : chassiResultado.validacao === 'diverge'
+                  ? 'bg-red-500'
+                  : 'bg-amber-500'
+              }`}>
+                {chassiResultado.validacao === 'confere' ? (
+                  <CheckCircle className="h-5 w-5 text-white" />
+                ) : chassiResultado.validacao === 'diverge' ? (
+                  <XCircle className="h-5 w-5 text-white" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5 text-white" />
+                )}
+              </div>
+              <div className="flex-1">
+                {chassiResultado.validacao === 'confere' ? (
+                  <>
+                    <p className="font-semibold text-green-700 dark:text-green-400">
+                      Chassi Validado
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      O número do chassi confere com o cadastro.
+                    </p>
+                  </>
+                ) : chassiResultado.validacao === 'diverge' ? (
+                  <>
+                    <p className="font-semibold text-red-700 dark:text-red-400">
+                      Chassi Divergente
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      O número da foto não confere com o cadastro.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold text-amber-700 dark:text-amber-400">
+                      Chassi Ilegível
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Não foi possível ler o chassi na foto.
+                    </p>
+                  </>
+                )}
+                {chassiResultado.confianca > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Confiança: {Math.round(chassiResultado.confianca * 100)}%
+                  </p>
+                )}
               </div>
             </div>
           )}
