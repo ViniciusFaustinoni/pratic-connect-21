@@ -1,221 +1,231 @@
 
+## Agendamento de Vistoria Presencial por Período (Manhã/Tarde)
 
-## Correções das Funcionalidades Mobile no App do Vistoriador
+### Resumo da Mudança
 
-### Análise do Estado Atual
+A funcionalidade de agendamento de vistoria presencial será simplificada para apresentar apenas opções por período (Manhã e Tarde), em vez de horários específicos. O sistema limitará a 10 vistorias por período por dia.
 
-Após inspeção completa do código, identifiquei os seguintes problemas funcionais no App do Vistoriador (tela mobile):
+### Estado Atual
 
-```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│ PROBLEMAS IDENTIFICADOS                                                     │
-├────────────────────────────────────────────────────────────────────────────┤
-│ 1. Itens do menu do Perfil não funcionam (onClick vazio)                   │
-│ 2. Falta página de Configurações específica para instalador                │
-│ 3. Falta página de Notificações para instalador                            │
-│ 4. "Ajuda e Suporte" não leva a lugar nenhum                               │
-│ 5. "Privacidade" não tem funcionalidade                                    │
-│ 6. Vistoriador Base vê o ação "Ver no Mapa" mesmo sem acesso ao mapa       │
-└────────────────────────────────────────────────────────────────────────────┘
-```
+Atualmente o sistema:
+- Exibe horários específicos (08:00, 09:00, 10:00, etc.)
+- Não possui limite de vagas por período
+- Armazena `hora_agendada` nas tabelas `instalacoes` e `servicos`
+- A tabela `servicos` já possui coluna `periodo` (ENUM: manha, tarde, noite)
 
 ### Solução Proposta
 
-#### 1. Criar Página de Configurações do Instalador
+```text
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                        ANTES                                                   │
+├───────────────────────────────────────────────────────────────────────────────┤
+│  Escolha o horário:                                                           │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐    │
+│  │08:00 │ │09:00 │ │10:00 │ │11:00 │ │14:00 │ │15:00 │ │16:00 │ │17:00 │    │
+│  └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘    │
+└───────────────────────────────────────────────────────────────────────────────┘
 
-Criar uma nova página `InstaladorConfiguracoes.tsx` para configurações específicas do profissional de campo:
-- Preferências de notificações
-- Configurações de localização
-- Tema (claro/escuro)
-- Versão do app
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                        DEPOIS                                                  │
+├───────────────────────────────────────────────────────────────────────────────┤
+│  Escolha o período:                                                           │
+│  ┌────────────────────────────────┐  ┌────────────────────────────────┐      │
+│  │  ☀️ MANHÃ                       │  │  🌅 TARDE                        │      │
+│  │  8h às 12h                     │  │  14h às 18h                     │      │
+│  │  ✓ 8 vagas disponíveis         │  │  ✓ 10 vagas disponíveis         │      │
+│  └────────────────────────────────┘  └────────────────────────────────┘      │
+│                                                                               │
+│  ⚠️ Sábado: apenas período da manhã disponível                              │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
 
-#### 2. Criar Página de Notificações do Instalador
-
-Criar uma nova página `InstaladorNotificacoes.tsx` para listar as notificações:
-- Notificações de novas tarefas
-- Alertas do sistema
-- Histórico de atribuições
-
-#### 3. Criar Página de Ajuda e Suporte
-
-Criar uma nova página `InstaladorAjuda.tsx`:
-- Telefone do coordenador
-- WhatsApp do suporte
-- FAQs comuns
-- Como usar o app
-
-#### 4. Atualizar a Página de Perfil
-
-Conectar todos os itens de menu às suas páginas correspondentes.
-
-#### 5. Corrigir Ações Rápidas para Vistoriador Base
-
-Na tela Home, ocultar o card "Ver no Mapa" para profissionais com role `vistoriador_base`.
-
-### Arquivos a Criar/Modificar
+### Arquivos a Modificar
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/pages/instalador/InstaladorConfiguracoes.tsx` | CRIAR | Página de configurações |
-| `src/pages/instalador/InstaladorNotificacoes.tsx` | CRIAR | Página de notificações |
-| `src/pages/instalador/InstaladorAjuda.tsx` | CRIAR | Página de ajuda e suporte |
-| `src/pages/instalador/InstaladorPerfil.tsx` | MODIFICAR | Conectar menu items às páginas |
-| `src/pages/instalador/InstaladorHome.tsx` | MODIFICAR | Ocultar mapa para vistoriador base |
-| `src/App.tsx` | MODIFICAR | Adicionar novas rotas |
+| `src/data/autovistoriaConfig.ts` | MODIFICAR | Adicionar config de períodos e função de vagas |
+| `src/components/cotacao-publica/AgendamentoVistoria.tsx` | MODIFICAR | Substituir seleção de horários por períodos |
+| `src/hooks/useCotacaoVistoria.ts` | MODIFICAR | Enviar período em vez de horário |
+| `supabase/functions/agendar-vistoria-presencial/index.ts` | MODIFICAR | Receber período e validar limite de vagas |
+| `supabase/functions/criar-instalacao-pos-pagamento/index.ts` | MODIFICAR | Usar período na criação da instalação |
+| Migração SQL | CRIAR | Adicionar coluna `vistoria_periodo` na tabela `cotacoes` |
 
-### Implementação Detalhada
+---
 
-#### InstaladorConfiguracoes.tsx
+### Detalhes Técnicos
 
-```text
-┌───────────────────────────────────────────────────────────────┐
-│ ⚙️ Configurações                                               │
-├───────────────────────────────────────────────────────────────┤
-│ ┌───────────────────────────────────────────────────────────┐ │
-│ │ 🔔 Notificações                                           │ │
-│ │    Receber alertas de novas tarefas          [   ON   ]  │ │
-│ │    Receber alertas de encaixes urgentes      [   ON   ]  │ │
-│ └───────────────────────────────────────────────────────────┘ │
-│ ┌───────────────────────────────────────────────────────────┐ │
-│ │ 📍 Localização                                            │ │
-│ │    GPS de alta precisão                      [   ON   ]  │ │
-│ │    Atualização em segundo plano              [   ON   ]  │ │
-│ └───────────────────────────────────────────────────────────┘ │
-│ ┌───────────────────────────────────────────────────────────┐ │
-│ │ 🎨 Aparência                                              │ │
-│ │    Tema escuro                               [   ON   ]  │ │
-│ └───────────────────────────────────────────────────────────┘ │
-└───────────────────────────────────────────────────────────────┘
+#### 1. Migração SQL - Adicionar coluna de período na tabela cotacoes
+
+```sql
+ALTER TABLE cotacoes 
+ADD COLUMN IF NOT EXISTS vistoria_periodo TEXT 
+CHECK (vistoria_periodo IN ('manha', 'tarde'));
+
+ALTER TABLE cotacoes 
+ADD COLUMN IF NOT EXISTS vistoria_completa_periodo TEXT 
+CHECK (vistoria_completa_periodo IN ('manha', 'tarde'));
 ```
 
-#### InstaladorNotificacoes.tsx
+#### 2. Configuração de Períodos (`src/data/autovistoriaConfig.ts`)
 
-```text
-┌───────────────────────────────────────────────────────────────┐
-│ 🔔 Notificações                                                │
-├───────────────────────────────────────────────────────────────┤
-│ Hoje                                                          │
-│ ┌───────────────────────────────────────────────────────────┐ │
-│ │ ✅ Nova tarefa atribuída                      10:30       │ │
-│ │    Instalação - ABC-1234                                  │ │
-│ └───────────────────────────────────────────────────────────┘ │
-│ ┌───────────────────────────────────────────────────────────┐ │
-│ │ ⚡ Encaixe urgente disponível                 09:15       │ │
-│ │    Cliente reagendou para hoje                            │ │
-│ └───────────────────────────────────────────────────────────┘ │
-│                                                               │
-│ Ontem                                                         │
-│ ┌───────────────────────────────────────────────────────────┐ │
-│ │ 📦 Tarefa concluída                          17:45       │ │
-│ │    Vistoria - XYZ-5678                                    │ │
-│ └───────────────────────────────────────────────────────────┘ │
-└───────────────────────────────────────────────────────────────┘
-```
-
-#### InstaladorAjuda.tsx
-
-```text
-┌───────────────────────────────────────────────────────────────┐
-│ ❓ Ajuda e Suporte                                             │
-├───────────────────────────────────────────────────────────────┤
-│ Precisa de ajuda?                                             │
-│ ┌───────────────────────────────────────────────────────────┐ │
-│ │ 📞 Ligar para Coordenador                                 │ │
-│ │    (11) 99999-9999                                        │ │
-│ └───────────────────────────────────────────────────────────┘ │
-│ ┌───────────────────────────────────────────────────────────┐ │
-│ │ 💬 WhatsApp Suporte                                       │ │
-│ │    Enviar mensagem                                        │ │
-│ └───────────────────────────────────────────────────────────┘ │
-│                                                               │
-│ Dúvidas Frequentes                                            │
-│ ┌───────────────────────────────────────────────────────────┐ │
-│ │ ▶ Como iniciar o serviço?                                 │ │
-│ │ ▶ O que fazer se não tenho GPS?                           │ │
-│ │ ▶ Como funciona o encaixe urgente?                        │ │
-│ │ ▶ Como tirar fotos da vistoria?                           │ │
-│ └───────────────────────────────────────────────────────────┘ │
-└───────────────────────────────────────────────────────────────┘
-```
-
-#### Modificações em InstaladorPerfil.tsx
+Adicionar constantes e tipos para os períodos:
 
 ```typescript
-const menuItems = [
-  { 
-    icon: Settings, 
-    label: 'Configurações', 
-    onClick: () => navigate('/instalador/configuracoes') 
-  },
-  { 
-    icon: Bell, 
-    label: 'Notificações', 
-    onClick: () => navigate('/instalador/notificacoes') 
-  },
-  { 
-    icon: HelpCircle, 
-    label: 'Ajuda e Suporte', 
-    onClick: () => navigate('/instalador/ajuda') 
-  },
-  { 
-    icon: Shield, 
-    label: 'Privacidade', 
-    onClick: () => window.open('/politica-privacidade', '_blank')
-  },
+export type Periodo = 'manha' | 'tarde';
+
+export interface PeriodoConfig {
+  id: Periodo;
+  label: string;
+  horarioInicio: string;
+  horarioFim: string;
+  icone: string;
+}
+
+export const PERIODOS_DISPONIVEIS: PeriodoConfig[] = [
+  { id: 'manha', label: 'Manhã', horarioInicio: '08:00', horarioFim: '12:00', icone: '☀️' },
+  { id: 'tarde', label: 'Tarde', horarioInicio: '14:00', horarioFim: '18:00', icone: '🌅' },
 ];
+
+export const LIMITE_VAGAS_POR_PERIODO = 10;
+
+// Sábado: apenas manhã
+export const getPeriodosParaDia = (date: Date): PeriodoConfig[] => {
+  if (isSabado(date)) {
+    return PERIODOS_DISPONIVEIS.filter(p => p.id === 'manha');
+  }
+  return PERIODOS_DISPONIVEIS;
+};
 ```
 
-#### Modificações em InstaladorHome.tsx (Ocultar Mapa para Vistoriador Base)
+#### 3. Hook para Verificar Vagas Disponíveis
+
+Criar novo hook ou função para consultar vagas:
 
 ```typescript
-// Adicionar verificação de role
-const { hasRole } = useAuth();
-const isVistoriadorBase = hasRole('vistoriador_base') && !hasRole('instalador_vistoriador');
-
-// Filtrar o card de mapa condicionalmente
-{!isVistoriadorBase && (
-  <Card onClick={() => navigate('/instalador/mapa')}>
-    ...
-  </Card>
-)}
+export function useVagasDisponiveis(data: string) {
+  return useQuery({
+    queryKey: ['vagas-periodo', data],
+    queryFn: async () => {
+      const { data: servicos, error } = await supabase
+        .from('servicos')
+        .select('periodo')
+        .eq('data_agendada', data)
+        .eq('local_vistoria', 'cliente')
+        .not('status', 'in', '("cancelada","recusada")');
+      
+      if (error) throw error;
+      
+      const contagem = { manha: 0, tarde: 0 };
+      servicos?.forEach(s => {
+        if (s.periodo === 'manha') contagem.manha++;
+        else if (s.periodo === 'tarde') contagem.tarde++;
+      });
+      
+      return {
+        manha: LIMITE_VAGAS_POR_PERIODO - contagem.manha,
+        tarde: LIMITE_VAGAS_POR_PERIODO - contagem.tarde,
+      };
+    },
+    enabled: !!data,
+  });
+}
 ```
 
-#### Novas Rotas no App.tsx
+#### 4. Componente AgendamentoVistoria - Mudança de UI
+
+Substituir a grid de horários por cards de período:
+
+```tsx
+// Estado
+const [periodoSelecionado, setPeriodoSelecionado] = useState<Periodo | null>(null);
+
+// UI
+<div className="grid grid-cols-2 gap-4">
+  {periodosDisponiveis.map((periodo) => {
+    const vagasRestantes = vagasData?.[periodo.id] ?? LIMITE_VAGAS_POR_PERIODO;
+    const esgotado = vagasRestantes <= 0;
+    
+    return (
+      <Card
+        key={periodo.id}
+        className={cn(
+          "p-4 cursor-pointer transition-all",
+          periodoSelecionado === periodo.id && "ring-2 ring-primary",
+          esgotado && "opacity-50 cursor-not-allowed"
+        )}
+        onClick={() => !esgotado && setPeriodoSelecionado(periodo.id)}
+      >
+        <div className="text-2xl mb-2">{periodo.icone}</div>
+        <h3 className="font-bold text-lg">{periodo.label}</h3>
+        <p className="text-sm text-muted-foreground">
+          {periodo.horarioInicio} às {periodo.horarioFim}
+        </p>
+        <p className="text-sm mt-2">
+          {esgotado 
+            ? <span className="text-destructive">Esgotado</span>
+            : <span className="text-success">{vagasRestantes} vagas</span>
+          }
+        </p>
+      </Card>
+    );
+  })}
+</div>
+```
+
+#### 5. Edge Function - Validação de Vagas
+
+Na função `agendar-vistoria-presencial`, adicionar validação:
 
 ```typescript
-// Dentro do bloco <Route element={<InstaladorLayout />}>
-<Route path="/instalador/configuracoes" element={<InstaladorConfiguracoes />} />
-<Route path="/instalador/notificacoes" element={<InstaladorNotificacoes />} />
-<Route path="/instalador/ajuda" element={<InstaladorAjuda />} />
+// Verificar vagas disponíveis
+const { data: servicosExistentes } = await supabase
+  .from('servicos')
+  .select('id')
+  .eq('data_agendada', dataAgendada)
+  .eq('periodo', periodoAgendado)
+  .eq('local_vistoria', 'cliente')
+  .not('status', 'in', '("cancelada","recusada")');
+
+if ((servicosExistentes?.length || 0) >= 10) {
+  return new Response(JSON.stringify({
+    success: false,
+    error: 'Período esgotado para esta data'
+  }), { status: 400, headers: corsHeaders });
+}
 ```
 
-### Fluxo Corrigido
+#### 6. Criação da Instalação - Usar Período
+
+No `criar-instalacao-pos-pagamento`, ler o período da cotação:
+
+```typescript
+const instalacaoData = {
+  // ... outros campos
+  hora_agendada: null, // Não usa mais horário específico
+  periodo: cotacao.vistoria_periodo, // Usa o período
+};
+```
+
+### Fluxo Completo
 
 ```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│ ANTES (PROBLEMA)                                                            │
-├────────────────────────────────────────────────────────────────────────────┤
-│ Menu Perfil:                                                               │
-│   [Configurações]     → onClick: () => {}        ✗ Não faz nada            │
-│   [Notificações]      → onClick: () => {}        ✗ Não faz nada            │
-│   [Ajuda e Suporte]   → onClick: () => {}        ✗ Não faz nada            │
-│   [Privacidade]       → onClick: () => {}        ✗ Não faz nada            │
-│                                                                            │
-│ Ações Rápidas (Vistoriador Base):                                          │
-│   [Ver no Mapa]       → Mostra card              ✗ Não deveria aparecer    │
-└────────────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────────────┐
-│ DEPOIS (CORRIGIDO)                                                          │
-├────────────────────────────────────────────────────────────────────────────┤
-│ Menu Perfil:                                                               │
-│   [Configurações]     → /instalador/configuracoes   ✓ Nova página          │
-│   [Notificações]      → /instalador/notificacoes    ✓ Nova página          │
-│   [Ajuda e Suporte]   → /instalador/ajuda           ✓ Nova página          │
-│   [Privacidade]       → Abre política em nova aba   ✓ Funcional            │
-│                                                                            │
-│ Ações Rápidas (Vistoriador Base):                                          │
-│   [Ver no Mapa]       → Oculto                      ✓ Condicionalmente     │
-└────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────────────┐
+│ 1. Cliente      │────▶│ 2. Componente   │────▶│ 3. Edge Function        │
+│    seleciona    │     │    envia data   │     │    valida limite de     │
+│    data + período│     │    + período    │     │    vagas (máx 10)       │
+└─────────────────┘     └─────────────────┘     └─────────────────────────┘
+                                                           │
+                                                           ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 4. Salva na cotação: vistoria_periodo = 'manha' ou 'tarde'              │
+│ 5. Após pagamento: cria instalação com periodo = 'manha' ou 'tarde'     │
+│ 6. Trigger sincroniza para tabela servicos com periodo correto          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Regras de Negócio Preservadas
+
+- Atribuição automática de tarefas continua igual (por período)
+- Encaixe continua funcionando (por período, não horário)
+- Sábado só tem manhã (já definido nas regras existentes)
+- Domingo continua bloqueado
