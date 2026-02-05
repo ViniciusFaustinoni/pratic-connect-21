@@ -1,261 +1,165 @@
 
-## Gerenciamento de Manutenções de Rastreadores
 
-### Resumo
+## Obrigatoriedade de Localização na Autovistoria
 
-Implementar um fluxo completo para que o coordenador de monitoramento possa enviar rastreadores para manutenção através de um agendamento por período (Manhã/Tarde), seguindo o fluxo padrão de atribuição automática. O vistoriador executará a tarefa de forma simplificada (apenas botões de iniciar e concluir).
+### Análise do Estado Atual
 
-### Estado Atual do Sistema
+Após exploração do código, identifiquei:
 
-O sistema já possui:
-- Tipo de serviço `vistoria_manutencao` definido no enum e nos tipos
-- Tabela `servicos` unificada para todos os tipos de tarefas
-- Fluxo de atribuição automática via Edge Functions
-- Página `FilaVistorias` para gestão de vistorias pelo coordenador
-- Menu de opções (3 pontinhos) na listagem de rastreadores
+1. **Tabela `vistorias`** já possui as colunas `endereco_latitude` e `endereco_longitude` (adicionadas na migration `20260119132829`)
+2. **Componente Autovistoria** (`src/components/associado/Autovistoria.tsx`) coleta fotos, mas **NÃO coleta localização**
+3. **Página AnaliseVistoria** (`src/pages/cadastro/AnaliseVistoria.tsx`) é onde o analista de cadastro revisa as vistorias
+4. Hook `useCriarAutovistoria` cria o registro na tabela vistorias, mas não passa dados de localização
 
-### Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/monitoramento/estoque/EnviarManutencaoModal.tsx` | Modal para agendar manutenção do rastreador |
-| `src/hooks/useCriarManutencao.ts` | Hook para criar serviço de manutenção |
-| `src/pages/instalador/ExecutarManutencao.tsx` | Página simplificada para o vistoriador executar manutenção |
-
-### Arquivos a Modificar
-
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/components/monitoramento/estoque/ListaRastreadores.tsx` | Adicionar opção "Enviar para Manutenção" no menu dropdown |
-| `src/pages/monitoramento/Rastreadores.tsx` | Adicionar opção "Enviar para Manutenção" no menu dropdown |
-| `src/pages/monitoramento/FilaVistorias.tsx` | Incluir filtro para exibir vistorias de manutenção |
-| `src/hooks/useServicos.ts` | Adicionar helper `isManutencao()` |
-| `src/components/vistoriador/TarefaAtualCard.tsx` | Redirecionar para página simplificada se for manutenção |
-| `src/App.tsx` | Adicionar rota para ExecutarManutencao |
-
----
-
-### Detalhes de Implementação
-
-#### 1. Modal de Enviar para Manutenção
+### Solução Proposta
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                    Enviar para Manutenção                               │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  Rastreador: ABC-12345 (IMEI: 867530012345678)                        │
-│  Status atual: Instalado                                               │
-│  Veículo: ABC-1234 - João Silva                                       │
-│                                                                        │
-│  ─────────────────────────────────────────────────────────────────────│
-│                                                                        │
-│  📅 Data do Agendamento *                                              │
-│  [ Seg, 10/02/2025 ▼ ]                                                │
-│                                                                        │
-│  ⏰ Período *                                                          │
-│  ┌─────────────────────┐  ┌─────────────────────┐                     │
-│  │  ☀️ MANHÃ            │  │  🌅 TARDE            │                     │
-│  │  8h às 12h          │  │  14h às 18h         │                     │
-│  │  ✓ 8 vagas          │  │  ✓ 10 vagas         │                     │
-│  └─────────────────────┘  └─────────────────────┘                     │
-│                                                                        │
-│  📝 Motivo da Manutenção                                              │
-│  ┌────────────────────────────────────────────────────────────────┐   │
-│  │ Ex: Rastreador sem comunicação há 48h                          │   │
-│  └────────────────────────────────────────────────────────────────┘   │
-│                                                                        │
-│  ⚠️ Ao confirmar, o rastreador será marcado como "Em Manutenção"      │
-│     e uma tarefa será criada para o vistoriador mais próximo.         │
-│                                                                        │
-│                              [ Cancelar ]  [ Confirmar Agendamento ]  │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                   FLUXO DE AUTOVISTORIA COM LOCALIZAÇÃO                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ANTES: Autovistoria                                                    │
+│  ┌─────────────────────────────────────────────────────────────┐        │
+│  │ Foto 1 de 6: Frente          ────────────────────────────   │        │
+│  │ [Tirar Foto]   [Anterior] [Próxima]                         │        │
+│  └─────────────────────────────────────────────────────────────┘        │
+│                                                                         │
+│  DEPOIS: Autovistoria com Localização                                   │
+│  ┌─────────────────────────────────────────────────────────────┐        │
+│  │ Foto 1 de 6: Frente          ────────────────────────────   │        │
+│  │ [Tirar Foto]   [Anterior] [Próxima]                         │        │
+│  │                                                              │        │
+│  │ ⚠️ OBRIGATÓRIO: Compartilhar Localização                    │        │
+│  │ Permitir acesso ao GPS? [ Permitir ] [ Negar ]             │        │
+│  │ Localização: São Paulo, SP (lat: -23.5505, long: -46.6333) │        │
+│  │ Precisão: ≈ 15m                                             │        │
+│  └─────────────────────────────────────────────────────────────┘        │
+│                                                                         │
+│  Após conclusão → Salva em banco:                                       │
+│  vistorias.endereco_latitude = -23.5505                                │
+│  vistorias.endereco_longitude = -46.6333                               │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│          ANALISTA DE CADASTRO VÊ A LOCALIZAÇÃO NA ANÁLISE               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Análise de Vistoria                                                    │
+│  ┌─────────────────────────────────────────────────────────────┐        │
+│  │ 📍 LOCALIZAÇÃO DA VISTORIA                                  │        │
+│  │ ├─ Latitude: -23.5505                                       │        │
+│  │ ├─ Longitude: -46.6333                                      │        │
+│  │ ├─ Precisão: ~15m                                           │        │
+│  │ └─ [Ver no Mapa 🗺️]  [Copiar Coordenadas]                  │        │
+│  │                                                              │        │
+│  │ Dados do Cliente / Veículo / Fotos / Checklist...           │        │
+│  │                                                              │        │
+│  └─────────────────────────────────────────────────────────────┘        │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-Comportamento:
-- Modal abre ao clicar em "Enviar para Manutenção" no menu de 3 pontinhos
-- Exibe dados do rastreador (código, IMEI, veículo vinculado)
-- Permite selecionar data e período (Manhã/Tarde)
-- Campo opcional para descrever o motivo da manutenção
-- Ao confirmar:
-  1. Altera status do rastreador para `manutencao`
-  2. Cria registro na tabela `servicos` com `tipo = 'vistoria_manutencao'`
-  3. O CRON de atribuição automática atribui ao vistoriador disponível
+### Componentes a Criar/Modificar
 
-#### 2. Hook useCriarManutencao
+#### 1. Criar Componente `LocationCapture.tsx`
 
+Novo componente de captura de localização que:
+- Usa `navigator.geolocation` para capturar GPS (como já existe em `LocationButton.tsx`)
+- Torna obrigatório compartilhar a localização
+- Mostra erro se GPS negado
+- Exibe coordenadas capturadas
+- Retorna `{ latitude, longitude, accuracy }`
+
+#### 2. Modificar `Autovistoria.tsx`
+
+Adicionar seção após a primeira foto ou antes de finalizar:
+- Incluir componente de captura de localização
+- Estado para armazenar coordenadas: `const [coordenadas, setCoordenadas] = useState<{latitude: number; longitude: number} | null>(null);`
+- Bloquear conclusão se não houver localização capturada
+- Passar coordenadas ao hook `useCriarAutovistoria` quando iniciar a vistoria
+
+#### 3. Modificar Hook `useCriarAutovistoria`
+
+Ajustar para aceitar parâmetro de coordenadas:
 ```typescript
-interface CriarManutencaoParams {
-  rastreadorId: string;
-  dataAgendada: string;      // formato: YYYY-MM-DD
-  periodo: 'manha' | 'tarde';
-  motivo?: string;
-}
-
-// Fluxo:
-// 1. Busca dados do rastreador (veiculo_id, associado_id)
-// 2. Atualiza rastreador.status = 'manutencao'
-// 3. Insere em servicos:
-//    - tipo: 'vistoria_manutencao'
-//    - status: 'pendente'
-//    - data_agendada: dataAgendada
-//    - periodo: periodo
-//    - rastreador_id: rastreadorId
-//    - veiculo_id: rastreador.veiculo_id
-//    - associado_id: rastreador.associado_id
-//    - observacoes: motivo
-//    - local_vistoria: 'cliente' (técnico vai até o veículo)
+export function useCriarAutovistoria() {
+  return useMutation({
+    mutationFn: async ({ 
+      contratoId, 
+      veiculoId,
+      associadoId,
+      latitude,     // NOVO
+      longitude,    // NOVO
+    }: { 
+      contratoId: string; 
+      veiculoId?: string;
+      associadoId: string;
+      latitude?: number;
+      longitude?: number;
+    }) => {
+      // ... criar vistoria
+      const { data: vistoria, error } = await supabase
+        .from('vistorias')
+        .insert({
+          // ... campos existentes
+          endereco_latitude: latitude || null,
+          endereco_longitude: longitude || null,
+        })
 ```
 
-#### 3. Página ExecutarManutencao (Simplificada)
+#### 4. Modificar `AnaliseVistoria.tsx`
 
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│ ← Voltar              Manutenção de Rastreador                         │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐ │
-│  │  🔧 Rastreador: ABC-12345                                        │ │
-│  │  IMEI: 867530012345678                                           │ │
-│  │  Veículo: ABC-1234 (Fiat Uno)                                    │ │
-│  │  Cliente: João Silva                                             │ │
-│  └──────────────────────────────────────────────────────────────────┘ │
-│                                                                        │
-│  📍 Endereço                                                          │
-│  Rua das Flores, 123 - Centro                                        │
-│  São Paulo/SP                                                         │
-│                            [ Navegar 📍 ]                             │
-│                                                                        │
-│  📝 Motivo                                                            │
-│  "Rastreador sem comunicação há 48h"                                  │
-│                                                                        │
-│  ────────────────────────────────────────────────────────────────────│
-│                                                                        │
-│  Se status == 'em_rota':                                              │
-│                 [ 🚗 Cheguei no Local ]                               │
-│                                                                        │
-│  Se status == 'em_andamento':                                         │
-│                 [ ✅ Concluir Manutenção ]                            │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘
-```
+Adicionar seção para exibir localização:
+- Card chamado "Localização da Vistoria" com:
+  - Latitude e longitude exibidas
+  - Precisão (se disponível)
+  - Botão "Ver no Mapa" que abre Google Maps
+  - Botão "Copiar Coordenadas" para copiar ao clipboard
+- Posicionar no início da análise (antes das fotos)
 
-Características:
-- **SEM captura de fotos** (diferente de vistoria comum)
-- **SEM checklist** de itens
-- Apenas dois botões: "Cheguei no Local" → "Concluir Manutenção"
-- Ao concluir: status do serviço = `concluida`
-- Status do rastreador permanece `manutencao` até coordenador retornar ao estoque
+#### 5. Criar Integração com Mapa (Opcional)
 
-#### 4. Modificações na ListaRastreadores e Rastreadores.tsx
-
-Adicionar opção no DropdownMenu para rastreadores com status `instalado`:
-
-```typescript
-// No DropdownMenuContent
-{rastreador.status === 'instalado' && (
-  <DropdownMenuItem onClick={() => handleEnviarManutencao(rastreador)}>
-    <Wrench className="mr-2 h-4 w-4" />
-    Enviar para Manutenção
-  </DropdownMenuItem>
-)}
-```
-
-#### 5. Modificações na FilaVistorias
-
-Adicionar suporte para exibir vistorias de manutenção:
-- Incluir tipo `vistoria_manutencao` nos filtros
-- Exibir badge específica "Manutenção" na listagem
-- Permitir reagendar/cancelar manutenções
-
-```typescript
-// Adicionar no TIPO_CONFIG
-const TIPO_CONFIG = {
-  // ... tipos existentes
-  manutencao: { label: 'Manutenção', className: 'bg-orange-100 text-orange-800' },
-};
-```
-
-#### 6. Rota e Redirecionamento
-
-No TarefaAtualCard, ao clicar em "Executar":
-
-```typescript
-const handleExecutar = () => {
-  if (tarefa.tipo === 'vistoria_manutencao') {
-    navigate(`/instalador/manutencao/${tarefa.id}`);
-  } else if (isInstalacao(tarefa.tipo)) {
-    navigate(`/instalador/instalacao/${tarefa.id}`);
-  } else {
-    navigate(`/instalador/vistoria/${tarefa.id}`);
-  }
-};
-```
+Adicionar modal com mapa interativo usando Leaflet para visualizar a localização capturada.
 
 ### Fluxo Completo
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ FLUXO DE MANUTENÇÃO DE RASTREADOR                                            │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ FLUXO DE AUTOVISTORIA COM OBRIGAÇÃO DE LOCALIZAÇÃO                       │
+└──────────────────────────────────────────────────────────────────────────┘
 
-     COORDENADOR                         SISTEMA                      VISTORIADOR
-         │                                  │                              │
-         │ 1. Clica "Enviar para           │                              │
-         │    Manutenção" no menu           │                              │
-         │ ─────────────────────────────────>                              │
-         │                                  │                              │
-         │ 2. Seleciona data + período      │                              │
-         │    (Manhã/Tarde)                 │                              │
-         │ ─────────────────────────────────>                              │
-         │                                  │                              │
-         │                      3. Altera status do                        │
-         │                         rastreador para                         │
-         │                         'manutencao'                            │
-         │                                  │                              │
-         │                      4. Cria registro em                        │
-         │                         'servicos' com tipo                     │
-         │                         'vistoria_manutencao'                   │
-         │                                  │                              │
-         │                      5. CRON atribui ao                         │
-         │                         vistoriador mais                        │
-         │                         próximo                                 │
-         │                                  │ ─────────────────────────────>
-         │                                  │                              │
-         │                                  │   6. Recebe notificação de   │
-         │                                  │      nova tarefa             │
-         │                                  │                              │
-         │                                  │   7. Inicia rota             │
-         │                                  │   8. Chega no local          │
-         │                                  │   9. Realiza manutenção      │
-         │                                  │  10. Clica "Concluir"        │
-         │                                  │ <─────────────────────────────
-         │                                  │                              │
-         │                     11. Atualiza serviço                        │
-         │                         status = 'concluida'                    │
-         │                                  │                              │
-         │ 12. Vê tarefa concluída          │                              │
-         │     na fila de vistorias         │                              │
-         │ <─────────────────────────────────                              │
-         │                                  │                              │
-         │ 13. Retorna rastreador ao        │                              │
-         │     estoque (ação manual)        │                              │
-         │ ─────────────────────────────────>                              │
-         │                                  │                              │
-         v                                  v                              v
+1. Cliente inicia autovistoria
+   ↓
+2. Sistema pede: "Permitir acesso à localização?"
+   ├─ Cliente permite → Captura GPS
+   └─ Cliente nega → Mostrar erro, pedir novamente até permitir
+   ↓
+3. Cliente tira 6 fotos
+   ↓
+4. Sistema salva:
+   - Todas as 6 fotos em storage
+   - Localização (latitude, longitude) na tabela vistorias
+   ↓
+5. Analista de Cadastro revisa:
+   - Vê card de localização no topo
+   - Pode clicar em "Ver no Mapa" para verificar coerência
+   - Aprova/reprova com ressalvas/reprovada
+   ↓
 ```
+
+### Rubricas de Decisão
+
+1. **Implementação**: Modificar componente para capturar GPS obrigatoriamente
+2. **Armazenamento**: Passar coordenadas para o banco via hook modificado
+3. **Visualização**: Exibir localização na tela de análise do cadastro
+4. **UX**: Validação clara se GPS negado, mostrar precisão capturada
 
 ### Considerações Técnicas
 
-1. **Atribuição Automática**: O serviço de manutenção entrará no fluxo normal do CRON `cron-atribuir-tarefas`, que atribui ao vistoriador mais próximo disponível.
+- **GPS já implementado**: O `LocationButton.tsx` já existe e pode ser reutilizado
+- **Colunas já existem**: Tabela `vistorias` já tem `endereco_latitude` e `endereco_longitude`
+- **Responsividade**: O componente funciona em mobile (web e Progressive Web App)
+- **Permissões**: Navegador pede permissão automaticamente ao chamar `navigator.geolocation`
+- **Privacidade**: Coordenadas são salvas apenas após consentimento do usuário
 
-2. **Status do Rastreador**: 
-   - Ao criar manutenção: `rastreador.status = 'manutencao'`
-   - Após conclusão pelo vistoriador: permanece `manutencao`
-   - Coordenador decide manualmente se volta para `estoque` ou `instalado`
-
-3. **Sem Fotos**: A tela do vistoriador para manutenção não terá captura de fotos, apenas botões de "Cheguei no Local" e "Concluir".
-
-4. **Fila de Vistorias**: As manutenções aparecerão na Fila de Vistorias com badge laranja "Manutenção", permitindo acompanhamento pelo coordenador.
-
-5. **Reutilização**: O modal de agendamento reutiliza os mesmos conceitos de período (Manhã/Tarde) já implementados no agendamento de vistoria presencial.
