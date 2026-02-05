@@ -186,15 +186,53 @@ export function useCotacaoContratacao(token: string | undefined) {
     refetchInterval: 30000, // Revalidar a cada 30 segundos como fallback
   });
 
-  // REALTIME: Subscrição para atualizações em tempo real de documentos solicitados
+  // REALTIME: Subscrição para atualizações em tempo real
+  // Inclui: documentos_solicitados, associados, cotacoes e vistorias
   useEffect(() => {
-    if (!associadoId) return;
+    if (!token) return;
 
-    console.log('[CotacaoContratacao] Iniciando realtime para associado:', associadoId);
+    console.log('[CotacaoContratacao] Iniciando realtime para token:', token, 'associadoId:', associadoId, 'cotacaoId:', cotacao?.id);
 
-    const channel: RealtimeChannel = publicSupabase
-      .channel(`docs-pendentes-${associadoId}`)
-      .on(
+    const channelName = `cotacao-contratacao-${token}`;
+    let channel: RealtimeChannel = publicSupabase.channel(channelName);
+
+    // 1. Subscrição para cotacoes (detecta vistoria_concluida_em, status_contratacao, etc)
+    channel = channel.on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'cotacoes',
+        filter: `token_publico=eq.${token}`,
+      },
+      (payload) => {
+        console.log('[CotacaoContratacao] Realtime: cotacao atualizada:', payload);
+        refetch();
+        queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
+      }
+    );
+
+    // 2. Subscrição para vistorias (por cotacao_id, se disponível)
+    if (cotacao?.id) {
+      channel = channel.on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'vistorias',
+          filter: `cotacao_id=eq.${cotacao.id}`,
+        },
+        (payload) => {
+          console.log('[CotacaoContratacao] Realtime: vistoria atualizada:', payload);
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ['vistoria-existente', cotacao.id] });
+        }
+      );
+    }
+
+    // 3. Subscrição para documentos_solicitados (por associado_id, se disponível)
+    if (associadoId) {
+      channel = channel.on(
         'postgres_changes',
         {
           event: '*', // INSERT, UPDATE, DELETE
@@ -206,8 +244,10 @@ export function useCotacaoContratacao(token: string | undefined) {
           console.log('[CotacaoContratacao] Realtime: documentos_solicitados mudou:', payload);
           refetchDocs();
         }
-      )
-      .on(
+      );
+
+      // 4. Subscrição para associados (por id, para detectar mudança de status)
+      channel = channel.on(
         'postgres_changes',
         {
           event: 'UPDATE',
@@ -217,20 +257,21 @@ export function useCotacaoContratacao(token: string | undefined) {
         },
         (payload) => {
           console.log('[CotacaoContratacao] Realtime: associado atualizado:', payload);
-          // Invalidar AMBAS as queries para garantir atualização completa da UI
           refetch();
           queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
         }
-      )
-      .subscribe((status) => {
-        console.log('[CotacaoContratacao] Realtime status:', status);
-      });
+      );
+    }
+
+    channel.subscribe((status) => {
+      console.log('[CotacaoContratacao] Realtime status:', status);
+    });
 
     return () => {
       console.log('[CotacaoContratacao] Removendo subscription realtime');
       publicSupabase.removeChannel(channel);
     };
-  }, [associadoId, refetchDocs, refetch]);
+  }, [token, associadoId, cotacao?.id, refetchDocs, refetch, queryClient]);
 
   // Extrair planos disponíveis para escolha
   const planosDisponiveis: PlanoOpcao[] = (() => {

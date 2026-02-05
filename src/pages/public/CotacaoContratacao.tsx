@@ -468,14 +468,62 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                <EtapaVistoria
-                    cotacaoId={cotacao.id}
-                    tipoVeiculo={cotacao.categoria === 'moto' ? 'moto' : 'carro'}
-                    onComplete={() => setEtapaAtual(4)}
-                    onAgendar={() => setEtapaAtual(4)}
-                    readOnly={isEtapaConcluida(3)}
-                    tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
-                  />
+                  {/* Estado intermediário: Vistoria Concluída, Aguardando Análise */}
+                  {cotacao?.vistoria_concluida_em ? (
+                    <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
+                      <CardContent className="py-12 text-center space-y-6">
+                        <motion.div 
+                          className="w-20 h-20 mx-auto rounded-full bg-success/10 flex items-center justify-center"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                        >
+                          <CheckCircle2 className="h-10 w-10 text-success" />
+                        </motion.div>
+                        
+                        <div>
+                          <Badge className="bg-success/20 text-success border-success/30 mb-4">
+                            Vistoria Concluída
+                          </Badge>
+                          <h2 className="text-2xl font-bold mb-3 text-foreground">
+                            VISTORIA CONCLUÍDA
+                          </h2>
+                          <p className="text-muted-foreground max-w-md mx-auto">
+                            Aguardando análise cadastral. Em breve você receberá a confirmação e será redirecionado automaticamente.
+                          </p>
+                        </div>
+
+                        {/* Indicador de carregamento */}
+                        <div className="flex flex-col items-center gap-3">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                          <p className="text-sm text-muted-foreground">
+                            Processando sua solicitação...
+                          </p>
+                        </div>
+
+                        {/* Checklist visual */}
+                        <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
+                          <div className="flex items-center gap-3">
+                            <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />
+                            <span className="text-sm text-muted-foreground">Vistoria presencial realizada</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Loader2 className="h-5 w-5 animate-spin text-primary flex-shrink-0" />
+                            <span className="text-sm text-muted-foreground">Análise cadastral em andamento</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <EtapaVistoria
+                      cotacaoId={cotacao.id}
+                      tipoVeiculo={cotacao.categoria === 'moto' ? 'moto' : 'carro'}
+                      onComplete={() => setEtapaAtual(4)}
+                      onAgendar={() => setEtapaAtual(4)}
+                      readOnly={isEtapaConcluida(3)}
+                      tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
+                    />
+                  )}
                   <NavegacaoEtapas
                     etapaAtual={etapaAtual}
                     etapaMaxima={etapaDoStatus}
