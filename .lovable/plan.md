@@ -1,174 +1,114 @@
 
-# Plano: Extrair Dados Adicionais de CRLV e CNH no OCR
+## Plano: Remover Botão "Voltar" da Área Pública
 
-## Objetivo
-Adicionar extração automática de:
-- **CRLV:** Cor, Combustível e **Número do Motor** (novo campo)
-- **CNH:** Validade, Número de Registro (CNH) e RG
+### Objetivo
+Remover o botão "Voltar" do canto inferior esquerdo que aparece na jornada pública de cotações.
 
 ---
 
-## Análise do Estado Atual
+### Análise do Estado Atual
 
-### Edge Function `document-ocr/index.ts`
+O botão "Voltar" aparece em dois arquivos:
 
-**CRLV - Campos atuais (linha 67-78):**
-| Campo | Extraindo? |
-|-------|------------|
-| cor | ✅ Sim |
-| combustivel | ✅ Sim |
-| motor | ❌ **NÃO** |
+#### 1. `src/components/cotacao-publica/NavegacaoEtapas.tsx`
+- **Linhas 36-44:** Renderiza o botão "Voltar" com ícone ChevronLeft quando `podeVoltar` é verdadeiro
+- Usado em `CotacaoContratacao.tsx` (fluxo de contratação/acompanhamento)
 
-**CNH - Campos atuais (linha 16-23):**
-| Campo | Extraindo? |
-|-------|------------|
-| validade | ✅ Sim |
-| rg | ✅ Sim |
-| numero_registro / registro | ❌ **NÃO** |
-
-### Frontend `handleOcrDataExtracted`
-
-**ContratoWizard.tsx (linhas 321-341):**
-- ✅ Já processa `numero_registro` ou `registro` para campo `cnh`
-- ✅ Já processa `validade` para campo `cnh_validade`
-- ✅ Já processa `cor` do CRLV (linha 463)
-- ✅ Já processa `combustivel` do CRLV (linha 478)
-- ❌ **Não processa** campo `motor` do CRLV
-
-**EtapaDadosPessoaisDocumentos.tsx (linhas 162-220):**
-- ✅ Já processa `numero_registro`/`registro` para `cnh`
-- ✅ Já processa `validade` para `cnh_validade`
-- ✅ Já processa `cor` do CRLV
-- ✅ Já processa `combustivel` do CRLV
-- ❌ **Não processa** campo `motor` do CRLV
+#### 2. `src/pages/public/CotacaoPublicaCompleta.tsx`
+- **Linhas 760-762:** Botão "Voltar" no passo "plano"
+- **Linhas 824-826:** Botão "Voltar" no passo "proposta"
+- **Linhas 900-902:** Botão "Voltar" no passo "documentos"
+- **Linhas 973-975:** Botão "Voltar" no passo "selfie"
+- **Linhas 1150-1152:** Botão "Voltar" no passo "vistoria"
+- Cada botão está em um `<div className="flex gap-3">` ao lado do botão de continuar
 
 ---
 
-## Alterações Necessárias
+### Solução Proposta
 
-### 1. Edge Function - `supabase/functions/document-ocr/index.ts`
+#### Opção 1: Ocultar o Botão "Voltar" (Recomendado)
+Adicionar uma propriedade `mostrarVoltar` ao componente `NavegacaoEtapas` que permite controlar se o botão é exibido. Isso mantém a flexibilidade para futuro.
 
-#### 1.1 Adicionar campo `motor` no CRLV (linha 67-78)
-
-**Antes:**
-```
-### CRLV (Certificado de Registro e Licenciamento de Veículo)
-Extrair OBRIGATORIAMENTE:
-- placa (formato ABC1234 ou ABC1D23)
-- renavam (11 dígitos)
-- chassi (17 caracteres alfanuméricos)
-- marca (ex: TOYOTA, VOLKSWAGEN, HONDA)
-- modelo (ex: COROLLA XEI, GOL 1.0, CIVIC)
-- ano_fabricacao (APENAS o número do ano de fabricação, ex: 2013)
-- ano_modelo (APENAS o número do ano do modelo, ex: 2014)
-- cor (ex: PRATA, PRETO, BRANCO)
-- combustivel (ex: FLEX, GASOLINA, DIESEL)
-- nome_proprietario (nome completo do proprietário)
-```
-
-**Depois:**
-```
-### CRLV (Certificado de Registro e Licenciamento de Veículo)
-Extrair OBRIGATORIAMENTE:
-- placa (formato ABC1234 ou ABC1D23)
-- renavam (11 dígitos)
-- chassi (17 caracteres alfanuméricos)
-- marca (ex: TOYOTA, VOLKSWAGEN, HONDA)
-- modelo (ex: COROLLA XEI, GOL 1.0, CIVIC)
-- ano_fabricacao (APENAS o número do ano de fabricação, ex: 2013)
-- ano_modelo (APENAS o número do ano do modelo, ex: 2014)
-- cor (ex: PRATA, PRETO, BRANCO)
-- combustivel (ex: FLEX, GASOLINA, DIESEL)
-- motor (número do motor, ex: M155966, 1234ABC5678)
-- nome_proprietario (nome completo do proprietário)
-```
-
-#### 1.2 Adicionar campo `numero_registro` no CNH (linha 16-23)
-
-**Antes:**
-```
-### CNH (Carteira Nacional de Habilitação)
-Extrair OBRIGATORIAMENTE:
-- nome (nome completo do condutor)
-- cpf (formato 000.000.000-00) - **PRIORIDADE MÁXIMA**
-- rg (número do RG)
-- data_nascimento (formato YYYY-MM-DD)
-- validade (formato YYYY-MM-DD)
-- categoria (A, B, AB, etc.)
-```
-
-**Depois:**
-```
-### CNH (Carteira Nacional de Habilitação)
-Extrair OBRIGATORIAMENTE:
-- nome (nome completo do condutor)
-- cpf (formato 000.000.000-00) - **PRIORIDADE MÁXIMA**
-- rg (número do RG)
-- numero_registro (número de registro da CNH, campo "N° Registro" ou "Registro" - geralmente 11 dígitos)
-- data_nascimento (formato YYYY-MM-DD)
-- validade (formato YYYY-MM-DD)
-- categoria (A, B, AB, etc.)
-```
-
----
-
-### 2. Frontend - Processar campo `motor`
-
-#### 2.1 `src/components/contratos/ContratoWizard.tsx`
-
-Adicionar no bloco de processamento do CRLV (após linha 476):
+**Arquivo:** `src/components/cotacao-publica/NavegacaoEtapas.tsx`
 
 ```typescript
-// Número do motor
-const motor = dados.motor || dados.numero_motor || dados.n_motor;
-if (motor && !form.getValues('motor')) {
-  form.setValue('motor', motor);
-  setDadosExtraidos(prev => ({ ...prev, motor: { value: motor, fonte: 'CRLV' } }));
+interface NavegacaoEtapasProps {
+  etapaAtual: number;
+  etapaMaxima: number;
+  totalEtapas: number;
+  onVoltar: () => void;
+  onAvancar: () => void;
+  navegacaoManual?: boolean;
+  mostrarVoltar?: boolean; // Novo prop
+}
+
+export function NavegacaoEtapas({
+  // ...
+  mostrarVoltar = false, // Padrão: não mostrar
+}: NavegacaoEtapasProps) {
+  // ...
+  {mostrarVoltar && podeVoltar ? (
+    <Button ...>
+      <ChevronLeft className="h-4 w-4" />
+      Voltar
+    </Button>
+  ) : <div />}
 }
 ```
 
-#### 2.2 `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`
+**Arquivo:** `src/pages/public/CotacaoPublicaCompleta.tsx`
 
-Adicionar no bloco de processamento do CRLV (após linha 196):
+Remover todos os botões "Voltar" com ChevronLeft (linhas 760-762, 824-826, 900-902, 973-975, 1150-1152). As divs com `flex gap-3` ficarão apenas com o botão "Continuar", que ocupará a largura total.
 
-```typescript
-// Número do motor
-if (dados.motor) novosDados.veiculo_motor = dados.motor;
+---
+
+### Comportamento Esperado
+
+**Antes:**
+```
+┌────────────────────────────────────────┐
+│     Conteúdo da Etapa                  │
+├────────────────────────────────────────┤
+│ [ ← Voltar ]         [ Continuar → ]   │
+└────────────────────────────────────────┘
+```
+
+**Depois:**
+```
+┌────────────────────────────────────────┐
+│     Conteúdo da Etapa                  │
+├────────────────────────────────────────┤
+│                [ Continuar → ]         │
+└────────────────────────────────────────┘
 ```
 
 ---
 
-## Resumo das Alterações
+### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/document-ocr/index.ts` | Adicionar `motor` no prompt do CRLV e `numero_registro` no prompt da CNH |
-| `src/components/contratos/ContratoWizard.tsx` | Processar campo `motor` extraído do CRLV |
-| `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` | Processar campo `motor` extraído do CRLV |
+| `src/components/cotacao-publica/NavegacaoEtapas.tsx` | Adicionar prop `mostrarVoltar` (com padrão `false`) e condicionar a renderização do botão |
+| `src/pages/public/CotacaoPublicaCompleta.tsx` | Remover os 5 botões "Voltar" (ChevronLeft + "Voltar") |
 
 ---
 
-## Fluxo Completo Após Implementação
+### Impacto
 
-**CRLV:**
-1. Upload do documento
-2. OCR extrai: cor, combustível, motor, renavam, chassi, placa, etc.
-3. Frontend mapeia automaticamente para os campos do formulário
-
-**CNH:**
-1. Upload do documento  
-2. OCR extrai: validade, numero_registro (CNH), rg, cpf, nome, etc.
-3. Frontend mapeia automaticamente para os campos do formulário
+- ✅ Usuários da área pública não verão o botão "Voltar"
+- ✅ A navegação fica mais linear e direciona o fluxo para frente
+- ✅ Mantém a flexibilidade para reativar em futuras necessidades (via prop)
+- ✅ O componente `NavegacaoEtapas` continuará sendo usado normalmente em outras páginas
 
 ---
 
-## Estimativa
+### Estimativa
 
 | Tarefa | Tempo |
 |--------|-------|
-| Atualizar prompt do OCR (CRLV + CNH) | 3 min |
-| Deploy da Edge Function | 1 min |
-| Atualizar ContratoWizard.tsx | 2 min |
-| Atualizar EtapaDadosPessoaisDocumentos.tsx | 2 min |
-| Testar com documento real | 5 min |
-| **Total** | **~13 min** |
+| Atualizar `NavegacaoEtapas.tsx` | 1 min |
+| Remover botões em `CotacaoPublicaCompleta.tsx` | 2 min |
+| Ajustar layout dos botões (se necessário) | 1 min |
+| Testar fluxo público | 3 min |
+| **Total** | **~7 min** |
+
