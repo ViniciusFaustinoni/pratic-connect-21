@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import { 
   ArrowLeft, 
   User, 
@@ -27,7 +28,10 @@ import {
   Calendar,
   Loader2,
   Wifi,
-  Radio
+  Radio,
+  MapPin,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -192,6 +196,58 @@ export default function AnaliseVistoria() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Coluna Esquerda - Dados e Fotos */}
         <div className="space-y-6">
+          {/* Card Localização da Vistoria */}
+          {(vistoria as any).endereco_latitude && (vistoria as any).endereco_longitude && (
+            <Card className="border-blue-500/30 bg-blue-500/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-blue-500" />
+                  Localização da Vistoria
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Latitude</p>
+                    <p className="font-mono font-medium">{(vistoria as any).endereco_latitude?.toFixed(6)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Longitude</p>
+                    <p className="font-mono font-medium">{(vistoria as any).endereco_longitude?.toFixed(6)}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      const coords = `${(vistoria as any).endereco_latitude},${(vistoria as any).endereco_longitude}`;
+                      navigator.clipboard.writeText(coords);
+                      toast.success('Coordenadas copiadas!');
+                    }}
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copiar
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      const lat = (vistoria as any).endereco_latitude;
+                      const lng = (vistoria as any).endereco_longitude;
+                      window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+                    }}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Ver no Mapa
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Card Cliente */}
           <Card>
             <CardHeader className="pb-3">
