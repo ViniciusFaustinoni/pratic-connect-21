@@ -1,114 +1,83 @@
 
-## Plano: Remover Botão "Voltar" da Área Pública
 
-### Objetivo
-Remover o botão "Voltar" do canto inferior esquerdo que aparece na jornada pública de cotações.
+## Diagnóstico: Toast de Boas-vindas Duplicado no Login
 
----
+### Problema Identificado
 
-### Análise do Estado Atual
+A mensagem de boas-vindas "Bem-vindo, Teste!" está sendo exibida **duas vezes** ao fazer login. Analisando o código, encontrei:
 
-O botão "Voltar" aparece em dois arquivos:
+**Único local que exibe esta mensagem:**
+- `src/pages/Auth.tsx`, linha 240: `toast.success(\`Bem-vindo, ${primeiroNome}!\`);`
 
-#### 1. `src/components/cotacao-publica/NavegacaoEtapas.tsx`
-- **Linhas 36-44:** Renderiza o botão "Voltar" com ícone ChevronLeft quando `podeVoltar` é verdadeiro
-- Usado em `CotacaoContratacao.tsx` (fluxo de contratação/acompanhamento)
+### Causa Raiz Provável
 
-#### 2. `src/pages/public/CotacaoPublicaCompleta.tsx`
-- **Linhas 760-762:** Botão "Voltar" no passo "plano"
-- **Linhas 824-826:** Botão "Voltar" no passo "proposta"
-- **Linhas 900-902:** Botão "Voltar" no passo "documentos"
-- **Linhas 973-975:** Botão "Voltar" no passo "selfie"
-- **Linhas 1150-1152:** Botão "Voltar" no passo "vistoria"
-- Cada botão está em um `<div className="flex gap-3">` ao lado do botão de continuar
+Existem **duas causas possíveis**:
 
----
+#### **Causa 1: React.StrictMode Duplicando Submissões (Mais Provável)**
+- O projeto usa `React.StrictMode` em `src/main.tsx` (linha 7)
+- Em desenvolvimento, pode causar duplicação de handlers
+- O formulário tem `onSubmit={handleLogin}` que pode estar sendo acionado duas vezes
 
-### Solução Proposta
+#### **Causa 2: Chamada Duplicada a `signIn()`**
+- O `handleLogin` é chamado corretamente via `onSubmit`
+- Mas se há outro código disparando o login simultaneamente, teríamos dois toasts
 
-#### Opção 1: Ocultar o Botão "Voltar" (Recomendado)
-Adicionar uma propriedade `mostrarVoltar` ao componente `NavegacaoEtapas` que permite controlar se o botão é exibido. Isso mantém a flexibilidade para futuro.
+### Solução Recomendada
 
-**Arquivo:** `src/components/cotacao-publica/NavegacaoEtapas.tsx`
+**Adicionar um debounce/prevenção de submissão dupla no `handleLogin`:**
 
+1. Criar uma flag (`isSubmitting`) para prevenir múltiplas submissões simultâneas
+2. Validar se o formulário já está em processo de login antes de iniciar outro
+3. Desabilitar o botão e impedir re-submissão enquanto `loginLoading` está ativo
+
+**Arquivo a modificar:**
+- `src/pages/Auth.tsx` - adicionar proteção contra submissão duplicada no `handleLogin`
+
+### Implementação
+
+**Passo 1:** Adicionar flag para rastrear se uma submissão já está em progresso
 ```typescript
-interface NavegacaoEtapasProps {
-  etapaAtual: number;
-  etapaMaxima: number;
-  totalEtapas: number;
-  onVoltar: () => void;
-  onAvancar: () => void;
-  navegacaoManual?: boolean;
-  mostrarVoltar?: boolean; // Novo prop
-}
-
-export function NavegacaoEtapas({
-  // ...
-  mostrarVoltar = false, // Padrão: não mostrar
-}: NavegacaoEtapasProps) {
-  // ...
-  {mostrarVoltar && podeVoltar ? (
-    <Button ...>
-      <ChevronLeft className="h-4 w-4" />
-      Voltar
-    </Button>
-  ) : <div />}
-}
+// Após linha 49, adicionar:
+const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
 ```
 
-**Arquivo:** `src/pages/public/CotacaoPublicaCompleta.tsx`
-
-Remover todos os botões "Voltar" com ChevronLeft (linhas 760-762, 824-826, 900-902, 973-975, 1150-1152). As divs com `flex gap-3` ficarão apenas com o botão "Continuar", que ocupará a largura total.
-
----
-
-### Comportamento Esperado
-
-**Antes:**
-```
-┌────────────────────────────────────────┐
-│     Conteúdo da Etapa                  │
-├────────────────────────────────────────┤
-│ [ ← Voltar ]         [ Continuar → ]   │
-└────────────────────────────────────────┘
-```
-
-**Depois:**
-```
-┌────────────────────────────────────────┐
-│     Conteúdo da Etapa                  │
-├────────────────────────────────────────┤
-│                [ Continuar → ]         │
-└────────────────────────────────────────┘
+**Passo 2:** Modificar o início de `handleLogin` (linha 168) para verificar se já está processando
+```typescript
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  // Prevenir múltiplas submissões
+  if (isSubmittingLogin || loginLoading) {
+    return;
+  }
+  
+  setIsSubmittingLogin(true);
+  setErrors({});
+  
+  try {
+    // ... resto do código
+  } finally {
+    setLoginLoading(false);
+    setIsSubmittingLogin(false);
+  }
+};
 ```
 
----
+**Passo 3:** Atualizar a condição `disabled` do botão (linha 500)
+```typescript
+disabled={loginLoading || isSubmittingLogin || !loginEmail || !loginPassword || bloqueio?.bloqueado}
+```
 
-### Arquivos a Modificar
+### Resultado Esperado
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/cotacao-publica/NavegacaoEtapas.tsx` | Adicionar prop `mostrarVoltar` (com padrão `false`) e condicionar a renderização do botão |
-| `src/pages/public/CotacaoPublicaCompleta.tsx` | Remover os 5 botões "Voltar" (ChevronLeft + "Voltar") |
-
----
+- ✅ O toast será exibido apenas uma vez ao fazer login
+- ✅ O botão ficará visualmente indisponível durante o processamento
+- ✅ Múltiplas submissões serão prevenidas
+- ✅ Mantém compatibilidade com `loginLoading` existente
 
 ### Impacto
 
-- ✅ Usuários da área pública não verão o botão "Voltar"
-- ✅ A navegação fica mais linear e direciona o fluxo para frente
-- ✅ Mantém a flexibilidade para reativar em futuras necessidades (via prop)
-- ✅ O componente `NavegacaoEtapas` continuará sendo usado normalmente em outras páginas
-
----
-
-### Estimativa
-
-| Tarefa | Tempo |
-|--------|-------|
-| Atualizar `NavegacaoEtapas.tsx` | 1 min |
-| Remover botões em `CotacaoPublicaCompleta.tsx` | 2 min |
-| Ajustar layout dos botões (se necessário) | 1 min |
-| Testar fluxo público | 3 min |
-| **Total** | **~7 min** |
+- Arquivo modificado: `src/pages/Auth.tsx`
+- Mudança não invasiva, apenas adiciona proteção
+- Sem alterações em contextos ou componentes
 
