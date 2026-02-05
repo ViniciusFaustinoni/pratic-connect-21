@@ -173,13 +173,54 @@ serve(async (req) => {
     const cpfLimpo = cpfFinal.replace(/\D/g, '');
     const { data: associadoExistente } = await supabase
       .from('associados')
-      .select('id')
+      .select('id, email, telefone')
       .eq('cpf', cpfLimpo)
       .maybeSingle();
     
     if (associadoExistente) {
       associadoId = associadoExistente.id;
       console.log('Associado existente encontrado pelo CPF:', associadoId);
+
+      // ═══════════════════════════════════════════════════════════════
+      // SINCRONIZAÇÃO SEGURA: Atualiza email e telefone se diferentes
+      // Endereço e outros dados NÃO são sobrescritos automaticamente
+      // ═══════════════════════════════════════════════════════════════
+      const updateData: Record<string, string> = {};
+
+      // EMAIL: só atualiza se cotação tem valor novo e diferente
+      if (emailFinal && emailFinal.trim() !== '' && emailFinal !== associadoExistente.email) {
+        updateData.email = emailFinal;
+        console.log(
+          `[AUDITORIA] Email do associado ${associadoId} será atualizado: ` +
+          `"${associadoExistente.email || '(vazio)'}" → "${emailFinal}" ` +
+          `(cotação ${cotacao_id})`
+        );
+      }
+
+      // TELEFONE: só atualiza se cotação tem valor novo e diferente
+      if (telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== associadoExistente.telefone) {
+        updateData.telefone = telefoneFinal;
+        console.log(
+          `[AUDITORIA] Telefone do associado ${associadoId} será atualizado: ` +
+          `"${associadoExistente.telefone || '(vazio)'}" → "${telefoneFinal}" ` +
+          `(cotação ${cotacao_id})`
+        );
+      }
+
+      // Executar atualização se houver mudanças
+      if (Object.keys(updateData).length > 0) {
+        const { error: updateAssociadoError } = await supabase
+          .from('associados')
+          .update(updateData)
+          .eq('id', associadoId);
+
+        if (updateAssociadoError) {
+          console.error('[ERRO] Falha ao sincronizar dados do associado:', updateAssociadoError);
+          // ⚠️ Não interrompe o fluxo — apenas loga
+        } else {
+          console.log('[OK] Dados do associado sincronizados:', Object.keys(updateData).join(', '));
+        }
+      }
       
       // CORREÇÃO: Buscar ou criar veículo para associado existente
       const placaLimpa = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -232,13 +273,34 @@ serve(async (req) => {
     } else if (emailFinal) {
       const { data: byEmail } = await supabase
         .from('associados')
-        .select('id')
+        .select('id, email, telefone')
         .eq('email', emailFinal)
         .maybeSingle();
       
       if (byEmail) {
         associadoId = byEmail.id;
         console.log('Associado existente encontrado pelo email:', associadoId);
+
+        // ═══════════════════════════════════════════════════════════════
+        // SINCRONIZAÇÃO SEGURA: Atualiza telefone se diferente
+        // (Email já é igual, pois foi encontrado por email)
+        // ═══════════════════════════════════════════════════════════════
+        if (telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== byEmail.telefone) {
+          const { error: updateTelError } = await supabase
+            .from('associados')
+            .update({ telefone: telefoneFinal })
+            .eq('id', associadoId);
+
+          if (updateTelError) {
+            console.error('[ERRO] Falha ao sincronizar telefone do associado:', updateTelError);
+          } else {
+            console.log(
+              `[AUDITORIA] Telefone do associado ${associadoId} atualizado: ` +
+              `"${byEmail.telefone || '(vazio)'}" → "${telefoneFinal}" ` +
+              `(cotação ${cotacao_id})`
+            );
+          }
+        }
         
         // CORREÇÃO: Buscar ou criar veículo para associado encontrado por email
         const placaLimpa = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -254,7 +316,7 @@ serve(async (req) => {
             veiculoId = veiculoExistente.id;
             console.log('Veículo existente encontrado pela placa:', veiculoId);
           } else {
-          const { data: novoVeiculoEmail, error: veiculoEmailError } = await supabase
+            const { data: novoVeiculoEmail, error: veiculoEmailError } = await supabase
               .from('veiculos')
               .insert({
                 associado_id: associadoId,
