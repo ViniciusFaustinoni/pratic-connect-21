@@ -248,6 +248,101 @@ export default function AnaliseVistoria() {
             </Card>
           )}
 
+          {/* Card Validação do Chassi via IA */}
+          {(vistoria.chassi_validacao || vistoria.chassi_ocr) && (
+            <Card className={`border ${
+              vistoria.chassi_validacao === 'confere' 
+                ? 'border-emerald-500/30 bg-emerald-500/5' 
+                : vistoria.chassi_validacao === 'diverge'
+                ? 'border-destructive/30 bg-destructive/5'
+                : 'border-yellow-500/30 bg-yellow-500/5'
+            }`}>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  {vistoria.chassi_validacao === 'confere' ? (
+                    <CheckCircle className="w-5 h-5 text-emerald-500" />
+                  ) : vistoria.chassi_validacao === 'diverge' ? (
+                    <XCircle className="w-5 h-5 text-destructive" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                  )}
+                  Validação do Chassi (IA)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Chassi do CRLV (cadastro)</p>
+                    <p className="font-mono font-medium text-sm">
+                      {vistoria.veiculo?.chassi || 'Não informado'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Chassi da Foto (OCR)</p>
+                    <p className="font-mono font-medium text-sm">
+                      {vistoria.chassi_ocr || '—'}
+                    </p>
+                  </div>
+                  {vistoria.chassi_ocr_confianca !== null && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Confiança da leitura</p>
+                      <p className="font-medium">{vistoria.chassi_ocr_confianca}%</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Badge de resultado */}
+                <div className={`p-3 rounded-lg ${
+                  vistoria.chassi_validacao === 'confere' 
+                    ? 'bg-emerald-500/10 border border-emerald-500/30' 
+                    : vistoria.chassi_validacao === 'diverge'
+                    ? 'bg-destructive/10 border border-destructive/30'
+                    : 'bg-yellow-500/10 border border-yellow-500/30'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {vistoria.chassi_validacao === 'confere' ? (
+                      <>
+                        <CheckCircle className="w-5 h-5 text-emerald-500" />
+                        <div>
+                          <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                            CHASSI CONFERE
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Os números são idênticos
+                          </p>
+                        </div>
+                      </>
+                    ) : vistoria.chassi_validacao === 'diverge' ? (
+                      <>
+                        <XCircle className="w-5 h-5 text-destructive" />
+                        <div>
+                          <p className="font-semibold text-destructive">
+                            CHASSI DIVERGENTE
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            O número da foto não confere com o cadastro. Verifique manualmente.
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                        <div>
+                          <p className="font-semibold text-yellow-700 dark:text-yellow-400">
+                            CHASSI ILEGÍVEL
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Não foi possível ler o chassi na foto. Verifique manualmente.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Card Cliente */}
           <Card>
             <CardHeader className="pb-3">

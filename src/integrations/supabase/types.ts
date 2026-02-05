@@ -18549,6 +18549,9 @@ export type Database = {
           assinatura_status: string | null
           associado_id: string | null
           avarias: string | null
+          chassi_ocr: string | null
+          chassi_ocr_confianca: number | null
+          chassi_validacao: string | null
           concluida_em: string | null
           contrato_id: string | null
           cotacao_id: string | null
@@ -18601,6 +18604,9 @@ export type Database = {
           assinatura_status?: string | null
           associado_id?: string | null
           avarias?: string | null
+          chassi_ocr?: string | null
+          chassi_ocr_confianca?: number | null
+          chassi_validacao?: string | null
           concluida_em?: string | null
           contrato_id?: string | null
           cotacao_id?: string | null
@@ -18653,6 +18659,9 @@ export type Database = {
           assinatura_status?: string | null
           associado_id?: string | null
           avarias?: string | null
+          chassi_ocr?: string | null
+          chassi_ocr_confianca?: number | null
+          chassi_validacao?: string | null
           concluida_em?: string | null
           contrato_id?: string | null
           cotacao_id?: string | null

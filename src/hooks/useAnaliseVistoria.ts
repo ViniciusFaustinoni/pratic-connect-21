@@ -21,6 +21,11 @@ interface VistoriaCompleta {
   endereco_latitude: number | null;
   endereco_longitude: number | null;
   
+  // Campos de validação de chassi via OCR
+  chassi_ocr: string | null;
+  chassi_ocr_confianca: number | null;
+  chassi_validacao: 'confere' | 'diverge' | 'ilegivel' | null;
+  
   associado: {
     id: string;
     nome: string;
@@ -88,6 +93,9 @@ export function useAnaliseVistoria(vistoriaId: string) {
           updated_at,
           endereco_latitude,
           endereco_longitude,
+          chassi_ocr,
+          chassi_ocr_confianca,
+          chassi_validacao,
           associado:associados!vistorias_associado_id_fkey (
             id, nome, cpf, email, telefone
           ),
@@ -113,6 +121,9 @@ export function useAnaliseVistoria(vistoriaId: string) {
         ...vistoriaData,
         endereco_latitude: vistoriaData.endereco_latitude,
         endereco_longitude: vistoriaData.endereco_longitude,
+        chassi_ocr: vistoriaData.chassi_ocr,
+        chassi_ocr_confianca: vistoriaData.chassi_ocr_confianca,
+        chassi_validacao: vistoriaData.chassi_validacao as VistoriaCompleta['chassi_validacao'],
         associado: vistoriaData.associado as unknown as VistoriaCompleta['associado'],
         veiculo: vistoriaData.veiculo as unknown as VistoriaCompleta['veiculo'],
         vistoriador: vistoriaData.vistoriador as unknown as VistoriaCompleta['vistoriador'],
