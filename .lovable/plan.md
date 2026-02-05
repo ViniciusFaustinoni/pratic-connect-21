@@ -1,87 +1,68 @@
 
-Objetivo
-- Remover o “piscar” (flicker) na tela de login antes do redirecionamento, garantindo transição contínua e previsível.
+# Plano: Remover Login com Google
 
-Diagnóstico (com base no código atual)
-1) O AuthContext está alternando `loading` para `false` dentro do `signIn()` mesmo quando o login foi bem-sucedido (finally).
-   - Isso acontece ANTES do `onAuthStateChange` terminar de carregar `profile` + `perfis` via `loadUserData()`.
-   - Resultado: o Login pode renderizar novamente (formulário/estado intermediário) por um instante, e depois voltar a “carregar”/redirecionar → sensação de flicker.
+## Resumo
+Remover completamente a funcionalidade de login com Google do sistema. Isso envolve remover:
+1. O ícone SVG do Google
+2. A função `handleGoogleLogin` na página de login
+3. O botão de login com Google
+4. A importação e chamada de `signInWithGoogle` no Login.tsx
+5. A função `signInWithGoogle` no AuthContext.tsx
+6. O export de `signInWithGoogle` do contexto
 
-2) Em `src/pages/auth/Login.tsx`, o estado de “tela de loading” (showLoadingScreen) atualmente depende de:
-   - `authLoading || (user && !profile)`
-   - Porém, no intervalo logo após clicar “Entrar”, pode existir uma janela curta onde:
-     - `isSubmitting === true` (usuário já clicou)
-     - `authLoading` pode ir para `false` (por causa do signIn finally)
-     - `user` ainda pode estar `null` (onAuthStateChange não refletiu ainda)
-   - Nesse intervalo, o componente volta a renderizar o card de login (mesmo que desabilitado), e em seguida muda de novo para loading/redirect → flicker.
+## Arquivos a Modificar
 
-Estratégia de correção (mínima e robusta)
-A) Ajustar o AuthContext para não “derrubar” o `loading` no sucesso do signIn
-Arquivo: src/contexts/AuthContext.tsx
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/auth/Login.tsx` | Remover: ícone Google, handleGoogleLogin, botão Google, importação de signInWithGoogle |
+| `src/contexts/AuthContext.tsx` | Remover: função signInWithGoogle, export da função |
 
-Mudança principal no método `signIn`:
-- Manter `setLoading(true)` ao iniciar.
-- Se houver erro no `supabase.auth.signInWithPassword`, aí sim:
-  - setError(...)
-  - setLoading(false)
-  - return failure
-- Se o login for bem-sucedido:
-  - retornar success SEM executar `setLoading(false)` no finally
-  - deixar o fluxo normal do AuthContext encerrar `loading` apenas quando `loadUserData()` concluir (que é onde profile/perfis são carregados)
+## Detalhes das Mudanças
 
-Por que isso funciona
-- O “loading” do AuthContext passa a refletir o carregamento real de autenticação + dados do usuário, e não apenas o término do request de login.
-- Evita o estado intermediário “não carregando” antes do profile existir.
+### 1. `src/pages/auth/Login.tsx`
 
-Observação importante
-- Essa mudança deve ser aplicada com cuidado para não “prender” loading quando o signIn falhar. Por isso o setLoading(false) deve ocorrer explicitamente nos caminhos de erro (e não no finally).
+**A remover:**
 
-B) Ajustar a tela de Login para cobrir o gap entre “clicou entrar” e “user/profile carregados”
-Arquivo: src/pages/auth/Login.tsx
+- **Linhas 42-64:** Componente `GoogleIcon` (não é mais necessário)
+- **Linha 75:** `signInWithGoogle` da desestruturação do hook useAuth
+- **Linhas 296-314:** Função `handleGoogleLogin` inteira
+- **Linhas 527-537:** Botão de "Entrar com Google" (com Divisor acima se ficar vazio)
 
-Mudança no cálculo de loading visual:
-- Atualizar:
-  - const showLoadingScreen = authLoading || (user && !profile);
-- Para:
-  - const showLoadingScreen = authLoading || isSubmitting || (user && !profile);
+**Impacto:** 
+- A página de login terá apenas a opção de login com email/senha
+- Se houver um divisor/separador antes do botão Google, será removido também para manter a UI limpa
 
-Além disso, manter o comportamento atual:
-- Em caso de erro de login: `setIsSubmitting(false)` (já existe).
-- Em caso de sucesso: manter `isSubmitting === true` até o redirect acontecer (já existe), garantindo que não renderize novamente o formulário.
+---
 
-Por que isso funciona
-- Assim que o usuário clica “Entrar”, a UI entra em modo “carregando” imediatamente e não volta ao formulário.
-- Mesmo que o AuthContext oscile rapidamente por qualquer motivo, o isSubmitting segura a tela estável.
+### 2. `src/contexts/AuthContext.tsx`
 
-C) (Opcional, se ainda houver flicker em outras telas de login)
-Arquivos afetados potencialmente:
-- src/pages/Auth.tsx (página /auth) atualmente tem fluxo próprio que faz fetch de profile e navigate manualmente.
-- src/pages/app/AppLogin.tsx e src/pages/instalador/InstaladorLogin.tsx também dependem de `loading: authLoading`.
+**A remover:**
 
-Se após A+B o problema persistir em /auth (ou em outros logins), vamos padronizar:
-- Evitar `navigate()` manual após signIn nessas telas e passar a depender de `user + profile` via AuthContext (mesma ideia aplicada no /login).
-- Introduzir um “loading local” (isSubmitting/loginLoading) que segura a UI estável até o redirect.
+- **Linhas 307-327:** Função `signInWithGoogle` inteira
+- **Linha 583:** `signInWithGoogle` no array de retorno do provider
 
-Plano de execução (passo a passo)
-1) Editar `src/contexts/AuthContext.tsx`
-   - Ajustar `signIn()` para:
-     - Remover `setLoading(false)` do `finally` (ou condicionar para só rodar em falha).
-     - Garantir `setLoading(false)` explicitamente em caso de `signInError`.
-2) Editar `src/pages/auth/Login.tsx`
-   - Alterar `showLoadingScreen` para incluir `isSubmitting`.
-3) Verificação manual do fluxo (E2E)
-   - Acessar /login
-   - Logar com: admin@teste.com / admin@teste.com
-   - Confirmar que após clicar “Entrar” a tela não volta ao formulário antes do redirect.
-   - Confirmar que em credenciais inválidas o loading encerra e a mensagem aparece normalmente.
-4) (Se necessário) Auditoria rápida em /auth
-   - Reproduzir o mesmo cenário na rota /auth (caso ela seja usada por usuários).
-   - Se houver flicker lá, padronizar o redirect para depender de `user+profile` e “segurar” UI com loading local.
+**Impacto:** 
+- O contexto de autenticação não oferecerá mais a função de login com Google
+- Usuários que usavam OAuth do Google não terão essa opção (apenas email/senha)
 
-Riscos e cuidados
-- Se o `signIn` não “desligar loading” no sucesso, precisamos garantir que `loadUserData()` sempre finalize e faça `setLoading(false)` (hoje ele faz no finally).
-- Se houver algum cenário em que o onAuthStateChange não dispare (raro), o `getSession()` na inicialização ainda existe; mas como signIn é uma ação explícita, o onAuthStateChange normalmente dispara. A checagem E2E vai validar.
+---
 
-Critério de pronto (Definition of Done)
-- Após clicar “Entrar”, o usuário vê uma transição contínua (spinner/tela carregando) até o redirecionamento, sem reaparecer o card de login.
-- Em caso de erro (senha inválida etc.), o usuário volta ao formulário sem travar em loading.
+## Verificações Necessárias
+
+Após remover, será necessário verificar:
+1. ✅ A página de login está funcional (apenas email/senha)
+2. ✅ Nenhuma outra página/componente referencia `signInWithGoogle`
+3. ✅ O TypeScript não tem erros de imports/referências faltantes
+
+---
+
+## Estimativa
+
+| Tarefa | Tempo |
+|--------|-------|
+| Remover ícone e handleGoogleLogin | 2 min |
+| Remover botão Google | 1 min |
+| Remover signInWithGoogle do AuthContext | 2 min |
+| Testar página de login | 3 min |
+| **Total** | **~8 min** |
+
