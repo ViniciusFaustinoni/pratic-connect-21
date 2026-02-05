@@ -1,103 +1,110 @@
 
-# Plano: Ocultar Botão "Nova Proposta" para Vendedor
+## Plano: Ocultar Item "Ativações" para Vendedores no Menu Lateral
 
-## Objetivo
-O vendedor não deve visualizar o botão "Nova Proposta" na tela de Propostas (`/vendas/contratos`). A criação de propostas deve ocorrer exclusivamente a partir de cotações, permitindo ao vendedor apenas visualizar os detalhes de propostas existentes.
-
----
-
-## Análise do Código Atual
-
-**Arquivo:** `src/pages/vendas/Contratos.tsx`
-
-O botão "Nova Proposta" está localizado nas linhas 298-301:
-
-```tsx
-<Button onClick={() => setFormDialogOpen(true)}>
-  <Plus className="mr-2 h-4 w-4" />
-  Nova Proposta
-</Button>
-```
-
-O arquivo já importa `usePermissions` (linha 8), mas atualmente só utiliza para verificar permissão de exclusão:
-
-```tsx
-const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
-const canDeleteContratos = isDiretor || isDesenvolvedor || isAdminMaster;
-```
+### Objetivo
+Remover o item "Ativações" do menu lateral para usuários com o perfil "Vendedor" (`vendedor_clt` ou `vendedor_externo` exclusivamente).
 
 ---
 
-## Solução Proposta
+### Análise Atual
 
-### 1. Utilizar `isVendedorOnly` do hook `usePermissions`
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
 
-O hook já possui a flag `isVendedorOnly` que foi adicionada recentemente para ajustes no Dashboard.
+- **Linhas 140-154:** Grupo "Vendas" com todos os itens, incluindo "Ativações" (linha 150)
+- **Linhas 483-500:** Função `getVisibleGroups()` que filtra grupos e itens baseado em permissões
+- **Linhas 486-497:** Exemplo de filtro específico para `isAnalistaCadastroOnly` que restringe itens para apenas "Cadastro"
 
-### 2. Envolver o botão em condicional
-
-Mostrar o botão apenas quando o usuário **não for** um vendedor puro (vendedor sem outros perfis administrativos).
+O arquivo já importa `usePermissions()` (linha 83) e a função já detecta quando o usuário é um perfil limitado.
 
 ---
 
-## Alteração Necessária
+### Solução Proposta
 
-**Arquivo:** `src/pages/vendas/Contratos.tsx`
+Estender a função `getVisibleGroups()` para filtrar o item "Ativações" quando `permissions.isVendedorOnly` é true.
 
-| Linha | Alteração |
-|-------|-----------|
-| 65 | Adicionar `isVendedorOnly` à desestruturação do `usePermissions()` |
-| 298-301 | Envolver o botão em `{!isVendedorOnly && (...)}` |
+#### Mudança no `src/components/layout/AppSidebar.tsx`
 
-### Código Final
+**Linhas 483-500 (atualizar função `getVisibleGroups`):**
 
-**Linha 65 (atualizada):**
-```tsx
-const { isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly } = usePermissions();
-```
-
-**Linhas 298-301 (atualizadas):**
-```tsx
-{!isVendedorOnly && (
-  <Button onClick={() => setFormDialogOpen(true)}>
-    <Plus className="mr-2 h-4 w-4" />
-    Nova Proposta
-  </Button>
-)}
+```typescript
+// Se é apenas analista de cadastro, filtrar menu para mostrar apenas Cadastro
+const getVisibleGroups = () => {
+  const baseGroups = filterGroups(menuConfig.groups);
+  
+  if (permissions.isAnalistaCadastroOnly) {
+    // Mostrar apenas grupo Cadastro com itens específicos
+    return baseGroups
+      .filter(g => g.id === 'cadastro')
+      .map(group => ({
+        ...group,
+        items: group.items.filter(item => 
+          item.url === '/cadastro/propostas' ||
+          item.url === '/cadastro/associados'
+        ),
+      }));
+  }
+  
+  // Se é apenas vendedor, remover item "Ativações" do grupo Vendas
+  if (permissions.isVendedorOnly) {
+    return baseGroups.map(group => {
+      if (group.id === 'vendas') {
+        return {
+          ...group,
+          items: group.items.filter(item => item.url !== '/vendas/ativacoes'),
+        };
+      }
+      return group;
+    });
+  }
+  
+  return baseGroups;
+};
 ```
 
 ---
 
-## Comportamento Esperado
+### Comportamento Esperado
 
-| Perfil | Visualiza Botão "Nova Proposta" |
-|--------|--------------------------------|
-| Vendedor CLT (apenas) | Não |
-| Vendedor Externo (apenas) | Não |
-| Diretor | Sim |
-| Gerente Comercial | Sim |
-| Supervisor de Vendas | Sim |
-| Analista de Cadastro | Sim |
-| Desenvolvedor | Sim |
-| Admin Master | Sim |
-
----
-
-## Fluxo do Vendedor
-
-1. Vendedor acessa `/vendas/contratos` (tela de Propostas)
-2. Visualiza a lista de propostas (suas ou de todos, conforme permissão)
-3. **Não vê** o botão "Nova Proposta"
-4. Pode clicar em uma proposta para ver detalhes no drawer
-5. Para criar nova proposta, deve acessar Cotações e gerar contrato a partir de uma cotação aceita
+| Perfil | Visualiza "Ativações" |
+|--------|----------------------|
+| Vendedor CLT (apenas) | Não ❌ |
+| Vendedor Externo (apenas) | Não ❌ |
+| Diretor | Sim ✅ |
+| Gerente Comercial | Sim ✅ |
+| Supervisor de Vendas | Sim ✅ |
+| Analista de Cadastro | Sim ✅ |
+| Desenvolvedor | Sim ✅ |
+| Admin Master | Sim ✅ |
 
 ---
 
-## Estimativa
+### Fluxo do Vendedor
+
+1. Vendedor faz login
+2. Acessa o dashboard
+3. No menu lateral, grupo "Vendas" fica visível com itens:
+   - ✅ Leads
+   - ✅ Cotação
+   - ✅ Propostas
+   - ✅ Consultores
+   - ✅ Planos e Benefícios
+   - ❌ **Ativações** (OCULTO)
+
+---
+
+### Arquivo a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/layout/AppSidebar.tsx` | Estender função `getVisibleGroups()` para filtrar "Ativações" para `isVendedorOnly` |
+
+---
+
+### Estimativa
 
 | Tarefa | Tempo |
 |--------|-------|
-| Adicionar `isVendedorOnly` à desestruturação | 1 min |
-| Envolver botão em condicional | 1 min |
+| Atualizar `getVisibleGroups()` | 2 min |
 | Testar com perfil vendedor | 3 min |
 | **Total** | **~5 min** |
+
