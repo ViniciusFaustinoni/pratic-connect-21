@@ -1,177 +1,87 @@
 
-# Plano: Corrigir Atraso/Delay no Scroll Vertical
+Objetivo
+- Remover o “piscar” (flicker) na tela de login antes do redirecionamento, garantindo transição contínua e previsível.
 
-## Problema Identificado
+Diagnóstico (com base no código atual)
+1) O AuthContext está alternando `loading` para `false` dentro do `signIn()` mesmo quando o login foi bem-sucedido (finally).
+   - Isso acontece ANTES do `onAuthStateChange` terminar de carregar `profile` + `perfis` via `loadUserData()`.
+   - Resultado: o Login pode renderizar novamente (formulário/estado intermediário) por um instante, e depois voltar a “carregar”/redirecionar → sensação de flicker.
 
-O atraso no scroll ocorre devido a **múltiplos containers com `overflow-auto` aninhados**, criando conflito de scroll entre containers pai e filho. Isso causa o comportamento de "scroll chain" onde o scroll só transfere para o container interno após o scroll do container externo atingir o limite.
+2) Em `src/pages/auth/Login.tsx`, o estado de “tela de loading” (showLoadingScreen) atualmente depende de:
+   - `authLoading || (user && !profile)`
+   - Porém, no intervalo logo após clicar “Entrar”, pode existir uma janela curta onde:
+     - `isSubmitting === true` (usuário já clicou)
+     - `authLoading` pode ir para `false` (por causa do signIn finally)
+     - `user` ainda pode estar `null` (onAuthStateChange não refletiu ainda)
+   - Nesse intervalo, o componente volta a renderizar o card de login (mesmo que desabilitado), e em seguida muda de novo para loading/redirect → flicker.
 
-### Hierarquia Problemática Atual
+Estratégia de correção (mínima e robusta)
+A) Ajustar o AuthContext para não “derrubar” o `loading` no sucesso do signIn
+Arquivo: src/contexts/AuthContext.tsx
 
-```text
-SidebarProvider (min-h-svh)
-└── div (flex h-screen overflow-x-hidden)
-    └── SidebarInset (main - flex min-h-svh)
-        └── main (overflow-auto) ← SCROLL AQUI
-            └── div (padding + conteúdo)
-                └── Dashboard content
-```
+Mudança principal no método `signIn`:
+- Manter `setLoading(true)` ao iniciar.
+- Se houver erro no `supabase.auth.signInWithPassword`, aí sim:
+  - setError(...)
+  - setLoading(false)
+  - return failure
+- Se o login for bem-sucedido:
+  - retornar success SEM executar `setLoading(false)` no finally
+  - deixar o fluxo normal do AuthContext encerrar `loading` apenas quando `loadUserData()` concluir (que é onde profile/perfis são carregados)
 
-O problema específico:
-1. O `SidebarInset` usa `<main>` com `min-h-svh`
-2. Dentro dele há outro `<main>` com `overflow-auto`
-3. O scroll do navegador fica "preso" no container externo até atingir o limite
+Por que isso funciona
+- O “loading” do AuthContext passa a refletir o carregamento real de autenticação + dados do usuário, e não apenas o término do request de login.
+- Evita o estado intermediário “não carregando” antes do profile existir.
 
----
+Observação importante
+- Essa mudança deve ser aplicada com cuidado para não “prender” loading quando o signIn falhar. Por isso o setLoading(false) deve ocorrer explicitamente nos caminhos de erro (e não no finally).
 
-## Solução
+B) Ajustar a tela de Login para cobrir o gap entre “clicou entrar” e “user/profile carregados”
+Arquivo: src/pages/auth/Login.tsx
 
-### Correção 1: AppLayout.tsx - Unificar o container de scroll
+Mudança no cálculo de loading visual:
+- Atualizar:
+  - const showLoadingScreen = authLoading || (user && !profile);
+- Para:
+  - const showLoadingScreen = authLoading || isSubmitting || (user && !profile);
 
-Remover o aninhamento duplo de elementos `<main>` e garantir que apenas UM container controle o scroll.
+Além disso, manter o comportamento atual:
+- Em caso de erro de login: `setIsSubmitting(false)` (já existe).
+- Em caso de sucesso: manter `isSubmitting === true` até o redirect acontecer (já existe), garantindo que não renderize novamente o formulário.
 
-**Arquivo:** `src/components/layout/AppLayout.tsx`
+Por que isso funciona
+- Assim que o usuário clica “Entrar”, a UI entra em modo “carregando” imediatamente e não volta ao formulário.
+- Mesmo que o AuthContext oscile rapidamente por qualquer motivo, o isSubmitting segura a tela estável.
 
-**Antes:**
-```tsx
-<SidebarInset className="flex flex-1 flex-col min-w-0 min-h-0 overflow-x-hidden">
-  <AppHeader />
-  <main className="flex-1 flex flex-col min-h-0 overflow-auto overflow-x-hidden">
-    <div className="flex-1 px-3 py-4 ...">
-      <Outlet />
-    </div>
-  </main>
-</SidebarInset>
-```
+C) (Opcional, se ainda houver flicker em outras telas de login)
+Arquivos afetados potencialmente:
+- src/pages/Auth.tsx (página /auth) atualmente tem fluxo próprio que faz fetch de profile e navigate manualmente.
+- src/pages/app/AppLogin.tsx e src/pages/instalador/InstaladorLogin.tsx também dependem de `loading: authLoading`.
 
-**Depois:**
-```tsx
-<SidebarInset className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
-  <AppHeader />
-  <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
-    <div className="px-3 py-4 ...">
-      <Outlet />
-    </div>
-  </main>
-</SidebarInset>
-```
+Se após A+B o problema persistir em /auth (ou em outros logins), vamos padronizar:
+- Evitar `navigate()` manual após signIn nessas telas e passar a depender de `user + profile` via AuthContext (mesma ideia aplicada no /login).
+- Introduzir um “loading local” (isSubmitting/loginLoading) que segura a UI estável até o redirect.
 
-Alterações:
-- `overflow-hidden` no SidebarInset (não `overflow-x-hidden`)
-- `overscroll-contain` no main para isolar o scroll
-- Remover `flex flex-col flex-1` extras que não são necessários
+Plano de execução (passo a passo)
+1) Editar `src/contexts/AuthContext.tsx`
+   - Ajustar `signIn()` para:
+     - Remover `setLoading(false)` do `finally` (ou condicionar para só rodar em falha).
+     - Garantir `setLoading(false)` explicitamente em caso de `signInError`.
+2) Editar `src/pages/auth/Login.tsx`
+   - Alterar `showLoadingScreen` para incluir `isSubmitting`.
+3) Verificação manual do fluxo (E2E)
+   - Acessar /login
+   - Logar com: admin@teste.com / admin@teste.com
+   - Confirmar que após clicar “Entrar” a tela não volta ao formulário antes do redirect.
+   - Confirmar que em credenciais inválidas o loading encerra e a mensagem aparece normalmente.
+4) (Se necessário) Auditoria rápida em /auth
+   - Reproduzir o mesmo cenário na rota /auth (caso ela seja usada por usuários).
+   - Se houver flicker lá, padronizar o redirect para depender de `user+profile` e “segurar” UI com loading local.
 
----
+Riscos e cuidados
+- Se o `signIn` não “desligar loading” no sucesso, precisamos garantir que `loadUserData()` sempre finalize e faça `setLoading(false)` (hoje ele faz no finally).
+- Se houver algum cenário em que o onAuthStateChange não dispare (raro), o `getSession()` na inicialização ainda existe; mas como signIn é uma ação explícita, o onAuthStateChange normalmente dispara. A checagem E2E vai validar.
 
-### Correção 2: sidebar.tsx - SidebarContent
-
-**Arquivo:** `src/components/ui/sidebar.tsx`
-
-Adicionar `overscroll-contain` ao `SidebarContent` para evitar que o scroll da sidebar interfira:
-
-**Antes (linha 382):**
-```tsx
-"flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-visible"
-```
-
-**Depois:**
-```tsx
-"flex min-h-0 flex-1 flex-col gap-2 overflow-auto overscroll-contain group-data-[collapsible=icon]:overflow-visible"
-```
-
----
-
-### Correção 3: index.css - Adicionar classe utilitária global
-
-**Arquivo:** `src/index.css`
-
-Adicionar na seção `@layer utilities`:
-
-```css
-/* Isolamento de scroll para containers principais */
-.scroll-container {
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-```
-
----
-
-### Correção 4: ConfiguracoesLayout.tsx
-
-**Arquivo:** `src/pages/configuracoes/ConfiguracoesLayout.tsx`
-
-**Antes:**
-```tsx
-<main className="flex-1 min-w-0 h-full overflow-y-auto">
-```
-
-**Depois:**
-```tsx
-<main className="flex-1 min-w-0 h-full overflow-y-auto overscroll-contain">
-```
-
----
-
-### Correção 5: AppLayout do App (Associados)
-
-**Arquivo:** `src/components/app/AppLayout.tsx`
-
-**Antes:**
-```tsx
-<main className="flex-1 overflow-auto pb-[56px] md:pb-0">
-```
-
-**Depois:**
-```tsx
-<main className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[56px] md:pb-0">
-```
-
----
-
-### Correção 6: InstaladorLayout.tsx
-
-**Arquivo:** `src/components/instalador/InstaladorLayout.tsx`
-
-Adicionar `overscroll-contain` em todos os containers de scroll.
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/layout/AppLayout.tsx` | Simplificar aninhamento e adicionar `overscroll-contain` |
-| `src/components/ui/sidebar.tsx` | Adicionar `overscroll-contain` ao SidebarContent |
-| `src/index.css` | Adicionar classe utilitária `.scroll-container` |
-| `src/pages/configuracoes/ConfiguracoesLayout.tsx` | Adicionar `overscroll-contain` |
-| `src/components/app/AppLayout.tsx` | Adicionar `overscroll-contain` |
-| `src/components/instalador/InstaladorLayout.tsx` | Adicionar `overscroll-contain` |
-
----
-
-## Explicação Técnica
-
-### O que é `overscroll-behavior: contain`?
-
-- Impede o "scroll chaining" (propagação do scroll para containers pai)
-- Quando o scroll atinge o limite, NÃO propaga para o container pai
-- Isso elimina o atraso que você descreveu
-
-### Por que está acontecendo?
-
-O navegador, por padrão, quando você scrolla dentro de um container e atinge o limite, propaga o scroll para o container pai. Com múltiplos containers aninhados, isso cria um "atraso" visível onde o scroll parece "travar" enquanto o navegador decide qual container deve responder.
-
----
-
-## Estimativa de Tempo
-
-| Tarefa | Tempo |
-|--------|-------|
-| Corrigir AppLayout.tsx | 3 min |
-| Corrigir sidebar.tsx | 2 min |
-| Adicionar classe CSS | 1 min |
-| Corrigir outros layouts | 5 min |
-| Testar scroll em todas as páginas | 5 min |
-| **Total** | **~16 min** |
+Critério de pronto (Definition of Done)
+- Após clicar “Entrar”, o usuário vê uma transição contínua (spinner/tela carregando) até o redirecionamento, sem reaparecer o card de login.
+- Em caso de erro (senha inválida etc.), o usuário volta ao formulário sem travar em loading.
