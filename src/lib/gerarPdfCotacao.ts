@@ -849,12 +849,20 @@ const desenharPaginaCapa = (
   drawGradientRect(doc, margin, y, contentWidth, 1.5, glowBlue, brandRed, 40);
   y += 10;
 
-  // Cards resumidos dos planos - Máximo 3 por linha, centralizados
+  // Cards resumidos dos planos - Layout dinâmico e centralizado
   const numPlanos = cotacao.planosComparar.length;
-  const MAX_CARDS_POR_LINHA = 3;
-  const cardGap = 6;
-  const cardWidth = 60; // Largura aumentada para nomes maiores
-  const cardHeight = 72; // Altura reduzida
+  
+  // Determinar número de colunas baseado na quantidade de planos
+  let MAX_CARDS_POR_LINHA = 3;
+  if (numPlanos === 1) MAX_CARDS_POR_LINHA = 1;
+  if (numPlanos === 2) MAX_CARDS_POR_LINHA = 2;
+  
+  const cardGap = 8; // Espaçamento aumentado entre cards
+  
+  // Largura dinâmica baseada na quantidade de cards por linha
+  const baseCardWidth = Math.min(65, (contentWidth - (cardGap * (MAX_CARDS_POR_LINHA - 1))) / MAX_CARDS_POR_LINHA);
+  const cardWidth = baseCardWidth;
+  const cardHeight = 80; // Altura aumentada para melhor distribuição do conteúdo
   const planoRecomendadoIndex = numPlanos > 1 ? 1 : 0;
 
   cotacao.planosComparar.forEach((plano, index) => {
@@ -866,10 +874,10 @@ const desenharPaginaCapa = (
       numPlanos - (linhaAtual * MAX_CARDS_POR_LINHA)
     );
     
-    // Largura total ocupada pelos cards nesta linha
-    const larguraLinha = (cardWidth * planosNestaLinha) + (cardGap * (planosNestaLinha - 1));
+    // Largura total ocupada pelos cards + gaps nesta linha específica
+    const larguraLinha = (cardWidth * planosNestaLinha) + (cardGap * Math.max(0, planosNestaLinha - 1));
     
-    // Posição X inicial para centralizar
+    // Posição X inicial para centralizar a linha inteira
     const startX = (pageWidth - larguraLinha) / 2;
     
     // Posição X do card atual
@@ -880,7 +888,7 @@ const desenharPaginaCapa = (
 
     const isRecommended = index === planoRecomendadoIndex;
 
-    // Card
+    // Card premium com efeito
     drawPremiumCard(doc, cardX, cardY, cardWidth, cardHeight, { 
       isRecommended, 
       hasGlow: true 
@@ -889,37 +897,39 @@ const desenharPaginaCapa = (
     const centerX = cardX + cardWidth / 2;
     
     // Posições fixas para garantir alinhamento entre todos os cards
-    const nomeY = cardY + 10;        // Nome do plano
-    const valorY = cardY + 26;       // Valor mensal
-    const mensalY = cardY + 32;      // "médio mensal"
-    const fipeY = cardY + 42;        // Badge FIPE
+    const nomeY = cardY + 12;        // Nome do plano (mais espaço superior)
+    const valorY = cardY + 30;       // Valor mensal
+    const mensalY = cardY + 38;      // "médio mensal"
+    const fipeY = cardY + 52;        // Badge FIPE (mais espaço)
 
-    // Nome do plano - usando splitTextToSize para quebrar em múltiplas linhas
+    // Nome do plano - quebra inteligente em múltiplas linhas
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(6);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
-    const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), cardWidth - 8);
+    const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), cardWidth - 10);
     const linesToShow = nomeLines.slice(0, 2); // Máximo 2 linhas
     linesToShow.forEach((line: string, lineIndex: number) => {
-      doc.text(line, centerX, nomeY + (lineIndex * 5), { align: 'center' });
+      doc.text(line, centerX, nomeY + (lineIndex * 6), { align: 'center' });
     });
 
-    // Valor mensal
+    // Valor mensal em destaque
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-    doc.setFontSize(14);
+    doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text(formatCurrency(plano.valorMensal), centerX, valorY, { align: 'center' });
     
+    // Texto "médio mensal"
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(5);
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'normal');
     doc.text('médio mensal', centerX, mensalY, { align: 'center' });
 
-    // Badge FIPE - posição fixa para alinhamento horizontal entre todos os cards
+    // Badge FIPE centralizado
+    const badgeWidth = cardWidth - 14;
     doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
-    doc.roundedRect(cardX + 6, fipeY - 3, cardWidth - 12, 8, 2, 2, 'F');
+    doc.roundedRect(cardX + 7, fipeY - 4, badgeWidth, 10, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(5);
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'bold');
     doc.text(`${plano.coberturaFipe}% FIPE`, centerX, fipeY + 2, { align: 'center' });
   });
