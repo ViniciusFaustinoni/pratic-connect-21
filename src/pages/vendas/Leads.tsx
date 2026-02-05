@@ -150,10 +150,19 @@ export default function Leads() {
   }, [filters.search]);
 
   // Detectar parâmetro ?novo=true para abrir modal automaticamente
+  // e ?etapa= para filtrar por etapa vinda do funil
   useEffect(() => {
     if (searchParams.get('novo') === 'true') {
       setShowLeadForm(true);
       searchParams.delete('novo');
+      setSearchParams(searchParams, { replace: true });
+    }
+    
+    // Filtro por etapa via URL (vindo do funil de cotação)
+    const etapaParam = searchParams.get('etapa');
+    if (etapaParam && ETAPAS_TODAS.includes(etapaParam as EtapaLead)) {
+      setFilters(prev => ({ ...prev, etapa: etapaParam as EtapaLead }));
+      searchParams.delete('etapa');
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
