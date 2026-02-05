@@ -1,231 +1,261 @@
 
-## Agendamento de Vistoria Presencial por Período (Manhã/Tarde)
+## Gerenciamento de Manutenções de Rastreadores
 
-### Resumo da Mudança
+### Resumo
 
-A funcionalidade de agendamento de vistoria presencial será simplificada para apresentar apenas opções por período (Manhã e Tarde), em vez de horários específicos. O sistema limitará a 10 vistorias por período por dia.
+Implementar um fluxo completo para que o coordenador de monitoramento possa enviar rastreadores para manutenção através de um agendamento por período (Manhã/Tarde), seguindo o fluxo padrão de atribuição automática. O vistoriador executará a tarefa de forma simplificada (apenas botões de iniciar e concluir).
 
-### Estado Atual
+### Estado Atual do Sistema
 
-Atualmente o sistema:
-- Exibe horários específicos (08:00, 09:00, 10:00, etc.)
-- Não possui limite de vagas por período
-- Armazena `hora_agendada` nas tabelas `instalacoes` e `servicos`
-- A tabela `servicos` já possui coluna `periodo` (ENUM: manha, tarde, noite)
+O sistema já possui:
+- Tipo de serviço `vistoria_manutencao` definido no enum e nos tipos
+- Tabela `servicos` unificada para todos os tipos de tarefas
+- Fluxo de atribuição automática via Edge Functions
+- Página `FilaVistorias` para gestão de vistorias pelo coordenador
+- Menu de opções (3 pontinhos) na listagem de rastreadores
 
-### Solução Proposta
+### Arquivos a Criar
 
-```text
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                        ANTES                                                   │
-├───────────────────────────────────────────────────────────────────────────────┤
-│  Escolha o horário:                                                           │
-│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐    │
-│  │08:00 │ │09:00 │ │10:00 │ │11:00 │ │14:00 │ │15:00 │ │16:00 │ │17:00 │    │
-│  └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘    │
-└───────────────────────────────────────────────────────────────────────────────┘
-
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                        DEPOIS                                                  │
-├───────────────────────────────────────────────────────────────────────────────┤
-│  Escolha o período:                                                           │
-│  ┌────────────────────────────────┐  ┌────────────────────────────────┐      │
-│  │  ☀️ MANHÃ                       │  │  🌅 TARDE                        │      │
-│  │  8h às 12h                     │  │  14h às 18h                     │      │
-│  │  ✓ 8 vagas disponíveis         │  │  ✓ 10 vagas disponíveis         │      │
-│  └────────────────────────────────┘  └────────────────────────────────┘      │
-│                                                                               │
-│  ⚠️ Sábado: apenas período da manhã disponível                              │
-└───────────────────────────────────────────────────────────────────────────────┘
-```
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/monitoramento/estoque/EnviarManutencaoModal.tsx` | Modal para agendar manutenção do rastreador |
+| `src/hooks/useCriarManutencao.ts` | Hook para criar serviço de manutenção |
+| `src/pages/instalador/ExecutarManutencao.tsx` | Página simplificada para o vistoriador executar manutenção |
 
 ### Arquivos a Modificar
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/data/autovistoriaConfig.ts` | MODIFICAR | Adicionar config de períodos e função de vagas |
-| `src/components/cotacao-publica/AgendamentoVistoria.tsx` | MODIFICAR | Substituir seleção de horários por períodos |
-| `src/hooks/useCotacaoVistoria.ts` | MODIFICAR | Enviar período em vez de horário |
-| `supabase/functions/agendar-vistoria-presencial/index.ts` | MODIFICAR | Receber período e validar limite de vagas |
-| `supabase/functions/criar-instalacao-pos-pagamento/index.ts` | MODIFICAR | Usar período na criação da instalação |
-| Migração SQL | CRIAR | Adicionar coluna `vistoria_periodo` na tabela `cotacoes` |
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/components/monitoramento/estoque/ListaRastreadores.tsx` | Adicionar opção "Enviar para Manutenção" no menu dropdown |
+| `src/pages/monitoramento/Rastreadores.tsx` | Adicionar opção "Enviar para Manutenção" no menu dropdown |
+| `src/pages/monitoramento/FilaVistorias.tsx` | Incluir filtro para exibir vistorias de manutenção |
+| `src/hooks/useServicos.ts` | Adicionar helper `isManutencao()` |
+| `src/components/vistoriador/TarefaAtualCard.tsx` | Redirecionar para página simplificada se for manutenção |
+| `src/App.tsx` | Adicionar rota para ExecutarManutencao |
 
 ---
 
-### Detalhes Técnicos
+### Detalhes de Implementação
 
-#### 1. Migração SQL - Adicionar coluna de período na tabela cotacoes
+#### 1. Modal de Enviar para Manutenção
 
-```sql
-ALTER TABLE cotacoes 
-ADD COLUMN IF NOT EXISTS vistoria_periodo TEXT 
-CHECK (vistoria_periodo IN ('manha', 'tarde'));
-
-ALTER TABLE cotacoes 
-ADD COLUMN IF NOT EXISTS vistoria_completa_periodo TEXT 
-CHECK (vistoria_completa_periodo IN ('manha', 'tarde'));
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                    Enviar para Manutenção                               │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Rastreador: ABC-12345 (IMEI: 867530012345678)                        │
+│  Status atual: Instalado                                               │
+│  Veículo: ABC-1234 - João Silva                                       │
+│                                                                        │
+│  ─────────────────────────────────────────────────────────────────────│
+│                                                                        │
+│  📅 Data do Agendamento *                                              │
+│  [ Seg, 10/02/2025 ▼ ]                                                │
+│                                                                        │
+│  ⏰ Período *                                                          │
+│  ┌─────────────────────┐  ┌─────────────────────┐                     │
+│  │  ☀️ MANHÃ            │  │  🌅 TARDE            │                     │
+│  │  8h às 12h          │  │  14h às 18h         │                     │
+│  │  ✓ 8 vagas          │  │  ✓ 10 vagas         │                     │
+│  └─────────────────────┘  └─────────────────────┘                     │
+│                                                                        │
+│  📝 Motivo da Manutenção                                              │
+│  ┌────────────────────────────────────────────────────────────────┐   │
+│  │ Ex: Rastreador sem comunicação há 48h                          │   │
+│  └────────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+│  ⚠️ Ao confirmar, o rastreador será marcado como "Em Manutenção"      │
+│     e uma tarefa será criada para o vistoriador mais próximo.         │
+│                                                                        │
+│                              [ Cancelar ]  [ Confirmar Agendamento ]  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### 2. Configuração de Períodos (`src/data/autovistoriaConfig.ts`)
+Comportamento:
+- Modal abre ao clicar em "Enviar para Manutenção" no menu de 3 pontinhos
+- Exibe dados do rastreador (código, IMEI, veículo vinculado)
+- Permite selecionar data e período (Manhã/Tarde)
+- Campo opcional para descrever o motivo da manutenção
+- Ao confirmar:
+  1. Altera status do rastreador para `manutencao`
+  2. Cria registro na tabela `servicos` com `tipo = 'vistoria_manutencao'`
+  3. O CRON de atribuição automática atribui ao vistoriador disponível
 
-Adicionar constantes e tipos para os períodos:
+#### 2. Hook useCriarManutencao
 
 ```typescript
-export type Periodo = 'manha' | 'tarde';
-
-export interface PeriodoConfig {
-  id: Periodo;
-  label: string;
-  horarioInicio: string;
-  horarioFim: string;
-  icone: string;
+interface CriarManutencaoParams {
+  rastreadorId: string;
+  dataAgendada: string;      // formato: YYYY-MM-DD
+  periodo: 'manha' | 'tarde';
+  motivo?: string;
 }
 
-export const PERIODOS_DISPONIVEIS: PeriodoConfig[] = [
-  { id: 'manha', label: 'Manhã', horarioInicio: '08:00', horarioFim: '12:00', icone: '☀️' },
-  { id: 'tarde', label: 'Tarde', horarioInicio: '14:00', horarioFim: '18:00', icone: '🌅' },
-];
+// Fluxo:
+// 1. Busca dados do rastreador (veiculo_id, associado_id)
+// 2. Atualiza rastreador.status = 'manutencao'
+// 3. Insere em servicos:
+//    - tipo: 'vistoria_manutencao'
+//    - status: 'pendente'
+//    - data_agendada: dataAgendada
+//    - periodo: periodo
+//    - rastreador_id: rastreadorId
+//    - veiculo_id: rastreador.veiculo_id
+//    - associado_id: rastreador.associado_id
+//    - observacoes: motivo
+//    - local_vistoria: 'cliente' (técnico vai até o veículo)
+```
 
-export const LIMITE_VAGAS_POR_PERIODO = 10;
+#### 3. Página ExecutarManutencao (Simplificada)
 
-// Sábado: apenas manhã
-export const getPeriodosParaDia = (date: Date): PeriodoConfig[] => {
-  if (isSabado(date)) {
-    return PERIODOS_DISPONIVEIS.filter(p => p.id === 'manha');
-  }
-  return PERIODOS_DISPONIVEIS;
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ ← Voltar              Manutenção de Rastreador                         │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐ │
+│  │  🔧 Rastreador: ABC-12345                                        │ │
+│  │  IMEI: 867530012345678                                           │ │
+│  │  Veículo: ABC-1234 (Fiat Uno)                                    │ │
+│  │  Cliente: João Silva                                             │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+│                                                                        │
+│  📍 Endereço                                                          │
+│  Rua das Flores, 123 - Centro                                        │
+│  São Paulo/SP                                                         │
+│                            [ Navegar 📍 ]                             │
+│                                                                        │
+│  📝 Motivo                                                            │
+│  "Rastreador sem comunicação há 48h"                                  │
+│                                                                        │
+│  ────────────────────────────────────────────────────────────────────│
+│                                                                        │
+│  Se status == 'em_rota':                                              │
+│                 [ 🚗 Cheguei no Local ]                               │
+│                                                                        │
+│  Se status == 'em_andamento':                                         │
+│                 [ ✅ Concluir Manutenção ]                            │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+Características:
+- **SEM captura de fotos** (diferente de vistoria comum)
+- **SEM checklist** de itens
+- Apenas dois botões: "Cheguei no Local" → "Concluir Manutenção"
+- Ao concluir: status do serviço = `concluida`
+- Status do rastreador permanece `manutencao` até coordenador retornar ao estoque
+
+#### 4. Modificações na ListaRastreadores e Rastreadores.tsx
+
+Adicionar opção no DropdownMenu para rastreadores com status `instalado`:
+
+```typescript
+// No DropdownMenuContent
+{rastreador.status === 'instalado' && (
+  <DropdownMenuItem onClick={() => handleEnviarManutencao(rastreador)}>
+    <Wrench className="mr-2 h-4 w-4" />
+    Enviar para Manutenção
+  </DropdownMenuItem>
+)}
+```
+
+#### 5. Modificações na FilaVistorias
+
+Adicionar suporte para exibir vistorias de manutenção:
+- Incluir tipo `vistoria_manutencao` nos filtros
+- Exibir badge específica "Manutenção" na listagem
+- Permitir reagendar/cancelar manutenções
+
+```typescript
+// Adicionar no TIPO_CONFIG
+const TIPO_CONFIG = {
+  // ... tipos existentes
+  manutencao: { label: 'Manutenção', className: 'bg-orange-100 text-orange-800' },
 };
 ```
 
-#### 3. Hook para Verificar Vagas Disponíveis
+#### 6. Rota e Redirecionamento
 
-Criar novo hook ou função para consultar vagas:
-
-```typescript
-export function useVagasDisponiveis(data: string) {
-  return useQuery({
-    queryKey: ['vagas-periodo', data],
-    queryFn: async () => {
-      const { data: servicos, error } = await supabase
-        .from('servicos')
-        .select('periodo')
-        .eq('data_agendada', data)
-        .eq('local_vistoria', 'cliente')
-        .not('status', 'in', '("cancelada","recusada")');
-      
-      if (error) throw error;
-      
-      const contagem = { manha: 0, tarde: 0 };
-      servicos?.forEach(s => {
-        if (s.periodo === 'manha') contagem.manha++;
-        else if (s.periodo === 'tarde') contagem.tarde++;
-      });
-      
-      return {
-        manha: LIMITE_VAGAS_POR_PERIODO - contagem.manha,
-        tarde: LIMITE_VAGAS_POR_PERIODO - contagem.tarde,
-      };
-    },
-    enabled: !!data,
-  });
-}
-```
-
-#### 4. Componente AgendamentoVistoria - Mudança de UI
-
-Substituir a grid de horários por cards de período:
-
-```tsx
-// Estado
-const [periodoSelecionado, setPeriodoSelecionado] = useState<Periodo | null>(null);
-
-// UI
-<div className="grid grid-cols-2 gap-4">
-  {periodosDisponiveis.map((periodo) => {
-    const vagasRestantes = vagasData?.[periodo.id] ?? LIMITE_VAGAS_POR_PERIODO;
-    const esgotado = vagasRestantes <= 0;
-    
-    return (
-      <Card
-        key={periodo.id}
-        className={cn(
-          "p-4 cursor-pointer transition-all",
-          periodoSelecionado === periodo.id && "ring-2 ring-primary",
-          esgotado && "opacity-50 cursor-not-allowed"
-        )}
-        onClick={() => !esgotado && setPeriodoSelecionado(periodo.id)}
-      >
-        <div className="text-2xl mb-2">{periodo.icone}</div>
-        <h3 className="font-bold text-lg">{periodo.label}</h3>
-        <p className="text-sm text-muted-foreground">
-          {periodo.horarioInicio} às {periodo.horarioFim}
-        </p>
-        <p className="text-sm mt-2">
-          {esgotado 
-            ? <span className="text-destructive">Esgotado</span>
-            : <span className="text-success">{vagasRestantes} vagas</span>
-          }
-        </p>
-      </Card>
-    );
-  })}
-</div>
-```
-
-#### 5. Edge Function - Validação de Vagas
-
-Na função `agendar-vistoria-presencial`, adicionar validação:
+No TarefaAtualCard, ao clicar em "Executar":
 
 ```typescript
-// Verificar vagas disponíveis
-const { data: servicosExistentes } = await supabase
-  .from('servicos')
-  .select('id')
-  .eq('data_agendada', dataAgendada)
-  .eq('periodo', periodoAgendado)
-  .eq('local_vistoria', 'cliente')
-  .not('status', 'in', '("cancelada","recusada")');
-
-if ((servicosExistentes?.length || 0) >= 10) {
-  return new Response(JSON.stringify({
-    success: false,
-    error: 'Período esgotado para esta data'
-  }), { status: 400, headers: corsHeaders });
-}
-```
-
-#### 6. Criação da Instalação - Usar Período
-
-No `criar-instalacao-pos-pagamento`, ler o período da cotação:
-
-```typescript
-const instalacaoData = {
-  // ... outros campos
-  hora_agendada: null, // Não usa mais horário específico
-  periodo: cotacao.vistoria_periodo, // Usa o período
+const handleExecutar = () => {
+  if (tarefa.tipo === 'vistoria_manutencao') {
+    navigate(`/instalador/manutencao/${tarefa.id}`);
+  } else if (isInstalacao(tarefa.tipo)) {
+    navigate(`/instalador/instalacao/${tarefa.id}`);
+  } else {
+    navigate(`/instalador/vistoria/${tarefa.id}`);
+  }
 };
 ```
 
 ### Fluxo Completo
 
 ```text
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────────────┐
-│ 1. Cliente      │────▶│ 2. Componente   │────▶│ 3. Edge Function        │
-│    seleciona    │     │    envia data   │     │    valida limite de     │
-│    data + período│     │    + período    │     │    vagas (máx 10)       │
-└─────────────────┘     └─────────────────┘     └─────────────────────────┘
-                                                           │
-                                                           ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│ 4. Salva na cotação: vistoria_periodo = 'manha' ou 'tarde'              │
-│ 5. Após pagamento: cria instalação com periodo = 'manha' ou 'tarde'     │
-│ 6. Trigger sincroniza para tabela servicos com periodo correto          │
-└─────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ FLUXO DE MANUTENÇÃO DE RASTREADOR                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+     COORDENADOR                         SISTEMA                      VISTORIADOR
+         │                                  │                              │
+         │ 1. Clica "Enviar para           │                              │
+         │    Manutenção" no menu           │                              │
+         │ ─────────────────────────────────>                              │
+         │                                  │                              │
+         │ 2. Seleciona data + período      │                              │
+         │    (Manhã/Tarde)                 │                              │
+         │ ─────────────────────────────────>                              │
+         │                                  │                              │
+         │                      3. Altera status do                        │
+         │                         rastreador para                         │
+         │                         'manutencao'                            │
+         │                                  │                              │
+         │                      4. Cria registro em                        │
+         │                         'servicos' com tipo                     │
+         │                         'vistoria_manutencao'                   │
+         │                                  │                              │
+         │                      5. CRON atribui ao                         │
+         │                         vistoriador mais                        │
+         │                         próximo                                 │
+         │                                  │ ─────────────────────────────>
+         │                                  │                              │
+         │                                  │   6. Recebe notificação de   │
+         │                                  │      nova tarefa             │
+         │                                  │                              │
+         │                                  │   7. Inicia rota             │
+         │                                  │   8. Chega no local          │
+         │                                  │   9. Realiza manutenção      │
+         │                                  │  10. Clica "Concluir"        │
+         │                                  │ <─────────────────────────────
+         │                                  │                              │
+         │                     11. Atualiza serviço                        │
+         │                         status = 'concluida'                    │
+         │                                  │                              │
+         │ 12. Vê tarefa concluída          │                              │
+         │     na fila de vistorias         │                              │
+         │ <─────────────────────────────────                              │
+         │                                  │                              │
+         │ 13. Retorna rastreador ao        │                              │
+         │     estoque (ação manual)        │                              │
+         │ ─────────────────────────────────>                              │
+         │                                  │                              │
+         v                                  v                              v
 ```
 
-### Regras de Negócio Preservadas
+### Considerações Técnicas
 
-- Atribuição automática de tarefas continua igual (por período)
-- Encaixe continua funcionando (por período, não horário)
-- Sábado só tem manhã (já definido nas regras existentes)
-- Domingo continua bloqueado
+1. **Atribuição Automática**: O serviço de manutenção entrará no fluxo normal do CRON `cron-atribuir-tarefas`, que atribui ao vistoriador mais próximo disponível.
+
+2. **Status do Rastreador**: 
+   - Ao criar manutenção: `rastreador.status = 'manutencao'`
+   - Após conclusão pelo vistoriador: permanece `manutencao`
+   - Coordenador decide manualmente se volta para `estoque` ou `instalado`
+
+3. **Sem Fotos**: A tela do vistoriador para manutenção não terá captura de fotos, apenas botões de "Cheguei no Local" e "Concluir".
+
+4. **Fila de Vistorias**: As manutenções aparecerão na Fila de Vistorias com badge laranja "Manutenção", permitindo acompanhamento pelo coordenador.
+
+5. **Reutilização**: O modal de agendamento reutiliza os mesmos conceitos de período (Manhã/Tarde) já implementados no agendamento de vistoria presencial.
