@@ -361,14 +361,47 @@ export function ListaRastreadores() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {item.portador ? (
-                          <span className="flex items-center gap-1.5 text-sm">
-                            <User className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="truncate max-w-[120px]">{item.portador.nome}</span>
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {item.portador ? (
+                            <>
+                              <User className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="truncate max-w-[100px] text-sm">{item.portador.nome}</span>
+                              {item.status === 'estoque' && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => setDialogAtribuirPortador({
+                                    id: item.id,
+                                    codigo: item.codigo,
+                                    portador_id: item.portador_id,
+                                    portador_nome: item.portador?.nome || null,
+                                  })}
+                                  title="Alterar portador"
+                                >
+                                  <UserPlus className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                </Button>
+                              )}
+                            </>
+                          ) : item.status === 'estoque' ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-xs border-primary/50 text-primary hover:bg-primary/10"
+                              onClick={() => setDialogAtribuirPortador({
+                                id: item.id,
+                                codigo: item.codigo,
+                                portador_id: null,
+                                portador_nome: null,
+                              })}
+                            >
+                              <UserPlus className="h-3 w-3 mr-1" />
+                              Atribuir
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {item.veiculos ? (

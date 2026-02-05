@@ -417,22 +417,22 @@ function RastreadoresContent({
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-6 w-6"
+                                  className="h-7 w-7"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleOpenPortadorDialog(rastreador);
                                   }}
                                   title="Alterar portador"
                                 >
-                                  <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <UserPlus className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                                 </Button>
                               )}
                             </>
                           ) : rastreador.status === 'estoque' ? (
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              className="h-7 text-xs text-muted-foreground hover:text-foreground -ml-2"
+                              className="h-7 text-xs border-primary/50 text-primary hover:bg-primary/10"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenPortadorDialog(rastreador);
