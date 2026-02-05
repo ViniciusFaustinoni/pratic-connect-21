@@ -17,12 +17,15 @@ import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOv
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 
 export default function InstaladorHome() {
-  const { profile } = useAuth();
+  const { profile, hasRole } = useAuth();
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
   const { emServico } = useIniciarServico();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // Verificar se é vistoriador base (sem acesso a mapa)
+  const isVistoriadorBase = hasRole('vistoriador_base') && !hasRole('instalador_vistoriador');
 
   // Monitorar status online/offline
   useEffect(() => {
@@ -136,17 +139,19 @@ export default function InstaladorHome() {
               </CardContent>
             </Card>
             
-            <Card 
-              className="border-slate-700 bg-slate-800 hover:bg-slate-750 cursor-pointer transition-colors"
-              onClick={() => navigate('/instalador/mapa')}
-            >
-              <CardContent className="flex flex-col items-center justify-center p-4 gap-2">
-                <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center">
-                  <Map className="h-5 w-5 text-purple-400" />
-                </div>
-                <span className="text-sm text-slate-300">Ver no Mapa</span>
-              </CardContent>
-            </Card>
+            {!isVistoriadorBase && (
+              <Card 
+                className="border-slate-700 bg-slate-800 hover:bg-slate-750 cursor-pointer transition-colors"
+                onClick={() => navigate('/instalador/mapa')}
+              >
+                <CardContent className="flex flex-col items-center justify-center p-4 gap-2">
+                  <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center">
+                    <Map className="h-5 w-5 text-purple-400" />
+                  </div>
+                  <span className="text-sm text-slate-300">Ver no Mapa</span>
+                </CardContent>
+              </Card>
+            )}
             
             <Card 
               className="border-slate-700 bg-slate-800 hover:bg-slate-750 cursor-pointer transition-colors"
