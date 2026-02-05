@@ -273,7 +273,7 @@ import InstaladorAjuda from "./pages/instalador/InstaladorAjuda";
 
 // Vistoria Completa (unified in instalador)
 import ExecutarVistoriaCompleta from "./pages/instalador/ExecutarVistoriaCompleta";
-
+import ExecutarManutencao from "./pages/instalador/ExecutarManutencao";
 // Public Pages
 import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
 import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
@@ -611,6 +611,7 @@ const App = () => (
               <Route path="/instalador/tarefas" element={<InstaladorTarefas />} />
               <Route path="/instalador/instalacao/:id" element={<InstaladorChecklist />} />
               <Route path="/instalador/vistoria/:id" element={<ExecutarVistoriaCompleta />} />
+              <Route path="/instalador/manutencao/:id" element={<ExecutarManutencao />} />
               <Route path="/instalador/mapa" element={<InstaladorMapa />} />
               <Route path="/instalador/perfil" element={<InstaladorPerfil />} />
               <Route path="/instalador/configuracoes" element={<InstaladorConfiguracoes />} />
