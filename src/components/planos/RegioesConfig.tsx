@@ -11,8 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, MapPin, Loader2, X, Search, Building2 } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, Loader2, X, Search, Building2, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
 
 export function RegioesConfig() {
   const { isDiretor, isDesenvolvedor } = usePermissions();
@@ -39,6 +40,7 @@ export function RegioesConfig() {
     multiplicador_preco: 1.00,
     ativa: true,
     ordem: 0,
+    exigir_titularidade_comprovante: false,
   });
   const [novaCidade, setNovaCidade] = useState('');
 
@@ -51,6 +53,7 @@ export function RegioesConfig() {
       multiplicador_preco: 1.00,
       ativa: true,
       ordem: 0,
+      exigir_titularidade_comprovante: false,
     });
     setNovaCidade('');
     setEditingRegiao(null);
@@ -71,6 +74,7 @@ export function RegioesConfig() {
       multiplicador_preco: regiao.multiplicador_preco,
       ativa: regiao.ativa,
       ordem: regiao.ordem,
+      exigir_titularidade_comprovante: regiao.exigir_titularidade_comprovante ?? false,
     });
     setIsDialogOpen(true);
   };
@@ -396,6 +400,34 @@ export function RegioesConfig() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <Separator className="my-2" />
+
+            {/* Verificação de Titularidade */}
+            <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="exigir_titularidade" className="text-base font-medium cursor-pointer">
+                      Verificação de Titularidade do Comprovante
+                    </Label>
+                    <Switch
+                      id="exigir_titularidade"
+                      checked={formData.exigir_titularidade_comprovante}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, exigir_titularidade_comprovante: checked }))}
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {formData.exigir_titularidade_comprovante
+                      ? 'O nome no comprovante de residência deve corresponder ao nome na CNH do cliente.'
+                      : 'O comprovante de residência pode estar em nome de terceiros (cônjuge, familiares, etc).'}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <DialogFooter>

@@ -15314,6 +15314,7 @@ export type Database = {
           codigo: string
           created_at: string | null
           descricao: string | null
+          exigir_titularidade_comprovante: boolean
           id: string
           multiplicador_preco: number | null
           nome: string
@@ -15326,6 +15327,7 @@ export type Database = {
           codigo: string
           created_at?: string | null
           descricao?: string | null
+          exigir_titularidade_comprovante?: boolean
           id?: string
           multiplicador_preco?: number | null
           nome: string
@@ -15338,6 +15340,7 @@ export type Database = {
           codigo?: string
           created_at?: string | null
           descricao?: string | null
+          exigir_titularidade_comprovante?: boolean
           id?: string
           multiplicador_preco?: number | null
           nome?: string
