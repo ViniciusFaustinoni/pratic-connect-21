@@ -1,60 +1,87 @@
 
 
-## Análise: Remover FIPE do Link Público da Proposta
+## Problema Identificado: Área do Cliente Não Atualiza ao Solicitar Documentos
 
-### Descoberta Importante
+### Diagnóstico
 
-Após análise detalhada do código fonte, **o FIPE já foi removido** da barra do veículo na página pública de cotação (`CotacaoContratacao.tsx`).
+O código já implementa **Supabase Realtime** no hook `useCotacaoContratacao.ts` (linhas 189-232), escutando mudanças na tabela `documentos_solicitados`. Porém, a atualização automática não funciona porque:
 
-### Código Atual (linhas 340-352)
+| Componente | Status |
+|------------|--------|
+| Código de subscription Realtime | ✅ Implementado |
+| Query de fallback com refetchInterval | ✅ 30 segundos |
+| Tabela publicada no Realtime | ❌ **Não configurado** |
 
-A barra de informações do veículo atualmente mostra apenas:
-- Marca e modelo do veículo
-- Ano (em badge)
+A consulta ao banco confirmou que `documentos_solicitados` **não está na publicação** `supabase_realtime`, então os eventos nunca chegam ao cliente.
+
+### Solução
+
+Adicionar a tabela `documentos_solicitados` à publicação Realtime do Supabase.
+
+### Implementação
+
+**SQL a executar (uma única query):**
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.documentos_solicitados;
+```
+
+### Resultado Esperado
+
+Após a alteração:
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│ 🚗 Toyota corolla Xei Flex  │ 2013 │                          │
-└────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│ ANALISTA                          │  CLIENTE                         │
+├───────────────────────────────────┼──────────────────────────────────┤
+│ Clica em "Solicitar Documentos"   │                                  │
+│ ↓                                 │                                  │
+│ INSERT em documentos_solicitados  │ → Realtime dispara callback      │
+│                                   │ → refetchDocs() é chamado        │
+│                                   │ → UI atualiza instantaneamente   │
+└───────────────────────────────────┴──────────────────────────────────┘
 ```
 
-O FIPE **não está sendo exibido** no código fonte atual.
+### Fluxo Técnico
 
-### Por Que Você Ainda Está Vendo o FIPE?
-
-A imagem que você compartilhou mostra "FIPE: R$ 70.008,00", mas essa é uma versão anterior. Possíveis causas:
-
-| Causa | Solução |
-|-------|---------|
-| **Cache do navegador** | Limpar cache ou usar aba anônima (Ctrl+Shift+N) |
-| **Deploy pendente** | Aguardar alguns minutos para o deploy atualizar |
-| **Preview desatualizado** | Forçar atualização (Ctrl+F5) |
-
-### Verificação Realizada
-
-- ✅ Arquivo `src/pages/public/CotacaoContratacao.tsx` - **Não mostra FIPE**
-- ✅ Componentes em `/src/components/cotacao-publica/` - **Nenhuma referência ao FIPE**
-- ✅ Memória do sistema confirma alteração anterior para ocultar FIPE
-
-### Próximo Passo Recomendado
-
-1. **Limpe o cache do navegador** e acesse a página novamente
-2. Ou abra a página em uma **aba anônima**
-3. Se ainda estiver visível, me avise que investigarei mais a fundo
-
-### Código Atual (Confirmação)
-
-```tsx
-{/* Vehicle Info Bar - SEM FIPE */}
-<div className="flex items-center gap-3 text-sm flex-wrap">
-  <div className="flex items-center gap-2">
-    <Car className="h-4 w-4" />
-    <span>{cotacao.veiculo_marca} {cotacao.veiculo_modelo}</span>
-  </div>
-  {cotacao.veiculo_ano && (
-    <Badge>{cotacao.veiculo_ano}</Badge>
-  )}
-  {/* ⛔ Nenhuma linha com valor_fipe ou FIPE aqui */}
-</div>
 ```
+Analista solicita docs
+        │
+        ▼
+┌────────────────────────┐
+│ INSERT na tabela       │
+│ documentos_solicitados │
+└────────────────────────┘
+        │
+        ▼ (após ADD TABLE)
+┌────────────────────────┐
+│ Supabase Realtime      │
+│ emite evento postgres_ │
+│ changes                │
+└────────────────────────┘
+        │
+        ▼
+┌────────────────────────┐
+│ Cliente recebe evento  │
+│ useCotacaoContratacao  │
+│ linha 197-208          │
+└────────────────────────┘
+        │
+        ▼
+┌────────────────────────┐
+│ refetchDocs()          │
+│ UI mostra docs         │
+│ pendentes              │
+└────────────────────────┘
+```
+
+### Impacto
+
+- **Atualização instantânea**: A área do cliente exibirá os documentos solicitados em tempo real
+- **Sem refresh manual**: O cliente não precisa recarregar a página
+- **Experiência fluida**: Consistente com outras partes do sistema que já usam Realtime (associados, instalacoes)
+
+### Observação Adicional
+
+O código de fallback com `refetchInterval: 30000` (30 segundos) continuará funcionando como backup caso haja algum problema com a conexão WebSocket.
 
