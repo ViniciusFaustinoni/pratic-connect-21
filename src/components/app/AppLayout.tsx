@@ -37,7 +37,7 @@ export function AppLayout() {
         <div className="flex min-h-screen flex-col bg-muted/30">
           <TestModeBanner />
           <AppHeader />
-          <main className="flex-1 overflow-auto pb-[56px] md:pb-0">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[56px] md:pb-0">
             <div className="mx-auto max-w-lg px-4">
               <Outlet />
             </div>

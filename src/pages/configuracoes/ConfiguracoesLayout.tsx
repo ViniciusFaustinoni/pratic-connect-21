@@ -22,7 +22,7 @@ export function ConfiguracoesLayout() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 h-full overflow-y-auto">
+        <main className="flex-1 min-w-0 h-full overflow-y-auto overscroll-contain">
           {/* Mobile Navigation */}
           <ConfiguracoesMobileNav />
           

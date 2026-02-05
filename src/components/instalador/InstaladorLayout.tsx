@@ -201,7 +201,7 @@ export function InstaladorLayout() {
                 <Outlet />
               </div>
             ) : (
-              <div className="h-full overflow-y-auto">
+              <div className="h-full overflow-y-auto overscroll-contain">
                 {/* Banner de Push Notifications - apenas na home */}
                 {location.pathname === '/instalador' && (
                   <div className="pt-4">
