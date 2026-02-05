@@ -18,6 +18,8 @@ interface VistoriaCompleta {
   observacoes: string | null;
   created_at: string;
   updated_at: string;
+  endereco_latitude: number | null;
+  endereco_longitude: number | null;
   
   associado: {
     id: string;
@@ -84,6 +86,8 @@ export function useAnaliseVistoria(vistoriaId: string) {
           observacoes,
           created_at,
           updated_at,
+          endereco_latitude,
+          endereco_longitude,
           associado:associados!vistorias_associado_id_fkey (
             id, nome, cpf, email, telefone
           ),
@@ -107,6 +111,8 @@ export function useAnaliseVistoria(vistoriaId: string) {
 
       return {
         ...vistoriaData,
+        endereco_latitude: vistoriaData.endereco_latitude,
+        endereco_longitude: vistoriaData.endereco_longitude,
         associado: vistoriaData.associado as unknown as VistoriaCompleta['associado'],
         veiculo: vistoriaData.veiculo as unknown as VistoriaCompleta['veiculo'],
         vistoriador: vistoriaData.vistoriador as unknown as VistoriaCompleta['vistoriador'],

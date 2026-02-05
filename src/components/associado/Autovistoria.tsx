@@ -11,6 +11,7 @@ import { getFotosAutovistoria, TipoVeiculo } from '@/data/autovistoriaConfig';
 import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExistente, useFinalizarAutovistoria } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
+import { LocationCapture, Coordenadas } from './LocationCapture';
 
 interface AutovistoriaProps {
   contratoId: string;
@@ -32,6 +33,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [previewsLocais, setPreviewsLocais] = useState<Record<string, string>>({});
   const [hidratado, setHidratado] = useState(false);
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
+  const [coordenadas, setCoordenadas] = useState<Coordenadas | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Buscar autovistoria existente para reidratar fotos após refresh
@@ -97,13 +99,21 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   };
 
   const handleTirarFoto = async () => {
+    // Verificar se localização foi capturada (obrigatório)
+    if (!coordenadas) {
+      toast.error('Por favor, permita o acesso à sua localização antes de tirar as fotos.');
+      return;
+    }
+    
     // Criar vistoria se ainda não existir
     if (!vistoriaId) {
       try {
         const result = await criarAutovistoria.mutateAsync({ 
           contratoId, 
           associadoId, 
-          veiculoId 
+          veiculoId,
+          latitude: coordenadas.latitude,
+          longitude: coordenadas.longitude,
         });
         setVistoriaId(result.id);
       } catch (error) {
@@ -301,6 +311,13 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {/* Captura de Localização - OBRIGATÓRIO */}
+        <LocationCapture 
+          onLocationCapture={setCoordenadas}
+          coordenadas={coordenadas}
+          disabled={readOnly}
+        />
+        
         {/* Ícone ilustrativo */}
         <div className="bg-muted rounded-xl p-8 flex flex-col items-center justify-center min-h-[200px]">
           {(fotoAtualEnviada || previewsLocais[fotoAtual.id]) && !imagensComErro[fotoAtual.id] ? (

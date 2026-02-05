@@ -302,10 +302,14 @@ export function useCriarAutovistoria() {
       contratoId, 
       veiculoId,
       associadoId,
+      latitude,
+      longitude,
     }: { 
       contratoId: string; 
       veiculoId?: string;
       associadoId: string;
+      latitude?: number;
+      longitude?: number;
     }) => {
       if (!associadoId) {
         throw new Error('Associado não vinculado ao contrato. Entre em contato com a associação.');
@@ -322,13 +326,25 @@ export function useCriarAutovistoria() {
         .limit(1)
         .single();
       
-      // Se já existe, reutilizar
+      // Se já existe, atualizar coordenadas se fornecidas e retornar
       if (existingVistoria) {
         console.log('[useCriarAutovistoria] Reutilizando vistoria existente:', existingVistoria.id);
+        
+        // Atualizar coordenadas se fornecidas e ainda não existem
+        if (latitude && longitude && !existingVistoria.endereco_latitude) {
+          await supabase
+            .from('vistorias')
+            .update({
+              endereco_latitude: latitude,
+              endereco_longitude: longitude,
+            })
+            .eq('id', existingVistoria.id);
+        }
+        
         return existingVistoria;
       }
       
-      // Criar nova vistoria
+      // Criar nova vistoria com coordenadas
       const { data: vistoria, error: vistoriaError } = await supabase
         .from('vistorias')
         .insert({
@@ -338,6 +354,8 @@ export function useCriarAutovistoria() {
           modalidade: 'autovistoria',
           status: 'pendente',
           tipo: 'instalacao' as any, // Instalação (anteriormente "entrada")
+          endereco_latitude: latitude || null,
+          endereco_longitude: longitude || null,
         })
         .select()
         .single();
@@ -349,7 +367,10 @@ export function useCriarAutovistoria() {
         contrato_id: contratoId,
         evento: 'autovistoria_iniciada',
         descricao: 'Autovistoria iniciada pelo associado',
-        dados: { vistoria_id: vistoria.id },
+        dados: { 
+          vistoria_id: vistoria.id,
+          coordenadas: latitude && longitude ? { latitude, longitude } : null,
+        },
       });
       
       return vistoria;
