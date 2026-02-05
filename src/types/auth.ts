@@ -661,12 +661,6 @@ export interface AuthMethods {
    */
   signInWithCPF: (credentials: CPFCredentials) => Promise<AuthResult>;
   
-  /**
-   * Login com Google OAuth
-   * @description Redireciona para OAuth do Google
-   * @returns Resultado (redirect acontece automaticamente)
-   */
-  signInWithGoogle: () => Promise<AuthResult>;
   
   /**
    * Login sem senha via magic link

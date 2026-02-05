@@ -304,27 +304,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
-  const signInWithGoogle = useCallback(async (): Promise<AuthResult> => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (oauthError) {
-        return { success: false, error: translateAuthError(oauthError) };
-      }
-
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: 'Erro ao fazer login com Google' };
-    }
-  }, []);
 
   const signInWithMagicLink = useCallback(async (credentials: MagicLinkCredentials): Promise<AuthResult> => {
     try {
@@ -580,7 +559,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Métodos de autenticação
     signIn,
     signInWithCPF,
-    signInWithGoogle,
     signInWithMagicLink,
     signUp,
     signOut,
