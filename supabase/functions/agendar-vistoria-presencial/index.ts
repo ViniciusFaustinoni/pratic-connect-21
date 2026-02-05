@@ -9,7 +9,7 @@ const corsHeaders = {
 interface AgendarVistoriaPresencialRequest {
   cotacaoId: string;
   dataAgendada: string;
-  horarioAgendado: string;
+  horarioAgendado: string; // Agora recebe 'manha' ou 'tarde' (período)
   endereco: {
     cep: string;
     logradouro: string;
@@ -28,6 +28,9 @@ interface AgendarVistoriaPresencialRequest {
   permiteEncaixe?: boolean;
 }
 
+// Limite de vagas por período
+const LIMITE_VAGAS_POR_PERIODO = 10;
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -45,8 +48,38 @@ serve(async (req) => {
 
     const body: AgendarVistoriaPresencialRequest = await req.json();
     const { cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel, latitude, longitude, permiteEncaixe } = body;
+    
+    // O horarioAgendado agora é o período ('manha' ou 'tarde')
+    const periodoAgendado = horarioAgendado;
 
-    console.log('[AgendarVistoriaPresencial] Iniciando para cotação:', cotacaoId);
+    console.log('[AgendarVistoriaPresencial] Iniciando para cotação:', cotacaoId, 'período:', periodoAgendado);
+
+    // VALIDAR LIMITE DE VAGAS POR PERÍODO
+    const { data: servicosExistentes, error: servicosError } = await supabase
+      .from('servicos')
+      .select('id')
+      .eq('data_agendada', dataAgendada)
+      .eq('periodo', periodoAgendado)
+      .eq('local_vistoria', 'cliente')
+      .not('status', 'in', '("cancelada","recusada")');
+
+    if (servicosError) {
+      console.error('[AgendarVistoriaPresencial] Erro ao verificar vagas:', servicosError);
+    }
+
+    const vagasOcupadas = servicosExistentes?.length || 0;
+    console.log('[AgendarVistoriaPresencial] Vagas ocupadas para', dataAgendada, periodoAgendado, ':', vagasOcupadas);
+
+    if (vagasOcupadas >= LIMITE_VAGAS_POR_PERIODO) {
+      console.log('[AgendarVistoriaPresencial] Período esgotado:', dataAgendada, periodoAgendado);
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Período ${periodoAgendado === 'manha' ? 'da manhã' : 'da tarde'} esgotado para esta data. Por favor, escolha outro período ou data.`
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     // 0. VERIFICAR SE JÁ EXISTE INSTALAÇÃO PARA EVITAR DUPLICATAS
     const { data: instalacaoExistente } = await supabase
@@ -125,7 +158,8 @@ serve(async (req) => {
       tipo_vistoria: 'agendada',
       status_contratacao: 'vistoria_ok',
       vistoria_data_agendada: dataAgendada,
-      vistoria_horario_agendado: horarioAgendado,
+      vistoria_horario_agendado: null, // Não usa mais horário específico
+      vistoria_periodo: periodoAgendado, // Salva o período (manha/tarde)
       vistoria_endereco_cep: endereco.cep,
       vistoria_endereco_logradouro: endereco.logradouro,
       vistoria_endereco_numero: endereco.numero,

@@ -58,6 +58,7 @@ serve(async (req) => {
         tipo_vistoria,
         vistoria_data_agendada,
         vistoria_horario_agendado,
+        vistoria_periodo,
         vistoria_endereco_cep,
         vistoria_endereco_logradouro,
         vistoria_endereco_numero,
@@ -72,6 +73,7 @@ serve(async (req) => {
         vistoria_permite_encaixe,
         vistoria_completa_data_agendada,
         vistoria_completa_horario_agendado,
+        vistoria_completa_periodo,
         vistoria_completa_endereco_cep,
         vistoria_completa_endereco_logradouro,
         vistoria_completa_endereco_numero,
@@ -172,7 +174,7 @@ serve(async (req) => {
     // 4. Determinar qual conjunto de dados usar baseado no tipo_vistoria
     const tipoVistoria = cotacao.tipo_vistoria;
     let dataAgendada: string | null = null;
-    let horarioAgendado: string | null = null;
+    let periodoAgendado: string | null = null;
     let endereco = {
       cep: '',
       logradouro: '',
@@ -192,7 +194,8 @@ serve(async (req) => {
       // VISTORIA PRESENCIAL SIMPLES: Usar campos vistoria_*
       console.log('[CriarInstalacaoPosPagamento] Modo: vistoria agendada (presencial simples)');
       dataAgendada = cotacao.vistoria_data_agendada;
-      horarioAgendado = cotacao.vistoria_horario_agendado;
+      // Priorizar período sobre horário (novo fluxo)
+      periodoAgendado = (cotacao as any).vistoria_periodo || cotacao.vistoria_horario_agendado;
       endereco = {
         cep: cotacao.vistoria_endereco_cep || '',
         logradouro: cotacao.vistoria_endereco_logradouro || '',
@@ -211,7 +214,8 @@ serve(async (req) => {
       // A instalação é agendada para APÓS a autovistoria ser aprovada (vistoria completa)
       console.log('[CriarInstalacaoPosPagamento] Modo: autovistoria → usando dados de vistoria_completa_*');
       dataAgendada = cotacao.vistoria_completa_data_agendada;
-      horarioAgendado = cotacao.vistoria_completa_horario_agendado;
+      // Priorizar período sobre horário (novo fluxo)
+      periodoAgendado = (cotacao as any).vistoria_completa_periodo || cotacao.vistoria_completa_horario_agendado;
       endereco = {
         cep: cotacao.vistoria_completa_endereco_cep || '',
         logradouro: cotacao.vistoria_completa_endereco_logradouro || '',
@@ -230,7 +234,7 @@ serve(async (req) => {
       // FALLBACK para outros tipos futuros: usar vistoria_completa_*
       console.log(`[CriarInstalacaoPosPagamento] Modo: fallback (tipo=${tipoVistoria}) → usando dados de vistoria_completa_*`);
       dataAgendada = cotacao.vistoria_completa_data_agendada;
-      horarioAgendado = cotacao.vistoria_completa_horario_agendado;
+      periodoAgendado = (cotacao as any).vistoria_completa_periodo || cotacao.vistoria_completa_horario_agendado;
       endereco = {
         cep: cotacao.vistoria_completa_endereco_cep || '',
         logradouro: cotacao.vistoria_completa_endereco_logradouro || '',
@@ -247,7 +251,7 @@ serve(async (req) => {
     }
     
     console.log(`[CriarInstalacaoPosPagamento] dataAgendada: ${dataAgendada}`);
-    console.log(`[CriarInstalacaoPosPagamento] horarioAgendado: ${horarioAgendado}`);
+    console.log(`[CriarInstalacaoPosPagamento] periodoAgendado: ${periodoAgendado}`);
     console.log(`[CriarInstalacaoPosPagamento] endereco: ${JSON.stringify(endereco)}`);
 
     // 5. Verificar se tem data agendada
@@ -314,6 +318,9 @@ serve(async (req) => {
     console.log(`[CriarInstalacaoPosPagamento] permite_encaixe: ${permiteEncaixe} (origem: cotacao.vistoria_permite_encaixe = ${cotacao.vistoria_permite_encaixe})`);
 
     // 6. CRIAR INSTALAÇÃO (única, tipo instalacao, não entrada)
+    // Determinar o período válido (manha ou tarde)
+    const periodoValido = ['manha', 'tarde'].includes(periodoAgendado || '') ? periodoAgendado : null;
+    
     const instalacaoData = {
       contrato_id: contrato.id,
       cotacao_id: cotacaoId,
@@ -321,7 +328,8 @@ serve(async (req) => {
       veiculo_id: veiculoIdFinal, // CORREÇÃO: Usar veiculoIdFinal que foi validado/recuperado
       status: 'agendada', // ✅ Status correto para atribuição automática
       data_agendada: dataAgendada,
-      hora_agendada: horarioAgendado,
+      hora_agendada: null, // Não usa mais horário específico
+      periodo: periodoValido, // ✅ Usa o período (manha/tarde)
       cep: endereco.cep,
       logradouro: endereco.logradouro,
       numero: endereco.numero,
@@ -335,7 +343,8 @@ serve(async (req) => {
       local_vistoria: 'cliente', // ✅ CRÍTICO: Define que é atendimento no cliente (não na base)
       instalador_responsavel_id: null, // ✅ CRÍTICO: NULL para ser elegível à atribuição automática
     };
-
+    
+    console.log('[CriarInstalacaoPosPagamento] Período:', periodoValido);
     console.log('[CriarInstalacaoPosPagamento] Criando instalação:', JSON.stringify(instalacaoData));
 
     const { data: novaInstalacao, error: instalacaoError } = await supabase

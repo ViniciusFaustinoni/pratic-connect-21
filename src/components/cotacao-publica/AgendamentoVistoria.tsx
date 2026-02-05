@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Calendar, Clock, MapPin, User, Phone, CheckCircle2, Loader2, Shield, AlertTriangle, Puzzle } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, Phone, CheckCircle2, Loader2, Shield, AlertTriangle, Puzzle, Sun, Sunset } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,7 +13,15 @@ import { toast } from 'sonner';
 import { maskCEP, maskTelefone } from '@/lib/validations';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFinalizarVistoriaCotacao, useAgendarVistoriaCompleta } from '@/hooks/useCotacaoVistoria';
-import { isDomingo, getHorariosParaDia, HORARIOS_DISPONIVEIS } from '@/data/autovistoriaConfig';
+import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
+import { 
+  isDomingo, 
+  getPeriodosParaDia, 
+  PERIODOS_DISPONIVEIS,
+  LIMITE_VAGAS_POR_PERIODO,
+  type Periodo,
+  type PeriodoConfig 
+} from '@/data/autovistoriaConfig';
 
 interface EnderecoForm {
   cep: string;
@@ -27,7 +35,7 @@ interface EnderecoForm {
 
 export interface AgendamentoVistoriaProps {
   cotacaoId: string;
-  onConfirmar: (dataAgendada?: string, horarioAgendado?: string) => void;
+  onConfirmar: (dataAgendada?: string, periodoAgendado?: string) => void;
   
   // Contexto define variações visuais e qual hook usar
   contexto: 'presencial-direto' | 'pos-autovistoria';
@@ -44,7 +52,7 @@ export function AgendamentoVistoria({
 }: AgendamentoVistoriaProps) {
   // Estados
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
-  const [horarioSelecionado, setHorarioSelecionado] = useState<string | null>(null);
+  const [periodoSelecionado, setPeriodoSelecionado] = useState<Periodo | null>(null);
   const [responsavel, setResponsavel] = useState<'eu' | 'outro'>('eu');
   const [nomeResponsavel, setNomeResponsavel] = useState('');
   const [telefoneResponsavel, setTelefoneResponsavel] = useState('');
@@ -68,68 +76,45 @@ export function AgendamentoVistoria({
   
   const isLoading = finalizarMutation.isPending || agendarMutation.isPending;
 
-  // === LÓGICA UNIFICADA DE DATAS/HORÁRIOS ===
-  
-  // Função para obter horários disponíveis para uma data específica
-  const getHorariosDisponiveis = (data: Date) => {
-    const agora = new Date();
-    const isHoje = format(data, 'yyyy-MM-dd') === format(agora, 'yyyy-MM-dd');
-    
-    // Pegar horários baseado no dia (sábado tem horário reduzido)
-    const horariosBase = getHorariosParaDia(data);
-    
-    if (!isHoje) {
-      return horariosBase;
-    }
-    
-    // Para hoje, filtrar horários que são >= 2 horas após agora
-    const horaMinima = agora.getHours() + 2;
-    
-    return horariosBase.filter(horario => {
-      const hora = parseInt(horario.split(':')[0], 10);
-      return hora > horaMinima;
-    });
-  };
-  
-  // Verificar se hoje tem horários disponíveis
-  const hojeTemHorarios = () => {
-    const hoje = new Date();
-    if (isDomingo(hoje)) return false; // Só bloqueia domingo
-    return getHorariosDisponiveis(hoje).length > 0;
-  };
+  // Hook de vagas disponíveis para a data selecionada
+  const dataFormatada = dataSelecionada ? format(dataSelecionada, 'yyyy-MM-dd') : null;
+  const { data: vagasData, isLoading: isLoadingVagas } = useVagasPeriodo(dataFormatada);
 
+  // === LÓGICA DE DATAS ===
+  
   // Gerar próximos 7 dias úteis (incluindo hoje se válido)
   const hoje = new Date();
   const datasDisponiveis: Date[] = [];
   
-  // Incluir hoje se tem horários válidos
-  if (hojeTemHorarios()) {
+  // Incluir hoje se não for domingo
+  if (!isDomingo(hoje)) {
     datasDisponiveis.push(hoje);
   }
   
-  // Continuar com dias futuros até ter 7 datas (incluindo sábados)
+  // Continuar com dias futuros até ter 7 datas
   let dia = addDays(hoje, 1);
   while (datasDisponiveis.length < 7) {
-    if (!isDomingo(dia)) { // Só bloqueia domingo
+    if (!isDomingo(dia)) {
       datasDisponiveis.push(new Date(dia));
     }
     dia = addDays(dia, 1);
   }
 
-  // Horários disponíveis para a data selecionada
-  const horariosParaDataSelecionada = dataSelecionada 
-    ? getHorariosDisponiveis(dataSelecionada) 
-    : HORARIOS_DISPONIVEIS;
+  // Períodos disponíveis para a data selecionada
+  const periodosParaDataSelecionada = dataSelecionada 
+    ? getPeriodosParaDia(dataSelecionada) 
+    : PERIODOS_DISPONIVEIS;
 
-  // Reset horário se mudar a data e o horário selecionado não estiver disponível
+  // Reset período se mudar a data e o período selecionado não estiver disponível
   useEffect(() => {
-    if (dataSelecionada && horarioSelecionado) {
-      const horariosDisponiveis = getHorariosDisponiveis(dataSelecionada);
-      if (!horariosDisponiveis.includes(horarioSelecionado)) {
-        setHorarioSelecionado(null);
+    if (dataSelecionada && periodoSelecionado) {
+      const periodosDisponiveis = getPeriodosParaDia(dataSelecionada);
+      const periodoExiste = periodosDisponiveis.some(p => p.id === periodoSelecionado);
+      if (!periodoExiste) {
+        setPeriodoSelecionado(null);
       }
     }
-  }, [dataSelecionada, horarioSelecionado]);
+  }, [dataSelecionada, periodoSelecionado]);
 
   // Buscar CEP
   const buscarCep = async (cep: string) => {
@@ -162,25 +147,37 @@ export function AgendamentoVistoria({
 
   // Validar formulário
   const formularioValido = () => {
-    if (!dataSelecionada || !horarioSelecionado) return false;
+    if (!dataSelecionada || !periodoSelecionado) return false;
     if (!endereco.cep || !endereco.logradouro || !endereco.numero || !endereco.bairro || !endereco.cidade || !endereco.estado) return false;
     if (responsavel === 'outro' && (!nomeResponsavel || !telefoneResponsavel)) return false;
     return true;
   };
 
+  // Verificar se período está esgotado
+  const isPeriodoEsgotado = (periodo: Periodo): boolean => {
+    if (!vagasData) return false;
+    return vagasData[periodo] <= 0;
+  };
+
+  // Obter vagas restantes para um período
+  const getVagasRestantes = (periodo: Periodo): number => {
+    if (!vagasData) return LIMITE_VAGAS_POR_PERIODO;
+    return vagasData[periodo];
+  };
+
   // Confirmar agendamento
   const handleConfirmar = async () => {
-    if (!formularioValido() || !dataSelecionada || !horarioSelecionado) {
+    if (!formularioValido() || !dataSelecionada || !periodoSelecionado) {
       toast.error('Preencha todos os campos obrigatórios');
       return;
     }
 
-    const dataFormatada = format(dataSelecionada, 'yyyy-MM-dd');
+    const dataFormatadaFinal = format(dataSelecionada, 'yyyy-MM-dd');
     
     const dadosAgendamento = {
       cotacaoId,
-      dataAgendada: dataFormatada,
-      horarioAgendado: horarioSelecionado,
+      dataAgendada: dataFormatadaFinal,
+      horarioAgendado: periodoSelecionado, // Agora envia o período ao invés do horário
       endereco: {
         cep: endereco.cep,
         logradouro: endereco.logradouro,
@@ -203,7 +200,7 @@ export function AgendamentoVistoria({
           ...dadosAgendamento,
           tipoVistoria: 'agendada'
         });
-        onConfirmar(dataFormatada, horarioSelecionado);
+        onConfirmar(dataFormatadaFinal, periodoSelecionado);
       } else {
         await agendarMutation.mutateAsync(dadosAgendamento);
         onConfirmar();
@@ -213,6 +210,12 @@ export function AgendamentoVistoria({
     }
   };
 
+  // Helper para obter label do período
+  const getPeriodoLabel = (periodoId: Periodo): string => {
+    const periodo = PERIODOS_DISPONIVEIS.find(p => p.id === periodoId);
+    return periodo ? `${periodo.label} (${periodo.horarioInicio} às ${periodo.horarioFim})` : periodoId;
+  };
+
   // === VARIAÇÕES VISUAIS POR CONTEXTO ===
   
   const titulo = contexto === 'presencial-direto' 
@@ -220,8 +223,8 @@ export function AgendamentoVistoria({
     : 'Agendar Instalação';
     
   const subtitulo = contexto === 'presencial-direto'
-    ? 'Escolha data e horário para o vistoriador ir até você'
-    : 'Escolha data e horário para o técnico instalar o rastreador';
+    ? 'Escolha data e período para o vistoriador ir até você'
+    : 'Escolha data e período para o técnico instalar o rastreador';
 
   return (
     <div className="space-y-6">
@@ -297,7 +300,7 @@ export function AgendamentoVistoria({
                   </div>
                 </div>
 
-                {/* Seleção de Horário */}
+                {/* Seleção de Período */}
                 {dataSelecionada && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
@@ -306,32 +309,69 @@ export function AgendamentoVistoria({
                   >
                     <Label className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
-                      Escolha o horário
+                      Escolha o período
                     </Label>
-                    {horariosParaDataSelecionada.length === 0 ? (
-                      <div className="flex items-center gap-2 text-warning bg-warning/10 p-3 rounded-lg">
-                        <AlertTriangle className="h-4 w-4" />
-                        <span className="text-sm">Não há horários disponíveis para esta data. Selecione outra data.</span>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-5 gap-2">
-                        {horariosParaDataSelecionada.map((horario) => (
-                          <Button
-                            key={horario}
-                            variant={horarioSelecionado === horario ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setHorarioSelecionado(horario)}
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      {periodosParaDataSelecionada.map((periodo) => {
+                        const vagasRestantes = getVagasRestantes(periodo.id);
+                        const esgotado = isPeriodoEsgotado(periodo.id);
+                        const selecionado = periodoSelecionado === periodo.id;
+                        
+                        return (
+                          <Card
+                            key={periodo.id}
+                            className={cn(
+                              "p-4 cursor-pointer transition-all border-2",
+                              selecionado && "ring-2 ring-primary border-primary bg-primary/5",
+                              esgotado && "opacity-50 cursor-not-allowed bg-muted",
+                              !selecionado && !esgotado && "hover:border-primary/50"
+                            )}
+                            onClick={() => !esgotado && setPeriodoSelecionado(periodo.id)}
                           >
-                            {horario}
-                          </Button>
-                        ))}
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "w-12 h-12 rounded-full flex items-center justify-center text-2xl",
+                                selecionado ? "bg-primary/20" : "bg-muted"
+                              )}>
+                                {periodo.id === 'manha' ? <Sun className="h-6 w-6 text-amber-500" /> : <Sunset className="h-6 w-6 text-orange-500" />}
+                              </div>
+                              <div className="flex-1">
+                                <h3 className="font-bold text-lg">{periodo.label}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {periodo.horarioInicio} às {periodo.horarioFim}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-3 text-sm">
+                              {isLoadingVagas ? (
+                                <span className="text-muted-foreground flex items-center gap-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Verificando...
+                                </span>
+                              ) : esgotado ? (
+                                <span className="text-destructive font-medium">Esgotado</span>
+                              ) : (
+                                <span className="text-success font-medium">{vagasRestantes} vagas disponíveis</span>
+                              )}
+                            </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+
+                    {/* Aviso de sábado */}
+                    {dataSelecionada && periodosParaDataSelecionada.length === 1 && (
+                      <div className="flex items-center gap-2 text-warning bg-warning/10 p-3 rounded-lg">
+                        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                        <span className="text-sm">Aos sábados, apenas o período da manhã está disponível.</span>
                       </div>
                     )}
                   </motion.div>
                 )}
 
                 {/* Endereço */}
-                {dataSelecionada && horarioSelecionado && (
+                {dataSelecionada && periodoSelecionado && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -508,7 +548,7 @@ export function AgendamentoVistoria({
                           </Label>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Se um profissional estiver próximo antes do horário agendado, ele pode antecipar sua visita. 
+                          Se um profissional estiver próximo antes do período agendado, ele pode antecipar sua visita. 
                           Você será avisado com antecedência.
                         </p>
                       </div>
@@ -556,9 +596,9 @@ export function AgendamentoVistoria({
                     <div className="flex items-start gap-3">
                       <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground" />
                       <div>
-                        <p className="font-medium">Data e horário</p>
+                        <p className="font-medium">Data e período</p>
                         <p className="text-muted-foreground">
-                          {dataSelecionada && format(dataSelecionada, "EEEE, d 'de' MMMM", { locale: ptBR })} às {horarioSelecionado}
+                          {dataSelecionada && format(dataSelecionada, "EEEE, d 'de' MMMM", { locale: ptBR })} - {periodoSelecionado && getPeriodoLabel(periodoSelecionado)}
                         </p>
                       </div>
                     </div>
