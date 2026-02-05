@@ -238,10 +238,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // ============================================
 
   const signIn = useCallback(async (credentials: EmailCredentials): Promise<AuthResult> => {
-    try {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
+    try {
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
@@ -250,17 +250,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (signInError) {
         const errorMessage = translateAuthError(signInError);
         setError(errorMessage);
+        setLoading(false); // Apenas em erro
         return { success: false, error: errorMessage };
       }
 
+      // Sucesso: NÃO fazer setLoading(false) aqui
+      // O loading será desligado pelo loadUserData() no onAuthStateChange
       return { success: true, redirectTo: '/dashboard' };
     } catch (err) {
       const errorMessage = 'Erro ao fazer login';
       setError(errorMessage);
+      setLoading(false); // Apenas em erro
       return { success: false, error: errorMessage };
-    } finally {
-      setLoading(false);
     }
+    // SEM finally { setLoading(false) } - mantém loading até profile carregar
   }, []);
 
   const signInWithCPF = useCallback(async (credentials: CPFCredentials): Promise<AuthResult> => {

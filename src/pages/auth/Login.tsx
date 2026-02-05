@@ -316,8 +316,8 @@ export default function LoginPage() {
   // ============================================
   // LOADING STATE COM ANIMAÇÃO
   // ============================================
-  // Loading state composto: mostra loading enquanto auth carrega OU já logou mas profile ainda não carregou
-  const showLoadingScreen = authLoading || (user && !profile);
+  // Loading state composto: inclui isSubmitting para cobrir o gap entre clique e onAuthStateChange
+  const showLoadingScreen = authLoading || isSubmitting || (user && !profile);
 
   if (showLoadingScreen) {
     return (
