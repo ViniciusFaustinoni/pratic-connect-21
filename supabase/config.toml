@@ -353,3 +353,6 @@ verify_jwt = false
 
 [functions.gerar-cobrancas-mensais]
 verify_jwt = false
+
+[functions.processar-reprovacao]
+verify_jwt = false
