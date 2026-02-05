@@ -72,7 +72,7 @@ export default function LoginPage() {
   // ============================================
   const navigate = useNavigate();
   const location = useLocation();
-  const { signIn, signInWithGoogle, user, loading: authLoading, isAssociado } = useAuth();
+  const { signIn, signInWithGoogle, user, profile, loading: authLoading, isAssociado } = useAuth();
 
   // ============================================
   // ESTADOS DO FORMULÁRIO
@@ -104,16 +104,21 @@ export default function LoginPage() {
   // REDIRECT SE JÁ AUTENTICADO
   // ============================================
   useEffect(() => {
-    if (!authLoading && user) {
+    // Só redireciona quando tiver user E profile carregado
+    if (!authLoading && user && profile) {
+      if (profile.primeiro_acesso) {
+        navigate('/definir-senha', { replace: true });
+        return;
+      }
       if (isAssociado) {
-        navigate('/app', { replace: true });
+        navigate('/app/home', { replace: true });
         return;
       }
       const params = new URLSearchParams(location.search);
       const returnTo = params.get('returnTo') || '/dashboard';
       navigate(returnTo, { replace: true });
     }
-  }, [authLoading, user, isAssociado, navigate, location.search]);
+  }, [authLoading, user, profile, isAssociado, navigate, location.search]);
 
   // ============================================
   // VERIFICAR BLOQUEIO AO DIGITAR EMAIL (DEBOUNCED)
@@ -271,48 +276,21 @@ export default function LoginPage() {
         const errorType = parseSupabaseError(result.error || '');
         setError(errorType);
         await registrarTentativaFalha(formData.email, errorType);
+        setIsSubmitting(false);
         return;
       }
 
-      // Login bem-sucedido
+      // Login bem-sucedido - registrar e aguardar useEffect fazer o redirect
       await registrarTentativaSucesso(formData.email);
-
-      // Buscar profile incluindo primeiro_acesso
-      const { data: userProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, nome, tipo, primeiro_acesso')
-        .eq('email', formData.email.trim().toLowerCase())
-        .maybeSingle();
-
-      if (profileError) {
-        console.error('Erro ao buscar profile:', profileError);
-      }
-
-      // Verificar primeiro_acesso - redirecionar para definir senha
-      if (userProfile?.primeiro_acesso) {
-        toast.success('Por favor, defina sua nova senha.');
-        navigate('/definir-senha', { replace: true });
-        return;
-      }
-
-      // Redirecionar conforme tipo de usuário
-      const primeiroNome = userProfile?.nome?.split(' ')[0] || '';
-      toast.success(`Bem-vindo${primeiroNome ? `, ${primeiroNome}` : ''}!`);
-
-      if (userProfile?.tipo === 'associado') {
-        navigate('/app/home', { replace: true });
-      } else {
-        const params = new URLSearchParams(location.search);
-        const returnTo = params.get('returnTo') || '/dashboard';
-        navigate(returnTo, { replace: true });
-      }
+      // NÃO fazer navigate aqui - o useEffect vai fazer quando profile carregar
+      // Manter isSubmitting = true para mostrar loading até redirecionar
 
     } catch (err) {
       setError('unknown_error');
       await registrarTentativaFalha(formData.email, 'unknown_error');
-    } finally {
       setIsSubmitting(false);
     }
+    // NÃO colocar setIsSubmitting(false) no finally - mantém loading até redirect
   };
 
   // ============================================
@@ -338,7 +316,10 @@ export default function LoginPage() {
   // ============================================
   // LOADING STATE COM ANIMAÇÃO
   // ============================================
-  if (authLoading) {
+  // Loading state composto: mostra loading enquanto auth carrega OU já logou mas profile ainda não carregou
+  const showLoadingScreen = authLoading || (user && !profile);
+
+  if (showLoadingScreen) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center animate-in fade-in duration-300">
         <div className="flex flex-col items-center gap-4 animate-in zoom-in-95 duration-300">
@@ -346,7 +327,9 @@ export default function LoginPage() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
           <div className="text-center">
-            <p className="font-medium text-foreground">Verificando sessão</p>
+            <p className="font-medium text-foreground">
+              {user ? 'Carregando dados...' : 'Verificando sessão'}
+            </p>
             <p className="text-sm text-muted-foreground">Aguarde um momento...</p>
           </div>
         </div>
