@@ -1348,11 +1348,8 @@ export default function AssociadoDetalhe() {
 
           {/* Invoices Table */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle className="text-base">Últimas Faturas</CardTitle>
-              <Button variant="outline" size="sm">
-                <ExternalLink className="mr-2 h-4 w-4" /> Ver todas
-              </Button>
             </CardHeader>
             <CardContent className="p-0">
               {isLoadingCobrancas ? (
