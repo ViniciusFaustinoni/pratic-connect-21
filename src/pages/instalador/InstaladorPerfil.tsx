@@ -33,10 +33,10 @@ export default function InstaladorPerfil() {
   };
 
   const menuItems = [
-    { icon: Settings, label: 'Configurações', onClick: () => {} },
-    { icon: Bell, label: 'Notificações', onClick: () => {} },
-    { icon: HelpCircle, label: 'Ajuda e Suporte', onClick: () => {} },
-    { icon: Shield, label: 'Privacidade', onClick: () => {} },
+    { icon: Settings, label: 'Configurações', onClick: () => navigate('/instalador/configuracoes') },
+    { icon: Bell, label: 'Notificações', onClick: () => navigate('/instalador/notificacoes') },
+    { icon: HelpCircle, label: 'Ajuda e Suporte', onClick: () => navigate('/instalador/ajuda') },
+    { icon: Shield, label: 'Privacidade', onClick: () => window.open('/politica-privacidade', '_blank') },
   ];
 
   return (

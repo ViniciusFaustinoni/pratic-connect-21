@@ -267,6 +267,9 @@ import InstaladorLogin from "./pages/instalador/InstaladorLogin";
 import InstaladorHome from "./pages/instalador/InstaladorHome";
 import InstaladorChecklist from "./pages/instalador/InstaladorChecklist";
 import InstaladorInstalar from "./pages/instalador/InstaladorInstalar";
+import InstaladorConfiguracoes from "./pages/instalador/InstaladorConfiguracoes";
+import InstaladorNotificacoes from "./pages/instalador/InstaladorNotificacoes";
+import InstaladorAjuda from "./pages/instalador/InstaladorAjuda";
 
 // Vistoria Completa (unified in instalador)
 import ExecutarVistoriaCompleta from "./pages/instalador/ExecutarVistoriaCompleta";
@@ -610,6 +613,9 @@ const App = () => (
               <Route path="/instalador/vistoria/:id" element={<ExecutarVistoriaCompleta />} />
               <Route path="/instalador/mapa" element={<InstaladorMapa />} />
               <Route path="/instalador/perfil" element={<InstaladorPerfil />} />
+              <Route path="/instalador/configuracoes" element={<InstaladorConfiguracoes />} />
+              <Route path="/instalador/notificacoes" element={<InstaladorNotificacoes />} />
+              <Route path="/instalador/ajuda" element={<InstaladorAjuda />} />
             </Route>
             
             {/* Vistoriador redirects to Instalador (unified app) */}
