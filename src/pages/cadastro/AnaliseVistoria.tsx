@@ -74,6 +74,43 @@ const FOTO_LABELS: Record<string, string> = {
   'painel': 'Painel',
 };
 
+// Função para renderizar chassi com diferenças destacadas caractere por caractere
+function renderChassiComparado(chassiCadastro: string, chassiOCR: string): { elemento: JSX.Element; diferencas: { posicao: number; esperado: string; encontrado: string }[] } {
+  const cadastroNormalizado = chassiCadastro?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
+  const ocrNormalizado = chassiOCR?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
+  const maxLen = Math.max(cadastroNormalizado.length, ocrNormalizado.length);
+  const caracteres: JSX.Element[] = [];
+  const diferencas: { posicao: number; esperado: string; encontrado: string }[] = [];
+  
+  for (let i = 0; i < maxLen; i++) {
+    const charCadastro = cadastroNormalizado[i] || '';
+    const charOCR = ocrNormalizado[i] || '';
+    const diferente = charCadastro !== charOCR;
+    
+    if (diferente) {
+      diferencas.push({ posicao: i + 1, esperado: charCadastro || '—', encontrado: charOCR || '—' });
+    }
+    
+    caracteres.push(
+      <span 
+        key={i} 
+        className={diferente 
+          ? 'bg-destructive/20 text-destructive font-bold px-0.5 rounded border border-destructive/30' 
+          : ''
+        }
+        title={diferente ? `Posição ${i + 1}: esperado "${charCadastro}", encontrado "${charOCR}"` : undefined}
+      >
+        {charOCR || '?'}
+      </span>
+    );
+  }
+  
+  return {
+    elemento: <span className="font-mono text-sm tracking-wider">{caracteres}</span>,
+    diferencas
+  };
+}
+
 export default function AnaliseVistoria() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -248,100 +285,142 @@ export default function AnaliseVistoria() {
             </Card>
           )}
 
-          {/* Card Validação do Chassi via IA */}
-          {(vistoria.chassi_validacao || vistoria.chassi_ocr) && (
-            <Card className={`border ${
-              vistoria.chassi_validacao === 'confere' 
-                ? 'border-emerald-500/30 bg-emerald-500/5' 
-                : vistoria.chassi_validacao === 'diverge'
-                ? 'border-destructive/30 bg-destructive/5'
-                : 'border-yellow-500/30 bg-yellow-500/5'
-            }`}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  {vistoria.chassi_validacao === 'confere' ? (
-                    <CheckCircle className="w-5 h-5 text-emerald-500" />
-                  ) : vistoria.chassi_validacao === 'diverge' ? (
-                    <XCircle className="w-5 h-5 text-destructive" />
-                  ) : (
-                    <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                  )}
-                  Validação do Chassi (IA)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Chassi do CRLV (cadastro)</p>
-                    <p className="font-mono font-medium text-sm">
-                      {vistoria.veiculo?.chassi || 'Não informado'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Chassi da Foto (OCR)</p>
-                    <p className="font-mono font-medium text-sm">
-                      {vistoria.chassi_ocr || '—'}
-                    </p>
-                  </div>
-                  {vistoria.chassi_ocr_confianca !== null && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Confiança da leitura</p>
-                      <p className="font-medium">{vistoria.chassi_ocr_confianca}%</p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Badge de resultado */}
-                <div className={`p-3 rounded-lg ${
-                  vistoria.chassi_validacao === 'confere' 
-                    ? 'bg-emerald-500/10 border border-emerald-500/30' 
-                    : vistoria.chassi_validacao === 'diverge'
-                    ? 'bg-destructive/10 border border-destructive/30'
-                    : 'bg-yellow-500/10 border border-yellow-500/30'
-                }`}>
-                  <div className="flex items-center gap-2">
+          {/* Card Validação do Chassi via IA - Com destaque de diferenças */}
+          {(vistoria.chassi_validacao || vistoria.chassi_ocr) && (() => {
+            const chassiCadastro = vistoria.veiculo?.chassi || '';
+            const chassiOCR = vistoria.chassi_ocr || '';
+            const comparacao = chassiCadastro && chassiOCR 
+              ? renderChassiComparado(chassiCadastro, chassiOCR)
+              : null;
+            
+            return (
+              <Card className={`border ${
+                vistoria.chassi_validacao === 'confere' 
+                  ? 'border-emerald-500/30 bg-emerald-500/5' 
+                  : vistoria.chassi_validacao === 'diverge'
+                  ? 'border-destructive/30 bg-destructive/5'
+                  : 'border-yellow-500/30 bg-yellow-500/5'
+              }`}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
                     {vistoria.chassi_validacao === 'confere' ? (
-                      <>
-                        <CheckCircle className="w-5 h-5 text-emerald-500" />
-                        <div>
-                          <p className="font-semibold text-emerald-700 dark:text-emerald-400">
-                            CHASSI CONFERE
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Os números são idênticos
-                          </p>
-                        </div>
-                      </>
+                      <CheckCircle className="w-5 h-5 text-emerald-500" />
                     ) : vistoria.chassi_validacao === 'diverge' ? (
-                      <>
-                        <XCircle className="w-5 h-5 text-destructive" />
-                        <div>
-                          <p className="font-semibold text-destructive">
-                            CHASSI DIVERGENTE
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            O número da foto não confere com o cadastro. Verifique manualmente.
-                          </p>
-                        </div>
-                      </>
+                      <XCircle className="w-5 h-5 text-destructive" />
                     ) : (
-                      <>
-                        <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                        <div>
-                          <p className="font-semibold text-yellow-700 dark:text-yellow-400">
-                            CHASSI ILEGÍVEL
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Não foi possível ler o chassi na foto. Verifique manualmente.
-                          </p>
-                        </div>
-                      </>
+                      <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                    )}
+                    Validação do Chassi (IA)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Chassi do CRLV (cadastro)</p>
+                      <p className="font-mono font-medium text-sm tracking-wider">
+                        {chassiCadastro || 'Não informado'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Chassi da Foto (OCR)</p>
+                      {/* Mostrar chassi com diferenças destacadas se houver divergência */}
+                      {vistoria.chassi_validacao === 'diverge' && comparacao ? (
+                        comparacao.elemento
+                      ) : (
+                        <p className="font-mono font-medium text-sm tracking-wider">
+                          {chassiOCR || '—'}
+                        </p>
+                      )}
+                    </div>
+                    {vistoria.chassi_ocr_confianca !== null && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Confiança da leitura</p>
+                        <p className="font-medium">{vistoria.chassi_ocr_confianca}%</p>
+                      </div>
                     )}
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  
+                  {/* Detalhe das diferenças quando houver divergência */}
+                  {vistoria.chassi_validacao === 'diverge' && comparacao && comparacao.diferencas.length > 0 && (
+                    <div className="bg-destructive/10 p-3 rounded-lg border border-destructive/20">
+                      <p className="text-sm font-medium text-destructive mb-2">
+                        {comparacao.diferencas.length === 1 
+                          ? '1 caractere divergente:'
+                          : `${comparacao.diferencas.length} caracteres divergentes:`
+                        }
+                      </p>
+                      <ul className="text-sm space-y-1">
+                        {comparacao.diferencas.slice(0, 5).map((dif, idx) => (
+                          <li key={idx} className="text-muted-foreground">
+                            <span className="font-mono">Posição {dif.posicao}:</span>{' '}
+                            esperado "<span className="font-bold text-foreground">{dif.esperado}</span>", 
+                            encontrado "<span className="font-bold text-destructive">{dif.encontrado}</span>"
+                          </li>
+                        ))}
+                        {comparacao.diferencas.length > 5 && (
+                          <li className="text-muted-foreground italic">
+                            ... e mais {comparacao.diferencas.length - 5} diferença(s)
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {/* Badge de resultado */}
+                  <div className={`p-3 rounded-lg ${
+                    vistoria.chassi_validacao === 'confere' 
+                      ? 'bg-emerald-500/10 border border-emerald-500/30' 
+                      : vistoria.chassi_validacao === 'diverge'
+                      ? 'bg-destructive/10 border border-destructive/30'
+                      : 'bg-yellow-500/10 border border-yellow-500/30'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {vistoria.chassi_validacao === 'confere' ? (
+                        <>
+                          <CheckCircle className="w-5 h-5 text-emerald-500" />
+                          <div>
+                            <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                              CHASSI CONFERE
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Os números são idênticos
+                            </p>
+                          </div>
+                        </>
+                      ) : vistoria.chassi_validacao === 'diverge' ? (
+                        <>
+                          <XCircle className="w-5 h-5 text-destructive" />
+                          <div>
+                            <p className="font-semibold text-destructive">
+                              CHASSI DIVERGENTE
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {comparacao && comparacao.diferencas.length > 0
+                                ? `${comparacao.diferencas.length} caractere(s) diferente(s). Verifique manualmente.`
+                                : 'O número da foto não confere com o cadastro. Verifique manualmente.'
+                              }
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                          <div>
+                            <p className="font-semibold text-yellow-700 dark:text-yellow-400">
+                              CHASSI ILEGÍVEL
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Não foi possível ler o chassi na foto. Verifique manualmente.
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Card Cliente */}
           <Card>
