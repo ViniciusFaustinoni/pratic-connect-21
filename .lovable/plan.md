@@ -1,164 +1,160 @@
 
-
-## Correção: Botão Atribuir Portador e Exibição da Atribuição
+## Problema: Vídeo 360° Não Aparece para o Analista de Cadastro
 
 ### Diagnóstico
 
-Após análise detalhada e testes, identifiquei que a funcionalidade **está funcionando corretamente**. O dialog de atribuição abre, a atribuição é salva com sucesso e a informação do portador é exibida. 
+Ao analisar o código, identifiquei dois problemas:
 
-No entanto, existem problemas de **usabilidade visual** que podem causar confusão:
+1. **O vídeo 360° é salvo corretamente** pelo hook `useUploadVideo360` (em `src/hooks/useVistoriaCompleta.ts` linhas 283-339), que faz upload para o bucket `vistoria-videos` e atualiza o campo `video_360_url` na tabela `vistorias`.
+
+2. **O vídeo NÃO é exibido para o analista** porque:
+   - A interface `VistoriaInfo` (linha 27-35 de `usePropostasPendentes.ts`) não possui o campo `video_360_url`
+   - A query de busca de vistorias (linha 276) não inclui o campo `video_360_url` no SELECT
+   - O componente `VistoriaFotosCard` não renderiza o vídeo 360°
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ PROBLEMAS IDENTIFICADOS                                                     │
+│ FLUXO ATUAL (COM PROBLEMA)                                                  │
 ├────────────────────────────────────────────────────────────────────────────┤
-│ 1. Botão "Atribuir" é muito discreto (variant="ghost", cor cinza)          │
-│ 2. Ícone de alterar portador é muito pequeno (6x6 pixels)                  │
-│ 3. Botão na página Estoque não tem opção inline, apenas no menu dropdown   │
-│ 4. Screenshot do usuário mostra botão vermelho que não existe no código    │
+│ Instalador grava vídeo 360° → Upload para bucket "vistoria-videos"          │
+│         ↓                                                                  │
+│ Campo "video_360_url" salvo na tabela "vistorias"  ✓                        │
+│         ↓                                                                  │
+│ Hook "usePropostasPendentes" busca vistoria SEM campo video_360_url  ✗     │
+│         ↓                                                                  │
+│ Tela "PropostaAnalise.tsx" não recebe dados do vídeo                       │
+│         ↓                                                                  │
+│ Analista não vê o vídeo 360°                                               │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Solução Proposta
 
-Melhorar a visibilidade e usabilidade dos controles de atribuição de portador em ambas as páginas:
-
-#### 1. Melhorar o botão "Atribuir" na página Rastreadores
-
-**Arquivo:** `src/pages/monitoramento/Rastreadores.tsx`
-
-**Antes:**
-- Botão `variant="ghost"` com `text-muted-foreground` (cinza, pouco visível)
-
-**Depois:**
-- Botão `variant="outline"` com cores de destaque para ser mais clicável
+Adicionar o campo `video_360_url` em toda a cadeia de dados e criar um componente para exibir o vídeo 360° para o analista:
 
 ```text
-Antes:      [👤 Atribuir] (cinza, discreto)
-                   ↓
-Depois:     [👤 Atribuir] (com borda azul, mais visível)
+┌────────────────────────────────────────────────────────────────────────────┐
+│ FLUXO CORRIGIDO                                                            │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Instalador grava vídeo 360° → Upload para bucket "vistoria-videos"          │
+│         ↓                                                                  │
+│ Campo "video_360_url" salvo na tabela "vistorias"  ✓                        │
+│         ↓                                                                  │
+│ Hook "usePropostasPendentes" busca vistoria COM campo video_360_url  ✓     │
+│         ↓                                                                  │
+│ Interface "VistoriaInfo" inclui campo video_360_url  ✓                     │
+│         ↓                                                                  │
+│ Tela "PropostaAnalise.tsx" exibe vídeo 360° em novo card  ✓                │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### 2. Aumentar ícone de alterar portador
+### Implementação
 
-**Arquivo:** `src/pages/monitoramento/Rastreadores.tsx`
+#### 1. Atualizar Interface VistoriaInfo
 
-**Antes:**
-- Ícone de 3.5x3.5 em um botão de 6x6 (muito pequeno)
+**Arquivo:** `src/hooks/usePropostasPendentes.ts`
 
-**Depois:**
-- Ícone de 4x4 em um botão de 7x7 com tooltip explicativo
+Adicionar o campo `video_360_url` na interface:
 
-#### 3. Adicionar botão inline na página Estoque
+```typescript
+export interface VistoriaInfo {
+  id: string;
+  status: string;
+  tipo: string;
+  modalidade?: string;
+  fotos: VistoriaFotoInfo[];
+  observacoes?: string | null;
+  km_atual?: number | null;
+  video_360_url?: string | null;  // NOVO CAMPO
+}
+```
 
-**Arquivo:** `src/components/monitoramento/estoque/ListaRastreadores.tsx`
+#### 2. Atualizar Query de Busca
 
-Adicionar o mesmo padrão de botão inline usado na página Rastreadores:
-- Quando tem portador: mostrar nome + ícone de edição
-- Quando não tem: mostrar botão "Atribuir"
+**Arquivo:** `src/hooks/usePropostasPendentes.ts`
 
-### Mudanças Técnicas
+Modificar a query para incluir `video_360_url` (linha 276):
+
+```typescript
+// Antes:
+.select('id, status, modalidade, observacoes, km_atual')
+
+// Depois:
+.select('id, status, modalidade, observacoes, km_atual, video_360_url')
+```
+
+E garantir que o campo seja passado para a interface (linha 291-299):
+
+```typescript
+vistoria = {
+  id: vistoriaData.id,
+  status: vistoriaData.status || 'pendente',
+  tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
+  modalidade: vistoriaData.modalidade || undefined,
+  fotos: fotosVistoria as VistoriaFotoInfo[],
+  observacoes: vistoriaData.observacoes,
+  km_atual: vistoriaData.km_atual,
+  video_360_url: vistoriaData.video_360_url,  // NOVO CAMPO
+};
+```
+
+#### 3. Criar Componente Video360Card
+
+**Arquivo:** `src/components/cadastro/Video360Card.tsx` (NOVO)
+
+Componente para exibir o vídeo 360° para o analista:
+
+```typescript
+interface Video360CardProps {
+  videoUrl: string;
+}
+
+export function Video360Card({ videoUrl }: Video360CardProps) {
+  // Card com player de vídeo nativo HTML5
+  // Controles de play/pause, volume, fullscreen
+  // Badge "Vídeo 360° do Veículo"
+}
+```
+
+#### 4. Integrar na Tela de Análise
+
+**Arquivo:** `src/pages/cadastro/PropostaAnalise.tsx`
+
+Adicionar o card de vídeo 360° abaixo das fotos da vistoria (após linha 752):
+
+```typescript
+{/* Vídeo 360° da Vistoria */}
+{proposta.vistoria?.video_360_url && (
+  <Video360Card videoUrl={proposta.vistoria.video_360_url} />
+)}
+```
+
+### Arquivos a Modificar/Criar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/pages/monitoramento/Rastreadores.tsx` | Melhorar estilo do botão "Atribuir" (linhas 432-443) |
-| `src/pages/monitoramento/Rastreadores.tsx` | Aumentar tamanho do ícone de alterar portador (linhas 417-429) |
-| `src/components/monitoramento/estoque/ListaRastreadores.tsx` | Adicionar botão inline na coluna Portador (linhas 363-371) |
+| `src/hooks/usePropostasPendentes.ts` | Adicionar `video_360_url` na interface e query (linhas 27-35 e 276) |
+| `src/components/cadastro/Video360Card.tsx` | CRIAR: Componente para exibir vídeo 360° |
+| `src/pages/cadastro/PropostaAnalise.tsx` | Adicionar card de vídeo após fotos (linha ~752) |
 
-### Comparação Visual
+### Layout do Novo Card
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│ ANTES (problema de visibilidade)                                        │
-├─────────────────────────────────────────────────────────────────────────┤
-│ Portador                                                                │
-│ ─────────────────                                                       │
-│ 👤 Atribuir  (cinza, quase invisível)                                   │
-│ [Nome] 🔍    (ícone muito pequeno)                                      │
-│ -                                                                       │
-└─────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│ DEPOIS (melhor visibilidade)                                            │
-├─────────────────────────────────────────────────────────────────────────┤
-│ Portador                                                                │
-│ ─────────────────                                                       │
-│ ┌───────────────┐                                                       │
-│ │ 👤 Atribuir   │  (com borda, mais visível)                            │
-│ └───────────────┘                                                       │
-│ [Nome]  🔍       (ícone maior com tooltip)                              │
-│ -                                                                       │
-└─────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ 🎬 Vídeo 360° do Veículo                                     │
+│ ┌────────────────────────────────────────────────────────┐   │
+│ │                                                        │   │
+│ │            [Player de Vídeo HTML5]                     │   │
+│ │            com controles nativos                       │   │
+│ │                                                        │   │
+│ └────────────────────────────────────────────────────────┘   │
+│ Gravado pelo vistoriador - Volta completa no veículo         │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Código Proposto
+### Detalhes Técnicos
 
-**Rastreadores.tsx - Botão "Atribuir" melhorado:**
-```typescript
-<Button
-  variant="outline"
-  size="sm"
-  className="h-7 text-xs border-primary/50 text-primary hover:bg-primary/10"
-  onClick={(e) => {
-    e.stopPropagation();
-    handleOpenPortadorDialog(rastreador);
-  }}
->
-  <UserPlus className="h-3.5 w-3.5 mr-1" />
-  Atribuir
-</Button>
-```
-
-**Rastreadores.tsx - Ícone de alterar maior:**
-```typescript
-<Button
-  variant="ghost"
-  size="icon"
-  className="h-7 w-7"
-  onClick={(e) => {
-    e.stopPropagation();
-    handleOpenPortadorDialog(rastreador);
-  }}
-  title="Alterar portador"
->
-  <UserPlus className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-</Button>
-```
-
-**ListaRastreadores.tsx - Adicionar botão inline:**
-```typescript
-<TableCell>
-  <div className="flex items-center gap-1.5">
-    {item.portador?.nome ? (
-      <>
-        <User className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="truncate max-w-[100px] text-sm">{item.portador.nome}</span>
-        {item.status === 'estoque' && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={() => setDialogAtribuirPortador({...})}
-            title="Alterar portador"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </>
-    ) : item.status === 'estoque' ? (
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-6 text-xs"
-        onClick={() => setDialogAtribuirPortador({...})}
-      >
-        <UserPlus className="h-3 w-3 mr-1" />
-        Atribuir
-      </Button>
-    ) : (
-      <span className="text-muted-foreground text-sm">-</span>
-    )}
-  </div>
-</TableCell>
-```
-
+- O bucket `vistoria-videos` já existe e é público (URL acessível)
+- O campo `video_360_url` já existe na tabela `vistorias` (confirmado nos types)
+- Player HTML5 nativo é suficiente para reproduzir arquivos `.webm`
+- Nenhuma migração de banco é necessária
