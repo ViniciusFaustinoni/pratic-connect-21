@@ -1,162 +1,195 @@
 
-## Plano: Remover Botão "Encerrar Turno" e Implementar Finalização Automática
 
-### Análise Atual
+## Plano: Exibir Dados da CNH no Card de Documentos Anexados
 
-O sistema já possui:
-- ✅ Cálculo correto de `minutosRestantes` (jornada ajustada - tempo trabalhado)
-- ✅ Mutation `encerrarTurnoMutation` pronta para encerrar o turno
-- ✅ Campo `encerrado_automaticamente` na tabela `turnos_profissionais`
-- ✅ Botão "Encerrar Turno" no `InstaladorPerfil.tsx` (linhas 92-102)
+### Contexto Atual
 
-**O que falta:**
-- Lógica para finalizar o turno **automaticamente** quando `minutosRestantes === 0`
-- Remover o botão "Encerrar Turno" da tela de perfil
+O componente `DocumentosAnexadosCard.tsx` atualmente exibe:
+- ✅ Nome do documento e tipo (ex: "CNH")
+- ✅ Data de upload
+- ✅ Badge "Validado por IA" quando OCR foi bem-sucedido
+- ❌ Dados extraídos do documento (validade, número de registro, RG)
 
----
+O OCR já extrai corretamente os dados da CNH:
+- `dados.validade` (formato YYYY-MM-DD)
+- `dados.numero_registro` (11 dígitos - número de registro da CNH)
+- `dados.rg` (número do RG)
 
-### Arquivos a Modificar
+### Estrutura de Dados
 
-| Arquivo | Modificação | Tipo |
-|---------|-------------|------|
-| `src/pages/instalador/InstaladorPerfil.tsx` | Remover botão "Encerrar Turno" | REMOVE |
-| `src/hooks/useJornadaTrabalho.ts` | Adicionar useEffect para finalizar turno automaticamente | ADD |
+Conforme documentação do `document-ocr`, a resposta inclui:
 
----
-
-### Alteração 1: Remover Botão de Perfil
-
-**Arquivo**: `src/pages/instalador/InstaladorPerfil.tsx` (linhas 92-102)
-
-Remover:
 ```typescript
-{/* Botão Encerrar Turno - apenas quando em serviço e sem tarefa ativa */}
-{emServico && !tarefaAtual && (
-  <Button 
-    variant="outline" 
-    className="w-full border-orange-600 text-orange-400 hover:bg-orange-900/30 hover:text-orange-300"
-    onClick={handleEncerrarTurno}
-  >
-    <Power className="h-4 w-4 mr-2" />
-    Encerrar Turno
-  </Button>
+{
+  sucesso: boolean,
+  dados: {
+    validade: "YYYY-MM-DD",
+    numero_registro: "12345678901",
+    rg: "12345678-9",
+    // ... outros campos
+  },
+  validado_ocr: boolean,
+  confianca: number
+}
+```
+
+### Solução Proposta
+
+#### 1. Adicionar função auxiliar para extrair e formatar dados específicos de CNH
+
+Na linha após `getDocConfig`, adicionar:
+
+```typescript
+const getCnhData = (ocr_resultado: any) => {
+  if (!ocr_resultado?.dados) return null;
+  
+  const { validade, numero_registro, rg } = ocr_resultado.dados;
+  
+  return {
+    validade: validade ? format(new Date(validade), 'dd/MM/yyyy', { locale: ptBR }) : null,
+    numeroRegistro: numero_registro,
+    rg: rg,
+  };
+};
+```
+
+#### 2. Exibir dados da CNH no card de listagem
+
+Modificar o card de cada documento (após a linha 148, dentro do `<div>` que contém label e data) para mostrar dados específicos quando for CNH:
+
+```typescript
+<div>
+  <p className={cn(
+    "font-medium text-sm",
+    isHighlight 
+      ? "text-foreground" 
+      : "text-foreground"
+  )}>
+    {docConfig.label}
+  </p>
+  <p className="text-xs text-muted-foreground">
+    {format(new Date(doc.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+  </p>
+  
+  {/* NOVO: Exibir dados de CNH */}
+  {doc.tipo === 'cnh' && doc.ocr_resultado?.dados && (
+    <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+      {doc.ocr_resultado.dados.numero_registro && (
+        <p className="text-xs text-muted-foreground">
+          <span className="font-semibold">Nº Registro:</span> {doc.ocr_resultado.dados.numero_registro}
+        </p>
+      )}
+      {doc.ocr_resultado.dados.rg && (
+        <p className="text-xs text-muted-foreground">
+          <span className="font-semibold">RG:</span> {doc.ocr_resultado.dados.rg}
+        </p>
+      )}
+      {doc.ocr_resultado.dados.validade && (
+        <p className="text-xs text-muted-foreground">
+          <span className="font-semibold">Válidade:</span>{' '}
+          {format(new Date(doc.ocr_resultado.dados.validade), 'dd/MM/yyyy', { locale: ptBR })}
+        </p>
+      )}
+    </div>
+  )}
+</div>
+```
+
+#### 3. Exibir dados completos no Dialog
+
+Também melhorar o Dialog para mostrar todos os dados extraídos quando a CNH é clicada (após o título do Dialog, antes da imagem):
+
+```typescript
+{selectedDoc && selectedDoc.tipo === 'cnh' && selectedDoc.ocr_resultado?.dados && (
+  <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4 space-y-2">
+    <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">Dados Extraídos:</p>
+    {selectedDoc.ocr_resultado.dados.nome && (
+      <div className="flex justify-between">
+        <span className="text-xs font-medium">Nome:</span>
+        <span className="text-xs">{selectedDoc.ocr_resultado.dados.nome}</span>
+      </div>
+    )}
+    {selectedDoc.ocr_resultado.dados.numero_registro && (
+      <div className="flex justify-between">
+        <span className="text-xs font-medium">Nº Registro:</span>
+        <span className="text-xs">{selectedDoc.ocr_resultado.dados.numero_registro}</span>
+      </div>
+    )}
+    {selectedDoc.ocr_resultado.dados.rg && (
+      <div className="flex justify-between">
+        <span className="text-xs font-medium">RG:</span>
+        <span className="text-xs">{selectedDoc.ocr_resultado.dados.rg}</span>
+      </div>
+    )}
+    {selectedDoc.ocr_resultado.dados.validade && (
+      <div className="flex justify-between">
+        <span className="text-xs font-medium">Válidade:</span>
+        <span className="text-xs">
+          {format(new Date(selectedDoc.ocr_resultado.dados.validade), 'dd/MM/yyyy', { locale: ptBR })}
+        </span>
+      </div>
+    )}
+  </div>
 )}
 ```
 
-Também remover:
-- Import do ícone `Power` (linha 2)
-- Função `handleEncerrarTurno` (linhas 22-24)
-- Hook `encerrarServico` da desestruturação (linha 14)
+### Arquivos a Modificar
 
----
+| Arquivo | Mudança | Linhas |
+|---------|---------|--------|
+| `src/components/cadastro/DocumentosAnexadosCard.tsx` | Adicionar exibição de dados da CNH na listagem e no Dialog | 136-149 e 175-200 |
 
-### Alteração 2: Finalização Automática de Turno
-
-**Arquivo**: `src/hooks/useJornadaTrabalho.ts`
-
-Adicionar um novo `useEffect` após o `useEffect` que verifica almoço automático (após linha 312):
-
-```typescript
-// Verificar se deve encerrar turno automaticamente quando jornada está completa
-useEffect(() => {
-  if (
-    turno?.status === 'ativo' &&
-    tempoReal.minutosTrabalhados > 0 &&
-    minutosRestantes === 0
-  ) {
-    console.log('[useJornadaTrabalho] Jornada completa - encerrando turno automaticamente');
-    encerrarTurnoMutation.mutate();
-  }
-}, [turno?.status, tempoReal.minutosTrabalhados, minutosRestantes, turno?.id]);
-```
-
-**Lógica:**
-- Verifica se está em turno ativo
-- Verifica se há tempo trabalhado
-- Verifica se `minutosRestantes === 0` (8 horas completas + ajustes)
-- Se tudo OK, chama a mutation para encerrar o turno automaticamente
-- O banco registra `encerrado_automaticamente = true`
-
----
-
-### Fluxo de Funcionamento
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│                    TURNO DO VISTORIADOR                        │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  1. Vistoriador clica "Iniciar Serviço"                       │
-│     → Turno criado com status = 'ativo'                       │
-│                                                                │
-│  2. Trabalha 4 horas                                          │
-│     → Sistema inicia almoço automaticamente                   │
-│                                                                │
-│  3. Retorna do almoço (pode ter atraso)                       │
-│     → Atraso é registrado em minutos_atraso_almoco            │
-│                                                                │
-│  4. Trabalha mais 4h (+ atraso se houver)                     │
-│                                                                │
-│  5. minutosRestantes === 0                                    │
-│     → Sistema finaliza turno AUTOMATICAMENTE                  │
-│     → Não há botão para clicar!                               │
-│     → Turno marcado como encerrado_automaticamente = true     │
-│                                                                │
-│  6. Vistoriador vê status "Turno encerrado"                   │
-│     → JornadaStatusBar mostra "Turno encerrado"               │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### Sequência de Implementação
-
-1. **Remover botão do perfil** em `InstaladorPerfil.tsx`
-2. **Adicionar lógica de finalização automática** em `useJornadaTrabalho.ts`
-3. **Testar fluxo completo** no simulador para verificar se encerra automaticamente
-
----
-
-### Casos de Teste
-
-| Cenário | Comportamento Esperado |
-|---------|----------------------|
-| Trabalha exatamente 8h | Encerra automaticamente |
-| Trabalha 4h, almoço, volta, trabalha 4h | Encerra automaticamente |
-| Trabalha 4h, almoço, volta 15min atrasado, trabalha 4h15min | Encerra automaticamente |
-| Vistoriador sai do app durante turno | useEffect continua verificando, encerra quando retornar se completou |
-
----
-
-### Impacto na Interface
+### Resultado Visual Esperado
 
 **Antes:**
 ```
-┌──────────────────────────┐
-│ Perfil                   │
-├──────────────────────────┤
-│ [Configurações]          │
-│ [Notificações]           │
-│ [Ajuda e Suporte]        │
-│ [Privacidade]            │
-│ ────────────────         │
-│ [🔴 Encerrar Turno] ← X  │  (REMOVE)
-│ [🔴 Sair da Conta]       │
-└──────────────────────────┘
+┌─────────────────────────────────────┐
+│ 📋 CNH                              │
+│ 15/02/2025 às 10:30                 │
+│ [Validado por IA] [👁️ Visualizar]  │
+└─────────────────────────────────────┘
 ```
 
 **Depois:**
 ```
-┌──────────────────────────┐
-│ Perfil                   │
-├──────────────────────────┤
-│ [Configurações]          │
-│ [Notificações]           │
-│ [Ajuda e Suporte]        │
-│ [Privacidade]            │
-│ ────────────────         │
-│ [🔴 Sair da Conta]       │  ← Único botão de ação
-└──────────────────────────┘
+┌─────────────────────────────────────┐
+│ 📋 CNH                              │
+│ 15/02/2025 às 10:30                 │
+│ ─────────────────────────────────   │
+│ Nº Registro: 12345678901            │
+│ RG: 12345678-9                      │
+│ Válidade: 20/10/2028                │
+│ [Validado por IA] [👁️ Visualizar]  │
+└─────────────────────────────────────┘
 ```
+
+**Dialog ao clicar:**
+```
+┌────────────────────────────────────────┐
+│ CNH                               ✕   │
+├────────────────────────────────────────┤
+│ 📋 Dados Extraídos:                   │
+│ Nome: João Silva Santos               │
+│ Nº Registro: 12345678901              │
+│ RG: 12345678-9                        │
+│ Válidade: 20/10/2028                  │
+│                                        │
+│ [Imagem da CNH]                       │
+│                                        │
+└────────────────────────────────────────┘
+```
+
+### Sequência de Implementação
+
+1. Adicionar exibição de dados CNH no card de listagem
+2. Adicionar exibição de dados CNH no Dialog de visualização
+3. Garantir formatação correta de datas
+4. Testar com CNHs reais no sistema
+
+### Benefícios
+
+- ✅ Dados da CNH visíveis sem abrir o documento
+- ✅ Validação de validade da CNH aparente imediatamente
+- ✅ Número de registro e RG acessíveis para verificação rápida
+- ✅ Melhor experiência do analista na revisão de documentos
 
