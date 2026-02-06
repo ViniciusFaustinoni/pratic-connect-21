@@ -56,6 +56,7 @@ import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';
 import { DadosProposta } from '@/types/proposta';
 import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
+import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
 import { useAuth } from '@/contexts/AuthContext';
 
 // ============================================
@@ -343,6 +344,15 @@ export default function CotadorPage() {
   // Estado para modal de placa duplicada
   const [placaDuplicadaInfo, setPlacaDuplicadaInfo] = useState<PlacaDuplicadaInfo | null>(null);
   const [showPlacaDuplicadaModal, setShowPlacaDuplicadaModal] = useState(false);
+  
+  // Estado para modal de blacklist
+  const [blacklistInfo, setBlacklistInfo] = useState<{
+    id: string;
+    motivo: string;
+    tipo_reprovacao: string;
+    created_at: string;
+  } | null>(null);
+  const [showBlacklistModal, setShowBlacklistModal] = useState(false);
 
   // Hook FIPE
   const { getByPlaca, loading: loadingFipe } = useFipe();
@@ -502,7 +512,24 @@ export default function CotadorPage() {
     setErroBusca(null);
     
     try {
-      // Primeiro, verificar se a placa já está em cotação de outro vendedor
+      // 1. PRIMEIRO: Verificar se está na BLACKLIST
+      const placaNormalizada = placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      const { data: blacklistData, error: blacklistError } = await supabase
+        .from('blacklist_veiculos')
+        .select('id, motivo, tipo_reprovacao, created_at')
+        .eq('placa', placaNormalizada)
+        .eq('ativo', true)
+        .maybeSingle();
+      
+      if (!blacklistError && blacklistData) {
+        // VEÍCULO BLOQUEADO - Interromper fluxo
+        setBlacklistInfo(blacklistData);
+        setShowBlacklistModal(true);
+        setBuscandoPlaca(false);
+        return;
+      }
+      
+      // 2. Verificar se a placa já está em cotação de outro vendedor
       const placaDuplicada = await verificarPlacaDuplicada.mutateAsync(placaBusca);
       
       if (placaDuplicada) {
@@ -519,7 +546,7 @@ export default function CotadorPage() {
         }
       }
       
-      // Continuar com a busca do veículo
+      // 3. Continuar com a busca do veículo
       const result = await getByPlaca(placaBusca.replace(/[^A-Za-z0-9]/g, ''));
       
       if (result.success && result.vehicleData) {
@@ -1566,6 +1593,14 @@ _Cotação válida por 7 dias_
         onOpenChange={setShowPlacaDuplicadaModal}
         placa={placaBusca}
         info={placaDuplicadaInfo}
+      />
+      
+      {/* Modal Veículo na Blacklist */}
+      <PlacaBlacklistModal
+        open={showBlacklistModal}
+        onOpenChange={setShowBlacklistModal}
+        placa={placaBusca}
+        info={blacklistInfo}
       />
     </div>
   );
