@@ -1,137 +1,101 @@
 
-# Plano: Corrigir Histórico para Mostrar Etapas do Associado
+# Plano: Corrigir Atualização de Status do Associado na Página do Cliente
 
 ## Problema Identificado
 
-O histórico da cotação mostra apenas "Cotação criada" e "Cliente aceitou a cotação", mas não mostra as etapas intermediárias do fluxo de contratação como:
-- Plano escolhido
-- Dados preenchidos  
-- Documentos enviados
-- Contrato assinado
-- Vistoria agendada/concluída
-- Pagamento confirmado
+O cliente permanece na tela "Em Análise Cadastral" mesmo depois que o analista aprovou o cadastro e o associado já está com status `ativo`. O redirecionamento para `/acompanhar/:token` não está acontecendo.
 
 ## Causa Raiz
 
-1. **Tabela `cotacoes_historico` vazia**: Nenhum evento está sendo persistido
-2. **RLS restritiva**: A tabela só permite INSERT/SELECT para usuários `authenticated`, mas o fluxo público usa `publicSupabase` (anon)
-3. **Timeline apenas infere do campo `status`**: O componente `CotacaoTimeline` só cria eventos inferidos baseados no campo `status` (enviada, aceita, recusada, expirada), mas ignora o campo `status_contratacao` que contém todas as etapas do fluxo
+1. **Realtime com limitações de RLS**: O canal realtime usa `publicSupabase` (role anon) para escutar a tabela `associados`, mas a RLS dessa tabela provavelmente não permite que requisições anônimas vejam os registros diretamente
+
+2. **Query stale**: A query `contrato-publico-fallback` que fornece o `associadoStatus` só é invalidada pelo realtime (que pode não estar funcionando) ou a cada 30 segundos via `refetchInterval`
+
+3. **Sem fallback robusto**: Se o realtime falhar, o cliente fica esperando 30 segundos para ver a mudança
 
 ## Solução Proposta
 
-Modificar o componente `CotacaoTimeline` para **inferir eventos a partir do `status_contratacao`** quando não há histórico persistido. Isso resolverá o problema imediatamente sem necessidade de alterar banco de dados ou lógicas de RLS.
+Implementar duas correções para garantir a atualização imediata:
 
-### Arquivo a Modificar
+### 1. Adicionar subscrição realtime na tabela `contratos` (mais confiável)
 
-**`src/components/cotacoes/CotacaoTimeline.tsx`**
+A tabela `contratos` tem RLS que permite leitura pública via `cotacao_token_publico`. Podemos escutar mudanças nessa tabela como proxy para detectar quando o associado foi processado.
 
-### Mudanças
+### 2. Reduzir intervalo de refetch e adicionar refetch no foco
 
-1. **Atualizar a interface** para receber `status_contratacao`:
-```text
-interface CotacaoTimelineProps {
-  cotacao: {
-    id: string;
-    created_at: string;
-    updated_at?: string;
-    status: string;
-    status_contratacao?: string | null;   // NOVO
-    vendedor?: { nome?: string } | null;
-  };
-  ...
-}
-```
+Como fallback, reduzir o `refetchInterval` de 30s para 10s e adicionar `refetchOnWindowFocus: true` para garantir atualização quando o cliente volta à aba.
 
-2. **Adicionar novos tipos de evento**:
-```text
-tipo: 'criacao' | 'pdf' | 'envio' | 'visualizacao' | 'aceite' | ... 
-    | 'plano_escolhido'    // existente
-    | 'dados_preenchidos'  // NOVO
-    | 'documentos_ok'      // NOVO
-    | 'contrato_assinado'  // NOVO
-    | 'vistoria_ok'        // NOVO
-    | 'pagamento_ok'       // NOVO
-```
+### 3. Adicionar log de debug para rastrear o problema
 
-3. **Adicionar configurações visuais** para os novos tipos de evento
+Adicionar console.log para verificar se o realtime está funcionando e quais valores estão sendo recebidos.
 
-4. **Modificar a lógica do useMemo** para inferir eventos do `status_contratacao`:
+## Arquivos a Modificar
+
+### `src/hooks/useCotacaoContratacao.ts`
+
+1. **Reduzir `refetchInterval`** de 30000ms para 10000ms na query `contrato-publico-fallback`
+2. **Adicionar `refetchOnWindowFocus: true`** para revalidar quando o cliente voltar à aba
+3. **Melhorar o handler do realtime** para forçar refetch imediato das queries dependentes
+4. **Adicionar log de debug** para identificar se o realtime está funcionando
 
 ```text
-// Ordem das etapas do status_contratacao
-const ETAPAS_CONTRATACAO = [
-  'plano_escolhido',
-  'dados_preenchidos', 
-  'documentos_ok',
-  'contrato_assinado',
-  'vistoria_ok',
-  'pagamento_ok'
-];
+// ANTES (linhas 143-145)
+refetchInterval: 30000,
 
-// Se não há histórico real, inferir etapas do status_contratacao
-if (historico.length === 0 && cotacao.status_contratacao) {
-  const etapaAtualIndex = ETAPAS_CONTRATACAO.indexOf(cotacao.status_contratacao);
-  
-  // Adicionar todas as etapas até a atual (inclusive)
-  ETAPAS_CONTRATACAO.slice(0, etapaAtualIndex + 1).forEach((etapa, idx) => {
-    lista.push({
-      id: `infer-${etapa}`,
-      tipo: etapa,
-      titulo: getTituloEtapaContratacao(etapa),
-      data: cotacao.updated_at || cotacao.created_at,
-    });
-  });
-}
+// DEPOIS
+refetchInterval: 10000, // Reduzido para 10 segundos
+refetchOnWindowFocus: true, // Revalidar ao voltar para a aba
+staleTime: 0, // Sempre considerar stale para garantir dados frescos
 ```
 
-5. **Adicionar função de mapeamento de títulos**:
+### Handler do realtime (linhas 249-263):
+
 ```text
-const getTituloEtapaContratacao = (etapa: string): string => {
-  const titulos: Record<string, string> = {
-    'plano_escolhido': 'Cliente escolheu o plano',
-    'dados_preenchidos': 'Dados pessoais preenchidos',
-    'documentos_ok': 'Documentos enviados',
-    'contrato_assinado': 'Contrato assinado',
-    'vistoria_ok': 'Vistoria realizada',
-    'pagamento_ok': 'Pagamento confirmado',
-  };
-  return titulos[etapa] || etapa;
-};
+// Melhorar invalidação para forçar refetch imediato
+channel = channel.on(
+  'postgres_changes',
+  {
+    event: 'UPDATE',
+    schema: 'public',
+    table: 'associados',
+    filter: `id=eq.${associadoId}`,
+  },
+  async (payload) => {
+    console.log('[CotacaoContratacao] Realtime: associado atualizado:', payload);
+    
+    // Forçar refetch imediato (não apenas invalidar)
+    await queryClient.refetchQueries({ queryKey: ['contrato-publico-fallback', token] });
+    refetch();
+  }
+);
 ```
 
-### Arquivos a Modificar
+### `src/pages/public/CotacaoContratacao.tsx`
 
-1. **`src/components/cotacoes/CotacaoTimeline.tsx`**
-   - Adicionar novos tipos de evento ao tipo `TimelineEvent`
-   - Adicionar configurações visuais em `getEventoConfig`
-   - Atualizar lógica de inferência no `useMemo` para usar `status_contratacao`
-   - Adicionar função `getTituloEtapaContratacao`
+1. **Adicionar log para debugging** no useEffect de redirecionamento
+2. **Garantir que o redirecionamento aconteça** assim que os dados forem atualizados
 
-2. **`src/components/cotacoes/CotacaoDetalhesModal.tsx`**
-   - Garantir que `cotacao.status_contratacao` seja passado para o `CotacaoTimeline`
-   (Verificar se CotacaoWithRelations já inclui esse campo)
+## Impacto
 
-### Comportamento Esperado Após Correção
+- O cliente verá a mudança de status em até 10 segundos (ao invés de 30)
+- Ao voltar para a aba, a atualização será imediata
+- O realtime continuará tentando funcionar como melhoria adicional
+- Logs de debug ajudarão a identificar se há problemas de RLS no realtime
 
-| Status Contratação | Eventos Exibidos na Timeline |
-|-------------------|------------------------------|
-| `aguardando` | Apenas "Cotação criada" |
-| `plano_escolhido` | Cotação criada → Cliente escolheu o plano |
-| `dados_preenchidos` | ... → Dados pessoais preenchidos |
-| `documentos_ok` | ... → Documentos enviados |
-| `contrato_assinado` | ... → Contrato assinado |
-| `vistoria_ok` | ... → Vistoria realizada |
-| `pagamento_ok` | ... → Pagamento confirmado |
+## Fluxo Corrigido
 
-### Vantagens da Solução
+```text
+1. Analista aprova o associado → status muda para 'ativo'
+2. Realtime dispara evento (se RLS permitir)
+   OU refetchInterval detecta a mudança em até 10s
+   OU usuário volta à aba e refetchOnWindowFocus atualiza
+3. Query contrato-publico-fallback é refetchada
+4. associadoStatus atualiza para 'ativo'
+5. useEffect detecta mudança e redireciona para /acompanhar/:token
+```
 
-1. **Sem alteração de banco de dados** - não precisa criar triggers ou alterar RLS
-2. **Atualização em tempo real** - o realtime já está ativo na tabela `cotacoes`
-3. **Retrocompatível** - se algum dia houver histórico real, ele será usado
-4. **Simples e eficiente** - apenas alterações no frontend
+## Testes Recomendados
 
-### Impacto
-
-- Correção visual imediata do histórico
-- As etapas serão mostradas mesmo sem persistência na tabela `cotacoes_historico`
-- O realtime já invalida a query de cotações quando `status_contratacao` muda
+1. Aprovar um associado e verificar se o cliente é redirecionado
+2. Verificar os console.logs para confirmar se o realtime está funcionando
+3. Testar o refetch ao voltar para a aba do navegador
