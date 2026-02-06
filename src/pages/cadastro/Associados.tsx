@@ -7,6 +7,7 @@ import {
   MessageCircle, X, ChevronLeft, ChevronRight, Users, Download, Filter, DollarSign, Trash2
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from '@/contexts/AuthContext';
 import { BadgeCoberturaCompact } from '@/components/veiculos/BadgeCobertura';
 import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
@@ -62,6 +63,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 export default function Associados() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { profile } = useAuth();
   const { isDiretor, isDesenvolvedor, isAdminMaster, isAnalistaCadastroOnly } = usePermissions();
   const canDeleteAssociados = isDiretor || isDesenvolvedor || isAdminMaster;
   
@@ -253,6 +255,49 @@ export default function Associados() {
       status: statusMap[acaoDialog.acao as keyof typeof statusMap],
       motivo,
     });
+
+    // Se ação for BLOQUEAR, adicionar veículos à blacklist
+    if (acaoDialog.acao === 'bloquear') {
+      try {
+        // Buscar veículos do associado
+        const { data: veiculos, error: veiculosError } = await supabase
+          .from('veiculos')
+          .select('id, placa, chassi')
+          .eq('associado_id', acaoDialog.associadoId);
+
+        if (veiculosError) {
+          console.error('Erro ao buscar veículos para blacklist:', veiculosError);
+        } else if (veiculos && veiculos.length > 0) {
+          // Para cada veículo, adicionar à blacklist
+          for (const veiculo of veiculos) {
+            const { error: blacklistError } = await supabase
+              .from('blacklist_veiculos')
+              .insert({
+                placa: veiculo.placa.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+                chassi: veiculo.chassi,
+                motivo: motivo,
+                justificativa: `Associado bloqueado: ${motivo}`,
+                tipo_reprovacao: 'associado_bloqueado',
+                veiculo_id: veiculo.id,
+                associado_id: acaoDialog.associadoId,
+                adicionado_por: profile?.id,
+                ativo: true,
+              });
+
+            if (blacklistError) {
+              console.error('Erro ao adicionar veículo à blacklist:', blacklistError);
+            }
+          }
+
+          toast({
+            title: 'Veículos adicionados à Blacklist',
+            description: `${veiculos.length} veículo(s) foram adicionados à blacklist.`,
+          });
+        }
+      } catch (err) {
+        console.error('Erro ao processar blacklist:', err);
+      }
+    }
     
     toast({
       title: 'Status atualizado',

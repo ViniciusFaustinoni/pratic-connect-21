@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Ban, Search, Trash2, Eye, AlertTriangle, Car, User } from 'lucide-react';
+import { Ban, Search, Trash2, Eye, AlertTriangle, Car, User, UserX } from 'lucide-react';
 import { useBlacklistVeiculos, useRemoverBlacklist } from '@/hooks/useBlacklist';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +37,7 @@ import { Loader2 } from 'lucide-react';
 const TIPO_LABELS: Record<string, string> = {
   vistoria_reprovada: 'Vistoria Reprovada',
   proposta_reprovada: 'Proposta Reprovada',
+  associado_bloqueado: 'Associado Bloqueado',
 };
 
 export default function Blacklist() {
@@ -91,7 +92,7 @@ export default function Blacklist() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total na Blacklist</CardTitle>
@@ -125,6 +126,17 @@ export default function Blacklist() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Associado Bloqueado</CardTitle>
+            <UserX className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {blacklist?.filter((i) => i.ativo && i.tipo_reprovacao === 'associado_bloqueado').length || 0}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabs e Filtros */}
@@ -153,6 +165,7 @@ export default function Blacklist() {
                 <SelectItem value="todos">Todos os tipos</SelectItem>
                 <SelectItem value="vistoria_reprovada">Vistoria Reprovada</SelectItem>
                 <SelectItem value="proposta_reprovada">Proposta Reprovada</SelectItem>
+                <SelectItem value="associado_bloqueado">Associado Bloqueado</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -201,8 +214,11 @@ export default function Blacklist() {
                             variant={
                               item.tipo_reprovacao === 'vistoria_reprovada'
                                 ? 'destructive'
+                                : item.tipo_reprovacao === 'associado_bloqueado'
+                                ? 'outline'
                                 : 'secondary'
                             }
+                            className={item.tipo_reprovacao === 'associado_bloqueado' ? 'border-orange-500 text-orange-600' : ''}
                           >
                             {TIPO_LABELS[item.tipo_reprovacao]}
                           </Badge>
@@ -329,8 +345,11 @@ export default function Blacklist() {
                   variant={
                     itemDetalhes.tipo_reprovacao === 'vistoria_reprovada'
                       ? 'destructive'
+                      : itemDetalhes.tipo_reprovacao === 'associado_bloqueado'
+                      ? 'outline'
                       : 'secondary'
                   }
+                  className={itemDetalhes.tipo_reprovacao === 'associado_bloqueado' ? 'border-orange-500 text-orange-600' : ''}
                 >
                   {TIPO_LABELS[itemDetalhes.tipo_reprovacao]}
                 </Badge>
