@@ -1,79 +1,64 @@
 
+## Plano: Corrigir Flickering na Autenticação
 
-## Plano: Eliminar Flickering na Tela de Login
+### Diagnóstico Completo
 
-### Problema Identificado
+A tela de login continua "piscando" porque há uma **race condition** entre múltiplos componentes:
 
-Ao fazer login, o usuário vê uma sequência de telas de loading que causa o efeito de "piscar":
-
-1. **Login.tsx** mostra loading enquanto `isSubmitting || authLoading || (user && !profile)`
-2. Quando `profile` carrega, o redirect acontece
-3. **ProtectedRoute** (usado pelo AppLayout) mostra **outro loading** enquanto `!initialized || loading`
-4. Finalmente, o Dashboard aparece
-
-Isso cria uma transição brusca: `Loading do Login` → `Flash do formulário` → `Loading do AppLayout` → `Dashboard`
+| Momento | Login.tsx | ProtectedRoute | Resultado |
+|---------|-----------|----------------|-----------|
+| Antes do login | Mostra formulário | - | OK |
+| Após signIn | `initialized=true`, `loading=false`, `user=ok`, `profile=null` | - | Deveria mostrar loading mas... |
+| Navigate para /dashboard | - | Vê `initialized=true`, `loading=false` → Não mostra loading | **PROBLEMA** |
+| ProtectedRoute avalia | - | `user` existe, mas `profile=null` → `userTipo=undefined` | Redirect para /auth! |
+| Volta para /auth | Vê `user` mas sem `profile` | - | Pisca e tenta novamente |
 
 ### Causa Raiz
 
-O problema está na **desconexão entre os estados de loading**:
+O `ProtectedRoute` (linha 34) só verifica `initialized` e `loading`:
+```typescript
+if (!initialized || loading) {
+  return <Loading />;
+}
+```
 
-| Componente | Condição de Loading |
-|------------|---------------------|
-| Login.tsx | `authLoading \|\| isSubmitting \|\| (user && !profile)` |
-| ProtectedRoute | `!initialized \|\| loading` |
+Mas quando `allowedTipos` é verificado (linha 56-69), ele precisa do `profile` para saber o tipo do usuário. Se `profile` ainda for `null`, o código assume que o usuário não tem permissão e redireciona de volta para `/auth`.
 
-Quando o Login faz o redirect, o `ProtectedRoute` ainda pode estar em loading por um breve momento, causando o flash.
+### Solução
 
-### Solução Proposta
-
-A estratégia é **manter o loading no Login até que todos os dados estejam prontos**, e então fazer o redirect para evitar qualquer tela intermediária.
+Modificar o `ProtectedRoute` para **aguardar o profile carregar** quando `allowedTipos` for especificado.
 
 ---
 
 ### Alterações
 
-**Arquivo:** `src/pages/auth/Login.tsx`
+**Arquivo:** `src/components/ProtectedRoute.tsx`
 
-#### 1. Adicionar verificação de `initialized` na condição de loading
-
-```typescript
-// Linha 276: De
-const showLoadingScreen = authLoading || isSubmitting || (user && !profile);
-
-// Para:
-const showLoadingScreen = authLoading || isSubmitting || (user && !profile) || !initialized;
-```
-
-Isso garante que o loading continue até que o AuthContext esteja completamente inicializado.
-
-#### 2. Importar `initialized` do useAuth
+#### Adicionar verificação de profile no loading state
 
 ```typescript
-// Linha 51: De
-const { signIn, user, profile, loading: authLoading, isAssociado } = useAuth();
+// Linha 33-43: De
+if (!initialized || loading) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      {/* ... */}
+    </div>
+  );
+}
 
 // Para:
-const { signIn, user, profile, loading: authLoading, initialized, isAssociado } = useAuth();
-```
-
-#### 3. Ajustar o useEffect de redirect para só executar quando `initialized` for `true`
-
-```typescript
-// Linha 82-97: De
-useEffect(() => {
-  // Só redireciona quando tiver user E profile carregado
-  if (!authLoading && user && profile) {
-    // ... redirect logic
-  }
-}, [authLoading, user, profile, isAssociado, navigate, location.search]);
-
-// Para:
-useEffect(() => {
-  // Só redireciona quando o contexto estiver totalmente inicializado
-  if (initialized && !authLoading && user && profile) {
-    // ... redirect logic (mesma lógica atual)
-  }
-}, [initialized, authLoading, user, profile, isAssociado, navigate, location.search]);
+// Aguardar profile carregar se temos user mas profile ainda não veio
+// Isso evita decisões prematuras sobre permissões
+if (!initialized || loading || (user && !profile)) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    </div>
+  );
+}
 ```
 
 ---
@@ -82,35 +67,37 @@ useEffect(() => {
 
 ```text
 ANTES (Com Flickering):
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  Formulário │ → │ Loading     │ → │ Flash       │ → │ Loading     │ → Dashboard
-│  de Login   │    │ Login       │    │ Formulário  │    │ ProtectedR. │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+┌─────────┐   ┌─────────────────┐   ┌────────────────────┐   ┌─────────┐
+│  Login  │ → │ Navigate para   │ → │ ProtectedRoute vê  │ → │ /auth   │ → Pisca!
+│ Loading │   │    /dashboard   │   │ profile=null →     │   │         │
+│         │   │                 │   │ redireciona /auth  │   │         │
+└─────────┘   └─────────────────┘   └────────────────────┘   └─────────┘
 
 DEPOIS (Sem Flickering):
-┌─────────────┐    ┌─────────────────────────────────┐    ┌─────────────┐
-│  Formulário │ → │ Loading (mantém até initialized) │ → │  Dashboard  │
-│  de Login   │    │ "Carregando dados..."           │    │             │
-└─────────────┘    └─────────────────────────────────┘    └─────────────┘
+┌─────────┐   ┌─────────────────┐   ┌────────────────────┐   ┌───────────┐
+│  Login  │ → │ Navigate para   │ → │ ProtectedRoute     │ → │ Dashboard │
+│ Loading │   │    /dashboard   │   │ aguarda profile    │   │           │
+│         │   │                 │   │ (mostra loading)   │   │           │
+└─────────┘   └─────────────────┘   └────────────────────┘   └───────────┘
 ```
 
 ---
 
-### Resumo das Alterações
+### Resumo
 
 | Arquivo | Linha | Alteração |
 |---------|-------|-----------|
-| `src/pages/auth/Login.tsx` | 51 | Adicionar `initialized` ao destructuring do `useAuth()` |
-| `src/pages/auth/Login.tsx` | 82-97 | Adicionar `initialized` como condição no `useEffect` de redirect |
-| `src/pages/auth/Login.tsx` | 276 | Adicionar `!initialized` à condição `showLoadingScreen` |
+| `src/components/ProtectedRoute.tsx` | 34 | Adicionar `(user && !profile)` à condição de loading |
 
 ---
 
-### Resultado Esperado
+### Por que esta é a solução correta
 
-Após a implementação:
-- O loading do Login será mantido **até que o AuthContext esteja 100% inicializado**
-- O redirect só acontecerá quando todos os dados estiverem prontos
-- Não haverá transição intermediária ou "piscar" da tela de login
-- A experiência será uma transição suave: `Login → Loading → Dashboard`
+1. **Princípio da solução**: O `ProtectedRoute` não deve tomar decisões de permissão enquanto não tiver todos os dados necessários (`profile`)
+
+2. **Mantém a responsabilidade correta**: O `ProtectedRoute` é o componente que protege as rotas, então ele deve garantir que tem todos os dados antes de decidir
+
+3. **Evita race conditions**: Ao aguardar o `profile`, eliminamos a possibilidade de redirecionamentos prematuros
+
+4. **Experiência do usuário**: O usuário verá uma única tela de loading suave até chegar ao Dashboard
 
