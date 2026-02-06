@@ -1,91 +1,193 @@
 
-## PLANO: MÓDULO DE COMISSIONAMENTO — CONCLUÍDO ✅
+## PLANO: ESTENDER TYPES, CRIAR HOOKS E REFORMAR COMISSOESCONFIG
 
-### MIGRATIONS EXECUTADAS COM SUCESSO
+### 1. ANÁLISE DA SITUAÇÃO ATUAL
 
----
+✅ **Estrutura Existente:**
+- `src/types/comissoes.ts`: Contém 8 interfaces (ComissaoConfig, Comissao, ComissaoPagamento, ComissaoResumo, TipoComissao)
+- `src/hooks/useComissoesConfig.ts`: Hook CRUD para `comissoes_config` (tabela legada)
+- `src/hooks/useComissoes.ts`: Hook para dashboard de comissões (gerencial)
+- `src/hooks/useMinhasComissoes.ts`: Hook para visão vendedor
+- `src/pages/vendas/ComissoesConfig.tsx`: Página atual com CRUD simples (apenas comissoes_config)
+- `src/pages/vendas/Comissoes.tsx`: Dashboard gerencial funcionando
+- `src/pages/vendas/MinhasComissoes.tsx`: Página vendedor funcionando
+- Rota `/vendas/comissoes/config` JÁ EXISTE
 
-#### ✅ MIGRATION 1: Campos em Tabelas Existentes
+⚠️ **Incompatibilidade Detectada:**
+O arquivo `src/types/comissoes.ts` JÁ tem `TipoComissao` definido (linha 24), e o usuário pede para adicionar novamente. Isso causará conflito de definição.
 
-**Em `associados`** (5 campos):
-- `vendedor_original_id` UUID → Preserva vendedor original após troca de titularidade
-- `motivo_cancelamento` TEXT
-- `data_cancelamento` TIMESTAMPTZ
-- `data_primeiro_boleto_pago` TIMESTAMPTZ
-- `qtd_boletos_pagos` INTEGER DEFAULT 0
+### 2. IMPLEMENTAÇÃO ESTRUTURADA
 
-**Em `comissoes`** (12 campos):
-- `tipo_comissao` VARCHAR(50) DEFAULT 'adesao'
-- `cobranca_id` UUID
-- `campanha_id` UUID
-- `associado_id` UUID REFERENCES associados(id)
-- `valor_bruto`, `valor_deducoes` NUMERIC(10,2)
-- `deducoes_detalhes` JSONB
-- `recalculada`, `contestada` BOOLEAN
-- Campos de motivo/resposta para contestação
+#### **PASSO 1: Estender src/types/comissoes.ts**
 
-**Em `contratos`** (3 campos):
-- `tipo_atendimento` VARCHAR(20) DEFAULT 'volante'
-- `tipo_venda` VARCHAR(20) DEFAULT 'nova'
-- `origem_troca_titularidade_id` UUID
+**Ação**: Adicionar os novos tipos ao FINAL do arquivo, EVITANDO duplicação.
 
-**Em `funcionarios`** (3 campos):
-- `recorde_vendas_mensal` INTEGER
-- `mes_recorde`, `ano_recorde` INTEGER
+O `TipoComissao` já existe na linha 24 com exatamente as mesmas opções que o usuário pediu. Então:
+- ✅ NÃO duplicar `TipoComissao`
+- ✅ ADICIONAR os 10 novos interfaces (FaixaAdesao, FaixaRecorrente, FaixaProducao, etc.)
+- ✅ ADICIONAR os labels (TIPO_COMISSAO_LABELS, TIPO_DEDUCAO_LABELS)
 
-**Índices criados:** 5 (para performance em queries de comissão)
+**Padrão de tipo a seguir:**
+```typescript
+export interface FaixaAdesao {
+  id: string;
+  tipo_consultor: 'interno' | 'externo';
+  // ... campos específicos com tipos validados
+  created_at: string;
+  updated_at: string;
+}
+```
 
----
+#### **PASSO 2: Criar src/hooks/useComissoesFaixas.ts**
 
-#### ✅ MIGRATION 2: Tabelas de Faixas
+**Estrutura do hook:**
+- **Queries** (5): useQuery para cada tabela de faixas (adesao, recorrente, producao, crescimento, classificacao)
+- **Parametros**: useQuery para comissoes_parametros
+- **Mutations genéricas**:
+  - `addFaixa(tabela, dados)`: INSERT em qualquer tabela
+  - `updateFaixa(tabela, id, dados)`: UPDATE em qualquer tabela
+  - `deleteFaixa(tabela, id)`: DELETE em qualquer tabela
+  - `updateParametro(chave, valor)`: UPDATE em comissoes_parametros
+- **Estados derivados**: `isLoading` (qualquer query em loading)
 
-| Tabela | Registros | Descrição |
-|--------|-----------|-----------|
-| `comissoes_faixas_adesao` | 11 | Faixas por qtd vendas (interno) |
-| `comissoes_faixas_recorrente` | 10 | Faixas por base ativa (7 interno + 3 externo) |
-| `comissoes_faixas_producao` | 3 | Faixas de produção (externo) |
-| `comissoes_faixas_crescimento` | 15 | Marcos de crescimento (10 interno + 5 externo) |
-| `comissoes_faixas_classificacao` | 27 | Ranking mensal (9+9 interno + 9 externo) |
+**Padrão a seguir:**
+- Usar mesmo padrão que `useComissoesConfig.ts`
+- Toast de sucesso/erro para cada ação
+- QueryClient invalidation correto
 
----
+#### **PASSO 3: Criar src/hooks/useComissoesCampanhas.ts**
 
-#### ✅ MIGRATION 3: Tabelas Auxiliares + RLS
+**Estrutura:**
+- Query para `comissoes_campanhas` (ordenadas por ano DESC, mês DESC)
+- Derivada: `campanhaAtual` (status='aberta' mais recente)
+- Mutation: `criarCampanha(dados)`
+- Mutation: `fecharCampanha(id)`
 
-| Tabela | Descrição | RLS |
-|--------|-----------|-----|
-| `comissoes_campanhas` | Períodos de apuração mensal | ✅ |
-| `comissoes_ranking_mensal` | Resultado de ranking por campanha | ✅ |
-| `comissoes_recorrentes` | Comissões sobre mensalidades | ✅ |
-| `comissoes_crescimento_log` | Marcos atingidos | ✅ |
-| `comissoes_deducoes` | Deduções detalhadas | ✅ |
-| `comissoes_parametros` | 10 parâmetros configuráveis | ✅ |
-| `comissoes_auditoria` | Log de alterações | ✅ |
+**Padrão:**
+- Simplificar: apenas operações mais comuns (criar, fechar)
+- Toast de sucesso/erro
 
-**RLS Policies:** 13 criadas (leitura geral + escrita restrita a diretor/gerente)
+#### **PASSO 4: Reformar src/pages/vendas/ComissoesConfig.tsx**
 
----
+**Mudanças estruturais:**
 
-### PRÓXIMOS PASSOS (PARTE 3)
+1. **Layout com Tabs (7 abas):**
+   - Aba 1: "Bonificação Adesão" (FaixaAdesao)
+   - Aba 2: "Recorrente" (FaixaRecorrente com subtabs interno/externo)
+   - Aba 3: "Produção" (FaixaProducao)
+   - Aba 4: "Crescimento" (FaixaCrescimento com subtabs)
+   - Aba 5: "Classificação" (FaixaClassificacao com filtros)
+   - Aba 6: "Parâmetros" (comissoes_parametros)
+   - Aba 7: "Campanhas" (comissoes_campanhas)
 
-1. **Edge Functions a criar:**
-   - `calcular-comissoes-recorrentes` → Processar boletos pagos
-   - `gerar-ranking-mensal` → Calcular posições e prêmios
-   - `processar-cancelamento-comissao` → Reverter comissões
+2. **Componentes usados:**
+   - Tabs, TabsList, TabsTrigger, TabsContent (já importados em MinhasComissoes.tsx)
+   - Table, TableHeader, TableBody, TableRow, TableHead, TableCell
+   - Dialog para edição (padrão já usado em ComissoesConfig atual)
+   - Badge para status
+   - Button, Input, Select
+   - Card para seções informativas
 
-2. **Triggers a modificar:**
-   - `trigger_comissao_ao_ativar` → Registrar em `comissoes_auditoria`
+3. **Padrão de CRUD por aba:**
+   - Tabela com dados do hook
+   - Botão "Nova [Recurso]" que abre Dialog
+   - Colunas: campo1 | campo2 | ... | Status/Ativo | Ações
+   - Ações: Editar (abre Dialog) e Excluir (confirmação)
+   - Validações no Dialog
 
-3. **Frontend a criar:**
-   - Tela de configuração de faixas
-   - Dashboard de ranking mensal
-   - Visualização de deduções
+4. **Comportamento esperado:**
+   - Usar `useComissoesFaixas()` para buscar dados
+   - Usar mutations do hook para salvar
+   - Loading state por aba
+   - Toast de sucesso/erro
+   - Permissões: PermissionGate para roles diretor/gerente_comercial
 
----
+**Estrutura de arquivo:**
+```typescript
+import { useState } from 'react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useComissoesFaixas } from '@/hooks/useComissoesFaixas';
+import { useComissoesCampanhas } from '@/hooks/useComissoesCampanhas';
+import { PermissionGate } from '@/components/PermissionGate';
 
-### VERIFICAÇÃO PÓS-EXECUÇÃO
+export default function ComissoesConfig() {
+  const { faixasAdesao, faixasRecorrente, parametros, addFaixa, updateFaixa, deleteFaixa, updateParametro, isLoading } = useComissoesFaixas();
+  const { campanhas, criarCampanha, fecharCampanha } = useComissoesCampanhas();
+  
+  // Estados de dialog por aba
+  const [dialogAberta, setDialogAberta] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState('adesao');
+  const [editando, setEditando] = useState(null);
+  
+  return (
+    <div className="container mx-auto py-6">
+      <h1>Configuração de Comissionamento</h1>
+      <Tabs value={abaAtiva} onValueChange={setAbaAtiva}>
+        <TabsList>
+          <TabsTrigger value="adesao">Bonificação Adesão</TabsTrigger>
+          <TabsTrigger value="recorrente">Recorrente</TabsTrigger>
+          {/* ... outras abas ... */}
+        </TabsList>
+        
+        <TabsContent value="adesao">
+          {/* Tabela + CRUD para FaixaAdesao */}
+        </TabsContent>
+        
+        {/* ... outras abas ... */}
+      </Tabs>
+    </div>
+  );
+}
+```
 
-✅ 12 tabelas de comissão existem
-✅ 66 registros de dados padrão inseridos
-✅ RLS ativo em todas as novas tabelas
-✅ Types TypeScript atualizados
-✅ Triggers existentes NÃO foram alterados
+### 3. PONTOS DE ATENÇÃO CRÍTICOS
+
+⚠️ **Impacto em páginas existentes:**
+- Comissoes.tsx usa `useComissoes()` (continua igual) ✅
+- MinhasComissoes.tsx usa `useMinhasComissoes()` (continua igual) ✅
+- useComissoesConfig.ts (continua igual) ✅
+
+✅ **Permissões:**
+- Rota `/vendas/comissoes/config` já existe
+- Usar `<PermissionGate roles={['diretor', 'gerente_comercial']}>` na página
+
+✅ **Padrões a manter:**
+- Sonner toast para feedback
+- React Query para estado
+- Shadcn UI components
+- TypeScript typing completo
+- Validações no Dialog
+
+⚠️ **Subtabs em "Recorrente" e "Crescimento":**
+- Usar `useState` para track qual subtab está ativa
+- Filtrar dados por `tipo_consultor` antes de renderizar
+
+### 4. SEQUENCE DE DESENVOLVIMENTO
+
+```
+1. Estender src/types/comissoes.ts
+   ↓ Validação: verificar se compila
+2. Criar src/hooks/useComissoesFaixas.ts
+   ↓ Validação: sem erros de type
+3. Criar src/hooks/useComissoesCampanhas.ts
+   ↓ Validação: sem erros de type
+4. Reformar src/pages/vendas/ComissoesConfig.tsx
+   ↓ Validação: página renderiza, abas funcionam, CRUD funciona
+5. Testar:
+   - Navegar para /vendas/comissoes/config
+   - Verificar se todas as abas renderizam
+   - CRUD: criar, editar, deletar em cada aba
+   - Verificar se Comissoes.tsx e MinhasComissoes.tsx continuam funcionando
+```
+
+### 5. VALIDAÇÃO ESPERADA
+
+✅ Todos os types compilam sem conflito
+✅ Hooks retornam dados corretos (sem erros de acesso)
+✅ ComissoesConfig carrega com as 7 abas
+✅ Aba Adesão: CRUD funciona (criar/editar/deletar faixa)
+✅ Aba Recorrente: subtabs interno/externo funcionam
+✅ Aba Parâmetros: edição de valores funciona
+✅ Aba Campanhas: criar/fechar campanha funciona
+✅ Páginas legadas NÃO quebram
+✅ PermissionGate restringe acesso corretamente
