@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
+import QRCode from "https://esm.sh/qrcode@1.5.3";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -201,6 +202,7 @@ serve(async (req) => {
         km_atual,
         observacoes,
         status,
+        video_360_url,
         endereco_logradouro,
         endereco_numero,
         endereco_bairro,
@@ -487,6 +489,125 @@ serve(async (req) => {
       y -= 18;
       y = drawWrappedText(page, vistoria.observacoes, MARGIN, y, CONTENT_WIDTH, 9, 12);
       y -= 20;
+    }
+
+    // Video 360° section with QR Code (if available)
+    if (vistoria.video_360_url) {
+      console.log(`[LAUDO] Incluindo vídeo 360° no laudo: ${vistoria.video_360_url}`);
+      
+      // Check if we need a new page for the video section
+      if (y < 200) {
+        page = addPage();
+        y = PAGE_HEIGHT - MARGIN - 30;
+      }
+
+      page.drawText('VÍDEO 360° DO VEÍCULO', {
+        x: MARGIN,
+        y,
+        size: 12,
+        font: fontBold,
+        color: PRIMARY_COLOR,
+      });
+
+      y -= 20;
+
+      page.drawText('Escaneie o QR Code ou acesse o link para visualizar o vídeo 360° do veículo:', {
+        x: MARGIN,
+        y,
+        size: 9,
+        font,
+        color: TEXT_COLOR,
+      });
+
+      y -= 25;
+
+      try {
+        // Generate QR Code as data URL
+        const qrDataUrl = await QRCode.toDataURL(vistoria.video_360_url, { 
+          width: 150,
+          margin: 1,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          }
+        });
+
+        // Convert base64 to Uint8Array
+        const base64Data = qrDataUrl.split(',')[1];
+        const binaryString = atob(base64Data);
+        const qrBytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          qrBytes[i] = binaryString.charCodeAt(i);
+        }
+
+        // Embed QR Code image in PDF
+        const qrImage = await pdfDoc.embedPng(qrBytes);
+        const qrSize = 100;
+
+        page.drawImage(qrImage, {
+          x: MARGIN,
+          y: y - qrSize,
+          width: qrSize,
+          height: qrSize,
+        });
+
+        // Add label below QR Code
+        page.drawText('Escaneie com seu celular', {
+          x: MARGIN,
+          y: y - qrSize - 15,
+          size: 8,
+          font,
+          color: MUTED_COLOR,
+        });
+
+        // Add clickable link text next to QR Code
+        page.drawText('Link direto:', {
+          x: MARGIN + qrSize + 20,
+          y: y - 20,
+          size: 9,
+          font,
+          color: TEXT_COLOR,
+        });
+
+        // Draw the link in blue (indicating it's a link)
+        const videoUrl = vistoria.video_360_url;
+        const maxLinkWidth = CONTENT_WIDTH - qrSize - 40;
+        const displayUrl = videoUrl.length > 60 ? videoUrl.substring(0, 57) + '...' : videoUrl;
+        
+        page.drawText(displayUrl, {
+          x: MARGIN + qrSize + 20,
+          y: y - 35,
+          size: 8,
+          font,
+          color: rgb(0, 0.4, 0.8), // Blue color for link
+        });
+
+        y = y - qrSize - 40;
+        console.log(`[LAUDO] QR Code do vídeo 360° adicionado com sucesso`);
+      } catch (qrError) {
+        console.error('[LAUDO] Erro ao gerar QR Code:', qrError);
+        
+        // Fallback: just show the link without QR Code
+        page.drawText('Link para o vídeo:', {
+          x: MARGIN,
+          y,
+          size: 9,
+          font,
+          color: TEXT_COLOR,
+        });
+
+        y -= 15;
+
+        page.drawText(vistoria.video_360_url, {
+          x: MARGIN,
+          y,
+          size: 8,
+          font,
+          color: rgb(0, 0.4, 0.8),
+        });
+
+        y -= 30;
+      }
     }
 
     // Photos section - with memory optimization
