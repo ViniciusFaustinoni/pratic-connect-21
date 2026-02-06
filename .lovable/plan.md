@@ -1,229 +1,231 @@
 
 
-## Calculadora de Preço Rápida - Faixa de Valores com Critérios
+## Plano: Redesenhar Cards dos Planos no PDF Comparativo
 
-### Objetivo
+### Problema Atual
 
-Transformar a calculadora atual (que mostra um valor único) em uma ferramenta mais robusta que:
-1. Exiba uma **faixa de valores** (ex: R$ 89 a R$ 169/mês) baseada nos planos disponíveis
-2. Inclua **critérios básicos** que influenciam o cálculo para maior coerência
-3. Mantenha a experiência de **cálculo rápido** (sem necessidade de cadastro)
+O PDF comparativo atual exibe cards de planos compactos na página de capa, mas com layout diferente da interface web (imagem de referência). O usuário deseja que os cards do PDF tenham:
 
----
+1. **Nome do plano** centralizado no topo com borda/destaque
+2. **Valor mensal** grande e centralizado logo abaixo
+3. **Lista de coberturas** com checkmarks verdes, alinhadas à esquerda
+4. **Filiação/Adesão** no rodapé do card
 
-### Campos de Entrada Propostos
-
-| Campo | Tipo | Objetivo |
-|-------|------|----------|
-| **Valor FIPE** | Input monetário | Base para encontrar faixa de preço |
-| **Ano do veículo** | Select (faixas) | Veículos mais antigos podem ter variação |
-| **Tipo de uso** | Toggle (Particular/Trabalho) | Uso profissional pode ter acréscimo |
-| **Cobertura desejada** | Select (Básica/Completa/Premium) | Filtrar por categoria de plano |
-
----
-
-### Lógica de Cálculo
-
-O sistema já possui na tabela `tabelas_preco`:
-- `fipe_de` / `fipe_ate` - Faixas de valor FIPE
-- `taxa_administrativa` - Taxa fixa mensal
-- `valor_cota` - Valor variável por faixa
-- `valor_rastreamento` - Taxa de rastreamento
-- `valor_assistencia` - Taxa de assistência (opcional)
-- `plano_id` - Referência ao plano (Básico, Total, Premium)
-
-**Fórmula base:**
-```
-Mensalidade = taxa_administrativa + valor_rastreamento + valor_assistencia + (valor_cota * fator_risco)
-```
-
-**Fatores de ajuste:**
-- **Ano do veículo**: Veículos com mais de 10 anos = fator 1.15 (15% adicional)
-- **Tipo de uso**: Trabalho/comercial = fator 1.20 (20% adicional)
-- **Sem fator**: Particular + veículo recente = fator 1.0
-
----
-
-### Exibição do Resultado
-
-Ao invés de um valor único, mostrar:
+### Layout de Referência (da imagem)
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  Estimativa para veículo R$ 40.000,00                       │
-│  Faixa FIPE: R$ 0 - R$ 50.000                               │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│     Mensalidade estimada:                                   │
-│     ┌─────────────────────────────────────────┐             │
-│     │  R$ 89,00  a  R$ 169,00                 │             │
-│     │  (Plano Básico até Premium)             │             │
-│     └─────────────────────────────────────────┘             │
-│                                                              │
-│  Critérios aplicados:                                       │
-│  - Uso particular                                           │
-│  - Veículo até 10 anos                                      │
-│  - Cobertura: Todas as opções                               │
-│                                                              │
-│  * Valores estimados. Consulte um especialista              │
-│    para cotação personalizada.                              │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│        SELECT EXCLUSIVE           1°    │  ← Badge de ranking (opcional)
+├─────────────────────────────────────────┤
+│                                         │
+│          R$ 206,00/mês                 │  ← Valor centralizado e grande
+│                                         │
+│  ✓ Roubo e Furto                       │
+│  ✓ Colisão                              │
+│  ✓ Perda Total                          │
+│  ✓ Incêndio                             │
+│  ✓ Alagamento                           │
+│  ✓ Chuva de Granizo                     │
+│  ✓ Assistência 24h 400km                │
+│  ✓ Rastreador/Monitoramento (...)       │
+│  ✓ 1000km Reboque                       │
+│  ✓ Danos Terceiros R$40mil              │
+│  ✓ Vidros e Faróis (após 120 dia...)    │
+│  ✓ Reboque Excedente (1x a ca...)       │
+│  ✓ Kit Gás                              │
+│  ✓ 100% FIPE APP + Carro Res...         │
+│                                         │
+│  ─ Ver menos                            │  ← (opcional no PDF)
+├─────────────────────────────────────────┤
+│  Filiação: R$ 0,00                      │  ← Taxa de adesão no rodapé
+└─────────────────────────────────────────┘
 ```
 
+### Alterações Propostas
+
+#### 1. Modificar a página de capa (`desenharPaginaCapa`)
+
+Substituir os cards compactos (80px altura) por **cards verticais expandidos** que mostram todas as coberturas de cada plano, similar à interface web.
+
+**Novo layout do card:**
+- Largura: Variável baseada na quantidade de planos (1 plano = 100% largura, 2 planos = 50% cada, 3+ = scroll ou múltiplas linhas)
+- Altura: Dinâmica baseada no número de coberturas
+- Estrutura interna:
+  1. Header com nome do plano (fundo azul/destaque)
+  2. Valor mensal grande centralizado
+  3. Separador "/mês" em texto menor
+  4. Lista de coberturas com check verde
+  5. Rodapé com taxa de filiação/adesão
+
+#### 2. Considerar limitação de espaço
+
+Como uma página A4 tem espaço limitado (~297mm de altura), para planos com muitas coberturas:
+- Exibir até 12-14 coberturas por card
+- Se houver mais, indicar "..." ou continuar na página de detalhes
+
+#### 3. Centralização
+
+- Cards centralizados horizontalmente na página
+- Conteúdo interno (nome, valor, coberturas) com alinhamento consistente
+- Espaçamento uniforme entre cards
+
 ---
 
-### Arquivos a Modificar
+### Detalhes Técnicos
 
-| Arquivo | Modificacao |
-|---------|-------------|
-| `src/components/planos/CalculadoraPreco.tsx` | Reescrever componente com novos campos e lógica de faixa |
-| `src/hooks/usePlanos.ts` | Adicionar query para buscar preços por faixa FIPE (se necessário) |
+**Arquivo a modificar:** `src/lib/gerarPdfCotacao.ts`
 
----
+**Função a modificar:** `desenharPaginaCapa` (linhas 740-1001)
 
-### Detalhes de Implementacao
-
-**1. Estados do componente:**
+**Alterações principais:**
 
 ```typescript
-const [valorFipe, setValorFipe] = useState<string>('');
-const [anoVeiculo, setAnoVeiculo] = useState<'recente' | 'antigo'>('recente'); // 0-10 anos vs 10+
-const [tipoUso, setTipoUso] = useState<'particular' | 'trabalho'>('particular');
-const [coberturaDesejada, setCoberturaDesejada] = useState<'todas' | 'basica' | 'completa' | 'premium'>('todas');
-const [resultado, setResultado] = useState<ResultadoFaixa | null>(null);
-```
-
-**2. Interface de resultado:**
-
-```typescript
-interface ResultadoFaixa {
-  faixaFipe: string;
-  valorMinimo: number;
-  valorMaximo: number;
-  planoMinimo: string;
-  planoMaximo: string;
-  fatoresAplicados: string[];
-  observacao?: string;
-}
-```
-
-**3. Funcao de calculo:**
-
-```typescript
-const calcular = () => {
-  const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
+// Novo card expandido para planos
+const desenharCardPlanoExpandido = (
+  doc: jsPDF,
+  plano: PlanoParaPdf,
+  x: number,
+  y: number,
+  width: number,
+  index: number
+): number => { // Retorna a altura final do card
   
-  // Buscar faixa FIPE correspondente
-  const faixas = tabelas.filter(t => 
-    valor >= Number(t.fipe_de) && valor <= Number(t.fipe_ate)
-  );
+  const padding = 8;
+  const lineHeight = 9;
+  const maxCoberturas = 12; // Limitar para caber na página
   
-  // Calcular fatores
-  let fator = 1.0;
-  const fatoresAplicados: string[] = [];
+  // Calcular altura baseada nas coberturas
+  const numCoberturas = Math.min(plano.coberturas.length, maxCoberturas);
+  const cardHeight = 
+    30 +  // Header (nome do plano)
+    35 +  // Valor mensal
+    (numCoberturas * lineHeight) + // Coberturas
+    25;   // Rodapé (filiação)
   
-  if (anoVeiculo === 'antigo') {
-    fator *= 1.15;
-    fatoresAplicados.push('Veículo com mais de 10 anos (+15%)');
-  }
-  
-  if (tipoUso === 'trabalho') {
-    fator *= 1.20;
-    fatoresAplicados.push('Uso para trabalho (+20%)');
-  }
-  
-  // Calcular valores por plano
-  const valores = faixas.map(f => {
-    const base = Number(f.taxa_administrativa) + Number(f.valor_rastreamento) + Number(f.valor_assistencia || 0);
-    return base * fator;
+  // Fundo do card
+  drawPremiumCard(doc, x, y, width, cardHeight, { 
+    isRecommended: index === 0, 
+    hasGlow: true 
   });
   
-  // Filtrar por cobertura se especificado
-  // Retornar min/max
-  setResultado({
-    faixaFipe: `R$ ${formatCurrency(faixas[0].fipe_de)} - R$ ${formatCurrency(faixas[0].fipe_ate)}`,
-    valorMinimo: Math.min(...valores),
-    valorMaximo: Math.max(...valores),
-    planoMinimo: 'Básico',
-    planoMaximo: 'Premium',
-    fatoresAplicados,
+  let currentY = y + 8;
+  
+  // 1. Header: Nome do plano centralizado
+  doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
+  doc.roundedRect(x + 4, currentY - 4, width - 8, 18, 2, 2, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text(plano.nome.toUpperCase(), x + width / 2, currentY + 7, { align: 'center' });
+  currentY += 22;
+  
+  // 2. Valor mensal grande
+  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(plano.valorMensal), x + width / 2, currentY, { align: 'center' });
+  currentY += 6;
+  
+  // 3. "/mês" em texto menor
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text('/mês', x + width / 2, currentY, { align: 'center' });
+  currentY += 12;
+  
+  // 4. Lista de coberturas
+  const coberturasExibir = plano.coberturas.slice(0, maxCoberturas);
+  coberturasExibir.forEach((cobertura) => {
+    // Check verde
+    doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
+    doc.circle(x + padding + 4, currentY - 1.5, 1.5, 'F');
+    
+    // Texto da cobertura
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(truncateText(cobertura, 30), x + padding + 10, currentY);
+    
+    currentY += lineHeight;
   });
+  
+  // Se tem mais coberturas, indicar
+  if (plano.coberturas.length > maxCoberturas) {
+    doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
+    doc.setFontSize(7);
+    doc.text(`+ ${plano.coberturas.length - maxCoberturas} mais...`, x + width / 2, currentY, { align: 'center' });
+    currentY += 8;
+  }
+  
+  currentY += 4;
+  
+  // 5. Rodapé: Filiação (taxa de adesão)
+  doc.setDrawColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
+  doc.line(x + padding, currentY - 4, x + width - padding, currentY - 4);
+  
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Filiação:', x + padding, currentY);
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(plano.valorAdesao), x + width - padding, currentY, { align: 'right' });
+  
+  return cardHeight;
 };
 ```
 
----
+**Modificação na lógica de layout:**
 
-### Interface Visual (Wireframe)
+```typescript
+// Na função desenharPaginaCapa, após desenhar header e dados do cliente
+// Desenhar cards em layout responsivo
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Calculadora de Preço                                    x │
-│  Simule rapidamente sua mensalidade                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Valor FIPE do Veículo                                     │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ R$ 40.000,00                                        │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Ano do Veículo                                            │
-│  ┌────────────────────┐ ┌────────────────────┐             │
-│  │ ● Até 10 anos      │ │ ○ Mais de 10 anos  │             │
-│  └────────────────────┘ └────────────────────┘             │
-│                                                             │
-│  Tipo de Uso                                               │
-│  ┌────────────────────┐ ┌────────────────────┐             │
-│  │ ● Particular       │ │ ○ Trabalho/App     │             │
-│  └────────────────────┘ └────────────────────┘             │
-│                                                             │
-│  Cobertura                                                 │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ Todas as opções                               ▼     │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                    Calcular                         │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  Resultado:                                                │
-│                                                             │
-│  Faixa FIPE: R$ 0 - R$ 50.000                              │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │      Mensalidade estimada:                          │   │
-│  │                                                     │   │
-│  │      R$ 89,00  a  R$ 169,00/mês                    │   │
-│  │      ─────────────────────────                      │   │
-│  │      Plano Básico até Premium                       │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Critérios:                                                │
-│  ✓ Uso particular                                          │
-│  ✓ Veículo até 10 anos                                     │
-│                                                             │
-│  * Valores sujeitos a análise. Entre em contato            │
-│    para cotação personalizada.                             │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+const numPlanos = cotacao.planosComparar.length;
+
+if (numPlanos === 1) {
+  // Card único centralizado (largura 70% da página)
+  const cardWidth = contentWidth * 0.7;
+  const cardX = (pageWidth - cardWidth) / 2;
+  desenharCardPlanoExpandido(doc, cotacao.planosComparar[0], cardX, y, cardWidth, 0);
+  
+} else if (numPlanos === 2) {
+  // 2 cards lado a lado
+  const cardWidth = (contentWidth - 10) / 2;
+  cotacao.planosComparar.forEach((plano, index) => {
+    const cardX = margin + (cardWidth + 10) * index;
+    desenharCardPlanoExpandido(doc, plano, cardX, y, cardWidth, index);
+  });
+  
+} else {
+  // 3+ cards: Layout em múltiplas linhas ou cards mais compactos
+  const cardsPerRow = 3;
+  const cardGap = 6;
+  const cardWidth = (contentWidth - (cardGap * (cardsPerRow - 1))) / cardsPerRow;
+  
+  cotacao.planosComparar.forEach((plano, index) => {
+    const row = Math.floor(index / cardsPerRow);
+    const col = index % cardsPerRow;
+    const cardX = margin + (cardWidth + cardGap) * col;
+    const cardY = y + row * 130; // Altura estimada por linha
+    
+    desenharCardPlanoExpandido(doc, plano, cardX, cardY, cardWidth, index);
+  });
+}
 ```
 
 ---
 
-### Benefícios
+### Resultado Esperado
 
-1. **Coerência**: Valores baseados em critérios reais (tipo uso, idade veículo)
-2. **Transparência**: Cliente entende que há uma faixa e quais fatores influenciam
-3. **Rapidez**: Poucos campos, cálculo instantâneo
-4. **Realismo**: Exibe min/max ao invés de valor único que pode frustrar
+Após as alterações, o PDF comparativo terá:
 
----
+1. **Cards verticais** com nome do plano em destaque no topo
+2. **Valor mensal centralizado** com tamanho grande
+3. **Lista de coberturas** alinhadas à esquerda com checks verdes
+4. **Taxa de filiação** visível no rodapé de cada card
+5. **Espaçamento uniforme** entre elementos
+6. **Centralização** de cards na página
 
-### Considerações Tecnicas
-
-- Dados vêm da tabela `tabelas_preco` já existente
-- Hook `useTabelasPreco` já busca as faixas
-- Os fatores (15% e 20%) podem ser configuráveis via tabela `configuracoes`
-- Se cobertura específica selecionada, filtra para mostrar apenas aquele plano
+O layout final será visualmente similar à interface web mostrada na imagem de referência, mantendo a identidade visual premium do sistema.
 
