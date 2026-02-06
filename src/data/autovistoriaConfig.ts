@@ -525,6 +525,33 @@ export const getPeriodosParaDia = (date: Date): PeriodoConfig[] => {
   return PERIODOS_DISPONIVEIS;
 };
 
+/**
+ * Filtra períodos disponíveis baseado na hora ATUAL
+ * Se for a MESMA data que hoje, bloqueia períodos que já expiraram
+ * Se for uma data FUTURA, retorna todos os períodos do dia
+ */
+export const getPeriodosDisponivelsPorHora = (date: Date): PeriodoConfig[] => {
+  const periodosDodia = getPeriodosParaDia(date); // Já filtra sábado
+  
+  // Se for uma data futura (não é hoje), retornar todos os períodos do dia
+  const hoje = new Date();
+  const dataFormatada = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const hojeFormatada = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+  
+  if (dataFormatada !== hojeFormatada) {
+    return periodosDodia;
+  }
+  
+  // Se é hoje, filtrar períodos que ainda estão disponíveis
+  const horaAgora = `${String(hoje.getHours()).padStart(2, '0')}:${String(hoje.getMinutes()).padStart(2, '0')}`;
+  
+  return periodosDodia.filter(periodo => {
+    // Comparar horarioInicio do período com hora atual
+    // Se 14:00 é horarioInicio da tarde e agora é 15:00, período não passa no filtro
+    return periodo.horarioInicio > horaAgora;
+  });
+};
+
 // Função para obter horários disponíveis baseado no dia da semana (LEGADO - mantido para compatibilidade)
 export const getHorariosParaDia = (date: Date): string[] => {
   if (isSabado(date)) {
