@@ -32,6 +32,12 @@ interface TarefaAtualCardProps {
     confirmacao_whatsapp?: string | null;
     confirmado_via_whatsapp_em?: string | null;
     permite_encaixe?: boolean;
+    cliente: {
+      id: string;
+      nome: string;
+      telefone: string;
+      whatsapp?: string | null;
+    };
   };
 }
 
@@ -101,6 +107,18 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const ligarCliente = () => {
     if (tarefa.cliente.telefone) {
       window.open(`tel:${tarefa.cliente.telefone}`, '_self');
+    }
+  };
+
+  const abrirWhatsApp = () => {
+    const numero = tarefa.cliente.whatsapp || tarefa.cliente.telefone;
+    if (numero) {
+      const numeroLimpo = numero.replace(/\D/g, '');
+      const mensagem = encodeURIComponent(
+        `Olá ${tarefa.cliente.nome?.split(' ')[0] || ''}, sou o técnico da PRATIC. ` +
+        `Estou entrando em contato para confirmar os detalhes do serviço agendado. Podemos conversar?`
+      );
+      window.open(`https://wa.me/55${numeroLimpo}?text=${mensagem}`, '_blank');
     }
   };
 
@@ -222,6 +240,15 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
               <p className="font-medium text-foreground truncate">{tarefa.cliente.nome}</p>
               <p className="text-sm text-muted-foreground">{tarefa.cliente.telefone}</p>
             </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={abrirWhatsApp}
+              disabled={!tarefa.cliente.whatsapp && !tarefa.cliente.telefone}
+              className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </Button>
             <Button
               variant="outline"
               size="icon"
