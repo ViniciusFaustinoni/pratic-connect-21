@@ -132,10 +132,10 @@ export function useRemoverBlacklist() {
       id: string; 
       reverterVeiculo?: boolean;
     }) => {
-      // Buscar dados da blacklist antes de remover
+      // Buscar dados da blacklist antes de remover (incluindo contrato e cotação)
       const { data: blacklistItem, error: fetchError } = await supabase
         .from('blacklist_veiculos')
-        .select('veiculo_id, associado_id')
+        .select('veiculo_id, associado_id, contrato_id, cotacao_id')
         .eq('id', id)
         .single();
 
@@ -153,9 +153,9 @@ export function useRemoverBlacklist() {
 
       if (error) throw error;
 
-      // Se solicitado reverter status do veículo
+      // Se solicitado reverter status do veículo (reset completo do processo)
       if (reverterVeiculo && blacklistItem?.veiculo_id) {
-        // Reverter veículo para 'em_analise'
+        // 1. Reverter veículo para 'em_analise'
         const { error: veiculoError } = await supabase
           .from('veiculos')
           .update({ 
@@ -168,7 +168,7 @@ export function useRemoverBlacklist() {
           console.error('Erro ao reverter status do veículo:', veiculoError);
         }
 
-        // Reverter associado para 'pendente_vistoria'
+        // 2. Reverter associado para 'pendente_vistoria'
         if (blacklistItem.associado_id) {
           const { error: associadoError } = await supabase
             .from('associados')
@@ -182,6 +182,67 @@ export function useRemoverBlacklist() {
           if (associadoError) {
             console.error('Erro ao reverter status do associado:', associadoError);
           }
+        }
+
+        // 3. Resetar contrato para rascunho (nova assinatura e pagamento obrigatórios)
+        if (blacklistItem.contrato_id) {
+          const { error: contratoError } = await supabase
+            .from('contratos')
+            .update({
+              status: 'rascunho',
+              // Limpar dados do Autentique (assinatura)
+              autentique_documento_id: null,
+              autentique_url: null,
+              autentique_status: null,
+              pdf_url: null,
+              pdf_assinado_url: null,
+              data_envio: null,
+              data_visualizacao: null,
+              data_assinatura: null,
+              // Limpar dados de pagamento
+              adesao_paga: false,
+              adesao_paga_em: null,
+              adesao_cobranca_id: null,
+              // Limpar dados de aprovação
+              aprovado_por: null,
+              aprovado_em: null,
+              observacao_aprovacao: null,
+              // Limpar dados de vistoria
+              vistoria_concluida_em: null,
+              vistoria_id: null,
+            })
+            .eq('id', blacklistItem.contrato_id);
+
+          if (contratoError) {
+            console.error('Erro ao resetar contrato:', contratoError);
+          }
+        }
+
+        // 4. Resetar cotação para aceita - aguardando vistoria
+        if (blacklistItem.cotacao_id) {
+          const { error: cotacaoError } = await supabase
+            .from('cotacoes')
+            .update({
+              status: 'aceita',
+              status_contratacao: 'aguardando_vistoria',
+              vistoria_concluida_em: null,
+              vistoria_id: null,
+            })
+            .eq('id', blacklistItem.cotacao_id);
+
+          if (cotacaoError) {
+            console.error('Erro ao resetar cotação:', cotacaoError);
+          }
+        }
+
+        // 5. Excluir vistorias antigas do veículo (para nova vistoria limpa)
+        const { error: vistoriaError } = await supabase
+          .from('vistorias')
+          .delete()
+          .eq('veiculo_id', blacklistItem.veiculo_id);
+
+        if (vistoriaError) {
+          console.error('Erro ao excluir vistorias antigas:', vistoriaError);
         }
       }
     },
