@@ -58,6 +58,7 @@ import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/Che
 import { VistoriaFotoCard } from '@/components/vistorias/VistoriaFotoCard';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { ModalRecusaVeiculo } from '@/components/instalador/ModalRecusaVeiculo';
+import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { useRastreadoresDoPortador, type RastreadorEmPorte } from '@/hooks/useRastreadoresPortador';
 import { useConfigFipeRastreador, precisaRastreador } from '@/hooks/useConfigRastreador';
 import { toast } from 'sonner';
@@ -567,6 +568,14 @@ export default function InstaladorChecklist() {
         </div>
         <Progress value={progresso} className="h-1" />
       </div>
+
+      {/* Temporizador de Execução */}
+      {servico?.iniciada_em && (
+        <TemporizadorExecucao 
+          iniciadaEm={servico.iniciada_em} 
+          className="mx-4 mt-4"
+        />
+      )}
 
       {/* Content */}
       <div className="flex-1 p-4 pb-24">
