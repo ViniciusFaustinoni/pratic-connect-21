@@ -23,7 +23,7 @@ import { useVagasPeriodo, temVagasDisponiveis } from '@/hooks/useVagasPeriodo';
 import { 
   PERIODOS_DISPONIVEIS, 
   LIMITE_VAGAS_POR_PERIODO, 
-  getPeriodosParaDia,
+  getPeriodosDisponivelsPorHora,
   type Periodo 
 } from '@/data/autovistoriaConfig';
 
@@ -68,10 +68,10 @@ export function EnviarManutencaoModal({
   // Buscar vagas disponíveis para a data selecionada
   const { data: vagasData, isLoading: isLoadingVagas } = useVagasPeriodo(dataFormatada);
 
-  // Períodos disponíveis para o dia selecionado
+  // Períodos disponíveis para o dia selecionado (considera hora atual para hoje)
   const periodosDisponiveis = useMemo(() => {
     if (!dataSelecionada) return PERIODOS_DISPONIVEIS;
-    return getPeriodosParaDia(dataSelecionada);
+    return getPeriodosDisponivelsPorHora(dataSelecionada);
   }, [dataSelecionada]);
 
   // Datas mínima e máxima

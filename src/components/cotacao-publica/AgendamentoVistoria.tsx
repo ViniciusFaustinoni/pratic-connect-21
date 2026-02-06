@@ -16,7 +16,7 @@ import { useFinalizarVistoriaCotacao, useAgendarVistoriaCompleta } from '@/hooks
 import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
 import { 
   isDomingo, 
-  getPeriodosParaDia, 
+  getPeriodosDisponivelsPorHora, 
   PERIODOS_DISPONIVEIS,
   LIMITE_VAGAS_POR_PERIODO,
   type Periodo,
@@ -100,15 +100,15 @@ export function AgendamentoVistoria({
     dia = addDays(dia, 1);
   }
 
-  // Períodos disponíveis para a data selecionada
+  // Períodos disponíveis para a data selecionada (considera hora atual para hoje)
   const periodosParaDataSelecionada = dataSelecionada 
-    ? getPeriodosParaDia(dataSelecionada) 
+    ? getPeriodosDisponivelsPorHora(dataSelecionada) 
     : PERIODOS_DISPONIVEIS;
 
   // Reset período se mudar a data e o período selecionado não estiver disponível
   useEffect(() => {
     if (dataSelecionada && periodoSelecionado) {
-      const periodosDisponiveis = getPeriodosParaDia(dataSelecionada);
+      const periodosDisponiveis = getPeriodosDisponivelsPorHora(dataSelecionada);
       const periodoExiste = periodosDisponiveis.some(p => p.id === periodoSelecionado);
       if (!periodoExiste) {
         setPeriodoSelecionado(null);
@@ -360,8 +360,18 @@ export function AgendamentoVistoria({
                       })}
                     </div>
 
-                    {/* Aviso de sábado */}
-                    {dataSelecionada && periodosParaDataSelecionada.length === 1 && (
+                    {/* Aviso quando nenhum período disponível hoje */}
+                    {dataSelecionada && periodosParaDataSelecionada.length === 0 && (
+                      <div className="flex items-center gap-2 text-destructive bg-destructive/10 p-3 rounded-lg">
+                        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                        <span className="text-sm">
+                          Todos os períodos de hoje já expiraram. Selecione uma data futura para continuar.
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Aviso de sábado (apenas manhã disponível) */}
+                    {dataSelecionada && periodosParaDataSelecionada.length === 1 && periodosParaDataSelecionada[0].id === 'manha' && (
                       <div className="flex items-center gap-2 text-warning bg-warning/10 p-3 rounded-lg">
                         <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                         <span className="text-sm">Aos sábados, apenas o período da manhã está disponível.</span>
