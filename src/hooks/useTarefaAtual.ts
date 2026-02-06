@@ -186,6 +186,19 @@ export function useIniciarRota() {
         .eq('profissional_id', profile.id); // Garantia adicional
 
       if (error) throw error;
+
+      // Disparar notificações em background (não bloqueia o fluxo)
+      supabase.functions.invoke('notificar-inicio-rota', {
+        body: { servico_id: tarefaId }
+      }).then(result => {
+        if (result.error) {
+          console.warn('[useIniciarRota] Erro ao disparar notificações:', result.error);
+        } else {
+          console.log('[useIniciarRota] Notificações disparadas:', result.data);
+        }
+      }).catch(err => {
+        console.warn('[useIniciarRota] Exceção ao disparar notificações:', err);
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
