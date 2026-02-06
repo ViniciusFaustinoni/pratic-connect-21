@@ -1,101 +1,65 @@
 
-# Plano: Corrigir Atualização de Status do Associado na Página do Cliente
+# Plano: Corrigir Edge Function de Atribuição Automática
 
 ## Problema Identificado
 
-O cliente permanece na tela "Em Análise Cadastral" mesmo depois que o analista aprovou o cadastro e o associado já está com status `ativo`. O redirecionamento para `/acompanhar/:token` não está acontecendo.
+A Edge Function `atribuir-proxima-tarefa` está **completamente quebrada** com o seguinte erro:
 
-## Causa Raiz
-
-1. **Realtime com limitações de RLS**: O canal realtime usa `publicSupabase` (role anon) para escutar a tabela `associados`, mas a RLS dessa tabela provavelmente não permite que requisições anônimas vejam os registros diretamente
-
-2. **Query stale**: A query `contrato-publico-fallback` que fornece o `associadoStatus` só é invalidada pelo realtime (que pode não estar funcionando) ou a cada 30 segundos via `refetchInterval`
-
-3. **Sem fallback robusto**: Se o realtime falhar, o cliente fica esperando 30 segundos para ver a mudança
-
-## Solução Proposta
-
-Implementar duas correções para garantir a atualização imediata:
-
-### 1. Adicionar subscrição realtime na tabela `contratos` (mais confiável)
-
-A tabela `contratos` tem RLS que permite leitura pública via `cotacao_token_publico`. Podemos escutar mudanças nessa tabela como proxy para detectar quando o associado foi processado.
-
-### 2. Reduzir intervalo de refetch e adicionar refetch no foco
-
-Como fallback, reduzir o `refetchInterval` de 30s para 10s e adicionar `refetchOnWindowFocus: true` para garantir atualização quando o cliente volta à aba.
-
-### 3. Adicionar log de debug para rastrear o problema
-
-Adicionar console.log para verificar se o realtime está funcionando e quais valores estão sendo recebidos.
-
-## Arquivos a Modificar
-
-### `src/hooks/useCotacaoContratacao.ts`
-
-1. **Reduzir `refetchInterval`** de 30000ms para 10000ms na query `contrato-publico-fallback`
-2. **Adicionar `refetchOnWindowFocus: true`** para revalidar quando o cliente voltar à aba
-3. **Melhorar o handler do realtime** para forçar refetch imediato das queries dependentes
-4. **Adicionar log de debug** para identificar se o realtime está funcionando
-
-```text
-// ANTES (linhas 143-145)
-refetchInterval: 30000,
-
-// DEPOIS
-refetchInterval: 10000, // Reduzido para 10 segundos
-refetchOnWindowFocus: true, // Revalidar ao voltar para a aba
-staleTime: 0, // Sempre considerar stale para garantir dados frescos
+```
+SyntaxError: Identifier 'hoje' has already been declared
+at file:///atribuir-proxima-tarefa/index.ts:273:11
 ```
 
-### Handler do realtime (linhas 249-263):
-
-```text
-// Melhorar invalidação para forçar refetch imediato
-channel = channel.on(
-  'postgres_changes',
-  {
-    event: 'UPDATE',
-    schema: 'public',
-    table: 'associados',
-    filter: `id=eq.${associadoId}`,
-  },
-  async (payload) => {
-    console.log('[CotacaoContratacao] Realtime: associado atualizado:', payload);
-    
-    // Forçar refetch imediato (não apenas invalidar)
-    await queryClient.refetchQueries({ queryKey: ['contrato-publico-fallback', token] });
-    refetch();
-  }
-);
-```
-
-### `src/pages/public/CotacaoContratacao.tsx`
-
-1. **Adicionar log para debugging** no useEffect de redirecionamento
-2. **Garantir que o redirecionamento aconteça** assim que os dados forem atualizados
+**Causa**: A variável `hoje` foi declarada duas vezes no mesmo escopo:
+- Linha 214: `const hoje = new Date().toISOString().split('T')[0];`
+- Linha 357: `const hoje = new Date().toISOString().split('T')[0];`
 
 ## Impacto
 
-- O cliente verá a mudança de status em até 10 segundos (ao invés de 30)
-- Ao voltar para a aba, a atualização será imediata
-- O realtime continuará tentando funcionar como melhoria adicional
-- Logs de debug ajudarão a identificar se há problemas de RLS no realtime
+| Funcionalidade | Status |
+|----------------|--------|
+| Vistoriador solicitar próxima tarefa | **QUEBRADO** |
+| Atribuição automática via CRON | Funcionando |
+| Iniciar rota para tarefa atribuída | **QUEBRADO** |
 
-## Fluxo Corrigido
+Isso explica por que o vistoriador não consegue receber tarefas automaticamente ao solicitar - a função nem sequer carrega.
+
+## Solução
+
+Remover a segunda declaração de `hoje` na linha 357, pois a variável já foi declarada na linha 214 e está disponível no mesmo escopo.
+
+### Arquivo a Modificar
+
+**`supabase/functions/atribuir-proxima-tarefa/index.ts`**
+
+### Mudança
 
 ```text
-1. Analista aprova o associado → status muda para 'ativo'
-2. Realtime dispara evento (se RLS permitir)
-   OU refetchInterval detecta a mudança em até 10s
-   OU usuário volta à aba e refetchOnWindowFocus atualiza
-3. Query contrato-publico-fallback é refetchada
-4. associadoStatus atualiza para 'ativo'
-5. useEffect detecta mudança e redireciona para /acompanhar/:token
+ANTES (linha 357):
+const hoje = new Date().toISOString().split('T')[0];
+const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+DEPOIS:
+// hoje já foi declarado na linha 214
+const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 ```
 
-## Testes Recomendados
+## Verificação Adicional
 
-1. Aprovar um associado e verificar se o cliente é redirecionado
-2. Verificar os console.logs para confirmar se o realtime está funcionando
-3. Testar o refetch ao voltar para a aba do navegador
+Após a correção, verificar se há outros lugares no código com declarações duplicadas de variáveis.
+
+## Testes
+
+1. Verificar que a Edge Function carrega sem erros
+2. Testar a atribuição automática ao solicitar próxima tarefa
+3. Confirmar que o vistoriador recebe tarefas corretamente
+
+## Impacto da Correção
+
+- Restauração imediata da funcionalidade de atribuição automática interativa
+- Vistoriadores poderão solicitar próximas tarefas novamente
+- Sistema voltará a funcionar como projetado
+
+## Detalhes Técnicos
+
+O erro ocorre porque o JavaScript/TypeScript não permite re-declarar uma variável `const` no mesmo escopo. A solução é simplesmente reutilizar a variável `hoje` que já foi declarada anteriormente no mesmo bloco de código.
