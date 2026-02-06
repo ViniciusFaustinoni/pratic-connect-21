@@ -1,128 +1,171 @@
 
-# Plano: Adicionar Botão de WhatsApp nas Telas de Execução de Serviço
+# Plano: Adicionar Veículos à Blacklist Quando Associado for Bloqueado
 
 ## Problema Identificado
 
-As páginas de execução de serviços do vistoriador/instalador não possuem botão de WhatsApp para contato com o cliente:
-
-| Página | WhatsApp? | Problema |
-|--------|-----------|----------|
-| `TarefaAtualCard.tsx` | ✅ Já tem | - |
-| `ExecutarManutencao.tsx` | ✅ Já tem | - |
-| `EncaixeUrgenteCard.tsx` | ✅ Já tem | - |
-| `ExecutarVistoriaCompleta.tsx` | ❌ Não tem | Campo `whatsapp` não buscado + sem botão |
-| `ExecutarRetirada.tsx` | ❌ Não tem | Campo `whatsapp` não buscado + sem botão |
+Quando um associado é bloqueado pelo sistema, seus veículos **não são automaticamente adicionados à blacklist**. Isso significa que:
+- O veículo pode ser usado em uma nova cotação por outro associado
+- Não há registro histórico do bloqueio na blacklist
+- O controle da diretoria sobre veículos problemáticos fica incompleto
 
 ## Solução Proposta
 
-### 1. Atualizar queries para incluir campo `whatsapp`
+### 1. Adicionar Novo Tipo de Reprovação no Banco de Dados
 
-**Arquivo: `src/hooks/useVistorias.ts`**
+Atualmente o enum `tipo_reprovacao` só tem dois valores:
+- `vistoria_reprovada`
+- `proposta_reprovada`
 
-Adicionar `whatsapp` em todas as queries de associado:
-- Linha 629: `associado:associados(id, nome, cpf, telefone, whatsapp)`
-- Linha 647: `associado:associados(id, nome, cpf, telefone, whatsapp)`
-- Linha 631: `associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone, whatsapp)`
-- Linha 649: `associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone, whatsapp)`
+**Ação:** Adicionar um novo valor ao enum para representar bloqueio de associado:
+- `associado_bloqueado`
 
-**Arquivo: `src/pages/instalador/ExecutarRetirada.tsx`**
-
-Linha 46: Adicionar `whatsapp` à query do associado:
-```typescript
-associado:associados(id, nome, telefone, cpf, whatsapp),
+```sql
+ALTER TYPE tipo_reprovacao ADD VALUE 'associado_bloqueado';
 ```
 
-### 2. Adicionar botão de WhatsApp no header das páginas
+### 2. Atualizar o Hook `useBlacklist.ts`
 
-**Arquivo: `src/pages/instalador/ExecutarVistoriaCompleta.tsx`**
+Atualizar a interface e o mutation para aceitar o novo tipo:
 
-Adicionar botões de contato no header (ao lado do nome do cliente):
-- Importar `MessageCircle` e `Phone` do lucide-react
-- Adicionar função `abrirWhatsApp()` 
-- Adicionar função `ligarCliente()`
-- Modificar o header para incluir botões de contato
-
-Código da modificação do header (linha 266-276):
 ```typescript
-<header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-800 px-4 py-3">
-  <div className="flex items-center gap-3">
-    <Button variant="ghost" size="icon" onClick={() => navigate('/vistoriador/tarefas')} className="text-slate-400">
-      <ArrowLeft className="h-5 w-5" />
-    </Button>
-    <div className="flex-1 min-w-0">
-      <p className="text-sm font-semibold text-white">Vistoria Completa</p>
-      <p className="text-xs text-slate-400 truncate">{associado?.nome} | {veiculo?.placa}</p>
+// Interface BlacklistVeiculo
+tipo_reprovacao: 'vistoria_reprovada' | 'proposta_reprovada' | 'associado_bloqueado';
+```
+
+### 3. Atualizar a Página de Blacklist
+
+**Arquivo: `src/pages/diretoria/Blacklist.tsx`**
+
+Adicionar o novo tipo no mapa de labels:
+```typescript
+const TIPO_LABELS: Record<string, string> = {
+  vistoria_reprovada: 'Vistoria Reprovada',
+  proposta_reprovada: 'Proposta Reprovada',
+  associado_bloqueado: 'Associado Bloqueado', // NOVO
+};
+```
+
+Adicionar opção no filtro de tipo:
+```typescript
+<SelectItem value="associado_bloqueado">Associado Bloqueado</SelectItem>
+```
+
+Adicionar card de estatísticas:
+```typescript
+<Card>
+  <CardHeader>
+    <CardTitle>Associado Bloqueado</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <div className="text-2xl font-bold">
+      {blacklist?.filter((i) => i.ativo && i.tipo_reprovacao === 'associado_bloqueado').length || 0}
     </div>
-    {/* NOVOS: Botões de Contato */}
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={abrirWhatsApp}
-      disabled={!associado?.whatsapp && !associado?.telefone}
-      className="text-green-500 hover:text-green-400 hover:bg-green-500/10"
-    >
-      <MessageCircle className="h-5 w-5" />
-    </Button>
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={ligarCliente}
-      disabled={!associado?.telefone}
-      className="text-slate-400"
-    >
-      <Phone className="h-5 w-5" />
-    </Button>
-  </div>
-</header>
+  </CardContent>
+</Card>
 ```
 
-**Arquivo: `src/pages/instalador/ExecutarRetirada.tsx`**
+### 4. Modificar a Lógica de Bloqueio de Associado
 
-Mesma estrutura de botões no header (linhas 221-235).
+**Arquivo: `src/pages/cadastro/Associados.tsx`**
 
-### 3. Adicionar funções de contato
-
-Em ambas as páginas, adicionar as funções:
+Na função `handleAcaoConfirm`, após bloquear o associado, buscar todos os veículos vinculados e adicionar cada um à blacklist:
 
 ```typescript
-const abrirWhatsApp = () => {
-  const numero = associado?.whatsapp || associado?.telefone;
-  if (numero) {
-    const numeroLimpo = numero.replace(/\D/g, '');
-    const mensagem = encodeURIComponent(
-      `Olá ${associado?.nome?.split(' ')[0] || ''}, sou o técnico da PRATIC. ` +
-      `Estou no local para realizar o serviço. Podemos confirmar?`
-    );
-    window.open(`https://wa.me/55${numeroLimpo}?text=${mensagem}`, '_blank');
-  }
-};
+const handleAcaoConfirm = async (motivo: string) => {
+  // ... código existente para atualizar status ...
 
-const ligarCliente = () => {
-  if (associado?.telefone) {
-    window.open(`tel:${associado.telefone}`, '_self');
+  // SE ação for BLOQUEAR, adicionar veículos à blacklist
+  if (acaoDialog.acao === 'bloquear') {
+    // 1. Buscar veículos do associado
+    const { data: veiculos } = await supabase
+      .from('veiculos')
+      .select('id, placa, chassi')
+      .eq('associado_id', acaoDialog.associadoId);
+
+    // 2. Para cada veículo, adicionar à blacklist
+    if (veiculos && veiculos.length > 0) {
+      for (const veiculo of veiculos) {
+        await supabase
+          .from('blacklist_veiculos')
+          .insert({
+            placa: veiculo.placa.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+            chassi: veiculo.chassi,
+            motivo: motivo,
+            justificativa: `Associado bloqueado: ${motivo}`,
+            tipo_reprovacao: 'associado_bloqueado',
+            veiculo_id: veiculo.id,
+            associado_id: acaoDialog.associadoId,
+            adicionado_por: profile?.id,
+            ativo: true,
+          });
+      }
+      
+      toast({
+        title: 'Veículos adicionados à Blacklist',
+        description: `${veiculos.length} veículo(s) foram adicionados à blacklist.`,
+      });
+    }
   }
 };
 ```
+
+### 5. Atualizar o Hook `useAssociadoActions` (Opcional)
+
+Para centralizar a lógica, podemos adicionar a inserção na blacklist dentro do hook `useAssociadoActions`:
+
+**Arquivo: `src/hooks/useAssociados.ts`**
+
+Modificar o mutation `atualizarStatus` para incluir a lógica de blacklist quando status for `bloqueado`.
 
 ## Arquivos a Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useVistorias.ts` | Adicionar `whatsapp` nas queries de associado (4 lugares) |
-| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Importar ícones, adicionar funções e botões no header |
-| `src/pages/instalador/ExecutarRetirada.tsx` | Importar ícones, adicionar funções e botões no header |
+| **Migração SQL** | Adicionar valor `associado_bloqueado` ao enum `tipo_reprovacao` |
+| `src/hooks/useBlacklist.ts` | Atualizar interface para incluir novo tipo |
+| `src/pages/diretoria/Blacklist.tsx` | Adicionar label, filtro e card de estatísticas |
+| `src/pages/cadastro/Associados.tsx` | Adicionar lógica de inserção na blacklist após bloqueio |
+
+## Fluxo Esperado
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  1. Usuário clica em "Bloquear" no menu do associado        │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. Dialog solicita motivo do bloqueio                      │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. Sistema atualiza status do associado para "bloqueado"   │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  4. Sistema busca todos os veículos do associado            │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  5. Cada veículo é inserido na blacklist_veiculos           │
+│     com tipo_reprovacao = 'associado_bloqueado'             │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  6. Toast confirma bloqueio + veículos na blacklist         │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## Comportamento Esperado
 
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| Vistoria/Retirada | Sem contato WhatsApp | Botão verde no header abre WhatsApp |
-| Cliente sem WhatsApp | - | Fallback usa telefone para WhatsApp |
-| Cliente sem dados | - | Botão desabilitado |
+| Bloquear associado | Apenas status alterado | Status + veículos na blacklist |
+| Página Blacklist | Sem categoria "Bloqueado" | Nova categoria com estatísticas |
+| Nova cotação com placa bloqueada | Poderia continuar | Bloqueada automaticamente |
 
 ## Testes Recomendados
 
-1. Acessar como vistoriador com uma tarefa de vistoria
-2. Verificar se o botão de WhatsApp aparece no header
-3. Clicar e verificar se abre o WhatsApp com mensagem pré-formatada
-4. Repetir teste para tela de retirada de rastreador
+1. Bloquear um associado que possui veículo cadastrado
+2. Verificar se o veículo aparece na página de Blacklist da Diretoria
+3. Confirmar que o tipo exibido é "Associado Bloqueado"
+4. Tentar fazer uma cotação com a placa bloqueada e verificar se o modal de bloqueio aparece
