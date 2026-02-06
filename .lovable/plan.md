@@ -1,120 +1,203 @@
 
-# Plano: Adicionar Vídeo 360° nos Detalhes da Instalação e Corrigir Legenda
+# Plano: Corrigir Notificações WhatsApp no Fluxo de Atribuição
 
-## Problemas Identificados
+## Problema Identificado
 
-### 1. Vídeo 360° não aparece na página de detalhes
-A instalação tem um vídeo 360° gravado pelo vistoriador (`video_360_url` na tabela `vistorias`), mas ele não é exibido na página de detalhes.
+O fluxo de atribuição tem **duas falhas críticas** de notificação:
 
-### 2. Legenda incorreta "Fotos da Autovistoria"
-Quando a vistoria foi realizada pelo vistoriador (modalidade `presencial`), a legenda deveria ser **"Fotos da Vistoria"**, não "Fotos da Autovistoria".
+### 1. Vistoriador NÃO recebe dados do cliente
+Quando uma tarefa é atribuída, o vistoriador deveria receber via WhatsApp:
+- Nome e telefone do cliente
+- Endereço completo
+- Dados do veículo
+- Link direto para WhatsApp do cliente
 
-| Modalidade | Legenda Correta |
-|------------|-----------------|
-| `autovistoria` | Fotos da Autovistoria |
-| `presencial` | Fotos da Vistoria |
+**Status atual**: A mensagem não foi enviada.
+
+### 2. Cliente NÃO recebe aviso de técnico a caminho
+Quando o técnico inicia a rota, o cliente deveria ser notificado:
+- Nome do técnico
+- Tipo de serviço
+- Horário previsto
+
+**Status atual**: A mensagem não foi enviada.
+
+## Análise da Causa Raiz
+
+### Cenário 1: Atribuição via Edge Function (Fluxo Automático)
+O código na Edge Function `atribuir-proxima-tarefa` (linhas 818-931) **TEM a lógica** para enviar as notificações:
+
+```text
+Linha 844-855: Notificar cliente via notificar-cliente (tipo: tecnico_em_rota)
+Linha 864-931: Notificar vistoriador via whatsapp-send-text
+```
+
+**Porém, os logs mostram que NENHUM serviço foi encontrado**:
+```
+[atribuir-proxima-tarefa] DEBUG: NENHUM serviço encontrado no sistema com status pendente/agendada
+```
+
+### Cenário 2: Atribuição Manual + Iniciar Rota (Hook Frontend)
+Quando a tarefa foi criada, o `profissional_id` já veio preenchido no banco (atribuição manual via trigger ou fluxo de agendamento).
+
+O vistoriador usou o hook `useIniciarRota` para iniciar a rota, que **apenas atualiza o status** sem chamar a Edge Function de notificação:
+
+```typescript
+// src/hooks/useTarefaAtual.ts - linha 178-186
+const { error } = await supabase
+  .from('servicos')
+  .update({ 
+    status: 'em_rota',
+    em_rota_em: new Date().toISOString(),
+  })
+  .eq('id', tarefaId);
+// ❌ NÃO envia notificações!
+```
+
+## Diagnóstico Final
+
+| Cenário | Status Atual |
+|---------|--------------|
+| Atribuição automática via polling | Funcionaria, mas não encontrou serviços |
+| Atribuição manual + iniciar rota | **NÃO ENVIA NOTIFICAÇÕES** |
+
+A instalação testada foi atribuída **manualmente** (profissional_id já existia no momento da criação do serviço às 17:50:49). Quando o vistoriador clicou em "Iniciar Rota" às 18:00:01, o hook atualizou o status, mas **nunca chamou a Edge Function que dispara as notificações**.
 
 ## Solução Proposta
 
-### 1. Modificar `src/hooks/useFotosAutovistoria.ts`
+### Modificação 1: Hook `useIniciarRota` - Adicionar Envio de Notificações
 
-Atualizar o hook para também retornar:
-- `video_360_url`: URL do vídeo 360° (se existir)
-- `modalidade`: Indica se foi autovistoria ou presencial
+**Arquivo:** `src/hooks/useTarefaAtual.ts`
 
-```
-// Antes
-.select('id, status, modalidade')
+Ao iniciar a rota, chamar a Edge Function `notificar-inicio-rota` (nova) para enviar as notificações:
 
-// Depois
-.select('id, status, modalidade, video_360_url')
-```
-
-```
-// Retornar adicionalmente
-return {
-  fotos: fotos as FotoAutovistoria[],
-  vistoriaId: vistoria.id,
-  origem: 'vistoria_fotos',
-  video360Url: vistoria.video_360_url,  // NOVO
-  modalidade: vistoria.modalidade,       // NOVO
-};
-```
-
-### 2. Modificar `src/pages/monitoramento/InstalacaoDetalhe.tsx`
-
-#### a) Corrigir legenda com base na modalidade
-
-```
-// Antes (linha 456)
-Fotos da Autovistoria ({totalFotos})
-
-// Depois
-{fotosData?.modalidade === 'presencial' 
-  ? 'Fotos da Vistoria' 
-  : 'Fotos da Autovistoria'} ({totalFotos})
+```typescript
+export function useIniciarRota() {
+  // ... código existente
+  
+  mutationFn: async ({ tarefaId }: { tarefaId: string }) => {
+    // ... validações existentes
+    
+    // Atualizar status
+    const { error } = await supabase
+      .from('servicos')
+      .update({ 
+        status: 'em_rota',
+        em_rota_em: new Date().toISOString(),
+      })
+      .eq('id', tarefaId);
+    
+    if (error) throw error;
+    
+    // NOVO: Disparar notificações (em background, não bloqueia)
+    supabase.functions.invoke('notificar-inicio-rota', {
+      body: { servico_id: tarefaId }
+    }).catch(err => console.warn('Erro ao notificar:', err));
+  },
+  // ...
+}
 ```
 
-#### b) Adicionar seção de Vídeo 360°
+### Modificação 2: Nova Edge Function `notificar-inicio-rota`
 
-Adicionar o componente `Video360Card` acima da seção de fotos:
+**Arquivo:** `supabase/functions/notificar-inicio-rota/index.ts`
 
+Esta Edge Function será responsável por:
+
+1. **Buscar dados do serviço** (cliente, veículo, endereço, profissional)
+2. **Notificar o CLIENTE** via `notificar-cliente` (template: tecnico_em_rota)
+3. **Notificar o VISTORIADOR** via `whatsapp-send-text` com dados do cliente
+
+```typescript
+// Estrutura básica
+serve(async (req) => {
+  const { servico_id } = await req.json();
+  
+  // 1. Buscar dados completos do serviço
+  const { data: servico } = await supabase
+    .from('servicos')
+    .select(`
+      *,
+      associado:associados(nome, telefone, whatsapp),
+      veiculo:veiculos(placa, marca, modelo),
+      profissional:profiles!profissional_id(nome, whatsapp, telefone)
+    `)
+    .eq('id', servico_id)
+    .single();
+  
+  // 2. Notificar cliente
+  await supabase.functions.invoke('notificar-cliente', {
+    body: {
+      tipo: 'tecnico_em_rota',
+      associado_id: servico.associado_id,
+      dados: { ... }
+    }
+  });
+  
+  // 3. Notificar vistoriador
+  await supabase.functions.invoke('whatsapp-send-text', {
+    body: {
+      telefone: profissionalTelefone,
+      mensagem: `📋 *NOVA TAREFA*\n\n👤 Cliente: ${servico.associado.nome}\n...`
+    }
+  });
+});
 ```
-import { Video360Card } from '@/components/cadastro/Video360Card';
 
-// Antes da seção de fotos, adicionar:
-{fotosData?.video360Url && (
-  <Video360Card videoUrl={fotosData.video360Url} />
-)}
-```
+### Modificação 3: Atualizar `supabase/config.toml`
 
-## Arquivos a Modificar
+Adicionar a nova função ao arquivo de configuração.
 
-1. **`src/hooks/useFotosAutovistoria.ts`**
-   - Adicionar `video_360_url` ao SELECT da vistoria
-   - Retornar `video360Url` e `modalidade` no objeto de resultado
-   - Atualizar tipo do retorno
+## Arquivos a Criar/Modificar
 
-2. **`src/pages/monitoramento/InstalacaoDetalhe.tsx`**
-   - Importar `Video360Card`
-   - Adicionar seção de vídeo 360°
-   - Corrigir legenda "Fotos da Autovistoria" para usar lógica baseada na modalidade
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/notificar-inicio-rota/index.ts` | **CRIAR** - Nova Edge Function |
+| `supabase/config.toml` | **MODIFICAR** - Adicionar config da nova função |
+| `src/hooks/useTarefaAtual.ts` | **MODIFICAR** - Chamar Edge Function ao iniciar rota |
 
-## Fluxo Visual Atualizado
+## Fluxo Atualizado
 
 ```text
-┌──────────────────────────────────────────────────────────┐
-│  Detalhes da Instalação #xxxx                            │
-├──────────────────────────────────────────────────────────┤
-│  [Cards existentes: Cliente, Veículo, Endereço, etc.]    │
-├──────────────────────────────────────────────────────────┤
-│  📹 Vídeo 360° do Veículo          ← NOVO                │
-│  ┌─────────────────────────────────────────┐             │
-│  │    [Player de Vídeo com controles]     │             │
-│  └─────────────────────────────────────────┘             │
-├──────────────────────────────────────────────────────────┤
-│  📷 Fotos da Vistoria (33)     ← CORRIGIDA (era "Autovistoria")
-│    ▸ Identificação                                       │
-│    ▸ Exterior                                            │
-│    ▸ Interior                                            │
-│    ▸ Outros                                              │
-├──────────────────────────────────────────────────────────┤
-│  📄 Documentação (x)                                     │
-└──────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     FLUXO DE ATRIBUIÇÃO E NOTIFICAÇÃO                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Serviço Criado (via agendamento)                                        │
+│     │                                                                       │
+│     ▼                                                                       │
+│  2A. Atribuição AUTOMÁTICA              2B. Atribuição MANUAL               │
+│      │ (via polling)                        │ (já tem profissional_id)      │
+│      ▼                                      ▼                               │
+│  atribuir-proxima-tarefa           Vistoriador clica "Iniciar Rota"         │
+│      │                                      │                               │
+│      │                                      ▼                               │
+│      │                              useIniciarRota (hook)                   │
+│      │                                      │                               │
+│      │                                      ▼                               │
+│      │                              notificar-inicio-rota (NOVO)            │
+│      │                                      │                               │
+│      ▼ ─────────────────────────────────────┘                               │
+│                                                                             │
+│  3. NOTIFICAÇÕES ENVIADAS:                                                  │
+│     ✅ Vistoriador recebe dados do cliente via WhatsApp                     │
+│     ✅ Cliente recebe aviso de técnico a caminho via WhatsApp               │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Comportamento Esperado
+## Comportamento Esperado Após Correção
 
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Vídeo 360° gravado | Não exibido | Card com player de vídeo |
-| Vistoria presencial | "Fotos da Autovistoria" | "Fotos da Vistoria" |
-| Autovistoria | "Fotos da Autovistoria" | "Fotos da Autovistoria" (mantém) |
-| Sem vídeo 360° | - | Seção não exibida |
+| Ação | Antes | Depois |
+|------|-------|--------|
+| Atribuição automática | Notificações OK (já implementado) | Mantém |
+| Atribuição manual + Iniciar Rota | **SEM notificações** | **COM notificações** |
 
 ## Testes Recomendados
 
-1. Abrir a instalação `2e3e8821-8a17-41e3-822b-b68011c73ec7` que tem vídeo 360°
-2. Verificar se o vídeo é exibido com player funcional
-3. Verificar se a legenda mudou para "Fotos da Vistoria"
-4. Testar uma instalação com autovistoria para garantir que continua com "Fotos da Autovistoria"
+1. Criar um agendamento de vistoria/instalação com vistoriador pré-atribuído
+2. Acessar como vistoriador e clicar em "Iniciar Rota"
+3. Verificar se:
+   - Vistoriador recebeu WhatsApp com dados do cliente
+   - Cliente recebeu WhatsApp avisando que técnico está a caminho
+4. Verificar logs da Edge Function `notificar-inicio-rota`
