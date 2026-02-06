@@ -125,7 +125,23 @@ export function useRemoverBlacklist() {
   const { profile } = useAuth();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ 
+      id, 
+      reverterVeiculo = false 
+    }: { 
+      id: string; 
+      reverterVeiculo?: boolean;
+    }) => {
+      // Buscar dados da blacklist antes de remover
+      const { data: blacklistItem, error: fetchError } = await supabase
+        .from('blacklist_veiculos')
+        .select('veiculo_id, associado_id')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Desativar na blacklist
       const { error } = await supabase
         .from('blacklist_veiculos')
         .update({
@@ -136,11 +152,50 @@ export function useRemoverBlacklist() {
         .eq('id', id);
 
       if (error) throw error;
+
+      // Se solicitado reverter status do veículo
+      if (reverterVeiculo && blacklistItem?.veiculo_id) {
+        // Reverter veículo para 'em_analise'
+        const { error: veiculoError } = await supabase
+          .from('veiculos')
+          .update({ 
+            status: 'em_analise',
+            motivo_recusa_veiculo: null,
+          })
+          .eq('id', blacklistItem.veiculo_id);
+
+        if (veiculoError) {
+          console.error('Erro ao reverter status do veículo:', veiculoError);
+        }
+
+        // Reverter associado para 'pendente_vistoria'
+        if (blacklistItem.associado_id) {
+          const { error: associadoError } = await supabase
+            .from('associados')
+            .update({ 
+              status: 'pendente_vistoria' as any,
+              bloqueado: false,
+              motivo_bloqueio: null,
+            })
+            .eq('id', blacklistItem.associado_id);
+
+          if (associadoError) {
+            console.error('Erro ao reverter status do associado:', associadoError);
+          }
+        }
+      }
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['blacklist-veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['blacklist-check'] });
-      toast.success('Veículo removido da blacklist');
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+      queryClient.invalidateQueries({ queryKey: ['associados'] });
+      
+      if (variables.reverterVeiculo) {
+        toast.success('Veículo removido da blacklist e status revertido');
+      } else {
+        toast.success('Veículo removido da blacklist');
+      }
     },
     onError: (error) => {
       console.error('Erro ao remover da blacklist:', error);

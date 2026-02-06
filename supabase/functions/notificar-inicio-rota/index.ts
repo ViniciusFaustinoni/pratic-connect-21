@@ -116,19 +116,31 @@ serve(async (req) => {
 
     // 2. Notificar o CLIENTE que o técnico está a caminho
     const clienteTelefone = associado.whatsapp || associado.telefone;
+    const profissionalTelefone = profissional.whatsapp || profissional.telefone;
+    const profissionalTelefoneFormatado = profissionalTelefone 
+      ? profissionalTelefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
+      : 'Não informado';
+    const profissionalWhatsappLink = profissionalTelefone 
+      ? `https://wa.me/55${profissionalTelefone.replace(/\D/g, '')}`
+      : 'Não disponível';
+    
     if (clienteTelefone) {
       try {
         console.log(`[notificar-inicio-rota] Notificando cliente ${associado.nome} via notificar-cliente...`);
         
         const tipoServico = servico.tipo === 'instalacao' ? 'instalação' : 'vistoria';
+        const periodoLabel = servico.periodo === 'manha' ? 'Manhã (08:00-12:00)' : servico.periodo === 'tarde' ? 'Tarde (14:00-18:00)' : 'A definir';
         
         const { error: notifyError } = await supabase.functions.invoke('notificar-cliente', {
           body: {
             tipo: 'tecnico_em_rota',
             associado_id: associado.id,
             dados: {
-              nome_profissional: profissional.nome,
+              tecnico_nome: profissional.nome,
+              tecnico_telefone: profissionalTelefoneFormatado,
+              tecnico_whatsapp_link: profissionalWhatsappLink,
               tipo_servico: tipoServico,
+              periodo: periodoLabel,
               endereco: [
                 servico.logradouro,
                 servico.numero,

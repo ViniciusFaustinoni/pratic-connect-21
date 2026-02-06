@@ -46,6 +46,7 @@ export default function Blacklist() {
   const [tab, setTab] = useState('ativos');
   const [detalhesId, setDetalhesId] = useState<string | null>(null);
   const [confirmarRemocao, setConfirmarRemocao] = useState<string | null>(null);
+  const [reverterStatus, setReverterStatus] = useState(false);
 
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
   const canManageBlacklist = isDiretor || isDesenvolvedor || isAdminMaster;
@@ -67,13 +68,22 @@ export default function Blacklist() {
   });
 
   const itemDetalhes = blacklist?.find((i) => i.id === detalhesId);
+  const itemRemocao = blacklist?.find((i) => i.id === confirmarRemocao);
 
   const handleRemover = () => {
     if (confirmarRemocao) {
-      remover.mutate(confirmarRemocao, {
-        onSuccess: () => setConfirmarRemocao(null),
+      remover.mutate({ id: confirmarRemocao, reverterVeiculo: reverterStatus }, {
+        onSuccess: () => {
+          setConfirmarRemocao(null);
+          setReverterStatus(false);
+        },
       });
     }
+  };
+
+  const handleOpenRemocao = (id: string) => {
+    setConfirmarRemocao(id);
+    setReverterStatus(false);
   };
 
   return (
@@ -240,7 +250,7 @@ export default function Blacklist() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setConfirmarRemocao(item.id)}
+                                onClick={() => handleOpenRemocao(item.id)}
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
@@ -387,7 +397,7 @@ export default function Blacklist() {
       </Dialog>
 
       {/* Dialog Confirmar Remoção */}
-      <Dialog open={!!confirmarRemocao} onOpenChange={() => setConfirmarRemocao(null)}>
+      <Dialog open={!!confirmarRemocao} onOpenChange={() => { setConfirmarRemocao(null); setReverterStatus(false); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -395,12 +405,40 @@ export default function Blacklist() {
               Confirmar Remoção
             </DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja remover este veículo da blacklist? O veículo poderá ser
-              associado novamente.
+              Tem certeza que deseja remover este veículo da blacklist?
             </DialogDescription>
           </DialogHeader>
+
+          {itemRemocao && (
+            <div className="space-y-4 py-2">
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm font-medium">Placa: <span className="font-mono">{itemRemocao.placa}</span></p>
+                {itemRemocao.associado?.nome && (
+                  <p className="text-sm text-muted-foreground">Associado: {itemRemocao.associado.nome}</p>
+                )}
+              </div>
+
+              <div className="flex items-start gap-3 p-3 border rounded-lg">
+                <input
+                  type="checkbox"
+                  id="reverter-status"
+                  checked={reverterStatus}
+                  onChange={(e) => setReverterStatus(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <label htmlFor="reverter-status" className="cursor-pointer">
+                  <p className="text-sm font-medium">Reverter status do veículo e associado</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Se marcado, o veículo voltará para "Em Análise" e o associado para "Pendente de Vistoria", 
+                    permitindo nova tentativa de contratação.
+                  </p>
+                </label>
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmarRemocao(null)}>
+            <Button variant="outline" onClick={() => { setConfirmarRemocao(null); setReverterStatus(false); }}>
               Cancelar
             </Button>
             <Button
@@ -411,7 +449,7 @@ export default function Blacklist() {
               {remover.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              Remover
+              {reverterStatus ? 'Remover e Reverter' : 'Apenas Remover'}
             </Button>
           </DialogFooter>
         </DialogContent>

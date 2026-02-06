@@ -1871,6 +1871,14 @@ export function useReprovarProposta() {
         throw new Error('Usuário não autenticado');
       }
 
+      // Buscar veículo do associado
+      const { data: veiculoData } = await supabase
+        .from('veiculos')
+        .select('id, placa, chassi')
+        .eq('associado_id', associadoId)
+        .limit(1)
+        .maybeSingle();
+
       // Atualizar contrato (usar 'cancelado' pois 'reprovado' não existe no enum)
       const { error: contratoError } = await supabase
         .from('contratos')
@@ -1892,6 +1900,44 @@ export function useReprovarProposta() {
 
       if (associadoError) throw associadoError;
 
+      // Atualizar veículo para 'recusado' e adicionar à blacklist
+      if (veiculoData?.id) {
+        // Atualizar status do veículo
+        const { error: veiculoError } = await supabase
+          .from('veiculos')
+          .update({ 
+            status: 'recusado',
+            motivo_recusa_veiculo: `${motivo}: ${justificativa}`,
+          })
+          .eq('id', veiculoData.id);
+
+        if (veiculoError) {
+          console.warn('Erro ao atualizar veículo (não crítico):', veiculoError);
+        }
+
+        // Adicionar veículo à blacklist
+        if (veiculoData.placa) {
+          const { error: blacklistError } = await supabase
+            .from('blacklist_veiculos')
+            .insert({
+              placa: veiculoData.placa.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+              chassi: veiculoData.chassi,
+              motivo: motivo,
+              justificativa: justificativa,
+              tipo_reprovacao: 'proposta_reprovada',
+              veiculo_id: veiculoData.id,
+              associado_id: associadoId,
+              contrato_id: contratoId,
+              adicionado_por: profile.id,
+              ativo: true,
+            });
+
+          if (blacklistError) {
+            console.warn('Erro ao adicionar à blacklist (não crítico):', blacklistError);
+          }
+        }
+      }
+
       // Registrar histórico (usando profile.id)
       const { error: historicoError } = await supabase
         .from('associados_historico')
@@ -1910,11 +1956,13 @@ export function useReprovarProposta() {
       return { contratoId, associadoId };
     },
     onSuccess: () => {
-      toast.success('Proposta reprovada.');
+      toast.success('Proposta reprovada e veículo adicionado à blacklist.');
       queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
       queryClient.invalidateQueries({ queryKey: ['propostas-stats'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      queryClient.invalidateQueries({ queryKey: ['blacklist-veiculos'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
     },
     onError: (error) => {
       console.error('Erro ao reprovar proposta:', error);

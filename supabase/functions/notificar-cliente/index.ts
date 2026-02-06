@@ -117,10 +117,12 @@ Bem-vindo à família PRATIC! 💙`,
     mensagem: `Olá {nome}! Nosso técnico está a caminho do seu endereço para realizar a {tipo_servico}.
 
 👤 *Técnico:* {tecnico_nome}
+📞 *Contato:* {tecnico_telefone}
+💬 *WhatsApp:* {tecnico_whatsapp_link}
 📍 *Endereço:* {endereco}
 ⏰ *Período:* {periodo}
 
-Aguarde no local combinado. Qualquer dúvida, responda esta mensagem!`,
+Você pode entrar em contato com o técnico se precisar de mais informações!`,
     emailTemplate: 'generico',
   },
 };
