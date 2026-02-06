@@ -49,8 +49,19 @@ const TEMPLATES: Record<string, {
     emailTemplate: 'generico',
   },
   documentos_solicitados: {
-    titulo: '📄 Documentos Pendentes',
-    mensagem: 'Olá {nome}! Precisamos de alguns documentos para dar continuidade ao seu cadastro: {documentos}. Acesse o link de acompanhamento para enviar. Você tem 7 dias para enviar.',
+    titulo: '📄 Documentação Pendente',
+    mensagem: `Olá {nome}! Para dar continuidade à sua filiação na PRATIC, precisamos dos seguintes documentos:
+
+{documentos}
+
+{observacoes}
+
+📲 *Envie agora mesmo pelo link:*
+🔗 {link_acompanhamento}
+
+⏰ Você tem *7 dias* para enviar. Após esse prazo, a solicitação pode ser cancelada.
+
+Qualquer dúvida, responda esta mensagem!`,
     emailTemplate: 'generico',
   },
   documento_aprovado: {

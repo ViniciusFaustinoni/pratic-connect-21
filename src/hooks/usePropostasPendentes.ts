@@ -1767,19 +1767,59 @@ export function useSolicitarDocumentos() {
         // Não falhar por causa do histórico
       }
 
-      // 4. NOVO: Enviar notificação via WhatsApp
+      // 4. NOVO: Enviar notificação via WhatsApp com link de acompanhamento
       try {
+        // Buscar link_token do contrato para incluir na mensagem
+        const { data: contratoComLink } = await supabase
+          .from('contratos')
+          .select('link_token')
+          .eq('id', contratoId)
+          .single();
+
+        // Mapa de labels para documentos
+        const DOCUMENTO_LABELS: Record<string, string> = {
+          cnh: 'CNH',
+          crlv: 'CRLV',
+          comprovante_residencia: 'Comprovante de Residência',
+          selfie_veiculo: 'Selfie com Veículo',
+          frente: 'Foto Frente do Veículo',
+          traseira: 'Foto Traseira',
+          lateral_direita: 'Foto Lateral Direita',
+          lateral_esquerda: 'Foto Lateral Esquerda',
+          odometro: 'Foto do Odômetro',
+          chassi: 'Foto do Chassi',
+          motor: 'Foto do Motor',
+          banco_dianteiro: 'Foto Banco Dianteiro',
+          banco_traseiro: 'Foto Banco Traseiro',
+          pneu_dianteiro_direito: 'Pneu Dianteiro Direito',
+          pneu_dianteiro_esquerdo: 'Pneu Dianteiro Esquerdo',
+          pneu_traseiro_direito: 'Pneu Traseiro Direito',
+          pneu_traseiro_esquerdo: 'Pneu Traseiro Esquerdo',
+          outro: 'Outro Documento',
+        };
+
+        // Formatar lista de documentos com labels legíveis
+        const docsFormatados = documentos
+          .map((id) => `• ${DOCUMENTO_LABELS[id] || id}`)
+          .join('\n');
+
+        // Gerar link de acompanhamento
+        const linkAcompanhamento = contratoComLink?.link_token 
+          ? `${window.location.origin}/acompanhar/${contratoComLink.link_token}`
+          : null;
+
         await supabase.functions.invoke('notificar-cliente', {
           body: {
             tipo: 'documentos_solicitados',
             associado_id: associadoId,
             dados: {
-              documentos: documentos.join(', '),
-              observacoes: observacoes || '',
+              documentos: docsFormatados,
+              observacoes: observacoes ? `📝 Obs: ${observacoes}` : '',
+              link_acompanhamento: linkAcompanhamento || 'Acesse pelo link enviado anteriormente',
             },
           },
         });
-        console.log('[useSolicitarDocumentos] Notificação WhatsApp enviada');
+        console.log('[useSolicitarDocumentos] Notificação WhatsApp enviada com link:', linkAcompanhamento);
       } catch (notifError) {
         console.warn('[useSolicitarDocumentos] Erro ao enviar notificação (não crítico):', notifError);
         // Não falhar por causa da notificação
