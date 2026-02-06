@@ -165,6 +165,18 @@ Deno.serve(async (req) => {
         // Delete gastos_beneficios
         await supabaseAdmin.from("gastos_beneficios").delete().eq("contrato_id", contrato.id);
 
+        // NOVO: Excluir blacklist_veiculos que referenciam vistorias do contrato ANTES de excluir vistorias
+        const { data: vistoriasContrato } = await supabaseAdmin
+          .from("vistorias")
+          .select("id")
+          .eq("contrato_id", contrato.id);
+        
+        if (vistoriasContrato && vistoriasContrato.length > 0) {
+          for (const vistoria of vistoriasContrato) {
+            await supabaseAdmin.from("blacklist_veiculos").delete().eq("vistoria_id", vistoria.id);
+          }
+        }
+
         // Delete installations and inspections linked to contract
         await supabaseAdmin.from("instalacoes").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("vistorias").delete().eq("contrato_id", contrato.id);
@@ -180,6 +192,12 @@ Deno.serve(async (req) => {
           await supabaseAdmin.from("cotacao_beneficios").delete().eq("cotacao_id", contrato.cotacao_id);
           await supabaseAdmin.from("cotacoes").delete().eq("id", contrato.cotacao_id);
         }
+
+        // NOVO: Desvincular contrato do veículo antes de excluir o contrato
+        await supabaseAdmin
+          .from("veiculos")
+          .update({ contrato_id: null })
+          .eq("contrato_id", contrato.id);
 
         // Delete the contract itself
         await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
@@ -249,11 +267,27 @@ Deno.serve(async (req) => {
 
     if (veiculos && veiculos.length > 0) {
       for (const veiculo of veiculos) {
+        // NOVO: Excluir blacklist_veiculos que referenciam vistorias do veículo ANTES de excluir vistorias
+        const { data: vistoriasVeiculo } = await supabaseAdmin
+          .from("vistorias")
+          .select("id")
+          .eq("veiculo_id", veiculo.id);
+        
+        if (vistoriasVeiculo && vistoriasVeiculo.length > 0) {
+          for (const vistoria of vistoriasVeiculo) {
+            await supabaseAdmin.from("blacklist_veiculos").delete().eq("vistoria_id", vistoria.id);
+          }
+        }
+
+        // NOVO: Excluir blacklist_veiculos que referenciam o veículo diretamente
+        await supabaseAdmin.from("blacklist_veiculos").delete().eq("veiculo_id", veiculo.id);
+
         // Delete veiculo dependencies
         await supabaseAdmin.from("vistorias").delete().eq("veiculo_id", veiculo.id);
         await supabaseAdmin.from("instalacoes").delete().eq("veiculo_id", veiculo.id);
         await supabaseAdmin.from("sinistros").delete().eq("veiculo_id", veiculo.id);
         await supabaseAdmin.from("chamados_assistencia").delete().eq("veiculo_id", veiculo.id);
+        await supabaseAdmin.from("acionamentos_roubo_furto").delete().eq("veiculo_id", veiculo.id);
         
         // Update rastreadores - desvincular E voltar para estoque
         await supabaseAdmin
@@ -266,10 +300,19 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString()
           })
           .eq("veiculo_id", veiculo.id);
+
+        // NOVO: Desvincular contrato do veículo antes de excluir
+        await supabaseAdmin
+          .from("veiculos")
+          .update({ contrato_id: null })
+          .eq("id", veiculo.id);
       }
       
       await supabaseAdmin.from("veiculos").delete().eq("associado_id", associadoId);
     }
+
+    // NOVO: Excluir blacklist_veiculos que referenciam o associado diretamente
+    await supabaseAdmin.from("blacklist_veiculos").delete().eq("associado_id", associadoId);
 
     // 13. Delete documentos
     await supabaseAdmin.from("documentos").delete().eq("associado_id", associadoId);
