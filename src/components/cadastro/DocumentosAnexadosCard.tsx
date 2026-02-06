@@ -21,6 +21,13 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+interface CnhDadosOCR {
+  nome?: string;
+  numero_registro?: string;
+  rg?: string;
+  validade?: string;
+}
+
 interface DocumentoAnexado {
   id: string;
   tipo: string;
@@ -29,6 +36,7 @@ interface DocumentoAnexado {
   created_at: string;
   ocr_resultado?: {
     validado_ocr?: boolean;
+    dados?: CnhDadosOCR;
     [key: string]: unknown;
   };
 }
@@ -145,6 +153,28 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
                     <p className="text-xs text-muted-foreground">
                       {format(new Date(doc.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                     </p>
+                    
+                    {/* Dados extraídos da CNH */}
+                    {doc.tipo === 'cnh' && doc.ocr_resultado?.dados && (
+                      <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+                        {doc.ocr_resultado.dados.numero_registro && (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-semibold">Nº Registro:</span> {doc.ocr_resultado.dados.numero_registro}
+                          </p>
+                        )}
+                        {doc.ocr_resultado.dados.rg && (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-semibold">RG:</span> {doc.ocr_resultado.dados.rg}
+                          </p>
+                        )}
+                        {doc.ocr_resultado.dados.validade && (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-semibold">Validade:</span>{' '}
+                            {format(new Date(doc.ocr_resultado.dados.validade), 'dd/MM/yyyy', { locale: ptBR })}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -180,6 +210,39 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
 
           {selectedDoc && (
             <div className="flex flex-col items-center py-4">
+              {/* Dados extraídos da CNH no Dialog */}
+              {selectedDoc.tipo === 'cnh' && selectedDoc.ocr_resultado?.dados && (
+                <div className="w-full bg-info/10 border border-info/30 rounded-lg p-4 mb-4 space-y-2">
+                  <p className="text-sm font-semibold text-info">Dados Extraídos:</p>
+                  {selectedDoc.ocr_resultado.dados.nome && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Nome:</span>
+                      <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.nome}</span>
+                    </div>
+                  )}
+                  {selectedDoc.ocr_resultado.dados.numero_registro && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Nº Registro:</span>
+                      <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.numero_registro}</span>
+                    </div>
+                  )}
+                  {selectedDoc.ocr_resultado.dados.rg && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">RG:</span>
+                      <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.rg}</span>
+                    </div>
+                  )}
+                  {selectedDoc.ocr_resultado.dados.validade && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Validade:</span>
+                      <span className="text-xs text-foreground">
+                        {format(new Date(selectedDoc.ocr_resultado.dados.validade), 'dd/MM/yyyy', { locale: ptBR })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               {selectedDoc.arquivo_url.toLowerCase().endsWith('.pdf') ? (
                 <iframe
                   src={selectedDoc.arquivo_url}
