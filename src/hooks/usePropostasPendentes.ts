@@ -726,7 +726,7 @@ export function useProposta(contratoId: string | undefined) {
       // 1. Tentar buscar vistoria vinculada ao contrato (nova arquitetura)
       const { data: vistoriaData } = await supabase
         .from('vistorias')
-        .select('id, status, modalidade')
+        .select('id, status, modalidade, observacoes, km_atual, video_360_url')
         .eq('contrato_id', contrato.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -747,12 +747,24 @@ export function useProposta(contratoId: string | undefined) {
             tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
             modalidade: vistoriaData.modalidade || undefined,
             fotos: fotosVistoria as VistoriaFotoInfo[],
+            observacoes: vistoriaData.observacoes,
+            km_atual: vistoriaData.km_atual,
+            video_360_url: vistoriaData.video_360_url,
           };
         }
       }
 
       // 2. Fallback: buscar em cotacoes_vistoria_fotos (legado, apenas se tiver cotacao_id)
       if (!vistoria && contrato.cotacao_id) {
+        // Buscar vistoria pela cotacao_id para obter video_360_url
+        const { data: vistoriaCotacao } = await supabase
+          .from('vistorias')
+          .select('video_360_url, observacoes, km_atual')
+          .eq('cotacao_id', contrato.cotacao_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
         const { data: fotosLegado } = await supabase
           .from('cotacoes_vistoria_fotos')
           .select('id, tipo, arquivo_url, created_at')
@@ -766,6 +778,9 @@ export function useProposta(contratoId: string | undefined) {
             tipo: 'autovistoria',
             modalidade: 'autovistoria', // Legado sempre é autovistoria
             fotos: fotosLegado as VistoriaFotoInfo[],
+            video_360_url: vistoriaCotacao?.video_360_url || null,
+            observacoes: vistoriaCotacao?.observacoes,
+            km_atual: vistoriaCotacao?.km_atual,
           };
         }
       }
