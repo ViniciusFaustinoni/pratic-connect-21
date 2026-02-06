@@ -68,16 +68,16 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* CONTAINER MOBILE */}
-      <div className="max-w-md mx-auto border-x border-gray-200 min-h-screen bg-white flex flex-col">
+      <div className="max-w-md mx-auto border-x border-border min-h-screen bg-background flex flex-col">
         
         {/* HEADER FIXO */}
-        <header className="sticky top-0 z-50 bg-white shadow-sm">
+        <header className="sticky top-0 z-50 bg-background shadow-sm border-b border-border">
           <div className="h-14 px-4 flex items-center justify-between">
             {/* LOGO */}
             <Link to="/app" className="flex items-center">
-              <span className="font-bold text-xl text-blue-600">PRATIC</span>
+              <span className="font-bold text-xl text-primary">PRATIC</span>
             </Link>
 
             {/* THEME TOGGLE + NOTIFICAÇÕES */}
@@ -85,9 +85,9 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
               <ThemeToggle className="scale-90" />
               
               <Link to="/app/notificacoes" className="relative p-2">
-              <Bell className="h-6 w-6 text-gray-600" />
+              <Bell className="h-6 w-6 text-muted-foreground" />
               {notificacoesNaoLidas > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-bold text-destructive-foreground">
                   {notificacoesNaoLidas > 9 ? '9+' : notificacoesNaoLidas}
                 </span>
               )}
@@ -102,7 +102,7 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
         </main>
 
         {/* BOTTOM NAVIGATION */}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200">
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border">
           <div className="max-w-md mx-auto">
             <div className="h-16 grid grid-cols-5">
               {NAV_ITEMS.map((item) => {
@@ -116,8 +116,8 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
                     className={cn(
                       'flex flex-col items-center justify-center gap-1 transition-colors',
                       active 
-                        ? 'text-blue-600' 
-                        : 'text-gray-500 hover:text-blue-600'
+                        ? 'text-primary' 
+                        : 'text-muted-foreground hover:text-primary'
                     )}
                   >
                     <Icon className="h-5 w-5" />
@@ -131,7 +131,7 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
           </div>
 
           {/* Safe area para iPhones com notch */}
-          <div className="h-safe-area-inset-bottom bg-white" />
+          <div className="h-safe-area-inset-bottom bg-background" />
         </nav>
 
       </div>

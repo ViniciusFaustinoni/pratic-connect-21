@@ -191,9 +191,9 @@ export default function AppConfiguracoes() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header Sticky */}
-      <header className="sticky top-0 z-50 bg-white border-b">
+      <header className="sticky top-0 z-50 bg-background border-b border-border">
         <div className="flex items-center justify-between px-4 py-3">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />
@@ -206,7 +206,7 @@ export default function AppConfiguracoes() {
       <div className="space-y-4 p-4 pb-24">
         {/* Card Perfil */}
         <Card 
-          className="border-0 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors"
+          className="border-0 shadow-sm cursor-pointer hover:bg-muted/50 transition-colors"
           onClick={() => navigate('/app/perfil')}
         >
           <CardContent className="p-4">
@@ -563,7 +563,7 @@ export default function AppConfiguracoes() {
             <CardContent className="p-0 divide-y">
               {/* Alterar Senha */}
               <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between p-4 hover:bg-muted/50 transition-colors"
                 onClick={() => setShowSenhaModal(true)}
               >
                 <div className="flex items-center gap-3">
@@ -598,7 +598,7 @@ export default function AppConfiguracoes() {
               </div>
               {/* Sessões Ativas */}
               <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between p-4 hover:bg-muted/50 transition-colors"
                 onClick={() => handleEmBreve('Gerenciamento de sessões')}
               >
                 <div className="flex items-center gap-3">
@@ -666,7 +666,7 @@ export default function AppConfiguracoes() {
             <CardContent className="p-0 divide-y">
               {/* Central de Ajuda */}
               <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between p-4 hover:bg-muted/50 transition-colors"
                 onClick={() => navigate('/app/ajuda')}
               >
                 <div className="flex items-center gap-3">
@@ -682,7 +682,7 @@ export default function AppConfiguracoes() {
               </button>
               {/* Fale Conosco */}
               <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between p-4 hover:bg-muted/50 transition-colors"
                 onClick={() => window.open('https://wa.me/5500000000000?text=Olá! Gostaria de falar com um atendente.', '_blank')}
               >
                 <div className="flex items-center gap-3">
@@ -698,7 +698,7 @@ export default function AppConfiguracoes() {
               </button>
               {/* Avaliar App */}
               <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between p-4 hover:bg-muted/50 transition-colors"
                 onClick={handleAvaliar}
               >
                 <div className="flex items-center gap-3">
@@ -725,7 +725,7 @@ export default function AppConfiguracoes() {
             <CardContent className="p-0 divide-y">
               {/* Termos de Uso */}
               <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between p-4 hover:bg-muted/50 transition-colors"
                 onClick={() => window.open('/termos-de-uso', '_blank')}
               >
                 <div className="flex items-center gap-3">
@@ -738,7 +738,7 @@ export default function AppConfiguracoes() {
               </button>
               {/* Política de Privacidade */}
               <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between p-4 hover:bg-muted/50 transition-colors"
                 onClick={() => window.open('/politica-privacidade', '_blank')}
               >
                 <div className="flex items-center gap-3">
@@ -751,7 +751,7 @@ export default function AppConfiguracoes() {
               </button>
               {/* Licenças de Software */}
               <button 
-                className="flex w-full items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between p-4 hover:bg-muted/50 transition-colors"
                 onClick={() => setShowLicencasModal(true)}
               >
                 <div className="flex items-center gap-3">
