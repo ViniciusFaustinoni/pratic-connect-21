@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { User, LogOut, Settings, Bell, HelpCircle, Shield, Power } from 'lucide-react';
+import { User, LogOut, Settings, Bell, HelpCircle, Shield, Power, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { useTarefaAtual } from '@/hooks/useTarefaAtual';
@@ -73,11 +73,13 @@ export default function InstaladorPerfil() {
             {menuItems.map((item, index) => (
               <div key={item.label}>
                 <button
-                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-slate-700/50 transition-colors"
+                  type="button"
+                  className="w-full flex items-center gap-3 p-4 text-left hover:bg-slate-700/50 active:bg-slate-600/50 transition-colors min-h-[56px] touch-manipulation"
                   onClick={item.onClick}
                 >
                   <item.icon className="h-5 w-5 text-slate-400" />
-                  <span className="text-sm text-white">{item.label}</span>
+                  <span className="text-sm text-white flex-1">{item.label}</span>
+                  <ChevronRight className="h-4 w-4 text-slate-500" />
                 </button>
                 {index < menuItems.length - 1 && (
                   <Separator className="bg-slate-700" />
