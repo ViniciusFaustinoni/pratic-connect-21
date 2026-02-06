@@ -1,190 +1,143 @@
 
-## Plano: Bloquear Veículos da Blacklist na Cotação
+## Plano: Salvar e Exibir Vídeo 360° para Analista de Cadastro
 
-### Problema
-Atualmente, veículos que estão na blacklist (reprovados por vistoria ou análise) ainda podem iniciar o processo de cotação. O sistema deve bloquear a cotação logo ao informar a placa, exibindo uma mensagem clara de que o veículo está bloqueado.
+### Análise do Sistema Atual
 
-### Solução
-Integrar a verificação da blacklist no fluxo de busca por placa (`handleBuscarPlaca`), ANTES de consultar a API de veículos. Se o veículo estiver bloqueado, exibir um modal informativo e impedir a continuação do processo.
+Após investigação do código, identifiquei que o sistema **já possui a implementação completa** para salvar e exibir o vídeo 360°:
 
----
+| Componente | Status | Descrição |
+|------------|--------|-----------|
+| Upload do vídeo | ✅ Funcionando | Hook `useUploadVideo360` salva no bucket `vistoria-videos` e atualiza `vistorias.video_360_url` |
+| Tela do vistoriador | ✅ Funcionando | `InstaladorChecklist.tsx` exibe o vídeo e permite substituir |
+| Tela do analista | ✅ Funcionando | `PropostaAnalise.tsx` renderiza `Video360Card` quando há URL |
+| Dados no banco | ✅ Confirmado | Existe contrato com vídeo 360° salvo corretamente |
 
-### Arquivos a Criar/Modificar
+### Lacuna Identificada
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/components/cotacoes/PlacaBlacklistModal.tsx` | **CRIAR** | Modal para exibir quando veículo está na blacklist |
-| `src/pages/vendas/Cotador.tsx` | **MODIFICAR** | Adicionar verificação de blacklist antes da busca FIPE |
-
----
-
-### 1. Criar Modal de Veículo Bloqueado
-
-Novo componente `PlacaBlacklistModal.tsx` similar ao `PlacaDuplicadaModal`:
+Existe um **cenário de fallback** no hook `usePropostasPendentes` que pode não exibir o vídeo:
 
 ```typescript
-// src/components/cotacoes/PlacaBlacklistModal.tsx
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Ban, Calendar, AlertTriangle, FileText } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
-
-interface BlacklistInfo {
-  id: string;
-  motivo: string;
-  tipo_reprovacao: string;
-  created_at: string;
-}
-
-interface PlacaBlacklistModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  placa: string;
-  info: BlacklistInfo | null;
-}
-
-const TIPO_LABELS: Record<string, { label: string; variant: 'destructive' | 'default' }> = {
-  vistoria_reprovada: { label: 'Vistoria Reprovada', variant: 'destructive' },
-  proposta_reprovada: { label: 'Proposta Reprovada', variant: 'destructive' },
+// Fallback para tabela legada cotacoes_vistoria_fotos
+// NÃO inclui video_360_url no objeto criado
+vistoria = {
+  id: contrato.cotacao_id,
+  status: 'pendente',
+  fotos: fotosLegado,
+  // video_360_url AUSENTE!
 };
-
-export function PlacaBlacklistModal({ open, onOpenChange, placa, info }: Props) {
-  // Exibe:
-  // - Ícone de bloqueio (Ban)
-  // - Título: "Veículo Bloqueado"
-  // - Mensagem: "Este veículo está na lista de bloqueio..."
-  // - Motivo do bloqueio
-  // - Tipo de reprovação (badge)
-  // - Data de inclusão na blacklist
-  // - Instrução para contatar a diretoria
-}
 ```
 
-### 2. Modificar Cotador.tsx
+### Correção Necessária
 
-**Linha ~44-59**: Adicionar imports:
+Modificar o fallback para também buscar o `video_360_url` da vistoria associada à cotação:
+
+---
+
+### Arquivos a Modificar
+
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/hooks/usePropostasPendentes.ts` | Adicionar busca de video_360_url no fallback legado |
+
+---
+
+### Alteração Detalhada
+
+**Arquivo:** `src/hooks/usePropostasPendentes.ts`
+
+**Linha 307-334 - Modificar fallback para incluir busca de vídeo:**
+
 ```typescript
-import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
-```
-
-**Linha ~344**: Adicionar estados para blacklist:
-```typescript
-// Estado para modal de blacklist
-const [blacklistInfo, setBlacklistInfo] = useState<{
-  id: string;
-  motivo: string;
-  tipo_reprovacao: string;
-  created_at: string;
-} | null>(null);
-const [showBlacklistModal, setShowBlacklistModal] = useState(false);
-```
-
-**Linha ~495-520**: Modificar `handleBuscarPlaca` para verificar blacklist PRIMEIRO:
-```typescript
-const handleBuscarPlaca = async () => {
-  if (!placaBusca || placaBusca.length < 7) {
-    toast.error('Digite uma placa válida');
-    return;
-  }
-
-  setBuscandoPlaca(true);
-  setErroBusca(null);
+// 2. Fallback: buscar em cotacoes_vistoria_fotos (legado)
+if (!vistoria && contrato.cotacao_id) {
+  // Primeiro, buscar tipo_vistoria e video_360_url da vistoria/cotação
+  const { data: cotacaoTipo } = await supabase
+    .from('cotacoes')
+    .select('tipo_vistoria')
+    .eq('id', contrato.cotacao_id)
+    .maybeSingle();
   
-  try {
-    // 1. PRIMEIRO: Verificar se está na BLACKLIST
-    const placaNormalizada = placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-    const { data: blacklistData, error: blacklistError } = await supabase
-      .from('blacklist_veiculos')
-      .select('id, motivo, tipo_reprovacao, created_at')
-      .eq('placa', placaNormalizada)
-      .eq('ativo', true)
-      .maybeSingle();
-    
-    if (!blacklistError && blacklistData) {
-      // VEÍCULO BLOQUEADO - Interromper fluxo
-      setBlacklistInfo(blacklistData);
-      setShowBlacklistModal(true);
-      setBuscandoPlaca(false);
-      return;
-    }
+  // Tentar buscar vistoria pela cotacao_id para obter video_360_url
+  const { data: vistoriaCotacao } = await supabase
+    .from('vistorias')
+    .select('video_360_url')
+    .eq('cotacao_id', contrato.cotacao_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  
+  const isAutoFromCotacao = cotacaoTipo?.tipo_vistoria === 'autovistoria';
+  
+  const { data: fotosLegado } = await supabase
+    .from('cotacoes_vistoria_fotos')
+    .select('id, tipo, arquivo_url, created_at')
+    .eq('cotacao_id', contrato.cotacao_id)
+    .order('created_at', { ascending: true });
 
-    // 2. Depois verificar placa duplicada (já existente)
-    const placaDuplicada = await verificarPlacaDuplicada.mutateAsync(placaBusca);
-    // ... resto do código existente
+  if (fotosLegado && fotosLegado.length > 0) {
+    vistoria = {
+      id: contrato.cotacao_id,
+      status: 'pendente',
+      tipo: isAutoFromCotacao ? 'autovistoria' : 'agendada',
+      modalidade: isAutoFromCotacao ? 'autovistoria' : 'presencial',
+      fotos: fotosLegado as VistoriaFotoInfo[],
+      // NOVO: Incluir video_360_url se existir
+      video_360_url: vistoriaCotacao?.video_360_url || null,
+    };
   }
-};
-```
-
-**Final do componente (~linha 1550)**: Adicionar o modal:
-```typescript
-{/* Modal Veículo na Blacklist */}
-<PlacaBlacklistModal
-  open={showBlacklistModal}
-  onOpenChange={setShowBlacklistModal}
-  placa={placaBusca}
-  info={blacklistInfo}
-/>
+}
 ```
 
 ---
 
-### Fluxo Após Implementação
+### Fluxo Completo Após Correção
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  VENDEDOR DIGITA PLACA: ABC-1234                                │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  1. VERIFICA BLACKLIST                                          │
-│     SELECT * FROM blacklist_veiculos                            │
-│     WHERE placa = 'ABC1234' AND ativo = true                    │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-          ┌──────────────┴──────────────┐
-          ▼                             ▼
-┌─────────────────────┐       ┌─────────────────────────────────┐
-│  ESTÁ NA BLACKLIST  │       │  NÃO ESTÁ NA BLACKLIST          │
-│                     │       │                                 │
-│  ┌───────────────┐  │       │  2. Verificar placa duplicada   │
-│  │ ⛔ BLOQUEADO  │  │       │  3. Buscar dados FIPE           │
-│  │               │  │       │  4. Continuar cotação           │
-│  │ Veículo       │  │       │                                 │
-│  │ reprovado!    │  │       └─────────────────────────────────┘
-│  │               │  │
-│  │ Motivo: ...   │  │
-│  │ Data: ...     │  │
-│  │               │  │
-│  │ [Entendido]   │  │
-│  └───────────────┘  │
-│                     │
-│  FLUXO INTERROMPIDO │
-└─────────────────────┘
+```text
+┌────────────────────────────────────────────────────────────────┐
+│  VISTORIADOR/INSTALADOR                                        │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  1. Grava vídeo 360° do veículo                          │  │
+│  │  2. Upload para bucket "vistoria-videos"                 │  │
+│  │  3. URL salva em vistorias.video_360_url                 │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  ANALISTA DE CADASTRO                                          │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  PropostaAnalise.tsx                                     │  │
+│  │                                                          │  │
+│  │  ┌────────────────────────────────────────────────────┐  │  │
+│  │  │  🎥 Vídeo 360° do Veículo                          │  │  │
+│  │  │  ┌──────────────────────────────────────────────┐  │  │  │
+│  │  │  │                                              │  │  │  │
+│  │  │  │         [VIDEO PLAYER]                       │  │  │  │
+│  │  │  │                                              │  │  │  │
+│  │  │  └──────────────────────────────────────────────┘  │  │  │
+│  │  │  Gravado pelo vistoriador - Volta completa         │  │  │
+│  │  └────────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ### Resultado Esperado
 
-Após implementação:
-1. Vendedor digita a placa no Cotador
-2. Sistema verifica PRIMEIRO se está na blacklist
-3. Se estiver bloqueado:
-   - Modal vermelho aparece com ícone de bloqueio
-   - Exibe motivo do bloqueio (vistoria/proposta reprovada)
-   - Exibe data de inclusão na blacklist
-   - Instrui a contatar a diretoria
-   - Botão "Entendido" fecha o modal
-   - Cotação NÃO pode prosseguir
-4. Se não estiver bloqueado:
-   - Continua fluxo normal (verifica duplicada, busca FIPE, etc.)
+Após a correção:
+
+1. **Upload funcionando** - O vistoriador grava e envia o vídeo 360° (já funciona)
+2. **Vídeo salvo no banco** - Campo `video_360_url` é preenchido na tabela `vistorias` (já funciona)
+3. **Analista visualiza** - O card `Video360Card` aparece na tela de análise mostrando o vídeo
+4. **Cobertura completa** - Funciona tanto para fluxo moderno (contrato_id) quanto legado (cotacao_id)
+
+---
+
+### Observação Técnica
+
+O componente `Video360Card` já existe e está funcional:
+- Player de vídeo nativo HTML5
+- Badge indicando "360°"
+- Descrição "Gravado pelo vistoriador"
+- Suporte a `preload="metadata"` e `playsInline` para mobile
