@@ -124,7 +124,7 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
         *,
         associados (id, nome, telefone, email),
         veiculos (id, marca, modelo, placa, ano_modelo, cor),
-        rastreadores (id, codigo, numero_serie, imei),
+        rastreadores (id, codigo, numero_serie, imei, plataforma, status),
         instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone),
         instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome, telefone)
       `, { count: 'exact' })
@@ -225,7 +225,7 @@ export function useInstalacao(id: string | undefined) {
           *,
           associados (id, nome, telefone, email, cpf, cep, logradouro, numero, complemento, bairro, cidade, uf),
           veiculos (id, marca, modelo, placa, ano_modelo, cor, chassi, renavam),
-          rastreadores (id, codigo, numero_serie, imei),
+          rastreadores (id, codigo, numero_serie, imei, plataforma, status),
           instalador:profiles!instalacoes_instalador_id_fkey (id, nome, telefone, email),
           instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome, telefone, email),
           rota:rotas!instalacoes_rota_id_fkey (id, codigo, status)
