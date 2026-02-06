@@ -46,7 +46,8 @@ export default function Blacklist() {
   const [detalhesId, setDetalhesId] = useState<string | null>(null);
   const [confirmarRemocao, setConfirmarRemocao] = useState<string | null>(null);
 
-  const { isDiretorOnly } = usePermissions();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canManageBlacklist = isDiretor || isDesenvolvedor || isAdminMaster;
   const { data: blacklist, isLoading } = useBlacklistVeiculos(tab === 'ativos');
   const remover = useRemoverBlacklist();
 
@@ -219,7 +220,7 @@ export default function Blacklist() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            {isDiretorOnly && (
+                            {canManageBlacklist && (
                               <Button
                                 variant="ghost"
                                 size="icon"
