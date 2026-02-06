@@ -359,3 +359,6 @@ verify_jwt = false
 
 [functions.chassi-ocr]
 verify_jwt = false
+
+[functions.concluir-retirada]
+verify_jwt = false
