@@ -30,8 +30,9 @@ export function ProtectedRoute({
     return <>{children}</>;
   }
 
-  // Loading state
-  if (!initialized || loading) {
+  // Loading state - aguardar profile carregar se temos user mas profile ainda não veio
+  // Isso evita decisões prematuras sobre permissões
+  if (!initialized || loading || (user && !profile)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
