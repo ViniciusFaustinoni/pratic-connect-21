@@ -21319,7 +21319,10 @@ export type Database = {
       tipo_foto_os: "entrada" | "execucao" | "conclusao"
       tipo_item_os: "peca" | "mao_de_obra" | "servico_terceiro"
       tipo_pix: "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
-      tipo_reprovacao: "vistoria_reprovada" | "proposta_reprovada"
+      tipo_reprovacao:
+        | "vistoria_reprovada"
+        | "proposta_reprovada"
+        | "associado_bloqueado"
       tipo_servico:
         | "instalacao"
         | "vistoria_entrada"
@@ -21690,7 +21693,11 @@ export const Constants = {
       tipo_foto_os: ["entrada", "execucao", "conclusao"],
       tipo_item_os: ["peca", "mao_de_obra", "servico_terceiro"],
       tipo_pix: ["cpf", "cnpj", "email", "telefone", "aleatoria"],
-      tipo_reprovacao: ["vistoria_reprovada", "proposta_reprovada"],
+      tipo_reprovacao: [
+        "vistoria_reprovada",
+        "proposta_reprovada",
+        "associado_bloqueado",
+      ],
       tipo_servico: [
         "instalacao",
         "vistoria_entrada",

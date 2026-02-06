@@ -9,7 +9,7 @@ export interface BlacklistVeiculo {
   chassi: string | null;
   motivo: string;
   justificativa: string | null;
-  tipo_reprovacao: 'vistoria_reprovada' | 'proposta_reprovada';
+  tipo_reprovacao: 'vistoria_reprovada' | 'proposta_reprovada' | 'associado_bloqueado';
   veiculo_id: string | null;
   associado_id: string | null;
   contrato_id: string | null;
@@ -83,7 +83,7 @@ export function useAdicionarBlacklist() {
       chassi?: string;
       motivo: string;
       justificativa?: string;
-      tipo_reprovacao: 'vistoria_reprovada' | 'proposta_reprovada';
+      tipo_reprovacao: 'vistoria_reprovada' | 'proposta_reprovada' | 'associado_bloqueado';
       veiculo_id?: string;
       associado_id?: string;
       contrato_id?: string;
