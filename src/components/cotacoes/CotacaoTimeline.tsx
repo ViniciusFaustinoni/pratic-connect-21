@@ -21,7 +21,7 @@ import type { EventoHistorico } from '@/hooks/useCotacaoHistorico';
 
 interface TimelineEvent {
   id: string;
-  tipo: 'criacao' | 'pdf' | 'envio' | 'visualizacao' | 'aceite' | 'recusa' | 'expiracao' | 'whatsapp' | 'email' | 'duplicada' | 'editada' | 'link' | 'plano_escolhido' | 'status';
+  tipo: 'criacao' | 'pdf' | 'envio' | 'visualizacao' | 'aceite' | 'recusa' | 'expiracao' | 'whatsapp' | 'email' | 'duplicada' | 'editada' | 'link' | 'plano_escolhido' | 'status' | 'dados_preenchidos' | 'documentos_ok' | 'contrato_assinado' | 'vistoria_ok' | 'pagamento_ok';
   titulo: string;
   data: string;
   autor?: string;
@@ -34,11 +34,34 @@ interface CotacaoTimelineProps {
     created_at: string;
     updated_at?: string;
     status: string;
+    status_contratacao?: string | null;
     vendedor?: { nome?: string } | null;
   };
   historico?: EventoHistorico[];
   isLoading?: boolean;
 }
+
+// Ordem das etapas do status_contratacao para inferir histórico
+const ETAPAS_CONTRATACAO = [
+  'plano_escolhido',
+  'dados_preenchidos',
+  'documentos_ok',
+  'contrato_assinado',
+  'vistoria_ok',
+  'pagamento_ok'
+] as const;
+
+const getTituloEtapaContratacao = (etapa: string): string => {
+  const titulos: Record<string, string> = {
+    'plano_escolhido': 'Cliente escolheu o plano',
+    'dados_preenchidos': 'Dados pessoais preenchidos',
+    'documentos_ok': 'Documentos enviados',
+    'contrato_assinado': 'Contrato assinado',
+    'vistoria_ok': 'Vistoria realizada',
+    'pagamento_ok': 'Pagamento confirmado',
+  };
+  return titulos[etapa] || etapa;
+};
 
 const formatDateTime = (date: string) => {
   const d = new Date(date);
@@ -168,6 +191,36 @@ const getEventoConfig = (tipo: TimelineEvent['tipo']) => {
         bgColor: 'bg-slate-100 dark:bg-slate-900/30',
         textColor: 'text-slate-600 dark:text-slate-400',
       };
+    case 'dados_preenchidos':
+      return {
+        icon: <FileText className="h-4 w-4" />,
+        bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+        textColor: 'text-blue-600 dark:text-blue-400',
+      };
+    case 'documentos_ok':
+      return {
+        icon: <FileText className="h-4 w-4" />,
+        bgColor: 'bg-teal-100 dark:bg-teal-900/30',
+        textColor: 'text-teal-600 dark:text-teal-400',
+      };
+    case 'contrato_assinado':
+      return {
+        icon: <FileText className="h-4 w-4" />,
+        bgColor: 'bg-orange-100 dark:bg-orange-900/30',
+        textColor: 'text-orange-600 dark:text-orange-400',
+      };
+    case 'vistoria_ok':
+      return {
+        icon: <Eye className="h-4 w-4" />,
+        bgColor: 'bg-violet-100 dark:bg-violet-900/30',
+        textColor: 'text-violet-600 dark:text-violet-400',
+      };
+    case 'pagamento_ok':
+      return {
+        icon: <Check className="h-4 w-4" />,
+        bgColor: 'bg-emerald-100 dark:bg-emerald-900/30',
+        textColor: 'text-emerald-600 dark:text-emerald-400',
+      };
     default:
       return {
         icon: <FileText className="h-4 w-4" />,
@@ -202,8 +255,26 @@ export function CotacaoTimeline({ cotacao, historico = [], isLoading }: CotacaoT
       });
     });
     
-    // Se não há histórico, adicionar eventos inferidos do status
+    // Se não há histórico real, inferir etapas do status_contratacao
     if (historico.length === 0) {
+      // Primeiro, inferir eventos do status_contratacao (etapas do fluxo de contratação)
+      if (cotacao.status_contratacao) {
+        const etapaAtualIndex = ETAPAS_CONTRATACAO.indexOf(cotacao.status_contratacao as typeof ETAPAS_CONTRATACAO[number]);
+        
+        if (etapaAtualIndex >= 0) {
+          // Adicionar todas as etapas até a atual (inclusive)
+          ETAPAS_CONTRATACAO.slice(0, etapaAtualIndex + 1).forEach((etapa) => {
+            lista.push({
+              id: `infer-${etapa}`,
+              tipo: etapa,
+              titulo: getTituloEtapaContratacao(etapa),
+              data: cotacao.updated_at || cotacao.created_at,
+            });
+          });
+        }
+      }
+      
+      // Também inferir do status básico da cotação (se aplicável)
       if (cotacao.status === 'enviada') {
         lista.push({
           id: 'envio',
