@@ -1,27 +1,20 @@
 
-## Plano: Correção de Interatividade dos Botões no Perfil do Vistoriador
+## Plano: Correção da Exibição da Opção de Encaixe no Agendamento
 
-### Diagnóstico
+### Problema Identificado
 
-Após análise detalhada do código e testes automatizados, identifiquei que:
+Na tela de agendamento, quando o usuário seleciona "Outra pessoa" para receber o técnico, a opção de **"Permitir encaixe de horário"** fica escondida até que os campos de nome e telefone do responsável sejam preenchidos.
 
-| Botão | Status no Código | Teste Automatizado |
-|-------|------------------|-------------------|
-| Configurações | ✅ Configurado corretamente | ✅ Navega para `/instalador/configuracoes` |
-| Notificações | ✅ Configurado corretamente | ✅ Navega para `/instalador/notificacoes` |
-| Ajuda e Suporte | ✅ Configurado corretamente | ✅ Navega para `/instalador/ajuda` |
-| Privacidade | ✅ Configurado corretamente | ✅ Abre em nova aba |
-| Sair da Conta | ✅ Configurado corretamente | ✅ Faz logout |
+**Linha problemática (546):**
+```typescript
+{endereco.logradouro && endereco.numero && (responsavel === 'eu' || (nomeResponsavel && telefoneResponsavel)) && (
+```
 
-### Possíveis Causas do Problema Relatado
+Esta condição exige que, se "Outra pessoa" for selecionado, os campos nome e telefone estejam preenchidos para mostrar a opção de encaixe. Isso gera uma UX confusa porque o usuário não vê a opção de encaixe enquanto preenche os dados.
 
-1. **Cache do PWA/Service Worker** - Versão antiga em cache
-2. **Área de toque insuficiente** - Botões podem não ser facilmente clicáveis em alguns dispositivos
-3. **Elemento fantasma** - Na imagem há um toggle switch que não existe no código atual
+### Solução
 
-### Correções Propostas
-
-Para garantir melhor interatividade em dispositivos mobile:
+Mostrar a opção de encaixe **sempre** após selecionar o responsável, independente do preenchimento dos campos. A validação de campos obrigatórios já é feita no `formularioValido()` antes de permitir confirmar.
 
 ---
 
@@ -29,71 +22,53 @@ Para garantir melhor interatividade em dispositivos mobile:
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/pages/instalador/InstaladorPerfil.tsx` | Melhorar área de toque e adicionar feedback visual |
+| `src/components/cotacao-publica/AgendamentoVistoria.tsx` | Alterar condição de exibição da opção de encaixe |
 
 ---
 
-### Alterações Detalhadas
+### Alteração Detalhada
 
-**Melhorias na interatividade dos botões:**
+**Linha 546 - Alterar a condição:**
 
+De:
 ```typescript
-// Alterar o button para ter área de toque maior e feedback visual claro
-<button
-  className="w-full flex items-center gap-3 p-4 text-left 
-             hover:bg-slate-700/50 active:bg-slate-600/50 
-             transition-colors min-h-[56px] touch-manipulation"
-  onClick={item.onClick}
-  type="button"
->
-  <item.icon className="h-5 w-5 text-slate-400" />
-  <span className="text-sm text-white flex-1">{item.label}</span>
-  <ChevronRight className="h-4 w-4 text-slate-500" />
-</button>
+{endereco.logradouro && endereco.numero && (responsavel === 'eu' || (nomeResponsavel && telefoneResponsavel)) && (
 ```
 
-**Melhorias específicas:**
+Para:
+```typescript
+{endereco.logradouro && endereco.numero && (
+```
 
-1. **Área de toque mínima**: `min-h-[56px]` (recomendado para mobile)
-2. **Touch optimization**: `touch-manipulation` para resposta mais rápida
-3. **Feedback de toque**: `active:bg-slate-600/50` para feedback visual imediato
-4. **Indicador de navegação**: Adicionar ícone `ChevronRight` para indicar que o item é clicável
-5. **Type button**: Explícito `type="button"` para evitar submissão de formulário acidental
-6. **Flex-1 no texto**: Garantir que o texto ocupe espaço adequado
+Essa mudança faz a opção de encaixe aparecer assim que:
+- O endereço (logradouro e número) estiver preenchido
+- Independente da seleção de responsável (eu mesmo ou outra pessoa)
+
+A validação completa do formulário (incluindo nome/telefone quando "outra pessoa") continua sendo feita pelo `formularioValido()` antes de mostrar o botão "Revisar agendamento".
 
 ---
 
-### Fluxo Visual Após Correção
+### Fluxo Corrigido
 
 ```
+ANTES (problemático):
 ┌─────────────────────────────────────────────────────────────────┐
-│                          PERFIL                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │  [IV]  [TESTE] Vistoriador                                 │ │
-│  │        vistoriador@teste.com                               │ │
-│  │        Instalador/Vistoriador                              │ │
-│  └────────────────────────────────────────────────────────────┘ │
-│                                                                 │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │  ⚙️  Configurações                                    ➡️  │ │
-│  ├────────────────────────────────────────────────────────────┤ │
-│  │  🔔  Notificações                                     ➡️  │ │
-│  ├────────────────────────────────────────────────────────────┤ │
-│  │  ❓  Ajuda e Suporte                                  ➡️  │ │
-│  ├────────────────────────────────────────────────────────────┤ │
-│  │  🛡️  Privacidade                                     ➡️  │ │
-│  └────────────────────────────────────────────────────────────┘ │
-│                                                                 │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │         ⏻  Encerrar Turno  (se aplicável)                 │ │
-│  └────────────────────────────────────────────────────────────┘ │
-│                                                                 │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │         🚪  Sair da Conta                                  │ │
-│  └────────────────────────────────────────────────────────────┘ │
-│                                                                 │
-│                     PRATIC Instalador v1.0.0                    │
+│  1. Preenche endereço                                          │
+│  2. Seleciona "Outra pessoa"                                   │
+│  3. Campos nome/telefone aparecem                              │
+│  4. Opção de encaixe ❌ ESCONDIDA                               │
+│  5. Preenche nome e telefone                                   │
+│  6. Opção de encaixe ✅ aparece                                │
+└─────────────────────────────────────────────────────────────────┘
+
+DEPOIS (corrigido):
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Preenche endereço                                          │
+│  2. Opção de encaixe ✅ já aparece                              │
+│  3. Seleciona "Outra pessoa"                                   │
+│  4. Campos nome/telefone aparecem                              │
+│  5. Preenche nome e telefone                                   │
+│  6. Botão "Revisar agendamento" aparece                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -101,17 +76,7 @@ Para garantir melhor interatividade em dispositivos mobile:
 
 ### Resultado Esperado
 
-1. **Área de toque maior**: Botões com altura mínima de 56px
-2. **Feedback visual imediato**: Mudança de cor ao tocar
-3. **Indicação clara**: Seta indicando que o item navega para outra tela
-4. **Melhor responsividade**: `touch-manipulation` para resposta instantânea
-5. **Prevenção de erros**: `type="button"` evita comportamentos inesperados
-
----
-
-### Observação para o Usuário
-
-Se o problema persistir após a implementação, recomendo:
-1. Limpar o cache do navegador
-2. Se estiver usando como PWA, desinstalar e reinstalar o app
-3. Forçar atualização (Ctrl+Shift+R ou Cmd+Shift+R)
+1. A opção de encaixe ficará visível assim que o endereço for preenchido
+2. O usuário pode ativar/desativar o encaixe enquanto preenche os dados do responsável
+3. O botão de confirmar só aparece quando todos os campos obrigatórios estiverem preenchidos
+4. Melhor experiência do usuário - todas as opções visíveis durante o preenchimento
