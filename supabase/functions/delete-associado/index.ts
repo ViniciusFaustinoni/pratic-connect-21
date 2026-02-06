@@ -204,6 +204,49 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 2.5. NOVO: Excluir cotações órfãs vinculadas a leads do associado
+    // (cotações que não têm contrato associado, como recusadas ou pendentes)
+    const { data: leads } = await supabaseAdmin
+      .from("leads")
+      .select("id")
+      .eq("associado_id", associadoId);
+
+    console.log(`[delete-associado] Leads vinculados: ${leads?.length || 0}`);
+
+    if (leads && leads.length > 0) {
+      for (const lead of leads) {
+        // Buscar cotações vinculadas a este lead
+        const { data: cotacoesLead } = await supabaseAdmin
+          .from("cotacoes")
+          .select("id")
+          .eq("lead_id", lead.id);
+
+        if (cotacoesLead && cotacoesLead.length > 0) {
+          console.log(`[delete-associado] Excluindo ${cotacoesLead.length} cotações órfãs do lead: ${lead.id}`);
+          
+          for (const cotacao of cotacoesLead) {
+            // Limpar dependências da cotação
+            await supabaseAdmin.from("cotacao_beneficios").delete().eq("cotacao_id", cotacao.id);
+            await supabaseAdmin.from("cotacoes_historico").delete().eq("cotacao_id", cotacao.id);
+            await supabaseAdmin.from("servicos").delete().eq("cotacao_id", cotacao.id);
+            await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("cotacao_id", cotacao.id);
+            
+            // Limpar referência do contrato se existir (pode já ter sido excluído)
+            await supabaseAdmin
+              .from("contratos")
+              .update({ cotacao_id: null })
+              .eq("cotacao_id", cotacao.id);
+
+            // Limpar agendamentos_base vinculados
+            await supabaseAdmin.from("agendamentos_base").delete().eq("cotacao_id", cotacao.id);
+          }
+          
+          // Excluir cotações do lead
+          await supabaseAdmin.from("cotacoes").delete().eq("lead_id", lead.id);
+        }
+      }
+    }
+
     // 3. Unlink leads (keep for history)
     const { error: leadsError } = await supabaseAdmin
       .from("leads")
