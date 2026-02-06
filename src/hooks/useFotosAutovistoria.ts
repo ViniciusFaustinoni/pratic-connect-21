@@ -58,12 +58,14 @@ export function useFotosVistoriaUnificada(params: {
       fotos: FotoAutovistoria[];
       vistoriaId: string | null;
       origem: 'vistoria_fotos' | 'cotacoes_vistoria_fotos' | null;
+      video360Url: string | null;
+      modalidade: string | null;
     }> => {
       // 1. Tentar buscar vistoria vinculada ao contrato (nova arquitetura)
       if (contratoId) {
         const { data: vistoria } = await supabase
           .from('vistorias')
-          .select('id, status, modalidade')
+          .select('id, status, modalidade, video_360_url')
           .eq('contrato_id', contratoId)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -81,6 +83,8 @@ export function useFotosVistoriaUnificada(params: {
               fotos: fotos as FotoAutovistoria[],
               vistoriaId: vistoria.id,
               origem: 'vistoria_fotos',
+              video360Url: vistoria.video_360_url || null,
+              modalidade: vistoria.modalidade || null,
             };
           }
         }
@@ -99,12 +103,14 @@ export function useFotosVistoriaUnificada(params: {
             fotos: fotosLegado as FotoAutovistoria[],
             vistoriaId: null,
             origem: 'cotacoes_vistoria_fotos',
+            video360Url: null,
+            modalidade: 'autovistoria', // Legado é sempre autovistoria
           };
         }
       }
 
       // 3. Sem fotos encontradas
-      return { fotos: [], vistoriaId: null, origem: null };
+      return { fotos: [], vistoriaId: null, origem: null, video360Url: null, modalidade: null };
     },
     enabled: !!(contratoId || cotacaoId),
   });
