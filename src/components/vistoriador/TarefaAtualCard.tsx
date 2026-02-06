@@ -22,6 +22,7 @@ import { TarefaAtual, useIniciarTarefa, useIniciarRota, TarefaAtualComConfirmaca
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
 import { isManutencao } from '@/hooks/useCriarManutencao';
+import { isRetirada } from '@/hooks/useCriarRetirada';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -114,6 +115,8 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const handleExecutar = () => {
     if (isManutencao(tarefa.tipo)) {
       navigate(`/instalador/manutencao/${tarefa.id}`);
+    } else if (isRetirada(tarefa.tipo)) {
+      navigate(`/instalador/retirada/${tarefa.id}`);
     } else if (isInstalacao(tarefa.tipo)) {
       navigate(`/instalador/instalacao/${tarefa.id}`);
     } else {

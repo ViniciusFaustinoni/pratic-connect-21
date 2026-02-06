@@ -20446,6 +20446,7 @@ export type Database = {
         | "vistoria_sinistro"
         | "vistoria_periodica"
         | "vistoria_manutencao"
+        | "vistoria_retirada"
       tipo_sinistro:
         | "roubo"
         | "furto"
@@ -20816,6 +20817,7 @@ export const Constants = {
         "vistoria_sinistro",
         "vistoria_periodica",
         "vistoria_manutencao",
+        "vistoria_retirada",
       ],
       tipo_sinistro: [
         "roubo",

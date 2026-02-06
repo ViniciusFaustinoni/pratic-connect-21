@@ -57,7 +57,7 @@ type StatusVistoriaFila =
   | 'aprovada'
   | 'reprovada';
 
-type TipoVistoria = 'presencial' | 'auto_vistoria' | 'ponto_fixo' | 'manutencao';
+type TipoVistoria = 'presencial' | 'auto_vistoria' | 'ponto_fixo' | 'manutencao' | 'retirada';
 
 interface VistoriaFila {
   id: string;
@@ -91,6 +91,7 @@ const TIPO_CONFIG: Record<TipoVistoria, { label: string; className: string }> = 
   auto_vistoria: { label: 'Auto Vistoria', className: 'bg-teal-100 text-teal-800' },
   ponto_fixo: { label: 'Ponto Fixo', className: 'bg-amber-100 text-amber-800' },
   manutencao: { label: 'Manutenção', className: 'bg-orange-100 text-orange-800 border-orange-300' },
+  retirada: { label: 'Retirada', className: 'bg-red-100 text-red-800 border-red-300' },
 };
 
 // ============================================
@@ -120,8 +121,9 @@ const mapStatus = (status: string, modalidade?: string): StatusVistoriaFila => {
 };
 
 const mapTipo = (modalidade?: string, tipoServico?: string): TipoVistoria => {
-  // Verificar se é manutenção pelo tipo do serviço
+  // Verificar se é manutenção ou retirada pelo tipo do serviço
   if (tipoServico === 'vistoria_manutencao') return 'manutencao';
+  if (tipoServico === 'vistoria_retirada') return 'retirada';
   
   switch (modalidade) {
     case 'auto_vistoria': return 'auto_vistoria';

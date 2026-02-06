@@ -14,7 +14,8 @@ export type TipoServico =
   | 'vistoria_saida' 
   | 'vistoria_sinistro'
   | 'vistoria_periodica'
-  | 'vistoria_manutencao';
+  | 'vistoria_manutencao'
+  | 'vistoria_retirada';
 
 export type StatusServico = 
   | 'pendente' 
@@ -204,6 +205,7 @@ export const TIPO_SERVICO_LABELS: Record<TipoServico, string> = {
   vistoria_sinistro: 'Vistoria de Sinistro',
   vistoria_periodica: 'Vistoria Periódica',
   vistoria_manutencao: 'Vistoria de Manutenção',
+  vistoria_retirada: 'Retirada de Rastreador',
 };
 
 export const STATUS_SERVICO_LABELS: Record<StatusServico, string> = {
