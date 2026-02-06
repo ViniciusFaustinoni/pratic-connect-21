@@ -861,6 +861,75 @@ serve(async (req) => {
           }
         }
 
+        // 10. NOTIFICAR VISTORIADOR via WhatsApp com dados do cliente
+        try {
+          // Buscar telefone do profissional
+          const { data: profissionalTel } = await supabase
+            .from('profiles')
+            .select('nome, whatsapp, telefone')
+            .eq('id', profissionalId)
+            .single();
+          
+          const telefoneProfissional = profissionalTel?.whatsapp || profissionalTel?.telefone;
+          
+          if (telefoneProfissional) {
+            const tipoServicoLabelWhats = servico.tipo === 'instalacao' 
+              ? 'INSTALAÇÃO' 
+              : 'VISTORIA';
+            
+            const telefoneCliente = servico.associado_whatsapp || servico.associado_telefone;
+            const linkWhatsAppCliente = telefoneCliente 
+              ? `https://wa.me/55${telefoneCliente.replace(/\D/g, '')}` 
+              : 'Não informado';
+            
+            const enderecoVist = [
+              servico.logradouro,
+              servico.numero,
+              servico.bairro,
+              servico.cidade
+            ].filter(Boolean).join(', ') || 'Endereço cadastrado';
+            
+            const periodoLabelVist = servico.periodo === 'manha' 
+              ? 'Manhã (08:00-12:00)' 
+              : servico.periodo === 'tarde'
+                ? 'Tarde (14:00-18:00)'
+                : 'A definir';
+
+            const mensagemVistoriador = `📋 *NOVA TAREFA ATRIBUÍDA*
+
+🔧 *Tipo:* ${tipoServicoLabelWhats}
+📍 *Endereço:* ${enderecoVist}
+⏰ *Período:* ${periodoLabelVist}
+
+👤 *DADOS DO CLIENTE:*
+• Nome: ${servico.associado_nome || 'Não informado'}
+• Telefone: ${telefoneCliente || 'Não informado'}
+
+🚗 *VEÍCULO:*
+• Placa: ${servico.veiculo_placa || 'Não informada'}
+• ${servico.veiculo_marca || ''} ${servico.veiculo_modelo || ''}
+
+📱 *Link direto para WhatsApp do cliente:*
+${linkWhatsAppCliente}
+
+⚠️ Entre em contato para confirmar sua chegada!`;
+
+            await supabase.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: telefoneProfissional.replace(/\D/g, ''),
+                mensagem: mensagemVistoriador,
+              },
+            });
+            
+            console.log(`[atribuir-proxima-tarefa] ✓ Vistoriador ${profissionalId} notificado via WhatsApp`);
+          } else {
+            console.log(`[atribuir-proxima-tarefa] Profissional sem WhatsApp cadastrado`);
+          }
+        } catch (vistWhatsError) {
+          console.error('[atribuir-proxima-tarefa] Erro ao notificar vistoriador via WhatsApp:', vistWhatsError);
+          // Não bloqueia o fluxo principal
+        }
+
         return new Response(
           JSON.stringify({
             resultado: 'atribuida',
