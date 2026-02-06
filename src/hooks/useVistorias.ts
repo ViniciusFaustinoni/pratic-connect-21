@@ -626,9 +626,9 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
           veiculo:veiculos(
             id, placa, chassi, marca, modelo, 
             ano_fabricacao, ano_modelo, cor,
-            associado:associados(id, nome, cpf, telefone)
+            associado:associados(id, nome, cpf, telefone, whatsapp)
           ),
-          associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+          associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone, whatsapp),
           vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
           fotos:vistoria_fotos(*)
         `)
@@ -644,9 +644,9 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
             veiculo:veiculos(
               id, placa, chassi, marca, modelo, 
               ano_fabricacao, ano_modelo, cor,
-              associado:associados(id, nome, cpf, telefone)
+              associado:associados(id, nome, cpf, telefone, whatsapp)
             ),
-            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone, whatsapp),
             vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
             fotos:vistoria_fotos(*)
           `)
@@ -703,9 +703,9 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
             veiculo:veiculos(
               id, placa, chassi, marca, modelo, 
               ano_fabricacao, ano_modelo, cor,
-              associado:associados(id, nome, cpf, telefone)
+              associado:associados(id, nome, cpf, telefone, whatsapp)
             ),
-            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone, whatsapp),
             vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
             fotos:vistoria_fotos(*)
           `)
@@ -726,7 +726,7 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
           ano_fabricacao: number | null;
           ano_modelo: number | null;
           cor: string | null;
-          associado: { id: string; nome: string; cpf: string; telefone: string } | null;
+          associado: { id: string; nome: string; cpf: string; telefone: string; whatsapp: string | null } | null;
         } | null;
         instalacao_id?: string;
       };
