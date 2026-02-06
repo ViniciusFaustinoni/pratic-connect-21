@@ -97,6 +97,15 @@ export interface Servico {
   assinatura_concluida_em: string | null;
   assinatura_documento_url: string | null;
   
+  // Campos específicos de manutenção
+  motivo_manutencao: string | null;
+  motivo_detalhe: string | null;
+  local_tipo_manutencao: string | null;
+  protecao_suspensa: boolean | null;
+  data_suspensao: string | null;
+  rastreador_substituto_id: string | null;
+  resultado_manutencao: string | null;
+  
   // Outros
   observacoes: string | null;
   origem: string | null;
