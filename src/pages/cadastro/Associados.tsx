@@ -56,6 +56,7 @@ const statusColors: Record<StatusAssociado, string> = {
   suspenso: 'bg-red-100 text-red-800',
   cancelado: 'bg-muted text-muted-foreground',
   bloqueado: 'bg-destructive text-destructive-foreground',
+  recusado: 'bg-red-500 text-white',
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];

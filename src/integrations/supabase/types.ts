@@ -21184,6 +21184,7 @@ export type Database = {
         | "suspenso"
         | "cancelado"
         | "bloqueado"
+        | "recusado"
       status_chamado:
         | "aberto"
         | "em_atendimento"
@@ -21552,6 +21553,7 @@ export const Constants = {
         "suspenso",
         "cancelado",
         "bloqueado",
+        "recusado",
       ],
       status_chamado: [
         "aberto",

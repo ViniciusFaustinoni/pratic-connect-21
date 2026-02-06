@@ -72,7 +72,8 @@ export type StatusAssociado =
   | 'inadimplente'
   | 'suspenso'
   | 'cancelado'
-  | 'bloqueado';
+  | 'bloqueado'
+  | 'recusado';
 
 export type StatusDocumento = 'pendente' | 'em_analise' | 'aprovado' | 'reprovado' | 'expirado';
 
@@ -550,6 +551,7 @@ export const STATUS_ASSOCIADO_LABELS: Record<StatusAssociado, string> = {
   suspenso: 'Suspenso',
   cancelado: 'Cancelado',
   bloqueado: 'Bloqueado',
+  recusado: 'Recusado',
 };
 
 export const STATUS_DOCUMENTO_LABELS: Record<StatusDocumento, string> = {
