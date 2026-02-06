@@ -82,18 +82,22 @@ export function AgendamentoVistoria({
 
   // === LÓGICA DE DATAS ===
   
-  // Gerar próximos 7 dias úteis (incluindo hoje se válido)
+  // Gerar hoje (se houver períodos) + próximos 2 dias úteis
   const hoje = new Date();
   const datasDisponiveis: Date[] = [];
   
-  // Incluir hoje se não for domingo
+  // Incluir hoje se não for domingo E se ainda houver períodos disponíveis
   if (!isDomingo(hoje)) {
-    datasDisponiveis.push(hoje);
+    const periodosHoje = getPeriodosDisponivelsPorHora(hoje);
+    if (periodosHoje.length > 0) {
+      datasDisponiveis.push(hoje);
+    }
   }
   
-  // Continuar com dias futuros até ter 7 datas
+  // Continuar com dias futuros até ter no máximo 3 datas (hoje + 2 dias)
   let dia = addDays(hoje, 1);
-  while (datasDisponiveis.length < 7) {
+  const maxDatas = 3;
+  while (datasDisponiveis.length < maxDatas) {
     if (!isDomingo(dia)) {
       datasDisponiveis.push(new Date(dia));
     }
