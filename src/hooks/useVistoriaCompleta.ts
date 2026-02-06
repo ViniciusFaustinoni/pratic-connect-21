@@ -194,21 +194,41 @@ export function useRecusarVeiculoVistoria() {
         }
       }
 
-      // 2. Atualizar veículo como suspenso
-      const { error: veiculoError } = await supabase
+      // 2. Atualizar veículo como RECUSADO (não mais suspenso)
+      const { data: veiculoData, error: veiculoError } = await supabase
         .from('veiculos')
         .update({ 
-          status: 'suspenso',
+          status: 'recusado',
           motivo_recusa_veiculo: data.observacoes,
           recusado_por: profile?.id,
           recusado_em: agora,
           updated_at: agora,
         })
-        .eq('id', data.veiculoId);
+        .eq('id', data.veiculoId)
+        .select('placa, chassi')
+        .single();
 
       if (veiculoError) throw veiculoError;
 
-      // 3. Atualizar vistoria como reprovada
+      // 3. NOVO: Adicionar veículo à blacklist
+      if (veiculoData) {
+        await supabase
+          .from('blacklist_veiculos')
+          .insert({
+            placa: veiculoData.placa?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '',
+            chassi: veiculoData.chassi,
+            motivo: data.motivo,
+            justificativa: data.observacoes,
+            tipo_reprovacao: 'vistoria_reprovada',
+            veiculo_id: data.veiculoId,
+            associado_id: data.associadoId,
+            adicionado_por: profile?.id,
+            vistoria_id: data.vistoriaId,
+            ativo: true,
+          });
+      }
+
+      // 4. Atualizar vistoria como reprovada
       const { error: vistoriaError } = await supabase
         .from('vistorias')
         .update({ 
@@ -221,7 +241,7 @@ export function useRecusarVeiculoVistoria() {
 
       if (vistoriaError) throw vistoriaError;
 
-      // 4. Cancelar instalação se existir
+      // 5. Cancelar instalação se existir
       if (data.instalacaoId) {
         const { error: instalacaoError } = await supabase
           .from('instalacoes')
@@ -234,7 +254,16 @@ export function useRecusarVeiculoVistoria() {
         if (instalacaoError) throw instalacaoError;
       }
 
-      // 5. Registrar no histórico
+      // 6. NOVO: Atualizar associado para suspenso
+      await supabase
+        .from('associados')
+        .update({ 
+          status: 'suspenso',
+          updated_at: agora,
+        })
+        .eq('id', data.associadoId);
+
+      // 7. Registrar no histórico
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
         tipo: 'veiculo_recusado',
@@ -250,7 +279,7 @@ export function useRecusarVeiculoVistoria() {
         usuario_id: profile?.id,
       });
 
-      // 6. Propagar cancelamento
+      // 8. Propagar cancelamento
       const { data: vistoriaData } = await supabase
         .from('vistorias')
         .select('cotacao_id, contrato_id')
@@ -262,6 +291,17 @@ export function useRecusarVeiculoVistoria() {
           .from('cotacoes')
           .update({ status_contratacao: 'veiculo_recusado' })
           .eq('id', vistoriaData.cotacao_id);
+      }
+
+      // 9. NOVO: Cancelar contrato se existir
+      if (vistoriaData?.contrato_id) {
+        await supabase
+          .from('contratos')
+          .update({ 
+            status: 'cancelado',
+            motivo_cancelamento: `Vistoria reprovada: ${data.motivo}`,
+          })
+          .eq('id', vistoriaData.contrato_id);
       }
     },
     onSuccess: () => {
