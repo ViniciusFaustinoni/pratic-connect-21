@@ -1,268 +1,344 @@
 
-## PLANO: REFORMAR PÁGINA COMISSOES.TSX E ESTENDER HOOKS
 
-### 1. ANÁLISE DA ARQUITETURA ATUAL
+## PLANO: PARTE 5 — VISÃO DO VENDEDOR, AUTOMAÇÃO E INTEGRAÇÃO ASAAS
 
-**Hooks Existentes:**
-- `useComissoes.ts`: Query de comissões + 4 mutations (aprovar, aprovar lote, pagar, cancelar) ✅
-- `useComissoesFaixas.ts`: Queries para 5 tabelas de faixas + parametros + mutations genéricas ✅
-- `useComissoesCampanhas.ts`: Query campanhas + mutations criar/fechar ✅
+### 1. ARQUITETURA ATUAL ANALISADA
 
-**Componentes Existentes:**
-- `ComissaoCard.tsx`: Card individual de comissão com status badges e ações
-- `ComissaoResumoMensal.tsx`: Resumo mini com totais por status
+**Estrutura de dados existente:**
+- Hook `useMinhasComissoes.ts`: 4 queries básicas (comissoes, resumoMensal, ultimosPagamentos, totalAcumulado)
+- Página `MinhasComissoes.tsx`: Layout simples com 4 KPIs + tabs de status
+- BD: Tabelas de comissoes, comissoes_recorrentes, comissoes_deducoes, comissoes_ranking_mensal, comissoes_crescimento_log já existem (Parte 1)
+- SQL: Funções `fn_tipo_consultor()`, `fn_tempo_casa_consultor()`, `fn_placas_ativas_consultor()` já existem
+- Edge Functions: Padrão estabelecido com Supabase client direto, CORS headers, service role key
 
-**Padrões Identificados:**
-- React Query para data fetching + React Router para navegação
-- Shadcn UI components (Card, Badge, Tabs, Select, Button, Dialog)
-- Sonner para toasts
-- Formatação de moeda em pt-BR
-- Icons do Lucide React
+**Padrões de código identificados:**
+- React Query (useQuery, useMutation) com queryKey estruturado e cacheamento
+- Supabase RPC para funções PostgreSQL complexas
+- Edge Functions usando Deno com `serve()` e CORS
+- Toast notifications via Sonner para feedback
+- Formatação pt-BR para moeda e datas
 
 ---
 
-### 2. PASSO 1: ESTENDER HOOK USECOMISSOES.TS
+### 2. PASSO 1: ESTENDER HOOK USEMIN
 
-**Adicionar 3 novas Queries:**
+HASCOMISSOES.TS
 
-1. **resumoVendedores**: Agrupa comissões por vendedor + mês/ano
-   - SELECT: vendedor_id, nome, avatar_url, SUM(valor_total) por tipo_comissao
-   - JOIN: profiles para nome/avatar
-   - GROUP BY: vendedor_id, tipo_comissao
-   - Ordenar por: valor_total DESC
+**Novas queries a adicionar:**
 
-2. **deducoesMensal**: Busca todas as deduções do mês
-   - SELECT: * de comissoes_deducoes
-   - JOIN: profiles (vendedor) para nome
-   - Filtrar por: mes_referencia, ano_referencia
-   - Agrupar por vendedor para resumo
+1. **meuResumoMensal(mes, ano)**: 
+   - `SELECT tipo_comissao, COUNT(*), SUM(valor_total) FROM comissoes WHERE vendedor_id=? AND mes=? AND ano=?`
+   - Agrupa por tipo_comissao → retorna array com { tipo, quantidade, valor_total }
+   - Habilitar com `enabled: !!mes && !!ano`
 
-3. **auditoriaRecente**: Últimos registros de auditoria
-   - SELECT: * de comissoes_auditoria
-   - LIMIT 50, ORDER BY created_at DESC
-   - JOIN: profiles (usuario_id) para nome
+2. **meuRanking(mes, ano)**:
+   - Query em `comissoes_ranking_mensal` com JOIN `comissoes_campanhas`
+   - Filter: vendedor_id + campanha(mes, ano)
+   - Retorna: { posicao_ranking, vendas_liquidas, valor_premio, total_participantes }
+   - Se não houver ranking/campanha: retorna null (não erro)
 
-**Adicionar 2 novas Mutations:**
+3. **meuRecorrente(mes, ano)**:
+   - Query em `comissoes_recorrentes` where vendedor_id + mes + ano
+   - Retorna única linha: { placas_ativas, total_boletos_pagos, percentual_aplicado, valor_recorrente }
 
-1. **contestarComissao**: UPDATE comissoes SET status='contestada', contestada_em, contestacao_motivo
-2. **executarFechamento**: Chama RPC `fn_fechamento_mensal_comissoes(p_mes, p_ano, p_usuario_id)`
-   - Usa `supabase.rpc()`
-   - Retorna JSONB com resultado da execução
-   - Invalidates queries: ['comissoes'], ['comissoes-campanhas']
+4. **minhasDeducoes(mes, ano)**:
+   - Query em `comissoes_deducoes` where vendedor_id + aplicada_em between start/end
+   - Retorna array: { id, tipo, descricao, contrato_id, associado_id, valor, aplicada_em }
+   - ORDER BY aplicada_em DESC
+
+5. **meuCrescimento**:
+   - Query em `comissoes_crescimento_log` where vendedor_id
+   - Retorna array: { marco_placas, data_atingido, valor_pago, percentual_recorrente_garantido }
+   - ORDER BY marco_placas ASC
+   - Não precisa de mes/ano (histórico completo)
+
+6. **meuHistorico(meses=12)**:
+   - Query last 12 months de `comissoes`
+   - GROUP BY mes_referencia, ano_referencia
+   - Retorna: { mes, ano, vendas_confirmadas (count), adesao, recorrente, producao, ranking, crescimento, deducoes, total, status }
+
+7. **minhasMetas(mes, ano)**:
+   - Query em `metas_vendas` (tabela que pode não existir — verificar se existe, se não, retornar null)
+   - Se existir: { meta_leads, meta_cotacoes, meta_contratos, meta_valor, realizado_leads, realizado_cotacoes, realizado_contratos, realizado_valor }
+
+**Nova mutation:**
+
+- **contestarComissao(id, motivo)**:
+  - UPDATE comissoes SET contestada=true, contestada_em=now(), contestacao_motivo=motivo WHERE id=?
+  - Invalidate queryKey: ['minhas-comissoes']
+  - Toast: "Comissão marcada como contestada"
 
 **Padrão a seguir:**
-- Usar mesmo padrão dos mutations existentes (toast success/error)
-- Usar queryClient.invalidateQueries() para refresh automático
-- Error handling com mensagens claras
+- Mesma estrutura que queries existentes (enabled, error handling, queryKey)
+- userID vem de `useAuth()` em TODAS as queries
+- Validar que mes/ano são válidos (1-12, ano >= 2020)
 
 ---
 
-### 3. PASSO 2: CRIAR HOOK USECOMISSOESRANKING.TS
+### 3. PASSO 2: REFORMAR MINHASCOMISSOES.TSX
 
-**Estrutura:**
+**Nova estrutura da página:**
 
+**Header:**
+- h1: "Minhas Comissões" (Wallet icon)
+- Select: Mês/Ano com default = mês atual
+- Badge: Tipo consultor (interno/externo) — derivado de `fn_tipo_consultor()` via RPC chamado 1x ao carregar
+- Breadcrumb: Vendas > Minhas Comissões (adicionar link)
+
+**Seção 1: Resumo do Mês (4 Cards KPI, sempre visível)**
+- "Total do Mês": SUM de todas as comissões | DollarSign ícone | cor verde | texto grande
+- "Vendas Confirmadas": COUNT de adesões | ShoppingCart ícone | cor blue
+- "Placas Ativas": valor de `fn_placas_ativas_consultor()` | Car ícone | cor purple
+- "Posição Ranking": meuRanking.posicao_ranking | Trophy ícone | cor gold se top 3, senão gray
+
+**Seção 2: Detalhamento (6 Tabs usando Shadcn Tabs)**
+
+**Tab 1: "Bonificação Adesão" (condicional: só se internal):**
+- 3 Cards informativos:
+  1. Vendas no mês (contagem) | Próxima faixa (incentivo de +2 vendas) | Faixa atingida (%)
+  2. Valor total adesões (R$) | Valor bruto após percentual | Deduções do mês (R$ + lista inline)
+  3. Antecipado 10% (R$) | **TOTAL LÍQUIDO 1ª FASE (R$ grande em verde)**
+
+- Barra de progresso visual:
+  - `<Progress>` mostrando posição nas faixas
+  - Texto: "Faltam X vendas para atingir Y%"
+
+- Tabela de vendas individuais (scroll horizontal):
+  | # | Associado | Placa | Adesão | Tipo Atend. | Dedução | Líquido |
+  - Linhas de comissoes_adesao do mês
+
+**Tab 2: "Recorrente" (condicional: só se placas >= 10 para interno, sempre para externo):**
+- Card:
+  - Placas ativas (número)
+  - Faixa atual (X placas = Y%)
+  - Próxima faixa (incentivo)
+  - Total boletos pagos (mês anterior) em R$
+  - **VALOR RECORRENTE (R$ grande)**
+  - Se interno: "Mínimo garantido: Z%" (se existe em crescimento_log)
+
+- Barra de progresso (se interno e < 10 placas):
+  - "Você precisa de X placas ativas para habilitar o recorrente"
+  - Progress bar até 10
+
+**Tab 3: "Produção" (condicional: só se externo):**
+- Card:
+  - Placas confirmadas (contagem)
+  - Faixa atingida (X placas = R$ valor)
+  - Próxima faixa (incentivo)
+  - **VALOR PRODUÇÃO (R$)**
+
+- Se < 30 placas:
+  - "Faltam X placas para habilitar bonificação de produção"
+  - Progress bar até 30
+
+**Tab 4: "Ranking":**
+- Card de destaque:
+  - Se top 3: emoji grande (🥇🥈🥉) + "Parabéns!" + posição
+  - Se não: posição + "Faltam X vendas para alcançar 3º lugar"
+
+- Tabela pública (sem valores de prêmios de outros, só do vendedor):
+  | # | Vendedor | Vendas Líquidas |
+  - Apenas nomes (sem valores/avatar de outros)
+  - Destacar linha do vendedor com bg-highlight
+
+- Info: "Faixa: X placas | Seu Prêmio: R$ Y (se aplicável)"
+
+**Tab 5: "Crescimento":**
+- Visual tipo "achievement tracker":
+  - Marcos em cards lado a lado: 100, 200, 300, 400, 500, 600 placas
+  - Atingido: green badge + valor recebido
+  - Próximo: yellow badge + "Faltam X"
+  - Futuros: gray badge (disabled)
+
+- Informação:
+  - Base ativa atual: X placas
+  - Próximo marco: Y placas (faltam Z)
+  - Recorrente mínimo garantido: W%
+
+**Tab 6: "Histórico":**
+- LineChart (Recharts):
+  - X: últimos 12 meses
+  - Y1: Total comissões (verde)
+  - Y2 (secondary axis): Vendas confirmadas (azul, scaled)
+
+- Tabela:
+  | Mês/Ano | Vendas | Adesão | Recorrente | Produção | Ranking | Crescimento | Deduções | Total | Status |
+  - Badge de status: paga (green), aprovada (blue), pendente (gray)
+  - ORDER BY ano DESC, mes DESC
+
+**Tab 7: "Deduções":**
+- Tabela completa do mês:
+  | Tipo | Descrição | Associado | Contrato | Valor | Data |
+  - Badge de tipo colorido:
+    - repasse_volante: gray
+    - taxa_cartao: blue
+    - cancelamento: red
+    - inadimplencia: orange
+    - fraude: dark-red
+
+- Resumo gráfico:
+  - Pie chart pequeno (Recharts): distribuição por tipo
+  - "Total deduções do mês: R$ X"
+
+**Seção 3: Contestação (inline em cada comissão)**
+- Em cada comissão pendente: Botão "Contestar"
+- Dialog: Campo textarea (motivo) + Botão enviar
+- Ao enviar: Mark como contestada, badge yellow "Contestada"
+- Se respondido: Mostrar resposta da gerência em dialog
+
+**Design:**
+- Clean, números grandes e destacados
+- Cores motivacionais: verde (valores), blue (meta/ranking)
+- Mobile-first: cards/tabs empilham
+- Barras de progresso = incentivo visual
+- Sem dados de outros vendedores (exceto ranking público limitado)
+
+---
+
+### 4. PASSO 3: EDGE FUNCTION CALCULAR-COMISSOES-MENSAIS
+
+**Localização:** `supabase/functions/calcular-comissoes-mensais/index.ts`
+
+**Lógica:**
+
+1. **Determinar mês/ano:**
+   - Mês anterior (e.g., se hoje é fev, processar jan)
+   - `const agora = new Date(); const mes = agora.getMonth() === 0 ? 12 : agora.getMonth(); const ano = agora.getMonth() === 0 ? agora.getFullYear() - 1 : agora.getFullYear();`
+
+2. **Processar mês anterior:**
+   - Buscar campanha do mês anterior
+   - Se `status === 'aberta'`: chamar `fn_fechamento_mensal_comissoes` via RPC
+   - Registrar resultado
+
+3. **Criar campanha mês atual:**
+   - Verificar se campanha já existe para mês/ano atual
+   - Se não existir: INSERT nova com `status='aberta'` e datas corretas
+
+4. **Apuração de inadimplência (60 dias):**
+   - Buscar `asaas_cobrancas` com:
+     - `tipo='mensalidade'`
+     - `status IN ('PENDING', 'OVERDUE')`
+     - `data_vencimento <= (hoje - 60 dias)`
+     - `mes_referencia <= 2`
+   - Para cada cobrança não-duplicada: INSERT deducao com tipo='inadimplencia_2_boletos'
+   - Vincular ao vendedor via contratos join
+
+5. **Retornar resultado:**
+   - JSON com timestamp, resultados de cada etapa, erros (se houver)
+
+**Padrão Deno:**
 ```typescript
-export function useComissoesRanking(mes?: number, ano?: number) {
-  // Query: Busca de comissoes_ranking_mensal
-  // - SELECT: * com JOIN profiles(nome, avatar_url)
-  // - Filtrar por: ano, mes
-  // - ORDER BY: vendas_liquidas DESC, posicao_ranking ASC
-  // - Retorna array tipado com campos adicionais (vendedor nome/avatar)
-  
-  // Estados derivados (computados do array):
-  // - rankingInterno1Ano: filter + sort
-  // - rankingInterno1AnoPlus: filter + sort
-  // - rankingExterno: filter + sort
-  // - totalPlacas: SUM(vendas_confirmadas)
-  // - faixaPlacas: 300/400/500 baseado no total
-  
-  return { ranking, rankingPorCategoria, totalPlacas, faixaPlacas, isLoading, error }
-}
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = { /* ... */ };
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  // ... lógica ...
+  return new Response(JSON.stringify({ success, data }), { headers: corsHeaders });
+});
 ```
 
 ---
 
-### 4. PASSO 3: REFORMAR PÁGINA COMISSOES.TSX
+### 5. PASSO 4: INTEGRAÇÃO WEBHOOK ASAAS
 
-**Layout com 5 Tabs principais:**
+**Modificação em:** `supabase/functions/asaas-webhook/index.ts`
 
-**TAB 1: RESUMO EXECUTIVO**
-- Header com seletor de mês/ano (reusar do layout atual)
-- Badge de status da campanha (aberta/em_apuracao/fechada/paga)
-- Grid 4 KPI Cards:
-  - Total Comissões (DollarSign, verde): SUM de todas as comissões
-  - Vendedores Ativos (Users, azul): COUNT distinct vendedor_id
-  - Vendas Confirmadas (TrendingUp, roxo): da campanha do mês
-  - Deduções (AlertTriangle, laranja): SUM de deducoes_mensal
-- BarChart Recharts (top 10 vendedores, barras empilhadas por tipo_comissao)
-- Tabela resumo (Vendedor | Tipo | Vendas | Adesão | Recorrente | ... | Total)
-  - Usar Table do Shadcn (simples, responsive com scroll)
-  - Últimas linhas: linha de TOTAL
-  - onClick linha → abre aba Detalhes com vendedor selecionado
+**Após processar evento de pagamento (linha 200+, após UPDATE de asaas_cobrancas):**
 
-**TAB 2: RANKING MENSAL**
-- Se há campanha: mostra faixa de placas (300/400/500) em Card destaque
-- 3 subtabs (ou seções): "Interno +1 Ano" | "Interno -1 Ano" | "Externo"
-- Para cada: Tabela com # | Vendedor | Vendas Líquidas | Trocas | Prêmio
-  - Top 3 com badges 🥇🥈🥉 e cor destaque
-  - Demais em cinza claro
-  - ORDER BY posicao_ranking ASC
-- Se sem campanha: mensagem + botão "Criar Campanha"
+```typescript
+if (payment.status === 'RECEIVED' || payment.status === 'CONFIRMED') {
+  if (cobranca.tipo === 'mensalidade') {
+    // 1. Chamar função para incrementar boletos
+    await supabase.rpc('fn_incrementar_boletos_associado', {
+      p_associado_id: cobranca.associado_id
+    });
+    
+    // 2. Se primeiro boleto, registrar data
+    if (cobranca.mes_referencia === 1) {
+      await supabase
+        .from('associados')
+        .update({ data_primeiro_boleto_pago: new Date().toISOString() })
+        .eq('id', cobranca.associado_id)
+        .is('data_primeiro_boleto_pago', null);
+    }
+  }
+}
+```
 
-**TAB 3: FECHAMENTO MENSAL**
-- Card com stepper visual (4 etapas em linha horizontal ou vertical)
-- **Etapa 1 - Campanha:**
-  - Status badge da campanha
-  - Se não existir: Botão "Criar Campanha" (chama mutation)
-  - Mostra datas (início, fim, pagamento 1ª fase, apuração boletos)
-- **Etapa 2 - Cálculo:**
-  - Botão "Executar Fechamento" (com AlertDialog confirmação)
-  - Durante: Progress bar + "Processando {x} vendedores..."
-  - Ao concluir: Resumo em json box (ou pretty print)
-  - Chama: executarFechamento.mutate(mes, ano)
-- **Etapa 3 - Aprovação:**
-  - Tabela de comissões status='pendente' ou 'calculada'
-  - Checkbox seleção múltipla
-  - Botão "Aprovar Selecionadas"
-  - Botão "Aprovar Todas"
-  - Para cada linha: Botão aprovar individual
-  - Colunas: Vendedor | Tipo | Valor | Ações
-- **Etapa 4 - Pagamento:**
-  - Tabela de comissões status='aprovada'
-  - Botão "Marcar como Pago"
-  - Colunas: Vendedor | Tipo | Valor | Data Aprovação | Ações
-
-**TAB 4: DETALHES POR VENDEDOR**
-- Combobox/Select pesquisável de vendedores (filtra por nome)
-- Ao selecionar:
-  - Card identificação: foto + nome + tipo + tempo de casa + placas ativas
-  - 6 Cards de comissão do mês (lado a lado, grid responsivo):
-    1. Bonificação Adesão (blue): vendas | % | bruto | deducoes | liquido
-    2. Recorrente (green): placas | boletos | % | valor
-    3. Produção (purple): placas | valor (ou N/A)
-    4. Classificação (orange): posição | prêmio
-    5. Crescimento (cyan): último marco | próximo | valor
-    6. Recorde (yellow): recorde | mês | vendas | bônus
-  - Tabela de deduções do mês (Tipo | Descrição | Valor | Data)
-  - Tabela de comissões por contrato (Contrato | Associado | Adesão | Dedução | Líquido)
-
-**TAB 5: HISTÓRICO / AUDITORIA**
-- 2 subtabs:
-  - **Pagamentos**: Tabela comissoes_pagamentos (Vendedor | Mês | Qtd | Valor | Data | Comprovante)
-    - Filtros: vendedor, mês/ano, status
-    - Paginação se muitos registros
-  - **Auditoria**: Tabela comissoes_auditoria (Data | Usuário | Tabela | Ação | Detalhes)
-    - Clicar em Detalhes abre Dialog com diff (antes/depois em json)
-    - Filtros: tabela, ação, data range
+**Nova função SQL:** `fn_incrementar_boletos_associado(p_associado_id UUID)`
+```sql
+CREATE OR REPLACE FUNCTION fn_incrementar_boletos_associado(p_associado_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE associados 
+  SET qtd_boletos_pagos = COALESCE(qtd_boletos_pagos, 0) + 1,
+      updated_at = now()
+  WHERE id = p_associado_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
 
 ---
 
-### 5. DESIGN E COMPONENTES
+### 6. PASSO 5: CONFIGURAR CRON
 
-**Cores por Tipo:**
-- adesao: blue-500
-- recorrente: green-500
-- producao: purple-500
-- classificacao: orange-500
-- crescimento: cyan-500
-- recorde: yellow-500
+**No Supabase Dashboard > Database > Extensions:**
 
-**Status Badges:**
-- pendente: gray-500
-- calculada: blue-500
-- em_apuracao: yellow-500
-- aprovada: green-500
-- paga: emerald-500
-- contestada: red-500
-- cancelada: slate-500
+1. Habilitar `pg_cron` (se já não estiver)
+2. Executar SQL (em Run SQL):
 
-**Shadcn Components a Usar:**
-- Tabs (layout principal)
-- Card (KPI, seções)
-- Badge (status, tipo)
-- Table (listas)
-- Dialog (formulários, detalhes)
-- AlertDialog (confirmações)
-- Select (filtros, seletor vendedor)
-- Combobox (seletor pesquisável vendedor)
-- Button (ações)
-- Progress (loading)
+```sql
+SELECT cron.schedule(
+  'calcular-comissoes-mensais',
+  '0 3 1 * *',
+  $$
+    SELECT
+      net.http_post(
+        url := current_setting('app.settings.supabase_url') || '/functions/v1/calcular-comissoes-mensais',
+        headers := jsonb_build_object(
+          'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key'),
+          'Content-Type', 'application/json'
+        ),
+        body := '{}'::jsonb
+      ) as request_id;
+  $$
+);
+```
 
-**Icons (Lucide React):**
-- DollarSign, Users, TrendingUp, AlertTriangle (KPIs)
-- Check, X, Clock, CheckCircle, Wallet (status/ações)
-- ChevronDown, ChevronUp (expand/collapse)
-- Medal (ranking - 1º, 2º, 3º lugar)
-
-**Recharts:**
-- BarChart: eixo X = vendedores, barras empilhadas = tipo_comissao
-- ResponsiveContainer para responsividade
-- Custom tooltip mostrando valores em R$
+**Se pg_cron não disponível:**
+- Instruir usuário a ir em Dashboard > Database > Extensions e ativar
+- Ou usar alternativa: configurar em app via mutation + schedule com date-fns
 
 ---
 
-### 6. PERMISSÕES E ACESSO
+### 7. VALIDAÇÃO ESPERADA
 
-**Implementar PermissionGate:**
-- Roles permitidos: 'diretor', 'gerente_comercial', 'supervisor_vendas'
-- Se vendedor ou sem role: redireciona ou mostra mensagem
-- Botões de aprovação/pagamento: apenas 'diretor' e 'gerente_comercial'
-- Supervisor: visualiza tudo mas sem botões
-
-**RLS Policies (confirmadas):**
-- Comissões: leitura para gestores, escrita para sistema
-- Deduções: leitura por vendedor (próprias) ou gestor
-- Ranking: leitura por vendedor (ranking public) ou gestor
-
----
-
-### 7. SEQUENCE DE DESENVOLVIMENTO
-
-1. **Estender useComissoes.ts**
-   - Adicionar 3 queries + 2 mutations
-   - Testar queries devolvem dados corretos
-
-2. **Criar useComissoesRanking.ts**
-   - Query + estados derivados
-   - Testes unitários simples
-
-3. **Reformar Comissoes.tsx**
-   - Layout Tabs principal
-   - Implementar Tab 1 (Resumo)
-   - Implementar Tab 2 (Ranking)
-   - Implementar Tab 3 (Fechamento)
-   - Implementar Tab 4 (Detalhes)
-   - Implementar Tab 5 (Histórico)
-   - PermissionGate no topo
-
-4. **Testar end-to-end**
-   - Navegar entre abas
-   - Executar fechamento
-   - Aprovar comissões
-   - Marcar como pago
+✅ Hook estendido com 7 queries + 1 mutation (sem quebrar existentes)
+✅ MinhasComissoes renderiza com 7 tabs (1 condicional por tipo)
+✅ KPIs mostram dados reais
+✅ Barras de progresso calculam corretamente (faixas adesão/recorrente/produção)
+✅ Ranking mostra posição do vendedor com privacidade
+✅ Histórico mostra 12 meses com gráfico Recharts
+✅ Contestação abre dialog + salva no BD
+✅ Edge Function compila e não tem erros de import
+✅ Função `fn_incrementar_boletos_associado` criada
+✅ Webhook ASAAS integrado (lógica ADICIONADA, não substituída)
+✅ CRON agendado (ou instruções fornecidas)
+✅ Todas as 3 páginas funcionam: Comissoes (gerência), MinhasComissoes (vendedor), ComissoesConfig (config)
 
 ---
 
-### 8. VALIDAÇÕES ESPERADAS
+### 8. RISCOS TÉCNICOS
 
-✅ Hook useComissoes estendido sem quebrar existente
-✅ Hook useComissoesRanking retorna dados + estados derivados
-✅ Página Comissoes renderiza 5 abas
-✅ KPIs mostram números corretos (ou 0)
-✅ Gráfico Recharts renderiza com dados reais
-✅ Ranking mostra top 10 por categoria
-✅ Botão Fechamento chama RPC (logs no console)
-✅ Aprovação individual/lote funciona
-✅ PermissionGate restringe acesso corretamente
-✅ MinhasComissoes.tsx continua funcionando
-✅ Responsive: abas funcionam em mobile
-
----
-
-### 9. RISCOS TÉCNICOS
-
-⚠️ **Recharts**: Validar instalação + data format (pode precisar transformação)
-⚠️ **Performance**: Tabelas com muitos registros → considerar paginação/virtualização
-⚠️ **RPC**: fn_fechamento_mensal_comissoes pode ser lento → usar loading state adequado
-⚠️ **RLS**: Validar que comissoes_ranking_mensal tem políticas corretas para leitura
+⚠️ **Query N+1 em meuHistorico:** Pode ser lento se usar loop. Usar aggregation SQL.
+⚠️ **Tabela metas_vendas pode não existir:** Verificar antes de query, retornar null se não.
+⚠️ **CRON timezone:** Postgres usa UTC por padrão. Dia 1 00:00 UTC = dia anterior em BR.
+⚠️ **RLS policies:** Vendedor só deve ver suas comissões (RLS garante via vendedor_id).
+⚠️ **Formatação de data em queries:** JavaScript getMonth é 0-indexed, SQL 1-indexed.
 
