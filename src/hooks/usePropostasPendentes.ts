@@ -312,6 +312,15 @@ export function usePropostasPendentes() {
           .eq('id', contrato.cotacao_id)
           .maybeSingle();
         
+        // Buscar vistoria pela cotacao_id para obter video_360_url
+        const { data: vistoriaCotacao } = await supabase
+          .from('vistorias')
+          .select('video_360_url')
+          .eq('cotacao_id', contrato.cotacao_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
         // tipo_vistoria: 'autovistoria' | 'agendada' | 'agendada_base'
         const isAutoFromCotacao = cotacaoTipo?.tipo_vistoria === 'autovistoria';
         
@@ -329,6 +338,7 @@ export function usePropostasPendentes() {
             tipo: isAutoFromCotacao ? 'autovistoria' : 'agendada',
             modalidade: isAutoFromCotacao ? 'autovistoria' : 'presencial',
             fotos: fotosLegado as VistoriaFotoInfo[],
+            video_360_url: vistoriaCotacao?.video_360_url || null,
           };
         }
       }
