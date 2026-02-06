@@ -543,7 +543,7 @@ export function AgendamentoVistoria({
                 )}
 
                 {/* Opção de Encaixe */}
-                {endereco.logradouro && endereco.numero && (responsavel === 'eu' || (nomeResponsavel && telefoneResponsavel)) && (
+                {endereco.logradouro && endereco.numero && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
