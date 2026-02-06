@@ -21,11 +21,19 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-interface CnhDadosOCR {
+interface DocumentoDadosOCR {
+  // Campos da CNH
   nome?: string;
   numero_registro?: string;
   rg?: string;
   validade?: string;
+  // Campos do CRLV
+  cor?: string;
+  combustivel?: string;
+  motor?: string;
+  placa?: string;
+  renavam?: string;
+  chassi?: string;
 }
 
 interface DocumentoAnexado {
@@ -36,7 +44,7 @@ interface DocumentoAnexado {
   created_at: string;
   ocr_resultado?: {
     validado_ocr?: boolean;
-    dados?: CnhDadosOCR;
+    dados?: DocumentoDadosOCR;
     [key: string]: unknown;
   };
 }
@@ -175,6 +183,27 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
                         )}
                       </div>
                     )}
+
+                    {/* Dados extraídos do CRLV */}
+                    {doc.tipo === 'crlv' && doc.ocr_resultado?.dados && (
+                      <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
+                        {doc.ocr_resultado.dados.cor && (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-semibold">Cor:</span> {doc.ocr_resultado.dados.cor}
+                          </p>
+                        )}
+                        {doc.ocr_resultado.dados.combustivel && (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-semibold">Combustível:</span> {doc.ocr_resultado.dados.combustivel}
+                          </p>
+                        )}
+                        {doc.ocr_resultado.dados.motor && (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-semibold">Motor:</span> {doc.ocr_resultado.dados.motor}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -238,6 +267,49 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
                       <span className="text-xs text-foreground">
                         {format(new Date(selectedDoc.ocr_resultado.dados.validade), 'dd/MM/yyyy', { locale: ptBR })}
                       </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Dados extraídos do CRLV no Dialog */}
+              {selectedDoc.tipo === 'crlv' && selectedDoc.ocr_resultado?.dados && (
+                <div className="w-full bg-info/10 border border-info/30 rounded-lg p-4 mb-4 space-y-2">
+                  <p className="text-sm font-semibold text-info">Dados Extraídos:</p>
+                  {selectedDoc.ocr_resultado.dados.placa && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Placa:</span>
+                      <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.placa}</span>
+                    </div>
+                  )}
+                  {selectedDoc.ocr_resultado.dados.renavam && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Renavam:</span>
+                      <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.renavam}</span>
+                    </div>
+                  )}
+                  {selectedDoc.ocr_resultado.dados.chassi && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Chassi:</span>
+                      <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.chassi}</span>
+                    </div>
+                  )}
+                  {selectedDoc.ocr_resultado.dados.cor && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Cor:</span>
+                      <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.cor}</span>
+                    </div>
+                  )}
+                  {selectedDoc.ocr_resultado.dados.combustivel && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Combustível:</span>
+                      <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.combustivel}</span>
+                    </div>
+                  )}
+                  {selectedDoc.ocr_resultado.dados.motor && (
+                    <div className="flex justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">Motor:</span>
+                      <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.motor}</span>
                     </div>
                   )}
                 </div>
