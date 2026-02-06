@@ -1,221 +1,194 @@
 
-## Plano: Sistema de Jornada de Trabalho com Controle de Almoço e Atraso
+## Plano: Notificar Vistoriador por WhatsApp com Dados do Associado
 
 ### Contexto Atual
 
-O sistema já possui uma infraestrutura básica de jornada de trabalho:
-- **Hook `useJornadaTrabalho`**: Gerencia o controle de tempo trabalhado e status de almoço
-- **Tabela `turnos_profissionais`**: Armazena dados do turno diário
-- **Overlay `AlmocoBloqueioOverlay`**: Exibe tela de bloqueio durante o almoço
-- **Edge Function `cron-atribuir-tarefas`**: Já verifica status de almoço antes de atribuir tarefas
+Quando uma vistoria é atribuída automaticamente, o sistema já:
+1. ✅ Atribui o serviço ao profissional mais próximo
+2. ✅ Envia **push notification** ao profissional (app)
+3. ✅ Notifica o **cliente** via WhatsApp que o técnico está a caminho
 
-### O Que Precisa Ser Implementado
-
-| Funcionalidade | Status Atual | Ação Necessária |
-|----------------|--------------|-----------------|
-| 4h de trabalho inicial | ✅ Implementado | Manter |
-| 1h de almoço obrigatório | ✅ Implementado | Manter |
-| 4h de trabalho após almoço | ⚠️ Parcial | Ajustar cálculo |
-| Regra de atraso de almoço | ❌ Não existe | Implementar |
-| Verificar almoço na Edge Function `atribuir-proxima-tarefa` | ❌ Faltando | Adicionar |
-
-### Regra de Atraso Detalhada
-
-```
-Se o vistoriador atrasar X minutos para voltar do almoço:
-→ Ele deve trabalhar X minutos extras no final do turno
-
-Exemplo:
-- Almoço iniciado: 12:00
-- Fim previsto: 13:00
-- Retorno real: 13:25 (25 min de atraso)
-- Jornada restante: 4h + 25min = 4h25min
-```
+**O que falta:** Enviar mensagem WhatsApp ao **vistoriador** com os dados do associado para que ele possa entrar em contato diretamente.
 
 ---
 
-### Arquivos a Modificar/Criar
+### Dados Disponíveis na Atribuição
+
+O sistema já possui todos os dados necessários no momento da atribuição:
+
+| Dado | Variável | Origem |
+|------|----------|--------|
+| Nome do cliente | `servico.associado_nome` | Tabela associados |
+| Telefone/WhatsApp do cliente | `servico.associado_telefone` ou `servico.associado_whatsapp` | Tabela associados |
+| Placa do veículo | `servico.veiculo_placa` | Tabela veiculos |
+| Marca/Modelo | `servico.veiculo_marca` / `servico.veiculo_modelo` | Tabela veiculos |
+| Endereço | `servico.logradouro`, `numero`, `bairro`, `cidade` | Tabela servicos |
+| WhatsApp do profissional | `profiles.whatsapp` ou `profiles.telefone` | Tabela profiles |
+
+---
+
+### Arquivo a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `supabase/functions/atribuir-proxima-tarefa/index.ts` | Adicionar verificação de status de almoço |
-| `src/hooks/useJornadaTrabalho.ts` | Adicionar cálculo de atraso de almoço |
-| `src/components/vistoriador/AlmocoBloqueioOverlay.tsx` | Mostrar aviso de atraso após 1 hora |
-| `src/components/vistoriador/JornadaStatusBar.tsx` | Exibir acréscimo por atraso |
-| **SQL Migration** | Adicionar coluna `minutos_atraso_almoco` na tabela |
+| `supabase/functions/atribuir-proxima-tarefa/index.ts` | Adicionar envio de WhatsApp ao vistoriador após atribuição |
 
 ---
 
-### Alterações no Banco de Dados
+### Alteração Proposta
 
-**Nova coluna na tabela `turnos_profissionais`:**
+Adicionar bloco de notificação WhatsApp ao vistoriador **após** a notificação ao cliente (linha ~861), para que ambos recebam a mensagem simultaneamente.
 
-```sql
-ALTER TABLE turnos_profissionais 
-ADD COLUMN minutos_atraso_almoco INTEGER DEFAULT 0;
-
-COMMENT ON COLUMN turnos_profissionais.minutos_atraso_almoco IS 
-  'Minutos de atraso no retorno do almoço. Será acrescido à jornada restante.';
-```
-
----
-
-### Alterações no Hook `useJornadaTrabalho`
-
-**1. Calcular atraso do almoço:**
+**Código a adicionar (após a linha 861):**
 
 ```typescript
-// Calcular atraso de almoço (além de 60 minutos)
-let minutosAtrasoAlmoco = 0;
-if (turno?.fim_almoco && turno?.inicio_almoco) {
-  const inicioAlmoco = new Date(turno.inicio_almoco);
-  const fimAlmoco = new Date(turno.fim_almoco);
-  const duracaoRealMinutos = Math.floor((fimAlmoco.getTime() - inicioAlmoco.getTime()) / 60000);
-  minutosAtrasoAlmoco = Math.max(0, duracaoRealMinutos - DURACAO_ALMOCO_MINUTOS);
-}
-```
-
-**2. Ajustar jornada restante para considerar o atraso:**
-
-```typescript
-// Segunda metade = 4h + atraso
-const jornadaSegundaMetade = TEMPO_ATE_ALMOCO_MINUTOS + minutosAtrasoAlmoco;
-```
-
----
-
-### Alterações na Edge Function `atribuir-proxima-tarefa`
-
-Adicionar verificação de status de almoço (similar ao que já existe no `cron-atribuir-tarefas`):
-
-```typescript
-// VERIFICAR STATUS DE JORNADA (ALMOÇO)
-const hoje = new Date().toISOString().split('T')[0];
-const { data: turnoHoje } = await supabase
-  .from('turnos_profissionais')
-  .select('id, status, inicio_almoco, inicio_turno')
-  .eq('profissional_id', profissionalId)
-  .eq('data', hoje)
-  .maybeSingle();
-
-// Se está em almoço, não atribuir
-if (turnoHoje?.status === 'em_almoco') {
-  return new Response(
-    JSON.stringify({
-      resultado: 'em_almoco',
-      mensagem: 'Você está em horário de almoço. Aguarde o término para receber novas tarefas.'
-    }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
-
-// Forçar almoço se atingiu 4h sem iniciar
-if (turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco && turnoHoje.inicio_turno) {
-  const inicioTurno = new Date(turnoHoje.inicio_turno);
-  const agora = new Date();
-  const minutosTrabalhados = Math.floor((agora.getTime() - inicioTurno.getTime()) / 60000);
-
-  if (minutosTrabalhados >= 240) { // 4 horas
-    await supabase
-      .from('turnos_profissionais')
-      .update({ 
-        status: 'em_almoco',
-        inicio_almoco: new Date().toISOString()
-      })
-      .eq('id', turnoHoje.id);
+// 10. NOTIFICAR VISTORIADOR via WhatsApp com dados do cliente
+try {
+  // Buscar telefone do profissional
+  const { data: profissionalTel } = await supabase
+    .from('profiles')
+    .select('nome, whatsapp, telefone')
+    .eq('id', profissionalId)
+    .single();
+  
+  const telefoneProfissional = profissionalTel?.whatsapp || profissionalTel?.telefone;
+  
+  if (telefoneProfissional) {
+    const tipoServicoLabel = servico.tipo === 'instalacao' 
+      ? 'INSTALAÇÃO' 
+      : 'VISTORIA';
     
-    return new Response(
-      JSON.stringify({
-        resultado: 'almoco_iniciado',
-        mensagem: 'Você completou 4 horas de trabalho. Horário de almoço iniciado automaticamente.'
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    const telefoneCliente = servico.associado_whatsapp || servico.associado_telefone;
+    const linkWhatsAppCliente = telefoneCliente 
+      ? `https://wa.me/55${telefoneCliente.replace(/\D/g, '')}` 
+      : 'Não informado';
+    
+    const endereco = [
+      servico.logradouro,
+      servico.numero,
+      servico.bairro,
+      servico.cidade
+    ].filter(Boolean).join(', ') || 'Endereço cadastrado';
+    
+    const periodoLabel = servico.periodo === 'manha' 
+      ? 'Manhã (08:00-12:00)' 
+      : servico.periodo === 'tarde'
+        ? 'Tarde (14:00-18:00)'
+        : 'A definir';
+
+    const mensagemVistoriador = `📋 *NOVA TAREFA ATRIBUÍDA*
+
+🔧 *Tipo:* ${tipoServicoLabel}
+📍 *Endereço:* ${endereco}
+⏰ *Período:* ${periodoLabel}
+
+👤 *DADOS DO CLIENTE:*
+• Nome: ${servico.associado_nome || 'Não informado'}
+• Telefone: ${telefoneCliente || 'Não informado'}
+
+🚗 *VEÍCULO:*
+• Placa: ${servico.veiculo_placa || 'Não informada'}
+• ${servico.veiculo_marca || ''} ${servico.veiculo_modelo || ''}
+
+📱 *Link direto para WhatsApp do cliente:*
+${linkWhatsAppCliente}
+
+⚠️ Entre em contato para confirmar sua chegada!`;
+
+    await supabase.functions.invoke('whatsapp-send-text', {
+      body: {
+        telefone: telefoneProfissional.replace(/\D/g, ''),
+        mensagem: mensagemVistoriador,
+      },
+    });
+    
+    console.log(`[atribuir-proxima-tarefa] ✓ Vistoriador ${profissionalId} notificado via WhatsApp`);
+  } else {
+    console.log(`[atribuir-proxima-tarefa] Profissional sem WhatsApp cadastrado`);
   }
+} catch (vistWhatsError) {
+  console.error('[atribuir-proxima-tarefa] Erro ao notificar vistoriador via WhatsApp:', vistWhatsError);
+  // Não bloqueia o fluxo principal
 }
 ```
 
 ---
 
-### Alterações no Overlay de Almoço
+### Fluxo Visual Atualizado
 
-Após 1 hora de almoço, mostrar mensagem de atraso:
-
-```tsx
-// Detectar atraso
-const emAtraso = segundosRestantes <= 0;
-const minutosAtraso = Math.abs(Math.floor(segundosRestantes / 60));
-
-// Se em atraso, mostrar aviso
-{emAtraso && (
-  <div className="bg-red-900/30 rounded-lg p-3 border border-red-700/50">
-    <p className="text-red-400 font-medium">
-      ⚠️ Atraso de {minutosAtraso} minutos
-    </p>
-    <p className="text-xs text-red-300/70 mt-1">
-      Este tempo será acrescido à sua jornada de hoje.
-    </p>
-  </div>
-)}
+```
+┌────────────────────────────────────────────────────────────────────┐
+│              ATRIBUIÇÃO AUTOMÁTICA DE TAREFA                       │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  1. Sistema encontra serviço pendente mais próximo                │
+│  2. Atribui ao vistoriador ativo                                  │
+│  3. Atualiza status para "em_rota"                                │
+│                                                                    │
+│  ═══════════════ NOTIFICAÇÕES SIMULTÂNEAS ══════════════════      │
+│                                                                    │
+│  ┌──────────────────────┐    ┌──────────────────────┐             │
+│  │  📱 PUSH (APP)        │    │  📱 PUSH (APP)       │             │
+│  │  Profissional        │    │  (se houver)         │             │
+│  │  "Nova Tarefa"       │    │                      │             │
+│  └──────────────────────┘    └──────────────────────┘             │
+│                                                                    │
+│  ┌──────────────────────┐    ┌──────────────────────┐             │
+│  │ 💬 WHATSAPP CLIENTE   │    │ 💬 WHATSAPP VISTORIADOR │ ← NOVO │
+│  │ "Técnico a caminho"  │    │ "Nova tarefa atribuída"│          │
+│  │ Nome do técnico      │    │ Nome/telefone cliente │          │
+│  │ Endereço             │    │ Endereço              │          │
+│  │ Período              │    │ Veículo               │          │
+│  │                      │    │ Link WhatsApp cliente │          │
+│  └──────────────────────┘    └──────────────────────┘             │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Fluxo Visual Completo
+### Exemplo de Mensagem ao Vistoriador
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│                    INÍCIO DO TURNO (08:00)                        │
-├───────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│    [4h de trabalho] ────────────────────────────────> (12:00)    │
-│                                                                   │
-│    ⏰ 4h atingidas → Sistema inicia ALMOÇO AUTOMATICAMENTE        │
-│                                                                   │
-│    ┌────────────────────────────────────────────────────────┐    │
-│    │  🍽️  OVERLAY DE ALMOÇO                                │    │
-│    │       Contador: 60:00 → 00:00                         │    │
-│    │                                                        │    │
-│    │  Se atrasar:                                          │    │
-│    │       Contador: -05:23 (atraso)                       │    │
-│    │       ⚠️ "5 minutos serão acrescidos"                 │    │
-│    └────────────────────────────────────────────────────────┘    │
-│                                                                   │
-│    [Fim do almoço] ─────────────────────────────────────> (13:05)│
-│                                                                   │
-│    📊 Atraso registrado: 5 minutos                               │
-│                                                                   │
-│    [4h + 5min de trabalho] ─────────────────────────> (17:10)    │
-│                                                                   │
-│    ✅ Jornada completa: 8h05min (inclui compensação)              │
-│                                                                   │
-└───────────────────────────────────────────────────────────────────┘
+📋 *NOVA TAREFA ATRIBUÍDA*
+
+🔧 *Tipo:* VISTORIA
+📍 *Endereço:* Rua das Flores, 123, Centro, Fortaleza
+⏰ *Período:* Manhã (08:00-12:00)
+
+👤 *DADOS DO CLIENTE:*
+• Nome: João Silva
+• Telefone: (85) 99999-1234
+
+🚗 *VEÍCULO:*
+• Placa: ABC-1234
+• Toyota Corolla
+
+📱 *Link direto para WhatsApp do cliente:*
+https://wa.me/5585999991234
+
+⚠️ Entre em contato para confirmar sua chegada!
 ```
 
 ---
 
-### Impacto na Interface
+### Benefícios
 
-**JornadaStatusBar** - Mostrar informações de acréscimo:
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  ⏱️ 5h30min trabalhadas          🎯 2h35min restantes           │
-│  [████████████████████░░░░░░░░░░░] 68%                          │
-│                                                                  │
-│  ⚠️ +5min de acréscimo por atraso no almoço                     │
-└──────────────────────────────────────────────────────────────────┘
-```
+| Benefício | Descrição |
+|-----------|-----------|
+| **Comunicação direta** | Vistoriador pode confirmar chegada via WhatsApp pessoal |
+| **Dados completos** | Nome, telefone, endereço e veículo na mesma mensagem |
+| **Link clicável** | Um toque para abrir conversa com o cliente |
+| **Independência** | Funciona mesmo sem internet no app (usa WhatsApp pessoal) |
 
 ---
 
-### Sequência de Implementação
+### Pré-requisitos
 
-1. **Migração SQL**: Adicionar coluna `minutos_atraso_almoco`
-2. **Edge Function**: Adicionar verificação de almoço em `atribuir-proxima-tarefa`
-3. **Hook**: Atualizar `useJornadaTrabalho` com lógica de atraso
-4. **Overlay**: Mostrar contador negativo e aviso de atraso
-5. **Status Bar**: Exibir acréscimo por atraso
+Para funcionar corretamente, é necessário:
+1. ✅ Vistoriador ter campo `whatsapp` ou `telefone` preenchido na tabela `profiles`
+2. ✅ Instância WhatsApp conectada (Evolution API)
+3. ✅ Edge Function `whatsapp-send-text` funcionando
 
 ---
 
@@ -223,8 +196,7 @@ const minutosAtraso = Math.abs(Math.floor(segundosRestantes / 60));
 
 | Cenário | Comportamento |
 |---------|---------------|
-| Trabalha 4h | Sistema inicia almoço automaticamente |
-| Durante almoço (1h) | Overlay bloqueia interface, Edge Functions não atribuem |
-| Volta pontual do almoço | Trabalha mais 4h normais |
-| Volta 15min atrasado | Trabalha 4h15min (compensa atraso) |
-| Volta 30min atrasado | Trabalha 4h30min (compensa atraso) |
+| Tarefa atribuída | Vistoriador recebe WhatsApp com dados do cliente |
+| Profissional sem WhatsApp | Log de aviso, não bloqueia o fluxo |
+| Erro no envio | Log de erro, tarefa continua atribuída normalmente |
+| Cliente sem telefone | Campo mostra "Não informado" |
