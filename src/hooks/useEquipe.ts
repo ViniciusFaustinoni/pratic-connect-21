@@ -179,7 +179,7 @@ export function useProfissionaisEquipe() {
           cidade: null,
           uf: null,
           regioes_atendimento: (profile as any).regioes_atendimento || [],
-          capacidade_diaria: (profile as any).capacidade_diaria || 5,
+          capacidade_diaria: (profile as any).capacidade_diaria || 10,
           status: (profile.ativo ? 'disponivel' : 'indisponivel') as StatusProfissional,
           status_operacional,
           ativo: profile.ativo ?? true,
