@@ -1,35 +1,20 @@
 
-## Plano: Salvar e Exibir Vídeo 360° para Analista de Cadastro
+## Plano: Temporizador de Execução + Relatório de Vistorias por Vistoriador
 
-### Análise do Sistema Atual
+### Objetivo
+1. Ao clicar em "Executar Instalação/Vistoria", mostrar um temporizador em tempo real acima do card do associado
+2. O tempo de execução já é salvo no banco (campos `iniciada_em` e `concluida_em` já existem)
+3. Fazer o botão "Relatório" na tela Equipe abrir um modal com lista de vistorias/instalações e tempos
 
-Após investigação do código, identifiquei que o sistema **já possui a implementação completa** para salvar e exibir o vídeo 360°:
+---
 
-| Componente | Status | Descrição |
-|------------|--------|-----------|
-| Upload do vídeo | ✅ Funcionando | Hook `useUploadVideo360` salva no bucket `vistoria-videos` e atualiza `vistorias.video_360_url` |
-| Tela do vistoriador | ✅ Funcionando | `InstaladorChecklist.tsx` exibe o vídeo e permite substituir |
-| Tela do analista | ✅ Funcionando | `PropostaAnalise.tsx` renderiza `Video360Card` quando há URL |
-| Dados no banco | ✅ Confirmado | Existe contrato com vídeo 360° salvo corretamente |
+### Arquivos a Criar
 
-### Lacuna Identificada
-
-Existe um **cenário de fallback** no hook `usePropostasPendentes` que pode não exibir o vídeo:
-
-```typescript
-// Fallback para tabela legada cotacoes_vistoria_fotos
-// NÃO inclui video_360_url no objeto criado
-vistoria = {
-  id: contrato.cotacao_id,
-  status: 'pendente',
-  fotos: fotosLegado,
-  // video_360_url AUSENTE!
-};
-```
-
-### Correção Necessária
-
-Modificar o fallback para também buscar o `video_360_url` da vistoria associada à cotação:
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/vistoriador/TemporizadorExecucao.tsx` | Componente de temporizador visual que mostra o tempo decorrido desde o início da tarefa |
+| `src/components/monitoramento/RelatorioTarefasModal.tsx` | Modal que exibe lista de tarefas concluídas por profissional com tempo de execução |
+| `src/hooks/useTarefasProfissional.ts` | Hook para buscar histórico de tarefas de um profissional específico |
 
 ---
 
@@ -37,107 +22,226 @@ Modificar o fallback para também buscar o `video_360_url` da vistoria associada
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/hooks/usePropostasPendentes.ts` | Adicionar busca de video_360_url no fallback legado |
+| `src/pages/instalador/InstaladorChecklist.tsx` | Adicionar componente TemporizadorExecucao no topo da tela |
+| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Adicionar componente TemporizadorExecucao no topo da tela |
+| `src/pages/monitoramento/Equipe.tsx` | Conectar botão "Relatório" ao modal RelatorioTarefasModal |
 
 ---
 
-### Alteração Detalhada
+### Detalhamento Técnico
 
-**Arquivo:** `src/hooks/usePropostasPendentes.ts`
-
-**Linha 307-334 - Modificar fallback para incluir busca de vídeo:**
+#### 1. Componente TemporizadorExecucao
 
 ```typescript
-// 2. Fallback: buscar em cotacoes_vistoria_fotos (legado)
-if (!vistoria && contrato.cotacao_id) {
-  // Primeiro, buscar tipo_vistoria e video_360_url da vistoria/cotação
-  const { data: cotacaoTipo } = await supabase
-    .from('cotacoes')
-    .select('tipo_vistoria')
-    .eq('id', contrato.cotacao_id)
-    .maybeSingle();
-  
-  // Tentar buscar vistoria pela cotacao_id para obter video_360_url
-  const { data: vistoriaCotacao } = await supabase
-    .from('vistorias')
-    .select('video_360_url')
-    .eq('cotacao_id', contrato.cotacao_id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  
-  const isAutoFromCotacao = cotacaoTipo?.tipo_vistoria === 'autovistoria';
-  
-  const { data: fotosLegado } = await supabase
-    .from('cotacoes_vistoria_fotos')
-    .select('id, tipo, arquivo_url, created_at')
-    .eq('cotacao_id', contrato.cotacao_id)
-    .order('created_at', { ascending: true });
-
-  if (fotosLegado && fotosLegado.length > 0) {
-    vistoria = {
-      id: contrato.cotacao_id,
-      status: 'pendente',
-      tipo: isAutoFromCotacao ? 'autovistoria' : 'agendada',
-      modalidade: isAutoFromCotacao ? 'autovistoria' : 'presencial',
-      fotos: fotosLegado as VistoriaFotoInfo[],
-      // NOVO: Incluir video_360_url se existir
-      video_360_url: vistoriaCotacao?.video_360_url || null,
-    };
-  }
+// src/components/vistoriador/TemporizadorExecucao.tsx
+interface TemporizadorExecucaoProps {
+  iniciadaEm: string | null; // ISO timestamp
+  className?: string;
 }
+
+// Funcionalidades:
+// - Recebe o timestamp de início (iniciada_em)
+// - Calcula diferença em tempo real usando useState + setInterval (1 segundo)
+// - Exibe no formato "00:00:00" (horas:minutos:segundos)
+// - Visual com ícone Timer, cor verde pulsante
+// - Persistente durante toda a execução da vistoria
+```
+
+**Visual do componente:**
+```
+┌─────────────────────────────────────────────────┐
+│  ⏱️  TEMPO DE EXECUÇÃO: 00:15:32               │
+│      (barra verde com animação pulse)          │
+└─────────────────────────────────────────────────┘
+```
+
+#### 2. Hook useTarefasProfissional
+
+```typescript
+// src/hooks/useTarefasProfissional.ts
+interface TarefaProfissional {
+  id: string;
+  tipo: 'vistoria' | 'instalacao' | 'manutencao';
+  status: string;
+  data_agendada: string;
+  iniciada_em: string | null;
+  concluida_em: string | null;
+  tempo_execucao_min: number | null;
+  associado_nome: string;
+  veiculo_placa: string;
+  bairro: string;
+}
+
+// Query: buscar serviços concluídos do profissional
+// - Calcular tempo_execucao_min = (concluida_em - iniciada_em) / 60
+// - Ordenar por data de conclusão (mais recentes primeiro)
+// - Filtrar por período (últimos 30 dias por padrão)
+```
+
+#### 3. Modal RelatorioTarefasModal
+
+```typescript
+// src/components/monitoramento/RelatorioTarefasModal.tsx
+interface RelatorioTarefasModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  profissionalId: string;
+  profissionalNome: string;
+}
+
+// Funcionalidades:
+// - Título: "Relatório de {nome}"
+// - Resumo no topo: total de tarefas, tempo médio de execução
+// - Filtros: período (7 dias, 30 dias, todos), tipo de serviço
+// - Tabela com colunas: Data, Tipo, Cliente, Veículo, Tempo
+// - Badge de cores para tempo (verde=rápido, amarelo=normal, vermelho=lento)
+```
+
+**Layout do modal:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  📊 Relatório de Produtividade - [TESTE] Vistoriador      [X]  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────┐  │
+│  │ Total Tarefas   │  │ Tempo Médio     │  │ Última Tarefa  │  │
+│  │     15          │  │    25 min       │  │   Hoje 14:30   │  │
+│  └─────────────────┘  └─────────────────┘  └────────────────┘  │
+│                                                                 │
+│  Filtros: [Últimos 30 dias ▼]  [Todos os tipos ▼]              │
+│                                                                 │
+│  ┌─────────┬────────────┬───────────────┬───────────┬────────┐ │
+│  │  Data   │    Tipo    │    Cliente    │  Veículo  │ Tempo  │ │
+│  ├─────────┼────────────┼───────────────┼───────────┼────────┤ │
+│  │ 05/02   │ Instalação │ Marcus V.     │ LTB4J74   │ 12min  │ │
+│  │ 04/02   │ Vistoria   │ João Silva    │ ABC1234   │ 18min  │ │
+│  │ 04/02   │ Instalação │ Maria Santos  │ XYZ5678   │ 45min  │ │
+│  │   ...   │    ...     │     ...       │    ...    │  ...   │ │
+│  └─────────┴────────────┴───────────────┴───────────┴────────┘ │
+│                                                                 │
+│                                           [Fechar]              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 4. Modificação em InstaladorChecklist.tsx
+
+Na etapa de execução (quando status = em_andamento), adicionar o temporizador logo após o header:
+
+```typescript
+// Linha ~480-485 (após o header fixo)
+{servico?.iniciada_em && (
+  <TemporizadorExecucao 
+    iniciadaEm={servico.iniciada_em} 
+    className="mx-4 mt-4"
+  />
+)}
+```
+
+#### 5. Modificação em ExecutarVistoriaCompleta.tsx
+
+Adicionar temporizador após o header:
+
+```typescript
+// Linha ~275 (após o header)
+{vistoria?.iniciada_em && (
+  <TemporizadorExecucao 
+    iniciadaEm={vistoria.iniciada_em} 
+    className="mx-4 mt-2"
+  />
+)}
+```
+
+#### 6. Modificação em Equipe.tsx
+
+Conectar o botão "Relatório" ao modal:
+
+```typescript
+// Adicionar estados:
+const [relatorioModalOpen, setRelatorioModalOpen] = useState(false);
+const [profissionalRelatorio, setProfissionalRelatorio] = useState<ProfissionalEquipe | null>(null);
+
+// No botão Relatório (linha ~472-475):
+<Button 
+  variant="outline" 
+  size="sm" 
+  className="flex-1"
+  onClick={() => {
+    setProfissionalRelatorio(profissional);
+    setRelatorioModalOpen(true);
+  }}
+>
+  <BarChart className="mr-2 h-4 w-4" />
+  Relatório
+</Button>
+
+// No final do componente:
+<RelatorioTarefasModal
+  open={relatorioModalOpen}
+  onOpenChange={setRelatorioModalOpen}
+  profissionalId={profissionalRelatorio?.id || ''}
+  profissionalNome={profissionalRelatorio?.nome || ''}
+/>
 ```
 
 ---
 
-### Fluxo Completo Após Correção
+### Fluxo do Usuário
 
-```text
-┌────────────────────────────────────────────────────────────────┐
-│  VISTORIADOR/INSTALADOR                                        │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  1. Grava vídeo 360° do veículo                          │  │
-│  │  2. Upload para bucket "vistoria-videos"                 │  │
-│  │  3. URL salva em vistorias.video_360_url                 │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌────────────────────────────────────────────────────────────────┐
-│  ANALISTA DE CADASTRO                                          │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  PropostaAnalise.tsx                                     │  │
-│  │                                                          │  │
-│  │  ┌────────────────────────────────────────────────────┐  │  │
-│  │  │  🎥 Vídeo 360° do Veículo                          │  │  │
-│  │  │  ┌──────────────────────────────────────────────┐  │  │  │
-│  │  │  │                                              │  │  │  │
-│  │  │  │         [VIDEO PLAYER]                       │  │  │  │
-│  │  │  │                                              │  │  │  │
-│  │  │  └──────────────────────────────────────────────┘  │  │  │
-│  │  │  Gravado pelo vistoriador - Volta completa         │  │  │
-│  │  └────────────────────────────────────────────────────┘  │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────┘
+```
+VISTORIADOR:
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Clica em "Executar Instalação"                             │
+│                    ↓                                            │
+│  2. Sistema marca iniciada_em = NOW() no banco                 │
+│                    ↓                                            │
+│  3. Temporizador aparece no topo: ⏱️ 00:00:00                  │
+│                    ↓                                            │
+│  4. Contador atualiza a cada segundo                           │
+│                    ↓                                            │
+│  5. Ao concluir, sistema marca concluida_em = NOW()            │
+│                    ↓                                            │
+│  6. Tempo de execução = concluida_em - iniciada_em (salvo)     │
+└─────────────────────────────────────────────────────────────────┘
+
+COORDENADOR:
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Acessa Monitoramento > Equipe                              │
+│                    ↓                                            │
+│  2. Clica em "Relatório" no card do profissional               │
+│                    ↓                                            │
+│  3. Modal abre com lista de tarefas e tempos                   │
+│                    ↓                                            │
+│  4. Pode filtrar por período e tipo de serviço                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Dados Já Existentes
+
+O banco de dados já salva os timestamps necessários:
+- `servicos.iniciada_em` - preenchido quando o profissional inicia a tarefa
+- `servicos.concluida_em` - preenchido quando a tarefa é concluída
+
+O tempo de execução é calculado dinamicamente:
+```sql
+EXTRACT(EPOCH FROM (concluida_em - iniciada_em))/60 as tempo_execucao_min
+```
+
+Exemplo de dado já existente:
+```
+id: c237ff6c-9fd1-40da-9ea5-21f70edcd603
+tipo: instalacao
+iniciada_em: 2026-02-05 20:04:56
+concluida_em: 2026-02-05 20:16:53
+tempo_execucao_min: 11.95 (aproximadamente 12 minutos)
 ```
 
 ---
 
 ### Resultado Esperado
 
-Após a correção:
-
-1. **Upload funcionando** - O vistoriador grava e envia o vídeo 360° (já funciona)
-2. **Vídeo salvo no banco** - Campo `video_360_url` é preenchido na tabela `vistorias` (já funciona)
-3. **Analista visualiza** - O card `Video360Card` aparece na tela de análise mostrando o vídeo
-4. **Cobertura completa** - Funciona tanto para fluxo moderno (contrato_id) quanto legado (cotacao_id)
-
----
-
-### Observação Técnica
-
-O componente `Video360Card` já existe e está funcional:
-- Player de vídeo nativo HTML5
-- Badge indicando "360°"
-- Descrição "Gravado pelo vistoriador"
-- Suporte a `preload="metadata"` e `playsInline` para mobile
+1. **Temporizador Visual**: O vistoriador vê o tempo de execução em tempo real durante toda a vistoria
+2. **Dados Persistentes**: O tempo é calculado automaticamente dos timestamps já salvos
+3. **Relatório por Profissional**: O coordenador pode ver todas as tarefas e tempos de cada profissional
+4. **Métricas de Produtividade**: Tempo médio, total de tarefas, comparativo entre profissionais
