@@ -1890,11 +1890,11 @@ export function useReprovarProposta() {
 
       if (contratoError) throw contratoError;
 
-      // Atualizar associado
+      // Atualizar associado para recusado
       const { error: associadoError } = await supabase
         .from('associados')
         .update({
-          status: 'reprovado' as any,
+          status: 'recusado',
         })
         .eq('id', associadoId);
 

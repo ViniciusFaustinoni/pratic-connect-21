@@ -1150,11 +1150,11 @@ export function useRecusarVeiculoServico() {
           });
       }
 
-      // 6. NOVO: Atualizar associado para suspenso
+      // 6. NOVO: Atualizar associado para recusado
       await supabase
         .from('associados')
         .update({
-          status: 'suspenso',
+          status: 'recusado',
           updated_at: agora,
         })
         .eq('id', data.associadoId);
