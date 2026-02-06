@@ -289,9 +289,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return ALERTAS_CATEGORIA[categoria] || null;
   }, [categoria]);
 
-  // Resetar formulário quando o modal abre sem leadId
+  // Resetar formulário quando o modal abre sem leadId (exceto em modo edição ou duplicação)
   useEffect(() => {
-    if (open && !leadId) {
+    if (open && !leadId && !cotacaoParaEditar && !cotacaoBase) {
       // Resetar todos os estados para começar limpo
       form.reset({
         lead_id: null,
@@ -322,7 +322,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setRegiaoSelecionada('');
       setDiaVencimento(null);
     }
-  }, [open, leadId, form]);
+  }, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
 
   // Carregar marcas quando dialog abre
   useEffect(() => {
@@ -630,6 +630,75 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
     }
   }, [cotacaoBase, open, form]);
+
+  // Efeito para preencher o formulário com dados da cotação para edição
+  useEffect(() => {
+    if (cotacaoParaEditar && open) {
+      // Preencher dados do formulário
+      if (cotacaoParaEditar.valor_fipe) {
+        form.setValue('valor_fipe', cotacaoParaEditar.valor_fipe);
+      }
+      if (cotacaoParaEditar.valor_adicional) {
+        form.setValue('valor_adicional', cotacaoParaEditar.valor_adicional);
+      }
+      if (cotacaoParaEditar.valor_adesao) {
+        form.setValue('valor_adesao', cotacaoParaEditar.valor_adesao);
+      }
+      if (cotacaoParaEditar.validade_dias) {
+        form.setValue('validade_dias', cotacaoParaEditar.validade_dias);
+      }
+      if (cotacaoParaEditar.lead_id) {
+        form.setValue('lead_id', cotacaoParaEditar.lead_id);
+      }
+      if (cotacaoParaEditar.plano_id) {
+        form.setValue('plano_id', cotacaoParaEditar.plano_id);
+      }
+      
+      // Preencher dados do solicitante
+      setNomeAssociado(cotacaoParaEditar.nome_solicitante || '');
+      setTelefoneAssociado(cotacaoParaEditar.telefone1_solicitante || '');
+      setEmailAssociado(cotacaoParaEditar.email_solicitante || '');
+      
+      // Preencher placa
+      if (cotacaoParaEditar.veiculo_placa) {
+        setPlaca(cotacaoParaEditar.veiculo_placa);
+      }
+      
+      // Preencher categoria
+      if (cotacaoParaEditar.categoria) {
+        setCategoria(cotacaoParaEditar.categoria);
+      }
+      
+      // Preencher região
+      if (cotacaoParaEditar.regiao) {
+        setRegiaoSelecionada(cotacaoParaEditar.regiao);
+      }
+      
+      // Preencher dados do veículo encontrado
+      if (cotacaoParaEditar.veiculo_marca && cotacaoParaEditar.veiculo_modelo) {
+        setVeiculoEncontrado({
+          success: true,
+          vehicleData: {
+            marca: cotacaoParaEditar.veiculo_marca,
+            modelo: cotacaoParaEditar.veiculo_modelo,
+            marca_modelo: `${cotacaoParaEditar.veiculo_marca} ${cotacaoParaEditar.veiculo_modelo}`,
+            ano: cotacaoParaEditar.veiculo_ano ? String(cotacaoParaEditar.veiculo_ano) : '',
+            placa: cotacaoParaEditar.veiculo_placa || '',
+            cor: '',
+            chassi: '',
+            municipio: '',
+            uf: '',
+            combustivel: ''
+          },
+          fipeData: cotacaoParaEditar.valor_fipe ? {
+            valor: cotacaoParaEditar.valor_fipe,
+            codigo: cotacaoParaEditar.codigo_fipe,
+            mesReferencia: null
+          } : null
+        });
+      }
+    }
+  }, [cotacaoParaEditar, open, form]);
 
   const handleTogglePlano = (plano: PlanoCotacao) => {
     setPlanosSelecionados(prev => {
