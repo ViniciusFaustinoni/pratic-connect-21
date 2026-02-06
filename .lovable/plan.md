@@ -1,202 +1,248 @@
 
-# Plano: Adicionar Status "Recusado" para Associados
 
-## Problema Identificado
+# Plano: Resetar Processo de Contratação ao Reverter Recusa
 
-Na imagem enviada, o associado "Marcus Vinicius" aparece com status **"Suspenso"** mesmo tendo sido recusado durante o processo de vistoria ou análise de proposta. O status correto deveria ser **"Recusado"**.
+## Contexto
 
-### Causa Raiz
+Quando um diretor remove um veículo da blacklist e reverte a recusa, o associado precisa **começar do zero** o processo de contratação. Isso é necessário porque:
 
-O valor `'recusado'` **NÃO existe** no sistema:
+- Podem ter ocorrido mudanças nos documentos
+- O veículo pode ter sofrido sinistros durante o período
+- Condições do plano podem ter sido alteradas
+- Nova assinatura de contrato é obrigatória para validade jurídica
 
-| Componente | Status Atual |
-|------------|-------------|
-| Enum `status_associado` no banco | Não inclui `'recusado'` |
-| Tipo TypeScript `StatusAssociado` | Não inclui `'recusado'` |
-| Labels `STATUS_ASSOCIADO_LABELS` | Não inclui `'recusado'` |
-| Cores `statusColors` | Não inclui `'recusado'` |
+## Situação Atual
 
-Os hooks estão usando valores incorretos:
-- `useRecusarVeiculoServico`: usa `'suspenso'`
-- `useReprovarProposta`: usa `'reprovado' as any` (contornando a verificação de tipo)
+O hook `useRemoverBlacklist` atualmente:
+1. Desativa a entrada na blacklist
+2. Reverte o veículo para `'em_analise'`
+3. Reverte o associado para `'pendente_vistoria'`
 
----
+**Problema:** Não reseta o contrato nem a cotação, deixando registros antigos que podem causar confusão.
 
 ## Solução Proposta
 
-### 1. Adicionar Valor ao Enum do Banco de Dados
+### O que precisa ser resetado
 
-**Migração SQL:**
+| Entidade | Status Atual | Status Novo | Campos a Limpar |
+|----------|-------------|-------------|-----------------|
+| Blacklist | `ativo: true` | `ativo: false` | - |
+| Veículo | `recusado` | `em_analise` | `motivo_recusa_veiculo` |
+| Associado | `recusado/suspenso` | `pendente_vistoria` | `bloqueado`, `motivo_bloqueio` |
+| Contrato | `cancelado` | `rascunho` | Dados de assinatura e pagamento |
+| Cotação | `recusada` | `aceita` | `status_contratacao` |
 
-```sql
--- Adicionar 'recusado' ao enum status_associado
-ALTER TYPE status_associado ADD VALUE IF NOT EXISTS 'recusado' AFTER 'bloqueado';
-```
-
-### 2. Atualizar Tipo TypeScript
-
-**Arquivo:** `src/types/database.ts`
-
-```typescript
-export type StatusAssociado =
-  | 'em_analise'
-  | 'pendente_vistoria'
-  | 'aprovado'
-  | 'documentacao_pendente'
-  | 'aguardando_instalacao'
-  | 'ativo'
-  | 'inadimplente'
-  | 'suspenso'
-  | 'cancelado'
-  | 'bloqueado'
-  | 'recusado';  // NOVO
-```
-
-### 3. Atualizar Labels
-
-**Arquivo:** `src/types/database.ts`
+### Campos do Contrato a Resetar
 
 ```typescript
-export const STATUS_ASSOCIADO_LABELS: Record<StatusAssociado, string> = {
-  em_analise: 'Em Análise',
-  pendente_vistoria: 'Pendente de Vistoria',
-  aprovado: 'Aprovado',
-  documentacao_pendente: 'Doc. Pendente',
-  aguardando_instalacao: 'Aguard. Instalação',
-  ativo: 'Ativo',
-  inadimplente: 'Inadimplente',
-  suspenso: 'Suspenso',
-  cancelado: 'Cancelado',
-  bloqueado: 'Bloqueado',
-  recusado: 'Recusado',  // NOVO
-};
+{
+  status: 'rascunho',
+  // Limpar dados do Autentique (assinatura)
+  autentique_documento_id: null,
+  autentique_url: null,
+  autentique_status: null,
+  pdf_url: null,
+  pdf_assinado_url: null,
+  data_envio: null,
+  data_visualizacao: null,
+  data_assinatura: null,
+  // Limpar dados de pagamento
+  adesao_paga: false,
+  adesao_paga_em: null,
+  adesao_cobranca_id: null,
+  // Limpar dados de aprovação
+  aprovado_por: null,
+  aprovado_em: null,
+  observacao_aprovacao: null,
+  // Limpar dados de vistoria
+  vistoria_concluida_em: null,
+  vistoria_id: null,
+}
 ```
 
-### 4. Atualizar Cores na Página de Associados
-
-**Arquivo:** `src/pages/cadastro/Associados.tsx`
+### Campos da Cotação a Resetar
 
 ```typescript
-const statusColors: Record<StatusAssociado, string> = {
-  em_analise: 'bg-yellow-100 text-yellow-800',
-  pendente_vistoria: 'bg-violet-100 text-violet-800',
-  aprovado: 'bg-blue-100 text-blue-800',
-  documentacao_pendente: 'bg-orange-100 text-orange-800',
-  aguardando_instalacao: 'bg-purple-100 text-purple-800',
-  ativo: 'bg-green-100 text-green-800',
-  inadimplente: 'bg-orange-500 text-white',
-  suspenso: 'bg-red-100 text-red-800',
-  cancelado: 'bg-muted text-muted-foreground',
-  bloqueado: 'bg-destructive text-destructive-foreground',
-  recusado: 'bg-red-500 text-white',  // NOVO - vermelho forte
-};
+{
+  status: 'aceita',
+  status_contratacao: 'aguardando_vistoria',
+  vistoria_concluida_em: null,
+  vistoria_id: null,
+}
 ```
-
-### 5. Atualizar Hook useRecusarVeiculoServico
-
-**Arquivo:** `src/hooks/useServicos.ts`
-
-Modificar linha 1156-1158:
-
-```typescript
-// Antes:
-await supabase
-  .from('associados')
-  .update({
-    status: 'suspenso',  // ERRADO
-    updated_at: agora,
-  })
-
-// Depois:
-await supabase
-  .from('associados')
-  .update({
-    status: 'recusado',  // CORRETO
-    updated_at: agora,
-  })
-```
-
-### 6. Atualizar Hook useReprovarProposta
-
-**Arquivo:** `src/hooks/usePropostasPendentes.ts`
-
-Modificar linha 1897:
-
-```typescript
-// Antes:
-await supabase
-  .from('associados')
-  .update({
-    status: 'reprovado' as any,  // HACK
-  })
-
-// Depois:
-await supabase
-  .from('associados')
-  .update({
-    status: 'recusado',  // CORRETO
-  })
-```
-
-### 7. Atualizar Hook useRemoverBlacklist
-
-**Arquivo:** `src/hooks/useBlacklist.ts`
-
-Quando o diretor reverter uma recusa, o status volta para `'pendente_vistoria'` (não para `'em_analise'` de `'suspenso'`).
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Ação |
-|---------|------|
-| **Migração SQL** | Adicionar `'recusado'` ao enum `status_associado` |
-| `src/types/database.ts` | Adicionar `'recusado'` ao tipo e labels |
-| `src/pages/cadastro/Associados.tsx` | Adicionar cor para status `'recusado'` |
-| `src/hooks/useServicos.ts` | Usar `'recusado'` em vez de `'suspenso'` |
-| `src/hooks/usePropostasPendentes.ts` | Usar `'recusado'` em vez de `'reprovado' as any` |
+### 1. `src/hooks/useBlacklist.ts`
+
+Expandir a lógica de reversão para incluir reset do contrato e cotação:
+
+```typescript
+// Se solicitado reverter status do veículo
+if (reverterVeiculo && blacklistItem?.veiculo_id) {
+  // 1. Reverter veículo para 'em_analise'
+  await supabase
+    .from('veiculos')
+    .update({ 
+      status: 'em_analise',
+      motivo_recusa_veiculo: null,
+    })
+    .eq('id', blacklistItem.veiculo_id);
+
+  // 2. Reverter associado para 'pendente_vistoria'
+  if (blacklistItem.associado_id) {
+    await supabase
+      .from('associados')
+      .update({ 
+        status: 'pendente_vistoria',
+        bloqueado: false,
+        motivo_bloqueio: null,
+      })
+      .eq('id', blacklistItem.associado_id);
+  }
+
+  // 3. NOVO: Resetar contrato para rascunho (precisa nova assinatura e pagamento)
+  if (blacklistItem.contrato_id) {
+    await supabase
+      .from('contratos')
+      .update({
+        status: 'rascunho',
+        // Limpar assinatura digital
+        autentique_documento_id: null,
+        autentique_url: null,
+        autentique_status: null,
+        pdf_url: null,
+        pdf_assinado_url: null,
+        data_envio: null,
+        data_visualizacao: null,
+        data_assinatura: null,
+        // Limpar pagamento
+        adesao_paga: false,
+        adesao_paga_em: null,
+        adesao_cobranca_id: null,
+        // Limpar aprovação
+        aprovado_por: null,
+        aprovado_em: null,
+        observacao_aprovacao: null,
+        // Limpar vistoria
+        vistoria_concluida_em: null,
+        vistoria_id: null,
+      })
+      .eq('id', blacklistItem.contrato_id);
+  }
+
+  // 4. NOVO: Resetar cotação para aceita
+  if (blacklistItem.cotacao_id) {
+    await supabase
+      .from('cotacoes')
+      .update({
+        status: 'aceita',
+        status_contratacao: 'aguardando_vistoria',
+        vistoria_concluida_em: null,
+        vistoria_id: null,
+      })
+      .eq('id', blacklistItem.cotacao_id);
+  }
+
+  // 5. NOVO: Excluir vistorias antigas do veículo (para nova vistoria limpa)
+  await supabase
+    .from('vistorias')
+    .delete()
+    .eq('veiculo_id', blacklistItem.veiculo_id);
+}
+```
+
+### 2. `src/hooks/useBlacklist.ts` - Buscar mais dados
+
+Atualizar a query inicial para buscar também `contrato_id` e `cotacao_id`:
+
+```typescript
+const { data: blacklistItem, error: fetchError } = await supabase
+  .from('blacklist_veiculos')
+  .select('veiculo_id, associado_id, contrato_id, cotacao_id')  // Adicionar campos
+  .eq('id', id)
+  .single();
+```
+
+### 3. `src/pages/diretoria/Blacklist.tsx` - Atualizar UI
+
+Atualizar a descrição no dialog para informar sobre o reset completo:
+
+```tsx
+<label htmlFor="reverter-status" className="cursor-pointer">
+  <p className="text-sm font-medium">Reverter recusa e permitir nova contratação</p>
+  <p className="text-xs text-muted-foreground mt-1">
+    O associado precisará <strong>assinar novamente o contrato</strong> e <strong>efetuar novo pagamento</strong>. 
+    O contrato atual será resetado para rascunho e uma nova vistoria será necessária.
+  </p>
+</label>
+```
 
 ---
 
-## Resultado Esperado
-
-| Tela | Antes | Depois |
-|------|-------|--------|
-| **Associados - Badge** | "Suspenso" (vermelho claro) | "Recusado" (vermelho forte) |
-| **Associados - Filtro** | Não aparece "Recusado" | Filtro "Recusado" disponível |
-| **Blacklist** | Associado com status "Suspenso" | Associado com status "Recusado" |
-
----
-
-## Fluxo Completo Após Correção
+## Fluxo Após Reversão
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  Recusa por Vistoriador ou Analista de Cadastro             │
+│  1. Diretor clica em "Remover e Reverter"                   │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Veículo → status = 'recusado'                              │
+│  2. Blacklist → ativo = false                               │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Associado → status = 'recusado'                            │
+│  3. Veículo → status = 'em_analise'                         │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Blacklist → veículo inserido                               │
+│  4. Associado → status = 'pendente_vistoria'                │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Na Página de Associados:                                   │
-│  Badge vermelho forte com texto "Recusado"                  │
+│  5. Contrato → status = 'rascunho'                          │
+│     (assinatura e pagamento resetados)                      │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  6. Cotação → status = 'aceita'                             │
+│              status_contratacao = 'aguardando_vistoria'     │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  7. Vistorias antigas excluídas                             │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Resultado: Associado pode recomeçar o processo             │
+│  - Nova vistoria será agendada                              │
+│  - Novo contrato será gerado para assinatura                │
+│  - Novo pagamento será necessário                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
+## Resultado Esperado
+
+| Item | Antes | Depois da Reversão |
+|------|-------|-------------------|
+| Blacklist | Ativo | Inativo (histórico) |
+| Veículo | Recusado | Em Análise |
+| Associado | Recusado/Suspenso | Pendente de Vistoria |
+| Contrato | Cancelado | Rascunho (sem assinatura/pagamento) |
+| Cotação | Recusada | Aceita - Aguardando Vistoria |
+| Vistorias | Reprovada | Excluídas (nova será criada) |
+
+---
+
 ## Testes Recomendados
 
-1. Verificar se o associado LTB4J74 agora aparece com status "Recusado"
-2. Verificar se o filtro "Recusado" aparece no dropdown de status
-3. Recusar uma nova proposta/vistoria e confirmar que o associado fica com status "Recusado"
+1. Reverter a recusa do associado "Marcus Vinicius" (LTB4J74)
+2. Verificar se o contrato volta para status "Rascunho"
+3. Verificar se a cotação volta para status "Aceita" com etapa "Aguardando Vistoria"
+4. Verificar se o associado aparece na lista de pendentes de vistoria
+5. Verificar se é possível agendar nova vistoria para o veículo
+
