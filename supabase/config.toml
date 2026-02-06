@@ -362,3 +362,6 @@ verify_jwt = false
 
 [functions.concluir-retirada]
 verify_jwt = false
+
+[functions.calcular-comissoes-mensais]
+verify_jwt = false
