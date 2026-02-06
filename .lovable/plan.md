@@ -1,196 +1,163 @@
 
 
-# Plano: Corrigir Reset Completo ao Reverter Recusa
+# Plano: Excluir Cotações Vinculadas ao Lead ao Excluir Associado
 
 ## Problema Identificado
 
-Ao reverter uma recusa da blacklist, o contrato e a cotação **não estão sendo resetados** porque:
+Ao excluir um associado, a cotação permanece visível na lista porque:
 
-1. **Bug na inserção**: O hook `useRecusarVeiculoServico` (linhas 1137-1151) **não passa** `contrato_id` e `cotacao_id` ao inserir na blacklist, mesmo tendo esses valores disponíveis
-2. **Bug na reversão**: O hook `useRemoverBlacklist` depende exclusivamente dos campos `contrato_id` e `cotacao_id` da blacklist, que estão null
+1. A cotação está vinculada ao **lead** através de `lead_id`
+2. O lead está vinculado ao **associado** através de `associado_id`
+3. A função `delete-associado` apenas **desvincula** o lead do associado (linha 207-211), mas **não exclui** as cotações desse lead
+4. Apenas cotações com **contrato vinculado** são excluídas (via `contrato.cotacao_id`)
 
-### Estado Atual do Marcus Vinicius (LTB4J74)
+### Fluxo Atual (Bug)
 
-| Entidade | Status Atual | Status Esperado |
-|----------|-------------|-----------------|
-| Associado | `pendente_vistoria` | OK |
-| Veículo | `em_analise` | OK |
-| Contrato | `cancelado` | `rascunho` |
-| Cotação | `recusada` + `veiculo_recusado` | `aceita` + `aguardando_vistoria` |
+```text
+Associado
+    ↓
+   Lead (associado_id → null após exclusão)
+    ↓
+  Cotação (lead_id permanece intacto) ← BUG: não é excluída!
+```
+
+### Cenário do Marcus Vinicius
+
+| Entidade | Estado |
+|----------|--------|
+| Associado | **Excluído** |
+| Lead | `associado_id = null` (desvinculado) |
+| Cotação | **Permanece visível** com `lead_id` apontando para o lead |
 
 ---
 
 ## Solução Proposta
 
-### 1. Corrigir inserção na blacklist
+### Alterar a ordem de exclusão na função `delete-associado`
 
-**Arquivo:** `src/hooks/useServicos.ts`
+**Arquivo:** `supabase/functions/delete-associado/index.ts`
 
-Na função `useRecusarVeiculoServico`, adicionar `contrato_id` e `cotacao_id` ao inserir na blacklist:
-
-```typescript
-// Linha 1137-1151 - Adicionar contrato_id e cotacao_id
-await supabase
-  .from('blacklist_veiculos')
-  .insert({
-    placa: veiculoData.placa?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '',
-    chassi: veiculoData.chassi,
-    motivo: data.motivo,
-    justificativa: `Veículo recusado pelo técnico: ${data.motivo}`,
-    tipo_reprovacao: 'vistoria_reprovada',
-    veiculo_id: data.veiculoId,
-    associado_id: data.associadoId,
-    contrato_id: contratoId,   // ADICIONAR
-    cotacao_id: cotacaoId,     // ADICIONAR
-    adicionado_por: profile?.id,
-    vistoria_id: vistoriaId,
-    ativo: true,
-  });
-```
-
-### 2. Corrigir reversão para buscar dados faltantes
-
-**Arquivo:** `src/hooks/useBlacklist.ts`
-
-Modificar `useRemoverBlacklist` para buscar `contrato_id` e `cotacao_id` diretamente do associado quando não existirem na blacklist:
+Adicionar exclusão de cotações vinculadas a leads do associado **ANTES** de desvincular os leads:
 
 ```typescript
-// Se solicitado reverter status do veículo (reset completo do processo)
-if (reverterVeiculo && blacklistItem?.veiculo_id) {
-  // NOVO: Buscar contrato e cotação pelo associado se não existirem na blacklist
-  let contratoId = blacklistItem.contrato_id;
-  let cotacaoId = blacklistItem.cotacao_id;
+// NOVO: Buscar todos os leads vinculados ao associado
+const { data: leads } = await supabaseAdmin
+  .from("leads")
+  .select("id")
+  .eq("associado_id", associadoId);
 
-  if (blacklistItem.associado_id && (!contratoId || !cotacaoId)) {
-    const { data: contratosData } = await supabase
-      .from('contratos')
-      .select('id, cotacao_id')
-      .eq('associado_id', blacklistItem.associado_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+console.log(`[delete-associado] Leads vinculados: ${leads?.length || 0}`);
 
-    if (contratosData) {
-      contratoId = contratoId || contratosData.id;
-      cotacaoId = cotacaoId || contratosData.cotacao_id;
+// NOVO: Excluir cotações vinculadas a esses leads (que não foram excluídas via contrato)
+if (leads && leads.length > 0) {
+  for (const lead of leads) {
+    // Excluir cotacoes_historico primeiro (FK)
+    await supabaseAdmin.from("cotacoes_historico").delete().eq("cotacao_id", 
+      supabaseAdmin.from("cotacoes").select("id").eq("lead_id", lead.id)
+    );
+    
+    // Excluir cotacao_beneficios primeiro (FK)
+    const { data: cotacoesLead } = await supabaseAdmin
+      .from("cotacoes")
+      .select("id")
+      .eq("lead_id", lead.id);
+    
+    if (cotacoesLead && cotacoesLead.length > 0) {
+      for (const cotacao of cotacoesLead) {
+        // Limpar dependências
+        await supabaseAdmin.from("cotacao_beneficios").delete().eq("cotacao_id", cotacao.id);
+        await supabaseAdmin.from("cotacoes_historico").delete().eq("cotacao_id", cotacao.id);
+        await supabaseAdmin.from("servicos").delete().eq("cotacao_id", cotacao.id);
+        await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("cotacao_id", cotacao.id);
+        
+        // Limpar referência do contrato se existir (já pode ter sido excluído)
+        await supabaseAdmin
+          .from("contratos")
+          .update({ cotacao_id: null })
+          .eq("cotacao_id", cotacao.id);
+      }
+      
+      // Excluir cotações
+      await supabaseAdmin.from("cotacoes").delete().eq("lead_id", lead.id);
     }
   }
-
-  // 1. Reverter veículo para 'em_analise'
-  // ... código existente ...
-
-  // 3. Resetar contrato para rascunho (usar contratoId da busca)
-  if (contratoId) {
-    // ... código existente usando contratoId ...
-  }
-
-  // 4. Resetar cotação para aceita (usar cotacaoId da busca)
-  if (cotacaoId) {
-    // ... código existente usando cotacaoId ...
-  }
-
-  // 5. Limpar referência de vistoria_id na blacklist ANTES de excluir vistorias
-  await supabase
-    .from('blacklist_veiculos')
-    .update({ vistoria_id: null })
-    .eq('veiculo_id', blacklistItem.veiculo_id);
-
-  // 6. Excluir vistorias antigas do veículo
-  // ... código existente ...
 }
-```
 
-### 3. Invalidar queries adicionais
-
-**Arquivo:** `src/hooks/useBlacklist.ts`
-
-Adicionar invalidação de queries para contratos e cotações:
-
-```typescript
-onSuccess: (_, variables) => {
-  queryClient.invalidateQueries({ queryKey: ['blacklist-veiculos'] });
-  queryClient.invalidateQueries({ queryKey: ['blacklist-check'] });
-  queryClient.invalidateQueries({ queryKey: ['veiculos'] });
-  queryClient.invalidateQueries({ queryKey: ['associados'] });
-  queryClient.invalidateQueries({ queryKey: ['contratos'] });    // ADICIONAR
-  queryClient.invalidateQueries({ queryKey: ['cotacoes'] });     // ADICIONAR
-  queryClient.invalidateQueries({ queryKey: ['propostas'] });    // ADICIONAR
-  
-  // ... resto do código ...
-}
+// 3. Unlink leads (keep for history)
+const { error: leadsError } = await supabaseAdmin
+  .from("leads")
+  .update({ associado_id: null })
+  .eq("associado_id", associadoId);
 ```
 
 ---
 
-## Arquivos a Modificar
-
-| Arquivo | Ação |
-|---------|------|
-| `src/hooks/useServicos.ts` | Adicionar `contrato_id` e `cotacao_id` ao inserir na blacklist |
-| `src/hooks/useBlacklist.ts` | Buscar contrato/cotação pelo associado quando não existir na blacklist |
-| `src/hooks/useBlacklist.ts` | Limpar `vistoria_id` antes de excluir vistorias |
-| `src/hooks/useBlacklist.ts` | Invalidar queries de contratos e cotações |
-
----
-
-## Fluxo Corrigido de Reversão
+## Fluxo Corrigido
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Diretor clica em "Remover e Reverter"                   │
+│  1. Buscar todos os leads vinculados ao associado           │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  2. Blacklist tem contrato_id/cotacao_id null?              │
-│     Sim → Buscar pela tabela contratos usando associado_id  │
+│  2. Para cada lead, buscar cotações vinculadas              │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  3. Blacklist → ativo = false, vistoria_id = null           │
+│  3. Excluir dependências das cotações:                      │
+│     - cotacao_beneficios                                    │
+│     - cotacoes_historico                                    │
+│     - servicos                                              │
+│     - instalacoes_pendentes_criacao                         │
+│     - desvincular de contratos                              │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  4. Veículo → status = 'em_analise'                         │
+│  4. Excluir cotações do lead                                │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  5. Associado → status = 'pendente_vistoria'                │
-└─────────────────────────────────┬───────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│  6. Contrato → status = 'rascunho' (encontrado pela busca)  │
-│     Assinatura e pagamento resetados                        │
-└─────────────────────────────────┬───────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│  7. Cotação → status = 'aceita'                             │
-│              status_contratacao = 'aguardando_vistoria'     │
-└─────────────────────────────────┬───────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│  8. Vistorias antigas excluídas                             │
+│  5. Desvincular leads do associado                          │
 └─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Arquivo a Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/delete-associado/index.ts` | Adicionar exclusão de cotações vinculadas a leads |
+
+---
+
+## Posição no Código
+
+A nova lógica será inserida **ANTES** da linha 207 (seção "3. Unlink leads"):
+
+```typescript
+// Linha ~206 - Inserir ANTES do código existente
+
+// NOVO CÓDIGO AQUI ↓
+
+// 3. Unlink leads (keep for history) ← Código existente
 ```
 
 ---
 
 ## Resultado Esperado
 
-Após a correção, ao reverter a recusa do associado "Marcus Vinicius":
-
-| Entidade | Antes | Depois |
-|----------|-------|--------|
-| Blacklist | Inativo | Inativo (mantém histórico) |
-| Veículo | Em Análise | Em Análise |
-| Associado | Pendente Vistoria | Pendente Vistoria |
-| **Contrato** | **Cancelado** | **Rascunho** |
-| **Cotação** | **Recusada + veiculo_recusado** | **Aceita + aguardando_vistoria** |
+| Antes | Depois |
+|-------|--------|
+| Cotação permanece visível após excluir associado | Cotação é excluída junto com o associado |
+| Lead fica com `associado_id = null` mas cotações intactas | Cotações do lead são excluídas antes de desvincular |
 
 ---
 
-## Correção Imediata para Marcus Vinicius
+## Testes Recomendados
 
-Após implementar as correções, será necessário **reverter novamente** o status do Marcus Vinicius, pois os registros atuais estão inconsistentes.
-
-Alternativamente, posso incluir um SQL de correção para aplicar manualmente no banco.
+1. Criar um novo associado com cotação recusada (sem contrato gerado)
+2. Excluir o associado
+3. Verificar que a cotação não aparece mais na lista `/vendas/cotacoes`
+4. Verificar que o lead permanece no sistema (apenas desvinculado)
 
