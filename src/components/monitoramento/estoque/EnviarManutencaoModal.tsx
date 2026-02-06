@@ -74,9 +74,9 @@ export function EnviarManutencaoModal({
     return getPeriodosDisponivelsPorHora(dataSelecionada);
   }, [dataSelecionada]);
 
-  // Datas mínima e máxima
-  const dataMinima = addDays(new Date(), 1); // A partir de amanhã
-  const dataMaxima = addDays(new Date(), 30); // Até 30 dias
+  // Datas mínima e máxima (hoje + próximos 2 dias)
+  const dataMinima = new Date(); // Hoje
+  const dataMaxima = addDays(new Date(), 2); // Até 2 dias
 
   // Desabilitar domingos e datas passadas
   const diasDesabilitados = (date: Date) => {
