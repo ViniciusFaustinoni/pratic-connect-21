@@ -1,4 +1,4 @@
-import { Clock, Target, Coffee, TrendingUp, TrendingDown } from 'lucide-react';
+import { Clock, Target, Coffee, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useJornadaTrabalho, formatarMinutos } from '@/hooks/useJornadaTrabalho';
 import { cn } from '@/lib/utils';
@@ -19,7 +19,9 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
     percentualJornada,
     saldoAnterior,
     emAlmoco,
-    minutosAlmocoRestantes
+    minutosAlmocoRestantes,
+    minutosAtrasoAlmoco,
+    turno
   } = useJornadaTrabalho();
 
   // Não mostrar se não iniciou turno
@@ -66,6 +68,9 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
     );
   }
 
+  // Atraso de almoço registrado (já voltou do almoço)
+  const atrasoRegistrado = turno?.minutos_atraso_almoco || 0;
+
   return (
     <div className={cn(
       "bg-slate-800/80 border border-slate-700 rounded-lg p-3 space-y-2",
@@ -88,6 +93,16 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
         value={percentualJornada} 
         className="h-2"
       />
+
+      {/* Acréscimo por atraso de almoço */}
+      {atrasoRegistrado > 0 && (
+        <div className="flex items-center justify-center gap-1 text-xs">
+          <AlertTriangle className="h-3 w-3 text-amber-400" />
+          <span className="text-amber-400">
+            +{formatarMinutos(atrasoRegistrado)} de acréscimo por atraso no almoço
+          </span>
+        </div>
+      )}
 
       {/* Saldo (se houver) */}
       {saldoAnterior !== 0 && (
