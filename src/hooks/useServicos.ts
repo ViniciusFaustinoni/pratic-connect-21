@@ -1144,6 +1144,8 @@ export function useRecusarVeiculoServico() {
             tipo_reprovacao: 'vistoria_reprovada',
             veiculo_id: data.veiculoId,
             associado_id: data.associadoId,
+            contrato_id: contratoId,
+            cotacao_id: cotacaoId,
             adicionado_por: profile?.id,
             vistoria_id: vistoriaId,
             ativo: true,
