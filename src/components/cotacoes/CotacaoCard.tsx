@@ -72,6 +72,7 @@ const statusConfig: Record<StatusCotacaoExtended, {
 
 // Etapas da venda
 type EtapaVenda = 
+  | 'veiculo_recusado'
   | 'cotacao_realizada'
   | 'escolhendo_plano'
   | 'enviando_documentos'
@@ -86,6 +87,11 @@ type EtapaVenda =
   | 'associado_ativo';
 
 const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgColor: string }> = {
+  veiculo_recusado: {
+    label: 'Veículo Recusado',
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-500/20',
+  },
   cotacao_realizada: {
     label: 'Cotação Realizada',
     color: 'text-slate-600 dark:text-slate-400',
@@ -148,8 +154,13 @@ const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgCol
   },
 };
 
-// Função para determinar a etapa da venda - CORRIGIDA para vistoria agendada
+// Função para determinar a etapa da venda - CORRIGIDA para verificar pagamento antes de vistoria
 const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
+  // PRIORIDADE MÁXIMA: Se veículo foi recusado
+  if (cotacao.status === 'recusada' || cotacao.status_contratacao === 'veiculo_recusado') {
+    return 'veiculo_recusado';
+  }
+  
   const statusContratacao = cotacao.status_contratacao;
   const temContratacaoAtiva = statusContratacao && 
     statusContratacao !== 'aguardando' && 
@@ -157,28 +168,44 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
   
   if (cotacao.status === 'rascunho' && !temContratacaoAtiva && !cotacao.contrato) return null;
   
-  // PRIORIDADE 1: Verificar status do associado
+  // PRIORIDADE 1: Status do associado APENAS para etapas finais (pós-vistoria)
   const associadoStatus = cotacao.contrato?.associados?.status;
   if (associadoStatus === 'ativo') return 'associado_ativo';
   if (associadoStatus === 'em_analise') return 'em_analise';
-  if (associadoStatus === 'pendente_vistoria') return 'vistoria_agendada';
   
-  // PRIORIDADE 2: Verificar status da instalação/vistoria
+  // PRIORIDADE 2: Verificar vistoria em andamento/concluída
   const instalacao = cotacao.instalacoes?.[0];
   if (instalacao) {
     if (instalacao.status === 'concluida') return 'vistoria_realizada';
     if (instalacao.status === 'em_andamento' || instalacao.status === 'em_rota') return 'realizando_vistoria';
-    if (instalacao.status === 'agendada' || instalacao.status === 'reagendada') {
-      const tipoVistoria = cotacao.tipo_vistoria;
-      if (tipoVistoria === 'autovistoria') return 'instalacao_agendada';
-      return 'vistoria_agendada';
+  }
+  
+  // PRIORIDADE 3: Verificar se pagamento foi feito ANTES de considerar vistoria agendada
+  const adesaoPaga = cotacao.contrato?.adesao_paga;
+  const contratoStatus = cotacao.contrato?.status;
+  
+  // Se contrato existe e foi assinado, verificar pagamento primeiro
+  if (contratoStatus === 'assinado' || contratoStatus === 'ativo') {
+    if (adesaoPaga === false) {
+      return 'realizando_pagamento';
     }
   }
   
-  // PRIORIDADE 3: Verificar status_contratacao - CORRIGIDO para vistoria agendada
+  // Agora sim verificar vistoria agendada (somente se pagamento OK)
+  if (instalacao && (instalacao.status === 'agendada' || instalacao.status === 'reagendada')) {
+    const tipoVistoria = cotacao.tipo_vistoria;
+    if (tipoVistoria === 'autovistoria') return 'instalacao_agendada';
+    return 'vistoria_agendada';
+  }
+  
+  // Se associado pendente_vistoria E pagamento OK, mostrar vistoria agendada
+  if (associadoStatus === 'pendente_vistoria' && adesaoPaga !== false) {
+    return 'vistoria_agendada';
+  }
+  
+  // PRIORIDADE 4: Verificar status_contratacao
   if (statusContratacao === 'pagamento_ok') return 'vistoria_agendada';
   
-  // CORREÇÃO: Quando vistoria_ok com tipo agendada, mostrar vistoria_agendada
   if (statusContratacao === 'vistoria_ok') {
     const tipoVistoria = cotacao.tipo_vistoria;
     if (tipoVistoria === 'agendada' && cotacao.vistoria_data_agendada) {
@@ -188,7 +215,6 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
   }
   
   if (statusContratacao === 'contrato_assinado' || statusContratacao === 'contrato_gerado') {
-    const adesaoPaga = cotacao.contrato?.adesao_paga;
     if (adesaoPaga === false) return 'realizando_pagamento';
     return 'vistoria_agendada';
   }
@@ -196,10 +222,7 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
   if (statusContratacao === 'dados_preenchidos') return 'enviando_documentos';
   if (statusContratacao === 'plano_escolhido') return 'escolhendo_plano';
   
-  // PRIORIDADE 4: Verificar status do contrato
-  const contratoStatus = cotacao.contrato?.status;
-  const adesaoPaga = cotacao.contrato?.adesao_paga;
-  
+  // PRIORIDADE 5: Fallback - status do contrato
   if (contratoStatus === 'assinado' && adesaoPaga === false) {
     return 'realizando_pagamento';
   }
