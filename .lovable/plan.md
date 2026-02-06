@@ -1,171 +1,238 @@
 
-# Plano: Adicionar Veículos à Blacklist Quando Associado for Bloqueado
+# Plano: Correções no Fluxo de Recusa de Vistoria e Duplicidade de Documentos
 
-## Problema Identificado
+## Problemas Identificados
 
-Quando um associado é bloqueado pelo sistema, seus veículos **não são automaticamente adicionados à blacklist**. Isso significa que:
-- O veículo pode ser usado em uma nova cotação por outro associado
-- Não há registro histórico do bloqueio na blacklist
-- O controle da diretoria sobre veículos problemáticos fica incompleto
+Analisando o código e o comportamento reportado, identifiquei **3 problemas principais**:
+
+### Problema 1: Veículos recusados NÃO vão para a Blacklist
+**Onde:** `src/hooks/useVistoriaCompleta.ts` - hook `useRecusarVeiculoVistoria`
+
+O hook apenas:
+- Atualiza o veículo para status `suspenso`
+- Atualiza a vistoria para `reprovada`
+- Cancela a instalação
+- Registra no histórico
+
+**Falta:** Inserir o veículo na tabela `blacklist_veiculos` com `tipo_reprovacao = 'vistoria_reprovada'`
+
+### Problema 2: Status do veículo é "suspenso" quando deveria ser "recusado"
+**Onde:** Enum `status_veiculo` no banco de dados
+
+O enum atual só possui:
+```
+{em_analise, aprovado, instalacao_pendente, ativo, suspenso, cancelado, sinistrado}
+```
+
+**Falta:** Adicionar valor `recusado` ao enum para representar veículos reprovados na vistoria.
+
+### Problema 3: Documentos duplicados (Laudo Vistoria)
+**Onde:** `supabase/functions/gerar-laudo-vistoria/index.ts`
+
+A edge function insere um novo documento na tabela `documentos` **sem verificar** se já existe um laudo para aquele veículo (linhas 987-1000):
+
+```typescript
+const { error: docError } = await supabase
+  .from('documentos')
+  .insert({
+    associado_id: associadoId,
+    veiculo_id: veiculoId,
+    tipo: 'laudo_vistoria',
+    // ...
+  });
+```
+
+Cada chamada cria um novo registro, causando duplicidade.
+
+---
 
 ## Solução Proposta
 
-### 1. Adicionar Novo Tipo de Reprovação no Banco de Dados
-
-Atualmente o enum `tipo_reprovacao` só tem dois valores:
-- `vistoria_reprovada`
-- `proposta_reprovada`
-
-**Ação:** Adicionar um novo valor ao enum para representar bloqueio de associado:
-- `associado_bloqueado`
+### 1. Adicionar valor "recusado" ao enum status_veiculo
 
 ```sql
-ALTER TYPE tipo_reprovacao ADD VALUE 'associado_bloqueado';
+ALTER TYPE status_veiculo ADD VALUE 'recusado';
 ```
 
-### 2. Atualizar o Hook `useBlacklist.ts`
+### 2. Atualizar hook useRecusarVeiculoVistoria
 
-Atualizar a interface e o mutation para aceitar o novo tipo:
+Modificar o hook para:
+
+1. **Alterar status do veículo para 'recusado'** (em vez de 'suspenso')
+2. **Adicionar veículo à blacklist** com tipo `vistoria_reprovada`
+3. **Atualizar status do associado** para `suspenso` ou `cancelado`
+4. **Atualizar contrato** (se existir) para status apropriado
+
+**Arquivo:** `src/hooks/useVistoriaCompleta.ts`
 
 ```typescript
-// Interface BlacklistVeiculo
-tipo_reprovacao: 'vistoria_reprovada' | 'proposta_reprovada' | 'associado_bloqueado';
+// Na função mutationFn, após atualizar a vistoria:
+
+// 2. Atualizar veículo como RECUSADO (não suspenso)
+const { data: veiculoData, error: veiculoError } = await supabase
+  .from('veiculos')
+  .update({ 
+    status: 'recusado', // MUDANÇA: era 'suspenso'
+    motivo_recusa_veiculo: data.observacoes,
+    recusado_por: profile?.id,
+    recusado_em: agora,
+    updated_at: agora,
+  })
+  .eq('id', data.veiculoId)
+  .select('placa, chassi')
+  .single();
+
+// NOVO: Adicionar à blacklist
+if (veiculoData) {
+  await supabase
+    .from('blacklist_veiculos')
+    .insert({
+      placa: veiculoData.placa.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+      chassi: veiculoData.chassi,
+      motivo: data.motivo,
+      justificativa: data.observacoes,
+      tipo_reprovacao: 'vistoria_reprovada',
+      veiculo_id: data.veiculoId,
+      associado_id: data.associadoId,
+      adicionado_por: profile?.id,
+      vistoria_id: data.vistoriaId, // referência à vistoria
+      ativo: true,
+    });
+}
+
+// NOVO: Atualizar associado para suspenso
+await supabase
+  .from('associados')
+  .update({ 
+    status: 'suspenso',
+    updated_at: agora,
+  })
+  .eq('id', data.associadoId);
+
+// NOVO: Atualizar contrato para cancelado
+if (vistoriaData?.contrato_id) {
+  await supabase
+    .from('contratos')
+    .update({ 
+      status: 'cancelado',
+      motivo_cancelamento: `Vistoria reprovada: ${data.motivo}`,
+    })
+    .eq('id', vistoriaData.contrato_id);
+}
 ```
 
-### 3. Atualizar a Página de Blacklist
+### 3. Corrigir duplicidade de documentos (Laudo Vistoria)
 
-**Arquivo: `src/pages/diretoria/Blacklist.tsx`**
+**Arquivo:** `supabase/functions/gerar-laudo-vistoria/index.ts`
 
-Adicionar o novo tipo no mapa de labels:
-```typescript
-const TIPO_LABELS: Record<string, string> = {
-  vistoria_reprovada: 'Vistoria Reprovada',
-  proposta_reprovada: 'Proposta Reprovada',
-  associado_bloqueado: 'Associado Bloqueado', // NOVO
-};
-```
-
-Adicionar opção no filtro de tipo:
-```typescript
-<SelectItem value="associado_bloqueado">Associado Bloqueado</SelectItem>
-```
-
-Adicionar card de estatísticas:
-```typescript
-<Card>
-  <CardHeader>
-    <CardTitle>Associado Bloqueado</CardTitle>
-  </CardHeader>
-  <CardContent>
-    <div className="text-2xl font-bold">
-      {blacklist?.filter((i) => i.ativo && i.tipo_reprovacao === 'associado_bloqueado').length || 0}
-    </div>
-  </CardContent>
-</Card>
-```
-
-### 4. Modificar a Lógica de Bloqueio de Associado
-
-**Arquivo: `src/pages/cadastro/Associados.tsx`**
-
-Na função `handleAcaoConfirm`, após bloquear o associado, buscar todos os veículos vinculados e adicionar cada um à blacklist:
+Antes de inserir, verificar se já existe e fazer upsert ou delete do anterior:
 
 ```typescript
-const handleAcaoConfirm = async (motivo: string) => {
-  // ... código existente para atualizar status ...
+// NOVO: Deletar laudo anterior se existir (evita duplicidade)
+const { data: laudoExistente } = await supabase
+  .from('documentos')
+  .select('id, arquivo_url')
+  .eq('associado_id', associadoId)
+  .eq('veiculo_id', veiculoId)
+  .eq('tipo', 'laudo_vistoria')
+  .maybeSingle();
 
-  // SE ação for BLOQUEAR, adicionar veículos à blacklist
-  if (acaoDialog.acao === 'bloquear') {
-    // 1. Buscar veículos do associado
-    const { data: veiculos } = await supabase
-      .from('veiculos')
-      .select('id, placa, chassi')
-      .eq('associado_id', acaoDialog.associadoId);
-
-    // 2. Para cada veículo, adicionar à blacklist
-    if (veiculos && veiculos.length > 0) {
-      for (const veiculo of veiculos) {
-        await supabase
-          .from('blacklist_veiculos')
-          .insert({
-            placa: veiculo.placa.toUpperCase().replace(/[^A-Z0-9]/g, ''),
-            chassi: veiculo.chassi,
-            motivo: motivo,
-            justificativa: `Associado bloqueado: ${motivo}`,
-            tipo_reprovacao: 'associado_bloqueado',
-            veiculo_id: veiculo.id,
-            associado_id: acaoDialog.associadoId,
-            adicionado_por: profile?.id,
-            ativo: true,
-          });
-      }
-      
-      toast({
-        title: 'Veículos adicionados à Blacklist',
-        description: `${veiculos.length} veículo(s) foram adicionados à blacklist.`,
-      });
+if (laudoExistente) {
+  console.log('[LAUDO] Laudo anterior encontrado, será substituído:', laudoExistente.id);
+  
+  // Deletar arquivo antigo do storage
+  if (laudoExistente.arquivo_url) {
+    const pathMatch = laudoExistente.arquivo_url.match(/\/documentos\/(.+)$/);
+    if (pathMatch) {
+      await supabase.storage.from('documentos').remove([pathMatch[1]]);
     }
   }
-};
+  
+  // Deletar registro antigo
+  await supabase
+    .from('documentos')
+    .delete()
+    .eq('id', laudoExistente.id);
+}
+
+// Depois continuar com a inserção normal do novo laudo
 ```
 
-### 5. Atualizar o Hook `useAssociadoActions` (Opcional)
+### 4. (Opcional) Adicionar coluna vistoria_id à blacklist
 
-Para centralizar a lógica, podemos adicionar a inserção na blacklist dentro do hook `useAssociadoActions`:
+Para rastrear qual vistoria originou o bloqueio:
 
-**Arquivo: `src/hooks/useAssociados.ts`**
+```sql
+ALTER TABLE blacklist_veiculos 
+ADD COLUMN vistoria_id UUID REFERENCES vistorias(id);
+```
 
-Modificar o mutation `atualizarStatus` para incluir a lógica de blacklist quando status for `bloqueado`.
+---
 
 ## Arquivos a Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| **Migração SQL** | Adicionar valor `associado_bloqueado` ao enum `tipo_reprovacao` |
-| `src/hooks/useBlacklist.ts` | Atualizar interface para incluir novo tipo |
-| `src/pages/diretoria/Blacklist.tsx` | Adicionar label, filtro e card de estatísticas |
-| `src/pages/cadastro/Associados.tsx` | Adicionar lógica de inserção na blacklist após bloqueio |
+| **Migração SQL** | Adicionar valor `recusado` ao enum `status_veiculo` |
+| **Migração SQL** | Adicionar coluna `vistoria_id` à tabela `blacklist_veiculos` (opcional) |
+| `src/hooks/useVistoriaCompleta.ts` | Atualizar lógica de recusa para incluir blacklist, status correto e associado |
+| `supabase/functions/gerar-laudo-vistoria/index.ts` | Verificar duplicidade antes de inserir laudo |
 
-## Fluxo Esperado
+---
+
+## Fluxo Esperado Após Correções
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Usuário clica em "Bloquear" no menu do associado        │
+│  1. Técnico recusa veículo durante vistoria                 │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  2. Dialog solicita motivo do bloqueio                      │
+│  2. Vistoria atualizada para status "reprovada"             │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  3. Sistema atualiza status do associado para "bloqueado"   │
+│  3. Veículo atualizado para status "recusado"               │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  4. Sistema busca todos os veículos do associado            │
+│  4. Veículo inserido na blacklist_veiculos                  │
+│     com tipo_reprovacao = 'vistoria_reprovada'              │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  5. Cada veículo é inserido na blacklist_veiculos           │
-│     com tipo_reprovacao = 'associado_bloqueado'             │
+│  5. Associado atualizado para status "suspenso"             │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  6. Toast confirma bloqueio + veículos na blacklist         │
+│  6. Contrato atualizado para status "cancelado"             │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  7. Veículo aparece na página Blacklist - Diretoria         │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
 
 ## Comportamento Esperado
 
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| Bloquear associado | Apenas status alterado | Status + veículos na blacklist |
-| Página Blacklist | Sem categoria "Bloqueado" | Nova categoria com estatísticas |
-| Nova cotação com placa bloqueada | Poderia continuar | Bloqueada automaticamente |
+| Recusar vistoria | Veículo fica "suspenso" | Veículo fica "recusado" |
+| Recusar vistoria | Não vai para blacklist | Vai para blacklist automaticamente |
+| Recusar vistoria | Associado mantém status | Associado fica "suspenso" |
+| Recusar vistoria | Contrato inalterado | Contrato fica "cancelado" |
+| Gerar laudo | Cria novo documento sempre | Substitui laudo anterior |
+| Página Blacklist | Sem registro da recusa | Mostra "Vistoria Reprovada" |
+
+---
 
 ## Testes Recomendados
 
-1. Bloquear um associado que possui veículo cadastrado
-2. Verificar se o veículo aparece na página de Blacklist da Diretoria
-3. Confirmar que o tipo exibido é "Associado Bloqueado"
-4. Tentar fazer uma cotação com a placa bloqueada e verificar se o modal de bloqueio aparece
+1. Acessar como vistoriador e recusar uma vistoria
+2. Verificar se o veículo aparece na Blacklist com tipo "Vistoria Reprovada"
+3. Verificar se o status do veículo é "recusado"
+4. Verificar se o status do associado é "suspenso"
+5. Verificar se não há documentos duplicados na lista de documentos
+6. Tentar fazer uma cotação com a mesma placa e confirmar que é bloqueada
