@@ -1,133 +1,147 @@
 
-# Plano: Corrigir Fluxo de Manutenção de Rastreadores
+# Plano: Corrigir Atualização Automática do Status do Associado na Lista de Cotações
 
-## Problemas Identificados
+## Problema Identificado
 
-### Problema 1: Modal de Agendamento Nao Abre
-**Causa:** A opcao "Agendar Manutencao" so aparece no menu dropdown quando o rastreador tem status `instalado`. Rastreadores em status `estoque` nao mostram essa opcao.
+Na página de Cotações, o status do associado mostra "Assinando Contrato" mesmo quando o cliente já está na fase de aprovação do cadastro. Dois problemas foram identificados:
 
-**Comportamento Atual:**
-- `ListaRastreadores.tsx` (linha 454): `{item.status === 'instalado' && (...)`
-- `Rastreadores.tsx` (linha 538): `{rastreador.status === 'instalado' && (...)`
+1. **Lógica incorreta de determinação de etapa**: A função `getEtapaVenda` retorna `'assinando_contrato'` quando `status_contratacao = 'pagamento_ok'`, mas isso está errado pois o pagamento já foi confirmado e o cliente está aguardando a vistoria/aprovação
+2. **Falta de atualização em tempo real**: O hook `useCotacoesRealtime` não escuta mudanças na tabela `associados`, então quando o status do associado muda, a lista não é atualizada automaticamente
 
-**Analise:** Isso e tecnicamente correto - um rastreador em estoque nao esta vinculado a um veiculo, entao nao faz sentido "agendar manutencao" para ele. Manutencao pressupoe que o rastreador esta instalado em um veiculo de um associado.
+## Evidência no Banco de Dados
 
-Se o coordenador precisa enviar um rastreador de **estoque** para verificacao/reparo, isso seria um processo diferente (nao uma "vistoria de manutencao").
-
-### Problema 2: Manutencao Nao Aparece na Fila de Vistorias
-**Causa:** A pagina `FilaVistorias` usa o hook `useVistorias()` que busca apenas da tabela `vistorias` com `tipo = 'entrada'`:
-
-```typescript
-// useVistorias.ts linha 68-77
-.from('vistorias')
-.eq('tipo', 'entrada')
+```text
+Associado: MARCUS VINICIUS FAUSTINONI DE FREITAS
+- Status do associado: pendente_vistoria
+- Status do contrato: assinado  
+- Status_contratacao da cotação: pagamento_ok
 ```
 
-Porem, manutencoes sao criadas na tabela `servicos` com `tipo = 'vistoria_manutencao'` (conforme `useCriarManutencao.ts`).
+A interface mostra "Assinando Contrato" quando deveria mostrar "Vistoria Agendada" ou "Em Análise".
 
-**Evidencia no banco:**
-- Existe rastreador `RAT-862667083494305` com status `manutencao` 
-- Nao existe nenhum registro correspondente na tabela `servicos` com esse rastreador
-- A FilaVistorias nunca consultaria a tabela `servicos` de qualquer forma
+## Solução Proposta
 
-## Solucao Proposta
-
-### Fase 1: Permitir Manutencao de Rastreadores em Estoque
-
-Alterar a condicao nos componentes para permitir "Agendar Manutencao" tambem para rastreadores em estoque, ja que podem precisar de verificacao/reparo antes de instalacao.
+### Correção 1: Adicionar etapa "em_analise" e corrigir lógica de `getEtapaVenda`
 
 **Arquivos a modificar:**
-1. `src/components/monitoramento/estoque/ListaRastreadores.tsx`
-2. `src/pages/monitoramento/Rastreadores.tsx`
+- `src/components/cotacoes/CotacoesTable.tsx`
+- `src/components/cotacoes/CotacaoCard.tsx`
+- `src/components/cotacoes/CotacaoDetalhesModal.tsx`
 
-**Mudanca:**
-```typescript
-// ANTES
-{item.status === 'instalado' && (
+**Mudanças:**
 
-// DEPOIS
-{(item.status === 'instalado' || item.status === 'estoque') && (
+1. Adicionar nova etapa `'em_analise'` ao tipo `EtapaVenda`:
+```text
+type EtapaVenda = 
+  | 'cotacao_realizada'
+  | ...
+  | 'vistoria_realizada'
+  | 'em_analise'       // NOVA ETAPA
+  | 'associado_ativo';
 ```
 
-### Fase 2: Incluir Servicos de Manutencao na Fila de Vistorias
+2. Adicionar configuração visual para a nova etapa:
+```text
+em_analise: {
+  label: 'Em Análise',
+  color: 'text-yellow-600 dark:text-yellow-400',
+  bgColor: 'bg-yellow-500/20',
+}
+```
 
-Atualizar `FilaVistorias` para buscar dados de ambas as fontes:
-1. Tabela `vistorias` (vistorias de entrada)
-2. Tabela `servicos` (manutencoes, retiradas)
+3. Corrigir a lógica de `getEtapaVenda`:
+```text
+ANTES (linha 165):
+if (statusContratacao === 'pagamento_ok') return 'assinando_contrato';
+
+DEPOIS:
+// Verificar status do associado para em_analise
+if (associadoStatus === 'em_analise') return 'em_analise';
+if (associadoStatus === 'pendente_vistoria') return 'vistoria_agendada';
+
+// Se pagamento_ok e sem vistoria agendada ainda, aguardar vistoria
+if (statusContratacao === 'pagamento_ok') return 'vistoria_agendada';
+```
+
+### Correção 2: Adicionar listener realtime para tabela `associados`
 
 **Arquivo a modificar:**
-`src/pages/monitoramento/FilaVistorias.tsx`
+- `src/hooks/useCotacoesRealtime.ts`
 
-**Abordagem:**
-- Criar/usar hook que busca servicos de manutencao e retirada da tabela `servicos`
-- Combinar os dados com as vistorias existentes
-- Manter a mesma interface de `VistoriaFila` mapeando os campos de `servicos`
+**Mudança:**
+Adicionar novo listener para a tabela `associados`:
 
-**Novo hook ou query:**
-```typescript
-// Buscar servicos de manutencao e retirada pendentes
-const { data: servicosManutencoesRaw } = useServicos({
-  tipo: ['vistoria_manutencao', 'vistoria_retirada'],
-  status: ['pendente', 'agendada', 'em_rota', 'em_andamento']
-});
+```text
+// Escutar mudanças em associados (afeta etapa de análise e ativação)
+.on(
+  'postgres_changes',
+  {
+    event: 'UPDATE',
+    schema: 'public',
+    table: 'associados',
+  },
+  (payload) => {
+    console.log('[useCotacoesRealtime] Associado alterado:', payload.eventType);
+    
+    // Invalidar cotações pois a etapa de venda depende do status do associado
+    queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+    queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+    queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+    
+    // Toast para associado ativado
+    const newData = payload.new as { status?: string };
+    const oldData = payload.old as { status?: string };
+    
+    if (newData.status === 'ativo' && oldData?.status !== 'ativo') {
+      toast.success('🎉 Associado ativado!', { duration: 5000 });
+    }
+  }
+)
 ```
 
-**Mapeamento de servicos para VistoriaFila:**
-```typescript
-const servicosComoVistorias: VistoriaFila[] = (servicosManutencoesRaw || []).map(s => ({
-  id: s.id,
-  protocolo: s.protocolo || gerarProtocolo(s.id, s.created_at),
-  cliente: s.associado?.nome || 'Sem associado',
-  clienteId: s.associado_id || '',
-  veiculo: `${s.veiculo?.marca || ''} ${s.veiculo?.modelo || ''}`.trim() || 'N/A',
-  placa: s.veiculo?.placa || '---',
-  tipo: mapTipo(undefined, s.tipo), // Usar tipoServico para detectar manutencao/retirada
-  regiao: s.bairro || s.cidade || 'Nao informada',
-  dataAgendada: s.data_agendada,
-  vistoriador: s.profissional?.nome || null,
-  vistoriadorId: s.profissional_id || null,
-  status: mapStatus(s.status as any, undefined),
-  createdAt: s.created_at,
-}));
-```
-
-### Fase 3: Adicionar Filtros de Tipo para Manutencao/Retirada
-
-Atualizar o seletor de tipo na FilaVistorias para incluir opcoes:
-- Manutencao
-- Retirada
-
-**Arquivo a modificar:**
-`src/pages/monitoramento/FilaVistorias.tsx`
-
-```typescript
-<SelectItem value="manutencao">Manutencao</SelectItem>
-<SelectItem value="retirada">Retirada</SelectItem>
-```
-
-## Detalhes Tecnicos
+## Detalhes Técnicos
 
 ### Arquivos a Modificar
 
-1. **`src/components/monitoramento/estoque/ListaRastreadores.tsx`**
-   - Linha 454: Alterar condicao para incluir `estoque`
-   
-2. **`src/pages/monitoramento/Rastreadores.tsx`**
-   - Linha 538: Alterar condicao para incluir `estoque`
+1. **`src/components/cotacoes/CotacoesTable.tsx`**
+   - Adicionar `'em_analise'` ao tipo `EtapaVenda` (linha 24-35)
+   - Adicionar config visual para `em_analise` no objeto `etapaVendaConfig` (linha 81-137)
+   - Corrigir lógica em `getEtapaVenda`:
+     - Após verificar `associadoStatus === 'ativo'`, verificar também `'em_analise'` e `'pendente_vistoria'`
+     - Mudar retorno de `'assinando_contrato'` para `'vistoria_agendada'` quando `pagamento_ok`
 
-3. **`src/pages/monitoramento/FilaVistorias.tsx`**
-   - Importar `useServicos` do hook existente
-   - Adicionar query para buscar servicos de manutencao/retirada
-   - Combinar os resultados com `vistoriasRaw` no useMemo
-   - Adicionar opcoes de filtro para manutencao/retirada
+2. **`src/components/cotacoes/CotacaoCard.tsx`**
+   - Mesmas mudanças do arquivo anterior (tipo, config e lógica)
 
-### Impacto
-- O coordenador podera enviar rastreadores em estoque para manutencao
-- As manutencoes criadas aparecerao na Fila de Vistorias
-- O vistoriador podera ver e executar as tarefas de manutencao
+3. **`src/components/cotacoes/CotacaoDetalhesModal.tsx`**
+   - Adicionar `em_analise` ao objeto `etapaVendaConfig`
 
-### Testes Recomendados
-1. Verificar se opcao "Agendar Manutencao" aparece para rastreadores em estoque
-2. Agendar uma manutencao e verificar se aparece na Fila de Vistorias
-3. Verificar se os filtros de tipo funcionam corretamente
-4. Testar fluxo completo do vistoriador recebendo tarefa de manutencao
+4. **`src/hooks/useCotacoesRealtime.ts`**
+   - Adicionar listener para a tabela `associados` no canal existente
+
+## Fluxo Corrigido
+
+```text
+1. Cliente escolhe plano           → escolhendo_plano
+2. Cliente preenche dados          → enviando_documentos
+3. Cliente envia documentos        → escolha_vistoria
+4. Cliente escolhe vistoria        → realizando_pagamento (ou assinando_contrato se precisa assinar)
+5. Cliente faz pagamento           → vistoria_agendada (CORRIGIDO - antes: assinando_contrato)
+6. Vistoria em andamento           → realizando_vistoria
+7. Vistoria concluída              → vistoria_realizada
+8. Associado em análise            → em_analise (NOVA ETAPA)
+9. Associado aprovado              → associado_ativo
+```
+
+## Comportamento Esperado Após Correção
+
+1. Quando `status_contratacao = 'pagamento_ok'`, exibir "Vistoria Agendada"
+2. Quando associado está em `'em_analise'`, exibir "Em Análise"
+3. Quando associado está em `'pendente_vistoria'`, exibir "Vistoria Agendada"
+4. A lista de cotações será atualizada automaticamente quando o status do associado mudar
+
+## Impacto
+- Correção visual imediata do status exibido
+- Atualização em tempo real quando operadores alterarem status de associados
+- Sem alteração em banco de dados
+- Sem alteração na lógica de negócio do backend
