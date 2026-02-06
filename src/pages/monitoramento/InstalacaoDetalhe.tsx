@@ -424,8 +424,8 @@ export default function InstalacaoDetalhePage() {
                 <p className="font-medium">{instalacao.rastreadores.codigo}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Modelo</p>
-                <p className="font-medium">{(instalacao.rastreadores as any).modelo || '—'}</p>
+                <p className="text-sm text-muted-foreground">Plataforma</p>
+                <p className="font-medium">{(instalacao.rastreadores as any).plataforma?.toUpperCase() || '—'}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">IMEI</p>
