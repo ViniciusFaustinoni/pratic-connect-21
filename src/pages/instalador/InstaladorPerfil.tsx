@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { User, LogOut, Settings, Bell, HelpCircle, Shield, Power, ChevronRight } from 'lucide-react';
+import { User, LogOut, Settings, Bell, HelpCircle, Shield, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { useTarefaAtual } from '@/hooks/useTarefaAtual';
@@ -11,16 +11,11 @@ import { Separator } from '@/components/ui/separator';
 export default function InstaladorPerfil() {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
-  const { emServico, encerrarServico } = useIniciarServico();
-  const { data: tarefaAtual } = useTarefaAtual();
+  const { emServico } = useIniciarServico();
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/instalador/login');
-  };
-
-  const handleEncerrarTurno = async () => {
-    await encerrarServico();
   };
 
   const getIniciais = () => {
@@ -88,18 +83,6 @@ export default function InstaladorPerfil() {
             ))}
           </CardContent>
         </Card>
-
-        {/* Botão Encerrar Turno - apenas quando em serviço e sem tarefa ativa */}
-        {emServico && !tarefaAtual && (
-          <Button 
-            variant="outline" 
-            className="w-full border-orange-600 text-orange-400 hover:bg-orange-900/30 hover:text-orange-300"
-            onClick={handleEncerrarTurno}
-          >
-            <Power className="h-4 w-4 mr-2" />
-            Encerrar Turno
-          </Button>
-        )}
 
         {/* Botão Sair */}
         <Button 
