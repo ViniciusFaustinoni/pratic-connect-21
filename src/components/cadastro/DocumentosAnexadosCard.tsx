@@ -17,6 +17,8 @@ import {
   Eye,
   CheckCircle,
   ClipboardCheck,
+  Video,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -67,12 +69,17 @@ const TIPO_DOC_CONFIG: Record<string, { label: string; icon: React.ComponentType
 
 interface DocumentosAnexadosCardProps {
   documentos: DocumentoAnexado[];
+  video360Url?: string | null;
 }
 
-export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardProps) {
+export function DocumentosAnexadosCard({ documentos, video360Url }: DocumentosAnexadosCardProps) {
   const [selectedDoc, setSelectedDoc] = useState<DocumentoAnexado | null>(null);
+  const [showVideo360, setShowVideo360] = useState(false);
+  
+  // Contagem total incluindo vídeo 360
+  const totalDocumentos = documentos.length + (video360Url ? 1 : 0);
 
-  if (!documentos || documentos.length === 0) {
+  if ((!documentos || documentos.length === 0) && !video360Url) {
     return (
       <Card className="border-border bg-card">
         <CardHeader>
@@ -104,13 +111,48 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
             <FileText className="h-5 w-5 text-purple-500" />
             Documentos Anexados
             <Badge variant="secondary" className="ml-2">
-              {documentos.length}
+              {totalDocumentos}
             </Badge>
           </CardTitle>
           <CardDescription>Clique para visualizar cada documento</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-        {documentos.map((doc) => {
+          {/* Vídeo 360° como primeiro item destacado */}
+          {video360Url && (
+            <div
+              className="flex items-center justify-between p-3 rounded-lg border border-purple-500/50 bg-purple-500/5 ring-1 ring-purple-500/30 hover:bg-purple-500/10 transition-colors cursor-pointer group"
+              onClick={() => setShowVideo360(true)}
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <Video className="h-4 w-4 text-purple-500" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm text-foreground">
+                    Vídeo 360° do Veículo
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Gravado pelo vistoriador
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/30">
+                  <Play className="h-3 w-3 mr-1" />
+                  360°
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {documentos.map((doc) => {
             const docConfig = getDocConfig(doc.tipo);
             const DocIcon = docConfig.icon;
 
@@ -228,7 +270,7 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
         </CardContent>
       </Card>
 
-      {/* Dialog de Visualização */}
+      {/* Dialog de Visualização de Documento */}
       <Dialog open={!!selectedDoc} onOpenChange={(open) => !open && setSelectedDoc(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
           <DialogHeader>
@@ -330,6 +372,30 @@ export function DocumentosAnexadosCard({ documentos }: DocumentosAnexadosCardPro
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Visualização do Vídeo 360° */}
+      <Dialog open={showVideo360} onOpenChange={setShowVideo360}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Video className="h-5 w-5 text-purple-500" />
+              Vídeo 360° do Veículo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="rounded-lg overflow-hidden bg-muted/50 border border-border">
+            <video
+              src={video360Url || ''}
+              controls
+              className="w-full aspect-video object-contain bg-black"
+              preload="metadata"
+              playsInline
+              autoPlay
+            >
+              Seu navegador não suporta a reprodução de vídeos.
+            </video>
+          </div>
         </DialogContent>
       </Dialog>
     </>

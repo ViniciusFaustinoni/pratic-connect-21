@@ -740,8 +740,11 @@ export default function PropostaAnalise() {
             />
           )}
 
-          {/* Documentos Anexados */}
-          <DocumentosAnexadosCard documentos={proposta.documentos || []} />
+          {/* Documentos Anexados (inclui Vídeo 360° se disponível) */}
+          <DocumentosAnexadosCard 
+            documentos={proposta.documentos || []} 
+            video360Url={proposta.vistoria?.video_360_url}
+          />
 
           {/* Fotos da Vistoria */}
           {proposta.vistoria && (
@@ -752,10 +755,7 @@ export default function PropostaAnalise() {
             />
           )}
 
-          {/* Vídeo 360° da Vistoria */}
-          {proposta.vistoria?.video_360_url && (
-            <Video360Card videoUrl={proposta.vistoria.video_360_url} />
-          )}
+          {/* Vídeo 360° agora está integrado ao DocumentosAnexadosCard */}
 
           {/* Observações do Vistoriador */}
           {proposta.vistoria && (proposta.vistoria.observacoes || proposta.vistoria.km_atual) && (
