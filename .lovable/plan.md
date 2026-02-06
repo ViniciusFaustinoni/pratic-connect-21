@@ -1,203 +1,205 @@
 
-# Plano: Corrigir Lógica de Etapa da Venda na Lista de Cotações
+# Plano: Incluir Vídeo 360° na Lista de Documentos Anexados
 
 ## Problema Identificado
 
-O status exibido na lista de cotações não reflete a etapa real do associado. No caso do Marcus Vinicius:
+Na tela de análise de propostas pendentes, o vídeo 360° é exibido em um card separado (`Video360Card`), mas **não aparece na lista de documentos anexados** (`DocumentosAnexadosCard`). O usuário deseja que o vídeo 360° também seja listado junto aos demais documentos para facilitar a análise consolidada.
 
-| Campo | Valor Atual |
-|-------|-------------|
-| `status_contratacao` | `contrato_assinado` |
-| `contrato.status` | `assinado` |
-| `contrato.adesao_paga` | `false` ← **Não pagou!** |
-| `associado.status` | `pendente_vistoria` |
-| **Etapa exibida** | `Vistoria Agendada` ← **Errado!** |
-| **Etapa correta** | `Realizando Pagamento` |
+### Situação Atual
 
-## Causa Raiz
+| Componente | O que exibe |
+|------------|-------------|
+| `DocumentosAnexadosCard` | CNH, CRLV, Comprovante, Laudo de Vistoria, Contrato |
+| `Video360Card` | Vídeo 360° (separado) |
 
-A função `getEtapaVenda` em `CotacoesTable.tsx` verifica o status do associado **antes** de verificar se o pagamento foi efetuado:
+### Objetivo
 
-```typescript
-// PRIORIDADE 1: Verificar status do associado (LINHA 166-169)
-const associadoStatus = cotacao.contrato?.associados?.status;
-if (associadoStatus === 'ativo') return 'associado_ativo';
-if (associadoStatus === 'em_analise') return 'em_analise';
-if (associadoStatus === 'pendente_vistoria') return 'vistoria_agendada'; // ← Retorna aqui!
-```
-
-O problema é que o status do associado é definido como `'pendente_vistoria'` no momento da geração do contrato, **antes** do pagamento ser efetuado. Isso faz com que a etapa "Vistoria Agendada" seja exibida prematuramente.
-
-## Solução
-
-Ajustar a ordem de prioridade na função `getEtapaVenda` para verificar:
-
-1. **Primeiro**: Se há contrato assinado mas pagamento pendente → `'realizando_pagamento'`
-2. **Depois**: Status do associado (apenas para etapas pós-pagamento)
+Incluir o vídeo 360° na lista de documentos anexados, mantendo a visualização inline do vídeo quando clicado.
 
 ---
 
-## Arquivo a Modificar
+## Arquivos a Modificar
 
-**`src/components/cotacoes/CotacoesTable.tsx`** - Função `getEtapaVenda` (linhas 152-223)
+| Arquivo | Ação |
+|---------|------|
+| `src/components/cadastro/DocumentosAnexadosCard.tsx` | Adicionar prop para vídeo 360° e renderizar como item especial |
+| `src/pages/cadastro/PropostaAnalise.tsx` | Passar o vídeo 360° para o `DocumentosAnexadosCard` |
 
-### Nova Lógica de Prioridades
+---
+
+## Solução Proposta
+
+### 1. Modificar `DocumentosAnexadosCard.tsx`
+
+Adicionar uma nova prop opcional `video360Url` e renderizar o vídeo como um documento especial na lista:
 
 ```typescript
-export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
-  // PRIORIDADE MÁXIMA: Se veículo foi recusado
-  if (cotacao.status === 'recusada' || cotacao.status_contratacao === 'veiculo_recusado') {
-    return 'veiculo_recusado';
-  }
-  
-  const statusContratacao = cotacao.status_contratacao;
-  const temContratacaoAtiva = statusContratacao && 
-    statusContratacao !== 'aguardando' && 
-    statusContratacao !== null;
-  
-  if (cotacao.status === 'rascunho' && !temContratacaoAtiva && !cotacao.contrato) return null;
-  
-  // PRIORIDADE 1: Verificar status do associado APENAS para etapas pós-vistoria
-  const associadoStatus = cotacao.contrato?.associados?.status;
-  if (associadoStatus === 'ativo') return 'associado_ativo';
-  if (associadoStatus === 'em_analise') return 'em_analise';
-  
-  // PRIORIDADE 2: Verificar status da instalação/vistoria (apenas se vistoria em andamento/concluída)
-  const instalacao = cotacao.instalacoes?.[0];
-  if (instalacao) {
-    if (instalacao.status === 'concluida') return 'vistoria_realizada';
-    if (instalacao.status === 'em_andamento' || instalacao.status === 'em_rota') return 'realizando_vistoria';
-  }
-  
-  // PRIORIDADE 3: Verificar se pagamento foi feito antes de considerar vistoria agendada
-  const adesaoPaga = cotacao.contrato?.adesao_paga;
-  const contratoStatus = cotacao.contrato?.status;
-  
-  // Se contrato existe e foi assinado, verificar pagamento
-  if (contratoStatus === 'assinado' || contratoStatus === 'ativo') {
-    if (adesaoPaga === false) {
-      return 'realizando_pagamento';
-    }
-  }
-  
-  // Agora sim verificar vistoria agendada (somente se pagamento OK)
-  if (instalacao && (instalacao.status === 'agendada' || instalacao.status === 'reagendada')) {
-    const tipoVistoria = cotacao.tipo_vistoria;
-    if (tipoVistoria === 'autovistoria') return 'instalacao_agendada';
-    return 'vistoria_agendada';
-  }
-  
-  // Se associado pendente_vistoria E pagamento OK, mostrar vistoria agendada
-  if (associadoStatus === 'pendente_vistoria' && adesaoPaga !== false) {
-    return 'vistoria_agendada';
-  }
-  
-  // PRIORIDADE 4: Verificar status_contratacao
-  if (statusContratacao === 'pagamento_ok') return 'vistoria_agendada';
-  
-  if (statusContratacao === 'vistoria_ok') {
-    const tipoVistoria = cotacao.tipo_vistoria;
-    if (tipoVistoria === 'agendada' && cotacao.vistoria_data_agendada) {
-      return 'vistoria_agendada';
-    }
-    return 'realizando_pagamento';
-  }
-  
-  if (statusContratacao === 'contrato_assinado' || statusContratacao === 'contrato_gerado') {
-    if (adesaoPaga === false) return 'realizando_pagamento';
-    return 'vistoria_agendada';
-  }
-  
-  if (statusContratacao === 'documentos_ok') return 'escolha_vistoria';
-  if (statusContratacao === 'dados_preenchidos') return 'enviando_documentos';
-  if (statusContratacao === 'plano_escolhido') return 'escolhendo_plano';
-  
-  // PRIORIDADE 5: Status do contrato (fallback)
-  if (contratoStatus === 'assinado' && adesaoPaga === false) {
-    return 'realizando_pagamento';
-  }
-  
-  if (contratoStatus === 'assinado' || contratoStatus === 'ativo') {
-    return 'vistoria_agendada';
-  }
-  
-  if (cotacao.status === 'enviada' || cotacao.status === 'aceita') {
-    return 'cotacao_realizada';
-  }
-  
-  if (temContratacaoAtiva) return 'cotacao_realizada';
-  
-  return null;
+// Adicionar ao TIPO_DOC_CONFIG
+const TIPO_DOC_CONFIG = {
+  // ... configs existentes ...
+  video_360: { 
+    label: 'Vídeo 360° do Veículo', 
+    icon: Video, 
+    highlight: true 
+  },
 };
+
+interface DocumentosAnexadosCardProps {
+  documentos: DocumentoAnexado[];
+  video360Url?: string | null; // NOVO
+}
+```
+
+Criar um item especial para o vídeo 360° no início ou final da lista de documentos:
+
+```typescript
+// Se tiver vídeo 360, adicionar como primeiro item destacado
+{video360Url && (
+  <div
+    className="flex items-center justify-between p-3 rounded-lg border 
+               border-purple-500/50 bg-purple-500/5 ring-1 ring-purple-500/30 
+               hover:bg-purple-500/10 cursor-pointer group"
+    onClick={() => setSelectedVideo360(true)}
+  >
+    <div className="flex items-center gap-3">
+      <div className="p-2 rounded-lg bg-purple-500/10">
+        <Video className="h-4 w-4 text-purple-500" />
+      </div>
+      <div>
+        <p className="font-medium text-sm text-foreground">
+          Vídeo 360° do Veículo
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Gravado pelo vistoriador
+        </p>
+      </div>
+    </div>
+    <div className="flex items-center gap-2">
+      <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/30">
+        <Play className="h-3 w-3 mr-1" />
+        360°
+      </Badge>
+    </div>
+  </div>
+)}
+```
+
+### 2. Adicionar Dialog de Visualização do Vídeo
+
+Incluir um Dialog específico para reprodução do vídeo 360° quando clicado na lista:
+
+```typescript
+const [selectedVideo360, setSelectedVideo360] = useState(false);
+
+// Dialog para Vídeo 360
+<Dialog open={selectedVideo360} onOpenChange={setSelectedVideo360}>
+  <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2">
+        <Video className="h-5 w-5 text-purple-500" />
+        Vídeo 360° do Veículo
+      </DialogTitle>
+    </DialogHeader>
+    <div className="rounded-lg overflow-hidden bg-muted/50 border border-border">
+      <video
+        src={video360Url}
+        controls
+        className="w-full aspect-video object-contain bg-black"
+        preload="metadata"
+        playsInline
+        autoPlay
+      >
+        Seu navegador não suporta a reprodução de vídeos.
+      </video>
+    </div>
+  </DialogContent>
+</Dialog>
+```
+
+### 3. Modificar `PropostaAnalise.tsx`
+
+Passar o vídeo 360° para o componente de documentos:
+
+```typescript
+{/* Documentos Anexados - ANTES */}
+<DocumentosAnexadosCard documentos={proposta.documentos || []} />
+
+{/* Documentos Anexados - DEPOIS */}
+<DocumentosAnexadosCard 
+  documentos={proposta.documentos || []} 
+  video360Url={proposta.vistoria?.video_360_url}
+/>
+
+{/* REMOVER o Video360Card separado (opcional - manter ambos pode ser útil) */}
 ```
 
 ---
 
-## Lógica de Prioridades (Diagrama)
+## Fluxo de Visualização
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Veículo recusado? → veiculo_recusado                    │
-└─────────────────────────────────────────────────────────────┘
-                              ↓ não
-┌─────────────────────────────────────────────────────────────┐
-│  2. Associado ativo ou em_analise?                          │
-│     - ativo → associado_ativo                               │
-│     - em_analise → em_analise                               │
-└─────────────────────────────────────────────────────────────┘
-                              ↓ não
-┌─────────────────────────────────────────────────────────────┐
-│  3. Vistoria concluída ou em andamento?                     │
-│     - concluida → vistoria_realizada                        │
-│     - em_andamento → realizando_vistoria                    │
-└─────────────────────────────────────────────────────────────┘
-                              ↓ não
-┌─────────────────────────────────────────────────────────────┐
-│  4. Contrato assinado MAS pagamento pendente?               │
-│     - adesao_paga = false → realizando_pagamento    ← FIX   │
-└─────────────────────────────────────────────────────────────┘
-                              ↓ não (pagamento OK)
-┌─────────────────────────────────────────────────────────────┐
-│  5. Vistoria agendada OU associado pendente_vistoria?       │
-│     → vistoria_agendada                                     │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│  6. Verificar status_contratacao para etapas anteriores     │
+│  Documentos Anexados                                    [5] │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 🎥 Vídeo 360° do Veículo              [360°] NOVO   │   │
+│  │     Gravado pelo vistoriador                        │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 📄 Contrato Assinado             [Validado por IA]  │   │
+│  │     06/02/2026 às 20:29                             │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 📋 Laudo de Vistoria                                │   │
+│  │     06/02/2026 às 20:40                             │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 🆔 CNH                           [Validado por IA]  │   │
+│  │     06/02/2026 às 20:20                             │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 🚗 CRLV                                             │   │
+│  │     06/02/2026 às 20:25                             │   │
+│  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Arquivos Adicionais
-
-Além de `CotacoesTable.tsx`, a mesma função `getEtapaVenda` é duplicada em:
-
-- `src/components/cotacoes/CotacaoCard.tsx` (linhas ~135-200)
-- `src/components/cotacoes/CotacaoDetalhesModal.tsx` (usa via import ou duplicada)
-
-A correção deve ser aplicada em **todos** os locais para garantir consistência.
 
 ---
 
 ## Resultado Esperado
 
-| Campo | Marcus Vinicius |
-|-------|-----------------|
-| `contrato.status` | `assinado` |
-| `contrato.adesao_paga` | `false` |
-| `associado.status` | `pendente_vistoria` |
-| **Etapa exibida ANTES** | `Vistoria Agendada` ❌ |
-| **Etapa exibida DEPOIS** | `Realizando Pagamento` ✓ |
+| Antes | Depois |
+|-------|--------|
+| Vídeo 360° em card separado | Vídeo 360° na lista de documentos |
+| Precisa rolar para ver o vídeo | Vídeo destacado no topo da lista |
+| Visualização isolada | Análise consolidada de todos os anexos |
 
 ---
 
 ## Testes Recomendados
 
-1. Verificar o Marcus Vinicius (LTB4374) na lista de cotações
-2. Confirmar que mostra "Realizando Pagamento" em vez de "Vistoria Agendada"
-3. Após simular pagamento, confirmar transição para "Vistoria Agendada"
-4. Testar outros cenários:
-   - Contrato não assinado → deve mostrar etapa do status_contratacao
-   - Pagamento efetuado + vistoria agendada → deve mostrar "Vistoria Agendada"
-   - Associado ativo → deve mostrar "Associado Ativo"
+1. Acessar uma proposta pendente que tenha vídeo 360°
+2. Verificar que o vídeo aparece na lista de documentos com destaque roxo
+3. Clicar no item do vídeo e confirmar que abre o player
+4. Verificar que o badge "360°" aparece corretamente
+5. Testar em propostas SEM vídeo 360° para garantir que não quebra
+
+---
+
+## Detalhes Técnicos
+
+### Imports Necessários
+
+No `DocumentosAnexadosCard.tsx`:
+```typescript
+import { Video, Play } from 'lucide-react';
+```
+
+### Contagem de Documentos
+
+Ajustar a contagem no badge para incluir o vídeo 360°:
+```typescript
+<Badge variant="secondary" className="ml-2">
+  {documentos.length + (video360Url ? 1 : 0)}
+</Badge>
+```
