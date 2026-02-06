@@ -65,46 +65,78 @@ export default function InstaladorLogin() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      <div className="flex min-h-screen items-center justify-center bg-[#0f172a]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="absolute inset-0 animate-pulse rounded-2xl bg-blue-500/20 blur-xl" />
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25">
+              <Wrench className="h-10 w-10 text-white" />
+            </div>
+          </div>
+          <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-900">
+    <div className="flex min-h-screen flex-col bg-[#0f172a]">
+      {/* Gradient Background Effect */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-1/4 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
+      </div>
+
       {/* Header com Logo */}
-      <div className="flex flex-1 flex-col items-center justify-center px-4 pb-4 pt-12">
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-blue-600 shadow-lg">
-            <Wrench className="h-12 w-12 text-white" />
+      <div className="relative flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-16">
+        <div className="flex flex-col items-center gap-5">
+          {/* Logo Icon com Glow Effect */}
+          <div className="relative">
+            <div className="absolute inset-0 animate-pulse rounded-2xl bg-blue-500/30 blur-xl" />
+            <div className="relative flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-xl shadow-blue-500/30 transition-transform hover:scale-105">
+              <Wrench className="h-12 w-12 text-white drop-shadow-lg" />
+            </div>
           </div>
+          
+          {/* Branding */}
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-white">PRATIC</h1>
-            <p className="text-sm text-slate-400">App do Instalador</p>
+            <h1 className="text-3xl font-bold tracking-tight text-white">
+              PRATIC
+            </h1>
+            <p className="mt-1 text-sm font-medium text-blue-400">
+              App do Instalador
+            </p>
           </div>
         </div>
       </div>
 
       {/* Card do Formulário */}
-      <div className="w-full rounded-t-3xl bg-slate-800 px-6 pb-8 pt-6 shadow-2xl">
+      <div className="relative w-full rounded-t-[2rem] bg-[#1e293b] px-6 pb-10 pt-8 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)]">
+        {/* Handle Decorativo */}
+        <div className="absolute left-1/2 top-3 h-1 w-12 -translate-x-1/2 rounded-full bg-slate-600" />
+        
         <div className="mx-auto w-full max-w-sm">
           {/* Título */}
-          <div className="mb-6 text-center">
-            <h2 className="text-xl font-semibold text-white">Acesse sua conta</h2>
-            <p className="text-sm text-slate-400">Digite seu email e senha</p>
+          <div className="mb-8 text-center">
+            <h2 className="text-xl font-semibold text-white">
+              Acesse sua conta
+            </h2>
+            <p className="mt-1.5 text-sm text-slate-400">
+              Digite seu email e senha
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <Alert variant="destructive" className="border-red-800 bg-red-900/50">
+              <Alert variant="destructive" className="border-red-500/50 bg-red-500/10 text-red-400">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription className="ml-2">{error}</AlertDescription>
               </Alert>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-300">Email</Label>
+              <Label htmlFor="email" className="text-sm font-medium text-slate-300">
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -115,12 +147,15 @@ export default function InstaladorLogin() {
                   setError('');
                 }}
                 disabled={loading}
-                className="h-12 border-slate-600 bg-slate-700/50 text-white placeholder:text-slate-500"
+                className="h-12 rounded-xl border-slate-600/50 bg-slate-700/50 text-white transition-all placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                autoComplete="email"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-300">Senha</Label>
+              <Label htmlFor="password" className="text-sm font-medium text-slate-300">
+                Senha
+              </Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -132,13 +167,14 @@ export default function InstaladorLogin() {
                     setError('');
                   }}
                   disabled={loading}
-                  className="h-12 border-slate-600 bg-slate-700/50 pr-12 text-white placeholder:text-slate-500"
+                  className="h-12 rounded-xl border-slate-600/50 bg-slate-700/50 pr-12 text-white transition-all placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  autoComplete="current-password"
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="absolute right-1 top-1/2 h-10 w-10 -translate-y-1/2 text-slate-400 hover:bg-transparent hover:text-white"
+                  className="absolute right-1.5 top-1/2 h-9 w-9 -translate-y-1/2 rounded-lg text-slate-400 hover:bg-slate-600/50 hover:text-slate-300"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={loading}
                 >
@@ -153,7 +189,7 @@ export default function InstaladorLogin() {
 
             <Button
               type="submit"
-              className="h-12 w-full bg-blue-600 text-base font-semibold hover:bg-blue-700"
+              className="h-12 w-full rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-base font-semibold shadow-lg shadow-blue-500/25 transition-all hover:from-blue-600 hover:to-blue-700 hover:shadow-blue-500/40 active:scale-[0.98]"
               disabled={loading}
             >
               {loading ? (
@@ -168,7 +204,7 @@ export default function InstaladorLogin() {
           </form>
 
           {/* Versão */}
-          <p className="mt-6 text-center text-xs text-slate-500">
+          <p className="mt-8 text-center text-xs text-slate-500">
             Versão 1.0.0
           </p>
         </div>
