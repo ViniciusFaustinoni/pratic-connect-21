@@ -155,6 +155,25 @@ export function useRemoverBlacklist() {
 
       // Se solicitado reverter status do veículo (reset completo do processo)
       if (reverterVeiculo && blacklistItem?.veiculo_id) {
+        // FALLBACK: Buscar contrato e cotação pelo associado se não existirem na blacklist
+        let contratoId = blacklistItem.contrato_id;
+        let cotacaoId = blacklistItem.cotacao_id;
+
+        if (blacklistItem.associado_id && (!contratoId || !cotacaoId)) {
+          const { data: contratosData } = await supabase
+            .from('contratos')
+            .select('id, cotacao_id')
+            .eq('associado_id', blacklistItem.associado_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (contratosData) {
+            contratoId = contratoId || contratosData.id;
+            cotacaoId = cotacaoId || contratosData.cotacao_id;
+          }
+        }
+
         // 1. Reverter veículo para 'em_analise'
         const { error: veiculoError } = await supabase
           .from('veiculos')
@@ -185,7 +204,7 @@ export function useRemoverBlacklist() {
         }
 
         // 3. Resetar contrato para rascunho (nova assinatura e pagamento obrigatórios)
-        if (blacklistItem.contrato_id) {
+        if (contratoId) {
           const { error: contratoError } = await supabase
             .from('contratos')
             .update({
@@ -211,7 +230,7 @@ export function useRemoverBlacklist() {
               vistoria_concluida_em: null,
               vistoria_id: null,
             })
-            .eq('id', blacklistItem.contrato_id);
+            .eq('id', contratoId);
 
           if (contratoError) {
             console.error('Erro ao resetar contrato:', contratoError);
@@ -219,7 +238,7 @@ export function useRemoverBlacklist() {
         }
 
         // 4. Resetar cotação para aceita - aguardando vistoria
-        if (blacklistItem.cotacao_id) {
+        if (cotacaoId) {
           const { error: cotacaoError } = await supabase
             .from('cotacoes')
             .update({
@@ -228,14 +247,20 @@ export function useRemoverBlacklist() {
               vistoria_concluida_em: null,
               vistoria_id: null,
             })
-            .eq('id', blacklistItem.cotacao_id);
+            .eq('id', cotacaoId);
 
           if (cotacaoError) {
             console.error('Erro ao resetar cotação:', cotacaoError);
           }
         }
 
-        // 5. Excluir vistorias antigas do veículo (para nova vistoria limpa)
+        // 5. Limpar referência de vistoria_id na blacklist ANTES de excluir vistorias
+        await supabase
+          .from('blacklist_veiculos')
+          .update({ vistoria_id: null })
+          .eq('veiculo_id', blacklistItem.veiculo_id);
+
+        // 6. Excluir vistorias antigas do veículo (para nova vistoria limpa)
         const { error: vistoriaError } = await supabase
           .from('vistorias')
           .delete()
@@ -251,9 +276,13 @@ export function useRemoverBlacklist() {
       queryClient.invalidateQueries({ queryKey: ['blacklist-check'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['contratos'] });
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['propostas'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
       
       if (variables.reverterVeiculo) {
-        toast.success('Veículo removido da blacklist e status revertido');
+        toast.success('Veículo removido da blacklist e processo resetado para nova contratação');
       } else {
         toast.success('Veículo removido da blacklist');
       }
