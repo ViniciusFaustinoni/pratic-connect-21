@@ -314,7 +314,7 @@ export default function Auth() {
             alt="PRATIC Car" 
             className="h-20 mx-auto mb-4 hidden dark:block"
           />
-          <h1 className="text-2xl font-bold text-foreground">SGA PRATIC 2.0</h1>
+          
           <p className="text-muted-foreground mt-1">Sistema de Gestão de Associados</p>
         </div>
 
