@@ -1,187 +1,148 @@
 
-# Plano: Autorização de Diretores, Blacklist em Reprovação de Analista e Contato do Vistoriador
+# Plano: Adicionar Status "Recusado" para Associados
 
-## Resumo das Solicitações
+## Problema Identificado
 
-1. **Diretor pode remover veículos/associados da blacklist e reverter recusas**
-2. **Reprovação por analista de cadastro adiciona veículo à blacklist** (tipo `proposta_reprovada`)
-3. **Incluir contato do vistoriador na mensagem enviada ao associado** quando a tarefa é atribuída
+Na imagem enviada, o associado "Marcus Vinicius" aparece com status **"Suspenso"** mesmo tendo sido recusado durante o processo de vistoria ou análise de proposta. O status correto deveria ser **"Recusado"**.
 
----
+### Causa Raiz
 
-## Análise do Cenário Atual
+O valor `'recusado'` **NÃO existe** no sistema:
 
-### Item 1: Remoção da Blacklist
-- A página `Blacklist.tsx` (linhas 50-51) já verifica permissão:
-  ```typescript
-  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
-  const canManageBlacklist = isDiretor || isDesenvolvedor || isAdminMaster;
-  ```
-- O hook `useRemoverBlacklist` já permite soft delete (marca como `ativo: false`)
-- **OK** - Diretores já podem remover da blacklist
+| Componente | Status Atual |
+|------------|-------------|
+| Enum `status_associado` no banco | Não inclui `'recusado'` |
+| Tipo TypeScript `StatusAssociado` | Não inclui `'recusado'` |
+| Labels `STATUS_ASSOCIADO_LABELS` | Não inclui `'recusado'` |
+| Cores `statusColors` | Não inclui `'recusado'` |
 
-### Item 2: Reprovação por Analista de Cadastro
-- O hook `useReprovarProposta` (linhas 1864-1924) **NÃO** insere na blacklist
-- Apenas atualiza contrato para `cancelado` e associado para `reprovado`
-- **FALTANDO** - Precisa adicionar inserção na blacklist com `tipo_reprovacao: 'proposta_reprovada'`
-
-### Item 3: Contato do Vistoriador na Mensagem
-- Template `tecnico_em_rota` na função `notificar-cliente` (linhas 115-125):
-  ```
-  👤 *Técnico:* {tecnico_nome}
-  📍 *Endereço:* {endereco}
-  ```
-- **FALTANDO** - Não inclui telefone/WhatsApp do técnico para o cliente entrar em contato
+Os hooks estão usando valores incorretos:
+- `useRecusarVeiculoServico`: usa `'suspenso'`
+- `useReprovarProposta`: usa `'reprovado' as any` (contornando a verificação de tipo)
 
 ---
 
 ## Solução Proposta
 
-### 1. Diretores Revertem Recusas de Veículos
+### 1. Adicionar Valor ao Enum do Banco de Dados
 
-Adicionar funcionalidade para reverter status do veículo quando removido da blacklist:
+**Migração SQL:**
 
-**Arquivo:** `src/pages/diretoria/Blacklist.tsx`
+```sql
+-- Adicionar 'recusado' ao enum status_associado
+ALTER TYPE status_associado ADD VALUE IF NOT EXISTS 'recusado' AFTER 'bloqueado';
+```
 
-- Adicionar dialog de confirmação com opção de reverter status do veículo
-- Ao confirmar, além de desativar o registro da blacklist:
-  - Atualizar `veiculos.status` de `'recusado'` para `'em_analise'`
-  - Opcionalmente reativar o associado (de `'suspenso'` para `'pendente_vistoria'`)
+### 2. Atualizar Tipo TypeScript
 
-**Arquivo:** `src/hooks/useBlacklist.ts`
+**Arquivo:** `src/types/database.ts`
 
-- Atualizar o hook `useRemoverBlacklist` para aceitar opção de reverter:
-  ```typescript
-  mutationFn: async ({ id, reverterVeiculo }: { id: string; reverterVeiculo?: boolean })
-  ```
+```typescript
+export type StatusAssociado =
+  | 'em_analise'
+  | 'pendente_vistoria'
+  | 'aprovado'
+  | 'documentacao_pendente'
+  | 'aguardando_instalacao'
+  | 'ativo'
+  | 'inadimplente'
+  | 'suspenso'
+  | 'cancelado'
+  | 'bloqueado'
+  | 'recusado';  // NOVO
+```
 
-### 2. Reprovação de Analista Adiciona à Blacklist
+### 3. Atualizar Labels
+
+**Arquivo:** `src/types/database.ts`
+
+```typescript
+export const STATUS_ASSOCIADO_LABELS: Record<StatusAssociado, string> = {
+  em_analise: 'Em Análise',
+  pendente_vistoria: 'Pendente de Vistoria',
+  aprovado: 'Aprovado',
+  documentacao_pendente: 'Doc. Pendente',
+  aguardando_instalacao: 'Aguard. Instalação',
+  ativo: 'Ativo',
+  inadimplente: 'Inadimplente',
+  suspenso: 'Suspenso',
+  cancelado: 'Cancelado',
+  bloqueado: 'Bloqueado',
+  recusado: 'Recusado',  // NOVO
+};
+```
+
+### 4. Atualizar Cores na Página de Associados
+
+**Arquivo:** `src/pages/cadastro/Associados.tsx`
+
+```typescript
+const statusColors: Record<StatusAssociado, string> = {
+  em_analise: 'bg-yellow-100 text-yellow-800',
+  pendente_vistoria: 'bg-violet-100 text-violet-800',
+  aprovado: 'bg-blue-100 text-blue-800',
+  documentacao_pendente: 'bg-orange-100 text-orange-800',
+  aguardando_instalacao: 'bg-purple-100 text-purple-800',
+  ativo: 'bg-green-100 text-green-800',
+  inadimplente: 'bg-orange-500 text-white',
+  suspenso: 'bg-red-100 text-red-800',
+  cancelado: 'bg-muted text-muted-foreground',
+  bloqueado: 'bg-destructive text-destructive-foreground',
+  recusado: 'bg-red-500 text-white',  // NOVO - vermelho forte
+};
+```
+
+### 5. Atualizar Hook useRecusarVeiculoServico
+
+**Arquivo:** `src/hooks/useServicos.ts`
+
+Modificar linha 1156-1158:
+
+```typescript
+// Antes:
+await supabase
+  .from('associados')
+  .update({
+    status: 'suspenso',  // ERRADO
+    updated_at: agora,
+  })
+
+// Depois:
+await supabase
+  .from('associados')
+  .update({
+    status: 'recusado',  // CORRETO
+    updated_at: agora,
+  })
+```
+
+### 6. Atualizar Hook useReprovarProposta
 
 **Arquivo:** `src/hooks/usePropostasPendentes.ts`
 
-Modificar a função `useReprovarProposta` para:
+Modificar linha 1897:
 
 ```typescript
-mutationFn: async ({ contratoId, associadoId, motivo, justificativa }: ReprovarPropostaParams) => {
-  // ... código existente ...
-  
-  // NOVO: Buscar veículo do contrato
-  const { data: veiculoData } = await supabase
-    .from('veiculos')
-    .select('id, placa, chassi')
-    .eq('associado_id', associadoId)
-    .single();
+// Antes:
+await supabase
+  .from('associados')
+  .update({
+    status: 'reprovado' as any,  // HACK
+  })
 
-  // NOVO: Atualizar veículo para 'recusado'
-  if (veiculoData?.id) {
-    await supabase
-      .from('veiculos')
-      .update({ 
-        status: 'recusado',
-        motivo_recusa_veiculo: `${motivo}: ${justificativa}`,
-      })
-      .eq('id', veiculoData.id);
-  }
-
-  // NOVO: Adicionar veículo à blacklist
-  if (veiculoData?.placa) {
-    await supabase
-      .from('blacklist_veiculos')
-      .insert({
-        placa: veiculoData.placa.toUpperCase().replace(/[^A-Z0-9]/g, ''),
-        chassi: veiculoData.chassi,
-        motivo: motivo,
-        justificativa: justificativa,
-        tipo_reprovacao: 'proposta_reprovada',
-        veiculo_id: veiculoData.id,
-        associado_id: associadoId,
-        contrato_id: contratoId,
-        adicionado_por: profile?.id,
-        ativo: true,
-      });
-  }
-  
-  // ... resto do código ...
-}
+// Depois:
+await supabase
+  .from('associados')
+  .update({
+    status: 'recusado',  // CORRETO
+  })
 ```
 
-### 3. Incluir Contato do Vistoriador na Mensagem ao Cliente
+### 7. Atualizar Hook useRemoverBlacklist
 
-**Arquivo:** `supabase/functions/notificar-cliente/index.ts`
+**Arquivo:** `src/hooks/useBlacklist.ts`
 
-Atualizar o template `tecnico_em_rota`:
-
-```typescript
-tecnico_em_rota: {
-  titulo: '🚗 Técnico a Caminho!',
-  mensagem: `Olá {nome}! Nosso técnico está a caminho do seu endereço para realizar a {tipo_servico}.
-
-👤 *Técnico:* {tecnico_nome}
-📞 *Contato:* {tecnico_telefone}
-💬 *WhatsApp:* {tecnico_whatsapp_link}
-📍 *Endereço:* {endereco}
-⏰ *Período:* {periodo}
-
-Você pode entrar em contato com o técnico se precisar de mais informações!`,
-  emailTemplate: 'generico',
-},
-```
-
-**Arquivo:** `supabase/functions/atribuir-proxima-tarefa/index.ts`
-
-Na notificação do cliente (linhas 844-855), adicionar dados do técnico:
-
-```typescript
-// Buscar telefone do profissional para enviar ao cliente
-const { data: profissionalData } = await supabase
-  .from('profiles')
-  .select('nome, whatsapp, telefone')
-  .eq('id', profissionalId)
-  .single();
-
-const telefoneTecnico = profissionalData?.whatsapp || profissionalData?.telefone;
-const whatsappLinkTecnico = telefoneTecnico 
-  ? `https://wa.me/55${telefoneTecnico.replace(/\D/g, '')}` 
-  : 'Não disponível';
-
-await supabase.functions.invoke('notificar-cliente', {
-  body: {
-    tipo: 'tecnico_em_rota',
-    associado_id: servico.associado_id,
-    dados: {
-      tecnico_nome: tecnicoNome,
-      tecnico_telefone: telefoneTecnico || 'Não informado',
-      tecnico_whatsapp_link: whatsappLinkTecnico,
-      tipo_servico: tipoServicoLabel,
-      endereco: endereco,
-      periodo: periodoLabel,
-    },
-  },
-});
-```
-
-**Arquivo:** `supabase/functions/notificar-inicio-rota/index.ts`
-
-Mesma atualização na função de início de rota (linhas 125-141):
-
-```typescript
-const { error: notifyError } = await supabase.functions.invoke('notificar-cliente', {
-  body: {
-    tipo: 'tecnico_em_rota',
-    associado_id: associado.id,
-    dados: {
-      tecnico_nome: profissional.nome,
-      tecnico_telefone: profissional.whatsapp || profissional.telefone || 'Não informado',
-      tecnico_whatsapp_link: profissional.whatsapp || profissional.telefone 
-        ? `https://wa.me/55${(profissional.whatsapp || profissional.telefone).replace(/\D/g, '')}`
-        : 'Não disponível',
-      tipo_servico: tipoServico,
-      endereco: [servico.logradouro, servico.numero, servico.bairro, servico.cidade, servico.uf]
-        .filter(Boolean).join(', ')
-    }
-  }
-});
-```
+Quando o diretor reverter uma recusa, o status volta para `'pendente_vistoria'` (não para `'em_analise'` de `'suspenso'`).
 
 ---
 
@@ -189,93 +150,53 @@ const { error: notifyError } = await supabase.functions.invoke('notificar-client
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/usePropostasPendentes.ts` | Adicionar inserção na blacklist ao reprovar proposta |
-| `src/hooks/useBlacklist.ts` | Adicionar opção de reverter status do veículo |
-| `src/pages/diretoria/Blacklist.tsx` | Adicionar UI para reverter recusa ao remover |
-| `supabase/functions/notificar-cliente/index.ts` | Atualizar template com contato do técnico |
-| `supabase/functions/atribuir-proxima-tarefa/index.ts` | Enviar dados de contato do técnico |
-| `supabase/functions/notificar-inicio-rota/index.ts` | Enviar dados de contato do técnico |
+| **Migração SQL** | Adicionar `'recusado'` ao enum `status_associado` |
+| `src/types/database.ts` | Adicionar `'recusado'` ao tipo e labels |
+| `src/pages/cadastro/Associados.tsx` | Adicionar cor para status `'recusado'` |
+| `src/hooks/useServicos.ts` | Usar `'recusado'` em vez de `'suspenso'` |
+| `src/hooks/usePropostasPendentes.ts` | Usar `'recusado'` em vez de `'reprovado' as any` |
 
 ---
 
-## Fluxo de Reprovação pelo Analista (Novo)
+## Resultado Esperado
+
+| Tela | Antes | Depois |
+|------|-------|--------|
+| **Associados - Badge** | "Suspenso" (vermelho claro) | "Recusado" (vermelho forte) |
+| **Associados - Filtro** | Não aparece "Recusado" | Filtro "Recusado" disponível |
+| **Blacklist** | Associado com status "Suspenso" | Associado com status "Recusado" |
+
+---
+
+## Fluxo Completo Após Correção
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Analista de Cadastro reprova proposta                   │
+│  Recusa por Vistoriador ou Analista de Cadastro             │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  2. Contrato → status = 'cancelado'                         │
+│  Veículo → status = 'recusado'                              │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  3. Associado → status = 'reprovado'                        │
+│  Associado → status = 'recusado'                            │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  4. Veículo → status = 'recusado'                           │
+│  Blacklist → veículo inserido                               │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  5. Veículo inserido na blacklist                           │
-│     com tipo_reprovacao = 'proposta_reprovada'              │
+│  Na Página de Associados:                                   │
+│  Badge vermelho forte com texto "Recusado"                  │
 └─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Fluxo de Reversão pelo Diretor
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  1. Diretor acessa Blacklist e clica em "Remover"           │
-└─────────────────────────────────┬───────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│  2. Dialog pergunta se deseja reverter status do veículo    │
-└─────────────────────────────────┬───────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│  3. Se sim: Veículo → status = 'em_analise'                 │
-│             Associado → status = 'pendente_vistoria'        │
-└─────────────────────────────────┬───────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│  4. Blacklist → ativo = false                               │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Exemplo de Mensagem para o Cliente (Atualizada)
-
-```
-🚗 Técnico a Caminho!
-
-Olá João! Nosso técnico está a caminho do seu endereço para realizar a vistoria.
-
-👤 Técnico: Carlos Silva
-📞 Contato: (11) 99999-9999
-💬 WhatsApp: https://wa.me/5511999999999
-📍 Endereço: Rua das Flores, 123, Centro, São Paulo
-⏰ Período: Manhã (08:00-12:00)
-
-Você pode entrar em contato com o técnico se precisar de mais informações!
 ```
 
 ---
 
 ## Testes Recomendados
 
-1. Reprovar uma proposta como analista de cadastro e verificar se:
-   - Veículo aparece na Blacklist com tipo "Proposta Reprovada"
-   - Status do veículo é "recusado"
-
-2. Como diretor, remover um veículo da blacklist e reverter:
-   - Status do veículo volta para "em_analise"
-   - Associado volta para status pendente
-
-3. Atribuir uma tarefa a um vistoriador e verificar se:
-   - Cliente recebe mensagem com nome E contato do técnico
-   - Link de WhatsApp do técnico está funcional
+1. Verificar se o associado LTB4J74 agora aparece com status "Recusado"
+2. Verificar se o filtro "Recusado" aparece no dropdown de status
+3. Recusar uma nova proposta/vistoria e confirmar que o associado fica com status "Recusado"
