@@ -72,6 +72,7 @@ const etapaVendaConfig: Record<string, { label: string; color: string; bgColor: 
   instalacao_agendada: { label: 'Instalação Agendada', color: 'text-purple-600 dark:text-purple-400', bgColor: 'bg-purple-500/20' },
   realizando_vistoria: { label: 'Realizando Vistoria', color: 'text-cyan-600 dark:text-cyan-400', bgColor: 'bg-cyan-500/20' },
   vistoria_realizada: { label: 'Vistoria Realizada', color: 'text-teal-600 dark:text-teal-400', bgColor: 'bg-teal-500/20' },
+  em_analise: { label: 'Em Análise', color: 'text-yellow-600 dark:text-yellow-400', bgColor: 'bg-yellow-500/20' },
   associado_ativo: { label: 'Associado Ativo', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-500/20' },
 };
 
