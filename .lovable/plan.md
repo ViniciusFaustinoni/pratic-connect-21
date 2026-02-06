@@ -1,73 +1,122 @@
 
 
-# Plano: Resetar Processo de Contratação ao Reverter Recusa
+# Plano: Corrigir Reset Completo ao Reverter Recusa
 
-## Contexto
+## Problema Identificado
 
-Quando um diretor remove um veículo da blacklist e reverte a recusa, o associado precisa **começar do zero** o processo de contratação. Isso é necessário porque:
+Ao reverter uma recusa da blacklist, o contrato e a cotação **não estão sendo resetados** porque:
 
-- Podem ter ocorrido mudanças nos documentos
-- O veículo pode ter sofrido sinistros durante o período
-- Condições do plano podem ter sido alteradas
-- Nova assinatura de contrato é obrigatória para validade jurídica
+1. **Bug na inserção**: O hook `useRecusarVeiculoServico` (linhas 1137-1151) **não passa** `contrato_id` e `cotacao_id` ao inserir na blacklist, mesmo tendo esses valores disponíveis
+2. **Bug na reversão**: O hook `useRemoverBlacklist` depende exclusivamente dos campos `contrato_id` e `cotacao_id` da blacklist, que estão null
 
-## Situação Atual
+### Estado Atual do Marcus Vinicius (LTB4J74)
 
-O hook `useRemoverBlacklist` atualmente:
-1. Desativa a entrada na blacklist
-2. Reverte o veículo para `'em_analise'`
-3. Reverte o associado para `'pendente_vistoria'`
+| Entidade | Status Atual | Status Esperado |
+|----------|-------------|-----------------|
+| Associado | `pendente_vistoria` | OK |
+| Veículo | `em_analise` | OK |
+| Contrato | `cancelado` | `rascunho` |
+| Cotação | `recusada` + `veiculo_recusado` | `aceita` + `aguardando_vistoria` |
 
-**Problema:** Não reseta o contrato nem a cotação, deixando registros antigos que podem causar confusão.
+---
 
 ## Solução Proposta
 
-### O que precisa ser resetado
+### 1. Corrigir inserção na blacklist
 
-| Entidade | Status Atual | Status Novo | Campos a Limpar |
-|----------|-------------|-------------|-----------------|
-| Blacklist | `ativo: true` | `ativo: false` | - |
-| Veículo | `recusado` | `em_analise` | `motivo_recusa_veiculo` |
-| Associado | `recusado/suspenso` | `pendente_vistoria` | `bloqueado`, `motivo_bloqueio` |
-| Contrato | `cancelado` | `rascunho` | Dados de assinatura e pagamento |
-| Cotação | `recusada` | `aceita` | `status_contratacao` |
+**Arquivo:** `src/hooks/useServicos.ts`
 
-### Campos do Contrato a Resetar
+Na função `useRecusarVeiculoServico`, adicionar `contrato_id` e `cotacao_id` ao inserir na blacklist:
 
 ```typescript
-{
-  status: 'rascunho',
-  // Limpar dados do Autentique (assinatura)
-  autentique_documento_id: null,
-  autentique_url: null,
-  autentique_status: null,
-  pdf_url: null,
-  pdf_assinado_url: null,
-  data_envio: null,
-  data_visualizacao: null,
-  data_assinatura: null,
-  // Limpar dados de pagamento
-  adesao_paga: false,
-  adesao_paga_em: null,
-  adesao_cobranca_id: null,
-  // Limpar dados de aprovação
-  aprovado_por: null,
-  aprovado_em: null,
-  observacao_aprovacao: null,
-  // Limpar dados de vistoria
-  vistoria_concluida_em: null,
-  vistoria_id: null,
+// Linha 1137-1151 - Adicionar contrato_id e cotacao_id
+await supabase
+  .from('blacklist_veiculos')
+  .insert({
+    placa: veiculoData.placa?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '',
+    chassi: veiculoData.chassi,
+    motivo: data.motivo,
+    justificativa: `Veículo recusado pelo técnico: ${data.motivo}`,
+    tipo_reprovacao: 'vistoria_reprovada',
+    veiculo_id: data.veiculoId,
+    associado_id: data.associadoId,
+    contrato_id: contratoId,   // ADICIONAR
+    cotacao_id: cotacaoId,     // ADICIONAR
+    adicionado_por: profile?.id,
+    vistoria_id: vistoriaId,
+    ativo: true,
+  });
+```
+
+### 2. Corrigir reversão para buscar dados faltantes
+
+**Arquivo:** `src/hooks/useBlacklist.ts`
+
+Modificar `useRemoverBlacklist` para buscar `contrato_id` e `cotacao_id` diretamente do associado quando não existirem na blacklist:
+
+```typescript
+// Se solicitado reverter status do veículo (reset completo do processo)
+if (reverterVeiculo && blacklistItem?.veiculo_id) {
+  // NOVO: Buscar contrato e cotação pelo associado se não existirem na blacklist
+  let contratoId = blacklistItem.contrato_id;
+  let cotacaoId = blacklistItem.cotacao_id;
+
+  if (blacklistItem.associado_id && (!contratoId || !cotacaoId)) {
+    const { data: contratosData } = await supabase
+      .from('contratos')
+      .select('id, cotacao_id')
+      .eq('associado_id', blacklistItem.associado_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (contratosData) {
+      contratoId = contratoId || contratosData.id;
+      cotacaoId = cotacaoId || contratosData.cotacao_id;
+    }
+  }
+
+  // 1. Reverter veículo para 'em_analise'
+  // ... código existente ...
+
+  // 3. Resetar contrato para rascunho (usar contratoId da busca)
+  if (contratoId) {
+    // ... código existente usando contratoId ...
+  }
+
+  // 4. Resetar cotação para aceita (usar cotacaoId da busca)
+  if (cotacaoId) {
+    // ... código existente usando cotacaoId ...
+  }
+
+  // 5. Limpar referência de vistoria_id na blacklist ANTES de excluir vistorias
+  await supabase
+    .from('blacklist_veiculos')
+    .update({ vistoria_id: null })
+    .eq('veiculo_id', blacklistItem.veiculo_id);
+
+  // 6. Excluir vistorias antigas do veículo
+  // ... código existente ...
 }
 ```
 
-### Campos da Cotação a Resetar
+### 3. Invalidar queries adicionais
+
+**Arquivo:** `src/hooks/useBlacklist.ts`
+
+Adicionar invalidação de queries para contratos e cotações:
 
 ```typescript
-{
-  status: 'aceita',
-  status_contratacao: 'aguardando_vistoria',
-  vistoria_concluida_em: null,
-  vistoria_id: null,
+onSuccess: (_, variables) => {
+  queryClient.invalidateQueries({ queryKey: ['blacklist-veiculos'] });
+  queryClient.invalidateQueries({ queryKey: ['blacklist-check'] });
+  queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+  queryClient.invalidateQueries({ queryKey: ['associados'] });
+  queryClient.invalidateQueries({ queryKey: ['contratos'] });    // ADICIONAR
+  queryClient.invalidateQueries({ queryKey: ['cotacoes'] });     // ADICIONAR
+  queryClient.invalidateQueries({ queryKey: ['propostas'] });    // ADICIONAR
+  
+  // ... resto do código ...
 }
 ```
 
@@ -75,114 +124,16 @@ O hook `useRemoverBlacklist` atualmente:
 
 ## Arquivos a Modificar
 
-### 1. `src/hooks/useBlacklist.ts`
-
-Expandir a lógica de reversão para incluir reset do contrato e cotação:
-
-```typescript
-// Se solicitado reverter status do veículo
-if (reverterVeiculo && blacklistItem?.veiculo_id) {
-  // 1. Reverter veículo para 'em_analise'
-  await supabase
-    .from('veiculos')
-    .update({ 
-      status: 'em_analise',
-      motivo_recusa_veiculo: null,
-    })
-    .eq('id', blacklistItem.veiculo_id);
-
-  // 2. Reverter associado para 'pendente_vistoria'
-  if (blacklistItem.associado_id) {
-    await supabase
-      .from('associados')
-      .update({ 
-        status: 'pendente_vistoria',
-        bloqueado: false,
-        motivo_bloqueio: null,
-      })
-      .eq('id', blacklistItem.associado_id);
-  }
-
-  // 3. NOVO: Resetar contrato para rascunho (precisa nova assinatura e pagamento)
-  if (blacklistItem.contrato_id) {
-    await supabase
-      .from('contratos')
-      .update({
-        status: 'rascunho',
-        // Limpar assinatura digital
-        autentique_documento_id: null,
-        autentique_url: null,
-        autentique_status: null,
-        pdf_url: null,
-        pdf_assinado_url: null,
-        data_envio: null,
-        data_visualizacao: null,
-        data_assinatura: null,
-        // Limpar pagamento
-        adesao_paga: false,
-        adesao_paga_em: null,
-        adesao_cobranca_id: null,
-        // Limpar aprovação
-        aprovado_por: null,
-        aprovado_em: null,
-        observacao_aprovacao: null,
-        // Limpar vistoria
-        vistoria_concluida_em: null,
-        vistoria_id: null,
-      })
-      .eq('id', blacklistItem.contrato_id);
-  }
-
-  // 4. NOVO: Resetar cotação para aceita
-  if (blacklistItem.cotacao_id) {
-    await supabase
-      .from('cotacoes')
-      .update({
-        status: 'aceita',
-        status_contratacao: 'aguardando_vistoria',
-        vistoria_concluida_em: null,
-        vistoria_id: null,
-      })
-      .eq('id', blacklistItem.cotacao_id);
-  }
-
-  // 5. NOVO: Excluir vistorias antigas do veículo (para nova vistoria limpa)
-  await supabase
-    .from('vistorias')
-    .delete()
-    .eq('veiculo_id', blacklistItem.veiculo_id);
-}
-```
-
-### 2. `src/hooks/useBlacklist.ts` - Buscar mais dados
-
-Atualizar a query inicial para buscar também `contrato_id` e `cotacao_id`:
-
-```typescript
-const { data: blacklistItem, error: fetchError } = await supabase
-  .from('blacklist_veiculos')
-  .select('veiculo_id, associado_id, contrato_id, cotacao_id')  // Adicionar campos
-  .eq('id', id)
-  .single();
-```
-
-### 3. `src/pages/diretoria/Blacklist.tsx` - Atualizar UI
-
-Atualizar a descrição no dialog para informar sobre o reset completo:
-
-```tsx
-<label htmlFor="reverter-status" className="cursor-pointer">
-  <p className="text-sm font-medium">Reverter recusa e permitir nova contratação</p>
-  <p className="text-xs text-muted-foreground mt-1">
-    O associado precisará <strong>assinar novamente o contrato</strong> e <strong>efetuar novo pagamento</strong>. 
-    O contrato atual será resetado para rascunho e uma nova vistoria será necessária.
-  </p>
-</label>
-```
+| Arquivo | Ação |
+|---------|------|
+| `src/hooks/useServicos.ts` | Adicionar `contrato_id` e `cotacao_id` ao inserir na blacklist |
+| `src/hooks/useBlacklist.ts` | Buscar contrato/cotação pelo associado quando não existir na blacklist |
+| `src/hooks/useBlacklist.ts` | Limpar `vistoria_id` antes de excluir vistorias |
+| `src/hooks/useBlacklist.ts` | Invalidar queries de contratos e cotações |
 
 ---
 
-## Fluxo Após Reversão
+## Fluxo Corrigido de Reversão
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -190,36 +141,34 @@ Atualizar a descrição no dialog para informar sobre o reset completo:
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  2. Blacklist → ativo = false                               │
+│  2. Blacklist tem contrato_id/cotacao_id null?              │
+│     Sim → Buscar pela tabela contratos usando associado_id  │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  3. Veículo → status = 'em_analise'                         │
+│  3. Blacklist → ativo = false, vistoria_id = null           │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  4. Associado → status = 'pendente_vistoria'                │
+│  4. Veículo → status = 'em_analise'                         │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  5. Contrato → status = 'rascunho'                          │
-│     (assinatura e pagamento resetados)                      │
+│  5. Associado → status = 'pendente_vistoria'                │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  6. Cotação → status = 'aceita'                             │
+│  6. Contrato → status = 'rascunho' (encontrado pela busca)  │
+│     Assinatura e pagamento resetados                        │
+└─────────────────────────────────┬───────────────────────────┘
+                                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  7. Cotação → status = 'aceita'                             │
 │              status_contratacao = 'aguardando_vistoria'     │
 └─────────────────────────────────┬───────────────────────────┘
                                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  7. Vistorias antigas excluídas                             │
-└─────────────────────────────────┬───────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Resultado: Associado pode recomeçar o processo             │
-│  - Nova vistoria será agendada                              │
-│  - Novo contrato será gerado para assinatura                │
-│  - Novo pagamento será necessário                           │
+│  8. Vistorias antigas excluídas                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -227,22 +176,21 @@ Atualizar a descrição no dialog para informar sobre o reset completo:
 
 ## Resultado Esperado
 
-| Item | Antes | Depois da Reversão |
-|------|-------|-------------------|
-| Blacklist | Ativo | Inativo (histórico) |
-| Veículo | Recusado | Em Análise |
-| Associado | Recusado/Suspenso | Pendente de Vistoria |
-| Contrato | Cancelado | Rascunho (sem assinatura/pagamento) |
-| Cotação | Recusada | Aceita - Aguardando Vistoria |
-| Vistorias | Reprovada | Excluídas (nova será criada) |
+Após a correção, ao reverter a recusa do associado "Marcus Vinicius":
+
+| Entidade | Antes | Depois |
+|----------|-------|--------|
+| Blacklist | Inativo | Inativo (mantém histórico) |
+| Veículo | Em Análise | Em Análise |
+| Associado | Pendente Vistoria | Pendente Vistoria |
+| **Contrato** | **Cancelado** | **Rascunho** |
+| **Cotação** | **Recusada + veiculo_recusado** | **Aceita + aguardando_vistoria** |
 
 ---
 
-## Testes Recomendados
+## Correção Imediata para Marcus Vinicius
 
-1. Reverter a recusa do associado "Marcus Vinicius" (LTB4J74)
-2. Verificar se o contrato volta para status "Rascunho"
-3. Verificar se a cotação volta para status "Aceita" com etapa "Aguardando Vistoria"
-4. Verificar se o associado aparece na lista de pendentes de vistoria
-5. Verificar se é possível agendar nova vistoria para o veículo
+Após implementar as correções, será necessário **reverter novamente** o status do Marcus Vinicius, pois os registros atuais estão inconsistentes.
+
+Alternativamente, posso incluir um SQL de correção para aplicar manualmente no banco.
 
