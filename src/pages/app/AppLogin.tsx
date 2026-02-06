@@ -26,7 +26,7 @@ const ERROR_MESSAGES: Record<LoginError, string> = {
   unknown_error: 'Erro inesperado. Tente novamente.'
 };
 const STORAGE_KEY_REMEMBER_EMAIL = 'pratic_remember_email';
-const WHATSAPP_SUPORTE = 'https://wa.me/5511999999999?text=Olá, preciso de ajuda para acessar o app PRATIC';
+const WHATSAPP_SUPORTE = 'https://wa.me/5521970048549?text=Olá, preciso de ajuda para acessar o app PRATIC';
 
 // ============================================
 // UTILITÁRIOS
