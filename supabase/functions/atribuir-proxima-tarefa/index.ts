@@ -818,14 +818,22 @@ serve(async (req) => {
         // 9. NOTIFICAR CLIENTE via WhatsApp que técnico está a caminho
         if (servico.associado_id) {
           try {
-            // Buscar nome do técnico
+            // Buscar dados do técnico (nome + telefone)
             const { data: profissionalData } = await supabase
               .from('profiles')
-              .select('nome')
+              .select('nome, whatsapp, telefone')
               .eq('id', profissionalId)
               .single();
             
             const tecnicoNome = profissionalData?.nome || 'Técnico PRATIC';
+            const tecnicoTelefone = profissionalData?.whatsapp || profissionalData?.telefone;
+            const tecnicoTelefoneFormatado = tecnicoTelefone 
+              ? tecnicoTelefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
+              : 'Não informado';
+            const tecnicoWhatsappLink = tecnicoTelefone 
+              ? `https://wa.me/55${tecnicoTelefone.replace(/\D/g, '')}`
+              : 'Não disponível';
+            
             const tipoServicoLabel = servico.tipo === 'instalacao' 
               ? 'instalação do rastreador' 
               : 'vistoria';
@@ -847,6 +855,8 @@ serve(async (req) => {
                 associado_id: servico.associado_id,
                 dados: {
                   tecnico_nome: tecnicoNome,
+                  tecnico_telefone: tecnicoTelefoneFormatado,
+                  tecnico_whatsapp_link: tecnicoWhatsappLink,
                   tipo_servico: tipoServicoLabel,
                   endereco: endereco,
                   periodo: periodoLabel,
