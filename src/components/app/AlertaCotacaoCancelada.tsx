@@ -32,7 +32,7 @@ export function AlertaCotacaoCancelada({
     const mensagem = encodeURIComponent(
       'Olá! Gostaria de informações sobre minha cotação que foi cancelada por falta de pagamento.'
     );
-    window.open(`https://wa.me/5511999999999?text=${mensagem}`, '_blank');
+    window.open(`https://wa.me/5521970048549?text=${mensagem}`, '_blank');
   };
 
   if (variante === 'card') {

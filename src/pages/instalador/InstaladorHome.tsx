@@ -50,7 +50,7 @@ export default function InstaladorHome() {
   };
 
   const ligarCoordenador = () => {
-    window.open('tel:+5511999999999', '_self');
+    window.open('tel:+5521970048549', '_self');
   };
 
   const dataFormatada = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
@@ -167,9 +167,9 @@ export default function InstaladorHome() {
             
             <Card 
               className="border-slate-700 bg-slate-800 hover:bg-slate-750 cursor-pointer transition-colors"
-              onClick={() => {
-                window.open('https://wa.me/5511999999999?text=Olá, preciso de suporte.', '_blank');
-              }}
+               onClick={() => {
+                 window.open('https://wa.me/5521970048549?text=Olá, preciso de suporte.', '_blank');
+               }}
             >
               <CardContent className="flex flex-col items-center justify-center p-4 gap-2">
                 <div className="w-10 h-10 rounded-full bg-emerald-600/20 flex items-center justify-center">

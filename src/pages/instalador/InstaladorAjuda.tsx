@@ -29,11 +29,11 @@ export default function InstaladorAjuda() {
   const [openFaq, setOpenFaq] = useState<string | null>(null);
 
   const ligarCoordenador = () => {
-    window.open('tel:+5511999999999', '_self');
+    window.open('tel:+5521970048549', '_self');
   };
 
   const abrirWhatsApp = () => {
-    window.open('https://wa.me/5511999999999?text=Olá, preciso de ajuda no app do instalador.', '_blank');
+    window.open('https://wa.me/5521970048549?text=Olá, preciso de ajuda no app do instalador.', '_blank');
   };
 
   return (

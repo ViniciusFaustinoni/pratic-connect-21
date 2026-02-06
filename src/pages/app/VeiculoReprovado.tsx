@@ -8,7 +8,7 @@ export default function VeiculoReprovado() {
 
   const handleWhatsApp = () => {
     // Número de suporte (ajustar conforme necessário)
-    window.open('https://wa.me/5511999999999?text=Olá, preciso de ajuda sobre a reprovação do meu veículo.', '_blank');
+    window.open('https://wa.me/5521970048549?text=Olá, preciso de ajuda sobre a reprovação do meu veículo.', '_blank');
   };
 
   return (
