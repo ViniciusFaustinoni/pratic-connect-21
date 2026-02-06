@@ -1,163 +1,91 @@
 
 
-## Plano: Adicionar Exibição de Dados do CRLV no Card de Documentos
+## Investigação: Erro Non-2xx do CRLV na Edge Function document-ocr
 
-### Diagnóstico
+### Diagnóstico Realizado
 
-| Item | Status | Detalhes |
-|------|--------|----------|
-| OCR extrai cor do CRLV | ✅ Implementado | Campo `dados.cor` |
-| OCR extrai combustível | ✅ Implementado | Campo `dados.combustivel` |
-| OCR extrai motor | ✅ Implementado | Campo `dados.motor` |
-| Exibição no card | ❌ Faltando | Apenas CNH tem exibição de dados extraídos |
+A investigação revelou que:
 
-### Alterações Necessárias
+1. **OCR está funcionando corretamente**: Consulta ao banco de dados mostrou 5 registros de CRLV com `ocr_resultado` válido e completo
+   - Todos com `sucesso: true`
+   - Todos com `tipo_detectado: crlv`
+   - Dados extraídos corretamente: cor, combustível, motor, placa, renavam, chassi
+   - Confiança entre 0.99 e 1.0
 
-#### 1. Expandir interface de tipos para incluir dados do CRLV
+2. **Não há logs de erro recentes** na edge function `document-ocr`
+   - Tentativas de buscar logs diretos retornaram vazio
+   - Logs analíticos também vazios
 
-Modificar a interface `CnhDadosOCR` para suportar também os campos do CRLV:
+3. **A função está respondendo com 2xx**: Os documentos CRLV no banco têm `ocr_resultado` preenchido, o que indica que a edge function processou com sucesso
 
-```typescript
-interface DocumentoDadosOCR {
-  // Campos da CNH
-  nome?: string;
-  numero_registro?: string;
-  rg?: string;
-  validade?: string;
-  // Campos do CRLV
-  cor?: string;
-  combustivel?: string;
-  motor?: string;
-  placa?: string;
-  renavam?: string;
-  chassi?: string;
+### Possíveis Cenários
+
+**Cenário 1: Erro intermitente/específico**
+- O erro pode estar ocorrendo em um cenário específico não reproduzido nos últimos uploads
+- Pode estar relacionado ao tipo de arquivo (PDF vs JPEG)
+- Pode estar relacionado à qualidade/tamanho da imagem
+
+**Cenário 2: Erro na chamada (não na edge function)**
+- O erro pode estar no cliente (UnifiedDocumentUploader ou CotacaoPublicaCompleta)
+- Validação de URL bloqueando URLs de storage (linhas 278-293 da document-ocr)
+- Timeout na requisição
+
+**Cenário 3: Erro de autenticação**
+- Token JWT expirado ou inválido na requisição pública
+- URL de storage não reconhecida como válida
+
+### Investigação Recomendada
+
+Para diagnosticar precisamente o erro non-2xx, é necessário:
+
+1. **Reproduzir o erro**: Fazer upload de um CRLV na interface pública ou interna e monitorar:
+   - Request/response no DevTools
+   - Logs do browser console
+   - Status code exato retornado
+   - Response body com mensagem de erro
+
+2. **Verificar os logs em tempo real**: 
+   - Usar `supabase--edge-function-logs` imediatamente após o erro ocorrer
+   - Verificar status code específico (429, 402, 403, 500, etc.)
+
+3. **Validar cenários**:
+   - Upload de PDF vs JPEG
+   - URLs de storage vs base64
+   - Com autenticação vs público
+   - Com dados esperados (cpfEsperado, nomeEsperado) vs sem
+
+### Ação Necessária
+
+Para avançar, você poderia:
+
+**Opção A: Reproduzir e Monitorar** (recomendado)
+- Fazer upload de um CRLV na cotação pública
+- Capturar exatamente qual é o erro e status code
+- Compartilhar os logs ou screenshot do erro
+
+**Opção B: Análise de Code Path**
+- Descrever o fluxo específico onde o erro ocorre
+- Se é ao salvar cotação, processar contrato, ou visualizar documento
+
+**Opção C: Implementar Melhorias Defensivas**
+- Adicionar retry logic na chamada da edge function
+- Melhorar tratamento de erros com feedback mais específico
+- Adicionar logging mais detalhado
+
+### Dados Importantes Encontrados
+
+```json
+{
+  "crlv_recente": {
+    "placa": "LTB4J74",
+    "renavam": "00543591115",
+    "chassi": "9BRBD48E6E2617010",
+    "combustivel": "FLEX",
+    "cor": "AZUL",
+    "confianca": 0.99
+  }
 }
 ```
 
-#### 2. Adicionar exibição de dados do CRLV no card de listagem
-
-Após o bloco que exibe dados da CNH (linha 177), adicionar:
-
-```typescript
-{/* Dados extraídos do CRLV */}
-{doc.tipo === 'crlv' && doc.ocr_resultado?.dados && (
-  <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
-    {doc.ocr_resultado.dados.cor && (
-      <p className="text-xs text-muted-foreground">
-        <span className="font-semibold">Cor:</span> {doc.ocr_resultado.dados.cor}
-      </p>
-    )}
-    {doc.ocr_resultado.dados.combustivel && (
-      <p className="text-xs text-muted-foreground">
-        <span className="font-semibold">Combustível:</span> {doc.ocr_resultado.dados.combustivel}
-      </p>
-    )}
-    {doc.ocr_resultado.dados.motor && (
-      <p className="text-xs text-muted-foreground">
-        <span className="font-semibold">Motor:</span> {doc.ocr_resultado.dados.motor}
-      </p>
-    )}
-  </div>
-)}
-```
-
-#### 3. Adicionar exibição de dados do CRLV no Dialog
-
-Após o bloco que exibe dados da CNH no Dialog (linha 244), adicionar:
-
-```typescript
-{/* Dados extraídos do CRLV no Dialog */}
-{selectedDoc.tipo === 'crlv' && selectedDoc.ocr_resultado?.dados && (
-  <div className="w-full bg-info/10 border border-info/30 rounded-lg p-4 mb-4 space-y-2">
-    <p className="text-sm font-semibold text-info">Dados Extraídos:</p>
-    {selectedDoc.ocr_resultado.dados.placa && (
-      <div className="flex justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Placa:</span>
-        <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.placa}</span>
-      </div>
-    )}
-    {selectedDoc.ocr_resultado.dados.renavam && (
-      <div className="flex justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Renavam:</span>
-        <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.renavam}</span>
-      </div>
-    )}
-    {selectedDoc.ocr_resultado.dados.chassi && (
-      <div className="flex justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Chassi:</span>
-        <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.chassi}</span>
-      </div>
-    )}
-    {selectedDoc.ocr_resultado.dados.cor && (
-      <div className="flex justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Cor:</span>
-        <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.cor}</span>
-      </div>
-    )}
-    {selectedDoc.ocr_resultado.dados.combustivel && (
-      <div className="flex justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Combustível:</span>
-        <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.combustivel}</span>
-      </div>
-    )}
-    {selectedDoc.ocr_resultado.dados.motor && (
-      <div className="flex justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Motor:</span>
-        <span className="text-xs text-foreground">{selectedDoc.ocr_resultado.dados.motor}</span>
-      </div>
-    )}
-  </div>
-)}
-```
-
----
-
-### Resultado Visual Esperado
-
-**Card de Listagem - CRLV:**
-```
-┌─────────────────────────────────────┐
-│ 🚗 CRLV                             │
-│ 15/02/2025 às 10:30                 │
-│ ─────────────────────────────────   │
-│ Cor: PRATA                          │
-│ Combustível: FLEX                   │
-│ Motor: M155966                      │
-│ [Validado por IA] [👁️ Visualizar]  │
-└─────────────────────────────────────┘
-```
-
-**Dialog ao clicar no CRLV:**
-```
-┌────────────────────────────────────────┐
-│ CRLV                              ✕   │
-├────────────────────────────────────────┤
-│ 📋 Dados Extraídos:                   │
-│ Placa: ABC1D23                        │
-│ Renavam: 12345678901                  │
-│ Chassi: 9BWZZZ377VT123456            │
-│ Cor: PRATA                            │
-│ Combustível: FLEX                     │
-│ Motor: M155966                        │
-│                                        │
-│ [Imagem do CRLV]                      │
-└────────────────────────────────────────┘
-```
-
----
-
-### Arquivo a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/cadastro/DocumentosAnexadosCard.tsx` | Expandir interface e adicionar exibição de dados do CRLV |
-
----
-
-### Sequência de Implementação
-
-1. Renomear interface `CnhDadosOCR` para `DocumentoDadosOCR` e adicionar campos do CRLV
-2. Adicionar bloco de exibição de dados do CRLV no card de listagem
-3. Adicionar bloco de exibição de dados do CRLV no Dialog de visualização
-4. Testar com CRLVs reais no sistema
+Todos os CRLVs testados extraíram dados com sucesso, indicando que a edge function está operacional.
 
