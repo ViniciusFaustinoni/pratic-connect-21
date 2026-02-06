@@ -30,12 +30,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server, UserPlus, X, Trash2 } from 'lucide-react';
+import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server, UserPlus, X, Trash2, Wrench } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AtribuirPortadorDialog } from '@/components/monitoramento/estoque/AtribuirPortadorDialog';
 import { AtribuirPortadorLoteDialog } from '@/components/monitoramento/estoque/AtribuirPortadorLoteDialog';
+import { EnviarManutencaoModal } from '@/components/monitoramento/estoque/EnviarManutencaoModal';
 import {
   useRastreadores,
   useRastreadoresMetricas,
@@ -214,6 +215,13 @@ function RastreadoresContent({
   } | null>(null);
   const [dialogExcluirAberto, setDialogExcluirAberto] = useState(false);
   const [rastreadorParaExcluir, setRastreadorParaExcluir] = useState<{ id: string; codigo: string } | null>(null);
+  const [dialogManutencao, setDialogManutencao] = useState<{
+    id: string;
+    codigo: string;
+    imei: string | null;
+    status: 'estoque' | 'instalado' | 'manutencao' | 'baixado';
+    veiculo: { placa: string; modelo: string | null } | null;
+  } | null>(null);
 
   const deleteRastreadorMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -519,6 +527,26 @@ function RastreadoresContent({
                                 Ver Estoque
                               </DropdownMenuItem>
                             )}
+                            {rastreador.status === 'instalado' && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => setDialogManutencao({
+                                    id: rastreador.id,
+                                    codigo: rastreador.codigo,
+                                    imei: rastreador.imei,
+                                    status: rastreador.status as 'estoque' | 'instalado' | 'manutencao' | 'baixado',
+                                    veiculo: rastreador.veiculos ? {
+                                      placa: rastreador.veiculos.placa,
+                                      modelo: rastreador.veiculos.modelo
+                                    } : null,
+                                  })}
+                                >
+                                  <Wrench className="mr-2 h-4 w-4" />
+                                  Enviar para Manutenção
+                                </DropdownMenuItem>
+                              </>
+                            )}
                             {isDiretor && (
                               <>
                                 <DropdownMenuSeparator />
@@ -606,6 +634,12 @@ function RastreadoresContent({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <EnviarManutencaoModal
+        open={!!dialogManutencao}
+        onOpenChange={() => setDialogManutencao(null)}
+        rastreador={dialogManutencao}
+      />
     </>
   );
 }
