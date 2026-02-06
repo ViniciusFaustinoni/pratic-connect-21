@@ -313,7 +313,6 @@ export function useJornadaTrabalho() {
 
   // NÃO finalizar almoço automaticamente - o vistoriador pode demorar mais e terá acréscimo
   // O almoço só termina quando ele voltar a receber tarefas (ação do sistema) ou manualmente
-
   // Calcular atraso de almoço em tempo real
   const calcularAtrasoAlmocoAtual = (): number => {
     if (turno?.status !== 'em_almoco' || !turno?.inicio_almoco) {
@@ -337,6 +336,17 @@ export function useJornadaTrabalho() {
   const minutosAlmocoRestantes = Math.max(0, DURACAO_ALMOCO_MINUTOS - tempoReal.minutosAlmoco);
   const deveIniciarAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco && tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS;
 
+  // Verificar se deve encerrar turno automaticamente quando jornada está completa
+  useEffect(() => {
+    if (
+      turno?.status === 'ativo' &&
+      tempoReal.minutosTrabalhados > 0 &&
+      minutosRestantes === 0
+    ) {
+      console.log('[useJornadaTrabalho] Jornada completa - encerrando turno automaticamente');
+      encerrarTurnoMutation.mutate();
+    }
+  }, [turno?.status, tempoReal.minutosTrabalhados, minutosRestantes, turno?.id]);
   const getStatus = (): JornadaState['status'] => {
     if (!turno || !turno.inicio_turno) return 'inativo';
     if (turno.status === 'encerrado') return 'encerrado';
