@@ -18,6 +18,7 @@ interface TurnoProfissional {
   minutos_extras: number;
   minutos_faltantes: number;
   saldo_anterior_minutos: number;
+  minutos_atraso_almoco: number;
   status: 'ativo' | 'em_almoco' | 'encerrado';
   encerrado_automaticamente: boolean;
 }
@@ -35,6 +36,10 @@ export interface JornadaState {
   minutosAlmoco: number;
   minutosAlmocoRestantes: number;
   deveIniciarAlmoco: boolean;
+  
+  // Atraso de almoço
+  minutosAtrasoAlmoco: number;
+  emAtrasoAlmoco: boolean;
   
   // Saldo
   saldoAnterior: number;
@@ -220,24 +225,35 @@ export function useJornadaTrabalho() {
   // Mutation para finalizar almoço
   const finalizarAlmocoMutation = useMutation({
     mutationFn: async () => {
-      if (!turno?.id) throw new Error('Turno não encontrado');
+      if (!turno?.id || !turno?.inicio_almoco) throw new Error('Turno não encontrado');
+
+      // Calcular atraso de almoço (além de 60 minutos)
+      const inicioAlmoco = new Date(turno.inicio_almoco);
+      const agora = new Date();
+      const duracaoRealMinutos = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
+      const minutosAtraso = Math.max(0, duracaoRealMinutos - DURACAO_ALMOCO_MINUTOS);
 
       const { data, error } = await supabase
         .from('turnos_profissionais')
         .update({
           status: 'ativo',
-          fim_almoco: new Date().toISOString()
+          fim_almoco: agora.toISOString(),
+          minutos_atraso_almoco: minutosAtraso
         })
         .eq('id', turno.id)
         .select()
         .single();
 
       if (error) throw error;
-      return data;
+      return { ...data, minutosAtraso };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       refetchTurno();
-      toast.success('Almoço finalizado, bom trabalho!');
+      if (data.minutosAtraso > 0) {
+        toast.warning(`Almoço finalizado com ${formatarMinutos(data.minutosAtraso)} de atraso. Este tempo será acrescido à sua jornada.`);
+      } else {
+        toast.success('Almoço finalizado, bom trabalho!');
+      }
     },
     onError: (error) => {
       console.error('[useJornadaTrabalho] Erro ao finalizar almoço:', error);
@@ -295,21 +311,27 @@ export function useJornadaTrabalho() {
     }
   }, [turno?.status, turno?.inicio_almoco, tempoReal.minutosTrabalhados]);
 
-  // Verificar se deve finalizar almoço automaticamente
-  useEffect(() => {
-    if (
-      turno?.status === 'em_almoco' &&
-      turno.inicio_almoco &&
-      !turno.fim_almoco &&
-      tempoReal.minutosAlmoco >= DURACAO_ALMOCO_MINUTOS
-    ) {
-      console.log('[useJornadaTrabalho] 1 hora de almoço - finalizando automaticamente');
-      finalizarAlmocoMutation.mutate();
+  // NÃO finalizar almoço automaticamente - o vistoriador pode demorar mais e terá acréscimo
+  // O almoço só termina quando ele voltar a receber tarefas (ação do sistema) ou manualmente
+
+  // Calcular atraso de almoço em tempo real
+  const calcularAtrasoAlmocoAtual = (): number => {
+    if (turno?.status !== 'em_almoco' || !turno?.inicio_almoco) {
+      return turno?.minutos_atraso_almoco || 0;
     }
-  }, [turno?.status, turno?.inicio_almoco, turno?.fim_almoco, tempoReal.minutosAlmoco]);
+    // Se ainda está em almoço, calcular atraso em tempo real
+    return Math.max(0, tempoReal.minutosAlmoco - DURACAO_ALMOCO_MINUTOS);
+  };
+
+  const minutosAtrasoAlmoco = calcularAtrasoAlmocoAtual();
+  const emAtrasoAlmoco = turno?.status === 'em_almoco' && tempoReal.minutosAlmoco > DURACAO_ALMOCO_MINUTOS;
 
   // Calcular estado da jornada
-  const jornadaAjustada = JORNADA_PADRAO_MINUTOS - (saldoAnterior || 0);
+  // A jornada é ajustada pelo saldo anterior E pelo atraso de almoço (se houver)
+  const atrasoRegistrado = turno?.minutos_atraso_almoco || 0;
+  const jornadaBase = JORNADA_PADRAO_MINUTOS - (saldoAnterior || 0);
+  const jornadaAjustada = jornadaBase + atrasoRegistrado; // Atraso AUMENTA a jornada
+  
   const minutosRestantes = Math.max(0, jornadaAjustada - tempoReal.minutosTrabalhados);
   const percentualJornada = Math.min(100, (tempoReal.minutosTrabalhados / jornadaAjustada) * 100);
   const minutosAlmocoRestantes = Math.max(0, DURACAO_ALMOCO_MINUTOS - tempoReal.minutosAlmoco);
@@ -331,6 +353,8 @@ export function useJornadaTrabalho() {
     minutosAlmoco: tempoReal.minutosAlmoco,
     minutosAlmocoRestantes,
     deveIniciarAlmoco,
+    minutosAtrasoAlmoco,
+    emAtrasoAlmoco,
     saldoAnterior: saldoAnterior || 0,
     jornadaAjustada,
     status: getStatus()

@@ -17901,6 +17901,7 @@ export type Database = {
           inicio_almoco: string | null
           inicio_turno: string | null
           minutos_almoco: number | null
+          minutos_atraso_almoco: number | null
           minutos_extras: number | null
           minutos_faltantes: number | null
           minutos_trabalhados: number | null
@@ -17919,6 +17920,7 @@ export type Database = {
           inicio_almoco?: string | null
           inicio_turno?: string | null
           minutos_almoco?: number | null
+          minutos_atraso_almoco?: number | null
           minutos_extras?: number | null
           minutos_faltantes?: number | null
           minutos_trabalhados?: number | null
@@ -17937,6 +17939,7 @@ export type Database = {
           inicio_almoco?: string | null
           inicio_turno?: string | null
           minutos_almoco?: number | null
+          minutos_atraso_almoco?: number | null
           minutos_extras?: number | null
           minutos_faltantes?: number | null
           minutos_trabalhados?: number | null

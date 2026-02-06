@@ -210,6 +210,71 @@ serve(async (req) => {
 
     console.log(`[atribuir-proxima-tarefa] Perfil verificado: ${profile.nome} (${profissionalId})`);
 
+    // ========== VERIFICAR STATUS DE JORNADA (ALMOÇO) ==========
+    const hoje = new Date().toISOString().split('T')[0];
+    const { data: turnoHoje, error: turnoError } = await supabase
+      .from('turnos_profissionais')
+      .select('id, status, inicio_almoco, inicio_turno, fim_almoco')
+      .eq('profissional_id', profissionalId)
+      .eq('data', hoje)
+      .maybeSingle();
+
+    if (turnoError) {
+      console.error('[atribuir-proxima-tarefa] Erro ao buscar turno:', turnoError);
+    }
+
+    // Se está em almoço, não atribuir novas tarefas
+    if (turnoHoje?.status === 'em_almoco') {
+      const inicioAlmoco = new Date(turnoHoje.inicio_almoco!);
+      const agora = new Date();
+      const minutosEmAlmoco = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
+      const minutosRestantes = Math.max(0, 60 - minutosEmAlmoco);
+      const emAtraso = minutosEmAlmoco > 60;
+      const minutosAtraso = emAtraso ? minutosEmAlmoco - 60 : 0;
+
+      console.log(`[atribuir-proxima-tarefa] Profissional em almoço há ${minutosEmAlmoco} minutos. Atraso: ${minutosAtraso} min`);
+
+      return new Response(
+        JSON.stringify({
+          resultado: 'em_almoco',
+          mensagem: emAtraso 
+            ? `Você está ${minutosAtraso} minutos atrasado do almoço. Este tempo será acrescido à sua jornada.`
+            : `Você está em horário de almoço. Aguarde ${minutosRestantes} minutos para receber novas tarefas.`,
+          minutos_restantes: minutosRestantes,
+          em_atraso: emAtraso,
+          minutos_atraso: minutosAtraso
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Forçar almoço se atingiu 4h sem iniciar
+    if (turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco && turnoHoje.inicio_turno) {
+      const inicioTurno = new Date(turnoHoje.inicio_turno);
+      const agora = new Date();
+      const minutosTrabalhados = Math.floor((agora.getTime() - inicioTurno.getTime()) / 60000);
+
+      if (minutosTrabalhados >= 240) { // 4 horas
+        console.log(`[atribuir-proxima-tarefa] Profissional trabalhou ${minutosTrabalhados} min. Forçando almoço.`);
+        
+        await supabase
+          .from('turnos_profissionais')
+          .update({ 
+            status: 'em_almoco',
+            inicio_almoco: new Date().toISOString()
+          })
+          .eq('id', turnoHoje.id);
+        
+        return new Response(
+          JSON.stringify({
+            resultado: 'almoco_iniciado',
+            mensagem: 'Você completou 4 horas de trabalho. Horário de almoço iniciado automaticamente (1 hora).'
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Get request body
     const { latitude, longitude, acao } = await req.json();
 
