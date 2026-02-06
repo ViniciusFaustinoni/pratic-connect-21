@@ -1582,7 +1582,9 @@ export type Database = {
           data_adesao: string | null
           data_ativacao: string | null
           data_bloqueio: string | null
+          data_cancelamento: string | null
           data_nascimento: string | null
+          data_primeiro_boleto_pago: string | null
           dia_vencimento: number | null
           email: string
           endereco_latitude: number | null
@@ -1592,11 +1594,13 @@ export type Database = {
           instalacao_agendada: boolean | null
           logradouro: string | null
           motivo_bloqueio: string | null
+          motivo_cancelamento: string | null
           nome: string
           numero: string | null
           plano_id: string | null
           primeiro_boleto_gerado: boolean | null
           profissao: string | null
+          qtd_boletos_pagos: number | null
           rg: string | null
           sexo: string | null
           sincronizado_hinova: boolean | null
@@ -1607,6 +1611,7 @@ export type Database = {
           uf: string | null
           updated_at: string
           user_id: string | null
+          vendedor_original_id: string | null
           whatsapp: string | null
         }
         Insert: {
@@ -1625,7 +1630,9 @@ export type Database = {
           data_adesao?: string | null
           data_ativacao?: string | null
           data_bloqueio?: string | null
+          data_cancelamento?: string | null
           data_nascimento?: string | null
+          data_primeiro_boleto_pago?: string | null
           dia_vencimento?: number | null
           email: string
           endereco_latitude?: number | null
@@ -1635,11 +1642,13 @@ export type Database = {
           instalacao_agendada?: boolean | null
           logradouro?: string | null
           motivo_bloqueio?: string | null
+          motivo_cancelamento?: string | null
           nome: string
           numero?: string | null
           plano_id?: string | null
           primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
+          qtd_boletos_pagos?: number | null
           rg?: string | null
           sexo?: string | null
           sincronizado_hinova?: boolean | null
@@ -1650,6 +1659,7 @@ export type Database = {
           uf?: string | null
           updated_at?: string
           user_id?: string | null
+          vendedor_original_id?: string | null
           whatsapp?: string | null
         }
         Update: {
@@ -1668,7 +1678,9 @@ export type Database = {
           data_adesao?: string | null
           data_ativacao?: string | null
           data_bloqueio?: string | null
+          data_cancelamento?: string | null
           data_nascimento?: string | null
+          data_primeiro_boleto_pago?: string | null
           dia_vencimento?: number | null
           email?: string
           endereco_latitude?: number | null
@@ -1678,11 +1690,13 @@ export type Database = {
           instalacao_agendada?: boolean | null
           logradouro?: string | null
           motivo_bloqueio?: string | null
+          motivo_cancelamento?: string | null
           nome?: string
           numero?: string | null
           plano_id?: string | null
           primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
+          qtd_boletos_pagos?: number | null
           rg?: string | null
           sexo?: string | null
           sincronizado_hinova?: boolean | null
@@ -1693,6 +1707,7 @@ export type Database = {
           uf?: string | null
           updated_at?: string
           user_id?: string | null
+          vendedor_original_id?: string | null
           whatsapp?: string | null
         }
         Relationships: [
@@ -1737,6 +1752,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_plans_compat"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_vendedor_original_id_fkey"
+            columns: ["vendedor_original_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_vendedor_original_id_fkey"
+            columns: ["vendedor_original_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "associados_vendedor_original_id_fkey"
+            columns: ["vendedor_original_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
           },
         ]
       }
@@ -4838,19 +4874,33 @@ export type Database = {
           ano_referencia: number
           aprovado_em: string | null
           aprovado_por: string | null
+          associado_id: string | null
           bonus_meta: number | null
+          campanha_id: string | null
+          cobranca_id: string | null
           config_id: string | null
+          contestacao_motivo: string | null
+          contestacao_resposta: string | null
+          contestada: boolean | null
+          contestada_em: string | null
           contrato_id: string
           created_at: string
+          deducoes_detalhes: Json | null
           id: string
           mes_referencia: number
           observacoes: string | null
           pago_em: string | null
           percentual_aplicado: number
+          recalculada: boolean | null
+          recalculada_em: string | null
+          recalculada_motivo: string | null
           status: string
+          tipo_comissao: string | null
           updated_at: string
           valor_base: number
+          valor_bruto: number | null
           valor_comissao: number
+          valor_deducoes: number | null
           valor_total: number
           vendedor_id: string
         }
@@ -4858,19 +4908,33 @@ export type Database = {
           ano_referencia: number
           aprovado_em?: string | null
           aprovado_por?: string | null
+          associado_id?: string | null
           bonus_meta?: number | null
+          campanha_id?: string | null
+          cobranca_id?: string | null
           config_id?: string | null
+          contestacao_motivo?: string | null
+          contestacao_resposta?: string | null
+          contestada?: boolean | null
+          contestada_em?: string | null
           contrato_id: string
           created_at?: string
+          deducoes_detalhes?: Json | null
           id?: string
           mes_referencia: number
           observacoes?: string | null
           pago_em?: string | null
           percentual_aplicado?: number
+          recalculada?: boolean | null
+          recalculada_em?: string | null
+          recalculada_motivo?: string | null
           status?: string
+          tipo_comissao?: string | null
           updated_at?: string
           valor_base?: number
+          valor_bruto?: number | null
           valor_comissao?: number
+          valor_deducoes?: number | null
           valor_total?: number
           vendedor_id: string
         }
@@ -4878,19 +4942,33 @@ export type Database = {
           ano_referencia?: number
           aprovado_em?: string | null
           aprovado_por?: string | null
+          associado_id?: string | null
           bonus_meta?: number | null
+          campanha_id?: string | null
+          cobranca_id?: string | null
           config_id?: string | null
+          contestacao_motivo?: string | null
+          contestacao_resposta?: string | null
+          contestada?: boolean | null
+          contestada_em?: string | null
           contrato_id?: string
           created_at?: string
+          deducoes_detalhes?: Json | null
           id?: string
           mes_referencia?: number
           observacoes?: string | null
           pago_em?: string | null
           percentual_aplicado?: number
+          recalculada?: boolean | null
+          recalculada_em?: string | null
+          recalculada_motivo?: string | null
           status?: string
+          tipo_comissao?: string | null
           updated_at?: string
           valor_base?: number
+          valor_bruto?: number | null
           valor_comissao?: number
+          valor_deducoes?: number | null
           valor_total?: number
           vendedor_id?: string
         }
@@ -4915,6 +4993,48 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "comissoes_config_id_fkey"
@@ -4947,6 +5067,143 @@ export type Database = {
           {
             foreignKeyName: "comissoes_vendedor_id_fkey"
             columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      comissoes_auditoria: {
+        Row: {
+          acao: string
+          created_at: string
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          id: string
+          ip_address: string | null
+          registro_id: string
+          tabela: string
+          usuario_id: string | null
+        }
+        Insert: {
+          acao: string
+          created_at?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          id?: string
+          ip_address?: string | null
+          registro_id: string
+          tabela: string
+          usuario_id?: string | null
+        }
+        Update: {
+          acao?: string
+          created_at?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          id?: string
+          ip_address?: string | null
+          registro_id?: string
+          tabela?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_auditoria_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_auditoria_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_auditoria_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      comissoes_campanhas: {
+        Row: {
+          ano: number
+          created_at: string
+          data_apuracao_boletos: string | null
+          data_fim: string
+          data_inicio: string
+          data_pagamento_1a_fase: string | null
+          data_pagamento_descontos: string | null
+          fechada_em: string | null
+          fechada_por: string | null
+          id: string
+          mes: number
+          nome: string
+          status: string
+          total_comissoes_geradas: number | null
+          total_vendas_confirmadas: number | null
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          data_apuracao_boletos?: string | null
+          data_fim: string
+          data_inicio: string
+          data_pagamento_1a_fase?: string | null
+          data_pagamento_descontos?: string | null
+          fechada_em?: string | null
+          fechada_por?: string | null
+          id?: string
+          mes: number
+          nome: string
+          status?: string
+          total_comissoes_geradas?: number | null
+          total_vendas_confirmadas?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          data_apuracao_boletos?: string | null
+          data_fim?: string
+          data_inicio?: string
+          data_pagamento_1a_fase?: string | null
+          data_pagamento_descontos?: string | null
+          fechada_em?: string | null
+          fechada_por?: string | null
+          id?: string
+          mes?: number
+          nome?: string
+          status?: string
+          total_comissoes_geradas?: number | null
+          total_vendas_confirmadas?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_campanhas_fechada_por_fkey"
+            columns: ["fechada_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_campanhas_fechada_por_fkey"
+            columns: ["fechada_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_campanhas_fechada_por_fkey"
+            columns: ["fechada_por"]
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
@@ -4998,6 +5255,360 @@ export type Database = {
           updated_at?: string
           valor_maximo?: number | null
           valor_minimo?: number | null
+        }
+        Relationships: []
+      }
+      comissoes_crescimento_log: {
+        Row: {
+          campanha_id: string | null
+          created_at: string
+          data_atingido: string
+          id: string
+          marco_placas: number
+          percentual_recorrente_garantido: number
+          valor_pago: number
+          vendedor_id: string
+        }
+        Insert: {
+          campanha_id?: string | null
+          created_at?: string
+          data_atingido?: string
+          id?: string
+          marco_placas: number
+          percentual_recorrente_garantido?: number
+          valor_pago: number
+          vendedor_id: string
+        }
+        Update: {
+          campanha_id?: string | null
+          created_at?: string
+          data_atingido?: string
+          id?: string
+          marco_placas?: number
+          percentual_recorrente_garantido?: number
+          valor_pago?: number
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_crescimento_log_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "comissoes_campanhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_crescimento_log_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_crescimento_log_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_crescimento_log_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      comissoes_deducoes: {
+        Row: {
+          aplicada_em: string
+          associado_id: string | null
+          campanha_id: string | null
+          cobranca_id: string | null
+          comissao_id: string | null
+          contrato_id: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          tipo: string
+          valor: number
+          vendedor_id: string
+        }
+        Insert: {
+          aplicada_em?: string
+          associado_id?: string | null
+          campanha_id?: string | null
+          cobranca_id?: string | null
+          comissao_id?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          tipo: string
+          valor: number
+          vendedor_id: string
+        }
+        Update: {
+          aplicada_em?: string
+          associado_id?: string | null
+          campanha_id?: string | null
+          cobranca_id?: string | null
+          comissao_id?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          tipo?: string
+          valor?: number
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_deducoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "comissoes_campanhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_comissao_id_fkey"
+            columns: ["comissao_id"]
+            isOneToOne: false
+            referencedRelation: "comissoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      comissoes_faixas_adesao: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          percentual_adesao: number
+          quantidade_vendas_minima: number
+          tipo_consultor: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          percentual_adesao: number
+          quantidade_vendas_minima: number
+          tipo_consultor?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          percentual_adesao?: number
+          quantidade_vendas_minima?: number
+          tipo_consultor?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      comissoes_faixas_classificacao: {
+        Row: {
+          ativo: boolean
+          categoria_tempo: string
+          created_at: string
+          faixa_placas_base: number
+          id: string
+          posicao_ranking: number
+          tipo_consultor: string
+          updated_at: string
+          valor_premio: number
+        }
+        Insert: {
+          ativo?: boolean
+          categoria_tempo?: string
+          created_at?: string
+          faixa_placas_base: number
+          id?: string
+          posicao_ranking: number
+          tipo_consultor: string
+          updated_at?: string
+          valor_premio: number
+        }
+        Update: {
+          ativo?: boolean
+          categoria_tempo?: string
+          created_at?: string
+          faixa_placas_base?: number
+          id?: string
+          posicao_ranking?: number
+          tipo_consultor?: string
+          updated_at?: string
+          valor_premio?: number
+        }
+        Relationships: []
+      }
+      comissoes_faixas_crescimento: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          percentual_minimo_recorrente: number
+          placas_confirmadas: number
+          tipo_consultor: string
+          updated_at: string
+          valor_remuneracao: number
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          percentual_minimo_recorrente?: number
+          placas_confirmadas: number
+          tipo_consultor?: string
+          updated_at?: string
+          valor_remuneracao: number
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          percentual_minimo_recorrente?: number
+          placas_confirmadas?: number
+          tipo_consultor?: string
+          updated_at?: string
+          valor_remuneracao?: number
+        }
+        Relationships: []
+      }
+      comissoes_faixas_producao: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          placas_confirmadas_minima: number
+          tipo_consultor: string
+          updated_at: string
+          valor_remuneracao: number
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          placas_confirmadas_minima: number
+          tipo_consultor?: string
+          updated_at?: string
+          valor_remuneracao: number
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          placas_confirmadas_minima?: number
+          tipo_consultor?: string
+          updated_at?: string
+          valor_remuneracao?: number
+        }
+        Relationships: []
+      }
+      comissoes_faixas_recorrente: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          percentual_recorrente: number
+          placas_maxima: number | null
+          placas_minima: number
+          tipo_consultor: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          percentual_recorrente: number
+          placas_maxima?: number | null
+          placas_minima: number
+          tipo_consultor: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          percentual_recorrente?: number
+          placas_maxima?: number | null
+          placas_minima?: number
+          tipo_consultor?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -5055,6 +5666,215 @@ export type Database = {
           },
           {
             foreignKeyName: "comissoes_pagamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      comissoes_parametros: {
+        Row: {
+          ativo: boolean
+          chave: string
+          descricao: string | null
+          id: string
+          tipo_dado: string
+          updated_at: string
+          updated_by: string | null
+          valor: string
+        }
+        Insert: {
+          ativo?: boolean
+          chave: string
+          descricao?: string | null
+          id?: string
+          tipo_dado?: string
+          updated_at?: string
+          updated_by?: string | null
+          valor: string
+        }
+        Update: {
+          ativo?: boolean
+          chave?: string
+          descricao?: string | null
+          id?: string
+          tipo_dado?: string
+          updated_at?: string
+          updated_by?: string | null
+          valor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_parametros_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_parametros_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_parametros_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      comissoes_ranking_mensal: {
+        Row: {
+          campanha_id: string
+          categoria_tempo: string
+          created_at: string
+          id: string
+          placas_ativas: number
+          posicao_ranking: number | null
+          tipo_consultor: string
+          trocas_titularidade: number
+          updated_at: string
+          valor_premio: number | null
+          vendas_canceladas: number
+          vendas_confirmadas: number
+          vendas_liquidas: number
+          vendedor_id: string
+        }
+        Insert: {
+          campanha_id: string
+          categoria_tempo: string
+          created_at?: string
+          id?: string
+          placas_ativas?: number
+          posicao_ranking?: number | null
+          tipo_consultor: string
+          trocas_titularidade?: number
+          updated_at?: string
+          valor_premio?: number | null
+          vendas_canceladas?: number
+          vendas_confirmadas?: number
+          vendas_liquidas?: number
+          vendedor_id: string
+        }
+        Update: {
+          campanha_id?: string
+          categoria_tempo?: string
+          created_at?: string
+          id?: string
+          placas_ativas?: number
+          posicao_ranking?: number | null
+          tipo_consultor?: string
+          trocas_titularidade?: number
+          updated_at?: string
+          valor_premio?: number | null
+          vendas_canceladas?: number
+          vendas_confirmadas?: number
+          vendas_liquidas?: number
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_ranking_mensal_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "comissoes_campanhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_ranking_mensal_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_ranking_mensal_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_ranking_mensal_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      comissoes_recorrentes: {
+        Row: {
+          ano_referencia: number
+          campanha_id: string | null
+          created_at: string
+          id: string
+          mes_referencia: number
+          percentual_aplicado: number
+          placas_ativas: number
+          status: string
+          total_boletos_pagos: number
+          updated_at: string
+          valor_recorrente: number
+          vendedor_id: string
+        }
+        Insert: {
+          ano_referencia: number
+          campanha_id?: string | null
+          created_at?: string
+          id?: string
+          mes_referencia: number
+          percentual_aplicado?: number
+          placas_ativas?: number
+          status?: string
+          total_boletos_pagos?: number
+          updated_at?: string
+          valor_recorrente?: number
+          vendedor_id: string
+        }
+        Update: {
+          ano_referencia?: number
+          campanha_id?: string | null
+          created_at?: string
+          id?: string
+          mes_referencia?: number
+          percentual_aplicado?: number
+          placas_ativas?: number
+          status?: string
+          total_boletos_pagos?: number
+          updated_at?: string
+          valor_recorrente?: number
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_recorrentes_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "comissoes_campanhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_recorrentes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_recorrentes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "comissoes_recorrentes_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
@@ -5574,10 +6394,13 @@ export type Database = {
           link_token: string | null
           numero: string
           observacao_aprovacao: string | null
+          origem_troca_titularidade_id: string | null
           pdf_assinado_url: string | null
           pdf_url: string | null
           plano_id: string
           status: Database["public"]["Enums"]["status_contrato"]
+          tipo_atendimento: string | null
+          tipo_venda: string | null
           tipo_vistoria: string | null
           updated_at: string
           validade_link: string | null
@@ -5668,10 +6491,13 @@ export type Database = {
           link_token?: string | null
           numero: string
           observacao_aprovacao?: string | null
+          origem_troca_titularidade_id?: string | null
           pdf_assinado_url?: string | null
           pdf_url?: string | null
           plano_id: string
           status?: Database["public"]["Enums"]["status_contrato"]
+          tipo_atendimento?: string | null
+          tipo_venda?: string | null
           tipo_vistoria?: string | null
           updated_at?: string
           validade_link?: string | null
@@ -5762,10 +6588,13 @@ export type Database = {
           link_token?: string | null
           numero?: string
           observacao_aprovacao?: string | null
+          origem_troca_titularidade_id?: string | null
           pdf_assinado_url?: string | null
           pdf_url?: string | null
           plano_id?: string
           status?: Database["public"]["Enums"]["status_contrato"]
+          tipo_atendimento?: string | null
+          tipo_venda?: string | null
           tipo_vistoria?: string | null
           updated_at?: string
           validade_link?: string | null
@@ -9020,6 +9849,7 @@ export type Database = {
       funcionarios: {
         Row: {
           agencia: string | null
+          ano_recorde: number | null
           bairro: string | null
           banco: string | null
           carga_horaria_semanal: number | null
@@ -9053,6 +9883,7 @@ export type Database = {
           intervalo_minutos: number | null
           logradouro: string | null
           matricula: string | null
+          mes_recorde: number | null
           motivo_demissao: string | null
           nacionalidade: string | null
           naturalidade: string | null
@@ -9061,6 +9892,7 @@ export type Database = {
           pis: string | null
           pix_chave: string | null
           pix_tipo: string | null
+          recorde_vendas_mensal: number | null
           rg: string | null
           rg_orgao: string | null
           salario_atual: number | null
@@ -9077,6 +9909,7 @@ export type Database = {
         }
         Insert: {
           agencia?: string | null
+          ano_recorde?: number | null
           bairro?: string | null
           banco?: string | null
           carga_horaria_semanal?: number | null
@@ -9110,6 +9943,7 @@ export type Database = {
           intervalo_minutos?: number | null
           logradouro?: string | null
           matricula?: string | null
+          mes_recorde?: number | null
           motivo_demissao?: string | null
           nacionalidade?: string | null
           naturalidade?: string | null
@@ -9118,6 +9952,7 @@ export type Database = {
           pis?: string | null
           pix_chave?: string | null
           pix_tipo?: string | null
+          recorde_vendas_mensal?: number | null
           rg?: string | null
           rg_orgao?: string | null
           salario_atual?: number | null
@@ -9134,6 +9969,7 @@ export type Database = {
         }
         Update: {
           agencia?: string | null
+          ano_recorde?: number | null
           bairro?: string | null
           banco?: string | null
           carga_horaria_semanal?: number | null
@@ -9167,6 +10003,7 @@ export type Database = {
           intervalo_minutos?: number | null
           logradouro?: string | null
           matricula?: string | null
+          mes_recorde?: number | null
           motivo_demissao?: string | null
           nacionalidade?: string | null
           naturalidade?: string | null
@@ -9175,6 +10012,7 @@ export type Database = {
           pis?: string | null
           pix_chave?: string | null
           pix_tipo?: string | null
+          recorde_vendas_mensal?: number | null
           rg?: string | null
           rg_orgao?: string | null
           salario_atual?: number | null

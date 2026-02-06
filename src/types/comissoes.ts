@@ -21,6 +21,8 @@ export interface ComissaoConfig {
   updated_at: string;
 }
 
+export type TipoComissao = 'adesao' | 'recorrente' | 'producao' | 'classificacao' | 'crescimento' | 'recorde';
+
 export interface Comissao {
   id: string;
   vendedor_id: string;
@@ -40,6 +42,21 @@ export interface Comissao {
   observacoes: string | null;
   created_at: string;
   updated_at: string;
+  // Novos campos da migration
+  tipo_comissao?: TipoComissao;
+  cobranca_id?: string | null;
+  campanha_id?: string | null;
+  associado_id?: string | null;
+  valor_bruto?: number;
+  valor_deducoes?: number;
+  deducoes_detalhes?: Record<string, unknown>[];
+  recalculada?: boolean;
+  recalculada_em?: string | null;
+  recalculada_motivo?: string | null;
+  contestada?: boolean;
+  contestada_em?: string | null;
+  contestacao_motivo?: string | null;
+  contestacao_resposta?: string | null;
   // Joins
   vendedor?: {
     id: string;
@@ -56,7 +73,7 @@ export interface Comissao {
       placa: string;
     };
   };
-  config?: ComissaoConfig;
+  config?: Partial<ComissaoConfig>;
 }
 
 export interface ComissaoPagamento {
