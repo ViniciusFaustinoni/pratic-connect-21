@@ -535,7 +535,7 @@ function RastreadoresContent({
                                 Ver Estoque
                               </DropdownMenuItem>
                             )}
-                            {rastreador.status === 'instalado' && (
+                            {(rastreador.status === 'instalado' || rastreador.status === 'estoque') && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
@@ -553,22 +553,24 @@ function RastreadoresContent({
                                   <Wrench className="mr-2 h-4 w-4" />
                                   Enviar para Manutenção
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => setDialogRetirada({
-                                    id: rastreador.id,
-                                    codigo: rastreador.codigo,
-                                    imei: rastreador.imei,
-                                    status: rastreador.status as 'estoque' | 'instalado' | 'manutencao' | 'baixado',
-                                    veiculo: rastreador.veiculos ? {
-                                      placa: rastreador.veiculos.placa,
-                                      modelo: rastreador.veiculos.modelo
-                                    } : null,
-                                  })}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <PackageMinus className="mr-2 h-4 w-4" />
-                                  Retirar Rastreador
-                                </DropdownMenuItem>
+                                {rastreador.status === 'instalado' && (
+                                  <DropdownMenuItem 
+                                    onClick={() => setDialogRetirada({
+                                      id: rastreador.id,
+                                      codigo: rastreador.codigo,
+                                      imei: rastreador.imei,
+                                      status: rastreador.status as 'estoque' | 'instalado' | 'manutencao' | 'baixado',
+                                      veiculo: rastreador.veiculos ? {
+                                        placa: rastreador.veiculos.placa,
+                                        modelo: rastreador.veiculos.modelo
+                                      } : null,
+                                    })}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <PackageMinus className="mr-2 h-4 w-4" />
+                                    Retirar Rastreador
+                                  </DropdownMenuItem>
+                                )}
                               </>
                             )}
                             {isDiretor && (

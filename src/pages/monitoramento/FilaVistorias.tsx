@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { cn } from '@/lib/utils';
 import { useVistorias, Vistoria } from '@/hooks/useVistorias';
+import { useServicos, Servico } from '@/hooks/useServicos';
 import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
 import { toast } from 'sonner';
 import { 
@@ -154,13 +155,20 @@ export default function FilaVistorias() {
   const [vistoriaParaAtribuir, setVistoriaParaAtribuir] = useState<VistoriaParaAtribuir | null>(null);
 
   // Dados
-  const { data: vistoriasRaw, isLoading } = useVistorias({});
+  const { data: vistoriasRaw, isLoading: isLoadingVistorias } = useVistorias({});
+  
+  // Buscar serviços de manutenção e retirada
+  const { data: servicosRaw, isLoading: isLoadingServicos } = useServicos({
+    tipo: ['vistoria_manutencao', 'vistoria_retirada'],
+    status: ['pendente', 'agendada', 'em_rota', 'em_andamento'],
+  });
 
-  // Transformar dados
+  const isLoading = isLoadingVistorias || isLoadingServicos;
+
+  // Transformar dados - combinar vistorias + serviços de manutenção/retirada
   const vistorias: VistoriaFila[] = useMemo(() => {
-    if (!vistoriasRaw) return [];
-
-    return vistoriasRaw.map((v: Vistoria) => {
+    // Mapear vistorias tradicionais
+    const vistoriasTransformadas: VistoriaFila[] = (vistoriasRaw || []).map((v: Vistoria) => {
       const raw = v as any;
       const clienteNome = v.associado?.nome || v.veiculo?.associado?.nome || raw.cotacao?.nome_solicitante || 'Cliente não identificado';
       const clienteId = v.associado?.id || v.veiculo?.associado?.id || '';
@@ -195,7 +203,29 @@ export default function FilaVistorias() {
         createdAt: v.created_at,
       };
     });
-  }, [vistoriasRaw]);
+
+    // Mapear serviços de manutenção/retirada para o mesmo formato
+    const servicosTransformados: VistoriaFila[] = (servicosRaw || []).map((s: Servico) => ({
+      id: s.id,
+      protocolo: s.protocolo || gerarProtocolo(s.id, s.created_at),
+      cliente: s.associado?.nome || 'Sem associado',
+      clienteId: s.associado_id || '',
+      veiculo: `${s.veiculo?.marca || ''} ${s.veiculo?.modelo || ''}`.trim() || 'N/A',
+      placa: s.veiculo?.placa || '---',
+      tipo: mapTipo(undefined, s.tipo),
+      regiao: s.bairro || s.cidade || 'Não informada',
+      dataAgendada: s.data_agendada,
+      vistoriador: s.profissional?.nome || null,
+      vistoriadorId: s.profissional_id || null,
+      status: mapStatus(s.status as string, undefined),
+      createdAt: s.created_at,
+    }));
+
+    // Combinar e ordenar por data de criação (mais recentes primeiro)
+    return [...vistoriasTransformadas, ...servicosTransformados].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [vistoriasRaw, servicosRaw]);
 
   // Lista de vistoriadores únicos
   const vistoriadores = useMemo(() => {
@@ -441,6 +471,8 @@ export default function FilaVistorias() {
               <SelectItem value="presencial">Presencial</SelectItem>
               <SelectItem value="auto_vistoria">Auto Vistoria</SelectItem>
               <SelectItem value="ponto_fixo">Ponto Fixo</SelectItem>
+              <SelectItem value="manutencao">Manutenção</SelectItem>
+              <SelectItem value="retirada">Retirada</SelectItem>
             </SelectContent>
           </Select>
 

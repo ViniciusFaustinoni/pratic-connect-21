@@ -451,7 +451,7 @@ export function ListaRastreadores() {
                                 {item.portador_id ? 'Alterar Portador' : 'Atribuir Portador'}
                               </DropdownMenuItem>
                             )}
-                            {item.status === 'instalado' && (
+                            {(item.status === 'instalado' || item.status === 'estoque') && (
                               <DropdownMenuItem 
                                 onClick={() => setDialogManutencao({
                                   id: item.id,
