@@ -418,7 +418,7 @@ export default function Blacklist() {
                 )}
               </div>
 
-              <div className="flex items-start gap-3 p-3 border rounded-lg">
+              <div className="flex items-start gap-3 p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20">
                 <input
                   type="checkbox"
                   id="reverter-status"
@@ -427,10 +427,10 @@ export default function Blacklist() {
                   className="mt-0.5 h-4 w-4 rounded border-gray-300"
                 />
                 <label htmlFor="reverter-status" className="cursor-pointer">
-                  <p className="text-sm font-medium">Reverter status do veículo e associado</p>
+                  <p className="text-sm font-medium">Reverter recusa e permitir nova contratação</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Se marcado, o veículo voltará para "Em Análise" e o associado para "Pendente de Vistoria", 
-                    permitindo nova tentativa de contratação.
+                    O associado precisará <strong>assinar novamente o contrato</strong> e <strong>efetuar novo pagamento</strong>. 
+                    O contrato atual será resetado para rascunho e uma nova vistoria será necessária.
                   </p>
                 </label>
               </div>
