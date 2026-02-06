@@ -1,231 +1,213 @@
 
+## Plano: Notificação Automática via WhatsApp ao Solicitar Documentos
 
-## Plano: Redesenhar Cards dos Planos no PDF Comparativo
+### Contexto Atual
 
-### Problema Atual
+O sistema já possui:
+- ✅ **Realtime funcionando**: A página `/acompanhar/:token` já escuta mudanças em `documentos_solicitados` via Supabase Realtime
+- ✅ **Componente de documentos pendentes**: `DocumentosPendentes` já é renderizado quando o associado tem status `documentacao_pendente`
+- ✅ **Chamada à notificação**: O hook `useSolicitarDocumentos` já invoca a edge function `notificar-cliente`
 
-O PDF comparativo atual exibe cards de planos compactos na página de capa, mas com layout diferente da interface web (imagem de referência). O usuário deseja que os cards do PDF tenham:
+### Problema a Resolver
 
-1. **Nome do plano** centralizado no topo com borda/destaque
-2. **Valor mensal** grande e centralizado logo abaixo
-3. **Lista de coberturas** com checkmarks verdes, alinhadas à esquerda
-4. **Filiação/Adesão** no rodapé do card
+O template atual de WhatsApp para `documentos_solicitados` não inclui:
+1. O **link direto** para a página de envio de documentos
+2. A **lista detalhada** dos documentos solicitados (apenas exibe os IDs concatenados)
 
-### Layout de Referência (da imagem)
+### Alterações Necessárias
 
-```
-┌─────────────────────────────────────────┐
-│        SELECT EXCLUSIVE           1°    │  ← Badge de ranking (opcional)
-├─────────────────────────────────────────┤
-│                                         │
-│          R$ 206,00/mês                 │  ← Valor centralizado e grande
-│                                         │
-│  ✓ Roubo e Furto                       │
-│  ✓ Colisão                              │
-│  ✓ Perda Total                          │
-│  ✓ Incêndio                             │
-│  ✓ Alagamento                           │
-│  ✓ Chuva de Granizo                     │
-│  ✓ Assistência 24h 400km                │
-│  ✓ Rastreador/Monitoramento (...)       │
-│  ✓ 1000km Reboque                       │
-│  ✓ Danos Terceiros R$40mil              │
-│  ✓ Vidros e Faróis (após 120 dia...)    │
-│  ✓ Reboque Excedente (1x a ca...)       │
-│  ✓ Kit Gás                              │
-│  ✓ 100% FIPE APP + Carro Res...         │
-│                                         │
-│  ─ Ver menos                            │  ← (opcional no PDF)
-├─────────────────────────────────────────┤
-│  Filiação: R$ 0,00                      │  ← Taxa de adesão no rodapé
-└─────────────────────────────────────────┘
-```
-
-### Alterações Propostas
-
-#### 1. Modificar a página de capa (`desenharPaginaCapa`)
-
-Substituir os cards compactos (80px altura) por **cards verticais expandidos** que mostram todas as coberturas de cada plano, similar à interface web.
-
-**Novo layout do card:**
-- Largura: Variável baseada na quantidade de planos (1 plano = 100% largura, 2 planos = 50% cada, 3+ = scroll ou múltiplas linhas)
-- Altura: Dinâmica baseada no número de coberturas
-- Estrutura interna:
-  1. Header com nome do plano (fundo azul/destaque)
-  2. Valor mensal grande centralizado
-  3. Separador "/mês" em texto menor
-  4. Lista de coberturas com check verde
-  5. Rodapé com taxa de filiação/adesão
-
-#### 2. Considerar limitação de espaço
-
-Como uma página A4 tem espaço limitado (~297mm de altura), para planos com muitas coberturas:
-- Exibir até 12-14 coberturas por card
-- Se houver mais, indicar "..." ou continuar na página de detalhes
-
-#### 3. Centralização
-
-- Cards centralizados horizontalmente na página
-- Conteúdo interno (nome, valor, coberturas) com alinhamento consistente
-- Espaçamento uniforme entre cards
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/hooks/usePropostasPendentes.ts` | Buscar `link_token` do contrato e formatar lista de documentos com labels legíveis |
+| `supabase/functions/notificar-cliente/index.ts` | Atualizar template para incluir link e listar documentos detalhadamente |
 
 ---
 
 ### Detalhes Técnicos
 
-**Arquivo a modificar:** `src/lib/gerarPdfCotacao.ts`
+#### 1. Atualizar `useSolicitarDocumentos` (src/hooks/usePropostasPendentes.ts)
 
-**Função a modificar:** `desenharPaginaCapa` (linhas 740-1001)
-
-**Alterações principais:**
-
+**Antes** (linha 1770-1781):
 ```typescript
-// Novo card expandido para planos
-const desenharCardPlanoExpandido = (
-  doc: jsPDF,
-  plano: PlanoParaPdf,
-  x: number,
-  y: number,
-  width: number,
-  index: number
-): number => { // Retorna a altura final do card
-  
-  const padding = 8;
-  const lineHeight = 9;
-  const maxCoberturas = 12; // Limitar para caber na página
-  
-  // Calcular altura baseada nas coberturas
-  const numCoberturas = Math.min(plano.coberturas.length, maxCoberturas);
-  const cardHeight = 
-    30 +  // Header (nome do plano)
-    35 +  // Valor mensal
-    (numCoberturas * lineHeight) + // Coberturas
-    25;   // Rodapé (filiação)
-  
-  // Fundo do card
-  drawPremiumCard(doc, x, y, width, cardHeight, { 
-    isRecommended: index === 0, 
-    hasGlow: true 
-  });
-  
-  let currentY = y + 8;
-  
-  // 1. Header: Nome do plano centralizado
-  doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
-  doc.roundedRect(x + 4, currentY - 4, width - 8, 18, 2, 2, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text(plano.nome.toUpperCase(), x + width / 2, currentY + 7, { align: 'center' });
-  currentY += 22;
-  
-  // 2. Valor mensal grande
-  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-  doc.setFontSize(22);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(plano.valorMensal), x + width / 2, currentY, { align: 'center' });
-  currentY += 6;
-  
-  // 3. "/mês" em texto menor
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.text('/mês', x + width / 2, currentY, { align: 'center' });
-  currentY += 12;
-  
-  // 4. Lista de coberturas
-  const coberturasExibir = plano.coberturas.slice(0, maxCoberturas);
-  coberturasExibir.forEach((cobertura) => {
-    // Check verde
-    doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
-    doc.circle(x + padding + 4, currentY - 1.5, 1.5, 'F');
-    
-    // Texto da cobertura
-    doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, 30), x + padding + 10, currentY);
-    
-    currentY += lineHeight;
-  });
-  
-  // Se tem mais coberturas, indicar
-  if (plano.coberturas.length > maxCoberturas) {
-    doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
-    doc.setFontSize(7);
-    doc.text(`+ ${plano.coberturas.length - maxCoberturas} mais...`, x + width / 2, currentY, { align: 'center' });
-    currentY += 8;
-  }
-  
-  currentY += 4;
-  
-  // 5. Rodapé: Filiação (taxa de adesão)
-  doc.setDrawColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
-  doc.line(x + padding, currentY - 4, x + width - padding, currentY - 4);
-  
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Filiação:', x + padding, currentY);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(plano.valorAdesao), x + width - padding, currentY, { align: 'right' });
-  
-  return cardHeight;
-};
+await supabase.functions.invoke('notificar-cliente', {
+  body: {
+    tipo: 'documentos_solicitados',
+    associado_id: associadoId,
+    dados: {
+      documentos: documentos.join(', '),
+      observacoes: observacoes || '',
+    },
+  },
+});
 ```
 
-**Modificação na lógica de layout:**
-
+**Depois**:
 ```typescript
-// Na função desenharPaginaCapa, após desenhar header e dados do cliente
-// Desenhar cards em layout responsivo
+// Buscar link_token do contrato para incluir na mensagem
+const { data: contratoComLink } = await supabase
+  .from('contratos')
+  .select('link_token')
+  .eq('id', contratoId)
+  .single();
 
-const numPlanos = cotacao.planosComparar.length;
+// Mapa de labels para documentos
+const DOCUMENTO_LABELS: Record<string, string> = {
+  cnh: 'CNH',
+  crlv: 'CRLV',
+  comprovante_residencia: 'Comprovante de Residência',
+  selfie_veiculo: 'Selfie com Veículo',
+  frente: 'Foto Frente do Veículo',
+  traseira: 'Foto Traseira',
+  lateral_direita: 'Foto Lateral Direita',
+  lateral_esquerda: 'Foto Lateral Esquerda',
+  odometro: 'Foto do Odômetro',
+  chassi: 'Foto do Chassi',
+  motor: 'Foto do Motor',
+  banco_dianteiro: 'Foto Banco Dianteiro',
+  banco_traseiro: 'Foto Banco Traseiro',
+  pneu_dianteiro_direito: 'Pneu Dianteiro Direito',
+  pneu_dianteiro_esquerdo: 'Pneu Dianteiro Esquerdo',
+  pneu_traseiro_direito: 'Pneu Traseiro Direito',
+  pneu_traseiro_esquerdo: 'Pneu Traseiro Esquerdo',
+  outro: 'Outro Documento',
+};
 
-if (numPlanos === 1) {
-  // Card único centralizado (largura 70% da página)
-  const cardWidth = contentWidth * 0.7;
-  const cardX = (pageWidth - cardWidth) / 2;
-  desenharCardPlanoExpandido(doc, cotacao.planosComparar[0], cardX, y, cardWidth, 0);
-  
-} else if (numPlanos === 2) {
-  // 2 cards lado a lado
-  const cardWidth = (contentWidth - 10) / 2;
-  cotacao.planosComparar.forEach((plano, index) => {
-    const cardX = margin + (cardWidth + 10) * index;
-    desenharCardPlanoExpandido(doc, plano, cardX, y, cardWidth, index);
-  });
-  
-} else {
-  // 3+ cards: Layout em múltiplas linhas ou cards mais compactos
-  const cardsPerRow = 3;
-  const cardGap = 6;
-  const cardWidth = (contentWidth - (cardGap * (cardsPerRow - 1))) / cardsPerRow;
-  
-  cotacao.planosComparar.forEach((plano, index) => {
-    const row = Math.floor(index / cardsPerRow);
-    const col = index % cardsPerRow;
-    const cardX = margin + (cardWidth + cardGap) * col;
-    const cardY = y + row * 130; // Altura estimada por linha
-    
-    desenharCardPlanoExpandido(doc, plano, cardX, cardY, cardWidth, index);
-  });
-}
+// Formatar lista de documentos com labels
+const docsFormatados = documentos
+  .map((id) => `• ${DOCUMENTO_LABELS[id] || id}`)
+  .join('\n');
+
+// Gerar link de acompanhamento
+const linkAcompanhamento = contratoComLink?.link_token 
+  ? `${window.location.origin}/acompanhar/${contratoComLink.link_token}`
+  : null;
+
+await supabase.functions.invoke('notificar-cliente', {
+  body: {
+    tipo: 'documentos_solicitados',
+    associado_id: associadoId,
+    dados: {
+      documentos: docsFormatados, // Lista formatada com bullets
+      observacoes: observacoes || '',
+      link_acompanhamento: linkAcompanhamento || 'Acesse pelo link enviado anteriormente',
+    },
+  },
+});
+```
+
+#### 2. Atualizar Template em `notificar-cliente` (supabase/functions/notificar-cliente/index.ts)
+
+**Antes** (linha 51-54):
+```typescript
+documentos_solicitados: {
+  titulo: '📄 Documentos Pendentes',
+  mensagem: 'Olá {nome}! Precisamos de alguns documentos para dar continuidade ao seu cadastro: {documentos}. Acesse o link de acompanhamento para enviar. Você tem 7 dias para enviar.',
+  emailTemplate: 'generico',
+},
+```
+
+**Depois**:
+```typescript
+documentos_solicitados: {
+  titulo: '📄 Documentação Pendente',
+  mensagem: `Olá {nome}! Para dar continuidade à sua filiação na PRATIC, precisamos dos seguintes documentos:
+
+{documentos}
+
+{observacoes}
+
+📲 *Envie agora mesmo pelo link:*
+🔗 {link_acompanhamento}
+
+⏰ Você tem *7 dias* para enviar. Após esse prazo, a solicitação pode ser cancelada.
+
+Qualquer dúvida, responda esta mensagem!`,
+  emailTemplate: 'generico',
+},
 ```
 
 ---
 
-### Resultado Esperado
+### Fluxo Completo Após Implementação
 
-Após as alterações, o PDF comparativo terá:
+```
+┌───────────────────────────────────────────────────────────────────┐
+│  ANALISTA DE CADASTRO                                             │
+│  (Tela de Análise de Proposta)                                   │
+│                                                                   │
+│  1. Clica em "Solicitar Documentos"                              │
+│  2. Seleciona: CNH, CRLV, Comprovante                            │
+│  3. Adiciona observação: "Fotos legíveis por favor"              │
+│  4. Confirma                                                      │
+└────────────────────────┬──────────────────────────────────────────┘
+                         │
+                         ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  SISTEMA (Backend)                                                │
+│                                                                   │
+│  1. Insere registros em documentos_solicitados                   │
+│  2. Atualiza associado.status → 'documentacao_pendente'          │
+│  3. Busca link_token do contrato                                 │
+│  4. Formata documentos com labels legíveis                       │
+│  5. Chama edge function notificar-cliente                        │
+└────────────────────────┬──────────────────────────────────────────┘
+                         │
+                         ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  WHATSAPP DO CLIENTE                                              │
+│                                                                   │
+│  📄 Documentação Pendente                                         │
+│                                                                   │
+│  Olá João! Para dar continuidade à sua filiação na PRATIC,       │
+│  precisamos dos seguintes documentos:                            │
+│                                                                   │
+│  • CNH                                                           │
+│  • CRLV                                                          │
+│  • Comprovante de Residência                                     │
+│                                                                   │
+│  📝 Obs: Fotos legíveis por favor                                │
+│                                                                   │
+│  📲 Envie agora mesmo pelo link:                                 │
+│  🔗 https://pratic.app/acompanhar/abc123                         │
+│                                                                   │
+│  ⏰ Você tem 7 dias para enviar.                                 │
+└────────────────────────┬──────────────────────────────────────────┘
+                         │
+                         ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  ÁREA DO CLIENTE (Realtime)                                       │
+│  /acompanhar/:token                                               │
+│                                                                   │
+│  A tela já atualiza automaticamente via Supabase Realtime        │
+│  quando o INSERT em documentos_solicitados é detectado.          │
+│                                                                   │
+│  O cliente vê:                                                   │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │  ⚠️ Documentos Pendentes                    │                 │
+│  │                                             │                 │
+│  │  📄 CNH                          [Pendente] │                 │
+│  │  📄 CRLV                         [Pendente] │                 │
+│  │  📄 Comprovante de Residência    [Pendente] │                 │
+│  │                                             │                 │
+│  │  [  📤 Enviar Documentos  ]                 │                 │
+│  └─────────────────────────────────────────────┘                 │
+└───────────────────────────────────────────────────────────────────┘
+```
 
-1. **Cards verticais** com nome do plano em destaque no topo
-2. **Valor mensal centralizado** com tamanho grande
-3. **Lista de coberturas** alinhadas à esquerda com checks verdes
-4. **Taxa de filiação** visível no rodapé de cada card
-5. **Espaçamento uniforme** entre elementos
-6. **Centralização** de cards na página
+---
 
-O layout final será visualmente similar à interface web mostrada na imagem de referência, mantendo a identidade visual premium do sistema.
+### Verificações Adicionais
 
+1. **Realtime já está funcionando** para `documentos_solicitados` na página `/acompanhar/:token` (linhas 408-421 do arquivo `AcompanhamentoProposta.tsx`)
+
+2. **O componente `DocumentosPendentes`** já renderiza quando `associado.status === 'documentacao_pendente'` (linha 594)
+
+3. **Não é necessário alterar a área do cliente** - ela já atualiza automaticamente via Realtime
+
+---
+
+### Considerações
+
+- O link enviado por WhatsApp direciona diretamente para `/acompanhar/:token`, onde o cliente verá os documentos pendentes e poderá enviá-los
+- A observação do analista (se preenchida) será incluída na mensagem
+- O prazo de 7 dias é informativo - pode ser ajustado conforme regra de negócio
