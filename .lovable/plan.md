@@ -1,110 +1,91 @@
 
-## PLANO: EXECUTAR MIGRATIONS SQL PARA COMISSIONAMENTO
+## PLANO: MÓDULO DE COMISSIONAMENTO — CONCLUÍDO ✅
 
-### SITUAÇÃO ATUAL VALIDADA
-
-✅ **Tabelas existentes:**
-- `comissoes` (18 campos)
-- `comissoes_config` (existente)
-- `comissoes_pagamentos` (existente)
-- `associados` (39 campos)
-- `contratos` (70+ campos)
-- `funcionarios` (60+ campos)
-- `profiles` (10 campos) — usada como referência para FK
-- `user_roles` (com role enum) — usada para RLS
-
-✅ **Triggers existentes:**
-- Nenhum trigger listado no information_schema (possível que estejam em outras schemas ou schemas de sistema)
+### MIGRATIONS EXECUTADAS COM SUCESSO
 
 ---
 
-### ESTRUTURA DAS MIGRATIONS
+#### ✅ MIGRATION 1: Campos em Tabelas Existentes
 
-A implementação será dividida em **3 migrations SQL** executadas sequencialmente:
+**Em `associados`** (5 campos):
+- `vendedor_original_id` UUID → Preserva vendedor original após troca de titularidade
+- `motivo_cancelamento` TEXT
+- `data_cancelamento` TIMESTAMPTZ
+- `data_primeiro_boleto_pago` TIMESTAMPTZ
+- `qtd_boletos_pagos` INTEGER DEFAULT 0
 
-#### **MIGRATION 1: Adicionar Campos em Tabelas Existentes**
+**Em `comissoes`** (12 campos):
+- `tipo_comissao` VARCHAR(50) DEFAULT 'adesao'
+- `cobranca_id` UUID
+- `campanha_id` UUID
+- `associado_id` UUID REFERENCES associados(id)
+- `valor_bruto`, `valor_deducoes` NUMERIC(10,2)
+- `deducoes_detalhes` JSONB
+- `recalculada`, `contestada` BOOLEAN
+- Campos de motivo/resposta para contestação
 
-Vai adicionar:
-- **Em `associados`**: 5 novos campos (vendedor_original_id, motivo_cancelamento, data_cancelamento, data_primeiro_boleto_pago, qtd_boletos_pagos)
-- **Em `comissoes`**: 12 novos campos (tipo_comissao, cobranca_id, campanha_id, associado_id, valor_bruto, valor_deducoes, deducoes_detalhes, recalculada, recalculada_em, recalculada_motivo, contestada, contestada_em, contestacao_motivo, contestacao_resposta)
-- **Em `contratos`**: 3 novos campos (tipo_atendimento, tipo_venda, origem_troca_titularidade_id)
-- **Em `funcionarios`**: 3 novos campos (recorde_vendas_mensal, mes_recorde, ano_recorde)
-- **Índices**: 5 índices novos para performance
+**Em `contratos`** (3 campos):
+- `tipo_atendimento` VARCHAR(20) DEFAULT 'volante'
+- `tipo_venda` VARCHAR(20) DEFAULT 'nova'
+- `origem_troca_titularidade_id` UUID
 
-**Risco:** Baixo. Usa `IF NOT EXISTS` e `ADD COLUMN IF NOT EXISTS`.
+**Em `funcionarios`** (3 campos):
+- `recorde_vendas_mensal` INTEGER
+- `mes_recorde`, `ano_recorde` INTEGER
 
----
-
-#### **MIGRATION 2: Criar Tabelas de Configuração de Faixas**
-
-Vai criar 5 tabelas principais com dados padrão:
-
-1. **`comissoes_faixas_adesao`** → 11 registros (faixas por quantidade de vendas)
-2. **`comissoes_faixas_recorrente`** → 10 registros (faixas por base ativa)
-3. **`comissoes_faixas_producao`** → 3 registros (faixas por produção externa)
-4. **`comissoes_faixas_crescimento`** → 15 registros (marcos de crescimento)
-5. **`comissoes_faixas_classificacao`** → 27 registros (ranking mensal)
-
-**Risco:** Muito baixo. Usa `IF NOT EXISTS` para criar tabelas.
-
----
-
-#### **MIGRATION 3: Criar Tabelas Auxiliares + RLS**
-
-Vai criar 7 tabelas auxiliares:
-
-1. **`comissoes_campanhas`** — período de apuração
-2. **`comissoes_ranking_mensal`** — resultado de ranking
-3. **`comissoes_recorrentes`** — comissões sobre mensalidades
-4. **`comissoes_crescimento_log`** — marcos atingidos
-5. **`comissoes_deducoes`** — registro detalhado de deduções
-6. **`comissoes_parametros`** → 10 parâmetros configuráveis
-7. **`comissoes_auditoria`** — auditoria de todas as alterações
-
-E vai:
-- Habilitar RLS em todas as 12 novas tabelas
-- Criar 13 RLS policies (leitura para todos autenticados, escrita para diretor/gerente)
-- Criar índices para performance
-
-**Risco:** Baixo. Policies usam `EXISTS` com `user_roles`, não RLS recursiva.
+**Índices criados:** 5 (para performance em queries de comissão)
 
 ---
 
-### VALIDAÇÕES PRÉ-EXECUÇÃO
+#### ✅ MIGRATION 2: Tabelas de Faixas
 
-Antes de executar:
-- ✅ Confirmar que `profiles` tem campo `id` UUID (SIM)
-- ✅ Confirmar que `user_roles` tem coluna `role` (SIM)
-- ✅ Confirmar que `associados`, `comissoes`, `contratos`, `funcionarios` existem (SIM)
-- ✅ Nenhuma tabela nova já existe (confirmado)
+| Tabela | Registros | Descrição |
+|--------|-----------|-----------|
+| `comissoes_faixas_adesao` | 11 | Faixas por qtd vendas (interno) |
+| `comissoes_faixas_recorrente` | 10 | Faixas por base ativa (7 interno + 3 externo) |
+| `comissoes_faixas_producao` | 3 | Faixas de produção (externo) |
+| `comissoes_faixas_crescimento` | 15 | Marcos de crescimento (10 interno + 5 externo) |
+| `comissoes_faixas_classificacao` | 27 | Ranking mensal (9+9 interno + 9 externo) |
 
-### FLUXO DE EXECUÇÃO
+---
 
-```
-1. MIGRATION 1 (Campos)
-   ↓ [Aguarda conclusão]
-2. MIGRATION 2 (Faixas + Parametros)
-   ↓ [Aguarda conclusão]
-3. MIGRATION 3 (Auxiliares + RLS)
-   ↓ [Conclusão]
-4. VALIDAÇÃO (Confirmação de sucesso)
-```
+#### ✅ MIGRATION 3: Tabelas Auxiliares + RLS
 
-### CHECKLIST DE VALIDAÇÃO PÓS-EXECUÇÃO
+| Tabela | Descrição | RLS |
+|--------|-----------|-----|
+| `comissoes_campanhas` | Períodos de apuração mensal | ✅ |
+| `comissoes_ranking_mensal` | Resultado de ranking por campanha | ✅ |
+| `comissoes_recorrentes` | Comissões sobre mensalidades | ✅ |
+| `comissoes_crescimento_log` | Marcos atingidos | ✅ |
+| `comissoes_deducoes` | Deduções detalhadas | ✅ |
+| `comissoes_parametros` | 10 parâmetros configuráveis | ✅ |
+| `comissoes_auditoria` | Log de alterações | ✅ |
 
-Após cada migration, será validado:
-- ✅ Tabelas criadas com sucesso
-- ✅ Dados padrão inseridos (contagem correta)
-- ✅ Índices criados
-- ✅ RLS ativado
-- ✅ Nenhum erro no console
-- ✅ Triggers existentes NÃO alterados
+**RLS Policies:** 13 criadas (leitura geral + escrita restrita a diretor/gerente)
 
-### PRÓXIMOS PASSOS (Parte 3)
+---
 
-Após aprovação e execução, a próxima etapa será:
-- Modificar triggers existentes para registrar em `comissoes_auditoria`
-- Criar edge function `calcular-comissoes-recorrentes` para boletos pagos
-- Criar edge function `gerar-ranking-mensal` para apuração
-- Atualizar TypeScript types conforme novas tabelas
+### PRÓXIMOS PASSOS (PARTE 3)
 
+1. **Edge Functions a criar:**
+   - `calcular-comissoes-recorrentes` → Processar boletos pagos
+   - `gerar-ranking-mensal` → Calcular posições e prêmios
+   - `processar-cancelamento-comissao` → Reverter comissões
+
+2. **Triggers a modificar:**
+   - `trigger_comissao_ao_ativar` → Registrar em `comissoes_auditoria`
+
+3. **Frontend a criar:**
+   - Tela de configuração de faixas
+   - Dashboard de ranking mensal
+   - Visualização de deduções
+
+---
+
+### VERIFICAÇÃO PÓS-EXECUÇÃO
+
+✅ 12 tabelas de comissão existem
+✅ 66 registros de dados padrão inseridos
+✅ RLS ativo em todas as novas tabelas
+✅ Types TypeScript atualizados
+✅ Triggers existentes NÃO foram alterados
