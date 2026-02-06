@@ -88,7 +88,7 @@ export default function AppInstall() {
         <div className="text-center mb-8">
           <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-primary/10 flex items-center justify-center shadow-lg">
             <img 
-              src="/pratic-logo.png" 
+              src="/logos/logo-icon-light.png" 
               alt="PRATIC" 
               className="w-16 h-16 object-contain"
             />

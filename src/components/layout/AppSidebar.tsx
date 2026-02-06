@@ -402,20 +402,26 @@ const PraticLogo = React.forwardRef<HTMLDivElement, { collapsed: boolean }>(
           collapsed ? "justify-center" : "gap-3"
         )}
       >
-        {/* Shield with gradient */}
-        <div className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-primary">
-          <Shield className="h-5 w-5 text-white" />
-        </div>
-        
-        {!collapsed && (
-          <div className="flex flex-col">
-            <div className="flex items-baseline">
-              <span className="pratic-logo-text text-lg text-sidebar-foreground font-semibold">pratic</span>
-            </div>
-            {/* Red line */}
-            <div className="h-0.5 w-full bg-accent mb-0.5" />
-            <span className="text-xs font-medium text-accent">car</span>
-          </div>
+        {/* Logo icon (collapsed) or full (expanded) */}
+        {collapsed ? (
+          <img 
+            src="/logos/logo-icon-light.png" 
+            alt="PRATIC" 
+            className="h-10 w-10 object-contain"
+          />
+        ) : (
+          <>
+            <img 
+              src="/logos/logo-full-light.png" 
+              alt="PRATIC Car" 
+              className="h-10 w-auto object-contain dark:hidden"
+            />
+            <img 
+              src="/logos/logo-full-dark.png" 
+              alt="PRATIC Car" 
+              className="h-10 w-auto object-contain hidden dark:block"
+            />
+          </>
         )}
       </div>
     );

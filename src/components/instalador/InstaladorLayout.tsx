@@ -19,7 +19,7 @@ import { useTarefaAtual } from '@/hooks/useTarefaAtual';
 import { toast } from 'sonner';
 import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptProfissional';
 import { PushNotificationBanner } from './PushNotificationBanner';
-import logoPratic from '@/assets/pratic-logo.png';
+import logoFullDark from '@/assets/logos/logo-full-dark.png';
 
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/instalador' },
@@ -144,7 +144,7 @@ export function InstaladorLayout() {
             <div className="flex items-center justify-between px-4 py-3">
               {/* Logo + Status */}
               <div className="flex items-center gap-3">
-                <img src={logoPratic} alt="PRATIC" className="h-9 w-auto" />
+                <img src={logoFullDark} alt="PRATIC" className="h-9 w-auto" />
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold text-white">
                     {getPrimeiroNome()}

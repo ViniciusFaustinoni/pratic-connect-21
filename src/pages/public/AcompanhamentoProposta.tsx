@@ -525,7 +525,7 @@ export default function AcompanhamentoProposta() {
             <div className="relative">
               <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
               <img 
-                src="/pratic-logo.png" 
+                src="/logos/logo-icon-light.png" 
                 alt="PRATIC" 
                 className="h-12 w-12 object-contain rounded-lg bg-white/10 p-1 relative z-10"
               />

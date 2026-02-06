@@ -19,7 +19,10 @@ export default defineConfig(({ mode }) => ({
       includeAssets: [
         'favicon.ico', 
         'robots.txt', 
-        'pratic-logo.png', 
+        'logos/logo-full-light.png',
+        'logos/logo-full-dark.png',
+        'logos/logo-icon-light.png',
+        'logos/logo-icon-dark.png',
         'pwa-192x192.png', 
         'pwa-512x512.png',
         'pwa-instalador-192x192.png',
@@ -27,7 +30,7 @@ export default defineConfig(({ mode }) => ({
       ],
       manifest: false, // Desativado - usando manifests estáticos separados em public/
       workbox: {
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         cleanupOutdatedCaches: true,
         skipWaiting: true,
