@@ -1,115 +1,200 @@
 
 
-## Plano: Ajustes no PDF de Cotação
+## Plano: Carregar Dados da Cotação ao Editar
 
-### Alterações Solicitadas
+### Problema Identificado
 
-| Item | Situação Atual | Alteração |
-|------|----------------|-----------|
-| Fonte das coberturas | 6.5pt (comparativo) e 8pt (normal) | Aumentar para **9pt** em ambos |
-| Truncamento de texto | `truncateText(cobertura, 30)` e `maxChars` | Exibir texto completo sem truncar |
-| Círculo amarelo "1°" | Badge de ranking no plano recomendado | Remover completamente |
+O componente `CotacaoFormDialog` recebe a prop `cotacaoParaEditar` quando o usuário quer editar uma cotação existente, mas **não existe um `useEffect` para carregar esses dados no formulário**.
 
----
+Existe apenas:
+- `useEffect` para resetar formulário quando abre sem leadId (linhas 293-325)
+- `useEffect` para preencher dados do lead (linhas 526-563)
+- `useEffect` para preencher dados de duplicação `cotacaoBase` (linhas 565-632)
 
-### Modificações no Arquivo
-
-**Arquivo:** `src/lib/gerarPdfCotacao.ts`
+O `cotacaoParaEditar` é definido mas **nunca utilizado para popular o formulário**.
 
 ---
 
-#### 1. Aumentar fonte das coberturas no PDF normal (linhas 521 e 537)
+### Análise do Fluxo Atual
+
+| Cenário | Prop | Dados Carregados |
+|---------|------|------------------|
+| Nova cotação | `leadId` | Dados do lead |
+| Duplicar cotação | `cotacaoBase` | Dados da cotação original |
+| **Editar cotação** | `cotacaoParaEditar` | **Nada - problema!** |
+
+---
+
+### Conflito Adicional
+
+O `useEffect` de reset (linhas 293-325) é executado quando `open && !leadId`, o que **limpa o formulário mesmo em modo de edição** se não houver leadId:
+
+```typescript
+useEffect(() => {
+  if (open && !leadId) {
+    // Resetar todos os estados para começar limpo
+    form.reset({...});
+    // ... limpa todos os states
+  }
+}, [open, leadId, form]);
+```
+
+Isso significa que mesmo que adicionássemos um `useEffect` para `cotacaoParaEditar`, ele seria sobrescrito pelo reset se a cotação não tiver `lead_id`.
+
+---
+
+### Solução Proposta
+
+#### 1. Modificar o useEffect de reset para excluir modo edição
+
+**Arquivo:** `src/components/cotacoes/CotacaoFormDialog.tsx`
+
+Alterar a condição do reset para não executar quando houver `cotacaoParaEditar` ou `cotacaoBase`:
 
 ```typescript
 // De:
-doc.setFontSize(8);
+useEffect(() => {
+  if (open && !leadId) {
+    // Resetar...
+  }
+}, [open, leadId, form]);
 
 // Para:
-doc.setFontSize(9);
+useEffect(() => {
+  if (open && !leadId && !cotacaoParaEditar && !cotacaoBase) {
+    // Resetar...
+  }
+}, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
 ```
 
-#### 2. Aumentar fonte das coberturas no PDF comparativo (linha 819)
+#### 2. Criar useEffect para carregar dados de edição
+
+Adicionar novo `useEffect` similar ao de `cotacaoBase`, mas para `cotacaoParaEditar`:
 
 ```typescript
-// De:
-doc.setFontSize(6.5);
-
-// Para:
-doc.setFontSize(9);
+// Efeito para preencher o formulário com dados da cotação para edição
+useEffect(() => {
+  if (cotacaoParaEditar && open) {
+    // Preencher dados do formulário
+    if (cotacaoParaEditar.valor_fipe) {
+      form.setValue('valor_fipe', cotacaoParaEditar.valor_fipe);
+    }
+    if (cotacaoParaEditar.valor_adicional) {
+      form.setValue('valor_adicional', cotacaoParaEditar.valor_adicional);
+    }
+    if (cotacaoParaEditar.valor_adesao) {
+      form.setValue('valor_adesao', cotacaoParaEditar.valor_adesao);
+    }
+    if (cotacaoParaEditar.validade_dias) {
+      form.setValue('validade_dias', cotacaoParaEditar.validade_dias);
+    }
+    if (cotacaoParaEditar.lead_id) {
+      form.setValue('lead_id', cotacaoParaEditar.lead_id);
+    }
+    if (cotacaoParaEditar.plano_id) {
+      form.setValue('plano_id', cotacaoParaEditar.plano_id);
+    }
+    
+    // Preencher dados do solicitante
+    setNomeAssociado(cotacaoParaEditar.nome_solicitante || '');
+    setTelefoneAssociado(cotacaoParaEditar.telefone1_solicitante || '');
+    setEmailAssociado(cotacaoParaEditar.email_solicitante || '');
+    
+    // Preencher placa
+    if (cotacaoParaEditar.veiculo_placa) {
+      setPlaca(cotacaoParaEditar.veiculo_placa);
+    }
+    
+    // Preencher categoria
+    if (cotacaoParaEditar.categoria) {
+      setCategoria(cotacaoParaEditar.categoria);
+    }
+    
+    // Preencher região
+    if (cotacaoParaEditar.regiao) {
+      setRegiaoSelecionada(cotacaoParaEditar.regiao);
+    }
+    
+    // Preencher dados do veículo encontrado
+    if (cotacaoParaEditar.veiculo_marca && cotacaoParaEditar.veiculo_modelo) {
+      setVeiculoEncontrado({
+        success: true,
+        vehicleData: {
+          marca: cotacaoParaEditar.veiculo_marca,
+          modelo: cotacaoParaEditar.veiculo_modelo,
+          marca_modelo: `${cotacaoParaEditar.veiculo_marca} ${cotacaoParaEditar.veiculo_modelo}`,
+          ano: cotacaoParaEditar.veiculo_ano ? String(cotacaoParaEditar.veiculo_ano) : '',
+          placa: cotacaoParaEditar.veiculo_placa || '',
+          cor: '',
+          chassi: '',
+          municipio: '',
+          uf: '',
+          combustivel: ''
+        },
+        fipeData: cotacaoParaEditar.valor_fipe ? {
+          valor: cotacaoParaEditar.valor_fipe,
+          codigo: cotacaoParaEditar.codigo_fipe,
+          mesReferencia: null
+        } : null
+      });
+    }
+    
+    // Preencher planos selecionados se existirem
+    if (cotacaoParaEditar.dados_extras?.planos_comparacao?.length) {
+      // Os planos serão selecionados após o hook usePlanosCotacao calcular
+    }
+  }
+}, [cotacaoParaEditar, open, form]);
 ```
 
-#### 3. Remover truncamento das coberturas no PDF normal (linhas 523 e 539)
+---
 
-```typescript
-// De:
-doc.text(truncateText(cobertura, 30), cobCol1X + 12, textY);
-doc.text(truncateText(cobertura, 30), cobCol2X + 9, textY);
+### Arquivos a Modificar
 
-// Para:
-doc.text(cobertura, cobCol1X + 12, textY);
-doc.text(cobertura, cobCol2X + 9, textY);
-```
-
-#### 4. Remover truncamento das coberturas no PDF comparativo (linha 824)
-
-```typescript
-// De:
-const maxChars = Math.floor((width - 20) / 2);
-doc.text(truncateText(cobertura, maxChars), x + padding + 8, currentY);
-
-// Para:
-doc.text(cobertura, x + padding + 8, currentY);
-```
-
-#### 5. Remover círculo amarelo "1°" do título do plano (linhas 774-783)
-
-```typescript
-// REMOVER este bloco inteiro:
-if (isRecommended) {
-  const badgeSize = 14;
-  doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
-  doc.circle(x + width - 10, currentY + 6, badgeSize / 2, 'F');
-  doc.setTextColor(premiumDark.r, premiumDark.g, premiumDark.b);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text('1°', x + width - 10, currentY + 8.5, { align: 'center' });
-}
-```
-
-#### 6. Ajustar centralização do nome do plano após remover badge (linhas 790-792)
-
-```typescript
-// De:
-const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), width - (isRecommended ? 24 : 12));
-const lineToShow = nomeLines[0];
-doc.text(lineToShow, x + width / 2 - (isRecommended ? 6 : 0), currentY + 9, { align: 'center' });
-
-// Para:
-const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), width - 12);
-const lineToShow = nomeLines[0];
-doc.text(lineToShow, x + width / 2, currentY + 9, { align: 'center' });
-```
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/cotacoes/CotacaoFormDialog.tsx` | Modificar useEffect de reset e adicionar useEffect para `cotacaoParaEditar` |
 
 ---
 
 ### Resumo das Alterações
 
-| Local | Linha(s) | Alteração |
-|-------|----------|-----------|
-| PDF Normal - Fonte coberturas | 521, 537 | 8pt → 9pt |
-| PDF Normal - Truncamento | 523, 539 | Remover `truncateText()` |
-| PDF Comparativo - Fonte coberturas | 819 | 6.5pt → 9pt |
-| PDF Comparativo - Truncamento | 822-824 | Remover `maxChars` e `truncateText()` |
-| PDF Comparativo - Badge amarelo | 774-783 | Remover bloco inteiro |
-| PDF Comparativo - Centralização nome | 790-792 | Remover offset condicional |
+1. **Linha ~294**: Alterar condição do `useEffect` de reset para incluir `!cotacaoParaEditar && !cotacaoBase`
+
+2. **Após linha 632**: Adicionar novo `useEffect` para carregar dados de `cotacaoParaEditar` (similar ao existente para `cotacaoBase`)
+
+---
+
+### Fluxo Corrigido
+
+```text
+Usuário clica em "Editar Cotação"
+         │
+         ▼
+CotacaoFormDialog abre com cotacaoParaEditar
+         │
+         ▼
+useEffect de reset NÃO executa (cotacaoParaEditar existe)
+         │
+         ▼
+useEffect de cotacaoParaEditar executa
+         │
+         ▼
+Formulário preenchido com:
+  • Nome, telefone, email do solicitante
+  • Dados do veículo (marca, modelo, ano, placa)
+  • Valor FIPE
+  • Região e categoria
+  • Plano selecionado
+  • Valor de adesão e adicional
+```
 
 ---
 
 ### Resultado Esperado
 
-Após as alterações:
-- As coberturas terão **fonte maior (9pt)** e mais legível
-- Os nomes das coberturas serão exibidos **completos, sem abreviações**
-- O **círculo amarelo com "1°"** será removido do título do plano no PDF comparativo
-- O nome do plano ficará **centralizado corretamente** sem o offset do badge
+Após a implementação:
+- Ao abrir o modal de edição, todos os campos serão preenchidos automaticamente com os dados da cotação existente
+- O usuário poderá modificar apenas os campos desejados
+- Ao salvar, a cotação será atualizada (não criada nova)
 
