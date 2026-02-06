@@ -142,6 +142,10 @@ Deno.serve(async (req) => {
     // 7. Delete gastos_beneficios
     await supabaseAdmin.from("gastos_beneficios").delete().eq("contrato_id", contratoId);
 
+    // 7b. Delete comissoes_deducoes (FK constraint com contratos)
+    await supabaseAdmin.from("comissoes_deducoes").delete().eq("contrato_id", contratoId);
+    console.log("[delete-ativacao] Comissões/deduções excluídas");
+
     // 8. Delete instalacoes linked to contract
     await supabaseAdmin.from("instalacoes").delete().eq("contrato_id", contratoId);
 
