@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Eye, EyeOff, Loader2, AlertCircle, Mail } from 'lucide-react';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import logoPratic from '@/assets/pratic-logo.png';
+import logoFullLight from '@/assets/logos/logo-full-light.png';
 
 // ============================================
 // TIPOS E CONSTANTES
@@ -189,7 +189,7 @@ export default function AppLogin() {
         
         {/* CABEÇALHO */}
         <div className="text-center mb-8">
-          <img src={logoPratic} alt="PRATIC" className="h-20 w-auto mx-auto mb-4" />
+          <img src={logoFullLight} alt="PRATIC" className="h-20 w-auto mx-auto mb-4" />
           <p className="text-gray-600">Área do Associado</p>
         </div>
 

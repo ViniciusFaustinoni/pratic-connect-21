@@ -17,7 +17,7 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 // Logo PRATIC
-import logoPratic from '@/assets/pratic-logo.png';
+import logoFullLight from '@/assets/logos/logo-full-light.png';
 
 // Mapeamento de status do associado para exibição
 const STATUS_ASSOCIADO_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode }> = {
@@ -179,7 +179,7 @@ export default function AssociadoVistoria() {
       >
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoPratic} alt="PRATIC" className="h-8 w-auto" />
+            <img src={logoFullLight} alt="PRATIC" className="h-8 w-auto" />
             <div className="h-6 w-px bg-border/50" />
             <div className="flex items-center gap-2 text-primary">
               <Shield className="h-5 w-5" />

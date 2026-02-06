@@ -294,7 +294,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   // Carregar imagens
   const [logoBase64, vehicleBase64] = await Promise.all([
-    loadImageAsBase64('/pratic-logo.png'),
+    loadImageAsBase64('/logos/logo-full-light.png'),
     loadImageAsBase64('/vehicle-silhouette.png'),
   ]);
 
@@ -1450,7 +1450,7 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   const margin = 15;
 
   // Carregar logo
-  const logoBase64 = await loadImageAsBase64('/pratic-logo.png');
+  const logoBase64 = await loadImageAsBase64('/logos/logo-full-light.png');
 
   const numPlanos = cotacao.planosComparar.length;
   

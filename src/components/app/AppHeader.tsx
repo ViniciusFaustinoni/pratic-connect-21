@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AppMobileMenu } from './AppMobileMenu';
 import { AppUserDropdown } from './AppUserDropdown';
-import logoPratic from '@/assets/pratic-logo.png';
+import logoFullLight from '@/assets/logos/logo-full-light.png';
 
 
 const navItems = [
@@ -30,7 +30,7 @@ export function AppHeader() {
         onClick={() => navigate('/app/home')}
         className="flex items-center gap-2"
       >
-        <img src={logoPratic} alt="PRATIC" className="h-10 w-auto" />
+        <img src={logoFullLight} alt="PRATIC" className="h-10 w-auto" />
       </button>
 
       {/* Desktop Navigation */}
