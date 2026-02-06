@@ -70,8 +70,9 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
 
       if (error) throw error;
 
-      // Filtrar por status
-      let filteredContratos = contratos || [];
+      // Filtrar por status - SEMPRE excluir contratos cancelados
+      let filteredContratos = (contratos || []).filter(c => c.status !== 'cancelado');
+      
       if (filtro === 'ativados') {
         filteredContratos = filteredContratos.filter(c => c.status === 'ativo');
       } else if (filtro !== 'todos') {

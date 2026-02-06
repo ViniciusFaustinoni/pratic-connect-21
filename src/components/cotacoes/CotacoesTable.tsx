@@ -33,7 +33,8 @@ type EtapaVenda =
   | 'realizando_vistoria'
   | 'vistoria_realizada'
   | 'em_analise'
-  | 'associado_ativo';
+  | 'associado_ativo'
+  | 'veiculo_recusado';
 
 const statusConfig: Record<StatusCotacaoExtended, { 
   label: string; 
@@ -140,10 +141,20 @@ const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgCol
     color: 'text-emerald-600 dark:text-emerald-400',
     bgColor: 'bg-emerald-500/20',
   },
+  veiculo_recusado: {
+    label: 'Veículo Recusado',
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-500/20',
+  },
 };
 
 // Função para determinar a etapa da venda - CORRIGIDA para vistoria agendada
 export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
+  // PRIORIDADE MÁXIMA: Se veículo foi recusado, mostrar imediatamente
+  if (cotacao.status === 'recusada' || cotacao.status_contratacao === 'veiculo_recusado') {
+    return 'veiculo_recusado';
+  }
+  
   const statusContratacao = cotacao.status_contratacao;
   const temContratacaoAtiva = statusContratacao && 
     statusContratacao !== 'aguardando' && 

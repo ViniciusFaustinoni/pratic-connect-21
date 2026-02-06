@@ -1169,11 +1169,14 @@ export function useRecusarVeiculoServico() {
           .eq('id', contratoId);
       }
 
-      // 8. NOVO: Atualizar cotação para veiculo_recusado
+      // 8. ATUALIZADO: Atualizar cotação - status E status_contratacao
       if (cotacaoId) {
         await supabase
           .from('cotacoes')
-          .update({ status_contratacao: 'veiculo_recusado' })
+          .update({ 
+            status: 'recusada',                    // Mudar status principal para aparecer correto na UI
+            status_contratacao: 'veiculo_recusado' 
+          })
           .eq('id', cotacaoId);
       }
 
