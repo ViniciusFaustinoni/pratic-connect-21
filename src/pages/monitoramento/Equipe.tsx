@@ -52,6 +52,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { ProfissionalModal, Profissional as ProfissionalModalData, ProfissionalFormData } from '@/components/monitoramento/ProfissionalModal';
+import { RelatorioTarefasModal } from '@/components/monitoramento/RelatorioTarefasModal';
 import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, ProfissionalEquipe, StatusProfissional, StatusOperacional } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
 import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
@@ -104,9 +105,13 @@ export default function Equipe() {
   const [statusOperacionalFilter, setStatusOperacionalFilter] = useState<string>('todos');
   const [regiaoFilter, setRegiaoFilter] = useState<string>('todas');
   
-  // Estado do modal
+  // Estado do modal de edição
   const [modalOpen, setModalOpen] = useState(false);
   const [profissionalSelecionado, setProfissionalSelecionado] = useState<ProfissionalEquipe | null>(null);
+  
+  // Estado do modal de relatório
+  const [relatorioModalOpen, setRelatorioModalOpen] = useState(false);
+  const [profissionalRelatorio, setProfissionalRelatorio] = useState<ProfissionalEquipe | null>(null);
 
   // Hooks de dados
   const { data: profissionais, isLoading, error } = useProfissionaisEquipe();
@@ -469,7 +474,15 @@ export default function Equipe() {
 
                   {/* Ações */}
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => {
+                        setProfissionalRelatorio(profissional);
+                        setRelatorioModalOpen(true);
+                      }}
+                    >
                       <BarChart className="mr-2 h-4 w-4" />
                       Relatório
                     </Button>
@@ -480,6 +493,14 @@ export default function Equipe() {
           )}
         </div>
       )}
+      
+      {/* Modal de Relatório */}
+      <RelatorioTarefasModal
+        open={relatorioModalOpen}
+        onOpenChange={setRelatorioModalOpen}
+        profissionalId={profissionalRelatorio?.id || ''}
+        profissionalNome={profissionalRelatorio?.nome || ''}
+      />
     </div>
   );
 }

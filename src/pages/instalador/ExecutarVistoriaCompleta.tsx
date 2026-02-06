@@ -16,6 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { FotoCapture } from '@/components/instalador/FotoCapture';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
+import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useVistoriaCompleta } from '@/hooks/useVistorias';
@@ -287,6 +288,14 @@ export default function ExecutarVistoriaCompleta() {
           />
         </div>
       </div>
+
+      {/* Temporizador de Execução */}
+      {(vistoria as any)?.iniciada_em && (
+        <TemporizadorExecucao 
+          iniciadaEm={(vistoria as any).iniciada_em} 
+          className="mx-4 mt-2"
+        />
+      )}
 
       <main className="flex-1 space-y-4 p-4">
         {/* Conferência de Dados */}
