@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FotoCapture } from '@/components/instalador/FotoCapture';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
-import { AssinaturaCapture } from '@/components/instalador/AssinaturaCapture';
+import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -361,7 +361,7 @@ export default function ExecutarRetirada() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <AssinaturaCapture onCapture={handleAssinatura} assinaturaUrl={assinaturaUrl} />
+            <SignaturePad onSave={handleAssinatura} disabled={!!assinaturaUrl} />
           </CardContent>
         </Card>
 
