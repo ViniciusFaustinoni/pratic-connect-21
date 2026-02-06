@@ -48,7 +48,7 @@ export default function LoginPage() {
   // ============================================
   const navigate = useNavigate();
   const location = useLocation();
-  const { signIn, user, profile, loading: authLoading, isAssociado } = useAuth();
+  const { signIn, user, profile, loading: authLoading, initialized, isAssociado } = useAuth();
 
   // ============================================
   // ESTADOS DO FORMULÁRIO
@@ -80,8 +80,8 @@ export default function LoginPage() {
   // REDIRECT SE JÁ AUTENTICADO
   // ============================================
   useEffect(() => {
-    // Só redireciona quando tiver user E profile carregado
-    if (!authLoading && user && profile) {
+    // Só redireciona quando o contexto estiver totalmente inicializado
+    if (initialized && !authLoading && user && profile) {
       if (profile.primeiro_acesso) {
         navigate('/definir-senha', { replace: true });
         return;
@@ -94,7 +94,7 @@ export default function LoginPage() {
       const returnTo = params.get('returnTo') || '/dashboard';
       navigate(returnTo, { replace: true });
     }
-  }, [authLoading, user, profile, isAssociado, navigate, location.search]);
+  }, [initialized, authLoading, user, profile, isAssociado, navigate, location.search]);
 
   // ============================================
   // VERIFICAR BLOQUEIO AO DIGITAR EMAIL (DEBOUNCED)
@@ -272,8 +272,8 @@ export default function LoginPage() {
   // ============================================
   // LOADING STATE COM ANIMAÇÃO
   // ============================================
-  // Loading state composto: inclui isSubmitting para cobrir o gap entre clique e onAuthStateChange
-  const showLoadingScreen = authLoading || isSubmitting || (user && !profile);
+  // Loading state composto: mantém loading até initialized para evitar flickering no redirect
+  const showLoadingScreen = authLoading || isSubmitting || (user && !profile) || !initialized;
 
   if (showLoadingScreen) {
     return (
