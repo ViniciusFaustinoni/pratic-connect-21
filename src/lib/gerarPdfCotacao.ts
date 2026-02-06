@@ -518,9 +518,9 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     // Indicador de check e texto no mesmo baseline
     drawCheckIndicator(doc, cobCol1X + 5, textY);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, 30), cobCol1X + 12, textY);
+    doc.text(cobertura, cobCol1X + 12, textY);
   });
 
   coberturasCol2.forEach((cobertura, index) => {
@@ -534,9 +534,9 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     
     drawCheckIndicator(doc, cobCol2X + 2, textY);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, 30), cobCol2X + 9, textY);
+    doc.text(cobertura, cobCol2X + 9, textY);
   });
 
   y = startY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + SECTION_GAP;
@@ -771,25 +771,14 @@ const desenharCardPlanoExpandido = (
   doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
   doc.roundedRect(x + 3, currentY - 2, width - 6, 16, 2, 2, 'F');
   
-  // Badge de ranking se for recomendado
-  if (isRecommended) {
-    const badgeSize = 14;
-    doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
-    doc.circle(x + width - 10, currentY + 6, badgeSize / 2, 'F');
-    doc.setTextColor(premiumDark.r, premiumDark.g, premiumDark.b);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('1°', x + width - 10, currentY + 8.5, { align: 'center' });
-  }
-  
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   
   // Quebrar nome em múltiplas linhas se necessário
-  const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), width - (isRecommended ? 24 : 12));
+  const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), width - 12);
   const lineToShow = nomeLines[0];
-  doc.text(lineToShow, x + width / 2 - (isRecommended ? 6 : 0), currentY + 9, { align: 'center' });
+  doc.text(lineToShow, x + width / 2, currentY + 9, { align: 'center' });
   
   currentY += 20;
   
@@ -816,12 +805,9 @@ const desenharCardPlanoExpandido = (
     
     // Texto da cobertura
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(6.5);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    
-    // Calcular limite de caracteres baseado na largura
-    const maxChars = Math.floor((width - 20) / 2);
-    doc.text(truncateText(cobertura, maxChars), x + padding + 8, currentY);
+    doc.text(cobertura, x + padding + 8, currentY);
     
     currentY += lineHeight;
   });
