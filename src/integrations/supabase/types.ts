@@ -2936,6 +2936,7 @@ export type Database = {
           removido_por: string | null
           tipo_reprovacao: Database["public"]["Enums"]["tipo_reprovacao"]
           veiculo_id: string | null
+          vistoria_id: string | null
         }
         Insert: {
           adicionado_por?: string | null
@@ -2953,6 +2954,7 @@ export type Database = {
           removido_por?: string | null
           tipo_reprovacao: Database["public"]["Enums"]["tipo_reprovacao"]
           veiculo_id?: string | null
+          vistoria_id?: string | null
         }
         Update: {
           adicionado_por?: string | null
@@ -2970,6 +2972,7 @@ export type Database = {
           removido_por?: string | null
           tipo_reprovacao?: Database["public"]["Enums"]["tipo_reprovacao"]
           veiculo_id?: string | null
+          vistoria_id?: string | null
         }
         Relationships: [
           {
@@ -3096,6 +3099,13 @@ export type Database = {
             columns: ["veiculo_id"]
             isOneToOne: false
             referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
         ]
@@ -21279,6 +21289,7 @@ export type Database = {
         | "suspenso"
         | "cancelado"
         | "sinistrado"
+        | "recusado"
       status_vistoria:
         | "pendente"
         | "aprovada"
@@ -21650,6 +21661,7 @@ export const Constants = {
         "suspenso",
         "cancelado",
         "sinistrado",
+        "recusado",
       ],
       status_vistoria: [
         "pendente",

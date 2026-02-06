@@ -983,6 +983,33 @@ serve(async (req) => {
 
     console.log('[LAUDO] PDF gerado e salvo:', arquivoUrl);
 
+    // NOVO: Deletar laudo anterior se existir (evita duplicidade)
+    const { data: laudoExistente } = await supabase
+      .from('documentos')
+      .select('id, arquivo_url')
+      .eq('associado_id', associadoId)
+      .eq('veiculo_id', veiculoId)
+      .eq('tipo', 'laudo_vistoria')
+      .maybeSingle();
+
+    if (laudoExistente) {
+      console.log('[LAUDO] Laudo anterior encontrado, será substituído:', laudoExistente.id);
+      
+      // Deletar arquivo antigo do storage (se for diferente do novo)
+      if (laudoExistente.arquivo_url && laudoExistente.arquivo_url !== arquivoUrl) {
+        const pathMatch = laudoExistente.arquivo_url.match(/\/documentos\/(.+)$/);
+        if (pathMatch) {
+          await supabase.storage.from('documentos').remove([pathMatch[1]]);
+        }
+      }
+      
+      // Deletar registro antigo
+      await supabase
+        .from('documentos')
+        .delete()
+        .eq('id', laudoExistente.id);
+    }
+
     // Insert into documentos table (for cadastro analyst view)
     const { error: docError } = await supabase
       .from('documentos')
