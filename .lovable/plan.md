@@ -1,65 +1,155 @@
 
-# Plano: Corrigir Edge Function de Atribuição Automática
+# Plano: Incluir Vídeo 360° na Documentação da Instalação
 
 ## Problema Identificado
 
-A Edge Function `atribuir-proxima-tarefa` está **completamente quebrada** com o seguinte erro:
+O vídeo 360° é capturado pelo vistoriador/instalador e armazenado corretamente na coluna `video_360_url` da tabela `vistorias`, porém **não é incluído no laudo PDF gerado** pela Edge Function `gerar-laudo-vistoria`.
 
-```
-SyntaxError: Identifier 'hoje' has already been declared
-at file:///atribuir-proxima-tarefa/index.ts:273:11
-```
+### Causa Raiz
 
-**Causa**: A variável `hoje` foi declarada duas vezes no mesmo escopo:
-- Linha 214: `const hoje = new Date().toISOString().split('T')[0];`
-- Linha 357: `const hoje = new Date().toISOString().split('T')[0];`
+A Edge Function `gerar-laudo-vistoria`:
+1. **Não busca o campo `video_360_url`** no SELECT da vistoria (linhas 194-220)
+2. **Não tem lógica para referenciar o vídeo** no PDF gerado
+3. Busca apenas fotos da tabela `vistoria_fotos`
 
-## Impacto
+### Desafio Técnico
 
-| Funcionalidade | Status |
-|----------------|--------|
-| Vistoriador solicitar próxima tarefa | **QUEBRADO** |
-| Atribuição automática via CRON | Funcionando |
-| Iniciar rota para tarefa atribuída | **QUEBRADO** |
+PDFs não suportam vídeos embutidos. A solução será incluir um **QR Code** ou **link clicável** para o vídeo 360° no laudo PDF.
 
-Isso explica por que o vistoriador não consegue receber tarefas automaticamente ao solicitar - a função nem sequer carrega.
+## Solução Proposta
 
-## Solução
+### 1. Modificar a Edge Function `gerar-laudo-vistoria`
 
-Remover a segunda declaração de `hoje` na linha 357, pois a variável já foi declarada na linha 214 e está disponível no mesmo escopo.
+**Arquivo:** `supabase/functions/gerar-laudo-vistoria/index.ts`
 
-### Arquivo a Modificar
-
-**`supabase/functions/atribuir-proxima-tarefa/index.ts`**
-
-### Mudança
+#### a) Adicionar `video_360_url` ao SELECT da vistoria
 
 ```text
-ANTES (linha 357):
-const hoje = new Date().toISOString().split('T')[0];
-const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-
-DEPOIS:
-// hoje já foi declarado na linha 214
-const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+// Linha 197: Adicionar campo video_360_url
+.select(`
+  id,
+  protocolo,
+  created_at,
+  km_atual,
+  observacoes,
+  status,
+  video_360_url,  // NOVO
+  endereco_logradouro,
+  ...
+`)
 ```
 
-## Verificação Adicional
+#### b) Adicionar seção de Vídeo 360° no PDF (com link)
 
-Após a correção, verificar se há outros lugares no código com declarações duplicadas de variáveis.
+Após a seção de observações e antes das fotos, adicionar:
 
-## Testes
+```text
+// Verificar se existe vídeo 360°
+if (vistoria.video_360_url) {
+  if (y < 150) {
+    page = addPage();
+    y = PAGE_HEIGHT - MARGIN - 30;
+  }
 
-1. Verificar que a Edge Function carrega sem erros
-2. Testar a atribuição automática ao solicitar próxima tarefa
-3. Confirmar que o vistoriador recebe tarefas corretamente
+  page.drawText('VÍDEO 360° DO VEÍCULO', {
+    x: MARGIN,
+    y,
+    size: 12,
+    font: fontBold,
+    color: PRIMARY_COLOR,
+  });
 
-## Impacto da Correção
+  y -= 18;
 
-- Restauração imediata da funcionalidade de atribuição automática interativa
-- Vistoriadores poderão solicitar próximas tarefas novamente
-- Sistema voltará a funcionar como projetado
+  page.drawText('Link para visualização:', {
+    x: MARGIN,
+    y,
+    size: 9,
+    font,
+    color: TEXT_COLOR,
+  });
 
-## Detalhes Técnicos
+  y -= 14;
 
-O erro ocorre porque o JavaScript/TypeScript não permite re-declarar uma variável `const` no mesmo escopo. A solução é simplesmente reutilizar a variável `hoje` que já foi declarada anteriormente no mesmo bloco de código.
+  // Desenhar o link (PDFs suportam links clicáveis)
+  page.drawText(vistoria.video_360_url, {
+    x: MARGIN,
+    y,
+    size: 8,
+    font,
+    color: rgb(0, 0.4, 0.8), // Azul para indicar link
+  });
+
+  y -= 30;
+}
+```
+
+### 2. Alternativa: Adicionar QR Code para o Vídeo (Opcional - Mais Elegante)
+
+Para uma experiência melhor, podemos gerar um QR Code que aponta para o vídeo:
+
+```text
+// Usar biblioteca de QR Code para Deno
+import QRCode from "https://esm.sh/qrcode@1.5.3";
+
+// Gerar QR Code como Data URL
+const qrDataUrl = await QRCode.toDataURL(vistoria.video_360_url, { 
+  width: 120,
+  margin: 1 
+});
+
+// Converter para bytes e embutir no PDF
+const qrBytes = Uint8Array.from(atob(qrDataUrl.split(',')[1]), c => c.charCodeAt(0));
+const qrImage = await pdfDoc.embedPng(qrBytes);
+
+page.drawImage(qrImage, {
+  x: MARGIN,
+  y: y - 120,
+  width: 100,
+  height: 100,
+});
+
+page.drawText('Escaneie para assistir', {
+  x: MARGIN + 110,
+  y: y - 60,
+  size: 9,
+  font,
+  color: MUTED_COLOR,
+});
+```
+
+## Arquivos a Modificar
+
+1. **`supabase/functions/gerar-laudo-vistoria/index.ts`**
+   - Adicionar `video_360_url` no SELECT da vistoria (linha ~197)
+   - Adicionar seção "Vídeo 360°" no PDF com link clicável
+   - Opcionalmente: gerar QR Code para o vídeo
+
+## Fluxo Atualizado
+
+```text
+1. Instalador grava vídeo 360° → Salvo em vistorias.video_360_url
+2. Cliente assina → Trigger chama gerar-laudo-vistoria
+3. Edge Function busca video_360_url junto com demais dados
+4. PDF é gerado com seção "Vídeo 360°" contendo link clicável
+5. Laudo é salvo no bucket 'documentos' e registrado
+```
+
+## Comportamento Esperado
+
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Vídeo 360° capturado | Não aparece no laudo | Link/QR Code no laudo |
+| Sem vídeo 360° | - | Seção não exibida |
+
+## Testes Recomendados
+
+1. Concluir uma instalação com vídeo 360° capturado
+2. Verificar se o laudo PDF gerado contém a seção de vídeo
+3. Clicar no link ou escanear QR Code e verificar se abre o vídeo
+
+## Observações Técnicas
+
+- A solução usa link clicável em vez de embutir o vídeo (impossível em PDF)
+- O QR Code é opcional mas oferece melhor UX para visualização mobile
+- A biblioteca qrcode para Deno é leve e bem suportada
