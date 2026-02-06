@@ -32,6 +32,7 @@ type EtapaVenda =
   | 'instalacao_agendada'
   | 'realizando_vistoria'
   | 'vistoria_realizada'
+  | 'em_analise'
   | 'associado_ativo';
 
 const statusConfig: Record<StatusCotacaoExtended, { 
@@ -129,6 +130,11 @@ const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgCol
     color: 'text-teal-600 dark:text-teal-400',
     bgColor: 'bg-teal-500/20',
   },
+  em_analise: {
+    label: 'Em Análise',
+    color: 'text-yellow-600 dark:text-yellow-400',
+    bgColor: 'bg-yellow-500/20',
+  },
   associado_ativo: {
     label: 'Associado Ativo',
     color: 'text-emerald-600 dark:text-emerald-400',
@@ -145,9 +151,11 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
   
   if (cotacao.status === 'rascunho' && !temContratacaoAtiva && !cotacao.contrato) return null;
   
-  // PRIORIDADE 1: Verificar se associado está ativo
+  // PRIORIDADE 1: Verificar status do associado
   const associadoStatus = cotacao.contrato?.associados?.status;
   if (associadoStatus === 'ativo') return 'associado_ativo';
+  if (associadoStatus === 'em_analise') return 'em_analise';
+  if (associadoStatus === 'pendente_vistoria') return 'vistoria_agendada';
   
   // PRIORIDADE 2: Verificar status da instalação/vistoria
   const instalacao = cotacao.instalacoes?.[0];
@@ -162,7 +170,7 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
   }
   
   // PRIORIDADE 3: Verificar status_contratacao - CORRIGIDO para vistoria agendada
-  if (statusContratacao === 'pagamento_ok') return 'assinando_contrato';
+  if (statusContratacao === 'pagamento_ok') return 'vistoria_agendada';
   
   // CORREÇÃO: Quando vistoria_ok com tipo agendada, mostrar vistoria_agendada
   if (statusContratacao === 'vistoria_ok') {

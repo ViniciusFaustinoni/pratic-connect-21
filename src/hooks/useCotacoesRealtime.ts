@@ -192,6 +192,32 @@ export function useCotacoesRealtime() {
           }
         }
       )
+      // Escutar mudanças em associados (afeta etapa de análise e ativação)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'associados',
+        },
+        (payload) => {
+          console.log('[useCotacoesRealtime] Associado alterado:', payload.eventType);
+          
+          // Invalidar cotações pois a etapa de venda depende do status do associado
+          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+          queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+          queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+          
+          // Toast para associado ativado
+          const newData = payload.new as { status?: string; nome?: string };
+          const oldData = payload.old as { status?: string };
+          
+          if (newData.status === 'ativo' && oldData?.status !== 'ativo') {
+            const nomeAssociado = newData.nome ? ` - ${newData.nome}` : '';
+            toast.success(`🎉 Associado ativado${nomeAssociado}!`, { duration: 5000 });
+          }
+        }
+      )
       .subscribe((status) => {
         console.log('[useCotacoesRealtime] Status da subscription:', status);
       });
