@@ -1,202 +1,162 @@
 
-## Plano: Notificar Vistoriador por WhatsApp com Dados do Associado
+## Plano: Remover Botão "Encerrar Turno" e Implementar Finalização Automática
 
-### Contexto Atual
+### Análise Atual
 
-Quando uma vistoria é atribuída automaticamente, o sistema já:
-1. ✅ Atribui o serviço ao profissional mais próximo
-2. ✅ Envia **push notification** ao profissional (app)
-3. ✅ Notifica o **cliente** via WhatsApp que o técnico está a caminho
+O sistema já possui:
+- ✅ Cálculo correto de `minutosRestantes` (jornada ajustada - tempo trabalhado)
+- ✅ Mutation `encerrarTurnoMutation` pronta para encerrar o turno
+- ✅ Campo `encerrado_automaticamente` na tabela `turnos_profissionais`
+- ✅ Botão "Encerrar Turno" no `InstaladorPerfil.tsx` (linhas 92-102)
 
-**O que falta:** Enviar mensagem WhatsApp ao **vistoriador** com os dados do associado para que ele possa entrar em contato diretamente.
-
----
-
-### Dados Disponíveis na Atribuição
-
-O sistema já possui todos os dados necessários no momento da atribuição:
-
-| Dado | Variável | Origem |
-|------|----------|--------|
-| Nome do cliente | `servico.associado_nome` | Tabela associados |
-| Telefone/WhatsApp do cliente | `servico.associado_telefone` ou `servico.associado_whatsapp` | Tabela associados |
-| Placa do veículo | `servico.veiculo_placa` | Tabela veiculos |
-| Marca/Modelo | `servico.veiculo_marca` / `servico.veiculo_modelo` | Tabela veiculos |
-| Endereço | `servico.logradouro`, `numero`, `bairro`, `cidade` | Tabela servicos |
-| WhatsApp do profissional | `profiles.whatsapp` ou `profiles.telefone` | Tabela profiles |
+**O que falta:**
+- Lógica para finalizar o turno **automaticamente** quando `minutosRestantes === 0`
+- Remover o botão "Encerrar Turno" da tela de perfil
 
 ---
 
-### Arquivo a Modificar
+### Arquivos a Modificar
 
-| Arquivo | Modificação |
-|---------|-------------|
-| `supabase/functions/atribuir-proxima-tarefa/index.ts` | Adicionar envio de WhatsApp ao vistoriador após atribuição |
+| Arquivo | Modificação | Tipo |
+|---------|-------------|------|
+| `src/pages/instalador/InstaladorPerfil.tsx` | Remover botão "Encerrar Turno" | REMOVE |
+| `src/hooks/useJornadaTrabalho.ts` | Adicionar useEffect para finalizar turno automaticamente | ADD |
 
 ---
 
-### Alteração Proposta
+### Alteração 1: Remover Botão de Perfil
 
-Adicionar bloco de notificação WhatsApp ao vistoriador **após** a notificação ao cliente (linha ~861), para que ambos recebam a mensagem simultaneamente.
+**Arquivo**: `src/pages/instalador/InstaladorPerfil.tsx` (linhas 92-102)
 
-**Código a adicionar (após a linha 861):**
+Remover:
+```typescript
+{/* Botão Encerrar Turno - apenas quando em serviço e sem tarefa ativa */}
+{emServico && !tarefaAtual && (
+  <Button 
+    variant="outline" 
+    className="w-full border-orange-600 text-orange-400 hover:bg-orange-900/30 hover:text-orange-300"
+    onClick={handleEncerrarTurno}
+  >
+    <Power className="h-4 w-4 mr-2" />
+    Encerrar Turno
+  </Button>
+)}
+```
+
+Também remover:
+- Import do ícone `Power` (linha 2)
+- Função `handleEncerrarTurno` (linhas 22-24)
+- Hook `encerrarServico` da desestruturação (linha 14)
+
+---
+
+### Alteração 2: Finalização Automática de Turno
+
+**Arquivo**: `src/hooks/useJornadaTrabalho.ts`
+
+Adicionar um novo `useEffect` após o `useEffect` que verifica almoço automático (após linha 312):
 
 ```typescript
-// 10. NOTIFICAR VISTORIADOR via WhatsApp com dados do cliente
-try {
-  // Buscar telefone do profissional
-  const { data: profissionalTel } = await supabase
-    .from('profiles')
-    .select('nome, whatsapp, telefone')
-    .eq('id', profissionalId)
-    .single();
-  
-  const telefoneProfissional = profissionalTel?.whatsapp || profissionalTel?.telefone;
-  
-  if (telefoneProfissional) {
-    const tipoServicoLabel = servico.tipo === 'instalacao' 
-      ? 'INSTALAÇÃO' 
-      : 'VISTORIA';
-    
-    const telefoneCliente = servico.associado_whatsapp || servico.associado_telefone;
-    const linkWhatsAppCliente = telefoneCliente 
-      ? `https://wa.me/55${telefoneCliente.replace(/\D/g, '')}` 
-      : 'Não informado';
-    
-    const endereco = [
-      servico.logradouro,
-      servico.numero,
-      servico.bairro,
-      servico.cidade
-    ].filter(Boolean).join(', ') || 'Endereço cadastrado';
-    
-    const periodoLabel = servico.periodo === 'manha' 
-      ? 'Manhã (08:00-12:00)' 
-      : servico.periodo === 'tarde'
-        ? 'Tarde (14:00-18:00)'
-        : 'A definir';
-
-    const mensagemVistoriador = `📋 *NOVA TAREFA ATRIBUÍDA*
-
-🔧 *Tipo:* ${tipoServicoLabel}
-📍 *Endereço:* ${endereco}
-⏰ *Período:* ${periodoLabel}
-
-👤 *DADOS DO CLIENTE:*
-• Nome: ${servico.associado_nome || 'Não informado'}
-• Telefone: ${telefoneCliente || 'Não informado'}
-
-🚗 *VEÍCULO:*
-• Placa: ${servico.veiculo_placa || 'Não informada'}
-• ${servico.veiculo_marca || ''} ${servico.veiculo_modelo || ''}
-
-📱 *Link direto para WhatsApp do cliente:*
-${linkWhatsAppCliente}
-
-⚠️ Entre em contato para confirmar sua chegada!`;
-
-    await supabase.functions.invoke('whatsapp-send-text', {
-      body: {
-        telefone: telefoneProfissional.replace(/\D/g, ''),
-        mensagem: mensagemVistoriador,
-      },
-    });
-    
-    console.log(`[atribuir-proxima-tarefa] ✓ Vistoriador ${profissionalId} notificado via WhatsApp`);
-  } else {
-    console.log(`[atribuir-proxima-tarefa] Profissional sem WhatsApp cadastrado`);
+// Verificar se deve encerrar turno automaticamente quando jornada está completa
+useEffect(() => {
+  if (
+    turno?.status === 'ativo' &&
+    tempoReal.minutosTrabalhados > 0 &&
+    minutosRestantes === 0
+  ) {
+    console.log('[useJornadaTrabalho] Jornada completa - encerrando turno automaticamente');
+    encerrarTurnoMutation.mutate();
   }
-} catch (vistWhatsError) {
-  console.error('[atribuir-proxima-tarefa] Erro ao notificar vistoriador via WhatsApp:', vistWhatsError);
-  // Não bloqueia o fluxo principal
-}
+}, [turno?.status, tempoReal.minutosTrabalhados, minutosRestantes, turno?.id]);
+```
+
+**Lógica:**
+- Verifica se está em turno ativo
+- Verifica se há tempo trabalhado
+- Verifica se `minutosRestantes === 0` (8 horas completas + ajustes)
+- Se tudo OK, chama a mutation para encerrar o turno automaticamente
+- O banco registra `encerrado_automaticamente = true`
+
+---
+
+### Fluxo de Funcionamento
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    TURNO DO VISTORIADOR                        │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  1. Vistoriador clica "Iniciar Serviço"                       │
+│     → Turno criado com status = 'ativo'                       │
+│                                                                │
+│  2. Trabalha 4 horas                                          │
+│     → Sistema inicia almoço automaticamente                   │
+│                                                                │
+│  3. Retorna do almoço (pode ter atraso)                       │
+│     → Atraso é registrado em minutos_atraso_almoco            │
+│                                                                │
+│  4. Trabalha mais 4h (+ atraso se houver)                     │
+│                                                                │
+│  5. minutosRestantes === 0                                    │
+│     → Sistema finaliza turno AUTOMATICAMENTE                  │
+│     → Não há botão para clicar!                               │
+│     → Turno marcado como encerrado_automaticamente = true     │
+│                                                                │
+│  6. Vistoriador vê status "Turno encerrado"                   │
+│     → JornadaStatusBar mostra "Turno encerrado"               │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Fluxo Visual Atualizado
+### Sequência de Implementação
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│              ATRIBUIÇÃO AUTOMÁTICA DE TAREFA                       │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  1. Sistema encontra serviço pendente mais próximo                │
-│  2. Atribui ao vistoriador ativo                                  │
-│  3. Atualiza status para "em_rota"                                │
-│                                                                    │
-│  ═══════════════ NOTIFICAÇÕES SIMULTÂNEAS ══════════════════      │
-│                                                                    │
-│  ┌──────────────────────┐    ┌──────────────────────┐             │
-│  │  📱 PUSH (APP)        │    │  📱 PUSH (APP)       │             │
-│  │  Profissional        │    │  (se houver)         │             │
-│  │  "Nova Tarefa"       │    │                      │             │
-│  └──────────────────────┘    └──────────────────────┘             │
-│                                                                    │
-│  ┌──────────────────────┐    ┌──────────────────────┐             │
-│  │ 💬 WHATSAPP CLIENTE   │    │ 💬 WHATSAPP VISTORIADOR │ ← NOVO │
-│  │ "Técnico a caminho"  │    │ "Nova tarefa atribuída"│          │
-│  │ Nome do técnico      │    │ Nome/telefone cliente │          │
-│  │ Endereço             │    │ Endereço              │          │
-│  │ Período              │    │ Veículo               │          │
-│  │                      │    │ Link WhatsApp cliente │          │
-│  └──────────────────────┘    └──────────────────────┘             │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
+1. **Remover botão do perfil** em `InstaladorPerfil.tsx`
+2. **Adicionar lógica de finalização automática** em `useJornadaTrabalho.ts`
+3. **Testar fluxo completo** no simulador para verificar se encerra automaticamente
 
 ---
 
-### Exemplo de Mensagem ao Vistoriador
+### Casos de Teste
 
+| Cenário | Comportamento Esperado |
+|---------|----------------------|
+| Trabalha exatamente 8h | Encerra automaticamente |
+| Trabalha 4h, almoço, volta, trabalha 4h | Encerra automaticamente |
+| Trabalha 4h, almoço, volta 15min atrasado, trabalha 4h15min | Encerra automaticamente |
+| Vistoriador sai do app durante turno | useEffect continua verificando, encerra quando retornar se completou |
+
+---
+
+### Impacto na Interface
+
+**Antes:**
 ```
-📋 *NOVA TAREFA ATRIBUÍDA*
-
-🔧 *Tipo:* VISTORIA
-📍 *Endereço:* Rua das Flores, 123, Centro, Fortaleza
-⏰ *Período:* Manhã (08:00-12:00)
-
-👤 *DADOS DO CLIENTE:*
-• Nome: João Silva
-• Telefone: (85) 99999-1234
-
-🚗 *VEÍCULO:*
-• Placa: ABC-1234
-• Toyota Corolla
-
-📱 *Link direto para WhatsApp do cliente:*
-https://wa.me/5585999991234
-
-⚠️ Entre em contato para confirmar sua chegada!
+┌──────────────────────────┐
+│ Perfil                   │
+├──────────────────────────┤
+│ [Configurações]          │
+│ [Notificações]           │
+│ [Ajuda e Suporte]        │
+│ [Privacidade]            │
+│ ────────────────         │
+│ [🔴 Encerrar Turno] ← X  │  (REMOVE)
+│ [🔴 Sair da Conta]       │
+└──────────────────────────┘
 ```
 
----
+**Depois:**
+```
+┌──────────────────────────┐
+│ Perfil                   │
+├──────────────────────────┤
+│ [Configurações]          │
+│ [Notificações]           │
+│ [Ajuda e Suporte]        │
+│ [Privacidade]            │
+│ ────────────────         │
+│ [🔴 Sair da Conta]       │  ← Único botão de ação
+└──────────────────────────┘
+```
 
-### Benefícios
-
-| Benefício | Descrição |
-|-----------|-----------|
-| **Comunicação direta** | Vistoriador pode confirmar chegada via WhatsApp pessoal |
-| **Dados completos** | Nome, telefone, endereço e veículo na mesma mensagem |
-| **Link clicável** | Um toque para abrir conversa com o cliente |
-| **Independência** | Funciona mesmo sem internet no app (usa WhatsApp pessoal) |
-
----
-
-### Pré-requisitos
-
-Para funcionar corretamente, é necessário:
-1. ✅ Vistoriador ter campo `whatsapp` ou `telefone` preenchido na tabela `profiles`
-2. ✅ Instância WhatsApp conectada (Evolution API)
-3. ✅ Edge Function `whatsapp-send-text` funcionando
-
----
-
-### Resultado Esperado
-
-| Cenário | Comportamento |
-|---------|---------------|
-| Tarefa atribuída | Vistoriador recebe WhatsApp com dados do cliente |
-| Profissional sem WhatsApp | Log de aviso, não bloqueia o fluxo |
-| Erro no envio | Log de erro, tarefa continua atribuída normalmente |
-| Cliente sem telefone | Campo mostra "Não informado" |
