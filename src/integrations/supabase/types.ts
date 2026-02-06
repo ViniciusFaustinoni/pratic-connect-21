@@ -17035,6 +17035,7 @@ export type Database = {
           created_at: string
           data_agendada: string
           data_agendada_original: string | null
+          data_suspensao: string | null
           em_rota_em: string | null
           encaixe_executado: boolean | null
           fotos_recusa: string[] | null
@@ -17046,10 +17047,13 @@ export type Database = {
           km_atual: number | null
           latitude: number | null
           lead_id: string | null
+          local_tipo_manutencao: string | null
           local_vistoria: string | null
           logradouro: string | null
           longitude: number | null
           modalidade: string | null
+          motivo_detalhe: string | null
+          motivo_manutencao: string | null
           motivo_reprovacao: string | null
           numero: string | null
           observacoes: string | null
@@ -17058,10 +17062,13 @@ export type Database = {
           periodo: Database["public"]["Enums"]["periodo_servico"]
           permite_encaixe: boolean | null
           profissional_id: string | null
+          protecao_suspensa: boolean | null
           protocolo: string | null
           quilometragem: number | null
           rastreador_id: string | null
+          rastreador_substituto_id: string | null
           ressalvas: string | null
+          resultado_manutencao: string | null
           rota_id: string | null
           sinistro_id: string | null
           status: Database["public"]["Enums"]["status_servico"]
@@ -17096,6 +17103,7 @@ export type Database = {
           created_at?: string
           data_agendada: string
           data_agendada_original?: string | null
+          data_suspensao?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           fotos_recusa?: string[] | null
@@ -17107,10 +17115,13 @@ export type Database = {
           km_atual?: number | null
           latitude?: number | null
           lead_id?: string | null
+          local_tipo_manutencao?: string | null
           local_vistoria?: string | null
           logradouro?: string | null
           longitude?: number | null
           modalidade?: string | null
+          motivo_detalhe?: string | null
+          motivo_manutencao?: string | null
           motivo_reprovacao?: string | null
           numero?: string | null
           observacoes?: string | null
@@ -17119,10 +17130,13 @@ export type Database = {
           periodo?: Database["public"]["Enums"]["periodo_servico"]
           permite_encaixe?: boolean | null
           profissional_id?: string | null
+          protecao_suspensa?: boolean | null
           protocolo?: string | null
           quilometragem?: number | null
           rastreador_id?: string | null
+          rastreador_substituto_id?: string | null
           ressalvas?: string | null
+          resultado_manutencao?: string | null
           rota_id?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_servico"]
@@ -17157,6 +17171,7 @@ export type Database = {
           created_at?: string
           data_agendada?: string
           data_agendada_original?: string | null
+          data_suspensao?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           fotos_recusa?: string[] | null
@@ -17168,10 +17183,13 @@ export type Database = {
           km_atual?: number | null
           latitude?: number | null
           lead_id?: string | null
+          local_tipo_manutencao?: string | null
           local_vistoria?: string | null
           logradouro?: string | null
           longitude?: number | null
           modalidade?: string | null
+          motivo_detalhe?: string | null
+          motivo_manutencao?: string | null
           motivo_reprovacao?: string | null
           numero?: string | null
           observacoes?: string | null
@@ -17180,10 +17198,13 @@ export type Database = {
           periodo?: Database["public"]["Enums"]["periodo_servico"]
           permite_encaixe?: boolean | null
           profissional_id?: string | null
+          protecao_suspensa?: boolean | null
           protocolo?: string | null
           quilometragem?: number | null
           rastreador_id?: string | null
+          rastreador_substituto_id?: string | null
           ressalvas?: string | null
+          resultado_manutencao?: string | null
           rota_id?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_servico"]
@@ -17317,6 +17338,20 @@ export type Database = {
           {
             foreignKeyName: "servicos_rastreador_id_fkey"
             columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "servicos_rastreador_substituto_id_fkey"
+            columns: ["rastreador_substituto_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_rastreador_substituto_id_fkey"
+            columns: ["rastreador_substituto_id"]
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["rastreador_id"]
