@@ -24,6 +24,7 @@ import { TIPO_COMISSAO_LABELS, TIPO_DEDUCAO_LABELS } from '@/types/comissoes';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useConsultores } from '@/hooks/useConsultores';
 
 interface ComissoesDetalhesTabProps {
   resumoVendedores: VendedorResumo[];
@@ -101,10 +102,32 @@ export function ComissoesDetalhesTab({
   isLoading,
 }: ComissoesDetalhesTabProps) {
   const [selectedVendedorId, setSelectedVendedorId] = useState<string>('');
+  const { data: consultores, isLoading: isLoadingConsultores } = useConsultores();
 
   const selectedVendedor = useMemo(() => {
-    return resumoVendedores.find(v => v.vendedor_id === selectedVendedorId);
-  }, [resumoVendedores, selectedVendedorId]);
+    // Primeiro tenta encontrar nos dados de comissões existentes
+    const fromResumo = resumoVendedores.find(v => v.vendedor_id === selectedVendedorId);
+    if (fromResumo) return fromResumo;
+    
+    // Se não encontrou, busca nos consultores e retorna estrutura zerada
+    const consultor = consultores?.find(c => c.id === selectedVendedorId);
+    if (!consultor) return null;
+    
+    return {
+      vendedor_id: consultor.id,
+      vendedor_nome: consultor.nome,
+      vendedor_avatar: consultor.avatar_url,
+      tipo_consultor: consultor.roles.includes('vendedor_externo') ? 'externo' : 'interno',
+      total_adesao: 0,
+      total_recorrente: 0,
+      total_producao: 0,
+      total_classificacao: 0,
+      total_crescimento: 0,
+      total_recorde: 0,
+      total_geral: 0,
+      vendas_confirmadas: 0,
+    };
+  }, [resumoVendedores, consultores, selectedVendedorId]);
 
   const vendedorDeducoes = useMemo(() => {
     return deducoesMensal.filter(d => d.vendedor_id === selectedVendedorId);
@@ -141,15 +164,15 @@ export function ComissoesDetalhesTab({
                 <SelectValue placeholder="Selecione um vendedor" />
               </SelectTrigger>
               <SelectContent>
-                {resumoVendedores.map((v) => (
-                  <SelectItem key={v.vendedor_id} value={v.vendedor_id}>
+                {consultores?.filter(c => c.ativo).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
                     <div className="flex items-center gap-2">
                       <UserAvatar
-                        src={v.vendedor_avatar || undefined}
-                        name={v.vendedor_nome}
+                        src={c.avatar_url || undefined}
+                        name={c.nome}
                         size="sm"
                       />
-                      {v.vendedor_nome}
+                      {c.nome}
                     </div>
                   </SelectItem>
                 ))}
