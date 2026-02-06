@@ -20873,6 +20873,15 @@ export type Database = {
         Returns: boolean
       }
       expirar_encaixes_urgentes: { Args: never; Returns: number }
+      fn_calcular_bonificacao_adesao: {
+        Args: {
+          p_ano: number
+          p_campanha_id?: string
+          p_mes: number
+          p_vendedor_id: string
+        }
+        Returns: Json
+      }
       fn_calcular_custo_beneficio: {
         Args: { p_beneficio_id: string; p_tipo?: string }
         Returns: {
@@ -20897,6 +20906,10 @@ export type Database = {
           valor_adicional: number
         }[]
       }
+      fn_calcular_producao: {
+        Args: { p_ano: number; p_mes: number; p_vendedor_id: string }
+        Returns: Json
+      }
       fn_calcular_prorata: {
         Args: {
           p_ano: number
@@ -20905,6 +20918,10 @@ export type Database = {
           p_mes: number
         }
         Returns: number
+      }
+      fn_calcular_ranking_campanha: {
+        Args: { p_campanha_id: string }
+        Returns: undefined
       }
       fn_calcular_rateio_por_cotas: {
         Args: { p_custo_total: number; p_percentual_fundo?: number }
@@ -20920,6 +20937,10 @@ export type Database = {
           valor_final_cota: number
         }[]
       }
+      fn_calcular_recorrente: {
+        Args: { p_ano: number; p_mes: number; p_vendedor_id: string }
+        Returns: Json
+      }
       fn_calcular_total_cotas_ativos: { Args: never; Returns: number }
       fn_calcular_valor_por_cota_beneficio: {
         Args: { p_fechamento_id: string; p_tipo_beneficio: string }
@@ -20930,9 +20951,18 @@ export type Database = {
           valor_total: number
         }[]
       }
+      fn_fechamento_mensal_comissoes: {
+        Args: { p_ano: number; p_mes: number; p_usuario_id?: string }
+        Returns: Json
+      }
       fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
       fn_get_cotas_veiculo: { Args: { p_veiculo_id: string }; Returns: number }
       fn_limpar_tokens_expirados: { Args: never; Returns: undefined }
+      fn_parametro_comissao: { Args: { p_chave: string }; Returns: number }
+      fn_placas_ativas_consultor: {
+        Args: { p_vendedor_id: string }
+        Returns: number
+      }
       fn_resumo_saude_beneficios: {
         Args: never
         Returns: {
@@ -20943,13 +20973,26 @@ export type Database = {
           total_beneficios: number
         }[]
       }
+      fn_tempo_casa_consultor: {
+        Args: { p_vendedor_id: string }
+        Returns: string
+      }
+      fn_tipo_consultor: { Args: { p_vendedor_id: string }; Returns: string }
       fn_verificar_almoco_profissional: {
         Args: { p_profissional_id: string }
         Returns: boolean
       }
+      fn_verificar_crescimento: {
+        Args: { p_vendedor_id: string }
+        Returns: Json
+      }
       fn_verificar_fim_almoco_profissional: {
         Args: { p_profissional_id: string }
         Returns: boolean
+      }
+      fn_verificar_recorde: {
+        Args: { p_ano: number; p_mes: number; p_vendedor_id: string }
+        Returns: Json
       }
       gerar_hash_lancamento: {
         Args: {
