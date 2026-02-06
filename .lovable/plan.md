@@ -1,153 +1,281 @@
 
-# Plano: Corrigir Busca do Vídeo 360° na Função `useProposta`
+# Plano: Redesign Completo da Página de Análise de Proposta
 
 ## Problema Identificado
 
-O vídeo 360° não aparece na lista de documentos porque a função `useProposta` (usada na tela de análise individual) **não busca** o campo `video_360_url` da tabela `vistorias`.
+A página atual de "Análise de Proposta" possui os seguintes problemas de UX/UI:
 
-### Evidências
+| Problema | Impacto |
+|----------|---------|
+| Falta de hierarquia visual | Difícil identificar informações mais importantes |
+| Cards muito semelhantes | Sem diferenciação clara entre seções |
+| Status escondido na lateral | O elemento mais importante está pequeno |
+| Muita rolagem necessária | Informações espalhadas em cards separados |
+| Ações distantes do contexto | Botões de ação estão no final da coluna direita |
+| Fotos da vistoria ocupam muito espaço | Lista longa sem condensação |
 
-| Verificação | Resultado |
-|-------------|-----------|
-| Vídeo existe no banco? | Sim - `cf7afb6b-acec-4214-bd70-edebf107ad2b` |
-| URL do vídeo | `https://...supabase.co/.../video_360_1770410381766.mp4` |
-| Contrato vinculado? | Sim - `contrato_id = 7a6d1532-c45c-4574-887c-5d30b795ba32` |
-| Prop passada ao componente | `proposta.vistoria?.video_360_url` = `undefined` |
+---
 
-### Código Problemático
+## Nova Arquitetura Visual
 
-**Arquivo:** `src/hooks/usePropostasPendentes.ts` - Função `useProposta` (linhas 727-751)
+### Layout Proposto: 3 Zonas Hierárquicas
 
-```typescript
-// ATUAL - NÃO busca video_360_url:
-const { data: vistoriaData } = await supabase
-  .from('vistorias')
-  .select('id, status, modalidade')  // ← FALTA video_360_url
-  .eq('contrato_id', contrato.id)
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ZONA 1: HEADER HERO (Status + Resumo + Ações Principais)                   │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │ ← Voltar    #CTR-20260206202652                           [Próxima →]  ││
+│  ├─────────────────────────────────────────────────────────────────────────┤│
+│  │  🟡 AGUARDANDO ANÁLISE                                                  ││
+│  │                                                                          ││
+│  │  Marcus Vinicius Faustinoni de Freitas                                  ││
+│  │  Toyota Corolla Xei 2013 • LTB4J74 • Azul                               ││
+│  │                                                                          ││
+│  │  [✓ Aprovar]  [📄 Solicitar Docs]  [✕ Reprovar]                        ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────┘
 
-// Montagem do objeto vistoria:
-vistoria = {
-  id: vistoriaData.id,
-  status: vistoriaData.status || 'pendente',
-  tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
-  modalidade: vistoriaData.modalidade || undefined,
-  fotos: fotosVistoria as VistoriaFotoInfo[],
-  // ← FALTA video_360_url: vistoriaData.video_360_url,
-};
-```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ZONA 2: EVIDÊNCIAS VISUAIS (Grid de Mídia)                                 │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌────────────────────┐ │
+│  │  📹 Vídeo 360°       │  │  📸 33 Fotos         │  │  ✍️ Assinatura     │ │
+│  │  [Thumbnail/Play]    │  │  [Grid 4 thumbs]     │  │  [Preview]         │ │
+│  │                      │  │  + Ver todas →       │  │                    │ │
+│  └──────────────────────┘  └──────────────────────┘  └────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-### Comparação com Código Correto
-
-Na função `usePropostasPendentes` (linhas 275-301), a busca está **correta**:
-
-```typescript
-.select('id, status, modalidade, observacoes, km_atual, video_360_url')
-// ...
-video_360_url: vistoriaData.video_360_url,
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ZONA 3: DETALHES (Tabs Organizadas)                                        │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │  [Cliente]  [Veículo]  [Documentos]  [Instalação]  [Contrato]          ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                                                                          ││
+│  │  Conteúdo da aba selecionada (compacto, dados lado a lado)              ││
+│  │                                                                          ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Solução
+## Componentes a Criar/Modificar
 
-### Modificar `src/hooks/usePropostasPendentes.ts`
+### 1. Novo: `PropostaHeroHeader`
 
-**Localização:** Linhas 727-751 (função `useProposta`)
+Card principal no topo com:
+- Status grande e destacado (badge colorido)
+- Nome do cliente + dados resumidos do veículo
+- Botões de ação principais (aprovar/solicitar/reprovar) inline
+- Navegação rápida (voltar/próxima)
 
-#### 1. Adicionar campos na consulta (linha 729)
+### 2. Novo: `PropostaMidiaGrid`
+
+Grid horizontal com 3 cards de mídia:
+- **Vídeo 360°**: Thumbnail com botão play, destaque roxo
+- **Galeria de Fotos**: Grid 2x2 com thumbnails, badge de contagem, expandir
+- **Assinatura**: Preview da assinatura com badge de validação
+
+### 3. Novo: `PropostaDetalhesTabs`
+
+Organização em abas para reduzir rolagem:
+- **Cliente**: Nome, CPF, telefone, email, endereço
+- **Veículo**: Marca, modelo, ano, placa, cor, RENAVAM, chassi
+- **Documentos**: Lista de documentos anexados com status
+- **Instalação**: Dados do rastreador, instalador, data
+- **Contrato**: Número, plano, valor, data assinatura, vendedor
+
+---
+
+## Detalhes Técnicos
+
+### Arquivos a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/cadastro/proposta/PropostaHeroHeader.tsx` | Header hero com status e ações |
+| `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` | Grid de evidências visuais |
+| `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx` | Tabs de detalhes organizados |
+| `src/components/cadastro/proposta/GaleriaFotosModal.tsx` | Modal fullscreen para galeria |
+
+### Arquivos a Modificar
+
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/pages/cadastro/PropostaAnalise.tsx` | Refatorar para usar novos componentes |
+
+---
+
+## Redesign do Header Hero
 
 ```typescript
-// DE:
-.select('id, status, modalidade')
-
-// PARA:
-.select('id, status, modalidade, observacoes, km_atual, video_360_url')
-```
-
-#### 2. Adicionar campos no objeto de resposta (linhas 744-750)
-
-```typescript
-// DE:
-vistoria = {
-  id: vistoriaData.id,
-  status: vistoriaData.status || 'pendente',
-  tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
-  modalidade: vistoriaData.modalidade || undefined,
-  fotos: fotosVistoria as VistoriaFotoInfo[],
-};
-
-// PARA:
-vistoria = {
-  id: vistoriaData.id,
-  status: vistoriaData.status || 'pendente',
-  tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
-  modalidade: vistoriaData.modalidade || undefined,
-  fotos: fotosVistoria as VistoriaFotoInfo[],
-  observacoes: vistoriaData.observacoes,
-  km_atual: vistoriaData.km_atual,
-  video_360_url: vistoriaData.video_360_url,
-};
-```
-
-#### 3. Adicionar fallback para busca legada (linhas 754-771)
-
-Para o caso de cotações antigas (fallback), também buscar o vídeo 360:
-
-```typescript
-// 2. Fallback: buscar em cotacoes_vistoria_fotos (legado, apenas se tiver cotacao_id)
-if (!vistoria && contrato.cotacao_id) {
-  // Buscar vistoria pela cotacao_id para obter video_360_url
-  const { data: vistoriaCotacao } = await supabase
-    .from('vistorias')
-    .select('video_360_url, observacoes, km_atual')
-    .eq('cotacao_id', contrato.cotacao_id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  
-  const { data: fotosLegado } = await supabase
-    .from('cotacoes_vistoria_fotos')
-    .select('id, tipo, arquivo_url, created_at')
-    .eq('cotacao_id', contrato.cotacao_id)
-    .order('created_at', { ascending: true });
-
-  if (fotosLegado && fotosLegado.length > 0) {
-    vistoria = {
-      id: contrato.cotacao_id,
-      status: 'pendente',
-      tipo: 'autovistoria',
-      modalidade: 'autovistoria',
-      fotos: fotosLegado as VistoriaFotoInfo[],
-      video_360_url: vistoriaCotacao?.video_360_url || null,
-      observacoes: vistoriaCotacao?.observacoes,
-      km_atual: vistoriaCotacao?.km_atual,
-    };
-  }
+// PropostaHeroHeader.tsx
+interface PropostaHeroHeaderProps {
+  proposta: PropostaPendente;
+  onAprovar: () => void;
+  onSolicitarDocs: () => void;
+  onReprovar: () => void;
+  onVoltar: () => void;
+  onProxima?: () => void;
+  isLoading?: boolean;
 }
 ```
 
+Visual:
+- Background gradiente sutil baseado no status
+- Status em badge grande centralizado
+- Dados do cliente/veículo em tipografia clara
+- Botões de ação com ícones e cores semânticas
+
 ---
 
-## Arquivos a Modificar
+## Redesign do Grid de Mídia
 
-| Arquivo | Ação |
-|---------|------|
-| `src/hooks/usePropostasPendentes.ts` | Corrigir função `useProposta` (linhas 727-771) |
+Layout responsivo 3 colunas (desktop) / stack (mobile):
+
+**Card Vídeo 360°:**
+- Thumbnail do primeiro frame ou placeholder
+- Overlay com ícone play
+- Borda roxa destacada
+- Click abre modal de vídeo
+
+**Card Galeria de Fotos:**
+- Grid 2x2 com 4 thumbnails principais
+- Badge com contagem total
+- Categorias como chips (Exterior, Interior, etc.)
+- Click abre modal galeria fullscreen
+
+**Card Assinatura:**
+- Preview da assinatura em miniatura
+- Badge "Coletada na Vistoria"
+- Data e responsável
+- Click abre modal ampliado
+
+---
+
+## Redesign das Tabs de Detalhes
+
+Usar o componente `Tabs` existente do Radix:
+
+```typescript
+<Tabs defaultValue="cliente">
+  <TabsList className="grid w-full grid-cols-5">
+    <TabsTrigger value="cliente">Cliente</TabsTrigger>
+    <TabsTrigger value="veiculo">Veículo</TabsTrigger>
+    <TabsTrigger value="documentos">
+      Documentos
+      <Badge className="ml-1">{totalDocs}</Badge>
+    </TabsTrigger>
+    <TabsTrigger value="instalacao">Instalação</TabsTrigger>
+    <TabsTrigger value="contrato">Contrato</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="cliente">
+    {/* Grid 2 colunas com dados */}
+  </TabsContent>
+  {/* ... outras tabs */}
+</Tabs>
+```
+
+---
+
+## Benefícios do Redesign
+
+| Aspecto | Antes | Depois |
+|---------|-------|--------|
+| **Hierarquia** | Todos os cards iguais | 3 zonas com prioridades |
+| **Status** | Pequeno na lateral | Grande e destacado no topo |
+| **Ações** | Escondidas no final | Visíveis no header |
+| **Rolagem** | Muita rolagem | Tabs condensam informação |
+| **Evidências** | Espalhadas | Grid organizado |
+| **Mobile** | Layout quebrado | Responsivo stack |
+
+---
+
+## Paleta de Cores por Status
+
+| Status | Cor Principal | Background |
+|--------|---------------|------------|
+| Aguardando Análise | `warning` (amarelo) | `bg-warning/10` |
+| Em Análise | `info` (azul) | `bg-info/10` |
+| Aprovado | `success` (verde) | `bg-success/10` |
+| Reprovado | `destructive` (vermelho) | `bg-destructive/10` |
+
+---
+
+## Implementação em Fases
+
+### Fase 1: Novo Layout Base
+- Criar estrutura de 3 zonas
+- Implementar `PropostaHeroHeader`
+- Mover botões de ação para o header
+
+### Fase 2: Grid de Mídia
+- Implementar `PropostaMidiaGrid`
+- Criar `GaleriaFotosModal` com navegação
+- Integrar vídeo 360° no grid
+
+### Fase 3: Tabs de Detalhes
+- Implementar `PropostaDetalhesTabs`
+- Migrar conteúdo dos cards para tabs
+- Condensar informações repetidas
+
+### Fase 4: Polish
+- Animações de transição
+- Skeleton states aprimorados
+- Testes de responsividade
+
+---
+
+## Wireframe Mobile
+
+```text
+┌─────────────────────────────┐
+│  ← #CTR-20260206      [→]  │
+├─────────────────────────────┤
+│      🟡 AGUARDANDO          │
+│                             │
+│  Marcus Vinicius F. Freitas │
+│  Corolla 2013 • LTB4J74     │
+├─────────────────────────────┤
+│ [Aprovar] [Docs] [Reprovar] │
+├─────────────────────────────┤
+│  ┌───┐  ┌───┐  ┌───┐       │
+│  │360│  │📷33│ │✍️ │       │
+│  └───┘  └───┘  └───┘       │
+├─────────────────────────────┤
+│ [Cliente][Veículo][Docs]... │
+├─────────────────────────────┤
+│                             │
+│  Conteúdo da tab            │
+│                             │
+└─────────────────────────────┘
+```
+
+---
+
+## Alertas e Reanálise
+
+O banner de "Reanálise Necessária" será movido para dentro do `PropostaHeroHeader` como um alert destacado:
+
+```typescript
+{proposta.documentos_solicitados_enviados?.length > 0 && (
+  <div className="bg-amber-500/20 border-l-4 border-amber-500 p-4 rounded-r-lg">
+    <div className="flex items-center gap-2">
+      <RefreshCw className="h-5 w-5 text-amber-500" />
+      <span className="font-medium">Reanálise Necessária</span>
+      <Badge>{proposta.documentos_solicitados_enviados.length} novo(s)</Badge>
+    </div>
+  </div>
+)}
+```
 
 ---
 
 ## Resultado Esperado
 
-| Antes | Depois |
-|-------|--------|
-| `proposta.vistoria?.video_360_url` = `undefined` | `proposta.vistoria?.video_360_url` = URL do vídeo |
-| Vídeo 360 não aparece nos documentos | Vídeo 360 aparece no topo da lista com destaque roxo |
-
----
-
-## Testes Recomendados
-
-1. Acessar a proposta `7a6d1532-c45c-4574-887c-5d30b795ba32`
-2. Verificar se o Vídeo 360° aparece no card "Documentos Anexados"
-3. Clicar no item do vídeo e confirmar que o player funciona
-4. Verificar a contagem de documentos (deve ser 6 agora: 5 docs + 1 vídeo)
+Uma página de análise mais:
+- **Intuitiva**: Hierarquia clara de informações
+- **Visual**: Evidências fotográficas em destaque
+- **Eficiente**: Menos rolagem, ações sempre visíveis
+- **Bonita**: Design moderno com gradientes e animações sutis
