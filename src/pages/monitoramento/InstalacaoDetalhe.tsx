@@ -15,7 +15,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, User, Car, MapPin, Wrench, Phone, MessageSquare, Navigation, Calendar, Clock, Wifi, Play, CheckCircle, XCircle, RefreshCw, AlertCircle, ExternalLink, Loader2, UserPlus, Camera, FileText, ChevronDown, ChevronRight, ClipboardCheck, Eye } from 'lucide-react';
+import { ArrowLeft, User, Car, MapPin, Wrench, Phone, MessageSquare, Navigation, Calendar, Clock, Wifi, Play, CheckCircle, XCircle, RefreshCw, AlertCircle, ExternalLink, Loader2, UserPlus, Camera, FileText, ChevronDown, ChevronRight, ClipboardCheck, Eye, Video } from 'lucide-react';
+import { Video360Card } from '@/components/cadastro/Video360Card';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
 import type { PeriodoInstalacao } from '@/types/database';
@@ -444,7 +445,12 @@ export default function InstalacaoDetalhePage() {
         </CardContent>
       </Card>
 
-      {/* FOTOS DA AUTOVISTORIA */}
+      {/* VÍDEO 360° */}
+      {fotosData?.video360Url && (
+        <Video360Card videoUrl={fotosData.video360Url} />
+      )}
+
+      {/* FOTOS DA VISTORIA */}
       {totalFotos > 0 && (
         <Collapsible open={fotosOpen} onOpenChange={setFotosOpen}>
           <Card>
@@ -453,7 +459,7 @@ export default function InstalacaoDetalhePage() {
                 <CardTitle className="flex items-center justify-between text-base">
                   <div className="flex items-center gap-2">
                     <Camera className="h-4 w-4" />
-                    Fotos da Autovistoria ({totalFotos})
+                    {fotosData?.modalidade === 'presencial' ? 'Fotos da Vistoria' : 'Fotos da Autovistoria'} ({totalFotos})
                   </div>
                   {fotosOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </CardTitle>
