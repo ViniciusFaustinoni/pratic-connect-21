@@ -354,7 +354,7 @@ serve(async (req) => {
     console.log(`[atribuir-proxima-tarefa] Lógica simplificada: sem limite de raio e janela`);
 
     // 2. Buscar serviços disponíveis (sem atribuição) da tabela UNIFICADA servicos
-    const hoje = new Date().toISOString().split('T')[0];
+    // hoje já foi declarado na linha 214
     const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
     // BUSCA 1: Serviços NORMAIS (hoje/amanhã)
