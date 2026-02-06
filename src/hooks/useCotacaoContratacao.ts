@@ -141,7 +141,9 @@ export function useCotacaoContratacao(token: string | undefined) {
       return data;
     },
     enabled: !!token,
-    refetchInterval: 30000, // Revalidar a cada 30 segundos para detectar mudanças de status
+    refetchInterval: 10000, // Reduzido para 10 segundos para detectar mudanças de status mais rápido
+    refetchOnWindowFocus: true, // Revalidar ao voltar para a aba
+    staleTime: 0, // Sempre considerar stale para garantir dados frescos
   });
 
   // Extrair associadoId do contrato vinculado - priorizar embed, usar fallback se necessário
@@ -255,10 +257,12 @@ export function useCotacaoContratacao(token: string | undefined) {
           table: 'associados',
           filter: `id=eq.${associadoId}`,
         },
-        (payload) => {
+        async (payload) => {
           console.log('[CotacaoContratacao] Realtime: associado atualizado:', payload);
+          
+          // Forçar refetch imediato (não apenas invalidar) para garantir atualização instantânea
+          await queryClient.refetchQueries({ queryKey: ['contrato-publico-fallback', token] });
           refetch();
-          queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
         }
       );
     }
