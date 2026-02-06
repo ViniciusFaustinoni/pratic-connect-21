@@ -1,345 +1,115 @@
 
-## Plano: Implementar Vistoria de Retirada
 
-### Resumo Executivo
+## Plano: Ajustes no PDF de Cotação
 
-A Vistoria de Retirada é um novo tipo de serviço que permite ao Coordenador de Monitoramento agendar a retirada de um rastreador instalado em um veículo. O fluxo é similar a uma instalação (fotos obrigatórias, assinatura do cliente), porém ao finalizar:
-- O rastreador é desativado na plataforma externa (Rede Veículos ou Softruck)
-- É desassociado do veículo
-- É atribuído ao porte do vistoriador que executou a tarefa
-- Fica disponível no estoque
+### Alterações Solicitadas
 
-### Alterações Necessárias
-
----
-
-#### 1. Adicionar novo tipo de serviço no banco de dados
-
-**Arquivo:** Nova migração SQL
-
-```sql
--- Adicionar 'vistoria_retirada' ao enum tipo_servico
-ALTER TYPE tipo_servico ADD VALUE 'vistoria_retirada';
-```
+| Item | Situação Atual | Alteração |
+|------|----------------|-----------|
+| Fonte das coberturas | 6.5pt (comparativo) e 8pt (normal) | Aumentar para **9pt** em ambos |
+| Truncamento de texto | `truncateText(cobertura, 30)` e `maxChars` | Exibir texto completo sem truncar |
+| Círculo amarelo "1°" | Badge de ranking no plano recomendado | Remover completamente |
 
 ---
 
-#### 2. Atualizar tipos e labels no frontend
+### Modificações no Arquivo
 
-**Arquivo:** `src/hooks/useServicos.ts`
+**Arquivo:** `src/lib/gerarPdfCotacao.ts`
 
-Adicionar o novo tipo ao TypeScript e seus labels:
+---
+
+#### 1. Aumentar fonte das coberturas no PDF normal (linhas 521 e 537)
 
 ```typescript
-export type TipoServico = 
-  | 'instalacao' 
-  | 'vistoria_entrada' 
-  | 'vistoria_saida' 
-  | 'vistoria_sinistro'
-  | 'vistoria_periodica'
-  | 'vistoria_manutencao'
-  | 'vistoria_retirada';  // Novo
+// De:
+doc.setFontSize(8);
 
-export const TIPO_SERVICO_LABELS: Record<TipoServico, string> = {
-  // ...existentes
-  vistoria_retirada: 'Retirada de Rastreador',  // Novo
-};
+// Para:
+doc.setFontSize(9);
 ```
 
----
-
-#### 3. Criar hook `useCriarRetirada`
-
-**Arquivo:** `src/hooks/useCriarRetirada.ts` (novo)
-
-Similar ao `useCriarManutencao.ts`, porém:
-- Cria serviço com `tipo: 'vistoria_retirada'`
-- Não altera o status do rastreador (será alterado após conclusão)
-- Busca dados do veículo e associado para preencher endereço
+#### 2. Aumentar fonte das coberturas no PDF comparativo (linha 819)
 
 ```typescript
-export interface CriarRetiradaParams {
-  rastreadorId: string;
-  dataAgendada: string;
-  periodo: Periodo;
-  motivo?: string;
+// De:
+doc.setFontSize(6.5);
+
+// Para:
+doc.setFontSize(9);
+```
+
+#### 3. Remover truncamento das coberturas no PDF normal (linhas 523 e 539)
+
+```typescript
+// De:
+doc.text(truncateText(cobertura, 30), cobCol1X + 12, textY);
+doc.text(truncateText(cobertura, 30), cobCol2X + 9, textY);
+
+// Para:
+doc.text(cobertura, cobCol1X + 12, textY);
+doc.text(cobertura, cobCol2X + 9, textY);
+```
+
+#### 4. Remover truncamento das coberturas no PDF comparativo (linha 824)
+
+```typescript
+// De:
+const maxChars = Math.floor((width - 20) / 2);
+doc.text(truncateText(cobertura, maxChars), x + padding + 8, currentY);
+
+// Para:
+doc.text(cobertura, x + padding + 8, currentY);
+```
+
+#### 5. Remover círculo amarelo "1°" do título do plano (linhas 774-783)
+
+```typescript
+// REMOVER este bloco inteiro:
+if (isRecommended) {
+  const badgeSize = 14;
+  doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
+  doc.circle(x + width - 10, currentY + 6, badgeSize / 2, 'F');
+  doc.setTextColor(premiumDark.r, premiumDark.g, premiumDark.b);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('1°', x + width - 10, currentY + 8.5, { align: 'center' });
 }
-
-export function useCriarRetirada() {
-  // Similar ao useCriarManutencao
-  // tipo: 'vistoria_retirada'
-}
-
-export function isRetirada(tipo: string): boolean {
-  return tipo === 'vistoria_retirada';
-}
 ```
 
----
-
-#### 4. Criar modal `EnviarRetiradaModal`
-
-**Arquivo:** `src/components/monitoramento/estoque/EnviarRetiradaModal.tsx` (novo)
-
-Baseado no `EnviarManutencaoModal.tsx`:
-- Mesma seleção de data (hoje + 2 dias) e período
-- Ícone diferente (PackageMinus ou similar)
-- Texto explicativo: "O rastreador será desativado, desvinculado do veículo e retornará ao estoque do vistoriador"
-
----
-
-#### 5. Adicionar opção "Retirar Rastreador" no menu de ações
-
-**Arquivo:** `src/pages/monitoramento/Rastreadores.tsx`
-
-Adicionar nova opção no dropdown para rastreadores com `status === 'instalado'`:
+#### 6. Ajustar centralização do nome do plano após remover badge (linhas 790-792)
 
 ```typescript
-// Após "Enviar para Manutenção"
-{rastreador.status === 'instalado' && (
-  <DropdownMenuItem onClick={() => setDialogRetirada({...})}>
-    <PackageMinus className="mr-2 h-4 w-4" />
-    Retirar Rastreador
-  </DropdownMenuItem>
-)}
+// De:
+const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), width - (isRecommended ? 24 : 12));
+const lineToShow = nomeLines[0];
+doc.text(lineToShow, x + width / 2 - (isRecommended ? 6 : 0), currentY + 9, { align: 'center' });
+
+// Para:
+const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), width - 12);
+const lineToShow = nomeLines[0];
+doc.text(lineToShow, x + width / 2, currentY + 9, { align: 'center' });
 ```
 
 ---
 
-#### 6. Criar página `ExecutarRetirada`
+### Resumo das Alterações
 
-**Arquivo:** `src/pages/instalador/ExecutarRetirada.tsx` (novo)
-
-Esta é a página mais complexa. Será baseada na `ExecutarVistoriaCompleta.tsx`:
-
-**Funcionalidades:**
-- Conferência de dados do veículo (placa, chassi, modelo, cor)
-- Registro de hodômetro
-- Captura de fotos obrigatórias (mesmas categorias da instalação)
-- Vídeo 360° obrigatório
-- Observações opcionais
-- Assinatura do cliente
-- Botão "Concluir Retirada"
-
-**Ao concluir:**
-1. Chamar edge function para desativar na plataforma externa
-2. Atualizar rastreador: `status = 'estoque'`, `veiculo_id = null`, `portador_id = profissional_id`
-3. Limpar IDs de plataforma do veículo
-4. Registrar movimentação de estoque
-5. Concluir serviço
+| Local | Linha(s) | Alteração |
+|-------|----------|-----------|
+| PDF Normal - Fonte coberturas | 521, 537 | 8pt → 9pt |
+| PDF Normal - Truncamento | 523, 539 | Remover `truncateText()` |
+| PDF Comparativo - Fonte coberturas | 819 | 6.5pt → 9pt |
+| PDF Comparativo - Truncamento | 822-824 | Remover `maxChars` e `truncateText()` |
+| PDF Comparativo - Badge amarelo | 774-783 | Remover bloco inteiro |
+| PDF Comparativo - Centralização nome | 790-792 | Remover offset condicional |
 
 ---
 
-#### 7. Criar edge function `concluir-retirada`
+### Resultado Esperado
 
-**Arquivo:** `supabase/functions/concluir-retirada/index.ts` (novo)
+Após as alterações:
+- As coberturas terão **fonte maior (9pt)** e mais legível
+- Os nomes das coberturas serão exibidos **completos, sem abreviações**
+- O **círculo amarelo com "1°"** será removido do título do plano no PDF comparativo
+- O nome do plano ficará **centralizado corretamente** sem o offset do badge
 
-**Parâmetros:**
-- `servicoId`: ID do serviço de retirada
-- `rastreadorId`: ID do rastreador
-- `veiculoId`: ID do veículo
-- `profissionalId`: ID do vistoriador (para atribuir porte)
-- `hodometro`: Quilometragem atual
-- `assinaturaUrl`: URL da assinatura do cliente
-
-**Fluxo:**
-1. Buscar dados do rastreador (plataforma, IMEI, etc.)
-2. Se `plataforma === 'rede_veiculos'`:
-   - Chamar `rede-veiculos-desvincular-cliente` (já existe)
-3. Se `plataforma === 'softruck'`:
-   - Chamar `softruck-api` com operação de desativação
-4. Atualizar rastreador:
-   ```sql
-   UPDATE rastreadores SET 
-     status = 'estoque',
-     veiculo_id = NULL,
-     portador_id = profissional_id,
-     id_plataforma = NULL
-   WHERE id = rastreador_id
-   ```
-5. Limpar IDs de plataforma do veículo
-6. Registrar movimentação de estoque
-7. Concluir serviço
-
----
-
-#### 8. Adicionar rota no App.tsx
-
-**Arquivo:** `src/App.tsx`
-
-```typescript
-import ExecutarRetirada from './pages/instalador/ExecutarRetirada';
-
-// Na seção de rotas do instalador
-<Route path="/instalador/retirada/:id" element={<ExecutarRetirada />} />
-```
-
----
-
-#### 9. Atualizar TarefaAtualCard para detectar retirada
-
-**Arquivo:** `src/components/vistoriador/TarefaAtualCard.tsx`
-
-Adicionar lógica para navegar para página de retirada:
-
-```typescript
-import { isRetirada } from '@/hooks/useCriarRetirada';
-
-const handleExecutar = () => {
-  if (isManutencao(tarefa.tipo)) {
-    navigate(`/instalador/manutencao/${tarefa.id}`);
-  } else if (isRetirada(tarefa.tipo)) {
-    navigate(`/instalador/retirada/${tarefa.id}`);  // Novo
-  } else if (isInstalacao(tarefa.tipo)) {
-    navigate(`/instalador/instalacao/${tarefa.id}`);
-  } else {
-    navigate(`/instalador/vistoria/${tarefa.id}`);
-  }
-};
-```
-
----
-
-#### 10. Atualizar FilaVistorias para exibir tipo "retirada"
-
-**Arquivo:** `src/pages/monitoramento/FilaVistorias.tsx`
-
-Adicionar mapeamento para o tipo:
-
-```typescript
-type TipoVistoria = 'presencial' | 'auto_vistoria' | 'ponto_fixo' | 'manutencao' | 'retirada';
-
-const TIPO_CONFIG: Record<TipoVistoria, { label: string; className: string }> = {
-  // ...existentes
-  retirada: { label: 'Retirada', className: 'bg-red-100 text-red-800 border-red-300' },
-};
-
-const mapTipo = (modalidade?: string, tipoServico?: string): TipoVistoria => {
-  if (tipoServico === 'vistoria_manutencao') return 'manutencao';
-  if (tipoServico === 'vistoria_retirada') return 'retirada';  // Novo
-  // ...resto
-};
-```
-
----
-
-### Fluxo Completo
-
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    COORDENADOR DE MONITORAMENTO                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  1. Rastreadores > Menu (⋯) > "Retirar Rastreador"                     │
-│                    │                                                    │
-│                    ▼                                                    │
-│  2. Modal de Agendamento de Retirada                                   │
-│     ┌──────────────────────────────────────────────────────────┐       │
-│     │ Rastreador: ABC-123 (IMEI: 123456789)                    │       │
-│     │ Veículo: ABC1D23 - Honda Civic                           │       │
-│     │ Associado: João Silva                                    │       │
-│     │                                                           │       │
-│     │ Data: [Hoje] [Amanhã] [Depois de amanhã]                 │       │
-│     │ Período: [Manhã] [Tarde]                                 │       │
-│     │ Motivo: [____________________]                           │       │
-│     │                                                           │       │
-│     │ ⚠️ Ao confirmar, o rastreador será desativado e         │       │
-│     │ retornará ao estoque após a retirada.                    │       │
-│     └──────────────────────────────────────────────────────────┘       │
-│                    │                                                    │
-│                    ▼                                                    │
-│  3. Vistoria aparece em:                                               │
-│     - Fila de Vistorias (badge "Retirada" vermelha)                    │
-│     - Atribuição automática para vistoriador                           │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         VISTORIADOR (APP)                               │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  4. Tarefa atribuída - Badge "Retirada de Rastreador"                  │
-│     ┌──────────────────────────────────────────────────────────┐       │
-│     │ [RETIRADA DE RASTREADOR]                                  │       │
-│     │ Cliente: João Silva                                       │       │
-│     │ Veículo: ABC1D23 - Honda Civic                           │       │
-│     │ Endereço: Rua das Flores, 123                            │       │
-│     │                                                           │       │
-│     │ [Iniciar Rota]                                           │       │
-│     └──────────────────────────────────────────────────────────┘       │
-│                    │                                                    │
-│                    ▼                                                    │
-│  5. Ao executar > navega para ExecutarRetirada.tsx                     │
-│     ┌──────────────────────────────────────────────────────────┐       │
-│     │ 📦 Retirada de Rastreador                                │       │
-│     │ ─────────────────────────────────────────                │       │
-│     │                                                           │       │
-│     │ ✅ Conferência de Dados                                  │       │
-│     │    ☑ Placa: ABC1D23                                      │       │
-│     │    ☑ Chassi: 9BWZZZ377VT123456                          │       │
-│     │    ☑ Modelo: Honda Civic                                 │       │
-│     │    ☑ Cor: Prata                                          │       │
-│     │    Hodômetro: [_______] km                               │       │
-│     │                                                           │       │
-│     │ 📷 Fotos Obrigatórias (12/12)                            │       │
-│     │    [Identificação] [Motor] [Exterior] [Rastreador]       │       │
-│     │                                                           │       │
-│     │ 🎥 Vídeo 360° ✅                                         │       │
-│     │                                                           │       │
-│     │ ✍️ Assinatura do Cliente                                 │       │
-│     │    [Pad de assinatura]                                   │       │
-│     │                                                           │       │
-│     │ [✅ Concluir Retirada]                                   │       │
-│     └──────────────────────────────────────────────────────────┘       │
-│                    │                                                    │
-│                    ▼                                                    │
-│  6. Sistema executa:                                                   │
-│     - Desativa rastreador na plataforma (Rede Veículos/Softruck)       │
-│     - Desvincula do veículo                                            │
-│     - Atribui ao porte do vistoriador                                  │
-│     - Marca como disponível no estoque                                 │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/hooks/useCriarRetirada.ts` | Hook para criar serviço de retirada |
-| `src/components/monitoramento/estoque/EnviarRetiradaModal.tsx` | Modal de agendamento |
-| `src/pages/instalador/ExecutarRetirada.tsx` | Página do vistoriador |
-| `supabase/functions/concluir-retirada/index.ts` | Edge function de conclusão |
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useServicos.ts` | Adicionar tipo e labels |
-| `src/pages/monitoramento/Rastreadores.tsx` | Adicionar opção no menu |
-| `src/components/vistoriador/TarefaAtualCard.tsx` | Adicionar navegação |
-| `src/pages/monitoramento/FilaVistorias.tsx` | Adicionar tipo e badge |
-| `src/App.tsx` | Adicionar rota |
-
-### Migração SQL Necessária
-
-```sql
-ALTER TYPE tipo_servico ADD VALUE 'vistoria_retirada';
-```
-
----
-
-### Sequência de Implementação
-
-1. Migração SQL para adicionar novo tipo de serviço
-2. Criar `useCriarRetirada.ts` e adicionar helper `isRetirada()`
-3. Atualizar `useServicos.ts` com tipo e labels
-4. Criar `EnviarRetiradaModal.tsx`
-5. Modificar `Rastreadores.tsx` para adicionar opção no menu
-6. Criar `ExecutarRetirada.tsx` (baseado em ExecutarVistoriaCompleta)
-7. Criar edge function `concluir-retirada`
-8. Atualizar `TarefaAtualCard.tsx` para navegação
-9. Atualizar `FilaVistorias.tsx` para exibição
-10. Adicionar rota em `App.tsx`
