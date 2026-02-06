@@ -736,6 +736,122 @@ const desenharRodapeCompacto = (
   doc.text(`#${cotacao.numero || 'N/A'} | Página ${paginaAtual} de ${totalPaginas}`, pageWidth - margin, footerY + 10, { align: 'right' });
 };
 
+// Função para desenhar card de plano expandido com coberturas
+const desenharCardPlanoExpandido = (
+  doc: jsPDF,
+  plano: PlanoParaPdf,
+  x: number,
+  y: number,
+  width: number,
+  index: number,
+  isRecommended: boolean = false
+): number => {
+  const padding = 6;
+  const lineHeight = 7;
+  const maxCoberturas = 14; // Máximo de coberturas por card para caber na página
+  
+  // Calcular altura baseada nas coberturas
+  const numCoberturas = Math.min(plano.coberturas.length, maxCoberturas);
+  const cardHeight = 
+    24 +  // Header (nome do plano)
+    28 +  // Valor mensal + /mês
+    (numCoberturas * lineHeight) + // Coberturas
+    (plano.coberturas.length > maxCoberturas ? 10 : 0) + // "+ X mais..."
+    18;   // Rodapé (filiação)
+  
+  // Fundo do card
+  drawPremiumCard(doc, x, y, width, cardHeight, { 
+    isRecommended, 
+    hasGlow: true 
+  });
+  
+  let currentY = y + 6;
+  
+  // 1. Header: Nome do plano centralizado com fundo azul
+  doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
+  doc.roundedRect(x + 3, currentY - 2, width - 6, 16, 2, 2, 'F');
+  
+  // Badge de ranking se for recomendado
+  if (isRecommended) {
+    const badgeSize = 14;
+    doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
+    doc.circle(x + width - 10, currentY + 6, badgeSize / 2, 'F');
+    doc.setTextColor(premiumDark.r, premiumDark.g, premiumDark.b);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('1°', x + width - 10, currentY + 8.5, { align: 'center' });
+  }
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  
+  // Quebrar nome em múltiplas linhas se necessário
+  const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), width - (isRecommended ? 24 : 12));
+  const lineToShow = nomeLines[0];
+  doc.text(lineToShow, x + width / 2 - (isRecommended ? 6 : 0), currentY + 9, { align: 'center' });
+  
+  currentY += 20;
+  
+  // 2. Valor mensal grande centralizado
+  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(plano.valorMensal), x + width / 2, currentY, { align: 'center' });
+  currentY += 5;
+  
+  // 3. "/mês" em texto menor
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text('/mês', x + width / 2, currentY, { align: 'center' });
+  currentY += 10;
+  
+  // 4. Lista de coberturas
+  const coberturasExibir = plano.coberturas.slice(0, maxCoberturas);
+  coberturasExibir.forEach((cobertura) => {
+    // Check verde (círculo)
+    doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
+    doc.circle(x + padding + 3, currentY - 1.5, 1.5, 'F');
+    
+    // Texto da cobertura
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'normal');
+    
+    // Calcular limite de caracteres baseado na largura
+    const maxChars = Math.floor((width - 20) / 2);
+    doc.text(truncateText(cobertura, maxChars), x + padding + 8, currentY);
+    
+    currentY += lineHeight;
+  });
+  
+  // Se tem mais coberturas, indicar
+  if (plano.coberturas.length > maxCoberturas) {
+    doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`+ ${plano.coberturas.length - maxCoberturas} mais...`, x + width / 2, currentY, { align: 'center' });
+    currentY += 8;
+  }
+  
+  currentY += 4;
+  
+  // 5. Rodapé: Filiação (taxa de adesão)
+  doc.setDrawColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
+  doc.line(x + padding, currentY - 4, x + width - padding, currentY - 4);
+  
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Filiação:', x + padding, currentY);
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(plano.valorAdesao), x + width - padding, currentY, { align: 'right' });
+  
+  return cardHeight;
+};
+
 // Função para desenhar página de capa (Página 1)
 const desenharPaginaCapa = (
   doc: jsPDF,
@@ -753,246 +869,136 @@ const desenharPaginaCapa = (
   // Background
   drawPageBackground(doc, pageWidth, pageHeight);
 
-  // Header
-  const headerHeight = 50;
+  // Header compacto
+  const headerHeight = 45;
   drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, { r: 30, g: 70, b: 130 });
   drawGradientRect(doc, 0, headerHeight - 3, pageWidth, 3, glowBlue, brandRed, 60);
 
   if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', margin, 6, 36, 36);
+    doc.addImage(logoBase64, 'PNG', margin, 5, 32, 32);
   }
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(24);
+  doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  const titleX = logoBase64 ? margin + 44 : margin;
-  doc.text('PRATICCAR', titleX, 20);
+  const titleX = logoBase64 ? margin + 38 : margin;
+  doc.text('PRATICCAR', titleX, 18);
 
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text('Proteção Veicular', titleX, 30);
+  doc.text('Proteção Veicular', titleX, 27);
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('COMPARATIVO DE PLANOS', titleX, 42);
+  doc.text('COMPARATIVO DE PLANOS', titleX, 38);
 
-  // Removido: Badge cotação não é mais exibido
+  y = headerHeight + 5;
 
-  y = headerHeight + 6;
-
-  // Barra de validade
+  // Barra de validade compacta
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.roundedRect(margin, y, contentWidth, 12, 3, 3, 'F');
+  doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'F');
 
   const dataValidade = new Date(cotacao.created_at);
   dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(8);
-  doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 5, y + 8);
+  doc.setFontSize(7);
+  doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 4, y + 7);
   
   doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 5, y + 8, { align: 'right' });
+  doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 4, y + 7, { align: 'right' });
 
-  y += 16;
+  y += 14;
 
-  // Dados do solicitante e veículo
+  // Dados do solicitante e veículo compactos
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.roundedRect(margin, y, contentWidth, 28, 3, 3, 'F');
+  doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'F');
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   
-  doc.text('Cliente:', margin + 5, y + 9);
+  doc.text('Cliente:', margin + 4, y + 7);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(cotacao.nome_solicitante || 'Não informado', margin + 25, y + 9);
+  doc.text(truncateText(cotacao.nome_solicitante, 30) || 'Não informado', margin + 22, y + 7);
   
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
-  doc.text('Telefone:', pageWidth / 2 + 10, y + 9);
+  doc.text('Tel:', pageWidth / 2 + 5, y + 7);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatPhone(cotacao.telefone1_solicitante), pageWidth / 2 + 32, y + 9);
+  doc.text(formatPhone(cotacao.telefone1_solicitante), pageWidth / 2 + 16, y + 7);
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
-  doc.text('Veículo:', margin + 5, y + 18);
+  doc.text('Veículo:', margin + 4, y + 15);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(`${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}`, margin + 28, y + 18);
+  doc.text(truncateText(`${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}`, 35), margin + 22, y + 15);
   
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
-  doc.text('Placa:', pageWidth / 2 + 10, y + 18);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatPlaca(cotacao.veiculo_placa), pageWidth / 2 + 28, y + 18);
-
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Valor FIPE:', margin + 5, y + 26);
+  doc.text('FIPE:', pageWidth / 2 + 5, y + 15);
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(cotacao.valor_fipe), margin + 32, y + 26);
+  doc.text(formatCurrency(cotacao.valor_fipe), pageWidth / 2 + 18, y + 15);
 
-  y += 34;
+  y += 28;
 
   // Título da seção de planos
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFontSize(12);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text(`${cotacao.planosComparar.length} OPÇÕES PARA SUA PROTEÇÃO`, pageWidth / 2, y, { align: 'center' });
-  y += 4;
+  y += 3;
   drawGradientRect(doc, margin, y, contentWidth, 1.5, glowBlue, brandRed, 40);
-  y += 10;
+  y += 8;
 
-  // Cards resumidos dos planos - Layout dinâmico e centralizado
+  // Cards expandidos dos planos - Layout dinâmico e centralizado
   const numPlanos = cotacao.planosComparar.length;
-  
-  // Determinar número de colunas baseado na quantidade de planos
-  let MAX_CARDS_POR_LINHA = 3;
-  if (numPlanos === 1) MAX_CARDS_POR_LINHA = 1;
-  if (numPlanos === 2) MAX_CARDS_POR_LINHA = 2;
-  
-  const cardGap = 8; // Espaçamento aumentado entre cards
-  
-  // Largura dinâmica baseada na quantidade de cards por linha
-  const baseCardWidth = Math.min(65, (contentWidth - (cardGap * (MAX_CARDS_POR_LINHA - 1))) / MAX_CARDS_POR_LINHA);
-  const cardWidth = baseCardWidth;
-  const cardHeight = 80; // Altura aumentada para melhor distribuição do conteúdo
-  const planoRecomendadoIndex = numPlanos > 1 ? 1 : 0;
+  const cardGap = 6;
+  const planoRecomendadoIndex = numPlanos > 1 ? 0 : -1; // Primeiro plano é recomendado
 
-  cotacao.planosComparar.forEach((plano, index) => {
-    // Calcular posição na grade
-    const linhaAtual = Math.floor(index / MAX_CARDS_POR_LINHA);
-    const posicaoNaLinha = index % MAX_CARDS_POR_LINHA;
-    const planosNestaLinha = Math.min(
-      MAX_CARDS_POR_LINHA, 
-      numPlanos - (linhaAtual * MAX_CARDS_POR_LINHA)
-    );
+  if (numPlanos === 1) {
+    // Card único centralizado (largura 60% da página)
+    const cardWidth = contentWidth * 0.6;
+    const cardX = (pageWidth - cardWidth) / 2;
+    desenharCardPlanoExpandido(doc, cotacao.planosComparar[0], cardX, y, cardWidth, 0, true);
     
-    // Largura total ocupada pelos cards + gaps nesta linha específica
-    const larguraLinha = (cardWidth * planosNestaLinha) + (cardGap * Math.max(0, planosNestaLinha - 1));
-    
-    // Posição X inicial para centralizar a linha inteira
-    const startX = (pageWidth - larguraLinha) / 2;
-    
-    // Posição X do card atual
-    const cardX = startX + (cardWidth + cardGap) * posicaoNaLinha;
-    
-    // Posição Y baseada na linha
-    const cardY = y + (cardHeight + cardGap) * linhaAtual;
-
-    const isRecommended = index === planoRecomendadoIndex;
-
-    // Card premium com efeito
-    drawPremiumCard(doc, cardX, cardY, cardWidth, cardHeight, { 
-      isRecommended, 
-      hasGlow: true 
+  } else if (numPlanos === 2) {
+    // 2 cards lado a lado
+    const cardWidth = (contentWidth - cardGap) / 2;
+    cotacao.planosComparar.forEach((plano, index) => {
+      const cardX = margin + (cardWidth + cardGap) * index;
+      desenharCardPlanoExpandido(doc, plano, cardX, y, cardWidth, index, index === planoRecomendadoIndex);
     });
-
-    const centerX = cardX + cardWidth / 2;
     
-    // Posições fixas para garantir alinhamento entre todos os cards
-    const nomeY = cardY + 12;        // Nome do plano (mais espaço superior)
-    const valorY = cardY + 30;       // Valor mensal
-    const mensalY = cardY + 38;      // "médio mensal"
-    const fipeY = cardY + 52;        // Badge FIPE (mais espaço)
-
-    // Nome do plano - quebra inteligente em múltiplas linhas
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'bold');
-    const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), cardWidth - 10);
-    const linesToShow = nomeLines.slice(0, 2); // Máximo 2 linhas
-    linesToShow.forEach((line: string, lineIndex: number) => {
-      doc.text(line, centerX, nomeY + (lineIndex * 6), { align: 'center' });
-    });
-
-    // Valor mensal em destaque
-    doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(formatCurrency(plano.valorMensal), centerX, valorY, { align: 'center' });
+  } else {
+    // 3+ cards: Layout em grid
+    const cardsPerRow = 3;
+    const cardWidth = (contentWidth - (cardGap * (cardsPerRow - 1))) / cardsPerRow;
     
-    // Texto "médio mensal"
-    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(6);
-    doc.setFont('helvetica', 'normal');
-    doc.text('médio mensal', centerX, mensalY, { align: 'center' });
-
-    // Badge FIPE centralizado
-    const badgeWidth = cardWidth - 14;
-    doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
-    doc.roundedRect(cardX + 7, fipeY - 4, badgeWidth, 10, 2, 2, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(6);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${plano.coberturaFipe}% FIPE`, centerX, fipeY + 2, { align: 'center' });
-  });
-
-  // Calcular quantas linhas de cards foram usadas
-  const numLinhas = Math.ceil(numPlanos / MAX_CARDS_POR_LINHA);
-  y += (cardHeight + cardGap) * numLinhas + 4;
-
-  // Tabela resumo de valores - Layout centralizado
-  const tabelaWidth = Math.min(contentWidth, (cardWidth + cardGap) * Math.min(numPlanos, MAX_CARDS_POR_LINHA) + 40);
-  const tabelaX = (pageWidth - tabelaWidth) / 2;
-  
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-  doc.roundedRect(tabelaX, y, tabelaWidth, 21, 3, 3, 'F');
-
-  // Labels
-  const labelWidth = 45;
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TAXA DE ADESÃO', tabelaX + 5, y + 8);
-  doc.text('VALOR MÉDIO MENSAL', tabelaX + 5, y + 15);
-
-  // Valores por plano (max 3 por linha)
-  const planosExibidos = cotacao.planosComparar.slice(0, MAX_CARDS_POR_LINHA);
-  const valorWidth = (tabelaWidth - labelWidth) / planosExibidos.length;
-  
-  planosExibidos.forEach((plano, index) => {
-    const valorX = tabelaX + labelWidth + valorWidth * index + valorWidth / 2;
-
-    doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.text(formatCurrency(plano.valorAdesao), valorX, y + 8, { align: 'center' });
-    doc.text(formatCurrency(plano.valorMensal), valorX, y + 15, { align: 'center' });
-  });
-
-  // Se houver mais de 3 planos, adicionar segunda tabela
-  if (numPlanos > MAX_CARDS_POR_LINHA) {
-    y += 25;
-    const planosRestantes = cotacao.planosComparar.slice(MAX_CARDS_POR_LINHA);
-    const tabelaWidth2 = Math.min(contentWidth, (cardWidth + cardGap) * planosRestantes.length + 40);
-    const tabelaX2 = (pageWidth - tabelaWidth2) / 2;
-    
-    doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
-    doc.roundedRect(tabelaX2, y, tabelaWidth2, 21, 3, 3, 'F');
-
-    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'bold');
-    doc.text('TAXA DE ADESÃO', tabelaX2 + 5, y + 8);
-    doc.text('VALOR MÉDIO MENSAL', tabelaX2 + 5, y + 15);
-
-    const valorWidth2 = (tabelaWidth2 - labelWidth) / planosRestantes.length;
-    
-    planosRestantes.forEach((plano, index) => {
-      const valorX = tabelaX2 + labelWidth + valorWidth2 * index + valorWidth2 / 2;
-
-      doc.setTextColor(textLight.r, textLight.g, textLight.b);
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'normal');
-      doc.text(formatCurrency(plano.valorAdesao), valorX, y + 8, { align: 'center' });
-      doc.text(formatCurrency(plano.valorMensal), valorX, y + 15, { align: 'center' });
+    cotacao.planosComparar.forEach((plano, index) => {
+      const row = Math.floor(index / cardsPerRow);
+      const col = index % cardsPerRow;
+      
+      // Calcular quantos cards nesta linha para centralizar
+      const startIndex = row * cardsPerRow;
+      const cardsNestaLinha = Math.min(cardsPerRow, numPlanos - startIndex);
+      const larguraLinha = (cardWidth * cardsNestaLinha) + (cardGap * (cardsNestaLinha - 1));
+      const startX = (pageWidth - larguraLinha) / 2;
+      
+      const cardX = startX + (cardWidth + cardGap) * col;
+      
+      // Calcular altura máxima dos cards (baseada no máximo de coberturas)
+      const maxCoberturas = Math.min(14, Math.max(...cotacao.planosComparar.map(p => p.coberturas.length)));
+      const estimatedCardHeight = 24 + 28 + (Math.min(maxCoberturas, 14) * 7) + 18;
+      const cardY = y + row * (estimatedCardHeight + cardGap);
+      
+      desenharCardPlanoExpandido(doc, plano, cardX, cardY, cardWidth, index, index === planoRecomendadoIndex);
     });
   }
 
