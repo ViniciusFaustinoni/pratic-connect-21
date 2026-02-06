@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Camera, Check, AlertTriangle, 
   Gauge, CheckCircle2, Loader2, Car, Video,
-  ChevronDown, ChevronUp, MessageSquare, PackageMinus
+  ChevronDown, ChevronUp, MessageSquare, PackageMinus,
+  MessageCircle, Phone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,7 +44,7 @@ export default function ExecutarRetirada() {
         .from('servicos')
         .select(`
           *,
-          associado:associados(id, nome, telefone, cpf),
+          associado:associados(id, nome, telefone, cpf, whatsapp),
           veiculo:veiculos(id, placa, marca, modelo, cor, chassi),
           rastreador:rastreadores(id, codigo, imei, plataforma)
         `)
@@ -74,6 +75,25 @@ export default function ExecutarRetirada() {
   const veiculo = servico?.veiculo;
   const associado = servico?.associado;
   const rastreador = servico?.rastreador;
+
+  // Funções de contato
+  const abrirWhatsApp = () => {
+    const numero = associado?.whatsapp || associado?.telefone;
+    if (numero) {
+      const numeroLimpo = numero.replace(/\D/g, '');
+      const mensagem = encodeURIComponent(
+        `Olá ${associado?.nome?.split(' ')[0] || ''}, sou o técnico da PRATIC. ` +
+        `Estou no local para realizar o serviço. Podemos confirmar?`
+      );
+      window.open(`https://wa.me/55${numeroLimpo}?text=${mensagem}`, '_blank');
+    }
+  };
+
+  const ligarCliente = () => {
+    if (associado?.telefone) {
+      window.open(`tel:${associado.telefone}`, '_self');
+    }
+  };
 
   // Categorias de fotos (sem rastreador)
   const categorias = useMemo(() => agruparFotosFiltradas('automovel', false), []);
@@ -224,13 +244,31 @@ export default function ExecutarRetirada() {
           <Button variant="ghost" size="icon" onClick={() => navigate('/vistoriador/tarefas')} className="text-slate-400">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white flex items-center gap-2">
               <PackageMinus className="h-4 w-4 text-red-400" />
               Retirada de Rastreador
             </p>
-            <p className="text-xs text-slate-400">{associado?.nome} | {veiculo?.placa}</p>
+            <p className="text-xs text-slate-400 truncate">{associado?.nome} | {veiculo?.placa}</p>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={abrirWhatsApp}
+            disabled={!associado?.whatsapp && !associado?.telefone}
+            className="text-green-500 hover:text-green-400 hover:bg-green-500/10"
+          >
+            <MessageCircle className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={ligarCliente}
+            disabled={!associado?.telefone}
+            className="text-slate-400"
+          >
+            <Phone className="h-5 w-5" />
+          </Button>
         </div>
       </header>
 
