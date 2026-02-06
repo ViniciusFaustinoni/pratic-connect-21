@@ -1,155 +1,120 @@
 
-# Plano: Incluir Vídeo 360° na Documentação da Instalação
+# Plano: Adicionar Vídeo 360° nos Detalhes da Instalação e Corrigir Legenda
 
-## Problema Identificado
+## Problemas Identificados
 
-O vídeo 360° é capturado pelo vistoriador/instalador e armazenado corretamente na coluna `video_360_url` da tabela `vistorias`, porém **não é incluído no laudo PDF gerado** pela Edge Function `gerar-laudo-vistoria`.
+### 1. Vídeo 360° não aparece na página de detalhes
+A instalação tem um vídeo 360° gravado pelo vistoriador (`video_360_url` na tabela `vistorias`), mas ele não é exibido na página de detalhes.
 
-### Causa Raiz
+### 2. Legenda incorreta "Fotos da Autovistoria"
+Quando a vistoria foi realizada pelo vistoriador (modalidade `presencial`), a legenda deveria ser **"Fotos da Vistoria"**, não "Fotos da Autovistoria".
 
-A Edge Function `gerar-laudo-vistoria`:
-1. **Não busca o campo `video_360_url`** no SELECT da vistoria (linhas 194-220)
-2. **Não tem lógica para referenciar o vídeo** no PDF gerado
-3. Busca apenas fotos da tabela `vistoria_fotos`
-
-### Desafio Técnico
-
-PDFs não suportam vídeos embutidos. A solução será incluir um **QR Code** ou **link clicável** para o vídeo 360° no laudo PDF.
+| Modalidade | Legenda Correta |
+|------------|-----------------|
+| `autovistoria` | Fotos da Autovistoria |
+| `presencial` | Fotos da Vistoria |
 
 ## Solução Proposta
 
-### 1. Modificar a Edge Function `gerar-laudo-vistoria`
+### 1. Modificar `src/hooks/useFotosAutovistoria.ts`
 
-**Arquivo:** `supabase/functions/gerar-laudo-vistoria/index.ts`
+Atualizar o hook para também retornar:
+- `video_360_url`: URL do vídeo 360° (se existir)
+- `modalidade`: Indica se foi autovistoria ou presencial
 
-#### a) Adicionar `video_360_url` ao SELECT da vistoria
+```
+// Antes
+.select('id, status, modalidade')
 
-```text
-// Linha 197: Adicionar campo video_360_url
-.select(`
-  id,
-  protocolo,
-  created_at,
-  km_atual,
-  observacoes,
-  status,
-  video_360_url,  // NOVO
-  endereco_logradouro,
-  ...
-`)
+// Depois
+.select('id, status, modalidade, video_360_url')
 ```
 
-#### b) Adicionar seção de Vídeo 360° no PDF (com link)
-
-Após a seção de observações e antes das fotos, adicionar:
-
-```text
-// Verificar se existe vídeo 360°
-if (vistoria.video_360_url) {
-  if (y < 150) {
-    page = addPage();
-    y = PAGE_HEIGHT - MARGIN - 30;
-  }
-
-  page.drawText('VÍDEO 360° DO VEÍCULO', {
-    x: MARGIN,
-    y,
-    size: 12,
-    font: fontBold,
-    color: PRIMARY_COLOR,
-  });
-
-  y -= 18;
-
-  page.drawText('Link para visualização:', {
-    x: MARGIN,
-    y,
-    size: 9,
-    font,
-    color: TEXT_COLOR,
-  });
-
-  y -= 14;
-
-  // Desenhar o link (PDFs suportam links clicáveis)
-  page.drawText(vistoria.video_360_url, {
-    x: MARGIN,
-    y,
-    size: 8,
-    font,
-    color: rgb(0, 0.4, 0.8), // Azul para indicar link
-  });
-
-  y -= 30;
-}
+```
+// Retornar adicionalmente
+return {
+  fotos: fotos as FotoAutovistoria[],
+  vistoriaId: vistoria.id,
+  origem: 'vistoria_fotos',
+  video360Url: vistoria.video_360_url,  // NOVO
+  modalidade: vistoria.modalidade,       // NOVO
+};
 ```
 
-### 2. Alternativa: Adicionar QR Code para o Vídeo (Opcional - Mais Elegante)
+### 2. Modificar `src/pages/monitoramento/InstalacaoDetalhe.tsx`
 
-Para uma experiência melhor, podemos gerar um QR Code que aponta para o vídeo:
+#### a) Corrigir legenda com base na modalidade
 
-```text
-// Usar biblioteca de QR Code para Deno
-import QRCode from "https://esm.sh/qrcode@1.5.3";
+```
+// Antes (linha 456)
+Fotos da Autovistoria ({totalFotos})
 
-// Gerar QR Code como Data URL
-const qrDataUrl = await QRCode.toDataURL(vistoria.video_360_url, { 
-  width: 120,
-  margin: 1 
-});
+// Depois
+{fotosData?.modalidade === 'presencial' 
+  ? 'Fotos da Vistoria' 
+  : 'Fotos da Autovistoria'} ({totalFotos})
+```
 
-// Converter para bytes e embutir no PDF
-const qrBytes = Uint8Array.from(atob(qrDataUrl.split(',')[1]), c => c.charCodeAt(0));
-const qrImage = await pdfDoc.embedPng(qrBytes);
+#### b) Adicionar seção de Vídeo 360°
 
-page.drawImage(qrImage, {
-  x: MARGIN,
-  y: y - 120,
-  width: 100,
-  height: 100,
-});
+Adicionar o componente `Video360Card` acima da seção de fotos:
 
-page.drawText('Escaneie para assistir', {
-  x: MARGIN + 110,
-  y: y - 60,
-  size: 9,
-  font,
-  color: MUTED_COLOR,
-});
+```
+import { Video360Card } from '@/components/cadastro/Video360Card';
+
+// Antes da seção de fotos, adicionar:
+{fotosData?.video360Url && (
+  <Video360Card videoUrl={fotosData.video360Url} />
+)}
 ```
 
 ## Arquivos a Modificar
 
-1. **`supabase/functions/gerar-laudo-vistoria/index.ts`**
-   - Adicionar `video_360_url` no SELECT da vistoria (linha ~197)
-   - Adicionar seção "Vídeo 360°" no PDF com link clicável
-   - Opcionalmente: gerar QR Code para o vídeo
+1. **`src/hooks/useFotosAutovistoria.ts`**
+   - Adicionar `video_360_url` ao SELECT da vistoria
+   - Retornar `video360Url` e `modalidade` no objeto de resultado
+   - Atualizar tipo do retorno
 
-## Fluxo Atualizado
+2. **`src/pages/monitoramento/InstalacaoDetalhe.tsx`**
+   - Importar `Video360Card`
+   - Adicionar seção de vídeo 360°
+   - Corrigir legenda "Fotos da Autovistoria" para usar lógica baseada na modalidade
+
+## Fluxo Visual Atualizado
 
 ```text
-1. Instalador grava vídeo 360° → Salvo em vistorias.video_360_url
-2. Cliente assina → Trigger chama gerar-laudo-vistoria
-3. Edge Function busca video_360_url junto com demais dados
-4. PDF é gerado com seção "Vídeo 360°" contendo link clicável
-5. Laudo é salvo no bucket 'documentos' e registrado
+┌──────────────────────────────────────────────────────────┐
+│  Detalhes da Instalação #xxxx                            │
+├──────────────────────────────────────────────────────────┤
+│  [Cards existentes: Cliente, Veículo, Endereço, etc.]    │
+├──────────────────────────────────────────────────────────┤
+│  📹 Vídeo 360° do Veículo          ← NOVO                │
+│  ┌─────────────────────────────────────────┐             │
+│  │    [Player de Vídeo com controles]     │             │
+│  └─────────────────────────────────────────┘             │
+├──────────────────────────────────────────────────────────┤
+│  📷 Fotos da Vistoria (33)     ← CORRIGIDA (era "Autovistoria")
+│    ▸ Identificação                                       │
+│    ▸ Exterior                                            │
+│    ▸ Interior                                            │
+│    ▸ Outros                                              │
+├──────────────────────────────────────────────────────────┤
+│  📄 Documentação (x)                                     │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ## Comportamento Esperado
 
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| Vídeo 360° capturado | Não aparece no laudo | Link/QR Code no laudo |
+| Vídeo 360° gravado | Não exibido | Card com player de vídeo |
+| Vistoria presencial | "Fotos da Autovistoria" | "Fotos da Vistoria" |
+| Autovistoria | "Fotos da Autovistoria" | "Fotos da Autovistoria" (mantém) |
 | Sem vídeo 360° | - | Seção não exibida |
 
 ## Testes Recomendados
 
-1. Concluir uma instalação com vídeo 360° capturado
-2. Verificar se o laudo PDF gerado contém a seção de vídeo
-3. Clicar no link ou escanear QR Code e verificar se abre o vídeo
-
-## Observações Técnicas
-
-- A solução usa link clicável em vez de embutir o vídeo (impossível em PDF)
-- O QR Code é opcional mas oferece melhor UX para visualização mobile
-- A biblioteca qrcode para Deno é leve e bem suportada
+1. Abrir a instalação `2e3e8821-8a17-41e3-822b-b68011c73ec7` que tem vídeo 360°
+2. Verificar se o vídeo é exibido com player funcional
+3. Verificar se a legenda mudou para "Fotos da Vistoria"
+4. Testar uma instalação com autovistoria para garantir que continua com "Fotos da Autovistoria"
