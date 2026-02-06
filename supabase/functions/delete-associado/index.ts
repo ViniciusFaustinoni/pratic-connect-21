@@ -128,6 +128,14 @@ Deno.serve(async (req) => {
 
     console.log(`[delete-associado] Contratos encontrados: ${contratos?.length || 0}`);
 
+    // 1.5. Desvincular contrato_id do associado ANTES de excluir contratos (evita FK constraint)
+    await supabaseAdmin
+      .from("associados")
+      .update({ contrato_id: null })
+      .eq("id", associadoId);
+    
+    console.log(`[delete-associado] Contrato desvinculado do associado`);
+
     // 2. For each contract, delete dependencies
     if (contratos && contratos.length > 0) {
       for (const contrato of contratos) {
