@@ -1,71 +1,67 @@
 
-# Plano: Corrigir Erro de Select.Item com Valor Vazio
+# Plano: Corrigir Agendamento de Vistoria de Manutenção
 
 ## Problema Identificado
 
-O erro ocorre porque o componente `<SelectItem value="">` na linha 382 do arquivo `AgendarVistoriaModal.tsx` usa string vazia como valor:
+Quando o usuário tenta agendar uma **vistoria de manutenção** pela Fila de Vistorias, o modal `AgendarVistoriaModal` exibe as opções incorretas:
+- **Presencial** (vistoriador vai até o cliente)
+- **Ponto Fixo** (cliente vai a local parceiro)
+- **Auto Vistoria** (cliente faz pelo app)
 
-```tsx
-<SelectItem value="">Qualquer horário</SelectItem>
+Porém, para **vistorias de manutenção de rastreadores**, as opções devem ser apenas:
+- **Base** — associado leva o veículo até a sede
+- **Rota** — técnico vai ao local do associado
+
+## Causa Raiz
+
+Na página `FilaVistorias.tsx`, a função `handleAgendar` sempre abre o `AgendarVistoriaModal` genérico, independente do tipo de vistoria:
+
+```typescript
+const handleAgendar = (vistoria: VistoriaFila) => {
+  setVistoriaSelecionada({...});
+  setAgendarModalOpen(true); // Sempre abre o modal genérico
+};
 ```
 
-O Radix UI Select **não permite** `value=""` em `SelectItem` porque o valor vazio é reservado para limpar a seleção e mostrar o placeholder.
+O sistema já possui o modal correto `AgendarManutencaoModal.tsx` que usa `LOCAL_TIPO_OPTIONS` (base/rota), mas ele não está sendo utilizado para vistorias de manutenção.
 
 ## Solução
 
-Substituir o valor vazio por um valor significativo (como `"any"` ou `"qualquer"`) e ajustar a lógica para tratar esse valor especial.
+Modificar `FilaVistorias.tsx` para detectar quando a vistoria é do tipo **manutenção** ou **retirada** e abrir o modal específico `AgendarManutencaoModal` em vez do genérico.
 
-## Alterações no Arquivo
+## Alterações
 
-**Arquivo:** `src/components/monitoramento/AgendarVistoriaModal.tsx`
+### Arquivo: `src/pages/monitoramento/FilaVistorias.tsx`
 
-### Mudança 1: Linha 382 - Substituir valor vazio
+1. **Importar** o `AgendarManutencaoModal` e o tipo `VistoriaManutencao`
 
-**Antes:**
-```tsx
-<SelectItem value="">Qualquer horário</SelectItem>
+2. **Adicionar estados** para controlar o modal de manutenção:
+   - `manutencaoModalOpen: boolean`
+   - `vistoriaManutencaoSelecionada: VistoriaManutencao | null`
+
+3. **Modificar a função `handleAgendar`** para verificar o tipo:
+```typescript
+const handleAgendar = (vistoria: VistoriaFila) => {
+  // Se for manutenção ou retirada, usar modal específico
+  if (vistoria.tipo === 'manutencao' || vistoria.tipo === 'retirada') {
+    // Buscar dados completos do serviço e abrir modal específico
+    const servico = servicosRaw?.find(s => s.id === vistoria.id);
+    if (servico) {
+      setVistoriaManutencaoSelecionada(/* mapear dados */);
+      setManutencaoModalOpen(true);
+      return;
+    }
+  }
+  
+  // Para outros tipos, continuar com modal genérico
+  setVistoriaSelecionada({...});
+  setAgendarModalOpen(true);
+};
 ```
 
-**Depois:**
-```tsx
-<SelectItem value="any">Qualquer horário</SelectItem>
-```
-
-### Mudança 2: Linha 376 - Ajustar handler
-
-**Antes:**
-```tsx
-onValueChange={(value) => updateForm('horarioEspecifico', value || undefined)}
-```
-
-**Depois:**
-```tsx
-onValueChange={(value) => updateForm('horarioEspecifico', value === 'any' ? undefined : value)}
-```
-
-### Mudança 3: Linha 375 - Ajustar valor exibido
-
-**Antes:**
-```tsx
-value={formData.horarioEspecifico || ''}
-```
-
-**Depois:**
-```tsx
-value={formData.horarioEspecifico || 'any'}
-```
-
-## Impacto em Outros Arquivos
-
-Existem 14 arquivos com o mesmo problema (`SelectItem value=""`). Porém, eles podem não estar causando erros visíveis no momento porque:
-1. Os componentes podem não estar sendo renderizados
-2. Os valores vazios podem não estar sendo selecionados
-
-Recomendo corrigir apenas o arquivo que está causando o erro agora, e os demais podem ser corrigidos em uma tarefa futura de refatoração.
+4. **Renderizar o modal** de manutenção no final do componente
 
 ## Resultado Esperado
 
-Após a correção:
-- O modal de agendamento abrirá sem erros
-- A opção "Qualquer horário" funcionará corretamente
-- O formulário continuará tratando a ausência de horário específico como `undefined` internamente
+- Ao clicar "Agendar" em uma vistoria do tipo **Manutenção** ou **Retirada**, será aberto o modal com opções **Base** e **Rota**
+- Para vistorias de entrada normais (cotações), continuará exibindo as opções Presencial/Ponto Fixo/Auto Vistoria
