@@ -19,9 +19,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useServico, useIniciarServicoMutation } from '@/hooks/useServicos';
 import { 
   useRegistrarResultadoManutencao, 
-  useRastreadoresParaSubstituicao,
   useMarcarNaoCompareceu 
 } from '@/hooks/useVistoriaManutencao';
+import { useRastreadoresDoPortador } from '@/hooks/useRastreadoresPortador';
 import { 
   type ResultadoManutencao,
   type DestinoRastreadorSubstituido,
@@ -50,7 +50,7 @@ export default function ExecutarManutencao() {
 
   const { data: servico, isLoading } = useServico(id);
   const { mutate: iniciarServico, isPending: isIniciando } = useIniciarServicoMutation();
-  const { data: rastreadoresDisponiveis, isLoading: loadingRastreadores } = useRastreadoresParaSubstituicao();
+  const { data: rastreadoresDisponiveis, isLoading: loadingRastreadores } = useRastreadoresDoPortador();
   const registrarResultado = useRegistrarResultadoManutencao();
   const marcarNaoCompareceu = useMarcarNaoCompareceu();
 
@@ -528,26 +528,31 @@ export default function ExecutarManutencao() {
                       <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>
-                          Nenhum rastreador disponível em estoque
+                          Você não tem rastreadores em seu porte. Solicite ao coordenador que transfira equipamentos para você.
                         </AlertDescription>
                       </Alert>
                     ) : (
-                      <div className="max-h-40 overflow-y-auto border rounded-lg divide-y">
+                      <div className="max-h-48 overflow-y-auto border rounded-lg divide-y">
                         {rastreadorFiltrados.slice(0, 10).map((r) => (
                           <div
                             key={r.id}
                             onClick={() => setRastreadorNovoId(r.id)}
                             className={cn(
-                              "p-2 cursor-pointer transition-colors",
+                              "p-3 cursor-pointer transition-colors",
                               rastreadorNovoId === r.id 
                                 ? "bg-primary/10 border-l-2 border-l-primary" 
                                 : "hover:bg-muted/50"
                             )}
                           >
                             <p className="font-medium text-sm">{r.codigo}</p>
-                            {r.imei && (
-                              <p className="text-xs text-muted-foreground font-mono">{r.imei}</p>
-                            )}
+                            <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+                              {r.numero_serie && (
+                                <span>S/N: <span className="font-mono">{r.numero_serie}</span></span>
+                              )}
+                              {r.imei && (
+                                <span>IMEI: <span className="font-mono">{r.imei}</span></span>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
