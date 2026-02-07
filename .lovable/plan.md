@@ -1,25 +1,34 @@
 
-
-# Plano: Completar Tela de Conclusão de Manutenção para o Vistoriador
+# Plano: Usar Rastreadores do Porte do Vistoriador na Substituição
 
 ## Problema Identificado
 
-A tela `ExecutarManutencao.tsx` (app do vistoriador) possui apenas um `AlertDialog` simples que pergunta "Confirme que a manutenção foi realizada". Isso não cobre os 4 cenários reais de campo:
+Na tela de conclusão de manutenção do vistoriador (`ExecutarManutencao.tsx`), quando ele seleciona "Substituição de Rastreador", o sistema busca **todos os rastreadores em estoque da base** usando `useRastreadoresParaSubstituicao()`.
 
-| Cenário | O que acontece | Status Final |
-|---------|----------------|--------------|
-| A) Resolvido | Consertou (fiação, reset, reposicionamento). Rastreador continua instalado | Concluída |
-| B) Substituição | Trocou por novo rastreador do seu porte. Antigo vai para triagem ou baixa | Concluída |
-| C) Não Resolvido | Não tinha peça/substituto. Precisa reagendar ou cancelar | Pendente ou Cancelada |
-| D) Ausente | Associado não estava (BASE) ou não foi possível acessar (ROTA) | Reagendada |
+Porém, a lógica correta é que o vistoriador só pode substituir por rastreadores que **ele carrega consigo** — o chamado "porte do vistoriador".
 
-O sistema já tem toda a lógica backend no hook `useRegistrarResultadoManutencao` e um modal completo `RegistrarResultadoModal` no painel administrativo. A tela do vistoriador precisa usar essa mesma infraestrutura.
+### Hook Atual (Incorreto)
+```typescript
+// useRastreadoresParaSubstituicao - busca TODOS em estoque
+.from('rastreadores')
+.select('id, codigo, numero_serie, imei, plataforma')
+.eq('status', 'estoque')  // Qualquer um em estoque
+```
+
+### Hook Correto (Já Existe)
+```typescript
+// useRastreadoresDoPortador - busca apenas do vistoriador logado
+.from('rastreadores')
+.select('id, codigo, imei, numero_serie, plataforma')
+.eq('portador_id', profile!.id)  // Apenas do MEU porte
+.eq('status', 'estoque')
+```
 
 ---
 
 ## Solução
 
-Substituir o `AlertDialog` simples por um modal completo de resultado, adaptado para mobile e reutilizando os hooks existentes.
+Substituir o hook `useRastreadoresParaSubstituicao` por `useRastreadoresDoPortador` na tela do vistoriador.
 
 ---
 
@@ -27,254 +36,112 @@ Substituir o `AlertDialog` simples por um modal completo de resultado, adaptado 
 
 ### Arquivo: `src/pages/instalador/ExecutarManutencao.tsx`
 
-#### 1. Remover imports não mais necessários
+#### 1. Atualizar import
+
 ```diff
-- import { AlertDialog, AlertDialogAction, ... } from "@/components/ui/alert-dialog";
+- import { 
+-   useRegistrarResultadoManutencao, 
+-   useRastreadoresParaSubstituicao,
+-   useMarcarNaoCompareceu 
+- } from '@/hooks/useVistoriaManutencao';
+
++ import { 
++   useRegistrarResultadoManutencao, 
++   useMarcarNaoCompareceu 
++ } from '@/hooks/useVistoriaManutencao';
++ import { useRastreadoresDoPortador } from '@/hooks/useRastreadoresPortador';
 ```
 
-#### 2. Adicionar novos imports
+#### 2. Substituir o hook usado
 
-```typescript
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Label } from '@/components/ui/label';
-import { 
-  RefreshCw, 
-  XCircle, 
-  RotateCcw, 
-  Trash2, 
-  ArrowRight, 
-  Search, 
-  AlertTriangle,
-  UserX
-} from 'lucide-react';
-import { 
-  useRegistrarResultadoManutencao, 
-  useRastreadoresParaSubstituicao,
-  useMarcarNaoCompareceuManutencao 
-} from '@/hooks/useVistoriaManutencao';
-import { 
-  type ResultadoManutencao,
-  type DestinoRastreadorSubstituido,
-  type AcaoNaoResolvido,
-} from '@/types/vistoriaManutencao';
+```diff
+- const { data: rastreadoresDisponiveis, isLoading: loadingRastreadores } = useRastreadoresParaSubstituicao();
++ const { data: rastreadoresDisponiveis, isLoading: loadingRastreadores } = useRastreadoresDoPortador();
 ```
 
-#### 3. Novos estados para o modal de resultado
+#### 3. Exibir número de série e IMEI no item
 
-```typescript
-// Modal de resultado
-const [showResultadoModal, setShowResultadoModal] = useState(false);
-const [resultado, setResultado] = useState<ResultadoManutencao>('resolvido');
-const [descricao, setDescricao] = useState('');
-
-// Para substituição
-const [rastreadorNovoId, setRastreadorNovoId] = useState('');
-const [idPlataforma, setIdPlataforma] = useState('');
-const [buscaRastreador, setBuscaRastreador] = useState('');
-const [destinoRastreadorAntigo, setDestinoRastreadorAntigo] = useState<DestinoRastreadorSubstituido>('retorno_base');
-
-// Para não resolvido
-const [acaoNaoResolvido, setAcaoNaoResolvido] = useState<AcaoNaoResolvido>('reagendar');
-```
-
-#### 4. Hooks adicionais
-
-```typescript
-const { data: rastreadoresDisponiveis, isLoading: loadingRastreadores } = useRastreadoresParaSubstituicao();
-const registrarResultado = useRegistrarResultadoManutencao();
-const marcarNaoCompareceu = useMarcarNaoCompareceuManutencao();
-```
-
-#### 5. Handler de conclusão com resultado
-
-```typescript
-const handleConcluirComResultado = async () => {
-  if (!id || !descricao.trim()) {
-    toast.error('Preencha a descrição do que foi feito');
-    return;
-  }
-
-  if (resultado === 'substituicao' && !rastreadorNovoId) {
-    toast.error('Selecione o rastreador substituto');
-    return;
-  }
-
-  await registrarResultado.mutateAsync({
-    servicoId: id,
-    resultado,
-    descricao,
-    rastreadorNovoId: resultado === 'substituicao' ? rastreadorNovoId : undefined,
-    idPlataforma: resultado === 'substituicao' ? idPlataforma : undefined,
-    destinoRastreadorAntigo: resultado === 'substituicao' ? destinoRastreadorAntigo : undefined,
-    acaoNaoResolvido: resultado === 'nao_resolvido' ? acaoNaoResolvido : undefined,
-  });
-
-  // Feedback conforme resultado
-  if (resultado === 'nao_resolvido') {
-    toast.success(acaoNaoResolvido === 'reagendar' ? 'Manutenção reagendada' : 'Manutenção cancelada');
-  } else {
-    toast.success('Manutenção concluída!');
-  }
-  
-  setShowResultadoModal(false);
-  navigate('/instalador');
-};
-```
-
-#### 6. Handler para "Associado Ausente"
-
-```typescript
-const handleNaoCompareceu = async () => {
-  if (!id) return;
-  
-  await marcarNaoCompareceu.mutateAsync({
-    servicoId: id,
-    observacao: 'Associado não estava presente no local',
-  });
-  
-  toast.info('Registrado como não compareceu');
-  navigate('/instalador');
-};
-```
-
-#### 7. Atualizar botão de "Concluir Manutenção"
-
-O botão agora abre o modal de resultado:
+Atualizar a lista para mostrar melhor as informações de cada rastreador em porte:
 
 ```tsx
-<Button 
-  className="w-full bg-green-600 hover:bg-green-700" 
-  onClick={() => setShowResultadoModal(true)}
->
-  <CheckCircle2 className="mr-2 h-4 w-4" />
-  Concluir Manutenção
-</Button>
-
-{/* Botão adicional para não compareceu (apenas se for ROTA) */}
-{servico.local_tipo_manutencao === 'rota' && (
-  <Button 
-    variant="outline"
-    className="w-full border-orange-300 text-orange-700"
-    onClick={handleNaoCompareceu}
+{rastreadorFiltrados.slice(0, 10).map((r) => (
+  <div
+    key={r.id}
+    onClick={() => setRastreadorNovoId(r.id)}
+    className={cn(
+      "p-3 cursor-pointer transition-colors",
+      rastreadorNovoId === r.id 
+        ? "bg-primary/10 border-l-2 border-l-primary" 
+        : "hover:bg-muted/50"
+    )}
   >
-    <UserX className="mr-2 h-4 w-4" />
-    Associado Ausente
-  </Button>
+    <p className="font-medium text-sm">{r.codigo}</p>
+    <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+      {r.numero_serie && (
+        <span>S/N: <span className="font-mono">{r.numero_serie}</span></span>
+      )}
+      {r.imei && (
+        <span>IMEI: <span className="font-mono">{r.imei}</span></span>
+      )}
+    </div>
+  </div>
+))}
+```
+
+#### 4. Melhorar mensagem de alerta quando vazio
+
+Quando o vistoriador não tem rastreadores em seu porte:
+
+```tsx
+{rastreadorFiltrados.length === 0 ? (
+  <Alert variant="destructive">
+    <AlertTriangle className="h-4 w-4" />
+    <AlertDescription>
+      Você não tem rastreadores em seu porte. Solicite ao coordenador que transfira equipamentos para você.
+    </AlertDescription>
+  </Alert>
+) : (
+  // lista de rastreadores...
 )}
-```
-
-#### 8. Novo modal de resultado (substituir AlertDialog)
-
-O modal terá a mesma estrutura visual do `RegistrarResultadoModal.tsx`, adaptado para mobile:
-
-**Estrutura do modal:**
-
-```
-┌─────────────────────────────────────────────┐
-│          Resultado da Manutenção            │
-├─────────────────────────────────────────────┤
-│                                             │
-│  [Card] ✓ Problema Resolvido                │
-│         Rastreador reparado, continua       │
-│                                             │
-│  [Card] ↻ Substituição de Rastreador        │
-│         Trocar por outro rastreador         │
-│                                             │
-│  [Card] ✗ Não Resolvido                     │
-│         Não foi possível resolver           │
-│                                             │
-├─────────────────────────────────────────────┤
-│  [Campos dinâmicos conforme seleção]        │
-│                                             │
-│  Se SUBSTITUIÇÃO:                           │
-│  - Destino do antigo (Triagem / Baixar)     │
-│  - Seleção do novo rastreador               │
-│  - ID Plataforma (opcional)                 │
-│                                             │
-│  Se NÃO RESOLVIDO:                          │
-│  - Reagendar ou Cancelar                    │
-│                                             │
-├─────────────────────────────────────────────┤
-│  Descrição: ____________________________    │
-│  O que foi feito?                           │
-│                                             │
-│           [Cancelar]  [Confirmar]           │
-└─────────────────────────────────────────────┘
-```
-
-#### 9. Resetar estados ao fechar modal
-
-```typescript
-useEffect(() => {
-  if (!showResultadoModal) {
-    setResultado('resolvido');
-    setDescricao('');
-    setRastreadorNovoId('');
-    setIdPlataforma('');
-    setBuscaRastreador('');
-    setDestinoRastreadorAntigo('retorno_base');
-    setAcaoNaoResolvido('reagendar');
-  }
-}, [showResultadoModal]);
 ```
 
 ---
 
-## Fluxo Visual Completo para o Vistoriador
+## Fluxo Visual Final
+
+Quando o vistoriador seleciona "Substituição de Rastreador":
 
 ```
-┌─────────────────────┐
-│  Chegou no Local    │
-│  [Cheguei no Local] │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Em Andamento       │
-│                     │
-│  [Concluir Manutenção]
-│  [Associado Ausente]  ← apenas se ROTA
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────────────────────┐
-│      Modal: Resultado               │
-│                                     │
-│  ○ Resolvido (consertou)            │
-│  ○ Substituição (trocou rastreador) │
-│  ○ Não Resolvido (sem peça/etc)     │
-│                                     │
-│  [campos dinâmicos]                 │
-│  [Descrição obrigatória]            │
-│                                     │
-│  [Cancelar]  [Confirmar]            │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│  O que fazer com o rastreador antigo?       │
+│                                             │
+│  ○ Enviar para Triagem (Base)               │
+│  ○ Baixar Definitivamente                   │
+├─────────────────────────────────────────────┤
+│  Rastreador Substituto *                    │
+│                                             │
+│  🔍 [Buscar por código, IMEI...]            │
+│                                             │
+│  ┌─────────────────────────────────────┐    │
+│  │ RT-001                          ✓   │    │
+│  │ S/N: ABC123  IMEI: 86712345678901  │    │
+│  ├─────────────────────────────────────┤    │
+│  │ RT-002                              │    │
+│  │ S/N: DEF456  IMEI: 86712345678902  │    │
+│  └─────────────────────────────────────┘    │
+│                                             │
+│  ID na Plataforma (opcional)                │
+│  [___________________________________]      │
+└─────────────────────────────────────────────┘
 ```
+
+Os rastreadores listados são **apenas os que estão no porte do vistoriador logado**, com código, número de série e IMEI visíveis para fácil identificação.
 
 ---
 
 ## Resultado Esperado
 
-1. Vistoriador vê 3 opções claras de resultado ao concluir
-2. Se **Resolvido**: apenas descreve o que fez
-3. Se **Substituição**: 
-   - Escolhe destino do antigo (Triagem ou Baixar)
-   - Seleciona novo rastreador do seu estoque
-   - Opcionalmente informa ID na plataforma
-4. Se **Não Resolvido**:
-   - Escolhe entre Reagendar ou Cancelar
-5. Campo de descrição sempre obrigatório
-6. Botão extra "Associado Ausente" para quando for tipo ROTA
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/instalador/ExecutarManutencao.tsx` | Substituir AlertDialog por modal completo com 3 cenários de resultado |
-
+1. Lista mostra apenas rastreadores em porte do vistoriador (portador_id = profile.id)
+2. Exibe código, número de série e IMEI para identificação física
+3. Mensagem clara quando não há rastreadores disponíveis no porte
+4. Busca filtra por código, número de série ou IMEI
