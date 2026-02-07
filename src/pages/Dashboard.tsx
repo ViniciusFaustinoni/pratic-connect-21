@@ -526,8 +526,6 @@ export default function Dashboard() {
             </Card>
           )}
 
-          {/* WIDGET DE FOLLOW-UPS */}
-          <FollowupWidget maxItems={3} />
 
           {/* DOCUMENTOS PENDENTES - Oculto para vendedor */}
           {!isVendedorOnly && (
