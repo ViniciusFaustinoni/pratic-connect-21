@@ -34,7 +34,6 @@ const quickActions = [
   { name: 'Nova Cotação', url: '/vendas/cotacoes?novo=true', icon: Calculator, keywords: 'criar cotacao nova' },
   { name: 'Novo Lead', url: '/vendas/leads', icon: Plus, keywords: 'adicionar lead novo' },
   { name: 'Agendar Instalação', url: '/operacional/instalacoes', icon: Wrench, keywords: 'agendar instalacao nova' },
-  { name: 'Novo Associado', url: '/cadastro/associados', icon: UserPlus, keywords: 'cadastrar associado novo' },
 ];
 
 export function GlobalSearch() {
