@@ -1,237 +1,280 @@
 
-# Plano: Melhorar Campo de Endereço na Manutenção
 
-## Situação Atual
+# Plano: Completar Tela de Conclusão de Manutenção para o Vistoriador
 
-No modal `AgendarManutencaoModal`, quando o tipo "Rota" é selecionado, aparece apenas um campo de texto livre para endereço com um pequeno link "Usar endereço cadastrado do associado" abaixo.
+## Problema Identificado
 
-## Solicitação do Usuário
+A tela `ExecutarManutencao.tsx` (app do vistoriador) possui apenas um `AlertDialog` simples que pergunta "Confirme que a manutenção foi realizada". Isso não cobre os 4 cenários reais de campo:
 
-1. Opção direta/proeminente para usar o **endereço cadastrado** do associado
-2. Opção alternativa de informar **CEP com auto-complete** (ViaCEP)
-3. Campo separado apenas para o **número** (já que CEP preenche o resto)
+| Cenário | O que acontece | Status Final |
+|---------|----------------|--------------|
+| A) Resolvido | Consertou (fiação, reset, reposicionamento). Rastreador continua instalado | Concluída |
+| B) Substituição | Trocou por novo rastreador do seu porte. Antigo vai para triagem ou baixa | Concluída |
+| C) Não Resolvido | Não tinha peça/substituto. Precisa reagendar ou cancelar | Pendente ou Cancelada |
+| D) Ausente | Associado não estava (BASE) ou não foi possível acessar (ROTA) | Reagendada |
 
-## Solução
-
-Reestruturar a seção de endereço com duas opções claras via tabs ou radio buttons:
-
-### Opção A: Usar Endereço Cadastrado
-- Mostra o endereço já cadastrado do associado
-- Apenas confirma e usa
-
-### Opção B: Informar Outro Endereço
-- Campo de CEP (8 dígitos) que dispara busca automática na ViaCEP
-- Auto-preenche: logradouro, bairro, cidade, UF
-- Campo de número obrigatório
+O sistema já tem toda a lógica backend no hook `useRegistrarResultadoManutencao` e um modal completo `RegistrarResultadoModal` no painel administrativo. A tela do vistoriador precisa usar essa mesma infraestrutura.
 
 ---
 
-## Alterações Técnicas
+## Solução
 
-### Arquivo: `src/components/monitoramento/manutencao/AgendarManutencaoModal.tsx`
+Substituir o `AlertDialog` simples por um modal completo de resultado, adaptado para mobile e reutilizando os hooks existentes.
 
-#### 1. Novos imports
-```typescript
-import { buscarCep } from '@/lib/cep';
-import { Home, Edit } from 'lucide-react';
+---
+
+## Alterações
+
+### Arquivo: `src/pages/instalador/ExecutarManutencao.tsx`
+
+#### 1. Remover imports não mais necessários
+```diff
+- import { AlertDialog, AlertDialogAction, ... } from "@/components/ui/alert-dialog";
 ```
 
-#### 2. Novos estados
-```typescript
-// Tipo de endereço selecionado
-const [tipoEndereco, setTipoEndereco] = useState<'cadastrado' | 'outro'>('cadastrado');
+#### 2. Adicionar novos imports
 
-// Campos para endereço alternativo
-const [cep, setCep] = useState('');
-const [logradouro, setLogradouro] = useState('');
-const [numero, setNumero] = useState('');
-const [bairro, setBairro] = useState('');
-const [cidade, setCidade] = useState('');
-const [uf, setUf] = useState('');
-const [buscandoCep, setBuscandoCep] = useState(false);
+```typescript
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Label } from '@/components/ui/label';
+import { 
+  RefreshCw, 
+  XCircle, 
+  RotateCcw, 
+  Trash2, 
+  ArrowRight, 
+  Search, 
+  AlertTriangle,
+  UserX
+} from 'lucide-react';
+import { 
+  useRegistrarResultadoManutencao, 
+  useRastreadoresParaSubstituicao,
+  useMarcarNaoCompareceuManutencao 
+} from '@/hooks/useVistoriaManutencao';
+import { 
+  type ResultadoManutencao,
+  type DestinoRastreadorSubstituido,
+  type AcaoNaoResolvido,
+} from '@/types/vistoriaManutencao';
 ```
 
-#### 3. Verificar se tem endereço cadastrado
+#### 3. Novos estados para o modal de resultado
+
 ```typescript
-const enderecoCadastrado = vistoria.logradouro
-  ? `${vistoria.logradouro}, ${vistoria.numero || 'S/N'} - ${vistoria.bairro}, ${vistoria.cidade}/${vistoria.uf}`
-  : null;
-const temEnderecoCadastrado = !!vistoria.logradouro;
+// Modal de resultado
+const [showResultadoModal, setShowResultadoModal] = useState(false);
+const [resultado, setResultado] = useState<ResultadoManutencao>('resolvido');
+const [descricao, setDescricao] = useState('');
+
+// Para substituição
+const [rastreadorNovoId, setRastreadorNovoId] = useState('');
+const [idPlataforma, setIdPlataforma] = useState('');
+const [buscaRastreador, setBuscaRastreador] = useState('');
+const [destinoRastreadorAntigo, setDestinoRastreadorAntigo] = useState<DestinoRastreadorSubstituido>('retorno_base');
+
+// Para não resolvido
+const [acaoNaoResolvido, setAcaoNaoResolvido] = useState<AcaoNaoResolvido>('reagendar');
 ```
 
-#### 4. Função para buscar CEP
+#### 4. Hooks adicionais
+
 ```typescript
-const handleCepChange = async (value: string) => {
-  const cepLimpo = value.replace(/\D/g, '');
-  // Formatar com máscara
-  if (cepLimpo.length <= 5) {
-    setCep(cepLimpo);
+const { data: rastreadoresDisponiveis, isLoading: loadingRastreadores } = useRastreadoresParaSubstituicao();
+const registrarResultado = useRegistrarResultadoManutencao();
+const marcarNaoCompareceu = useMarcarNaoCompareceuManutencao();
+```
+
+#### 5. Handler de conclusão com resultado
+
+```typescript
+const handleConcluirComResultado = async () => {
+  if (!id || !descricao.trim()) {
+    toast.error('Preencha a descrição do que foi feito');
+    return;
+  }
+
+  if (resultado === 'substituicao' && !rastreadorNovoId) {
+    toast.error('Selecione o rastreador substituto');
+    return;
+  }
+
+  await registrarResultado.mutateAsync({
+    servicoId: id,
+    resultado,
+    descricao,
+    rastreadorNovoId: resultado === 'substituicao' ? rastreadorNovoId : undefined,
+    idPlataforma: resultado === 'substituicao' ? idPlataforma : undefined,
+    destinoRastreadorAntigo: resultado === 'substituicao' ? destinoRastreadorAntigo : undefined,
+    acaoNaoResolvido: resultado === 'nao_resolvido' ? acaoNaoResolvido : undefined,
+  });
+
+  // Feedback conforme resultado
+  if (resultado === 'nao_resolvido') {
+    toast.success(acaoNaoResolvido === 'reagendar' ? 'Manutenção reagendada' : 'Manutenção cancelada');
   } else {
-    setCep(`${cepLimpo.slice(0, 5)}-${cepLimpo.slice(5, 8)}`);
+    toast.success('Manutenção concluída!');
   }
   
-  // Buscar quando completar 8 dígitos
-  if (cepLimpo.length === 8) {
-    setBuscandoCep(true);
-    const endereco = await buscarCep(cepLimpo);
-    if (endereco) {
-      setLogradouro(endereco.logradouro);
-      setBairro(endereco.bairro);
-      setCidade(endereco.cidade);
-      setUf(endereco.uf);
-    }
-    setBuscandoCep(false);
-  }
+  setShowResultadoModal(false);
+  navigate('/instalador');
 };
 ```
 
-#### 5. Nova UI quando localTipo === 'rota'
+#### 6. Handler para "Associado Ausente"
+
+```typescript
+const handleNaoCompareceu = async () => {
+  if (!id) return;
+  
+  await marcarNaoCompareceu.mutateAsync({
+    servicoId: id,
+    observacao: 'Associado não estava presente no local',
+  });
+  
+  toast.info('Registrado como não compareceu');
+  navigate('/instalador');
+};
+```
+
+#### 7. Atualizar botão de "Concluir Manutenção"
+
+O botão agora abre o modal de resultado:
+
 ```tsx
-{localTipo === 'rota' && (
-  <div className="space-y-3">
-    <Label>Endereço *</Label>
-    
-    {/* Seletor de tipo de endereço */}
-    <RadioGroup
-      value={tipoEndereco}
-      onValueChange={(v) => setTipoEndereco(v as 'cadastrado' | 'outro')}
-      className="space-y-2"
-    >
-      {/* Opção: Endereço Cadastrado */}
-      {temEnderecoCadastrado && (
-        <div className={cn(
-          "flex items-start space-x-2 p-3 rounded-lg border-2 transition-all cursor-pointer",
-          tipoEndereco === 'cadastrado' ? "border-primary bg-primary/5" : "border-muted"
-        )}>
-          <RadioGroupItem value="cadastrado" id="end-cadastrado" className="mt-1" />
-          <div className="flex-1">
-            <Label htmlFor="end-cadastrado" className="font-medium cursor-pointer flex items-center gap-2">
-              <Home className="h-4 w-4" />
-              Endereço cadastrado
-            </Label>
-            <p className="text-sm text-muted-foreground mt-1">
-              {enderecoCadastrado}
-            </p>
-          </div>
-        </div>
-      )}
-      
-      {/* Opção: Outro Endereço */}
-      <div className={cn(
-        "flex items-start space-x-2 p-3 rounded-lg border-2 transition-all cursor-pointer",
-        tipoEndereco === 'outro' ? "border-primary bg-primary/5" : "border-muted"
-      )}>
-        <RadioGroupItem value="outro" id="end-outro" className="mt-1" />
-        <div className="flex-1">
-          <Label htmlFor="end-outro" className="font-medium cursor-pointer flex items-center gap-2">
-            <Edit className="h-4 w-4" />
-            Informar outro endereço
-          </Label>
-        </div>
-      </div>
-    </RadioGroup>
-    
-    {/* Campos de endereço alternativo */}
-    {tipoEndereco === 'outro' && (
-      <div className="space-y-3 pt-2 border-t">
-        {/* CEP */}
-        <div className="space-y-1">
-          <Label className="text-sm">CEP</Label>
-          <div className="relative">
-            <Input
-              placeholder="00000-000"
-              value={cep}
-              onChange={(e) => handleCepChange(e.target.value)}
-              maxLength={9}
-              className="pr-10"
-            />
-            {buscandoCep && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-            )}
-          </div>
-        </div>
-        
-        {/* Logradouro (auto-preenchido) */}
-        {logradouro && (
-          <div className="bg-muted/50 rounded-lg p-3 text-sm">
-            <p className="font-medium">{logradouro}</p>
-            <p className="text-muted-foreground">{bairro} - {cidade}/{uf}</p>
-          </div>
-        )}
-        
-        {/* Número */}
-        <div className="space-y-1">
-          <Label className="text-sm">Número *</Label>
-          <Input
-            placeholder="Número ou S/N"
-            value={numero}
-            onChange={(e) => setNumero(e.target.value)}
-            className="w-32"
-          />
-        </div>
-      </div>
-    )}
-  </div>
+<Button 
+  className="w-full bg-green-600 hover:bg-green-700" 
+  onClick={() => setShowResultadoModal(true)}
+>
+  <CheckCircle2 className="mr-2 h-4 w-4" />
+  Concluir Manutenção
+</Button>
+
+{/* Botão adicional para não compareceu (apenas se for ROTA) */}
+{servico.local_tipo_manutencao === 'rota' && (
+  <Button 
+    variant="outline"
+    className="w-full border-orange-300 text-orange-700"
+    onClick={handleNaoCompareceu}
+  >
+    <UserX className="mr-2 h-4 w-4" />
+    Associado Ausente
+  </Button>
 )}
 ```
 
-#### 6. Atualizar validação
-```typescript
-// Se rota, precisa de endereço válido
-const enderecoValido = localTipo !== 'rota' || (
-  tipoEndereco === 'cadastrado' 
-    ? temEnderecoCadastrado 
-    : (cep.replace(/\D/g, '').length === 8 && logradouro && numero)
-);
+#### 8. Novo modal de resultado (substituir AlertDialog)
 
-const isValid = dataAgendada && periodo && profissionalId && enderecoValido;
+O modal terá a mesma estrutura visual do `RegistrarResultadoModal.tsx`, adaptado para mobile:
+
+**Estrutura do modal:**
+
+```
+┌─────────────────────────────────────────────┐
+│          Resultado da Manutenção            │
+├─────────────────────────────────────────────┤
+│                                             │
+│  [Card] ✓ Problema Resolvido                │
+│         Rastreador reparado, continua       │
+│                                             │
+│  [Card] ↻ Substituição de Rastreador        │
+│         Trocar por outro rastreador         │
+│                                             │
+│  [Card] ✗ Não Resolvido                     │
+│         Não foi possível resolver           │
+│                                             │
+├─────────────────────────────────────────────┤
+│  [Campos dinâmicos conforme seleção]        │
+│                                             │
+│  Se SUBSTITUIÇÃO:                           │
+│  - Destino do antigo (Triagem / Baixar)     │
+│  - Seleção do novo rastreador               │
+│  - ID Plataforma (opcional)                 │
+│                                             │
+│  Se NÃO RESOLVIDO:                          │
+│  - Reagendar ou Cancelar                    │
+│                                             │
+├─────────────────────────────────────────────┤
+│  Descrição: ____________________________    │
+│  O que foi feito?                           │
+│                                             │
+│           [Cancelar]  [Confirmar]           │
+└─────────────────────────────────────────────┘
 ```
 
-#### 7. Atualizar submit
-```typescript
-// Montar endereço final
-let enderecoFinal = '';
-if (localTipo === 'rota') {
-  if (tipoEndereco === 'cadastrado') {
-    enderecoFinal = enderecoCadastrado || '';
-  } else {
-    enderecoFinal = `${logradouro}, ${numero} - ${bairro}, ${cidade}/${uf}`;
-  }
-}
+#### 9. Resetar estados ao fechar modal
 
-// Passar para mutation
-await agendarMutation.mutateAsync({
-  // ... outros campos
-  localEndereco: localTipo === 'rota' ? enderecoFinal : undefined,
-});
-```
-
-#### 8. Resetar estados ao fechar
 ```typescript
 useEffect(() => {
-  if (!open) {
-    // ... resets existentes
-    setTipoEndereco('cadastrado');
-    setCep('');
-    setLogradouro('');
-    setNumero('');
-    setBairro('');
-    setCidade('');
-    setUf('');
+  if (!showResultadoModal) {
+    setResultado('resolvido');
+    setDescricao('');
+    setRastreadorNovoId('');
+    setIdPlataforma('');
+    setBuscaRastreador('');
+    setDestinoRastreadorAntigo('retorno_base');
+    setAcaoNaoResolvido('reagendar');
   }
-}, [open]);
+}, [showResultadoModal]);
+```
+
+---
+
+## Fluxo Visual Completo para o Vistoriador
+
+```
+┌─────────────────────┐
+│  Chegou no Local    │
+│  [Cheguei no Local] │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Em Andamento       │
+│                     │
+│  [Concluir Manutenção]
+│  [Associado Ausente]  ← apenas se ROTA
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────────────────────┐
+│      Modal: Resultado               │
+│                                     │
+│  ○ Resolvido (consertou)            │
+│  ○ Substituição (trocou rastreador) │
+│  ○ Não Resolvido (sem peça/etc)     │
+│                                     │
+│  [campos dinâmicos]                 │
+│  [Descrição obrigatória]            │
+│                                     │
+│  [Cancelar]  [Confirmar]            │
+└─────────────────────────────────────┘
 ```
 
 ---
 
 ## Resultado Esperado
 
-Quando "Rota" é selecionado:
+1. Vistoriador vê 3 opções claras de resultado ao concluir
+2. Se **Resolvido**: apenas descreve o que fez
+3. Se **Substituição**: 
+   - Escolhe destino do antigo (Triagem ou Baixar)
+   - Seleciona novo rastreador do seu estoque
+   - Opcionalmente informa ID na plataforma
+4. Se **Não Resolvido**:
+   - Escolhe entre Reagendar ou Cancelar
+5. Campo de descrição sempre obrigatório
+6. Botão extra "Associado Ausente" para quando for tipo ROTA
 
-1. **Card destacado** mostra o endereço já cadastrado (se existir) com opção de seleção
-2. **Opção alternativa** para informar outro endereço
-3. Ao escolher "outro endereço":
-   - Campo de CEP com auto-complete
-   - Exibe logradouro/bairro/cidade preenchidos automaticamente
-   - Campo separado para número
-4. Validação garante que o endereço está completo antes de permitir agendamento
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/instalador/ExecutarManutencao.tsx` | Substituir AlertDialog por modal completo com 3 cenários de resultado |
+
