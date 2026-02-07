@@ -191,11 +191,8 @@ export function useVistoriasManutencaoMetricas() {
           case 'em_andamento':
             metricas.emAndamento++;
             break;
-          case 'cancelada':
-          case 'reagendada':
-            if (item.protecao_suspensa) {
-              metricas.naoCompareceu++;
-            }
+          case 'nao_compareceu':
+            metricas.naoCompareceu++;
             break;
           case 'concluida':
           case 'aprovada':
@@ -731,11 +728,10 @@ export function useMarcarNaoCompareceu() {
       const { error } = await supabase
         .from('servicos')
         .update({
-          status: 'cancelada',
-          protecao_suspensa: true,
-          data_suspensao: new Date().toISOString(),
-          observacoes_analise: params.observacao || 'Associado não compareceu em 48h - proteção suspensa',
+          status: 'nao_compareceu' as any,
+          observacoes_analise: params.observacao || 'Associado não compareceu',
           updated_at: new Date().toISOString(),
+          // NÃO suspender proteção ainda - coordenador/diretor decide
         })
         .eq('id', params.servicoId);
 
@@ -751,8 +747,8 @@ export function useMarcarNaoCompareceu() {
       queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
       
-      toast.warning('Proteção suspensa', {
-        description: 'Associado não compareceu em 48h. Proteções suspensas conforme regulamento.',
+      toast.info('Não comparecimento registrado', {
+        description: 'O coordenador/diretor poderá reagendar ou cancelar com suspensão.',
       });
     },
     onError: (error: Error) => {
@@ -773,7 +769,11 @@ export function useCancelarVistoriaManutencao() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ servicoId, motivo }: { servicoId: string; motivo?: string }) => {
+    mutationFn: async ({ servicoId, motivo, suspenderProtecao }: { 
+      servicoId: string; 
+      motivo?: string;
+      suspenderProtecao?: boolean;
+    }) => {
       // Buscar rastreador_id do serviço
       const { data: servico } = await supabase
         .from('servicos')
@@ -782,13 +782,21 @@ export function useCancelarVistoriaManutencao() {
         .single();
 
       // Cancelar serviço
+      const updateData: Record<string, any> = {
+        status: 'cancelada',
+        observacoes_analise: motivo || 'Cancelado',
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Se deve suspender proteção (quando vem do status nao_compareceu)
+      if (suspenderProtecao) {
+        updateData.protecao_suspensa = true;
+        updateData.data_suspensao = new Date().toISOString();
+      }
+
       const { error } = await supabase
         .from('servicos')
-        .update({
-          status: 'cancelada',
-          observacoes_analise: motivo || 'Cancelado',
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', servicoId);
 
       if (error) {
