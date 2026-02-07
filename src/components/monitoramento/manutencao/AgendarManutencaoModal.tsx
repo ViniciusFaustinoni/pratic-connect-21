@@ -249,7 +249,7 @@ export function AgendarManutencaoModal({
             )}
           </div>
 
-          {/* Tipo de local */}
+          {/* Tipo de local - apenas Base e Rota para manutenção */}
           <div className="space-y-2">
             <Label>Local *</Label>
             <RadioGroup
@@ -257,17 +257,19 @@ export function AgendarManutencaoModal({
               onValueChange={(v) => setLocalTipo(v as LocalTipoManutencao)}
               className="space-y-2"
             >
-              {LOCAL_TIPO_OPTIONS.map((opt) => (
-                <div key={opt.value} className="flex items-start space-x-2">
-                  <RadioGroupItem value={opt.value} id={opt.value} className="mt-1" />
-                  <div className="flex flex-col">
-                    <Label htmlFor={opt.value} className="font-normal cursor-pointer">
-                      {opt.label}
-                    </Label>
-                    <span className="text-xs text-muted-foreground">{opt.description}</span>
+              {LOCAL_TIPO_OPTIONS
+                .filter((opt) => opt.value === 'base' || opt.value === 'rota')
+                .map((opt) => (
+                  <div key={opt.value} className="flex items-start space-x-2">
+                    <RadioGroupItem value={opt.value} id={opt.value} className="mt-1" />
+                    <div className="flex flex-col">
+                      <Label htmlFor={opt.value} className="font-normal cursor-pointer">
+                        {opt.label}
+                      </Label>
+                      <span className="text-xs text-muted-foreground">{opt.description}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </RadioGroup>
           </div>
 
