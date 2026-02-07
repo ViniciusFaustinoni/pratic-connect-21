@@ -1,89 +1,154 @@
 
-# Plano: Remover Cards de Documentos Pendentes e Ajustar Instalações Hoje
+# Plano: Ajustar Visibilidade de Cards e Layout do Dashboard
 
-## Problema Identificado
+## Alterações Solicitadas
 
-Na Dashboard existem dois cards que precisam ser ajustados:
-
-1. **Documentos Pendentes** - Não deve aparecer para NENHUM usuário
-2. **Instalações Hoje** - Deve aparecer APENAS para:
-   - Coordenador de Monitoramento (vê todas as instalações)
-   - Vistoriadores/Instaladores (vêem apenas as suas)
+1. **Card "Últimos Leads"** - Ocultar para todos os usuários, EXCETO vendedores (que veem apenas os seus leads)
+2. **Card "Ações Rápidas"** - Transformar em layout horizontal e posicionar ACIMA do Funil de Cotação
 
 ---
 
-## Alterações Necessárias
+## Estrutura Atual do Dashboard
 
-### Arquivo: `src/pages/Dashboard.tsx`
-
-#### 1. Remover Card "Documentos Pendentes"
-
-Remover completamente o bloco de código das linhas 530-577 que renderiza o card de "Documentos Pendentes".
-
-#### 2. Restringir Card "Instalações Hoje"
-
-Alterar a condição de exibição do card de instalações (linhas 579-638):
-
-**Condição Atual:**
-```typescript
-{!isVendedorOnly && (
-  // Card de Instalações Hoje
-)}
 ```
+Banner de Boas-Vindas
+Alertas
+KPIs (4 cards)
 
-**Nova Condição:**
-```typescript
-{(isCoordenadorMonitoramento || isInstaladorVistoriador || isVistoriadorBase) && (
-  // Card de Instalações Hoje
-)}
+Grid Principal (2/3 + 1/3):
+├── Coluna Esquerda (2/3):
+│   ├── Funil de Cotação
+│   └── Últimos Leads        ← OCULTAR (exceto vendedores)
+│
+└── Coluna Direita (1/3):
+    ├── Ações Rápidas        ← MOVER para acima do Funil
+    └── Instalações Hoje
 ```
-
-Para isso, será necessário:
-1. Importar as permissões adicionais do hook `usePermissions()`
-2. Usar as variáveis `isCoordenadorMonitoramento`, `isInstaladorVistoriador` e `isVistoriadorBase`
 
 ---
 
-## Resultado Esperado
+## Nova Estrutura Proposta
 
-| Card | Usuário | Visibilidade |
-|------|---------|--------------|
-| Documentos Pendentes | Qualquer | Oculto |
-| Instalações Hoje | Coordenador Monitoramento | Visível (todas) |
-| Instalações Hoje | Instalador/Vistoriador | Visível (suas tarefas) |
-| Instalações Hoje | Outros perfis | Oculto |
+```
+Banner de Boas-Vindas
+Alertas
+KPIs (4 cards)
+Ações Rápidas (horizontal, full-width) ← NOVA POSIÇÃO
+
+Grid Principal (2/3 + 1/3):
+├── Coluna Esquerda (2/3):
+│   ├── Funil de Cotação
+│   └── Últimos Leads (apenas vendedores)
+│
+└── Coluna Direita (1/3):
+    └── Instalações Hoje (coordenador/vistoriadores)
+```
+
+---
+
+## Alterações no Arquivo `src/pages/Dashboard.tsx`
+
+### 1. Mover Ações Rápidas para Layout Horizontal
+
+Mover o card de Ações Rápidas para fora do grid de 3 colunas e posicioná-lo logo após os KPIs, antes do grid principal.
+
+O card será exibido horizontalmente com os botões lado a lado em uma única linha.
+
+### 2. Restringir Card "Últimos Leads"
+
+Adicionar condição para exibir apenas para vendedores:
+
+```typescript
+// Antes (linhas 425-512):
+<Card className="border-border bg-card">
+  {/* Card Últimos Leads - sempre visível */}
+</Card>
+
+// Depois:
+{isVendedorOnly && (
+  <Card className="border-border bg-card">
+    {/* Card Últimos Leads - apenas vendedores */}
+  </Card>
+)}
+```
+
+### 3. Ajustar Coluna Direita
+
+Remover o card de Ações Rápidas da coluna direita (já foi movido para cima).
+
+---
+
+## Resultado Visual Esperado
+
+Com base na imagem 2 de referência, o layout final será:
+
+| Seção | Conteúdo |
+|-------|----------|
+| Topo | Banner + Alertas |
+| KPIs | 4 cards em linha |
+| **Ações Rápidas** | Botões horizontais (Nova Cotação + Novo Lead) |
+| Grid Principal | Funil à esquerda, Instalações à direita (para perfis específicos) |
+| Últimos Leads | Apenas visível para vendedores (abaixo do funil) |
+
+---
+
+## Visibilidade por Perfil
+
+| Card | Vendedor | Coordenador | Vistoriador | Outros |
+|------|----------|-------------|-------------|--------|
+| Ações Rápidas | Visível | Visível | Visível | Visível |
+| Funil de Cotação | Visível | Visível | Visível | Visível |
+| Últimos Leads | Visível (só seus) | Oculto | Oculto | Oculto |
+| Instalações Hoje | Oculto | Visível | Visível | Oculto |
 
 ---
 
 ## Seção Técnica
 
-### Código a Adicionar (Desestruturação)
+### Código do Card de Ações Rápidas (Nova Posição)
 
-Na linha onde o `usePermissions()` é chamado no Dashboard, adicionar:
+Será posicionado após os KPIs e antes do grid principal:
 
 ```typescript
-const { 
-  // ... permissões existentes ...
-  isCoordenadorMonitoramento,
-  isInstaladorVistoriador,
-  isVistoriadorBase
-} = usePermissions();
+{/* AÇÕES RÁPIDAS - HORIZONTAL */}
+<Card className="border-border bg-card">
+  <CardContent className="py-4">
+    <div className="flex items-center gap-4">
+      <h3 className="text-lg font-semibold text-foreground whitespace-nowrap">
+        Ações Rápidas
+      </h3>
+      <div className="flex gap-3 flex-1">
+        <QuickActions />
+      </div>
+    </div>
+  </CardContent>
+</Card>
 ```
 
-### Condição Final do Card Instalações
+### Ajuste no Componente QuickActions
+
+Alterar o layout de `grid-cols-2` para `flex` horizontal:
 
 ```typescript
-{(isCoordenadorMonitoramento || isInstaladorVistoriador || isVistoriadorBase) && (
-  <Card className="border-border bg-card">
-    {/* ... conteúdo do card ... */}
-  </Card>
+// Antes:
+<div className="grid grid-cols-2 gap-2 sm:gap-3">
+
+// Depois:
+<div className="flex gap-3">
+```
+
+### Condição para Últimos Leads
+
+```typescript
+{isVendedorOnly && (
+  // Card Últimos Leads existente
 )}
 ```
 
-### Observação sobre Filtragem de Dados
+---
 
-O hook que busca as instalações do dia já deve filtrar os dados de acordo com o perfil do usuário logado:
-- Coordenador: vê todas
-- Vistoriador/Instalador: vê apenas as atribuídas a ele
+## Arquivos a Modificar
 
-Isso deve ser verificado no hook `useInstalacoesHoje` ou similar para garantir que os dados exibidos estejam corretos para cada perfil.
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/Dashboard.tsx` | Mover Ações Rápidas, restringir Últimos Leads |
