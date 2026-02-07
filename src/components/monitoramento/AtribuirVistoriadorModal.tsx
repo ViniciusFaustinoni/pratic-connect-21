@@ -142,7 +142,7 @@ export function AtribuirVistoriadorModal({
           .from('servicos')
           .select('profissional_id')
           .eq('data_agendada', vistoria.dataAgendada)
-          .not('status', 'in', '("cancelada","recusada")');
+          .not('status', 'eq', 'cancelada');
 
         if (servicos) {
           servicos.forEach(s => {

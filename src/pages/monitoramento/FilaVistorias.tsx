@@ -2,11 +2,13 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   Search, MoreHorizontal, Calendar, User, Car, MapPin, 
   Clock, Camera, CheckCircle, XCircle, Eye, CalendarDays,
   UserPlus, Send, RotateCcw, Trash2, Loader2, LinkIcon
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 import { 
   Table, TableBody, TableCell, TableHead, 
@@ -343,12 +345,56 @@ export default function FilaVistorias() {
     setAtribuirModalOpen(true);
   };
 
+  // Query client para invalidar cache
+  const queryClient = useQueryClient();
+
   // Handler para salvar atribuição
   const handleSaveAtribuicao = async (vistoriadorId: string) => {
-    // TODO: Implementar mutação real para salvar no banco
-    console.log('Atribuição vistoriador:', vistoriadorId);
-    toast.success('Vistoriador atribuído com sucesso!');
-    setAtribuirModalOpen(false);
+    if (!vistoriaParaAtribuir) return;
+    
+    try {
+      // Determinar qual tabela atualizar baseado no tipo
+      const isServico = vistoriaParaAtribuir.id && 
+        servicosRaw?.some(s => s.id === vistoriaParaAtribuir.id);
+      
+      if (isServico) {
+        // É um serviço (manutenção/retirada)
+        const { error } = await supabase
+          .from('servicos')
+          .update({
+            profissional_id: vistoriadorId,
+            status: 'agendada',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', vistoriaParaAtribuir.id);
+
+        if (error) throw error;
+      } else {
+        // É uma vistoria tradicional
+        const { error } = await supabase
+          .from('vistorias')
+          .update({
+            vistoriador_id: vistoriadorId,
+            status: 'agendada',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', vistoriaParaAtribuir.id);
+
+        if (error) throw error;
+      }
+
+      // Invalidar caches para atualizar as listas
+      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-fila'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+
+      toast.success('Vistoriador atribuído com sucesso!');
+      setAtribuirModalOpen(false);
+    } catch (error) {
+      console.error('Erro ao atribuir vistoriador:', error);
+      toast.error('Erro ao atribuir vistoriador. Tente novamente.');
+    }
   };
 
   // Ações 
