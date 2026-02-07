@@ -409,6 +409,7 @@ export function useAgendarVistoriaManutencao() {
         periodo: params.periodo,
         local_tipo_manutencao: params.localTipo,
         profissional_id: params.profissionalId,
+        permite_encaixe: params.permiteEncaixe ?? false,
         updated_at: new Date().toISOString(),
       };
 
