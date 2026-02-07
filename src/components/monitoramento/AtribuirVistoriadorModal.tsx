@@ -110,44 +110,71 @@ export function AtribuirVistoriadorModal({
     }
   }, [open]);
 
-  // Buscar vistoriadores
+  // Buscar vistoriadores com role de instalador_vistoriador ou vistoriador_base
   const { data: vistoriadores = [], isLoading } = useQuery({
     queryKey: ['vistoriadores-para-atribuir', vistoria?.dataAgendada, vistoria?.regiao],
     queryFn: async (): Promise<VistoriadorDisponivel[]> => {
-      const query = supabase
+      // 1. Buscar user_ids que são vistoriadores
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', ['instalador_vistoriador', 'vistoriador_base']);
+
+      if (rolesError) throw rolesError;
+      if (!roles?.length) return [];
+
+      const userIds = roles.map(r => r.user_id);
+
+      // 2. Buscar profiles apenas desses user_ids
+      const { data, error } = await supabase
         .from('profiles')
-        .select('id, nome, telefone, ativo')
+        .select('id, user_id, nome, telefone, ativo, regioes_atendimento, capacidade_diaria')
+        .in('user_id', userIds)
         .eq('ativo', true)
         .order('nome');
 
-      const { data, error } = await query as { data: any[] | null; error: any };
-
       if (error) throw error;
 
-      // Enriquecer com dados mock de disponibilidade
-      // TODO: Implementar contagem real de tarefas por dia
+      // 3. Buscar contagem de tarefas para o dia selecionado
+      let tarefasContagem: Record<string, number> = {};
+      if (vistoria?.dataAgendada) {
+        const { data: servicos } = await supabase
+          .from('servicos')
+          .select('profissional_id')
+          .eq('data_agendada', vistoria.dataAgendada)
+          .not('status', 'in', '("cancelada","recusada")');
+
+        if (servicos) {
+          servicos.forEach(s => {
+            if (s.profissional_id) {
+              tarefasContagem[s.profissional_id] = (tarefasContagem[s.profissional_id] || 0) + 1;
+            }
+          });
+        }
+      }
+
+      // 4. Mapear para o formato esperado
       const enriched: VistoriadorDisponivel[] = (data || []).map((p, index) => {
-        const tarefasDia = Math.floor(Math.random() * 6);
-        const capacidadeDia = 5;
+        const tarefasDia = tarefasContagem[p.id] || 0;
+        const capacidadeDia = p.capacidade_diaria || 5;
         const isLotado = tarefasDia >= capacidadeDia;
-        const isIndisponivel = index === 2; // Mock: terceiro vistoriador indisponível
+        const regioes = (p.regioes_atendimento as string[]) || [];
 
         let status: StatusVistoriador = 'disponivel';
-        if (isIndisponivel) status = 'indisponivel';
-        else if (isLotado) status = 'lotado';
+        if (isLotado) status = 'lotado';
 
         return {
           id: p.id,
           nome: p.nome || 'Sem nome',
           telefone: p.telefone || undefined,
-          regioes: ['Centro', 'Zona Sul', 'Pinheiros'].slice(0, Math.floor(Math.random() * 3) + 1),
+          regioes,
           tarefasDia,
           capacidadeDia,
-          distanciaKm: parseFloat((Math.random() * 10).toFixed(1)),
-          ultimaVistoria: index === 0 ? 'Hoje às 08:30' : 'Ontem às 17:00',
+          distanciaKm: undefined,
+          ultimaVistoria: undefined,
           status,
-          motivoIndisponivel: isIndisponivel ? 'Em férias até 20/01' : undefined,
-          sugerido: index === 0 && status === 'disponivel',
+          motivoIndisponivel: undefined,
+          sugerido: index === 0 && status === 'disponivel' && regioes.length > 0,
         };
       });
 
