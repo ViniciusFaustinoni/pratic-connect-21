@@ -82,10 +82,12 @@ export default function Equipe() {
         regioes_atendimento: data.regioes,
         capacidade_diaria: data.capacidadeDiaria,
         ativo: data.status === 'disponivel',
+        tipoVistoriador: data.tipoVistoriador,
+        senhaProvisoria: data.senhaProvisoria,
       },
       {
         onSuccess: () => {
-          toast.success(profissionalSelecionado ? 'Profissional atualizado!' : 'Profissional cadastrado!');
+          toast.success(profissionalSelecionado ? 'Profissional atualizado!' : 'Profissional cadastrado com sucesso!');
           setModalOpen(false);
         },
         onError: (err) => {

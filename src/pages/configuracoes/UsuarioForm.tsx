@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { ArrowLeft, Save, Loader2, User, Shield, TrendingUp, History, Lock, Mail } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, User, Shield, TrendingUp, History, Lock, Mail, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useVendedorStats } from '@/hooks/useVendedorHistorico';
 import { usePermissions } from '@/hooks/usePermissions';
+import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
 const perfisDisponiveis = [
   { value: 'diretor', label: 'Diretor', desc: 'Acesso total ao sistema' },
   { value: 'gerente_comercial', label: 'Gerente Comercial', desc: 'Vendas, relatórios e equipe' },
@@ -113,6 +114,8 @@ export default function UsuarioForm() {
     tipo: 'funcionario',
     ativo: true,
     perfis: preselectedPerfil ? [preselectedPerfil] : [] as string[],
+    regioes_atendimento: [] as string[],
+    capacidade_diaria: 10,
   });
 
   // Estado para erros de validação de campos específicos
@@ -219,6 +222,8 @@ export default function UsuarioForm() {
       tipo: usuario.tipo || 'funcionario',
       ativo: usuario.ativo ?? true,
       perfis: usuario.roles || [],
+      regioes_atendimento: usuario.regioes_atendimento || [],
+      capacidade_diaria: usuario.capacidade_diaria || 10,
     };
 
     // Evita loop: só atualiza o estado se algo realmente mudou
@@ -231,7 +236,9 @@ export default function UsuarioForm() {
         prev.tipo === next.tipo &&
         prev.ativo === next.ativo &&
         prev.perfis.length === next.perfis.length &&
-        prev.perfis.every((p, i) => p === next.perfis[i]);
+        prev.perfis.every((p, i) => p === next.perfis[i]) &&
+        prev.regioes_atendimento.length === next.regioes_atendimento.length &&
+        prev.capacidade_diaria === next.capacidade_diaria;
 
       return same ? prev : next;
     });
@@ -280,6 +287,9 @@ export default function UsuarioForm() {
         // Limpar erros de campo anteriores
         setFieldErrors({});
         
+        // Verificar se precisa enviar campos de vistoriador
+        const isVistoriador = formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p));
+        
         const { data, error } = await supabase.functions.invoke('create-user', {
           body: {
             nome: formData.nome,
@@ -289,6 +299,10 @@ export default function UsuarioForm() {
             senha: formData.senha,
             tipo: formData.tipo,
             perfis: formData.perfis,
+            ...(isVistoriador && {
+              regioes_atendimento: formData.regioes_atendimento,
+              capacidade_diaria: formData.capacidade_diaria,
+            }),
           }
         });
 
@@ -513,6 +527,72 @@ export default function UsuarioForm() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Card de Configurações de Campo - apenas para vistoriadores */}
+            {formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p)) && (
+              <Card className="border-border/50 border-yellow-500/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <MapPin className="w-5 h-5 text-yellow-500" />
+                    Configurações de Campo
+                  </CardTitle>
+                  <CardDescription>
+                    Configurações específicas para vistoriadores (opcional)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Regiões de Atendimento */}
+                  <div className="space-y-2">
+                    <Label>Regiões de Atuação</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Deixe em branco para atender todas as regiões
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {REGIOES_ATENDIMENTO.map((regiao) => (
+                        <label 
+                          key={regiao.value} 
+                          className="flex items-center gap-2 text-sm cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={formData.regioes_atendimento?.includes(regiao.value)}
+                            onCheckedChange={(checked) => {
+                              const current = formData.regioes_atendimento || [];
+                              setFormData({
+                                ...formData,
+                                regioes_atendimento: checked 
+                                  ? [...current, regiao.value]
+                                  : current.filter(r => r !== regiao.value)
+                              });
+                            }}
+                          />
+                          {regiao.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Capacidade Diária */}
+                  <div className="space-y-2">
+                    <Label htmlFor="capacidade_diaria">Capacidade Diária</Label>
+                    <Input
+                      id="capacidade_diaria"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={formData.capacidade_diaria}
+                      onChange={(e) => setFormData({
+                        ...formData, 
+                        capacidade_diaria: parseInt(e.target.value) || 10
+                      })}
+                      className="bg-background"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Máximo de tarefas por dia (1-20)
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Coluna Lateral */}

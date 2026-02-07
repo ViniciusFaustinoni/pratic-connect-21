@@ -15,6 +15,8 @@ interface CreateUserRequest {
   perfil?: string;          // Para retro-compatibilidade
   perfis?: string[];        // Múltiplos perfis
   tipo: 'funcionario' | 'associado' | 'prestador';
+  regioes_atendimento?: string[];  // Regiões de atuação (vistoriadores)
+  capacidade_diaria?: number;       // Capacidade de tarefas por dia
 }
 
 serve(async (req) => {
@@ -79,7 +81,7 @@ serve(async (req) => {
     }
 
     const body: CreateUserRequest = await req.json();
-    const { nome, email, cpf, telefone, senha, perfil, perfis, tipo } = body;
+    const { nome, email, cpf, telefone, senha, perfil, perfis, tipo, regioes_atendimento, capacidade_diaria } = body;
     
     // Determinar perfis a adicionar
     const perfisParaAdicionar = perfis?.length ? perfis : (perfil ? [perfil] : ['vendedor_clt']);
@@ -147,6 +149,8 @@ serve(async (req) => {
     const updateData: any = { primeiro_acesso: !senha }; // Se tem senha, não é primeiro acesso
     if (cpf) updateData.cpf = cpf;
     if (telefone) updateData.telefone = telefone;
+    if (regioes_atendimento?.length) updateData.regioes_atendimento = regioes_atendimento;
+    if (capacidade_diaria) updateData.capacidade_diaria = capacidade_diaria;
     
     const { error: updateError } = await supabaseAdmin
       .from('profiles')
