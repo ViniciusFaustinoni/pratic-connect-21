@@ -7,17 +7,28 @@ import {
   FileText,
   Clock,
   CheckCircle,
+  XCircle,
   ArrowRight,
   Shield,
-  Eye,
-  User,
+  Users,
+  TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useDocumentosQueue, useDocumentosStats } from '@/hooks/useDocumentosQueue';
+import { usePropostaStats, usePropostasPendentes } from '@/hooks/usePropostasPendentes';
+import { useCadastroPerformance } from '@/hooks/useCadastroPerformance';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 
 // ============================================
 // COMPONENTE: CARD DE KPI
@@ -99,7 +110,7 @@ function WelcomeBanner({ nome }: WelcomeBannerProps) {
           {getSaudacao()}, {nome}! 👋
         </h1>
         <p className="text-white/80 mt-1">
-          Gerencie documentos e associados da sua fila de trabalho.
+          Gerencie propostas e associados da sua fila de trabalho.
         </p>
       </div>
     </div>
@@ -107,21 +118,95 @@ function WelcomeBanner({ nome }: WelcomeBannerProps) {
 }
 
 // ============================================
-// COMPONENTE: LISTA DE DOCUMENTOS PENDENTES
+// COMPONENTE: GRÁFICO DE PERFORMANCE SEMANAL
 // ============================================
-function DocumentosPendentes() {
-  const navigate = useNavigate();
-  const { data: documentos, isLoading } = useDocumentosQueue({ 
-    status: 'pendente', 
-    orderBy: 'oldest'
-  });
+function PerformanceChart() {
+  const { data, isLoading } = useCadastroPerformance();
 
   if (isLoading) {
     return (
       <Card className="border-border bg-card">
         <CardHeader>
-          <CardTitle className="text-foreground">Fila de Documentos</CardTitle>
-          <CardDescription>Documentos aguardando sua análise</CardDescription>
+          <CardTitle className="text-foreground">Performance Semanal</CardTitle>
+          <CardDescription>Propostas analisadas nos últimos 7 dias</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[250px] w-full bg-muted" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-border bg-card">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <TrendingUp className="h-5 w-5 text-purple-500" />
+              Performance Semanal
+            </CardTitle>
+            <CardDescription>
+              Propostas analisadas nos últimos 7 dias
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[250px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data || []}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis 
+                dataKey="dia" 
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              />
+              <YAxis 
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                allowDecimals={false}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px',
+                }}
+                labelStyle={{ color: 'hsl(var(--foreground))' }}
+              />
+              <Legend />
+              <Bar 
+                dataKey="aprovados" 
+                fill="#22c55e" 
+                name="Aprovadas" 
+                radius={[4, 4, 0, 0]}
+              />
+              <Bar 
+                dataKey="reprovados" 
+                fill="#ef4444" 
+                name="Reprovadas" 
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================
+// COMPONENTE: LISTA DE PROPOSTAS AGUARDANDO
+// ============================================
+function PropostasAguardando() {
+  const navigate = useNavigate();
+  const { data: propostas, isLoading } = usePropostasPendentes();
+
+  if (isLoading) {
+    return (
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="text-foreground">Propostas Aguardando Análise</CardTitle>
+          <CardDescription>Propostas prontas para sua análise</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -134,7 +219,7 @@ function DocumentosPendentes() {
     );
   }
 
-  const pendentes = documentos?.slice(0, 5) || [];
+  const pendentes = propostas?.slice(0, 5) || [];
 
   return (
     <Card className="border-border bg-card">
@@ -143,21 +228,21 @@ function DocumentosPendentes() {
           <div>
             <CardTitle className="flex items-center gap-2 text-foreground">
               <Clock className="h-5 w-5 text-warning" />
-              Fila de Documentos
+              Propostas Aguardando
             </CardTitle>
             <CardDescription>
               {pendentes.length > 0 
-                ? `${documentos?.length || 0} documentos aguardando análise`
-                : 'Nenhum documento pendente'}
+                ? `${propostas?.length || 0} propostas prontas para análise`
+                : 'Nenhuma proposta pendente'}
             </CardDescription>
           </div>
           <Button 
             variant="outline"
             size="sm"
             className="border-border hover:border-border-hover"
-            onClick={() => navigate('/cadastro/documentos')}
+            onClick={() => navigate('/cadastro/propostas')}
           >
-            Ver Todos <ArrowRight className="ml-1 h-4 w-4" />
+            Ver Todas <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
       </CardHeader>
@@ -169,11 +254,11 @@ function DocumentosPendentes() {
           </div>
         ) : (
           <div className="space-y-3">
-            {pendentes.map((doc) => (
+            {pendentes.map((proposta) => (
               <div 
-                key={doc.id}
+                key={proposta.id}
                 className="flex items-center justify-between p-3 rounded-lg bg-card-hover border border-border hover:border-border-hover transition-colors cursor-pointer"
-                onClick={() => navigate(`/cadastro/documentos/${doc.id}`)}
+                onClick={() => navigate(`/cadastro/propostas/${proposta.id}`)}
               >
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-purple-500/10">
@@ -181,20 +266,18 @@ function DocumentosPendentes() {
                   </div>
                   <div>
                     <p className="font-medium text-foreground">
-                      {doc.associados?.nome || 'Sem associado'}
+                      {proposta.cliente_nome || 'Sem nome'}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {doc.tipo} • {doc.veiculos?.placa || 'Sem veículo'}
+                      {proposta.veiculo_placa || 'Sem placa'} • {proposta.veiculo_modelo || 'Sem modelo'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
-                    há {formatDistanceToNow(new Date(doc.created_at), { locale: ptBR })}
+                    há {formatDistanceToNow(new Date(proposta.data_assinatura || proposta.id), { locale: ptBR })}
                   </span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Eye className="h-4 w-4" />
-                  </Button>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 </div>
               </div>
             ))}
@@ -207,11 +290,11 @@ function DocumentosPendentes() {
               className="w-full bg-purple-600 hover:bg-purple-700 text-white"
               onClick={() => {
                 const primeiro = pendentes[0];
-                if (primeiro) navigate(`/cadastro/documentos/${primeiro.id}`);
+                if (primeiro) navigate(`/cadastro/propostas/${primeiro.id}`);
               }}
             >
               <FileText className="mr-2 h-4 w-4" />
-              Analisar Próximo Documento
+              Analisar Próxima Proposta
             </Button>
           </div>
         )}
@@ -227,42 +310,40 @@ export function DashboardCadastro() {
   const navigate = useNavigate();
   const { profile } = useAuth();
 
-  const { data: stats, isLoading: statsLoading } = useDocumentosStats();
+  const { data: stats, isLoading: statsLoading } = usePropostaStats();
 
-  // Calcular métricas
-  const pendentes = stats?.pendentes || 0;
-  const emAnalise = stats?.emAnalise || 0;
-  const aprovados = stats?.aprovados || 0;
-  const reprovados = stats?.reprovados || 0;
-  const total = aprovados + reprovados;
-  const taxaAprovacao = total > 0 ? Math.round((aprovados / total) * 100) : 0;
+  // Calcular taxa de aprovação
+  const aprovadosHoje = stats?.aprovadosHoje || 0;
+  const reprovadosHoje = stats?.reprovadosHoje || 0;
+  const totalHoje = aprovadosHoje + reprovadosHoje;
+  const taxaAprovacao = totalHoje > 0 ? Math.round((aprovadosHoje / totalHoje) * 100) : 0;
 
   return (
     <div className="space-y-6">
       {/* BANNER */}
       <WelcomeBanner nome={profile?.nome?.split(' ')[0] || 'Analista'} />
 
-      {/* KPIs - Grid de 4 */}
+      {/* KPIs - Grid de 4 baseados em PROPOSTAS */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard
-          titulo="Documentos Pendentes"
-          valor={pendentes}
+          titulo="Aguardando Análise"
+          valor={stats?.aguardando || 0}
           icon={<Clock className="h-5 w-5 text-white" />}
           cor="bg-warning"
           loading={statsLoading}
         />
         <KPICard
-          titulo="Em Análise"
-          valor={emAnalise}
-          icon={<Eye className="h-5 w-5 text-white" />}
-          cor="bg-info"
+          titulo="Aprovadas Hoje"
+          valor={aprovadosHoje}
+          icon={<CheckCircle className="h-5 w-5 text-white" />}
+          cor="bg-success"
           loading={statsLoading}
         />
         <KPICard
-          titulo="Aprovados"
-          valor={aprovados}
-          icon={<CheckCircle className="h-5 w-5 text-white" />}
-          cor="bg-success"
+          titulo="Reprovadas Hoje"
+          valor={reprovadosHoje}
+          icon={<XCircle className="h-5 w-5 text-white" />}
+          cor="bg-destructive"
           loading={statsLoading}
         />
         <KPICard
@@ -274,12 +355,15 @@ export function DashboardCadastro() {
         />
       </div>
 
+      {/* GRÁFICO DE PERFORMANCE */}
+      <PerformanceChart />
+
       {/* CONTEÚDO PRINCIPAL */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Documentos Pendentes */}
-        <DocumentosPendentes />
+        {/* Propostas Aguardando */}
+        <PropostasAguardando />
 
-        {/* Ações Rápidas */}
+        {/* Ações Rápidas - SIMPLIFICADAS */}
         <Card className="border-border bg-card">
           <CardHeader>
             <CardTitle className="text-foreground">Ações Rápidas</CardTitle>
@@ -305,47 +389,15 @@ export function DashboardCadastro() {
             <Button 
               variant="outline" 
               className="w-full justify-start h-auto py-4 border-border hover:border-purple-500 hover:bg-purple-500/10"
-              onClick={() => navigate('/cadastro/documentos')}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-500/10">
-                  <FileText className="h-5 w-5 text-purple-500" />
-                </div>
-                <div className="text-left">
-                  <p className="font-medium text-foreground">Fila de Documentos</p>
-                  <p className="text-sm text-muted-foreground">Analisar documentos pendentes</p>
-                </div>
-              </div>
-            </Button>
-
-            <Button 
-              variant="outline" 
-              className="w-full justify-start h-auto py-4 border-border hover:border-purple-500 hover:bg-purple-500/10"
               onClick={() => navigate('/cadastro/associados')}
             >
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-purple-500/10">
-                  <Shield className="h-5 w-5 text-purple-500" />
+                  <Users className="h-5 w-5 text-purple-500" />
                 </div>
                 <div className="text-left">
                   <p className="font-medium text-foreground">Associados</p>
                   <p className="text-sm text-muted-foreground">Consultar e editar cadastros</p>
-                </div>
-              </div>
-            </Button>
-
-            <Button 
-              variant="outline" 
-              className="w-full justify-start h-auto py-4 border-border hover:border-muted-foreground hover:bg-muted/50"
-              onClick={() => navigate('/perfil')}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-muted">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="text-left">
-                  <p className="font-medium text-foreground">Meu Perfil</p>
-                  <p className="text-sm text-muted-foreground">Configurações da conta</p>
                 </div>
               </div>
             </Button>
