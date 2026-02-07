@@ -17,7 +17,7 @@ const pages = [
   { name: 'Associados', url: '/cadastro/associados', icon: Users, keywords: 'clientes membros pessoas' },
   { name: 'Veículos', url: '/cadastro/veiculos', icon: Car, keywords: 'carros motos auto' },
   { name: 'Leads', url: '/vendas/leads', icon: UserPlus, keywords: 'prospectos contatos vendas' },
-  { name: 'Cotador', url: '/vendas/cotador', icon: Calculator, keywords: 'cotacao preco valor orcamento' },
+  { name: 'Cotações', url: '/vendas/cotacoes', icon: Calculator, keywords: 'cotacao preco valor orcamento' },
   { name: 'Kanban', url: '/vendas/kanban', icon: ClipboardList, keywords: 'pipeline funil vendas' },
   { name: 'Instalações', url: '/operacional/instalacoes', icon: Wrench, keywords: 'agendamento tecnico rastreador' },
   { name: 'Assistência 24h', url: '/operacional/assistencia', icon: HelpCircle, keywords: 'guincho socorro chamado' },
@@ -31,7 +31,7 @@ const pages = [
 ];
 
 const quickActions = [
-  { name: 'Nova Cotação', url: '/vendas/cotador', icon: Calculator, keywords: 'criar cotacao nova' },
+  { name: 'Nova Cotação', url: '/vendas/cotacoes?novo=true', icon: Calculator, keywords: 'criar cotacao nova' },
   { name: 'Novo Lead', url: '/vendas/leads', icon: Plus, keywords: 'adicionar lead novo' },
   { name: 'Agendar Instalação', url: '/operacional/instalacoes', icon: Wrench, keywords: 'agendar instalacao nova' },
   { name: 'Novo Associado', url: '/cadastro/associados', icon: UserPlus, keywords: 'cadastrar associado novo' },

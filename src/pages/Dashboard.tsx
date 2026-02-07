@@ -249,7 +249,7 @@ function QuickActions() {
     { 
       label: 'Nova Cotação', 
       emoji: '📊', 
-      url: '/vendas/cotador',
+      url: '/vendas/cotacoes?novo=true',
       primary: true 
     },
     { 
