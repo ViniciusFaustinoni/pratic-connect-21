@@ -261,21 +261,21 @@ function QuickActions() {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+    <div className="flex gap-3">
       {actions.map((action) => (
         <Button
           key={action.label}
           variant="outline"
           className={cn(
-            "h-auto py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 transition-all duration-200 hover:scale-105 touch-target",
+            "h-auto py-3 px-6 flex items-center gap-2 transition-all duration-200 hover:scale-105",
             action.primary 
               ? "bg-gradient-to-r from-accent to-accent-hover border-accent text-white hover:shadow-[0_0_20px_hsl(351,84%,49%,0.3)]" 
               : "bg-gradient-to-r from-primary-dark to-primary border-primary text-white hover:shadow-[0_0_20px_hsl(218,67%,36%,0.3)]"
           )}
           onClick={() => navigate(action.url)}
         >
-          <span className="text-xl sm:text-2xl">{action.emoji}</span>
-          <span className="text-xs sm:text-sm font-medium">{action.label}</span>
+          <span className="text-xl">{action.emoji}</span>
+          <span className="text-sm font-medium">{action.label}</span>
         </Button>
       ))}
     </div>
@@ -415,6 +415,20 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* AÇÕES RÁPIDAS - HORIZONTAL */}
+      <Card className="border-border bg-card">
+        <CardContent className="py-4">
+          <div className="flex items-center gap-4">
+            <h3 className="text-lg font-semibold text-foreground whitespace-nowrap">
+              Ações Rápidas
+            </h3>
+            <div className="flex gap-3 flex-1">
+              <QuickActions />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* GRID PRINCIPAL - 2/3 + 1/3 */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* COLUNA 1-2: Funil + Leads */}
@@ -422,7 +436,8 @@ export default function Dashboard() {
           {/* FUNIL DE VENDAS */}
           <FunilCotacaoChart periodo="30dias" />
 
-          {/* ÚLTIMOS LEADS */}
+          {/* ÚLTIMOS LEADS - Apenas para vendedores */}
+          {isVendedorOnly && (
           <Card className="border-border bg-card">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -510,23 +525,11 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
+          )}
         </div>
 
-        {/* COLUNA 3: Ações Rápidas + Widgets */}
+        {/* COLUNA 3: Widgets */}
         <div className="space-y-6">
-          {/* AÇÕES RÁPIDAS - Oculto para vendedor */}
-          {!isVendedorOnly && (
-            <Card className="border-border bg-card">
-              <CardHeader>
-                <CardTitle className="text-lg text-foreground">Ações Rápidas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <QuickActions />
-              </CardContent>
-            </Card>
-          )}
-
-
           {/* INSTALAÇÕES HOJE - Apenas coordenador e vistoriadores */}
           {(isCoordenadorMonitoramento || isInstaladorVistoriador || isVistoriadorBase) && (
             <Card className="border-border bg-card">
