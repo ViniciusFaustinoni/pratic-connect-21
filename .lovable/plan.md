@@ -1,60 +1,109 @@
 
-# Plano: Corrigir Filtro de Vistoriadores no Modal de Atribuição
+# Plano: Corrigir Atribuição de Vistoriador
 
-## Problema Identificado
+## Problemas Identificados
 
-O modal `AtribuirVistoriadorModal.tsx` está buscando **todos os usuários ativos** do sistema em vez de filtrar apenas os vistoriadores.
-
-**Query atual (incorreta):**
+### 1. Função `handleSaveAtribuicao` não implementada
+A função no arquivo `src/pages/monitoramento/FilaVistorias.tsx` está marcada como **TODO**:
 ```typescript
-const query = supabase
-  .from('profiles')
-  .select('id, nome, telefone, ativo')
-  .eq('ativo', true)
-  .order('nome');
+const handleSaveAtribuicao = async (vistoriadorId: string) => {
+  // TODO: Implementar mutação real para salvar no banco
+  console.log('Atribuição vistoriador:', vistoriadorId);
+  toast.success('Vistoriador atribuído com sucesso!');
+  setAtribuirModalOpen(false);
+};
+```
+O sistema apenas mostra o toast de sucesso, mas **não salva nada** no banco.
+
+### 2. Query com status inválido
+No arquivo `src/components/monitoramento/AtribuirVistoriadorModal.tsx`, a query de contagem de tarefas usa `"recusada"`:
+```typescript
+.not('status', 'in', '("cancelada","recusada")');
 ```
 
-Esta query retorna todos os profiles (Analista Cadastro, Coordenador, etc.) sem verificar se possuem a role de vistoriador.
+O enum `status_servico` **não tem `recusada`**. Os valores válidos são:
+- pendente, agendada, em_rota, em_andamento, concluida, aprovada, reprovada, aprovada_ressalvas, em_analise, reagendada, cancelada
 
-## Solução
+Isso causa um erro 400 na requisição, impedindo a contagem correta.
 
-Modificar a query para primeiro buscar os `user_id` da tabela `user_roles` que tenham role `instalador_vistoriador` ou `vistoriador_base`, e depois buscar apenas os profiles correspondentes.
+---
 
-## Alterações
+## Correções Necessárias
+
+### Correção 1: Implementar `handleSaveAtribuicao`
+
+**Arquivo:** `src/pages/monitoramento/FilaVistorias.tsx`
+
+Substituir a função TODO por uma implementação real que:
+1. Atualiza o `profissional_id` na tabela `servicos`
+2. Muda o status para `agendada` (se estava `pendente`)
+3. Invalida os caches de React Query
+4. Mostra toast de sucesso apenas após confirmação do banco
+
+```typescript
+const handleSaveAtribuicao = async (vistoriadorId: string) => {
+  if (!vistoriaParaAtribuir) return;
+  
+  try {
+    // 1. Atualizar o serviço no banco
+    const { error } = await supabase
+      .from('servicos')
+      .update({
+        profissional_id: vistoriadorId,
+        status: 'agendada', // Garantir que status é agendada
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', vistoriaParaAtribuir.id);
+
+    if (error) throw error;
+
+    // 2. Invalidar cache para atualizar a lista
+    queryClient.invalidateQueries({ queryKey: ['vistorias-fila'] });
+    queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
+
+    // 3. Feedback de sucesso
+    toast.success('Vistoriador atribuído com sucesso!');
+    setAtribuirModalOpen(false);
+  } catch (error) {
+    console.error('Erro ao atribuir vistoriador:', error);
+    toast.error('Erro ao atribuir vistoriador. Tente novamente.');
+  }
+};
+```
+
+### Correção 2: Corrigir status inválido na query
 
 **Arquivo:** `src/components/monitoramento/AtribuirVistoriadorModal.tsx`
 
-### Lógica a implementar:
-
+Substituir:
 ```typescript
-// 1. Buscar user_ids que são vistoriadores
-const { data: roles, error: rolesError } = await supabase
-  .from('user_roles')
-  .select('user_id')
-  .in('role', ['instalador_vistoriador', 'vistoriador_base']);
-
-if (rolesError) throw rolesError;
-if (!roles?.length) return [];
-
-const userIds = roles.map(r => r.user_id);
-
-// 2. Buscar profiles apenas desses user_ids
-const { data, error } = await supabase
-  .from('profiles')
-  .select('id, user_id, nome, telefone, ativo, regioes_atendimento, capacidade_diaria')
-  .in('user_id', userIds)
-  .eq('ativo', true)
-  .order('nome');
+.not('status', 'in', '("cancelada","recusada")');
 ```
 
-### Melhorias adicionais:
+Por:
+```typescript
+.not('status', 'in', '("cancelada","reprovada")');
+```
 
-1. **Usar dados reais de regiões:** Trocar o mock `['Centro', 'Zona Sul', 'Pinheiros']` pelo campo real `regioes_atendimento` do profile
+Ou remover a filtragem por status e usar apenas:
+```typescript
+.not('status', 'eq', 'cancelada');
+```
 
-2. **Usar capacidade real:** Trocar o mock `capacidadeDia: 5` pelo campo real `capacidade_diaria` do profile
+---
 
-3. **Buscar contagem real de tarefas:** Contar quantas tarefas (instalações + vistorias) o vistoriador tem agendadas para o dia selecionado
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/monitoramento/FilaVistorias.tsx` | Implementar `handleSaveAtribuicao` com update real no banco |
+| `src/components/monitoramento/AtribuirVistoriadorModal.tsx` | Corrigir status `"recusada"` para `"reprovada"` |
+
+---
 
 ## Resultado Esperado
 
-Após a correção, apenas usuários com as roles `instalador_vistoriador` ou `vistoriador_base` aparecerão na lista de seleção. Usuários como "Analista Cadastro" e "Coordenador de Monitoramento" não aparecerão mais.
+Após as correções:
+1. Ao selecionar um vistoriador e clicar "Confirmar Atribuição", o banco será atualizado
+2. A coluna "Vistoriador" na lista mostrará o nome do profissional atribuído
+3. A contagem de tarefas por dia funcionará corretamente
