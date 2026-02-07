@@ -45,6 +45,8 @@ import {
   AtribuirVistoriadorModal, 
   VistoriaParaAtribuir 
 } from '@/components/monitoramento/AtribuirVistoriadorModal';
+import { AgendarManutencaoModal } from '@/components/monitoramento/manutencao/AgendarManutencaoModal';
+import { type VistoriaManutencao } from '@/types/vistoriaManutencao';
 
 // ============================================
 // TIPOS E CONSTANTES
@@ -155,6 +157,10 @@ export default function FilaVistorias() {
   // Estado do modal de atribuir vistoriador
   const [atribuirModalOpen, setAtribuirModalOpen] = useState(false);
   const [vistoriaParaAtribuir, setVistoriaParaAtribuir] = useState<VistoriaParaAtribuir | null>(null);
+
+  // Estado do modal de agendamento de manutenção (base/rota)
+  const [manutencaoModalOpen, setManutencaoModalOpen] = useState(false);
+  const [vistoriaManutencaoSelecionada, setVistoriaManutencaoSelecionada] = useState<VistoriaManutencao | null>(null);
 
   // Dados
   const { data: vistoriasRaw, isLoading: isLoadingVistorias } = useVistorias({});
@@ -308,6 +314,76 @@ export default function FilaVistorias() {
 
   // Handler para abrir modal de agendamento
   const handleAgendar = (vistoria: VistoriaFila) => {
+    // Se for manutenção ou retirada, usar modal específico com opções Base/Rota
+    if (vistoria.tipo === 'manutencao' || vistoria.tipo === 'retirada') {
+      const servico = servicosRaw?.find(s => s.id === vistoria.id);
+      if (servico) {
+        // Mapear dados do serviço para VistoriaManutencao
+        setVistoriaManutencaoSelecionada({
+          id: servico.id,
+          protocolo: servico.protocolo || null,
+          tipo: 'vistoria_manutencao',
+          status: servico.status as string,
+          data_agendada: servico.data_agendada || '',
+          periodo: (servico as any).periodo || 'manha',
+          motivo_manutencao: (servico as any).motivo_manutencao || null,
+          motivo_detalhe: (servico as any).motivo_detalhe || null,
+          local_tipo_manutencao: (servico as any).local_tipo_manutencao || null,
+          protecao_suspensa: (servico as any).protecao_suspensa || false,
+          data_suspensao: (servico as any).data_suspensao || null,
+          rastreador_substituto_id: (servico as any).rastreador_substituto_id || null,
+          resultado_manutencao: (servico as any).resultado_manutencao || null,
+          logradouro: servico.logradouro || null,
+          numero: servico.numero || null,
+          bairro: servico.bairro || null,
+          cidade: servico.cidade || null,
+          uf: servico.uf || null,
+          cep: servico.cep || null,
+          latitude: servico.latitude || null,
+          longitude: servico.longitude || null,
+          created_at: servico.created_at,
+          updated_at: servico.updated_at,
+          concluida_em: (servico as any).concluida_em || null,
+          observacoes: servico.observacoes || null,
+          observacoes_analise: (servico as any).observacoes_analise || null,
+          associado_id: servico.associado_id || null,
+          veiculo_id: servico.veiculo_id || null,
+          rastreador_id: servico.rastreador_id || null,
+          profissional_id: servico.profissional_id || null,
+          associado: servico.associado ? {
+            id: servico.associado.id,
+            nome: servico.associado.nome,
+            telefone: servico.associado.telefone || '',
+            whatsapp: servico.associado.whatsapp || null,
+            cpf: servico.associado.cpf || '',
+            email: servico.associado.email || '',
+          } : null,
+          veiculo: servico.veiculo ? {
+            id: servico.veiculo.id,
+            placa: servico.veiculo.placa || '',
+            marca: servico.veiculo.marca || '',
+            modelo: servico.veiculo.modelo || '',
+            cor: servico.veiculo.cor || null,
+            ano_fabricacao: servico.veiculo.ano_fabricacao || null,
+          } : null,
+          rastreador: (servico as any).rastreador ? {
+            id: (servico as any).rastreador.id,
+            codigo: (servico as any).rastreador.codigo || '',
+            imei: (servico as any).rastreador.imei || null,
+            plataforma: (servico as any).rastreador.plataforma || null,
+          } : null,
+          profissional: servico.profissional ? {
+            id: servico.profissional.id,
+            nome: servico.profissional.nome,
+            telefone: servico.profissional.telefone || null,
+          } : null,
+        });
+        setManutencaoModalOpen(true);
+        return;
+      }
+    }
+    
+    // Para outros tipos, usar modal genérico (Presencial/Ponto Fixo/Auto Vistoria)
     setVistoriaSelecionada({
       id: vistoria.id,
       protocolo: vistoria.protocolo,
@@ -677,6 +753,13 @@ export default function FilaVistorias() {
         onOpenChange={setAtribuirModalOpen}
         vistoria={vistoriaParaAtribuir}
         onSave={handleSaveAtribuicao}
+      />
+
+      {/* Modal de Agendamento de Manutenção (Base/Rota) */}
+      <AgendarManutencaoModal
+        open={manutencaoModalOpen}
+        onOpenChange={setManutencaoModalOpen}
+        vistoria={vistoriaManutencaoSelecionada}
       />
     </div>
   );
