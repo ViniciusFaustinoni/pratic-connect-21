@@ -383,12 +383,6 @@ export default function Associados() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {!isAnalistaCadastroOnly && (
-            <Button onClick={() => setFormDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Novo Associado
-            </Button>
-          )}
         </div>
       </div>
 
