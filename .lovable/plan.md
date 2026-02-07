@@ -1,111 +1,250 @@
 
-# Plano: Otimizar Dashboard do Coordenador de Monitoramento
 
-## Análise do Dashboard Atual
+# Plano: Ajustar Modal de Novo Chamado - Assistência 24h
 
-O Dashboard do Coordenador (`src/pages/monitoramento/DashboardCoordenador.tsx`) possui:
+## Problema Identificado
 
-### Elementos Existentes (509 linhas):
+O modal atual do "Novo Chamado" de Assistência 24h:
+1. Busca apenas por CPF ou placa
+2. Não permite busca por nome do associado
+3. Quando não encontra resultados, não oferece opção de entrada manual
+4. Exige um associado e veículo cadastrados no sistema para abrir um chamado
 
-| Seção | Descrição |
-|-------|-----------|
-| **KPIs** (5 cards) | Rotas Hoje, Em Execução, Vistorias Pendentes, Instalações Hoje, Taxa de Conclusão |
-| **Métricas de Tempo** (3 cards) | Tempo Médio em Trânsito, Tempo Médio de Execução, Rastreadores em Porte |
-| **Agendamentos na Base** | Componente funcional com lista de agendamentos do dia |
-| **Equipe em Campo** | Cards com status dos profissionais e progresso de tarefas |
-| **Alertas e Pendências** | Lista de alertas dinâmicos (atrasados, sem equipe, pendentes) |
-| **Ações Rápidas** (4 botões) | Ver Fila de Vistorias, Gestão de Rotas, Equipe, Instalações |
+## Solução Proposta
 
-### Diagnóstico:
-
-**Elementos Funcionais e Relevantes:**
-- KPIs (todos funcionais e relevantes)
-- Métricas de Tempo (funcionais, úteis para gestão)
-- Rastreadores em Porte (relevante para controle de estoque)
-- Agendamentos na Base (funcional)
-- Alertas e Pendências (funcional)
-- Equipe em Campo (funcional)
-
-**Elementos Funcionais mas podem ser melhorados:**
-- Ações Rápidas: 4 botões ✓ (mantemos todos, são relevantes para o coordenador)
-
-**O que falta:**
-- **Gráficos visuais** - Não há gráficos de evolução ou desempenho
-- **Visão de produtividade** - Quantidade de serviços realizados por dia
+Modificar o modal para:
+1. Adicionar busca por nome
+2. Oferecer entrada manual de dados quando nenhum resultado for encontrado
+3. Permitir abrir chamados com dados mínimos necessários
 
 ---
 
-## Proposta de Melhorias
+## Nova Estrutura do Modal
 
-### 1. Adicionar Gráfico de Performance Semanal
-
-Incluir um gráfico de barras mostrando:
-- **Eixo X**: Últimos 7 dias
-- **Barras Azuis**: Vistorias realizadas
-- **Barras Verdes**: Instalações realizadas
-
-Isso permite ao coordenador visualizar a produtividade da equipe ao longo da semana.
-
-### 2. Reorganizar Layout
-
-A estrutura atual está funcional, mas o gráfico será adicionado após os cards de métricas de tempo.
-
-### Nova Estrutura:
+### Etapa 1: Busca (atual)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Header: Central de Monitoramento                           │
+│  Novo Chamado de Assistência                                │
+│  Busque o associado por nome, CPF ou placa                  │
 ├─────────────────────────────────────────────────────────────┤
-│  [KPIs - 5 Cards]                                           │
-│  Rotas | Em Execução | Vistorias | Instalações | Taxa       │
+│  [🔍 Digite nome, CPF ou placa do veículo... ] [Buscar]     │
 ├─────────────────────────────────────────────────────────────┤
-│  [Métricas de Tempo - 3 Cards]                              │
-│  Tempo Trânsito | Tempo Execução | Rastreadores             │
+│  Resultados (N)                                             │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ 👤 MARCUS VINICIUS FAUSTINONI...  [ativo]          │    │
+│  │ CPF: 124.936.497-37                                │    │
+│  │ 📞 (21) 98224-4909                                 │    │
+│  │ 🚗 LTB4J74                          [Selecionar]   │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                             │
+│  -- OU se não encontrar resultados --                       │
+│                                                             │
+│  ⚠️ Nenhum associado encontrado                            │
+│  [📝 Informar Dados Manualmente]                            │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Etapa 2: Dados do Chamado (com entrada manual)
+
+Se o usuário escolher entrada manual, o formulário incluirá:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Novo Chamado de Assistência                                │
+│  Preencha os dados do chamado                               │
 ├─────────────────────────────────────────────────────────────┤
-│  [NOVO: Gráfico Performance Semanal - Full Width]           │
-│  BarChart: Vistorias x Instalações nos últimos 7 dias       │
+│  ⚠️ Modo Manual - Dados do Cliente                         │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ Nome do Cliente *:      [_________________________]│    │
+│  │ Telefone *:             [_________________________]│    │
+│  │ Placa do Veículo:       [_________________________]│    │
+│  │ Marca/Modelo:           [_________________________]│    │
+│  └─────────────────────────────────────────────────────┘    │
 ├─────────────────────────────────────────────────────────────┤
-│  [Agendamentos na Base]                                     │
+│  Dados do Chamado                                           │
+│  Tipo de Serviço *:       [▼ Reboque/Guincho           ]    │
+│  Descrição do Problema:   [___________________________]     │
+│  Endereço de Origem *:    [___________________________]     │
+│  Endereço de Destino:     [___________________________]     │
 ├─────────────────────────────────────────────────────────────┤
-│  [Grid 2/3 + 1/3]                                           │
-│  Equipe em Campo | Alertas e Pendências                     │
-├─────────────────────────────────────────────────────────────┤
-│  [Ações Rápidas - 4 botões - MANTIDOS]                      │
-│  Fila Vistorias | Rotas | Equipe | Instalações              │
+│                          [Cancelar] [Abrir Chamado]         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## O Que Será Mantido
+## Alterações no Código
 
-| Elemento | Motivo |
-|----------|--------|
-| 5 KPIs | Todos funcionais e relevantes para operação diária |
-| 3 Cards de Métricas de Tempo | Dados úteis sobre produtividade |
-| Agendamentos na Base | Funcionalidade operacional importante |
-| Equipe em Campo | Visibilidade do status da equipe |
-| Alertas e Pendências | Ações corretivas imediatas |
-| 4 Ações Rápidas | Navegação direta para funcionalidades principais |
+### Arquivo: `src/components/assistencia/NovoChamadoModal.tsx`
+
+#### 1. Adicionar Estado para Modo Manual
+
+```typescript
+// Estado para modo manual
+const [modoManual, setModoManual] = useState(false);
+const [dadosManuais, setDadosManuais] = useState({
+  nome_cliente: '',
+  telefone_cliente: '',
+  placa_veiculo: '',
+  marca_modelo: '',
+});
+```
+
+#### 2. Expandir Busca para Incluir Nome
+
+Na função `buscarAssociado()`, adicionar busca por nome:
+
+```typescript
+// Buscar por Nome
+const { data: porNome, error: errorNome } = await supabase
+  .from('associados')
+  .select(`
+    id, nome, cpf, telefone, whatsapp, status,
+    veiculos(id, placa, marca, modelo, ano_modelo)
+  `)
+  .ilike('nome', `%${termoBusca}%`)
+  .eq('status', 'ativo')
+  .limit(10);
+```
+
+#### 3. Adicionar Botão de Entrada Manual
+
+Quando não houver resultados:
+
+```typescript
+{resultadosBusca.length === 0 && termoBusca.length >= 3 && !buscando && (
+  <div className="text-center py-6 space-y-4">
+    <div className="text-muted-foreground">
+      <User className="h-12 w-12 mx-auto mb-2 opacity-50" />
+      <p>Nenhum associado encontrado</p>
+      <p className="text-sm">Verifique os dados ou informe manualmente</p>
+    </div>
+    <Button 
+      variant="outline" 
+      onClick={() => {
+        setModoManual(true);
+        setEtapa('dados');
+      }}
+    >
+      <Edit className="h-4 w-4 mr-2" />
+      Informar Dados Manualmente
+    </Button>
+  </div>
+)}
+```
+
+#### 4. Formulário de Dados Manuais
+
+Na etapa 'dados', adicionar seção para dados manuais quando `modoManual === true`:
+
+```typescript
+{modoManual && (
+  <Card className="border-amber-200 bg-amber-50/50">
+    <CardHeader className="pb-2">
+      <CardTitle className="text-sm flex items-center gap-2 text-amber-700">
+        <AlertTriangle className="h-4 w-4" />
+        Entrada Manual de Dados
+      </CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="nome_cliente">Nome do Cliente *</Label>
+          <Input
+            id="nome_cliente"
+            placeholder="Nome completo"
+            value={dadosManuais.nome_cliente}
+            onChange={(e) => setDadosManuais({...dadosManuais, nome_cliente: e.target.value})}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="telefone_cliente">Telefone *</Label>
+          <Input
+            id="telefone_cliente"
+            placeholder="(00) 00000-0000"
+            value={dadosManuais.telefone_cliente}
+            onChange={(e) => setDadosManuais({...dadosManuais, telefone_cliente: e.target.value})}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="placa_veiculo">Placa do Veículo</Label>
+          <Input
+            id="placa_veiculo"
+            placeholder="ABC1D23"
+            value={dadosManuais.placa_veiculo}
+            onChange={(e) => setDadosManuais({...dadosManuais, placa_veiculo: e.target.value})}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="marca_modelo">Marca/Modelo</Label>
+          <Input
+            id="marca_modelo"
+            placeholder="Ex: Toyota Corolla"
+            value={dadosManuais.marca_modelo}
+            onChange={(e) => setDadosManuais({...dadosManuais, marca_modelo: e.target.value})}
+          />
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+)}
+```
+
+#### 5. Ajustar Mutation para Dados Manuais
+
+Modificar a mutation para salvar dados manuais no campo `descricao` ou em campos específicos se disponíveis:
+
+```typescript
+const { data, error } = await supabase
+  .from('chamados_assistencia')
+  .insert({
+    protocolo,
+    associado_id: modoManual ? null : associadoSelecionado!.id,
+    veiculo_id: modoManual ? null : (veiculoSelecionado || null),
+    tipo_servico: formData.tipo_servico,
+    descricao: modoManual 
+      ? `[CHAMADO MANUAL]\nCliente: ${dadosManuais.nome_cliente}\nTelefone: ${dadosManuais.telefone_cliente}\nVeículo: ${dadosManuais.placa_veiculo} - ${dadosManuais.marca_modelo}\n\n${formData.descricao || ''}`
+      : (formData.descricao || null),
+    origem_endereco: formData.origem_endereco,
+    destino_endereco: formData.destino_endereco || null,
+    canal: 'telefone',
+    atendente_id: user.data.user?.id,
+    status: 'aberto' as const,
+  })
+```
+
+#### 6. Ajustar Validação do Formulário
+
+```typescript
+const isFormValid = () => {
+  const baseValid = formData.tipo_servico && formData.origem_endereco.trim().length > 0;
+  
+  if (modoManual) {
+    return baseValid && 
+           dadosManuais.nome_cliente.trim().length > 0 && 
+           dadosManuais.telefone_cliente.trim().length > 0;
+  }
+  
+  return baseValid && associadoSelecionado && veiculoSelecionado;
+};
+```
 
 ---
 
-## Novo Hook: `usePerformanceSemanal`
+## Verificação do Schema
 
-Criar hook para buscar dados do gráfico:
+Observação: O schema atual de `chamados_assistencia` tem `associado_id` como campo **obrigatório** (NOT NULL). 
 
-```typescript
-interface PerformanceDia {
-  dia: string;        // "07/02"
-  vistorias: number;  // Quantidade de vistorias concluídas
-  instalacoes: number; // Quantidade de instalações concluídas
-}
-```
+Para permitir chamados manuais, será necessário:
+- **Opção A**: Alterar o schema para tornar `associado_id` nullable
+- **Opção B**: Criar um associado "placeholder" para chamados manuais
+- **Opção C**: Armazenar dados manuais apenas na descrição (abordagem atual proposta)
 
-Query:
-- Buscar vistorias com status 'aprovada' ou 'reprovada' nos últimos 7 dias
-- Buscar instalações com status 'concluida' nos últimos 7 dias
-- Agrupar por data
+A **Opção C** é a mais simples e não requer alterações no banco de dados.
 
 ---
 
@@ -113,160 +252,19 @@ Query:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/monitoramento/DashboardCoordenador.tsx` | Adicionar gráfico de performance semanal |
-
-### Novo Arquivo
-
-| Arquivo | Conteúdo |
-|---------|----------|
-| `src/hooks/usePerformanceSemanalCoordenador.ts` | Hook para buscar vistorias/instalações por dia |
-
----
-
-## Seção Técnica
-
-### Estrutura do Hook `usePerformanceSemanalCoordenador`
-
-```typescript
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { format, subDays } from 'date-fns';
-import { getHojeBrasilia } from '@/lib/date-utils';
-
-interface PerformanceDia {
-  dia: string;
-  vistorias: number;
-  instalacoes: number;
-}
-
-export function usePerformanceSemanalCoordenador() {
-  return useQuery({
-    queryKey: ['performance-semanal-coordenador'],
-    queryFn: async (): Promise<PerformanceDia[]> => {
-      const hoje = getHojeBrasilia();
-      const seteDiasAtras = subDays(hoje, 6);
-      seteDiasAtras.setHours(0, 0, 0, 0);
-
-      // Buscar vistorias concluídas
-      const { data: vistorias } = await supabase
-        .from('vistorias')
-        .select('concluida_em')
-        .in('status', ['aprovada', 'reprovada'])
-        .not('concluida_em', 'is', null)
-        .gte('concluida_em', seteDiasAtras.toISOString());
-
-      // Buscar instalações concluídas
-      const { data: instalacoes } = await supabase
-        .from('instalacoes')
-        .select('concluida_em')
-        .eq('status', 'concluida')
-        .not('concluida_em', 'is', null)
-        .gte('concluida_em', seteDiasAtras.toISOString());
-
-      // Inicializar mapa dos últimos 7 dias
-      const diasMap = new Map<string, { vistorias: number; instalacoes: number }>();
-      for (let i = 6; i >= 0; i--) {
-        const dia = subDays(hoje, i);
-        const diaStr = format(dia, 'dd/MM');
-        diasMap.set(diaStr, { vistorias: 0, instalacoes: 0 });
-      }
-
-      // Contar vistorias por dia
-      vistorias?.forEach(v => {
-        if (v.concluida_em) {
-          const diaStr = format(new Date(v.concluida_em), 'dd/MM');
-          const atual = diasMap.get(diaStr);
-          if (atual) diasMap.set(diaStr, { ...atual, vistorias: atual.vistorias + 1 });
-        }
-      });
-
-      // Contar instalações por dia
-      instalacoes?.forEach(i => {
-        if (i.concluida_em) {
-          const diaStr = format(new Date(i.concluida_em), 'dd/MM');
-          const atual = diasMap.get(diaStr);
-          if (atual) diasMap.set(diaStr, { ...atual, instalacoes: atual.instalacoes + 1 });
-        }
-      });
-
-      return Array.from(diasMap.entries()).map(([dia, dados]) => ({
-        dia,
-        ...dados
-      }));
-    },
-    staleTime: 60000,
-  });
-}
-```
-
-### Componente do Gráfico (dentro de DashboardCoordenador.tsx)
-
-```typescript
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { usePerformanceSemanalCoordenador } from '@/hooks/usePerformanceSemanalCoordenador';
-
-function PerformanceSemanalChart() {
-  const { data, isLoading } = usePerformanceSemanalCoordenador();
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Performance Semanal</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-[250px] w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Performance Semanal
-        </CardTitle>
-        <CardDescription>
-          Serviços realizados nos últimos 7 dias
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="h-[250px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data || []}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="dia" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="vistorias" fill="#3B82F6" name="Vistorias" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="instalacoes" fill="#22C55E" name="Instalações" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-```
-
-### Posição no Layout
-
-O gráfico será inserido após a seção de "Métricas de Tempo" (linha 362) e antes de "AgendamentosBase" (linha 365).
+| `src/components/assistencia/NovoChamadoModal.tsx` | Adicionar modo manual, expandir busca para nome, UI de entrada manual |
 
 ---
 
 ## Resultado Esperado
 
-O Coordenador de Monitoramento terá:
+1. A busca funcionará por **nome, CPF ou placa**
+2. Quando não encontrar resultados, aparecerá um botão **"Informar Dados Manualmente"**
+3. No modo manual, o operador poderá inserir:
+   - Nome do Cliente
+   - Telefone
+   - Placa do Veículo (opcional)
+   - Marca/Modelo (opcional)
+4. Esses dados serão salvos na descrição do chamado para referência futura
+5. O chamado poderá ser aberto mesmo sem associado cadastrado
 
-1. **5 KPIs operacionais** - Mantidos (relevantes)
-2. **3 Cards de métricas de tempo** - Mantidos (úteis para gestão)
-3. **NOVO: Gráfico de Performance Semanal** - Visualização da produtividade
-4. **Agendamentos na Base** - Mantido (operacional)
-5. **Equipe em Campo + Alertas** - Mantidos (essenciais)
-6. **4 Ações Rápidas** - Mantidas (navegação principal)
-
-O dashboard terá agora uma **visão gráfica da performance**, permitindo identificar tendências e dias de maior/menor produtividade.
