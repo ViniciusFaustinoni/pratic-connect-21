@@ -372,14 +372,14 @@ export function AgendarVistoriaModal({
                 <div className="space-y-2">
                   <Label>Horário Específico (opcional)</Label>
                   <Select
-                    value={formData.horarioEspecifico || ''}
-                    onValueChange={(value) => updateForm('horarioEspecifico', value || undefined)}
+                    value={formData.horarioEspecifico || 'any'}
+                    onValueChange={(value) => updateForm('horarioEspecifico', value === 'any' ? undefined : value)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Qualquer horário" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Qualquer horário</SelectItem>
+                      <SelectItem value="any">Qualquer horário</SelectItem>
                       {HORARIOS.filter(h => {
                         if (!formData.periodo) return true;
                         const hour = parseInt(h.split(':')[0]);
