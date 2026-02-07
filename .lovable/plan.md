@@ -1,71 +1,303 @@
 
-## Análise
+# Plano: Unificar Criação de Vistoriadores com Fluxo de Usuários
 
-O sistema PRATIC está estruturado para criar associados **exclusivamente através de cotações**. O fluxo correto é:
-1. **Cotação** criada no módulo de Vendas
-2. Cliente aceita proposta e dados são validados
-3. **ContratoWizard** cria o associado automaticamente (linha 572 de ContratoWizard.tsx)
-4. Associado fica em status "em_analise" aguardando documentação/vistoria/aprovação
+## Contexto
 
-Atualmente existem **3 pontos** onde "Novo Associado" é exposto de forma inadequada:
+Atualmente existem dois locais para criar profissionais de campo:
+1. **Monitoramento → Equipe → Novo Profissional** (modal `ProfissionalModal`)
+2. **Configurações → Usuários e Acessos → Novo Usuário** (página `UsuarioForm`)
 
-### Problemas Identificados
+O problema é que o modal em "Equipe" atualmente **não cria usuários reais** no sistema de autenticação — ele tenta apenas atualizar um profile existente, lançando erro se tentar criar novo.
 
-1. **Página de Associados** (`src/pages/cadastro/Associados.tsx:387-390`)
-   - Botão "Novo Associado" disponível para todos exceto Analistas de Cadastro
-   - Permitir criar associado manualmente viola o fluxo da cotação
-   - Já tem condição `!isAnalistaCadastroOnly` que limita visibilidade
+## Objetivos
 
-2. **Busca Global** (`src/components/layout/GlobalSearch.tsx:37`)
-   - Atalho rápido "Novo Associado" nas Quick Actions
-   - Acessível via Cmd+K ou Ctrl+K
-   - Redireciona para `/cadastro/associados`
+1. O modal "Novo Profissional" em Monitoramento → Equipe deve criar um usuário **completo** (auth + profile + role)
+2. Utilizar a mesma Edge Function `create-user` já existente
+3. Atribuir automaticamente a role `instalador_vistoriador` ou `vistoriador_base`
+4. Campo de **Região** deve ser **opcional** (conforme solicitado) e salvo em `profiles.regioes_atendimento`
+5. Sincronizar comportamento entre os dois fluxos de criação
 
-3. **Modal AssociadoFormDialog** (`src/components/associados/AssociadoFormDialog.tsx`)
-   - Componente permite criação standalone
-   - Usado apenas em 2 cenários:
-     - Na página de Associados (formDialogOpen state)
-     - No ContratoWizard (integrado)
+## Alterações Necessárias
 
-### Solução Proposta
+### 1. Atualizar Edge Function `create-user`
 
-**Remover acesso direto ao cadastro de Associados**:
+**Arquivo:** `supabase/functions/create-user/index.ts`
 
-| Localização | Ação | Razão |
-|-------------|------|-------|
-| `src/pages/cadastro/Associados.tsx` (linhas 386-391) | **Remover botão** "Novo Associado" | Associados só criam via Cotação |
-| `src/components/layout/GlobalSearch.tsx` (linha 37) | **Remover** "Novo Associado" das quick actions | Evita criação manual descontrolada |
-| `src/components/associados/AssociadoFormDialog.tsx` | **Manter inalterado** | Ainda usado internamente por ContratoWizard |
-| `src/pages/cadastro/Associados.tsx` | **Manter estado** `formDialogOpen` | Para futuro uso se necessário |
+Adicionar suporte para salvar campos específicos de vistoriadores:
+- `regioes_atendimento` (array de strings)
+- `capacidade_diaria` (número)
 
-### Implementação
+```typescript
+interface CreateUserRequest {
+  // ... campos existentes
+  regioes_atendimento?: string[];  // NOVO
+  capacidade_diaria?: number;       // NOVO
+}
 
-**Arquivo 1: `src/pages/cadastro/Associados.tsx` (linhas 386-391)**
-- Remover o `Button` com "Novo Associado"
-- Manter apenas "Exportar" dropdown
-- Remover estado `formDialogOpen` se não usado em outro lugar
-- Remover `setFormDialogOpen` setter
-- Remover renderização de `<AssociadoFormDialog>`
+// Após criar o profile, atualizar campos específicos
+const updateData: any = { primeiro_acesso: !senha };
+if (cpf) updateData.cpf = cpf;
+if (telefone) updateData.telefone = telefone;
+if (regioes_atendimento?.length) updateData.regioes_atendimento = regioes_atendimento;  // NOVO
+if (capacidade_diaria) updateData.capacidade_diaria = capacidade_diaria;                 // NOVO
+```
 
-**Arquivo 2: `src/components/layout/GlobalSearch.tsx` (linha 37)**
-- Remover objeto com `{ name: 'Novo Associado', url: '/cadastro/associados', ... }`
-- Remover import `UserPlus` se não usar em outro lugar
+### 2. Atualizar Modal `ProfissionalModal`
 
-### Impacto
+**Arquivo:** `src/components/monitoramento/ProfissionalModal.tsx`
 
-✅ **Positivo:**
-- Força fluxo correto: Cotação → Contrato → Associado
-- Evita duplicação de associados com dados incompletos
-- Alinha permissões (Analistas não veem mais o botão)
-- Simplifica UI
+#### 2.1 Adicionar campo de tipo de vistoriador
+```typescript
+// No schema
+tipoVistoriador: z.enum(['instalador_vistoriador', 'vistoriador_base']),
 
-⚠️ **Considerações:**
-- Se usuário tentar acessar `/cadastro/associados?novo=true` diretamente, o modal não abrirá (apenas lista)
-- Associados ainda aparecem na página de listagem com todas as funcionalidades (filtros, exportação, etc.)
-- ContratoWizard continua criando associados normalmente
+// Na interface
+tipoVistoriador: 'instalador_vistoriador' | 'vistoriador_base';
+```
 
-### Verificação de Dependências
+#### 2.2 Tornar regiões opcionais (atualmente obrigatório)
+```typescript
+// ANTES
+regioes: z.array(z.string()).min(1, 'Selecione pelo menos uma região'),
 
-- Modal `AssociadoFormDialog` continua existindo para uso interno (ContratoWizard)
-- Estado `formDialogOpen` pode ser removido se não usado em outro lugar
-- `useCreateAssociado` hook continua funcional
+// DEPOIS
+regioes: z.array(z.string()).default([]),  // Opcional
+```
+
+#### 2.3 Adicionar Select para tipo de vistoriador
+```tsx
+<FormField
+  control={form.control}
+  name="tipoVistoriador"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>Tipo de Acesso *</FormLabel>
+      <Select value={field.value} onValueChange={field.onChange}>
+        <FormControl>
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
+        </FormControl>
+        <SelectContent>
+          <SelectItem value="instalador_vistoriador">
+            Vistoriador de Campo (rota)
+          </SelectItem>
+          <SelectItem value="vistoriador_base">
+            Vistoriador de Base
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      <FormDescription>
+        Define qual interface o profissional terá acesso
+      </FormDescription>
+      <FormMessage />
+    </FormItem>
+  )}
+/>
+```
+
+### 3. Atualizar Hook `useSaveProfissional`
+
+**Arquivo:** `src/hooks/useEquipe.ts`
+
+Modificar a mutation para chamar a Edge Function `create-user` ao criar novo profissional:
+
+```typescript
+export function useSaveProfissional() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      id?: string;
+      nome: string;
+      email: string;
+      telefone: string;
+      cpf?: string;
+      regioes_atendimento?: string[];
+      capacidade_diaria?: number;
+      ativo?: boolean;
+      tipoVistoriador?: 'instalador_vistoriador' | 'vistoriador_base';
+      senhaProvisoria?: string;
+    }) => {
+      if (data.id) {
+        // ATUALIZAR profile existente
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            nome: data.nome,
+            telefone: data.telefone,
+            cpf: data.cpf,
+            regioes_atendimento: data.regioes_atendimento,
+            capacidade_diaria: data.capacidade_diaria,
+            ativo: data.ativo,
+          })
+          .eq('id', data.id);
+
+        if (error) throw error;
+        return { success: true, updated: true };
+      } else {
+        // CRIAR novo usuário via Edge Function
+        const { data: result, error } = await supabase.functions.invoke('create-user', {
+          body: {
+            nome: data.nome,
+            email: data.email,
+            telefone: data.telefone,
+            cpf: data.cpf,
+            senha: data.senhaProvisoria,
+            tipo: 'prestador',  // Prestador = profissional externo
+            perfis: [data.tipoVistoriador || 'instalador_vistoriador'],
+            regioes_atendimento: data.regioes_atendimento,
+            capacidade_diaria: data.capacidade_diaria,
+          }
+        });
+
+        if (error) throw error;
+        if (result?.error) throw new Error(result.error);
+        
+        return { success: true, created: true };
+      }
+    },
+    // ... invalidate queries
+  });
+}
+```
+
+### 4. Atualizar UsuarioForm para exibir campos de região
+
+**Arquivo:** `src/pages/configuracoes/UsuarioForm.tsx`
+
+Exibir seção de "Regiões de Atendimento" quando o perfil selecionado for `instalador_vistoriador` ou `vistoriador_base`:
+
+```tsx
+{/* Mostrar apenas se for vistoriador */}
+{formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p)) && (
+  <Card className="border-border/50 border-yellow-500/30">
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2 text-lg">
+        <MapPin className="w-5 h-5 text-yellow-500" />
+        Configurações de Campo
+      </CardTitle>
+      <CardDescription>
+        Configurações específicas para vistoriadores (opcional)
+      </CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      {/* Regiões de Atendimento */}
+      <div className="space-y-2">
+        <Label>Regiões de Atuação</Label>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {REGIOES_ATENDIMENTO.map((regiao) => (
+            <label key={regiao.value} className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={formData.regioes_atendimento?.includes(regiao.value)}
+                onCheckedChange={(checked) => {
+                  const current = formData.regioes_atendimento || [];
+                  setFormData({
+                    ...formData,
+                    regioes_atendimento: checked 
+                      ? [...current, regiao.value]
+                      : current.filter(r => r !== regiao.value)
+                  });
+                }}
+              />
+              {regiao.label}
+            </label>
+          ))}
+        </div>
+      </div>
+      
+      {/* Capacidade Diária */}
+      <div className="space-y-2">
+        <Label>Capacidade Diária</Label>
+        <Input
+          type="number"
+          min={1}
+          max={20}
+          value={formData.capacidade_diaria || 10}
+          onChange={(e) => setFormData({...formData, capacidade_diaria: parseInt(e.target.value)})}
+        />
+        <p className="text-xs text-muted-foreground">Máximo de tarefas por dia (1-20)</p>
+      </div>
+    </CardContent>
+  </Card>
+)}
+```
+
+### 5. Atualizar Página Equipe para passar dados corretos
+
+**Arquivo:** `src/pages/monitoramento/Equipe.tsx`
+
+Atualizar o `handleSave` para incluir novos campos:
+
+```typescript
+const handleSave = (data: ProfissionalFormData) => {
+  saveProfissional(
+    {
+      id: profissionalSelecionado?.id,
+      nome: data.nome,
+      email: data.email,
+      telefone: data.telefone,
+      cpf: data.cpf,
+      regioes_atendimento: data.regioes,  // Pode ser vazio
+      capacidade_diaria: data.capacidadeDiaria,
+      ativo: data.status === 'disponivel',
+      tipoVistoriador: data.tipoVistoriador,
+      senhaProvisoria: data.senhaProvisoria,
+    },
+    // callbacks...
+  );
+};
+```
+
+---
+
+## Resumo de Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/create-user/index.ts` | Adicionar suporte para `regioes_atendimento` e `capacidade_diaria` |
+| `src/components/monitoramento/ProfissionalModal.tsx` | Adicionar tipo de vistoriador, tornar regiões opcionais |
+| `src/hooks/useEquipe.ts` | Integrar com Edge Function para criar novos profissionais |
+| `src/pages/monitoramento/Equipe.tsx` | Passar novos campos para o hook |
+| `src/pages/configuracoes/UsuarioForm.tsx` | Adicionar seção de "Configurações de Campo" para vistoriadores |
+
+---
+
+## Fluxo Final
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MONITORAMENTO → EQUIPE → NOVO PROFISSIONAL                │
+├─────────────────────────────────────────────────────────────┤
+│  [Dados Pessoais]                                           │
+│  Nome, CPF, Email, Telefone, WhatsApp                       │
+├─────────────────────────────────────────────────────────────┤
+│  [Endereço Base]                                            │
+│  CEP, Logradouro, Número, Bairro, Cidade, UF                │
+├─────────────────────────────────────────────────────────────┤
+│  [Configurações de Trabalho]                                │
+│  Tipo de Acesso *:  [ Vistoriador Campo ▼ ]                │
+│                     [ Vistoriador Base   ]                  │
+│                                                             │
+│  Regiões de atuação (opcional):                            │
+│  ☐ SP Centro  ☐ SP Zona Sul  ☐ SP Zona Norte               │
+│  ☐ ABC        ☐ Campinas     ☐ Santos                      │
+│                                                             │
+│  Capacidade diária: [10]                                    │
+├─────────────────────────────────────────────────────────────┤
+│  [Acesso ao Sistema]                                        │
+│  ☑ Criar acesso ao app mobile                              │
+│  Senha provisória: [********]                               │
+├─────────────────────────────────────────────────────────────┤
+│                          [Cancelar] [Salvar]                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Benefícios
+
+1. **Unificação**: Mesmo fluxo de criação em ambos os locais
+2. **Segurança**: Usuário criado corretamente com auth + profile + role
+3. **Flexibilidade**: Regiões opcionais para uso futuro
+4. **Acesso imediato**: Profissional criado já pode usar o App do Vistoriador
