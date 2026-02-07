@@ -165,10 +165,16 @@ export default function Cotacoes() {
 
   useEffect(() => {
     const leadParam = searchParams.get('lead');
+    const novoParam = searchParams.get('novo');
+    
     if (leadParam) {
       setLeadIdFromUrl(leadParam);
       setShowCotacaoForm(true);
       searchParams.delete('lead');
+      setSearchParams(searchParams, { replace: true });
+    } else if (novoParam === 'true') {
+      setShowCotacaoForm(true);
+      searchParams.delete('novo');
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);

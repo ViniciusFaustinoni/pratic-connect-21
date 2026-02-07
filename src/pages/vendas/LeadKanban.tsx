@@ -240,18 +240,7 @@ export default function LeadKanban() {
         handleWhatsAppClick(lead.id, lead.etapa);
         break;
       case 'cotacao':
-        navigate('/vendas/cotador', {
-          state: {
-            leadId: lead.id,
-            nome: lead.nome,
-            telefone: lead.telefone,
-            veiculo_placa: lead.veiculo_placa,
-            veiculo_marca: lead.veiculo_marca,
-            veiculo_modelo: lead.veiculo_modelo,
-            veiculo_ano: lead.veiculo_ano,
-            preencherAutomatico: true,
-          },
-        });
+        navigate(`/vendas/cotacoes?lead=${lead.id}`);
         break;
       case 'contrato':
         navigate(`/vendas/contratos?lead=${lead.id}`);
