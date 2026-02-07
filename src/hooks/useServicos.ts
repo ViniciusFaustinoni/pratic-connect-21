@@ -28,6 +28,7 @@ export type StatusServico =
   | 'aprovada_ressalvas'
   | 'em_analise'
   | 'reagendada' 
+  | 'nao_compareceu'
   | 'cancelada';
 
 export type PeriodoServico = 'manha' | 'tarde' | 'noite';
@@ -228,6 +229,7 @@ export const STATUS_SERVICO_LABELS: Record<StatusServico, string> = {
   aprovada_ressalvas: 'Aprovada c/ Ressalvas',
   em_analise: 'Em Análise',
   reagendada: 'Reagendada',
+  nao_compareceu: 'Não Compareceu',
   cancelada: 'Cancelada',
 };
 
@@ -242,6 +244,7 @@ export const STATUS_SERVICO_COLORS: Record<StatusServico, string> = {
   aprovada_ressalvas: 'bg-orange-100 text-orange-800',
   em_analise: 'bg-cyan-100 text-cyan-800',
   reagendada: 'bg-indigo-100 text-indigo-800',
+  nao_compareceu: 'bg-orange-100 text-orange-800',
   cancelada: 'bg-gray-100 text-gray-600',
 };
 
@@ -286,9 +289,9 @@ export function useServicos(filters?: ServicoFilters) {
 
       if (filters?.status) {
         if (Array.isArray(filters.status)) {
-          query = query.in('status', filters.status);
+          query = query.in('status', filters.status as any);
         } else {
-          query = query.eq('status', filters.status);
+          query = query.eq('status', filters.status as any);
         }
       }
 
@@ -607,8 +610,8 @@ export function useCriarServicoMutation() {
       const { data, error } = await supabase
         .from('servicos')
         .insert({
-          tipo: dados.tipo,
-          status: dados.status || 'agendada',
+          tipo: dados.tipo as any,
+          status: (dados.status || 'agendada') as any,
           data_agendada: dados.data_agendada,
           hora_agendada: dados.hora_agendada,
           periodo: dados.periodo || 'manha',

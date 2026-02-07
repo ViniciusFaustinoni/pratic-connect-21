@@ -68,7 +68,17 @@ export default function VistoriasManutencao() {
 
   const confirmarCancelamento = async () => {
     if (!vistoriaSelecionada) return;
-    await cancelarMutation.mutateAsync({ servicoId: vistoriaSelecionada.id });
+    
+    // Se o serviço estava com status 'nao_compareceu', cancela COM suspensão de proteção
+    const deveSuspenderProtecao = vistoriaSelecionada.status === 'nao_compareceu';
+    
+    await cancelarMutation.mutateAsync({ 
+      servicoId: vistoriaSelecionada.id,
+      motivo: deveSuspenderProtecao 
+        ? 'Cancelado após não comparecimento - proteção suspensa'
+        : undefined,
+      suspenderProtecao: deveSuspenderProtecao,
+    });
     setDialogCancelar(false);
     setVistoriaSelecionada(null);
   };
@@ -137,15 +147,28 @@ export default function VistoriasManutencao() {
       <AlertDialog open={dialogCancelar} onOpenChange={setDialogCancelar}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancelar Manutenção?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {vistoriaSelecionada?.status === 'nao_compareceu' 
+                ? 'Cancelar e Suspender Proteção?' 
+                : 'Cancelar Manutenção?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação irá cancelar a vistoria de manutenção e o rastreador voltará ao status "instalado".
+              {vistoriaSelecionada?.status === 'nao_compareceu' 
+                ? 'Esta ação irá cancelar definitivamente a manutenção e SUSPENDER as proteções (roubo, furto e colisão) conforme regulamento 5.12.'
+                : 'Esta ação irá cancelar a vistoria de manutenção e o rastreador voltará ao status "instalado".'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Não</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmarCancelamento}>
-              Sim, cancelar
+            <AlertDialogAction 
+              onClick={confirmarCancelamento}
+              className={vistoriaSelecionada?.status === 'nao_compareceu' 
+                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' 
+                : ''}
+            >
+              {vistoriaSelecionada?.status === 'nao_compareceu' 
+                ? 'Sim, suspender proteção' 
+                : 'Sim, cancelar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -214,7 +214,25 @@ export function ManutencaoTabela({
                       </>
                     )}
 
-                    {!['concluida', 'aprovada', 'cancelada'].includes(vistoria.status) && canManage && (
+                    {/* Status nao_compareceu - Permitir reagendar ou cancelar definitivamente */}
+                    {vistoria.status === 'nao_compareceu' && canManage && (
+                      <>
+                        <DropdownMenuItem onClick={() => onAgendar?.(vistoria)}>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Reagendar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => onCancelar?.(vistoria)}
+                          className="text-destructive"
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Cancelar e Suspender Proteção
+                        </DropdownMenuItem>
+                      </>
+                    )}
+
+                    {!['concluida', 'aprovada', 'cancelada', 'nao_compareceu'].includes(vistoria.status) && canManage && (
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
