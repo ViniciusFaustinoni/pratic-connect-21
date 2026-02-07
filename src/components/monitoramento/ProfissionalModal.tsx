@@ -77,6 +77,7 @@ export interface ProfissionalFormData {
   status: StatusProfissional;
   criarAcesso: boolean;
   senhaProvisoria: string;
+  tipoVistoriador: 'instalador_vistoriador' | 'vistoriador_base';
 }
 
 interface ProfissionalModalProps {
@@ -138,15 +139,13 @@ const profissionalSchema = z.object({
   bairro: z.string().min(1, 'Bairro obrigatório'),
   cidade: z.string().min(1, 'Cidade obrigatória'),
   uf: z.string().length(2, 'Estado obrigatório'),
-  regioes: z.array(z.string()).min(1, 'Selecione pelo menos uma região'),
-  capacidadeDiaria: z.coerce.number().min(1, 'Mínimo 1').max(10, 'Máximo 10'),
+  regioes: z.array(z.string()).default([]),  // Regiões agora são opcionais
+  capacidadeDiaria: z.coerce.number().min(1, 'Mínimo 1').max(20, 'Máximo 20'),
   status: z.enum(['disponivel', 'indisponivel']),
-  criarAcesso: z.boolean().default(false),
-  senhaProvisoria: z.string().optional().default(''),
-}).refine(
-  data => !data.criarAcesso || (data.criarAcesso && data.senhaProvisoria && data.senhaProvisoria.length >= 6),
-  { message: 'Senha deve ter pelo menos 6 caracteres', path: ['senhaProvisoria'] }
-);
+  criarAcesso: z.boolean().default(true),
+  senhaProvisoria: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+  tipoVistoriador: z.enum(['instalador_vistoriador', 'vistoriador_base']),
+});
 
 type FormSchema = z.infer<typeof profissionalSchema>;
 
@@ -171,10 +170,11 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
     cidade: '',
     uf: '',
     regioes: [],
-    capacidadeDiaria: 5,
+    capacidadeDiaria: 10,
     status: 'disponivel',
-    criarAcesso: false,
+    criarAcesso: true,
     senhaProvisoria: '',
+    tipoVistoriador: 'instalador_vistoriador',
   };
 
   const form = useForm<FormSchema>({
@@ -184,6 +184,7 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
 
   const criarAcesso = form.watch('criarAcesso');
   const regioesValue = form.watch('regioes');
+  const tipoVistoriador = form.watch('tipoVistoriador');
 
   // Resetar form quando modal abre/fecha ou profissional muda
   useEffect(() => {
@@ -202,10 +203,11 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
           cidade: profissional.cidade || '',
           uf: profissional.uf || '',
           regioes: profissional.regioes || [],
-          capacidadeDiaria: profissional.capacidadeDiaria || 5,
+          capacidadeDiaria: profissional.capacidadeDiaria || 10,
           status: profissional.status || 'disponivel',
-          criarAcesso: false,
+          criarAcesso: false,  // Ao editar, não recriar acesso
           senhaProvisoria: '',
+          tipoVistoriador: 'instalador_vistoriador',  // Default ao editar
         });
       } else {
         form.reset(defaultValues);
@@ -454,6 +456,38 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                 Configurações de Trabalho
               </h3>
+
+              {/* Tipo de Vistoriador - apenas para novos profissionais */}
+              {!isEditing && (
+                <FormField
+                  control={form.control}
+                  name="tipoVistoriador"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Acesso *</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="instalador_vistoriador">
+                            Vistoriador de Campo (rota)
+                          </SelectItem>
+                          <SelectItem value="vistoriador_base">
+                            Vistoriador de Base
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Define qual interface o profissional terá acesso no app
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               
               {/* Regiões de atuação */}
               <FormField
@@ -461,7 +495,10 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                 name="regioes"
                 render={() => (
                   <FormItem>
-                    <FormLabel>Regiões de atuação *</FormLabel>
+                    <FormLabel>Regiões de atuação (opcional)</FormLabel>
+                    <FormDescription className="text-xs">
+                      Deixe em branco para atender todas as regiões
+                    </FormDescription>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
                       {REGIOES_ATENDIMENTO.map((regiao) => (
                         <div
@@ -504,7 +541,7 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                         />
                       </FormControl>
                       <FormDescription>
-                        Quantidade máxima de tarefas por dia (1-10)
+                        Quantidade máxima de tarefas por dia (1-20)
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -535,39 +572,25 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
               </div>
             </div>
 
-            {/* Seção: Acesso ao Sistema */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Acesso ao Sistema
-              </h3>
-              
-              <FormField
-                control={form.control}
-                name="criarAcesso"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className="cursor-pointer">
-                        Criar acesso ao app mobile
-                      </FormLabel>
-                    </div>
-                  </FormItem>
-                )}
-              />
+            {/* Seção: Acesso ao Sistema - apenas para novos profissionais */}
+            {!isEditing && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  Acesso ao Sistema
+                </h3>
 
-              {criarAcesso && (
+                <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    O profissional será criado com acesso ao App do Vistoriador usando o email e senha informados.
+                  </p>
+                </div>
+                
                 <FormField
                   control={form.control}
                   name="senhaProvisoria"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Senha provisória *</FormLabel>
+                      <FormLabel>Senha de acesso *</FormLabel>
                       <FormControl>
                         <Input 
                           type="password" 
@@ -576,14 +599,14 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                         />
                       </FormControl>
                       <FormDescription>
-                        O profissional receberá as credenciais por email
+                        Senha inicial para acesso ao aplicativo
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              )}
-            </div>
+              </div>
+            )}
 
             <DialogFooter className="gap-2 sm:gap-0">
               <Button

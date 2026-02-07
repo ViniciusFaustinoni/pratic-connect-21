@@ -215,15 +215,19 @@ export function useSaveProfissional() {
       regioes_atendimento?: string[];
       capacidade_diaria?: number;
       ativo?: boolean;
+      tipoVistoriador?: 'instalador_vistoriador' | 'vistoriador_base';
+      senhaProvisoria?: string;
     }) => {
       if (data.id) {
-        // Atualizar profile existente (apenas campos que existem)
+        // ATUALIZAR profile existente
         const { error } = await supabase
           .from('profiles')
           .update({
             nome: data.nome,
             telefone: data.telefone,
             cpf: data.cpf,
+            regioes_atendimento: data.regioes_atendimento,
+            capacidade_diaria: data.capacidade_diaria,
             ativo: data.ativo,
           })
           .eq('id', data.id);
@@ -231,8 +235,25 @@ export function useSaveProfissional() {
         if (error) throw error;
         return { success: true, updated: true };
       } else {
-        // Para criar novo, precisaria criar usuário via auth.users primeiro
-        throw new Error('Para criar novos profissionais, utilize o cadastro de usuários.');
+        // CRIAR novo usuário via Edge Function
+        const { data: result, error } = await supabase.functions.invoke('create-user', {
+          body: {
+            nome: data.nome,
+            email: data.email,
+            telefone: data.telefone,
+            cpf: data.cpf,
+            senha: data.senhaProvisoria,
+            tipo: 'prestador',  // Prestador = profissional externo
+            perfis: [data.tipoVistoriador || 'instalador_vistoriador'],
+            regioes_atendimento: data.regioes_atendimento,
+            capacidade_diaria: data.capacidade_diaria,
+          }
+        });
+
+        if (error) throw error;
+        if (result?.error) throw new Error(result.error);
+        
+        return { success: true, created: true };
       }
     },
     onSuccess: () => {
