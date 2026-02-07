@@ -1,206 +1,146 @@
 
-# Plano: Permitir Reagendamento Após "Associado Ausente"
+# Plano: Implementar Dialog "Ver Detalhes" do Rastreador
 
-## Problema Atual
+## Problema
 
-Quando o vistoriador marca "Associado Ausente":
-- O hook `useMarcarNaoCompareceu` define `status: 'cancelada'`
-- O serviço desaparece da lista de manutenções pendentes
-- O coordenador/diretor não consegue reagendar porque o serviço está "cancelado"
+Na lista de rastreadores (`ListaRastreadores.tsx`), o botão "Ver Detalhes" no menu dropdown não funciona porque:
+
+1. O estado `dialogDetalhes` é definido na linha 109
+2. O clique define o ID do rastreador: `setDialogDetalhes(item.id)` (linha 436)
+3. **Não existe nenhum componente Dialog que usa esse estado**
 
 ## Solução
 
-Criar um novo status intermediário `nao_compareceu` que:
-1. Indica claramente que o associado não estava presente
-2. Permite ao coordenador/diretor visualizar e reagendar
-3. Mantém a opção de cancelar definitivamente se necessário
+Criar um componente `DetalhesRastreadorDialog` que será reutilizável e exibirá informações completas do rastreador.
 
 ---
 
-## Alterações Necessárias
+## Alterações
 
-### 1. Adicionar Novo Status `nao_compareceu`
+### 1. Criar novo componente `DetalhesRastreadorDialog.tsx`
 
-**Arquivo:** `src/hooks/useServicos.ts`
+**Arquivo:** `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx`
 
-Adicionar o novo status no tipo e nos labels:
+Criar um dialog que mostra:
+- Status atual com badge colorido
+- Informações básicas (código, IMEI, número de série)
+- Plataforma e ID na plataforma
+- Dados do chip (ICCID, operadora)
+- Veículo vinculado (se instalado)
+- Associado (se aplicável)
+- Portador atual (se em estoque)
+- Data de entrada
+- Última comunicação
+- Histórico de movimentações (últimas 10)
 
-```typescript
-export type StatusServico = 
-  | 'pendente' 
-  | 'agendada' 
-  | 'em_rota' 
-  | 'em_andamento'
-  | 'concluida' 
-  | 'aprovada' 
-  | 'reprovada'
-  | 'aprovada_ressalvas'
-  | 'em_analise'
-  | 'reagendada' 
-  | 'nao_compareceu'  // NOVO
-  | 'cancelada';
+Estrutura do componente:
+```tsx
+interface DetalhesRastreadorDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  rastreadorId: string | null;
+}
 
-export const STATUS_SERVICO_LABELS: Record<StatusServico, string> = {
-  // ... existentes
-  nao_compareceu: 'Não Compareceu',
-};
-
-export const STATUS_SERVICO_COLORS: Record<StatusServico, string> = {
-  // ... existentes
-  nao_compareceu: 'bg-orange-100 text-orange-800',
-};
-```
-
-### 2. Atualizar Hook `useMarcarNaoCompareceu`
-
-**Arquivo:** `src/hooks/useVistoriaManutencao.ts`
-
-Alterar para usar o novo status ao invés de `cancelada`:
-
-```typescript
-export function useMarcarNaoCompareceu() {
-  return useMutation({
-    mutationFn: async (params: MarcarNaoCompareceuParams) => {
-      const { error } = await supabase
-        .from('servicos')
-        .update({
-          status: 'nao_compareceu',  // Era 'cancelada'
-          observacoes_analise: params.observacao || 'Associado não compareceu',
-          updated_at: new Date().toISOString(),
-          // NÃO suspender proteção ainda - coordenador decide
-        })
-        .eq('id', params.servicoId);
-      // ...
-    }
+export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: Props) {
+  // Query para buscar dados do rastreador
+  const { data: rastreador, isLoading } = useQuery({
+    queryKey: ['rastreador-detalhes', rastreadorId],
+    queryFn: async () => {
+      // Buscar rastreador com veículo, associado e portador
+    },
+    enabled: !!rastreadorId && open,
   });
+
+  // Query para buscar histórico
+  const { data: historico } = useQuery({...});
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+        <DialogHeader>
+          <DialogTitle>Detalhes do Rastreador</DialogTitle>
+        </DialogHeader>
+        
+        {/* Status Card */}
+        {/* Grid de informações */}
+        {/* Histórico de movimentações */}
+      </DialogContent>
+    </Dialog>
+  );
 }
 ```
 
-### 3. Atualizar Tabela de Manutenções para Mostrar "Não Compareceu"
+### 2. Atualizar `ListaRastreadores.tsx`
 
-**Arquivo:** `src/components/monitoramento/manutencao/ManutencaoTabela.tsx`
+Adicionar o novo dialog ao final do componente:
 
-Adicionar botão de reagendar para itens com `status === 'nao_compareceu'`:
+```tsx
+// Importar o novo componente
+import { DetalhesRastreadorDialog } from './DetalhesRastreadorDialog';
 
-```typescript
-{/* Status nao_compareceu - Permitir reagendar ou cancelar */}
-{vistoria.status === 'nao_compareceu' && canManage && (
-  <>
-    <DropdownMenuItem onClick={() => onAgendar?.(vistoria)}>
-      <RefreshCw className="h-4 w-4 mr-2" />
-      Reagendar
-    </DropdownMenuItem>
-    <DropdownMenuSeparator />
-    <DropdownMenuItem 
-      onClick={() => onCancelar?.(vistoria)}
-      className="text-destructive"
-    >
-      <XCircle className="h-4 w-4 mr-2" />
-      Cancelar e Suspender Proteção
-    </DropdownMenuItem>
-  </>
-)}
-```
-
-### 4. Atualizar Consulta de Manutenções
-
-**Arquivo:** `src/hooks/useVistoriaManutencao.ts`
-
-Incluir `nao_compareceu` nos filtros padrão para que apareçam na lista:
-
-```typescript
-// Na query useVistoriasManutencao
-.in('status', ['pendente', 'agendada', 'em_rota', 'em_andamento', 'nao_compareceu', ...])
-```
-
-### 5. Atualizar Métricas
-
-**Arquivo:** `src/hooks/useVistoriaManutencao.ts`
-
-Contar `nao_compareceu` na métrica existente:
-
-```typescript
-naoCompareceu: data?.filter(v => v.status === 'nao_compareceu').length || 0,
-```
-
-### 6. Atualizar Modal de Agendar para Aceitar Reagendamento
-
-**Arquivo:** `src/components/monitoramento/manutencao/AgendarManutencaoModal.tsx`
-
-Permitir agendar também para status `nao_compareceu`:
-
-```typescript
-// O modal já está preparado - apenas garantir que aceita o status
+// No final do componente, antes de fechar o div principal:
+<DetalhesRastreadorDialog
+  open={!!dialogDetalhes}
+  onOpenChange={() => setDialogDetalhes(null)}
+  rastreadorId={dialogDetalhes}
+/>
 ```
 
 ---
 
-## Fluxo Atualizado
+## Conteúdo do Dialog
+
+O dialog exibirá em formato organizado:
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                      VISTORIADOR (Campo)                      │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  [Concluir Manutenção]     [Associado Ausente]               │
-│         │                          │                         │
-│         ▼                          ▼                         │
-│   Modal de Resultado      status = 'nao_compareceu'          │
-│   (Resolvido/Subst/etc)                                      │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌──────────────────────────────────────────────────────────────┐
-│               COORDENADOR/DIRETOR (Painel Admin)             │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Tabela de Manutenções:                                      │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │ Protocolo │ Cliente │ Status           │ Ações      │    │
-│  ├──────────────────────────────────────────────────────┤    │
-│  │ MAN-001   │ João    │ [Não Compareceu] │ [⋮]        │    │
-│  │           │         │                  │ ↳ Reagendar│    │
-│  │           │         │                  │ ↳ Cancelar │    │
-│  └──────────────────────────────────────────────────────┘    │
-│                                                              │
-│  Ao clicar "Reagendar":                                      │
-│    → Abre AgendarManutencaoModal                             │
-│    → Seleciona nova data/período/técnico                     │
-│    → status volta para 'agendada'                            │
-│                                                              │
-│  Ao clicar "Cancelar e Suspender":                           │
-│    → status = 'cancelada'                                    │
-│    → protecao_suspensa = true                                │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  Detalhes do Rastreador                               [X]  │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │ 📦 RAT-86266708340368                              │    │
+│  │ [Estoque]  [Softruck]                              │    │
+│  │ Portador: Técnico 1                                │    │
+│  └────────────────────────────────────────────────────┘    │
+│                                                            │
+│  Informações Técnicas                                      │
+│  ┌──────────────────────┬─────────────────────────────┐    │
+│  │ IMEI                 │ 86266708340368              │    │
+│  │ Número de Série      │ ABC123456                   │    │
+│  │ Plataforma           │ Softruck                    │    │
+│  │ ID Plataforma        │ STK-12345                   │    │
+│  │ ICCID do Chip        │ 8955...                     │    │
+│  │ Operadora            │ Vivo                        │    │
+│  │ Entrada              │ 02/02/2026                  │    │
+│  │ Última Comunicação   │ 07/02/2026 15:30            │    │
+│  └──────────────────────┴─────────────────────────────┘    │
+│                                                            │
+│  Histórico de Movimentações                                │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │ • entrada_estoque                                  │    │
+│  │   02/02/2026 10:00 • Admin                         │    │
+│  │   NF: 12345                                        │    │
+│  └────────────────────────────────────────────────────┘    │
+│                                                            │
+│                                            [Fechar]        │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Destaque Visual
+## Arquivos a Criar/Modificar
 
-O status "Não Compareceu" terá destaque especial na tabela:
-- Badge laranja chamativo
-- Ícone de alerta
-- Linha destacada (similar ao atual para proteção suspensa)
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useServicos.ts` | Adicionar tipo e labels para `nao_compareceu` |
-| `src/hooks/useVistoriaManutencao.ts` | Atualizar `useMarcarNaoCompareceu` e queries |
-| `src/components/monitoramento/manutencao/ManutencaoTabela.tsx` | Adicionar botão Reagendar para status `nao_compareceu` |
-| `src/types/vistoriaManutencao.ts` | Atualizar métricas se necessário |
+| Arquivo | Ação |
+|---------|------|
+| `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx` | Criar |
+| `src/components/monitoramento/estoque/ListaRastreadores.tsx` | Adicionar import e uso do dialog |
 
 ---
 
 ## Resultado Esperado
 
-1. Vistoriador marca "Associado Ausente" → serviço vai para `nao_compareceu`
-2. Coordenador/Diretor vê na lista com badge laranja
-3. Pode clicar em "Reagendar" → abre modal para nova data
-4. Ou clicar em "Cancelar e Suspender" → finaliza com proteção suspensa
+1. Clicar em "Ver Detalhes" abre o dialog com informações completas
+2. Mostra status com ícone e cor correspondente
+3. Exibe informações técnicas organizadas em grid
+4. Histórico de movimentações com timeline visual
+5. Botão de fechar funcional
