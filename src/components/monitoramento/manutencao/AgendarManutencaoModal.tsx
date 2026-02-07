@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { format, addDays } from 'date-fns';
+import { useState, useEffect, useMemo } from 'react';
+import { format, addDays, isSunday, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Dialog,
@@ -22,14 +22,23 @@ import {
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Loader2, CalendarIcon, MapPin, User, Car, MessageCircle } from 'lucide-react';
+import { Loader2, CalendarIcon, MapPin, User, Car, MessageCircle, Puzzle, Sun, Sunset } from 'lucide-react';
 import { useAgendarVistoriaManutencao } from '@/hooks/useVistoriaManutencao';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
+import { useVagasPeriodo, temVagasDisponiveis } from '@/hooks/useVagasPeriodo';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   LOCAL_TIPO_OPTIONS,
   type VistoriaManutencao,
   type LocalTipoManutencao,
 } from '@/types/vistoriaManutencao';
+import {
+  PERIODOS_DISPONIVEIS,
+  LIMITE_VAGAS_POR_PERIODO,
+  getPeriodosDisponivelsPorHora,
+  type Periodo,
+  type PeriodoConfig,
+} from '@/data/autovistoriaConfig';
 import { cn } from '@/lib/utils';
 
 interface AgendarManutencaoModalProps {
@@ -43,45 +52,81 @@ export function AgendarManutencaoModal({
   onOpenChange,
   vistoria,
 }: AgendarManutencaoModalProps) {
-  const [dataAgendada, setDataAgendada] = useState<Date | undefined>(addDays(new Date(), 1));
-  const [periodo, setPeriodo] = useState<'manha' | 'tarde'>('manha');
+  const [dataAgendada, setDataAgendada] = useState<Date | undefined>(undefined);
+  const [periodo, setPeriodo] = useState<Periodo | ''>('');
   const [localTipo, setLocalTipo] = useState<LocalTipoManutencao>('base');
   const [localEndereco, setLocalEndereco] = useState('');
   const [profissionalId, setProfissionalId] = useState('');
   const [notificarWhatsApp, setNotificarWhatsApp] = useState(true);
+  const [permiteEncaixe, setPermiteEncaixe] = useState(false);
 
   const { data: equipe, isLoading: loadingEquipe } = useProfissionaisEquipe();
   const agendarMutation = useAgendarVistoriaManutencao();
+  
+  // Permissões para encaixe
+  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
+  const podeHabilitarEncaixe = isDiretor || isCoordenadorMonitoramento;
+
+  // Configuração de datas - hoje + próximos 2 dias (excluindo domingos)
+  const dataMinima = startOfDay(new Date());
+  const dataMaxima = addDays(dataMinima, 2);
+  
+  const diasDesabilitados = (date: Date) => {
+    const start = startOfDay(date);
+    return isSunday(start) || start < dataMinima || start > dataMaxima;
+  };
+
+  // Verificação de vagas para a data selecionada
+  const dataFormatada = dataAgendada ? format(dataAgendada, 'yyyy-MM-dd') : null;
+  const { data: vagasData, isLoading: isLoadingVagas } = useVagasPeriodo(dataFormatada);
+
+  // Períodos disponíveis baseados na data selecionada
+  const periodosDisponiveis = useMemo((): PeriodoConfig[] => {
+    if (!dataAgendada) return PERIODOS_DISPONIVEIS;
+    return getPeriodosDisponivelsPorHora(dataAgendada);
+  }, [dataAgendada]);
 
   // Limpar ao fechar
   useEffect(() => {
     if (!open) {
-      setDataAgendada(addDays(new Date(), 1));
-      setPeriodo('manha');
+      setDataAgendada(undefined);
+      setPeriodo('');
       setLocalTipo('base');
       setLocalEndereco('');
       setProfissionalId('');
       setNotificarWhatsApp(true);
+      setPermiteEncaixe(false);
     }
   }, [open]);
 
+  // Resetar período quando data muda (período pode não estar mais disponível)
+  useEffect(() => {
+    if (dataAgendada && periodo) {
+      const periodoAindaDisponivel = periodosDisponiveis.some(p => p.id === periodo);
+      if (!periodoAindaDisponivel) {
+        setPeriodo('');
+      }
+    }
+  }, [dataAgendada, periodo, periodosDisponiveis]);
+
   const handleSubmit = async () => {
-    if (!vistoria || !dataAgendada || !profissionalId) return;
+    if (!vistoria || !dataAgendada || !profissionalId || !periodo) return;
 
     await agendarMutation.mutateAsync({
       servicoId: vistoria.id,
       dataAgendada: format(dataAgendada, 'yyyy-MM-dd'),
-      periodo,
+      periodo: periodo as Periodo,
       localTipo,
       localEndereco: localTipo === 'rota' ? localEndereco : undefined,
       profissionalId,
       notificarWhatsApp,
+      permiteEncaixe,
     });
 
     onOpenChange(false);
   };
 
-  const isValid = dataAgendada && profissionalId && (localTipo !== 'rota' || localEndereco);
+  const isValid = dataAgendada && periodo && profissionalId && (localTipo !== 'rota' || localEndereco);
 
   // Profissionais disponíveis (já filtrados pelo hook)
   const profissionais = equipe || [];
@@ -129,35 +174,79 @@ export function AgendarManutencaoModal({
                   {dataAgendada ? format(dataAgendada, 'PPP', { locale: ptBR }) : 'Selecione a data'}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
                 <Calendar
                   mode="single"
                   selected={dataAgendada}
                   onSelect={setDataAgendada}
-                  disabled={(date) => date < new Date()}
+                  disabled={diasDesabilitados}
                   locale={ptBR}
+                  className="pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
           </div>
 
-          {/* Período */}
+          {/* Período com vagas */}
           <div className="space-y-2">
             <Label>Período *</Label>
-            <RadioGroup
-              value={periodo}
-              onValueChange={(v) => setPeriodo(v as 'manha' | 'tarde')}
-              className="flex gap-4"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="manha" id="manha" />
-                <Label htmlFor="manha" className="font-normal cursor-pointer">Manhã</Label>
+            {!dataAgendada ? (
+              <p className="text-sm text-muted-foreground">
+                Selecione uma data para ver os períodos disponíveis
+              </p>
+            ) : isLoadingVagas ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Verificando vagas...</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="tarde" id="tarde" />
-                <Label htmlFor="tarde" className="font-normal cursor-pointer">Tarde</Label>
+            ) : periodosDisponiveis.length === 0 ? (
+              <p className="text-sm text-destructive">
+                Nenhum período disponível para esta data
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {periodosDisponiveis.map((p) => {
+                  const vagasRestantes = vagasData?.[p.id] ?? LIMITE_VAGAS_POR_PERIODO;
+                  const semVagas = vagasRestantes === 0;
+                  const isSelected = periodo === p.id;
+
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => !semVagas && setPeriodo(p.id)}
+                      disabled={semVagas}
+                      className={cn(
+                        'flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all',
+                        isSelected
+                          ? 'border-primary bg-primary/10'
+                          : semVagas
+                          ? 'border-muted bg-muted/50 opacity-50 cursor-not-allowed'
+                          : 'border-muted hover:border-primary/50 cursor-pointer'
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        {p.id === 'manha' ? (
+                          <Sun className="h-4 w-4 text-amber-500" />
+                        ) : (
+                          <Sunset className="h-4 w-4 text-orange-500" />
+                        )}
+                        <span className="font-medium">{p.label}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {p.horarioInicio} - {p.horarioFim}
+                      </span>
+                      <span className={cn(
+                        'text-xs font-medium',
+                        semVagas ? 'text-destructive' : vagasRestantes <= 3 ? 'text-amber-600' : 'text-emerald-600'
+                      )}>
+                        {semVagas ? 'Sem vagas' : `${vagasRestantes} vaga${vagasRestantes !== 1 ? 's' : ''}`}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-            </RadioGroup>
+            )}
           </div>
 
           {/* Tipo de local */}
@@ -251,6 +340,21 @@ export function AgendarManutencaoModal({
               Contatar associado via WhatsApp
             </Label>
           </div>
+
+          {/* Permitir encaixe - apenas para Diretor/Coordenador */}
+          {podeHabilitarEncaixe && (
+            <div className="flex items-center space-x-2 p-3 rounded-md bg-primary/5 border border-primary/20">
+              <Checkbox
+                id="encaixe"
+                checked={permiteEncaixe}
+                onCheckedChange={(checked) => setPermiteEncaixe(checked === true)}
+              />
+              <Label htmlFor="encaixe" className="font-normal cursor-pointer flex items-center gap-1">
+                <Puzzle className="h-4 w-4 text-primary" />
+                Permitir encaixe de horário
+              </Label>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

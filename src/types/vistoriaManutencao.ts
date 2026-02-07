@@ -277,6 +277,7 @@ export interface AgendarManutencaoParams {
   localEndereco?: string;
   profissionalId: string;
   notificarWhatsApp?: boolean;
+  permiteEncaixe?: boolean;
 }
 
 /**
