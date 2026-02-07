@@ -258,18 +258,6 @@ function QuickActions() {
       url: '/vendas/leads?novo=true',
       primary: false 
     },
-    { 
-      label: 'Agendar', 
-      emoji: '🔧', 
-      url: '/monitoramento/instalacoes?agendar=true',
-      primary: false 
-    },
-    { 
-      label: 'Documentos', 
-      emoji: '📄', 
-      url: '/cadastro/documentos',
-      primary: false 
-    },
   ];
 
   return (
