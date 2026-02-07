@@ -3744,7 +3744,7 @@ export type Database = {
       }
       chamados_assistencia: {
         Row: {
-          associado_id: string
+          associado_id: string | null
           atendente_id: string | null
           avaliacao_comentario: string | null
           avaliacao_data: string | null
@@ -3787,7 +3787,7 @@ export type Database = {
           veiculo_id: string | null
         }
         Insert: {
-          associado_id: string
+          associado_id?: string | null
           atendente_id?: string | null
           avaliacao_comentario?: string | null
           avaliacao_data?: string | null
@@ -3830,7 +3830,7 @@ export type Database = {
           veiculo_id?: string | null
         }
         Update: {
-          associado_id?: string
+          associado_id?: string | null
           atendente_id?: string | null
           avaliacao_comentario?: string | null
           avaliacao_data?: string | null
