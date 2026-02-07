@@ -63,6 +63,7 @@ import { usePlataformasOptions, usePlataformasLabels } from '@/hooks/usePlatafor
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { AtribuirPortadorDialog } from './AtribuirPortadorDialog';
 import { EnviarManutencaoModal } from './EnviarManutencaoModal';
+import { DetalhesRastreadorDialog } from './DetalhesRastreadorDialog';
 
 interface RastreadorListItem {
   id: string;
@@ -555,6 +556,13 @@ export function ListaRastreadores() {
         open={!!dialogManutencao}
         onOpenChange={() => setDialogManutencao(null)}
         rastreador={dialogManutencao}
+      />
+
+      {/* Dialog de Detalhes */}
+      <DetalhesRastreadorDialog
+        open={!!dialogDetalhes}
+        onOpenChange={() => setDialogDetalhes(null)}
+        rastreadorId={dialogDetalhes}
       />
     </div>
   );
