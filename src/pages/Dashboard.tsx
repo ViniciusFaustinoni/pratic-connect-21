@@ -289,7 +289,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const { isAnalistaCadastroOnly, isCoordenadorMonitoramentoOnly, isInstaladorVistoriador, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
+  const { isAnalistaCadastroOnly, isCoordenadorMonitoramentoOnly, isCoordenadorMonitoramento, isInstaladorVistoriador, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
 
   // Verificar se é APENAS instalador/vistoriador (sem perfis de gerência ou admin)
   const isInstaladorVistoriadorOnly = isInstaladorVistoriador && 
@@ -527,57 +527,8 @@ export default function Dashboard() {
           )}
 
 
-          {/* DOCUMENTOS PENDENTES - Oculto para vendedor */}
-          {!isVendedorOnly && (
-            <Card className="border-border bg-card">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-                    <Clock className="h-5 w-5 text-warning" />
-                    Documentos Pendentes
-                  </CardTitle>
-                  <Badge variant="secondary" className="bg-muted text-muted-foreground">{docsContagem?.pendente || 0}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {docsLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full bg-muted" />)}
-                  </div>
-                ) : !pendingDocs || pendingDocs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-6 text-center">
-                    <CheckCircle className="h-8 w-8 text-success" />
-                    <p className="mt-2 text-sm text-muted-foreground">Nenhum documento pendente</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {pendingDocs.slice(0, 3).map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-sm text-foreground">{doc.associados?.nome || 'Desconhecido'}</p>
-                          <p className="text-xs text-muted-foreground">{doc.tipo}</p>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {formatTime(doc.created_at)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Button 
-                  variant="ghost" 
-                  className="w-full mt-3 hover:bg-card-hover" 
-                  size="sm"
-                  onClick={() => navigate('/cadastro/documentos')}
-                >
-                  Ver todos <ArrowRight className="ml-1 h-4 w-4" />
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* INSTALAÇÕES HOJE - Oculto para vendedor */}
-          {!isVendedorOnly && (
+          {/* INSTALAÇÕES HOJE - Apenas coordenador e vistoriadores */}
+          {(isCoordenadorMonitoramento || isInstaladorVistoriador || isVistoriadorBase) && (
             <Card className="border-border bg-card">
               <CardHeader>
                 <div className="flex items-center justify-between">
