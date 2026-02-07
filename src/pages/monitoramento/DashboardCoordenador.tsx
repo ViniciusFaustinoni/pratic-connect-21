@@ -13,9 +13,10 @@ import {
   Users,
   Navigation,
   Timer,
-  Radio
+  Radio,
+  BarChart3
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -36,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useVistoriasMetricas } from '@/hooks/useVistorias';
 import { useInstalacoesContagem } from '@/hooks/useInstalacoes';
 import { 
@@ -45,6 +47,7 @@ import {
 } from '@/hooks/useDashboardCoordenador';
 import { useMetricasTempo } from '@/hooks/useMetricasTempo';
 import { useRastreadoresPorPortador } from '@/hooks/useRastreadoresPorPortador';
+import { usePerformanceSemanalCoordenador } from '@/hooks/usePerformanceSemanalCoordenador';
 import { AgendamentosBase } from '@/components/monitoramento/AgendamentosBase';
 import { cn } from '@/lib/utils';
 
@@ -68,6 +71,7 @@ export default function DashboardCoordenador() {
     profissionalId: filtroProfissional !== 'todos' ? filtroProfissional : undefined,
   });
   const { data: rastreadoresPortador, isLoading: loadingRastreadoresPortador } = useRastreadoresPorPortador();
+  const { data: performanceSemanal, isLoading: loadingPerformance } = usePerformanceSemanalCoordenador();
 
   const isLoading = loadingVistorias || loadingInstalacoes || loadingRotas;
 
@@ -360,6 +364,61 @@ export default function DashboardCoordenador() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Gráfico Performance Semanal */}
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            Performance Semanal
+          </CardTitle>
+          <CardDescription>
+            Vistorias e instalações realizadas nos últimos 7 dias
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingPerformance ? (
+            <Skeleton className="h-[250px] w-full" />
+          ) : (
+            <div className="h-[250px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={performanceSemanal || []}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis 
+                    dataKey="dia" 
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} 
+                  />
+                  <YAxis 
+                    allowDecimals={false} 
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} 
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px'
+                    }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
+                  <Legend />
+                  <Bar 
+                    dataKey="vistorias" 
+                    fill="hsl(var(--primary))" 
+                    name="Vistorias" 
+                    radius={[4, 4, 0, 0]} 
+                  />
+                  <Bar 
+                    dataKey="instalacoes" 
+                    fill="hsl(142.1 76.2% 36.3%)" 
+                    name="Instalações" 
+                    radius={[4, 4, 0, 0]} 
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Agendamentos na Base */}
       <AgendamentosBase />
