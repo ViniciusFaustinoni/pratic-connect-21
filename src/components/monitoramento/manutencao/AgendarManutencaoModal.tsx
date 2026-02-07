@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Loader2, CalendarIcon, MapPin, User, Car, MessageCircle, Puzzle, Sun, Sunset } from 'lucide-react';
+import { Loader2, CalendarIcon, User, Car, MessageCircle, Puzzle, Sun, Sunset, Home, Edit } from 'lucide-react';
 import { useAgendarVistoriaManutencao } from '@/hooks/useVistoriaManutencao';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { useVagasPeriodo, temVagasDisponiveis } from '@/hooks/useVagasPeriodo';
@@ -40,6 +40,7 @@ import {
   type PeriodoConfig,
 } from '@/data/autovistoriaConfig';
 import { cn } from '@/lib/utils';
+import { buscarCep } from '@/lib/cep';
 
 interface AgendarManutencaoModalProps {
   open: boolean;
@@ -55,10 +56,19 @@ export function AgendarManutencaoModal({
   const [dataAgendada, setDataAgendada] = useState<Date | undefined>(undefined);
   const [periodo, setPeriodo] = useState<Periodo | ''>('');
   const [localTipo, setLocalTipo] = useState<LocalTipoManutencao>('base');
-  const [localEndereco, setLocalEndereco] = useState('');
   const [profissionalId, setProfissionalId] = useState('');
   const [notificarWhatsApp, setNotificarWhatsApp] = useState(true);
   const [permiteEncaixe, setPermiteEncaixe] = useState(false);
+
+  // Estados para endereço
+  const [tipoEndereco, setTipoEndereco] = useState<'cadastrado' | 'outro'>('cadastrado');
+  const [cep, setCep] = useState('');
+  const [logradouro, setLogradouro] = useState('');
+  const [numero, setNumero] = useState('');
+  const [bairro, setBairro] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [uf, setUf] = useState('');
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const { data: equipe, isLoading: loadingEquipe } = useProfissionaisEquipe();
   const agendarMutation = useAgendarVistoriaManutencao();
@@ -86,16 +96,53 @@ export function AgendarManutencaoModal({
     return getPeriodosDisponivelsPorHora(dataAgendada);
   }, [dataAgendada]);
 
+  // Endereço cadastrado do associado
+  const enderecoCadastrado = vistoria?.logradouro
+    ? `${vistoria.logradouro}, ${vistoria.numero || 'S/N'} - ${vistoria.bairro}, ${vistoria.cidade}/${vistoria.uf}`
+    : null;
+  const temEnderecoCadastrado = !!vistoria?.logradouro;
+
+  // Função para buscar CEP
+  const handleCepChange = async (value: string) => {
+    const cepLimpo = value.replace(/\D/g, '');
+    // Formatar com máscara
+    if (cepLimpo.length <= 5) {
+      setCep(cepLimpo);
+    } else {
+      setCep(`${cepLimpo.slice(0, 5)}-${cepLimpo.slice(5, 8)}`);
+    }
+    
+    // Buscar quando completar 8 dígitos
+    if (cepLimpo.length === 8) {
+      setBuscandoCep(true);
+      const endereco = await buscarCep(cepLimpo);
+      if (endereco) {
+        setLogradouro(endereco.logradouro);
+        setBairro(endereco.bairro);
+        setCidade(endereco.cidade);
+        setUf(endereco.uf);
+      }
+      setBuscandoCep(false);
+    }
+  };
+
   // Limpar ao fechar
   useEffect(() => {
     if (!open) {
       setDataAgendada(undefined);
       setPeriodo('');
       setLocalTipo('base');
-      setLocalEndereco('');
       setProfissionalId('');
       setNotificarWhatsApp(true);
       setPermiteEncaixe(false);
+      // Resetar estados de endereço
+      setTipoEndereco('cadastrado');
+      setCep('');
+      setLogradouro('');
+      setNumero('');
+      setBairro('');
+      setCidade('');
+      setUf('');
     }
   }, [open]);
 
@@ -112,12 +159,22 @@ export function AgendarManutencaoModal({
   const handleSubmit = async () => {
     if (!vistoria || !dataAgendada || !profissionalId || !periodo) return;
 
+    // Montar endereço final
+    let enderecoFinal = '';
+    if (localTipo === 'rota') {
+      if (tipoEndereco === 'cadastrado') {
+        enderecoFinal = enderecoCadastrado || '';
+      } else {
+        enderecoFinal = `${logradouro}, ${numero} - ${bairro}, ${cidade}/${uf}`;
+      }
+    }
+
     await agendarMutation.mutateAsync({
       servicoId: vistoria.id,
       dataAgendada: format(dataAgendada, 'yyyy-MM-dd'),
       periodo: periodo as Periodo,
       localTipo,
-      localEndereco: localTipo === 'rota' ? localEndereco : undefined,
+      localEndereco: localTipo === 'rota' ? enderecoFinal : undefined,
       profissionalId,
       notificarWhatsApp,
       permiteEncaixe,
@@ -126,7 +183,14 @@ export function AgendarManutencaoModal({
     onOpenChange(false);
   };
 
-  const isValid = dataAgendada && periodo && profissionalId && (localTipo !== 'rota' || localEndereco);
+  // Validação de endereço
+  const enderecoValido = localTipo !== 'rota' || (
+    tipoEndereco === 'cadastrado' 
+      ? temEnderecoCadastrado 
+      : (cep.replace(/\D/g, '').length === 8 && logradouro && numero)
+  );
+
+  const isValid = dataAgendada && periodo && profissionalId && enderecoValido;
 
   // Profissionais disponíveis (já filtrados pelo hook)
   const profissionais = equipe || [];
@@ -275,27 +339,94 @@ export function AgendarManutencaoModal({
 
           {/* Endereço (se rota) */}
           {localTipo === 'rota' && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label>Endereço *</Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Endereço para atendimento..."
-                  value={localEndereco}
-                  onChange={(e) => setLocalEndereco(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              {vistoria.logradouro && (
-                <button
-                  type="button"
-                  onClick={() => setLocalEndereco(
-                    `${vistoria.logradouro}, ${vistoria.numero || 'S/N'} - ${vistoria.bairro}, ${vistoria.cidade}/${vistoria.uf}`
+              
+              {/* Seletor de tipo de endereço */}
+              <RadioGroup
+                value={tipoEndereco}
+                onValueChange={(v) => setTipoEndereco(v as 'cadastrado' | 'outro')}
+                className="space-y-2"
+              >
+                {/* Opção: Endereço Cadastrado */}
+                {temEnderecoCadastrado && (
+                  <div 
+                    className={cn(
+                      "flex items-start space-x-2 p-3 rounded-lg border-2 transition-all cursor-pointer",
+                      tipoEndereco === 'cadastrado' ? "border-primary bg-primary/5" : "border-muted"
+                    )}
+                    onClick={() => setTipoEndereco('cadastrado')}
+                  >
+                    <RadioGroupItem value="cadastrado" id="end-cadastrado" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="end-cadastrado" className="font-medium cursor-pointer flex items-center gap-2">
+                        <Home className="h-4 w-4" />
+                        Endereço cadastrado
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {enderecoCadastrado}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Opção: Outro Endereço */}
+                <div 
+                  className={cn(
+                    "flex items-start space-x-2 p-3 rounded-lg border-2 transition-all cursor-pointer",
+                    tipoEndereco === 'outro' ? "border-primary bg-primary/5" : "border-muted"
                   )}
-                  className="text-xs text-primary hover:underline"
+                  onClick={() => setTipoEndereco('outro')}
                 >
-                  Usar endereço cadastrado do associado
-                </button>
+                  <RadioGroupItem value="outro" id="end-outro" className="mt-1" />
+                  <div className="flex-1">
+                    <Label htmlFor="end-outro" className="font-medium cursor-pointer flex items-center gap-2">
+                      <Edit className="h-4 w-4" />
+                      Informar outro endereço
+                    </Label>
+                  </div>
+                </div>
+              </RadioGroup>
+              
+              {/* Campos de endereço alternativo */}
+              {tipoEndereco === 'outro' && (
+                <div className="space-y-3 pt-2 border-t">
+                  {/* CEP */}
+                  <div className="space-y-1">
+                    <Label className="text-sm">CEP</Label>
+                    <div className="relative">
+                      <Input
+                        placeholder="00000-000"
+                        value={cep}
+                        onChange={(e) => handleCepChange(e.target.value)}
+                        maxLength={9}
+                        className="pr-10"
+                      />
+                      {buscandoCep && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Logradouro (auto-preenchido) */}
+                  {logradouro && (
+                    <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                      <p className="font-medium">{logradouro}</p>
+                      <p className="text-muted-foreground">{bairro} - {cidade}/{uf}</p>
+                    </div>
+                  )}
+                  
+                  {/* Número */}
+                  <div className="space-y-1">
+                    <Label className="text-sm">Número *</Label>
+                    <Input
+                      placeholder="Número ou S/N"
+                      value={numero}
+                      onChange={(e) => setNumero(e.target.value)}
+                      className="w-32"
+                    />
+                  </div>
+                </div>
               )}
             </div>
           )}
