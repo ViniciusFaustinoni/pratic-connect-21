@@ -457,7 +457,8 @@ export function useAgendarVistoriaManutencao() {
  * 
  * Cenários:
  * A) Problema resolvido: rastreador volta para 'instalado'
- * B) Substituição: rastreador antigo 'baixado', novo 'instalado'
+ * B) Substituição: rastreador antigo vai para 'retorno_base' ou 'baixado', novo vai para 'instalado'
+ * C) Não resolvido: reagenda ou cancela a manutenção
  */
 export function useRegistrarResultadoManutencao() {
   const queryClient = useQueryClient();
@@ -530,31 +531,47 @@ export function useRegistrarResultadoManutencao() {
           throw new Error('Selecione o rastreador substituto');
         }
 
-        // 1. BAIXAR rastreador antigo (status terminal)
+        const destino = params.destinoRastreadorAntigo || 'baixado';
+
+        // 1. Atualizar rastreador antigo conforme destino
         if (rastreadorAntigoId) {
-          const { error: baixarError } = await supabase
+          const statusNovo = destino === 'retorno_base' ? 'retorno_base' : 'baixado';
+          
+          const { error: atualizarAntigoError } = await supabase
             .from('rastreadores')
             .update({ 
-              status: 'baixado',
+              status: statusNovo,
               veiculo_id: null,
               updated_at: new Date().toISOString()
             })
             .eq('id', rastreadorAntigoId);
 
-          if (baixarError) {
-            console.error('[useRegistrarResultadoManutencao] Erro ao baixar rastreador:', baixarError);
-            throw new Error('Erro ao baixar rastreador antigo');
+          if (atualizarAntigoError) {
+            console.error('[useRegistrarResultadoManutencao] Erro ao atualizar rastreador antigo:', atualizarAntigoError);
+            throw new Error('Erro ao atualizar rastreador antigo');
           }
 
-          // Registrar movimentação de baixa
+          // Registrar movimentação
           await supabase.from('estoque_movimentacoes').insert({
-            tipo: 'baixa_substituicao',
+            tipo: destino === 'retorno_base' ? 'retorno_base' : 'baixa_substituicao',
             quantidade: 1,
             status_anterior: 'manutencao',
-            status_novo: 'baixado',
+            status_novo: statusNovo,
             rastreador_id: rastreadorAntigoId,
-            observacoes: 'Baixado por substituição em manutenção',
+            observacoes: destino === 'retorno_base' 
+              ? 'Enviado para triagem na base após substituição'
+              : 'Baixado por substituição em manutenção',
           });
+
+          // Se for retorno_base, criar registro de manutenção interna
+          if (destino === 'retorno_base') {
+            await supabase.from('rastreador_manutencao_interna').insert({
+              rastreador_id: rastreadorAntigoId,
+              servico_origem_id: params.servicoId,
+              etapa: 'aguardando_triagem',
+              diagnostico_inicial: params.descricao,
+            });
+          }
         }
 
         // 2. INSTALAR novo rastreador no mesmo veículo
@@ -586,7 +603,7 @@ export function useRegistrarResultadoManutencao() {
           status_novo: 'instalado',
           rastreador_id: params.rastreadorNovoId,
           veiculo_id: veiculoId,
-          observacoes: 'Instalado em substituição ao rastreador baixado',
+          observacoes: 'Instalado em substituição',
         });
 
         // 3. Atualizar serviço
@@ -597,6 +614,7 @@ export function useRegistrarResultadoManutencao() {
             concluida_em: new Date().toISOString(),
             resultado_manutencao: 'substituicao',
             rastreador_substituto_id: params.rastreadorNovoId,
+            rastreador_destino_pos_substituicao: destino,
             observacoes_analise: params.descricao,
             updated_at: new Date().toISOString(),
           })
@@ -605,9 +623,68 @@ export function useRegistrarResultadoManutencao() {
         if (servicoUpdateError) {
           throw new Error('Erro ao concluir serviço');
         }
+
+      } else if (params.resultado === 'nao_resolvido') {
+        // Cenário C: Não resolvido
+        
+        const acao = params.acaoNaoResolvido || 'reagendar';
+
+        if (acao === 'reagendar') {
+          // Reagendar: serviço volta para pendente
+          const { error: servicoUpdateError } = await supabase
+            .from('servicos')
+            .update({
+              status: 'pendente',
+              observacoes_analise: `Não resolvido: ${params.descricao}`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', params.servicoId);
+
+          if (servicoUpdateError) {
+            throw new Error('Erro ao reagendar serviço');
+          }
+
+        } else {
+          // Cancelar: rastreador volta para instalado
+          if (rastreadorAntigoId) {
+            const { error: updateError } = await supabase
+              .from('rastreadores')
+              .update({ 
+                status: 'instalado',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', rastreadorAntigoId);
+
+            if (updateError) {
+              throw new Error('Erro ao atualizar rastreador');
+            }
+
+            await supabase.from('estoque_movimentacoes').insert({
+              tipo: 'alteracao_status',
+              quantidade: 1,
+              status_anterior: 'manutencao',
+              status_novo: 'instalado',
+              rastreador_id: rastreadorAntigoId,
+              observacoes: 'Manutenção cancelada - não resolvido',
+            });
+          }
+
+          const { error: servicoUpdateError } = await supabase
+            .from('servicos')
+            .update({
+              status: 'cancelada',
+              observacoes_analise: `Cancelado - Não resolvido: ${params.descricao}`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', params.servicoId);
+
+          if (servicoUpdateError) {
+            throw new Error('Erro ao cancelar serviço');
+          }
+        }
       }
 
-      return { servicoId: params.servicoId, resultado: params.resultado };
+      return { servicoId: params.servicoId, resultado: params.resultado, acao: params.acaoNaoResolvido };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
@@ -617,10 +694,16 @@ export function useRegistrarResultadoManutencao() {
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['manutencao-interna'] });
       
-      const msg = data.resultado === 'substituicao' 
-        ? 'Manutenção concluída com substituição!'
-        : 'Manutenção concluída com sucesso!';
+      let msg = 'Manutenção concluída com sucesso!';
+      if (data.resultado === 'substituicao') {
+        msg = 'Manutenção concluída com substituição!';
+      } else if (data.resultado === 'nao_resolvido') {
+        msg = data.acao === 'reagendar' 
+          ? 'Manutenção reagendada'
+          : 'Manutenção cancelada';
+      }
       
       toast.success(msg);
     },

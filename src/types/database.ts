@@ -104,7 +104,15 @@ export type StatusCotacao = 'rascunho' | 'enviada' | 'aceita' | 'recusada' | 'ex
 export type StatusContrato = 'rascunho' | 'pendente' | 'pendente_assinatura' | 'enviado' | 'visualizado' | 'assinado' | 'ativo' | 'suspenso' | 'cancelado' | 'expirado';
 
 // Novos tipos para as tabelas adicionadas
-export type StatusRastreador = 'estoque' | 'instalado' | 'manutencao' | 'baixado';
+export type StatusRastreador = 
+  | 'estoque' 
+  | 'instalado' 
+  | 'manutencao' 
+  | 'retorno_base'
+  | 'triagem'
+  | 'em_analise_plataforma'
+  | 'em_garantia'
+  | 'baixado';
 
 export type StatusRota = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada';
 
@@ -603,7 +611,11 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
   estoque: 'Em Estoque',
   instalado: 'Instalado',
-  manutencao: 'Manutenção',
+  manutencao: 'Em Manutenção (Campo)',
+  retorno_base: 'Retorno Base',
+  triagem: 'Em Triagem',
+  em_analise_plataforma: 'Análise Plataforma',
+  em_garantia: 'Em Garantia',
   baixado: 'Baixado',
 };
 
@@ -611,6 +623,10 @@ export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
   estoque: 'bg-gray-100 text-gray-800',
   instalado: 'bg-green-100 text-green-800',
   manutencao: 'bg-yellow-100 text-yellow-800',
+  retorno_base: 'bg-amber-100 text-amber-800',
+  triagem: 'bg-purple-100 text-purple-800',
+  em_analise_plataforma: 'bg-cyan-100 text-cyan-800',
+  em_garantia: 'bg-indigo-100 text-indigo-800',
   baixado: 'bg-red-100 text-red-800',
 };
 
