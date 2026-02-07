@@ -1,149 +1,105 @@
 
-# Plano: Ajustar Visibilidade de Cards e Layout do Dashboard
+# Plano: Dashboard Centralizado para Diretor
 
-## Alterações Solicitadas
+## Contexto
 
-1. **Card "Últimos Leads"** - Ocultar para todos os usuários, EXCETO vendedores (que veem apenas os seus leads)
-2. **Card "Ações Rápidas"** - Transformar em layout horizontal e posicionar ACIMA do Funil de Cotação
+Atualmente, quando um Diretor acessa `/dashboard`, ele vê o mesmo dashboard genérico de vendas com:
+- KPIs básicos (Associados, Leads, Instalações, Receita)
+- Ações Rápidas (Nova Cotação, Novo Lead)
+- Funil de Cotação
+- Instalações Hoje (oculto para diretores)
 
----
-
-## Estrutura Atual do Dashboard
-
-```
-Banner de Boas-Vindas
-Alertas
-KPIs (4 cards)
-
-Grid Principal (2/3 + 1/3):
-├── Coluna Esquerda (2/3):
-│   ├── Funil de Cotação
-│   └── Últimos Leads        ← OCULTAR (exceto vendedores)
-│
-└── Coluna Direita (1/3):
-    ├── Ações Rápidas        ← MOVER para acima do Funil
-    └── Instalações Hoje
-```
+Já existe um dashboard executivo completo em `/diretoria` com métricas estratégicas, mas o Diretor precisa navegar manualmente até lá.
 
 ---
 
-## Nova Estrutura Proposta
+## Solução Proposta
 
-```
-Banner de Boas-Vindas
-Alertas
-KPIs (4 cards)
-Ações Rápidas (horizontal, full-width) ← NOVA POSIÇÃO
+Quando o usuário for identificado como **Diretor**, o Dashboard principal exibirá:
 
-Grid Principal (2/3 + 1/3):
-├── Coluna Esquerda (2/3):
-│   ├── Funil de Cotação
-│   └── Últimos Leads (apenas vendedores)
-│
-└── Coluna Direita (1/3):
-    └── Instalações Hoje (coordenador/vistoriadores)
+### Layout Centralizado
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                 Banner de Boas-Vindas                       │
+├─────────────────────────────────────────────────────────────┤
+│  [7 KPIs em linha - Métricas Executivas]                    │
+│  Associados | Receita | Sinistralidade | Conversão |        │
+│  Inadimplência | Resultado | Rateio                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌───────────────────────────┐  ┌─────────────────────────┐ │
+│  │   Gráfico de Evolução     │  │   Saúde Financeira      │ │
+│  │   (Receita x Sinistros)   │  │   + Alertas Críticos    │ │
+│  │                           │  │   + Ações Rápidas       │ │
+│  └───────────────────────────┘  └─────────────────────────┘ │
+│                                                             │
+│  ┌───────────────────────────┐  ┌─────────────────────────┐ │
+│  │  Indicadores Operacionais │  │  Distribuição por Plano │ │
+│  │  (Grid 2x3)               │  │  (Gráfico de Pizza)     │ │
+│  └───────────────────────────┘  └─────────────────────────┘ │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+### Métricas Exibidas para o Diretor
+
+| Categoria | Métricas |
+|-----------|----------|
+| **KPIs Financeiros** | Associados Ativos, Receita do Período, Sinistralidade, Resultado Operacional |
+| **KPIs Comerciais** | Taxa de Conversão, Taxa de Inadimplência, Valor do Rateio/Cota |
+| **Gráficos** | Evolução Mensal (12 meses), Distribuição por Plano |
+| **Operacionais** | Leads, Conversões, Instalações, Assistências, Tempo Médio Trânsito/Execução |
+| **Saúde Financeira** | Barra de Sinistralidade, Margem Operacional, Fundo de Reserva |
+| **Alertas** | Sinistralidade Alta, Inadimplência Alta, Fundo de Reserva Baixo |
 
 ---
 
-## Alterações no Arquivo `src/pages/Dashboard.tsx`
+## Alterações no Código
 
-### 1. Mover Ações Rápidas para Layout Horizontal
+### Arquivo: `src/pages/Dashboard.tsx`
 
-Mover o card de Ações Rápidas para fora do grid de 3 colunas e posicioná-lo logo após os KPIs, antes do grid principal.
+#### 1. Adicionar Verificação de Perfil Diretor
 
-O card será exibido horizontalmente com os botões lado a lado em uma única linha.
-
-### 2. Restringir Card "Últimos Leads"
-
-Adicionar condição para exibir apenas para vendedores:
+No início do componente, após as verificações existentes:
 
 ```typescript
-// Antes (linhas 425-512):
-<Card className="border-border bg-card">
-  {/* Card Últimos Leads - sempre visível */}
-</Card>
-
-// Depois:
-{isVendedorOnly && (
-  <Card className="border-border bg-card">
-    {/* Card Últimos Leads - apenas vendedores */}
-  </Card>
-)}
+// Se é diretor, mostrar dashboard executivo
+if (isDiretor) {
+  return <DiretoriaDashboard />;
+}
 ```
 
-### 3. Ajustar Coluna Direita
+#### 2. Importar o Componente
 
-Remover o card de Ações Rápidas da coluna direita (já foi movido para cima).
+Adicionar import do DiretoriaDashboard:
+
+```typescript
+import DiretoriaDashboard from '@/pages/diretoria/DiretoriaDashboard';
+```
 
 ---
 
-## Resultado Visual Esperado
+## Fluxo de Renderização por Perfil
 
-Com base na imagem 2 de referência, o layout final será:
-
-| Seção | Conteúdo |
-|-------|----------|
-| Topo | Banner + Alertas |
-| KPIs | 4 cards em linha |
-| **Ações Rápidas** | Botões horizontais (Nova Cotação + Novo Lead) |
-| Grid Principal | Funil à esquerda, Instalações à direita (para perfis específicos) |
-| Últimos Leads | Apenas visível para vendedores (abaixo do funil) |
-
----
-
-## Visibilidade por Perfil
-
-| Card | Vendedor | Coordenador | Vistoriador | Outros |
-|------|----------|-------------|-------------|--------|
-| Ações Rápidas | Visível | Visível | Visível | Visível |
-| Funil de Cotação | Visível | Visível | Visível | Visível |
-| Últimos Leads | Visível (só seus) | Oculto | Oculto | Oculto |
-| Instalações Hoje | Oculto | Visível | Visível | Oculto |
+| Perfil | Dashboard Renderizado |
+|--------|----------------------|
+| Analista de Cadastro | DashboardCadastro |
+| Coordenador de Monitoramento | DashboardCoordenador |
+| Instalador/Vistoriador | Redireciona para /instalador |
+| **Diretor** | **DiretoriaDashboard** (novo) |
+| Vendedor | Dashboard padrão (Funil + Leads) |
+| Outros | Dashboard padrão |
 
 ---
 
-## Seção Técnica
+## Resultado Esperado
 
-### Código do Card de Ações Rápidas (Nova Posição)
-
-Será posicionado após os KPIs e antes do grid principal:
-
-```typescript
-{/* AÇÕES RÁPIDAS - HORIZONTAL */}
-<Card className="border-border bg-card">
-  <CardContent className="py-4">
-    <div className="flex items-center gap-4">
-      <h3 className="text-lg font-semibold text-foreground whitespace-nowrap">
-        Ações Rápidas
-      </h3>
-      <div className="flex gap-3 flex-1">
-        <QuickActions />
-      </div>
-    </div>
-  </CardContent>
-</Card>
-```
-
-### Ajuste no Componente QuickActions
-
-Alterar o layout de `grid-cols-2` para `flex` horizontal:
-
-```typescript
-// Antes:
-<div className="grid grid-cols-2 gap-2 sm:gap-3">
-
-// Depois:
-<div className="flex gap-3">
-```
-
-### Condição para Últimos Leads
-
-```typescript
-{isVendedorOnly && (
-  // Card Últimos Leads existente
-)}
-```
+- **Diretores** verão automaticamente o dashboard executivo com todas as métricas estratégicas ao acessar `/dashboard`
+- O layout já está centralizado no DiretoriaDashboard existente
+- Todas as métricas relevantes (sinistralidade, receita, rateio, alertas) estarão visíveis
+- Gráficos de evolução e distribuição por plano serão exibidos
+- Alertas críticos (sinistralidade alta, inadimplência, fundo baixo) serão destacados
 
 ---
 
@@ -151,4 +107,43 @@ Alterar o layout de `grid-cols-2` para `flex` horizontal:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/Dashboard.tsx` | Mover Ações Rápidas, restringir Últimos Leads |
+| `src/pages/Dashboard.tsx` | Adicionar import e condição para renderizar DiretoriaDashboard quando isDiretor |
+
+---
+
+## Seção Técnica
+
+### Código Completo da Alteração
+
+```typescript
+// No topo do arquivo, adicionar import:
+import DiretoriaDashboard from '@/pages/diretoria/DiretoriaDashboard';
+
+// Dentro do componente Dashboard, após as verificações existentes:
+// (após if isAnalistaCadastroOnly e if isCoordenadorMonitoramentoOnly)
+
+// Se é diretor, mostrar dashboard executivo
+if (isDiretor) {
+  return <DiretoriaDashboard />;
+}
+```
+
+### Posição no Código
+
+A verificação será inserida após a linha 315 (depois da verificação de coordenador de monitoramento):
+
+```typescript
+// Se é coordenador de monitoramento, mostrar dashboard específico
+if (isCoordenadorMonitoramentoOnly) {
+  return <DashboardCoordenador />;
+}
+
+// NOVA VERIFICAÇÃO - Se é diretor, mostrar dashboard executivo
+if (isDiretor) {
+  return <DiretoriaDashboard />;
+}
+```
+
+### Observação
+
+A variável `isDiretor` já está sendo importada do hook `usePermissions()` na linha 292, então não é necessário adicionar nenhuma desestruturação adicional.
