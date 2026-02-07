@@ -538,19 +538,19 @@ export default function ExecutarManutencao() {
                             key={r.id}
                             onClick={() => setRastreadorNovoId(r.id)}
                             className={cn(
-                              "p-3 cursor-pointer transition-colors",
+                              "p-3 cursor-pointer transition-colors w-full",
                               rastreadorNovoId === r.id 
                                 ? "bg-primary/10 border-l-2 border-l-primary" 
                                 : "hover:bg-muted/50"
                             )}
                           >
-                            <p className="font-medium text-sm">{r.codigo}</p>
+                            <p className="font-medium text-sm break-words">{r.codigo}</p>
                             <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
                               {r.numero_serie && (
-                                <span>S/N: <span className="font-mono">{r.numero_serie}</span></span>
+                                <span className="break-all">S/N: <span className="font-mono">{r.numero_serie}</span></span>
                               )}
                               {r.imei && (
-                                <span>IMEI: <span className="font-mono">{r.imei}</span></span>
+                                <span className="break-all">IMEI: <span className="font-mono">{r.imei}</span></span>
                               )}
                             </div>
                           </div>
