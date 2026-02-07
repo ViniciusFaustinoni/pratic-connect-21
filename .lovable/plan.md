@@ -1,109 +1,71 @@
 
-# Plano: Corrigir Atribuição de Vistoriador
+# Plano: Corrigir Erro de Select.Item com Valor Vazio
 
-## Problemas Identificados
+## Problema Identificado
 
-### 1. Função `handleSaveAtribuicao` não implementada
-A função no arquivo `src/pages/monitoramento/FilaVistorias.tsx` está marcada como **TODO**:
-```typescript
-const handleSaveAtribuicao = async (vistoriadorId: string) => {
-  // TODO: Implementar mutação real para salvar no banco
-  console.log('Atribuição vistoriador:', vistoriadorId);
-  toast.success('Vistoriador atribuído com sucesso!');
-  setAtribuirModalOpen(false);
-};
-```
-O sistema apenas mostra o toast de sucesso, mas **não salva nada** no banco.
+O erro ocorre porque o componente `<SelectItem value="">` na linha 382 do arquivo `AgendarVistoriaModal.tsx` usa string vazia como valor:
 
-### 2. Query com status inválido
-No arquivo `src/components/monitoramento/AtribuirVistoriadorModal.tsx`, a query de contagem de tarefas usa `"recusada"`:
-```typescript
-.not('status', 'in', '("cancelada","recusada")');
+```tsx
+<SelectItem value="">Qualquer horário</SelectItem>
 ```
 
-O enum `status_servico` **não tem `recusada`**. Os valores válidos são:
-- pendente, agendada, em_rota, em_andamento, concluida, aprovada, reprovada, aprovada_ressalvas, em_analise, reagendada, cancelada
+O Radix UI Select **não permite** `value=""` em `SelectItem` porque o valor vazio é reservado para limpar a seleção e mostrar o placeholder.
 
-Isso causa um erro 400 na requisição, impedindo a contagem correta.
+## Solução
 
----
+Substituir o valor vazio por um valor significativo (como `"any"` ou `"qualquer"`) e ajustar a lógica para tratar esse valor especial.
 
-## Correções Necessárias
+## Alterações no Arquivo
 
-### Correção 1: Implementar `handleSaveAtribuicao`
+**Arquivo:** `src/components/monitoramento/AgendarVistoriaModal.tsx`
 
-**Arquivo:** `src/pages/monitoramento/FilaVistorias.tsx`
+### Mudança 1: Linha 382 - Substituir valor vazio
 
-Substituir a função TODO por uma implementação real que:
-1. Atualiza o `profissional_id` na tabela `servicos`
-2. Muda o status para `agendada` (se estava `pendente`)
-3. Invalida os caches de React Query
-4. Mostra toast de sucesso apenas após confirmação do banco
-
-```typescript
-const handleSaveAtribuicao = async (vistoriadorId: string) => {
-  if (!vistoriaParaAtribuir) return;
-  
-  try {
-    // 1. Atualizar o serviço no banco
-    const { error } = await supabase
-      .from('servicos')
-      .update({
-        profissional_id: vistoriadorId,
-        status: 'agendada', // Garantir que status é agendada
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', vistoriaParaAtribuir.id);
-
-    if (error) throw error;
-
-    // 2. Invalidar cache para atualizar a lista
-    queryClient.invalidateQueries({ queryKey: ['vistorias-fila'] });
-    queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
-
-    // 3. Feedback de sucesso
-    toast.success('Vistoriador atribuído com sucesso!');
-    setAtribuirModalOpen(false);
-  } catch (error) {
-    console.error('Erro ao atribuir vistoriador:', error);
-    toast.error('Erro ao atribuir vistoriador. Tente novamente.');
-  }
-};
+**Antes:**
+```tsx
+<SelectItem value="">Qualquer horário</SelectItem>
 ```
 
-### Correção 2: Corrigir status inválido na query
-
-**Arquivo:** `src/components/monitoramento/AtribuirVistoriadorModal.tsx`
-
-Substituir:
-```typescript
-.not('status', 'in', '("cancelada","recusada")');
+**Depois:**
+```tsx
+<SelectItem value="any">Qualquer horário</SelectItem>
 ```
 
-Por:
-```typescript
-.not('status', 'in', '("cancelada","reprovada")');
+### Mudança 2: Linha 376 - Ajustar handler
+
+**Antes:**
+```tsx
+onValueChange={(value) => updateForm('horarioEspecifico', value || undefined)}
 ```
 
-Ou remover a filtragem por status e usar apenas:
-```typescript
-.not('status', 'eq', 'cancelada');
+**Depois:**
+```tsx
+onValueChange={(value) => updateForm('horarioEspecifico', value === 'any' ? undefined : value)}
 ```
 
----
+### Mudança 3: Linha 375 - Ajustar valor exibido
 
-## Arquivos a Modificar
+**Antes:**
+```tsx
+value={formData.horarioEspecifico || ''}
+```
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/monitoramento/FilaVistorias.tsx` | Implementar `handleSaveAtribuicao` com update real no banco |
-| `src/components/monitoramento/AtribuirVistoriadorModal.tsx` | Corrigir status `"recusada"` para `"reprovada"` |
+**Depois:**
+```tsx
+value={formData.horarioEspecifico || 'any'}
+```
 
----
+## Impacto em Outros Arquivos
+
+Existem 14 arquivos com o mesmo problema (`SelectItem value=""`). Porém, eles podem não estar causando erros visíveis no momento porque:
+1. Os componentes podem não estar sendo renderizados
+2. Os valores vazios podem não estar sendo selecionados
+
+Recomendo corrigir apenas o arquivo que está causando o erro agora, e os demais podem ser corrigidos em uma tarefa futura de refatoração.
 
 ## Resultado Esperado
 
-Após as correções:
-1. Ao selecionar um vistoriador e clicar "Confirmar Atribuição", o banco será atualizado
-2. A coluna "Vistoriador" na lista mostrará o nome do profissional atribuído
-3. A contagem de tarefas por dia funcionará corretamente
+Após a correção:
+- O modal de agendamento abrirá sem erros
+- A opção "Qualquer horário" funcionará corretamente
+- O formulário continuará tratando a ausência de horário específico como `undefined` internamente
