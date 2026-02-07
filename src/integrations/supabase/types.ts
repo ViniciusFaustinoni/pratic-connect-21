@@ -15490,6 +15490,133 @@ export type Database = {
           },
         ]
       }
+      rastreador_manutencao_interna: {
+        Row: {
+          acao_tomada: string | null
+          created_at: string
+          created_by: string | null
+          data_encaminhamento: string | null
+          data_retorno: string | null
+          defeito_identificado: string | null
+          diagnostico_inicial: string | null
+          encaminhado_para: string | null
+          etapa: string
+          id: string
+          laudo_externo: string | null
+          numero_protocolo_externo: string | null
+          rastreador_id: string
+          recuperavel: boolean | null
+          resolvido_em: string | null
+          resolvido_por: string | null
+          servico_origem_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          acao_tomada?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_encaminhamento?: string | null
+          data_retorno?: string | null
+          defeito_identificado?: string | null
+          diagnostico_inicial?: string | null
+          encaminhado_para?: string | null
+          etapa?: string
+          id?: string
+          laudo_externo?: string | null
+          numero_protocolo_externo?: string | null
+          rastreador_id: string
+          recuperavel?: boolean | null
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          servico_origem_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          acao_tomada?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_encaminhamento?: string | null
+          data_retorno?: string | null
+          defeito_identificado?: string | null
+          diagnostico_inicial?: string | null
+          encaminhado_para?: string | null
+          etapa?: string
+          id?: string
+          laudo_externo?: string | null
+          numero_protocolo_externo?: string | null
+          rastreador_id?: string
+          recuperavel?: boolean | null
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          servico_origem_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rastreador_manutencao_interna_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreador_manutencao_interna_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreador_manutencao_interna_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreador_manutencao_interna_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreador_manutencao_interna_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "rastreador_manutencao_interna_resolvido_por_fkey"
+            columns: ["resolvido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreador_manutencao_interna_resolvido_por_fkey"
+            columns: ["resolvido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreador_manutencao_interna_resolvido_por_fkey"
+            columns: ["resolvido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreador_manutencao_interna_servico_origem_id_fkey"
+            columns: ["servico_origem_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rastreador_posicoes: {
         Row: {
           altitude: number | null
@@ -17065,6 +17192,7 @@ export type Database = {
           protecao_suspensa: boolean | null
           protocolo: string | null
           quilometragem: number | null
+          rastreador_destino_pos_substituicao: string | null
           rastreador_id: string | null
           rastreador_substituto_id: string | null
           ressalvas: string | null
@@ -17133,6 +17261,7 @@ export type Database = {
           protecao_suspensa?: boolean | null
           protocolo?: string | null
           quilometragem?: number | null
+          rastreador_destino_pos_substituicao?: string | null
           rastreador_id?: string | null
           rastreador_substituto_id?: string | null
           ressalvas?: string | null
@@ -17201,6 +17330,7 @@ export type Database = {
           protecao_suspensa?: boolean | null
           protocolo?: string | null
           quilometragem?: number | null
+          rastreador_destino_pos_substituicao?: string | null
           rastreador_id?: string | null
           rastreador_substituto_id?: string | null
           ressalvas?: string | null
@@ -21279,7 +21409,15 @@ export type Database = {
         | "processando"
         | "pago"
         | "cancelado"
-      status_rastreador: "estoque" | "instalado" | "manutencao" | "baixado"
+      status_rastreador:
+        | "estoque"
+        | "instalado"
+        | "manutencao"
+        | "baixado"
+        | "retorno_base"
+        | "triagem"
+        | "em_analise_plataforma"
+        | "em_garantia"
       status_rota: "pendente" | "em_andamento" | "concluida" | "cancelada"
       status_servico:
         | "pendente"
@@ -21650,7 +21788,16 @@ export const Constants = {
         "pago",
         "cancelado",
       ],
-      status_rastreador: ["estoque", "instalado", "manutencao", "baixado"],
+      status_rastreador: [
+        "estoque",
+        "instalado",
+        "manutencao",
+        "baixado",
+        "retorno_base",
+        "triagem",
+        "em_analise_plataforma",
+        "em_garantia",
+      ],
       status_rota: ["pendente", "em_andamento", "concluida", "cancelada"],
       status_servico: [
         "pendente",

@@ -27,6 +27,10 @@ import {
   Car, 
   User,
   Search,
+  XCircle,
+  RotateCcw,
+  Trash2,
+  ArrowRight,
 } from 'lucide-react';
 import { 
   useRegistrarResultadoManutencao, 
@@ -35,7 +39,11 @@ import {
 import { 
   type VistoriaManutencao,
   type ResultadoManutencao,
+  type DestinoRastreadorSubstituido,
+  type AcaoNaoResolvido,
   RESULTADO_MANUTENCAO_LABELS,
+  DESTINO_RASTREADOR_LABELS,
+  ACAO_NAO_RESOLVIDO_LABELS,
 } from '@/types/vistoriaManutencao';
 
 interface RegistrarResultadoModalProps {
@@ -54,6 +62,8 @@ export function RegistrarResultadoModal({
   const [rastreadorNovoId, setRastreadorNovoId] = useState('');
   const [idPlataforma, setIdPlataforma] = useState('');
   const [buscaRastreador, setBuscaRastreador] = useState('');
+  const [destinoRastreadorAntigo, setDestinoRastreadorAntigo] = useState<DestinoRastreadorSubstituido>('retorno_base');
+  const [acaoNaoResolvido, setAcaoNaoResolvido] = useState<AcaoNaoResolvido>('reagendar');
 
   const { data: rastreadoresDisponiveis, isLoading: loadingRastreadores } = useRastreadoresParaSubstituicao();
   const registrarMutation = useRegistrarResultadoManutencao();
@@ -66,6 +76,8 @@ export function RegistrarResultadoModal({
       setRastreadorNovoId('');
       setIdPlataforma('');
       setBuscaRastreador('');
+      setDestinoRastreadorAntigo('retorno_base');
+      setAcaoNaoResolvido('reagendar');
     }
   }, [open]);
 
@@ -82,12 +94,18 @@ export function RegistrarResultadoModal({
       descricao,
       rastreadorNovoId: resultado === 'substituicao' ? rastreadorNovoId : undefined,
       idPlataforma: resultado === 'substituicao' ? idPlataforma : undefined,
+      destinoRastreadorAntigo: resultado === 'substituicao' ? destinoRastreadorAntigo : undefined,
+      acaoNaoResolvido: resultado === 'nao_resolvido' ? acaoNaoResolvido : undefined,
     });
 
     onOpenChange(false);
   };
 
-  const isValid = descricao && (resultado === 'resolvido' || (resultado === 'substituicao' && rastreadorNovoId));
+  const isValid = descricao && (
+    resultado === 'resolvido' || 
+    resultado === 'nao_resolvido' ||
+    (resultado === 'substituicao' && rastreadorNovoId)
+  );
 
   // Filtrar rastreadores pela busca
   const rastreadorFiltrados = rastreadoresDisponiveis?.filter((r: any) => {
@@ -137,9 +155,10 @@ export function RegistrarResultadoModal({
               onValueChange={(v) => setResultado(v as ResultadoManutencao)}
               className="space-y-3"
             >
+              {/* Resolvido */}
               <div 
-                className={`flex items-start space-x-3 p-3 rounded-lg border ${
-                  resultado === 'resolvido' ? 'border-green-500 bg-green-50' : 'border-muted'
+                className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                  resultado === 'resolvido' ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : 'border-border'
                 }`}
               >
                 <RadioGroupItem value="resolvido" id="resolvido" className="mt-1" />
@@ -154,9 +173,10 @@ export function RegistrarResultadoModal({
                 </div>
               </div>
 
+              {/* Substituição */}
               <div 
-                className={`flex items-start space-x-3 p-3 rounded-lg border ${
-                  resultado === 'substituicao' ? 'border-purple-500 bg-purple-50' : 'border-muted'
+                className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                  resultado === 'substituicao' ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/20' : 'border-border'
                 }`}
               >
                 <RadioGroupItem value="substituicao" id="substituicao" className="mt-1" />
@@ -166,7 +186,25 @@ export function RegistrarResultadoModal({
                     Substituição de Rastreador
                   </Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    O rastreador antigo será BAIXADO e um novo será instalado no veículo.
+                    O rastreador antigo será removido e um novo será instalado no veículo.
+                  </p>
+                </div>
+              </div>
+
+              {/* Não Resolvido */}
+              <div 
+                className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                  resultado === 'nao_resolvido' ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20' : 'border-border'
+                }`}
+              >
+                <RadioGroupItem value="nao_resolvido" id="nao_resolvido" className="mt-1" />
+                <div className="flex-1">
+                  <Label htmlFor="nao_resolvido" className="font-medium cursor-pointer flex items-center gap-2">
+                    <XCircle className="h-4 w-4 text-orange-600" />
+                    Não Resolvido
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Não foi possível resolver no local (sem peça, substituto, etc).
                   </p>
                 </div>
               </div>
@@ -176,15 +214,70 @@ export function RegistrarResultadoModal({
           {/* Campos de substituição */}
           {resultado === 'substituicao' && (
             <>
-              {/* Alerta de baixa */}
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Rastreador será BAIXADO</AlertTitle>
-                <AlertDescription>
-                  O rastreador <strong>{vistoria.rastreador?.codigo}</strong> será marcado como BAIXADO 
-                  e NÃO poderá mais ser utilizado em nenhum veículo.
-                </AlertDescription>
-              </Alert>
+              {/* Destino do rastreador antigo */}
+              <div className="space-y-3">
+                <Label className="font-medium">Destino do rastreador antigo</Label>
+                <RadioGroup
+                  value={destinoRastreadorAntigo}
+                  onValueChange={(v) => setDestinoRastreadorAntigo(v as DestinoRastreadorSubstituido)}
+                  className="space-y-2"
+                >
+                  <div 
+                    className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                      destinoRastreadorAntigo === 'retorno_base' ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/20' : 'border-border'
+                    }`}
+                  >
+                    <RadioGroupItem value="retorno_base" id="retorno_base" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="retorno_base" className="font-medium cursor-pointer flex items-center gap-2">
+                        <ArrowRight className="h-4 w-4 text-amber-600" />
+                        Enviar para Triagem (Base)
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        O equipamento será avaliado na bancada e pode ser recuperado.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div 
+                    className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                      destinoRastreadorAntigo === 'baixado' ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : 'border-border'
+                    }`}
+                  >
+                    <RadioGroupItem value="baixado" id="baixado_destino" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="baixado_destino" className="font-medium cursor-pointer flex items-center gap-2">
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                        Baixar Definitivamente
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Equipamento irrecuperável - será descartado permanentemente.
+                      </p>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Alerta conforme destino */}
+              {destinoRastreadorAntigo === 'baixado' ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Rastreador será BAIXADO</AlertTitle>
+                  <AlertDescription>
+                    O rastreador <strong>{vistoria.rastreador?.codigo}</strong> será marcado como BAIXADO 
+                    e NÃO poderá mais ser utilizado.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                  <ArrowRight className="h-4 w-4 text-amber-600" />
+                  <AlertTitle className="text-amber-800 dark:text-amber-200">Rastreador vai para Triagem</AlertTitle>
+                  <AlertDescription className="text-amber-700 dark:text-amber-300">
+                    O rastreador <strong>{vistoria.rastreador?.codigo}</strong> será enviado para a bancada 
+                    para avaliação e possível recuperação.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Seleção de novo rastreador */}
               <div className="space-y-2">
@@ -201,7 +294,7 @@ export function RegistrarResultadoModal({
 
                 {/* Rastreador selecionado */}
                 {rastreadorSelecionado && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between">
+                  <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-3 flex items-center justify-between">
                     <div>
                       <span className="font-mono font-medium">{rastreadorSelecionado.codigo}</span>
                       <span className="text-xs text-muted-foreground ml-2">
@@ -269,11 +362,61 @@ export function RegistrarResultadoModal({
             </>
           )}
 
+          {/* Campos de não resolvido */}
+          {resultado === 'nao_resolvido' && (
+            <div className="space-y-3">
+              <Label className="font-medium">O que fazer?</Label>
+              <RadioGroup
+                value={acaoNaoResolvido}
+                onValueChange={(v) => setAcaoNaoResolvido(v as AcaoNaoResolvido)}
+                className="space-y-2"
+              >
+                <div 
+                  className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                    acaoNaoResolvido === 'reagendar' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20' : 'border-border'
+                  }`}
+                >
+                  <RadioGroupItem value="reagendar" id="reagendar" className="mt-1" />
+                  <div className="flex-1">
+                    <Label htmlFor="reagendar" className="font-medium cursor-pointer flex items-center gap-2">
+                      <RotateCcw className="h-4 w-4 text-blue-600" />
+                      Reagendar Manutenção
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      O serviço volta para a fila de agendamento.
+                    </p>
+                  </div>
+                </div>
+                
+                <div 
+                  className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                    acaoNaoResolvido === 'cancelar' ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : 'border-border'
+                  }`}
+                >
+                  <RadioGroupItem value="cancelar" id="cancelar_acao" className="mt-1" />
+                  <div className="flex-1">
+                    <Label htmlFor="cancelar_acao" className="font-medium cursor-pointer flex items-center gap-2">
+                      <XCircle className="h-4 w-4 text-red-600" />
+                      Cancelar Manutenção
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      A manutenção é cancelada e o rastreador volta ao status instalado.
+                    </p>
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
+
           {/* Descrição */}
           <div className="space-y-2">
             <Label>Descrição do que foi feito *</Label>
             <Textarea
-              placeholder="Descreva o procedimento realizado..."
+              placeholder={
+                resultado === 'nao_resolvido' 
+                  ? "Descreva o motivo de não ter conseguido resolver..."
+                  : "Descreva o procedimento realizado..."
+              }
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
               rows={3}
@@ -288,10 +431,20 @@ export function RegistrarResultadoModal({
           <Button 
             onClick={handleSubmit} 
             disabled={!isValid || registrarMutation.isPending}
-            className={resultado === 'substituicao' ? 'bg-purple-600 hover:bg-purple-700' : ''}
+            className={
+              resultado === 'substituicao' 
+                ? 'bg-purple-600 hover:bg-purple-700' 
+                : resultado === 'nao_resolvido'
+                  ? 'bg-orange-600 hover:bg-orange-700'
+                  : ''
+            }
           >
             {registrarMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {resultado === 'substituicao' ? 'Confirmar Substituição' : 'Confirmar Resultado'}
+            {resultado === 'substituicao' 
+              ? 'Confirmar Substituição' 
+              : resultado === 'nao_resolvido'
+                ? acaoNaoResolvido === 'reagendar' ? 'Reagendar' : 'Cancelar Manutenção'
+                : 'Confirmar Resultado'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -51,6 +51,8 @@ const createRastreadorSchema = z.object({
 });
 
 // Schema para edição (completo)
+// Nota: o enum do banco tem mais status (retorno_base, triagem, etc) mas
+// esses só são alterados por fluxo automático, não manual no form
 const editRastreadorSchema = z.object({
   codigo: z.string().min(1, 'Código é obrigatório').max(50),
   numero_serie: z.string().max(100).optional().nullable(),
@@ -61,7 +63,11 @@ const editRastreadorSchema = z.object({
   chip_iccid: z.string().max(20).optional().nullable(),
   plataforma: z.string().min(1, 'Plataforma é obrigatória'),
   id_plataforma: z.string().max(100).optional().nullable(),
-  status: z.enum(['estoque', 'instalado', 'manutencao', 'baixado'] as const),
+  // Aceitar todos os status do banco, mas o select só mostra os manuais
+  status: z.string().refine(
+    (val) => ['estoque', 'instalado', 'manutencao', 'baixado', 'retorno_base', 'triagem', 'em_analise_plataforma', 'em_garantia'].includes(val),
+    { message: 'Status inválido' }
+  ),
   veiculo_id: z.string().uuid().optional().nullable(),
   portador_id: z.string().uuid().optional().nullable(),
 }).refine(
@@ -177,12 +183,15 @@ export function RastreadorFormDialog({
 
   const onSubmit = async (data: EditRastreadorFormData) => {
     try {
+      // Cast status para o tipo correto do banco
+      type DBStatusRastreador = 'estoque' | 'instalado' | 'manutencao' | 'retorno_base' | 'triagem' | 'em_analise_plataforma' | 'em_garantia' | 'baixado';
+      
       if (isEditing && rastreadorId) {
         // Edição: manter estrutura completa
         const payload = {
           codigo: data.codigo,
           plataforma: data.plataforma,
-          status: data.status,
+          status: data.status as DBStatusRastreador,
           numero_serie: data.numero_serie || null,
           imei: data.imei || null,
           chip_iccid: data.chip_iccid || null,
@@ -197,7 +206,7 @@ export function RastreadorFormDialog({
           codigo: `RAT-${data.imei}`,
           imei: data.imei,
           plataforma: data.plataforma,
-          status: data.status || 'estoque',
+          status: (data.status || 'estoque') as DBStatusRastreador,
           portador_id: data.status === 'estoque' ? (data.portador_id || null) : null,
           numero_serie: null,
           chip_iccid: null,

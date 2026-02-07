@@ -4,7 +4,68 @@
 
 export type PlataformaRastreador = 'rede_veiculos' | 'softruck';
 
-export type StatusRastreador = 'estoque' | 'instalado' | 'manutencao' | 'baixado';
+/**
+ * Status do rastreador no ciclo de vida completo
+ * Inclui Processo 1 (Campo) e Processo 2 (Manutenção Interna/Base)
+ */
+export type StatusRastreador = 
+  | 'estoque'               // Pronto para uso na base
+  | 'instalado'             // No veículo do associado
+  | 'manutencao'            // Vistoria aberta (campo)
+  | 'retorno_base'          // Voltou do campo, aguarda triagem
+  | 'triagem'               // Coordenador avaliando na bancada
+  | 'em_analise_plataforma' // Na plataforma (Rede Veículos/Softruck)
+  | 'em_garantia'           // No fornecedor
+  | 'baixado';              // TERMINAL - descartado
+
+export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
+  estoque: 'Em Estoque',
+  instalado: 'Instalado',
+  manutencao: 'Em Manutenção (Campo)',
+  retorno_base: 'Retorno Base',
+  triagem: 'Em Triagem',
+  em_analise_plataforma: 'Análise Plataforma',
+  em_garantia: 'Em Garantia',
+  baixado: 'Baixado',
+};
+
+export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
+  estoque: 'bg-green-100 text-green-800',
+  instalado: 'bg-emerald-100 text-emerald-800',
+  manutencao: 'bg-orange-100 text-orange-800',
+  retorno_base: 'bg-yellow-100 text-yellow-800',
+  triagem: 'bg-purple-100 text-purple-800',
+  em_analise_plataforma: 'bg-cyan-100 text-cyan-800',
+  em_garantia: 'bg-indigo-100 text-indigo-800',
+  baixado: 'bg-gray-100 text-gray-600',
+};
+
+/**
+ * Status que podem ser selecionados manualmente no formulário de rastreador
+ * (exclui os status de workflow automático)
+ */
+export type StatusRastreadorManual = 'estoque' | 'instalado' | 'manutencao' | 'baixado';
+
+/**
+ * Status de manutenção interna (Processo 2)
+ */
+export type StatusManutencaoInterna = 'retorno_base' | 'triagem' | 'em_analise_plataforma' | 'em_garantia';
+
+/**
+ * Transições permitidas de status de rastreador
+ */
+export const TRANSICOES_STATUS_RASTREADOR: Record<StatusRastreador, StatusRastreador[]> = {
+  estoque: ['instalado', 'manutencao', 'baixado'],
+  instalado: ['manutencao', 'estoque'],
+  manutencao: ['instalado', 'retorno_base', 'baixado'],
+  retorno_base: ['triagem'],
+  triagem: ['estoque', 'em_analise_plataforma', 'em_garantia', 'baixado'],
+  em_analise_plataforma: ['triagem', 'estoque', 'baixado'],
+  em_garantia: ['triagem', 'estoque', 'baixado'],
+  baixado: [], // Terminal - sem transições
+};
+
+// StatusRastreador removido - usar a definição na linha 11
 
 export interface RastreadorPosicao {
   latitude: number;

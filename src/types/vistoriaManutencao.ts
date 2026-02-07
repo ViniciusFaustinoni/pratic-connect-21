@@ -25,9 +25,22 @@ export type MotivoManutencao =
 export type LocalTipoManutencao = 'base' | 'ponto_instalacao' | 'rota';
 
 /**
- * Resultado da manutenção
+ * Resultado da manutenção (Processo 1 - Campo)
  */
-export type ResultadoManutencao = 'resolvido' | 'substituicao';
+export type ResultadoManutencao = 
+  | 'resolvido'       // Consertou no local, rastreador continua instalado
+  | 'substituicao'    // Trocou por outro rastreador
+  | 'nao_resolvido';  // Não conseguiu resolver, precisa reagendar
+
+/**
+ * Destino do rastreador antigo quando há substituição
+ */
+export type DestinoRastreadorSubstituido = 'retorno_base' | 'baixado';
+
+/**
+ * Ação quando não resolvido no campo
+ */
+export type AcaoNaoResolvido = 'reagendar' | 'cancelar';
 
 // ============================================
 // LABELS PARA UI
@@ -68,6 +81,17 @@ export const LOCAL_TIPO_DESCRICOES: Record<LocalTipoManutencao, string> = {
 export const RESULTADO_MANUTENCAO_LABELS: Record<ResultadoManutencao, string> = {
   resolvido: 'Problema resolvido',
   substituicao: 'Substituição de rastreador',
+  nao_resolvido: 'Não resolvido',
+};
+
+export const DESTINO_RASTREADOR_LABELS: Record<DestinoRastreadorSubstituido, string> = {
+  retorno_base: 'Enviar para Triagem (Base)',
+  baixado: 'Baixar Definitivamente',
+};
+
+export const ACAO_NAO_RESOLVIDO_LABELS: Record<AcaoNaoResolvido, string> = {
+  reagendar: 'Reagendar manutenção',
+  cancelar: 'Cancelar manutenção',
 };
 
 // ============================================
@@ -265,6 +289,9 @@ export interface RegistrarResultadoParams {
   // Se resultado = 'substituicao'
   rastreadorNovoId?: string;
   idPlataforma?: string;
+  destinoRastreadorAntigo?: DestinoRastreadorSubstituido;
+  // Se resultado = 'nao_resolvido'
+  acaoNaoResolvido?: AcaoNaoResolvido;
 }
 
 /**
