@@ -17,6 +17,8 @@ import {
   Loader2,
   ArrowLeft,
   LucideIcon,
+  Edit,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Dialog,
@@ -30,7 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -39,6 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { TelefoneInput, PlacaInput } from '@/components/inputs/MaskedInputs';
 
 interface Veiculo {
   id: string;
@@ -105,6 +108,15 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
   const [associadoSelecionado, setAssociadoSelecionado] = useState<AssociadoComVeiculos | null>(null);
   const [veiculoSelecionado, setVeiculoSelecionado] = useState<string>('');
 
+  // Modo manual (quando não encontra associado)
+  const [modoManual, setModoManual] = useState(false);
+  const [dadosManuais, setDadosManuais] = useState({
+    nome_cliente: '',
+    telefone_cliente: '',
+    placa_veiculo: '',
+    marca_modelo: '',
+  });
+
   // Dados do chamado
   const [formData, setFormData] = useState({
     tipo_servico: '',
@@ -119,6 +131,13 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
     setResultadosBusca([]);
     setAssociadoSelecionado(null);
     setVeiculoSelecionado('');
+    setModoManual(false);
+    setDadosManuais({
+      nome_cliente: '',
+      telefone_cliente: '',
+      placa_veiculo: '',
+      marca_modelo: '',
+    });
     setFormData({
       tipo_servico: '',
       descricao: '',
@@ -137,6 +156,7 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
     setBuscando(true);
     try {
       const termoLimpo = termoBusca.replace(/[.\-\s]/g, '').toUpperCase();
+      const termoOriginal = termoBusca.trim();
 
       // Buscar por CPF
       const { data: porCPF, error: errorCPF } = await supabase
@@ -150,6 +170,19 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
         .limit(10);
 
       if (errorCPF) throw errorCPF;
+
+      // Buscar por Nome
+      const { data: porNome, error: errorNome } = await supabase
+        .from('associados')
+        .select(`
+          id, nome, cpf, telefone, whatsapp, status,
+          veiculos(id, placa, marca, modelo, ano_modelo)
+        `)
+        .ilike('nome', `%${termoOriginal}%`)
+        .eq('status', 'ativo')
+        .limit(10);
+
+      if (errorNome) throw errorNome;
 
       // Buscar por placa
       const { data: porPlaca, error: errorPlaca } = await supabase
@@ -166,6 +199,7 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
       // Combinar resultados únicos
       const associadosMap = new Map<string, AssociadoComVeiculos>();
 
+      // Adicionar resultados por CPF
       porCPF?.forEach((a) => {
         if (a.status === 'ativo') {
           associadosMap.set(a.id, {
@@ -180,6 +214,22 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
         }
       });
 
+      // Adicionar resultados por Nome
+      porNome?.forEach((a) => {
+        if (a.status === 'ativo' && !associadosMap.has(a.id)) {
+          associadosMap.set(a.id, {
+            id: a.id,
+            nome: a.nome,
+            cpf: a.cpf,
+            telefone: a.telefone,
+            whatsapp: a.whatsapp,
+            status: a.status,
+            veiculos: (a.veiculos || []) as Veiculo[],
+          });
+        }
+      });
+
+      // Adicionar resultados por Placa
       porPlaca?.forEach((v) => {
         const assoc = v.associado as unknown as {
           id: string;
@@ -235,9 +285,17 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
 
   const selecionarAssociado = (associado: AssociadoComVeiculos) => {
     setAssociadoSelecionado(associado);
+    setModoManual(false);
     if (associado.veiculos.length === 1) {
       setVeiculoSelecionado(associado.veiculos[0].id);
     }
+    setEtapa('dados');
+  };
+
+  const iniciarModoManual = () => {
+    setModoManual(true);
+    setAssociadoSelecionado(null);
+    setVeiculoSelecionado('');
     setEtapa('dados');
   };
 
@@ -251,14 +309,30 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
       const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
       const protocolo = `ASS-${dateStr}-${random}`;
 
+      // Montar descrição com dados manuais se necessário
+      let descricaoFinal = formData.descricao || '';
+      if (modoManual) {
+        const dadosCliente = [
+          `[CHAMADO MANUAL]`,
+          `Cliente: ${dadosManuais.nome_cliente}`,
+          `Telefone: ${dadosManuais.telefone_cliente}`,
+          dadosManuais.placa_veiculo ? `Placa: ${dadosManuais.placa_veiculo}` : null,
+          dadosManuais.marca_modelo ? `Veículo: ${dadosManuais.marca_modelo}` : null,
+        ].filter(Boolean).join('\n');
+        
+        descricaoFinal = formData.descricao 
+          ? `${dadosCliente}\n\n${formData.descricao}`
+          : dadosCliente;
+      }
+
       const { data, error } = await supabase
         .from('chamados_assistencia')
         .insert({
           protocolo,
-          associado_id: associadoSelecionado!.id,
-          veiculo_id: veiculoSelecionado || null,
+          associado_id: modoManual ? null : associadoSelecionado!.id,
+          veiculo_id: modoManual ? null : (veiculoSelecionado || null),
           tipo_servico: formData.tipo_servico,
-          descricao: formData.descricao || null,
+          descricao: descricaoFinal || null,
           origem_endereco: formData.origem_endereco,
           destino_endereco: formData.destino_endereco || null,
           canal: 'telefone',
@@ -275,7 +349,9 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
         chamado_id: data.id,
         status_novo: 'aberto',
         usuario_id: user.data.user?.id,
-        observacao: 'Chamado aberto via central telefônica',
+        observacao: modoManual 
+          ? `Chamado manual aberto - Cliente: ${dadosManuais.nome_cliente}`
+          : 'Chamado aberto via central telefônica',
       });
 
       return data;
@@ -296,12 +372,17 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
   });
 
   const isFormValid = () => {
-    return (
-      associadoSelecionado &&
-      veiculoSelecionado &&
-      formData.tipo_servico &&
-      formData.origem_endereco.trim().length > 0
-    );
+    const baseValid = formData.tipo_servico && formData.origem_endereco.trim().length > 0;
+
+    if (modoManual) {
+      return (
+        baseValid &&
+        dadosManuais.nome_cliente.trim().length > 0 &&
+        dadosManuais.telefone_cliente.trim().length >= 10
+      );
+    }
+
+    return baseValid && associadoSelecionado && veiculoSelecionado;
   };
 
   return (
@@ -311,7 +392,9 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
           <DialogTitle>Novo Chamado de Assistência</DialogTitle>
           <DialogDescription>
             {etapa === 'busca'
-              ? 'Busque o associado por CPF ou placa do veículo'
+              ? 'Busque o associado por nome, CPF ou placa do veículo'
+              : modoManual
+              ? 'Preencha os dados do cliente e do chamado'
               : 'Preencha os dados do chamado'}
           </DialogDescription>
         </DialogHeader>
@@ -323,7 +406,7 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Digite o CPF ou placa do veículo..."
+                  placeholder="Digite nome, CPF ou placa do veículo..."
                   className="pl-9"
                   value={termoBusca}
                   onChange={(e) => setTermoBusca(e.target.value)}
@@ -385,13 +468,32 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
               </div>
             )}
 
+            {/* Nenhum resultado - Oferecer modo manual */}
             {resultadosBusca.length === 0 && termoBusca.length >= 3 && !buscando && (
-              <div className="text-center py-8 text-muted-foreground">
-                <User className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>Nenhum associado encontrado</p>
-                <p className="text-sm">Verifique o CPF ou placa informados</p>
+              <div className="text-center py-6 space-y-4">
+                <div className="text-muted-foreground">
+                  <User className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p className="font-medium">Nenhum associado encontrado</p>
+                  <p className="text-sm">Verifique os dados ou informe manualmente</p>
+                </div>
+                <Button variant="outline" onClick={iniciarModoManual}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Informar Dados Manualmente
+                </Button>
               </div>
             )}
+
+            {/* Botão para modo manual direto */}
+            <div className="border-t pt-4">
+              <Button 
+                variant="ghost" 
+                className="w-full text-muted-foreground" 
+                onClick={iniciarModoManual}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Abrir chamado sem associado cadastrado
+              </Button>
+            </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={handleClose}>
@@ -401,56 +503,132 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Associado Selecionado */}
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-muted rounded-lg">
-                      <User className="h-5 w-5" />
+            {/* Modo Manual - Dados do Cliente */}
+            {modoManual && (
+              <Card className="border-warning/50 bg-warning/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2 text-warning-foreground">
+                    <AlertTriangle className="h-4 w-4" />
+                    Dados do Cliente (Entrada Manual)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="nome_cliente">Nome do Cliente *</Label>
+                      <Input
+                        id="nome_cliente"
+                        placeholder="Nome completo"
+                        value={dadosManuais.nome_cliente}
+                        onChange={(e) =>
+                          setDadosManuais({ ...dadosManuais, nome_cliente: e.target.value })
+                        }
+                      />
                     </div>
-                    <div>
-                      <p className="font-medium">{associadoSelecionado?.nome}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatPhone(associadoSelecionado?.telefone || '')}
-                      </p>
+                    <div className="space-y-1">
+                      <Label htmlFor="telefone_cliente">Telefone *</Label>
+                      <TelefoneInput
+                        id="telefone_cliente"
+                        value={dadosManuais.telefone_cliente}
+                        onChange={(value) =>
+                          setDadosManuais({ ...dadosManuais, telefone_cliente: value })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="placa_veiculo">Placa do Veículo</Label>
+                      <PlacaInput
+                        id="placa_veiculo"
+                        value={dadosManuais.placa_veiculo}
+                        onChange={(value) =>
+                          setDadosManuais({ ...dadosManuais, placa_veiculo: value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="marca_modelo">Marca/Modelo</Label>
+                      <Input
+                        id="marca_modelo"
+                        placeholder="Ex: Toyota Corolla"
+                        value={dadosManuais.marca_modelo}
+                        onChange={(e) =>
+                          setDadosManuais({ ...dadosManuais, marca_modelo: e.target.value })
+                        }
+                      />
                     </div>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="text-muted-foreground"
                     onClick={() => {
+                      setModoManual(false);
                       setEtapa('busca');
-                      setAssociadoSelecionado(null);
-                      setVeiculoSelecionado('');
                     }}
                   >
                     <ArrowLeft className="h-4 w-4 mr-1" />
-                    Alterar
+                    Voltar para busca
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Veículo */}
-            <div className="space-y-2">
-              <Label htmlFor="veiculo">Veículo *</Label>
-              <Select value={veiculoSelecionado} onValueChange={setVeiculoSelecionado}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o veículo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {associadoSelecionado?.veiculos.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      <span className="font-mono">{v.placa}</span>
-                      <span className="text-muted-foreground ml-2">
-                        - {v.marca} {v.modelo} {v.ano_modelo && `(${v.ano_modelo})`}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Associado Selecionado (modo normal) */}
+            {!modoManual && associadoSelecionado && (
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-muted rounded-lg">
+                        <User className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{associadoSelecionado?.nome}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatPhone(associadoSelecionado?.telefone || '')}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEtapa('busca');
+                        setAssociadoSelecionado(null);
+                        setVeiculoSelecionado('');
+                      }}
+                    >
+                      <ArrowLeft className="h-4 w-4 mr-1" />
+                      Alterar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Veículo (apenas modo normal) */}
+            {!modoManual && (
+              <div className="space-y-2">
+                <Label htmlFor="veiculo">Veículo *</Label>
+                <Select value={veiculoSelecionado} onValueChange={setVeiculoSelecionado}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o veículo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {associadoSelecionado?.veiculos.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        <span className="font-mono">{v.placa}</span>
+                        <span className="text-muted-foreground ml-2">
+                          - {v.marca} {v.modelo} {v.ano_modelo && `(${v.ano_modelo})`}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Tipo de Serviço */}
             <div className="space-y-2">
@@ -483,7 +661,7 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
               <Label htmlFor="descricao">Descrição do Problema</Label>
               <Textarea
                 id="descricao"
-                placeholder="Descreva o problema relatado pelo associado..."
+                placeholder="Descreva o problema relatado pelo cliente..."
                 value={formData.descricao}
                 onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
                 rows={3}
