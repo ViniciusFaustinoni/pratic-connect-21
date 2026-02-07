@@ -39,6 +39,7 @@ import { useInstalacoesDoDia, useInstalacoesMetricas } from '@/hooks/useInstalac
 import { FollowupWidget } from '@/components/vendas/FollowupWidget';
 import { DashboardCadastro } from '@/components/cadastro/DashboardCadastro';
 import DashboardCoordenador from '@/pages/monitoramento/DashboardCoordenador';
+import DiretoriaDashboard from '@/pages/diretoria/DiretoriaDashboard';
 
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -313,6 +314,11 @@ export default function Dashboard() {
   // Se é coordenador de monitoramento, mostrar dashboard específico
   if (isCoordenadorMonitoramentoOnly) {
     return <DashboardCoordenador />;
+  }
+
+  // Se é diretor, mostrar dashboard executivo
+  if (isDiretor) {
+    return <DiretoriaDashboard />;
   }
 
   // Se está redirecionando, mostrar loading
