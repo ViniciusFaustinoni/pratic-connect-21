@@ -2,13 +2,27 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Helper para validar operações críticas e logar erros
+function logIfError(
+  operation: string,
+  result: { error: any },
+  context: Record<string, unknown>
+) {
+  if (result.error) {
+    console.error(`[delete-associado] ERRO em ${operation}:`, {
+      message: result.error.message,
+      ...context,
+    });
+  }
+}
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
@@ -108,7 +122,7 @@ Deno.serve(async (req) => {
             associadoId,
             motivo: 'exclusao',
             observacoes: 'Exclusão permanente por diretor',
-            atualizarBancoLocal: false, // Não atualizar banco, vamos excluir tudo
+            atualizarBancoLocal: false,
             desvincular: true,
           }),
         }
@@ -117,7 +131,6 @@ Deno.serve(async (req) => {
       console.log(`[delete-associado] Resultado Rede Veículos:`, inativarResult);
     } catch (redeErr) {
       console.warn(`[delete-associado] Erro ao inativar na Rede Veículos (continuando):`, redeErr);
-      // Não bloquear exclusão por erro na plataforma externa
     }
 
     // 1. Fetch all contracts for this associate (by associado_id)
@@ -129,33 +142,57 @@ Deno.serve(async (req) => {
     console.log(`[delete-associado] Contratos encontrados: ${contratos?.length || 0}`);
 
     // 1.5. Desvincular contrato_id do associado ANTES de excluir contratos (evita FK constraint)
-    await supabaseAdmin
+    const unlinkResult = await supabaseAdmin
       .from("associados")
       .update({ contrato_id: null })
       .eq("id", associadoId);
+    logIfError("desvincular contrato do associado", unlinkResult, { associadoId });
     
     console.log(`[delete-associado] Contrato desvinculado do associado`);
 
-    // 2. For each contract, delete dependencies
+    // 2. For each contract, delete dependencies (INCLUINDO comissoes_deducoes)
     if (contratos && contratos.length > 0) {
       for (const contrato of contratos) {
         console.log(`[delete-associado] Limpando contrato: ${contrato.id}`);
 
-        // IMPORTANTE: Excluir instalacoes_pendentes_criacao PRIMEIRO (FK constraint)
-        await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("contrato_id", contrato.id);
+        // **CRÍTICO**: Excluir comissoes_deducoes ANTES de excluir contratos (FK sem cascade)
+        const comissoesDeducoesResult = await supabaseAdmin
+          .from("comissoes_deducoes")
+          .delete()
+          .eq("contrato_id", contrato.id);
+        logIfError("excluir comissoes_deducoes", comissoesDeducoesResult, { contrato_id: contrato.id });
+        console.log(`[delete-associado] comissoes_deducoes excluídas para contrato: ${contrato.id}`);
+
+        // Excluir comissoes (segurança adicional, mesmo com cascade)
+        const comissoesResult = await supabaseAdmin
+          .from("comissoes")
+          .delete()
+          .eq("contrato_id", contrato.id);
+        logIfError("excluir comissoes", comissoesResult, { contrato_id: contrato.id });
+
+        // Excluir instalacoes_pendentes_criacao (FK constraint)
+        const instPendResult = await supabaseAdmin
+          .from("instalacoes_pendentes_criacao")
+          .delete()
+          .eq("contrato_id", contrato.id);
+        logIfError("excluir instalacoes_pendentes_criacao", instPendResult, { contrato_id: contrato.id });
+
         if (contrato.cotacao_id) {
           await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("cotacao_id", contrato.cotacao_id);
         }
         console.log(`[delete-associado] instalacoes_pendentes_criacao excluídas para contrato: ${contrato.id}`);
 
         // Excluir serviços vinculados
-        await supabaseAdmin.from("servicos").delete().eq("contrato_id", contrato.id);
+        const servicosResult = await supabaseAdmin.from("servicos").delete().eq("contrato_id", contrato.id);
+        logIfError("excluir servicos", servicosResult, { contrato_id: contrato.id });
+
         if (contrato.cotacao_id) {
           await supabaseAdmin.from("servicos").delete().eq("cotacao_id", contrato.cotacao_id);
         }
 
         // Delete Asaas related
-        await supabaseAdmin.from("asaas_cobrancas").delete().eq("contrato_id", contrato.id);
+        const asaasResult = await supabaseAdmin.from("asaas_cobrancas").delete().eq("contrato_id", contrato.id);
+        logIfError("excluir asaas_cobrancas", asaasResult, { contrato_id: contrato.id });
         
         // Delete contract documents
         await supabaseAdmin.from("contratos_documentos").delete().eq("contrato_id", contrato.id);
@@ -165,7 +202,7 @@ Deno.serve(async (req) => {
         // Delete gastos_beneficios
         await supabaseAdmin.from("gastos_beneficios").delete().eq("contrato_id", contrato.id);
 
-        // NOVO: Excluir blacklist_veiculos que referenciam vistorias do contrato ANTES de excluir vistorias
+        // Excluir blacklist_veiculos que referenciam vistorias do contrato ANTES de excluir vistorias
         const { data: vistoriasContrato } = await supabaseAdmin
           .from("vistorias")
           .select("id")
@@ -178,8 +215,11 @@ Deno.serve(async (req) => {
         }
 
         // Delete installations and inspections linked to contract
-        await supabaseAdmin.from("instalacoes").delete().eq("contrato_id", contrato.id);
-        await supabaseAdmin.from("vistorias").delete().eq("contrato_id", contrato.id);
+        const instalacoesResult = await supabaseAdmin.from("instalacoes").delete().eq("contrato_id", contrato.id);
+        logIfError("excluir instalacoes", instalacoesResult, { contrato_id: contrato.id });
+
+        const vistoriasResult = await supabaseAdmin.from("vistorias").delete().eq("contrato_id", contrato.id);
+        logIfError("excluir vistorias", vistoriasResult, { contrato_id: contrato.id });
 
         // Clear cotacao reference and delete
         if (contrato.cotacao_id) {
@@ -188,34 +228,44 @@ Deno.serve(async (req) => {
             .update({ contrato_gerado_id: null })
             .eq("id", contrato.cotacao_id);
           
-          // Delete cotacao beneficios first
           await supabaseAdmin.from("cotacao_beneficios").delete().eq("cotacao_id", contrato.cotacao_id);
           await supabaseAdmin.from("cotacoes").delete().eq("id", contrato.cotacao_id);
         }
 
-        // NOVO: Desvincular contrato do veículo antes de excluir o contrato
-        await supabaseAdmin
+        // Desvincular contrato do veículo antes de excluir o contrato
+        const veiculoUnlinkResult = await supabaseAdmin
           .from("veiculos")
           .update({ contrato_id: null })
           .eq("contrato_id", contrato.id);
+        logIfError("desvincular veiculo do contrato", veiculoUnlinkResult, { contrato_id: contrato.id });
 
         // Delete the contract itself
-        await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
+        const contratoDeleteResult = await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
+        logIfError("excluir contrato", contratoDeleteResult, { contrato_id: contrato.id });
+        
+        if (contratoDeleteResult.error) {
+          console.error(`[delete-associado] FALHA ao excluir contrato ${contrato.id}: ${contratoDeleteResult.error.message}`);
+        } else {
+          console.log(`[delete-associado] Contrato ${contrato.id} excluído com sucesso`);
+        }
       }
     }
 
-    // 2.1 NOVO: Excluir QUALQUER contrato que ainda referencie este associado (por segurança)
-    // Isso garante que não haja contratos órfãos ou criados por outras rotas
+    // 2.1 VERIFICAR e excluir contratos restantes (segurança adicional)
     const { data: contratosRestantes } = await supabaseAdmin
       .from("contratos")
       .select("id")
       .eq("associado_id", associadoId);
     
     if (contratosRestantes && contratosRestantes.length > 0) {
-      console.log(`[delete-associado] Encontrados ${contratosRestantes.length} contratos restantes, excluindo...`);
+      console.log(`[delete-associado] Encontrados ${contratosRestantes.length} contratos restantes, limpando dependências...`);
       
       for (const contrato of contratosRestantes) {
-        // Limpar dependências básicas
+        // **CRÍTICO**: comissoes_deducoes primeiro!
+        const comDeducResult = await supabaseAdmin.from("comissoes_deducoes").delete().eq("contrato_id", contrato.id);
+        logIfError("force delete comissoes_deducoes", comDeducResult, { contrato_id: contrato.id });
+        
+        await supabaseAdmin.from("comissoes").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("servicos").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("asaas_cobrancas").delete().eq("contrato_id", contrato.id);
@@ -233,24 +283,49 @@ Deno.serve(async (req) => {
           .eq("contrato_id", contrato.id);
         
         // Excluir contrato
-        await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
+        const forceDeleteResult = await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
+        logIfError("force delete contrato", forceDeleteResult, { contrato_id: contrato.id });
       }
     }
 
-    // 2.2 NOVO: Forçar exclusão final de qualquer contrato restante (última linha de defesa)
-    const { error: contratosForceDeleteError } = await supabaseAdmin
+    // 2.2 VERIFICAÇÃO FINAL: Checar se ainda existem contratos
+    const { data: contratosFinal, count: contratosCount } = await supabaseAdmin
       .from("contratos")
-      .delete()
+      .select("id", { count: "exact", head: false })
       .eq("associado_id", associadoId);
-    
-    if (contratosForceDeleteError) {
-      console.error(`[delete-associado] Erro ao forçar exclusão de contratos: ${contratosForceDeleteError.message}`);
-    } else {
-      console.log(`[delete-associado] Verificação final de contratos concluída`);
+
+    console.log(`[delete-associado] Contratos restantes após limpeza: ${contratosCount || 0}`);
+
+    if (contratosFinal && contratosFinal.length > 0) {
+      // Diagnóstico detalhado: verificar o que está bloqueando
+      const diagnostico: Record<string, unknown>[] = [];
+      
+      for (const contrato of contratosFinal.slice(0, 5)) { // Limitar a 5 para não sobrecarregar
+        const { count: comDeducCount } = await supabaseAdmin
+          .from("comissoes_deducoes")
+          .select("*", { count: "exact", head: true })
+          .eq("contrato_id", contrato.id);
+        
+        diagnostico.push({
+          contrato_id: contrato.id,
+          comissoes_deducoes: comDeducCount || 0,
+        });
+      }
+
+      console.error(`[delete-associado] BLOQUEIO: ${contratosFinal.length} contratos ainda existem:`, diagnostico);
+      
+      return new Response(
+        JSON.stringify({
+          error: "Não foi possível excluir todos os contratos do associado",
+          contratos_restantes: contratosFinal.length,
+          diagnostico,
+          hint: "Existem dependências de banco bloqueando a exclusão. Verifique comissoes_deducoes ou outras FKs.",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // 2.5. NOVO: Excluir cotações órfãs vinculadas a leads do associado
-    // (cotações que não têm contrato associado, como recusadas ou pendentes)
+    // 2.5. Excluir cotações órfãs vinculadas a leads do associado
     const { data: leads } = await supabaseAdmin
       .from("leads")
       .select("id")
@@ -260,7 +335,6 @@ Deno.serve(async (req) => {
 
     if (leads && leads.length > 0) {
       for (const lead of leads) {
-        // Buscar cotações vinculadas a este lead
         const { data: cotacoesLead } = await supabaseAdmin
           .from("cotacoes")
           .select("id")
@@ -270,23 +344,19 @@ Deno.serve(async (req) => {
           console.log(`[delete-associado] Excluindo ${cotacoesLead.length} cotações órfãs do lead: ${lead.id}`);
           
           for (const cotacao of cotacoesLead) {
-            // Limpar dependências da cotação
             await supabaseAdmin.from("cotacao_beneficios").delete().eq("cotacao_id", cotacao.id);
             await supabaseAdmin.from("cotacoes_historico").delete().eq("cotacao_id", cotacao.id);
             await supabaseAdmin.from("servicos").delete().eq("cotacao_id", cotacao.id);
             await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("cotacao_id", cotacao.id);
             
-            // Limpar referência do contrato se existir (pode já ter sido excluído)
             await supabaseAdmin
               .from("contratos")
               .update({ cotacao_id: null })
               .eq("cotacao_id", cotacao.id);
 
-            // Limpar agendamentos_base vinculados
             await supabaseAdmin.from("agendamentos_base").delete().eq("cotacao_id", cotacao.id);
           }
           
-          // Excluir cotações do lead
           await supabaseAdmin.from("cotacoes").delete().eq("lead_id", lead.id);
         }
       }
@@ -355,7 +425,7 @@ Deno.serve(async (req) => {
 
     if (veiculos && veiculos.length > 0) {
       for (const veiculo of veiculos) {
-        // NOVO: Excluir blacklist_veiculos que referenciam vistorias do veículo ANTES de excluir vistorias
+        // Excluir blacklist_veiculos que referenciam vistorias do veículo ANTES de excluir vistorias
         const { data: vistoriasVeiculo } = await supabaseAdmin
           .from("vistorias")
           .select("id")
@@ -367,7 +437,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // NOVO: Excluir blacklist_veiculos que referenciam o veículo diretamente
+        // Excluir blacklist_veiculos que referenciam o veículo diretamente
         await supabaseAdmin.from("blacklist_veiculos").delete().eq("veiculo_id", veiculo.id);
 
         // Delete veiculo dependencies
@@ -389,7 +459,7 @@ Deno.serve(async (req) => {
           })
           .eq("veiculo_id", veiculo.id);
 
-        // NOVO: Desvincular contrato do veículo antes de excluir
+        // Desvincular contrato do veículo antes de excluir
         await supabaseAdmin
           .from("veiculos")
           .update({ contrato_id: null })
@@ -399,7 +469,7 @@ Deno.serve(async (req) => {
       await supabaseAdmin.from("veiculos").delete().eq("associado_id", associadoId);
     }
 
-    // NOVO: Excluir blacklist_veiculos que referenciam o associado diretamente
+    // Excluir blacklist_veiculos que referenciam o associado diretamente
     await supabaseAdmin.from("blacklist_veiculos").delete().eq("associado_id", associadoId);
 
     // 13. Delete documentos
@@ -409,6 +479,8 @@ Deno.serve(async (req) => {
     await supabaseAdmin.from("auth_tokens_primeiro_acesso").delete().eq("associado_id", associadoId);
 
     // 15. Finally, delete the associate
+    console.log(`[delete-associado] Todas as dependências limpas. Excluindo associado...`);
+    
     const { error: deleteError } = await supabaseAdmin
       .from("associados")
       .delete()
@@ -423,40 +495,35 @@ Deno.serve(async (req) => {
     }
 
     // 16. Log the action
-    await supabaseAdmin.from("auth_logs").insert({
-      acao: "excluir_associado",
-      modulo: "associados",
-      email: user.email,
-      profile_id: user.id,
-      metadata: {
-        associado_id: associadoId,
-        associado_nome: associado.nome,
-        associado_cpf: associado.cpf,
-        associado_status: associado.status,
-        contratos_excluidos: contratos?.length || 0,
-        veiculos_excluidos: veiculos?.length || 0,
-      },
-    });
+    try {
+      await supabaseAdmin.from("auth_logs").insert({
+        profile_id: user.id,
+        acao: "exclusao_associado",
+        modulo: "associados",
+        metadata: {
+          associado_id: associadoId,
+          associado_nome: associado.nome,
+          associado_cpf: associado.cpf,
+          status_anterior: associado.status,
+        },
+      });
+    } catch (logErr) {
+      console.warn("[delete-associado] Erro ao registrar log:", logErr);
+    }
 
-    console.log(`[delete-associado] Associado excluído com sucesso: ${associado.nome}`);
+    console.log(`[delete-associado] Associado ${associadoId} excluído com sucesso`);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         message: `Associado ${associado.nome} excluído com sucesso`,
-        details: {
-          contratos_excluidos: contratos?.length || 0,
-          veiculos_excluidos: veiculos?.length || 0,
-        }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
-  } catch (error: unknown) {
-    console.error("[delete-associado] Erro:", error);
-    const errorMessage = error instanceof Error ? error.message : "Erro interno do servidor";
+  } catch (error) {
+    console.error("[delete-associado] Erro geral:", error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: error.message || "Erro interno do servidor" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
