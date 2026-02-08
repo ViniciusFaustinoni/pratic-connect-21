@@ -449,12 +449,12 @@ export default function ExecutarManutencao() {
 
       {/* Modal de Resultado */}
       <Dialog open={showResultadoModal} onOpenChange={setShowResultadoModal}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="p-4 pb-2 flex-shrink-0">
             <DialogTitle>Resultado da Manutenção</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 -mx-6 px-6">
+          <ScrollArea className="flex-1 max-h-[calc(90vh-140px)] px-4 overscroll-contain">
             <div className="space-y-4 pb-4">
               {/* Seleção de Resultado */}
               <div className="space-y-3">
@@ -702,7 +702,7 @@ export default function ExecutarManutencao() {
             </div>
           </ScrollArea>
 
-          <DialogFooter className="flex-row gap-2 pt-4 border-t">
+          <DialogFooter className="flex-row gap-2 p-4 border-t flex-shrink-0 bg-background">
             <Button
               variant="outline"
               onClick={() => setShowResultadoModal(false)}
