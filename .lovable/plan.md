@@ -1,88 +1,125 @@
 
-# Plano de Correção: Erro de Enum "reagendar" ao Concluir Instalação
+# Correção: Scroll do Modal de Resultado da Manutenção
 
-## Diagnóstico Completo
+## Problema Identificado
 
-### Causa Raiz Identificada
-A migration recente (`20260208023823...`) criou a função `sync_servicos_to_instalacao` com dois erros críticos:
+O modal "Resultado da Manutenção" em `ExecutarManutencao.tsx` (linhas 450-735) não permite scroll no dispositivo móvel, impedindo o vistoriador de acessar os botões "Cancelar" e "Confirmar".
 
-1. **Valor de enum incorreto**: Usa `'reagendar'` (não existe) em vez de `'reagendada'`
-2. **Valor inválido para instalacao**: Usa `'pendente'` que não existe em `status_instalacao`
+### Causa Raiz
 
-### Fluxo do Erro
-```text
-1. Código chama aprovarVeiculoMutation
-2. Tenta atualizar servicos.status = 'concluida'
-3. Trigger sync_servicos_to_instalacao dispara
-4. UPDATE instalacoes tenta aplicar CASE com valores inválidos
-5. Trigger sync_instalacao_update_to_servicos dispara (loop)
-6. Tenta fazer: (NEW.status::text)::status_servico
-7. Se qualquer conversão falhar → ERRO "invalid input value for enum"
+A estrutura atual usa:
+```tsx
+<DialogContent className="max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+  <DialogHeader>...</DialogHeader>
+  <ScrollArea className="flex-1 -mx-6 px-6">
+    ...conteúdo...
+  </ScrollArea>
+  <DialogFooter>...</DialogFooter>
+</DialogContent>
 ```
 
-### Logs Confirmando
+O problema está na combinação de:
+1. **`overflow-hidden` no DialogContent** - bloqueia qualquer overflow
+2. **`ScrollArea` com `flex-1`** - o `flex-1` não calcula corretamente a altura disponível quando não há altura fixa
+3. **`-mx-6 px-6`** - margem negativa pode causar problemas de touch em mobile
+
+### Solução
+
+Substituir a estrutura atual por um layout mais robusto que funcione corretamente em dispositivos móveis:
+
+1. **Remover `overflow-hidden`** do DialogContent
+2. **Usar altura fixa no ScrollArea** com `max-h-[calc(90vh-180px)]` para garantir espaço para header/footer
+3. **Adicionar `overscroll-contain`** para melhor experiência de scroll em mobile
+4. **Garantir que o footer permaneça visível** fora da área de scroll
+
+---
+
+## Alterações
+
+### Arquivo: `src/pages/instalador/ExecutarManutencao.tsx`
+
+**Linha 452 - DialogContent**:
+Remover `overflow-hidden` e ajustar estrutura:
+
+```tsx
+// ANTES:
+<DialogContent className="max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+
+// DEPOIS:
+<DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0">
 ```
-ERROR: invalid input value for enum status_servico: "reagendar"
-(múltiplas ocorrências)
+
+**Linhas 453-455 - DialogHeader**:
+Adicionar padding:
+
+```tsx
+<DialogHeader className="p-4 pb-2 flex-shrink-0">
+  <DialogTitle>Resultado da Manutenção</DialogTitle>
+</DialogHeader>
+```
+
+**Linha 457 - ScrollArea**:
+Usar altura máxima calculada e remover margens negativas:
+
+```tsx
+// ANTES:
+<ScrollArea className="flex-1 -mx-6 px-6">
+
+// DEPOIS:
+<ScrollArea className="flex-1 max-h-[calc(90vh-140px)] px-4 overscroll-contain">
+```
+
+**Linha 705 - DialogFooter**:
+Garantir que fique sempre visível:
+
+```tsx
+// ANTES:
+<DialogFooter className="flex-row gap-2 pt-4 border-t">
+
+// DEPOIS:
+<DialogFooter className="flex-row gap-2 p-4 border-t flex-shrink-0 bg-background">
 ```
 
 ---
 
-## Solução
+## Estrutura Final
 
-### Migração de Correção
-Corrigir a função `sync_servicos_to_instalacao` com:
+```tsx
+<DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0">
+  <DialogHeader className="p-4 pb-2 flex-shrink-0">
+    <DialogTitle>Resultado da Manutenção</DialogTitle>
+  </DialogHeader>
 
-1. **Status corretos**: Trocar `'reagendar'` por `'reagendada'`
-2. **Remover `'pendente'`**: Não existe em `status_instalacao`
-3. **Adicionar proteção contra loops**: Evitar que triggers disparem em cascata infinitamente
+  <ScrollArea className="flex-1 max-h-[calc(90vh-140px)] px-4 overscroll-contain">
+    <div className="space-y-4 pb-4">
+      {/* Todo o conteúdo scrollável */}
+    </div>
+  </ScrollArea>
 
-```sql
-CREATE OR REPLACE FUNCTION sync_servicos_to_instalacao()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- Só sincroniza se tiver instalacao_origem_id definido
-  IF NEW.instalacao_origem_id IS NOT NULL THEN
-    -- CORREÇÃO: Lista de status válidos para status_instalacao
-    -- status_instalacao = {agendada, em_rota, em_andamento, concluida, reagendada, cancelada}
-    UPDATE instalacoes
-    SET 
-      status = CASE 
-        WHEN NEW.status::text IN ('agendada', 'em_rota', 'em_andamento', 'concluida', 'reagendada', 'cancelada') 
-        THEN (NEW.status::text)::status_instalacao
-        ELSE status -- Mantém o status atual se não for mapeável
-      END,
-      updated_at = NOW()
-    WHERE id = NEW.instalacao_origem_id
-      AND status::text IS DISTINCT FROM NEW.status::text;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+  <DialogFooter className="flex-row gap-2 p-4 border-t flex-shrink-0 bg-background">
+    <Button variant="outline" ...>Cancelar</Button>
+    <Button ...>Confirmar</Button>
+  </DialogFooter>
+</DialogContent>
 ```
 
-### Possíveis Problemas Adicionais
+---
 
-Também verificar se o hook `useAprovarVeiculoServico` está preparado para casos onde:
-- `imeiRastreador` é `undefined` (veículo não precisa de rastreador)
-- O rastreador não é encontrado
+## Resumo das Alterações
 
-O hook atualmente falha se não encontrar rastreador, mas o veículo pode dispensar rastreador.
+| Linha | Alteração |
+|-------|-----------|
+| 452 | Remover `overflow-hidden`, adicionar `p-0` |
+| 453-455 | Adicionar `className="p-4 pb-2 flex-shrink-0"` ao DialogHeader |
+| 457 | Trocar `flex-1 -mx-6 px-6` por `flex-1 max-h-[calc(90vh-140px)] px-4 overscroll-contain` |
+| 705 | Adicionar `flex-shrink-0 bg-background` e trocar `pt-4` por `p-4` no DialogFooter |
 
 ---
 
-## Arquivos a Modificar
+## Resultado Esperado
 
-| Arquivo | Alteração |
-|---------|-----------|
-| Nova migração SQL | Corrigir função `sync_servicos_to_instalacao` |
-| `src/hooks/useServicos.ts` | Verificar se `imeiRastreador` é opcional |
-
----
-
-## Validação
-
-1. Aplicar a migração de correção
-2. Tentar concluir a instalação `ff578a8f-...` novamente
-3. Verificar nos logs que não há mais erro de enum
-4. Confirmar que o status mudou para `concluida` em ambas as tabelas
+Após a correção:
+- O conteúdo do modal será scrollável normalmente
+- O header e footer ficarão fixos (sempre visíveis)
+- Os botões "Cancelar" e "Confirmar" estarão sempre acessíveis
+- O scroll funcionará corretamente tanto em desktop quanto em dispositivos móveis
