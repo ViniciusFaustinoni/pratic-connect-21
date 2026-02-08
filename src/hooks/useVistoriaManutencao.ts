@@ -698,6 +698,32 @@ export function useRegistrarResultadoManutencao() {
             throw new Error('Erro ao reagendar serviço');
           }
 
+          // Atualizar rastreador para aguardar novo agendamento
+          if (rastreadorAntigoId) {
+            const { error: rastreadorError } = await supabase
+              .from('rastreadores')
+              .update({
+                status: 'reagendar_manutencao',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', rastreadorAntigoId);
+
+            if (rastreadorError) {
+              console.error('[useRegistrarResultadoManutencao] Erro ao atualizar rastreador:', rastreadorError);
+              throw new Error('Erro ao atualizar status do rastreador');
+            }
+
+            // Registrar movimentação no histórico
+            await supabase.from('estoque_movimentacoes').insert({
+              tipo: 'alteracao_status',
+              quantidade: 1,
+              status_anterior: 'manutencao',
+              status_novo: 'reagendar_manutencao',
+              rastreador_id: rastreadorAntigoId,
+              observacoes: `Manutenção não resolvida - aguardando reagendamento: ${params.descricao}`,
+            });
+          }
+
         } else {
           // Cancelar: rastreador volta para instalado
           if (rastreadorAntigoId) {
@@ -781,13 +807,24 @@ export function useMarcarNaoCompareceu() {
 
   return useMutation({
     mutationFn: async (params: MarcarNaoCompareceuParams) => {
+      // 1. Buscar o rastreador_id do serviço
+      const { data: servico, error: servicoGetError } = await supabase
+        .from('servicos')
+        .select('rastreador_id')
+        .eq('id', params.servicoId)
+        .single();
+
+      if (servicoGetError || !servico) {
+        throw new Error('Erro ao buscar dados do serviço');
+      }
+
+      // 2. Atualizar status do serviço
       const { error } = await supabase
         .from('servicos')
         .update({
           status: 'nao_compareceu' as any,
           observacoes_analise: params.observacao || 'Associado não compareceu',
           updated_at: new Date().toISOString(),
-          // NÃO suspender proteção ainda - coordenador/diretor decide
         })
         .eq('id', params.servicoId);
 
@@ -796,12 +833,41 @@ export function useMarcarNaoCompareceu() {
         throw new Error('Erro ao marcar não comparecimento');
       }
 
+      // 3. Atualizar status do rastreador para 'reagendar_manutencao'
+      if (servico.rastreador_id) {
+        const { error: rastreadorError } = await supabase
+          .from('rastreadores')
+          .update({
+            status: 'reagendar_manutencao',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', servico.rastreador_id);
+
+        if (rastreadorError) {
+          console.error('[useMarcarNaoCompareceu] Erro ao atualizar rastreador:', rastreadorError);
+          throw new Error('Erro ao atualizar status do rastreador');
+        }
+
+        // 4. Registrar movimentação no histórico
+        await supabase.from('estoque_movimentacoes').insert({
+          tipo: 'alteracao_status',
+          quantidade: 1,
+          status_anterior: 'manutencao',
+          status_novo: 'reagendar_manutencao',
+          rastreador_id: servico.rastreador_id,
+          observacoes: `Não comparecimento: ${params.observacao || 'Associado ausente na data agendada'}`,
+        });
+      }
+
       return { servicoId: params.servicoId };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['lista-rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
       
       toast.info('Não comparecimento registrado', {
         description: 'O coordenador/diretor poderá reagendar ou cancelar com suspensão.',
