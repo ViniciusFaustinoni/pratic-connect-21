@@ -49,6 +49,7 @@ interface ManutencaoTabelaProps {
   onMarcarNaoCompareceu?: (vistoria: VistoriaManutencao) => void;
   onCancelar?: (vistoria: VistoriaManutencao) => void;
   onVerDetalhes?: (vistoria: VistoriaManutencao) => void;
+  onTratarAusencia?: (vistoria: VistoriaManutencao) => void;
 }
 
 export function ManutencaoTabela({
@@ -59,6 +60,7 @@ export function ManutencaoTabela({
   onMarcarNaoCompareceu,
   onCancelar,
   onVerDetalhes,
+  onTratarAusencia,
 }: ManutencaoTabelaProps) {
   const { isDiretor, isCoordenadorMonitoramento, isInstaladorVistoriador } = usePermissions();
   const canManage = isDiretor || isCoordenadorMonitoramento;
@@ -214,20 +216,13 @@ export function ManutencaoTabela({
                       </>
                     )}
 
-                    {/* Status nao_compareceu - Permitir reagendar ou cancelar definitivamente */}
+                    {/* Status nao_compareceu - Tratar ausencia */}
                     {vistoria.status === 'nao_compareceu' && canManage && (
                       <>
-                        <DropdownMenuItem onClick={() => onAgendar?.(vistoria)}>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Reagendar
-                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => onCancelar?.(vistoria)}
-                          className="text-destructive"
-                        >
-                          <XCircle className="h-4 w-4 mr-2" />
-                          Cancelar e Suspender Proteção
+                        <DropdownMenuItem onClick={() => onTratarAusencia?.(vistoria)}>
+                          <AlertTriangle className="h-4 w-4 mr-2" />
+                          Tratar ausência
                         </DropdownMenuItem>
                       </>
                     )}
