@@ -23,6 +23,11 @@ import {
   ArrowRight,
   History,
   Server,
+  Settings,
+  Clock,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { usePlataformasLabels } from '@/hooks/usePlataformasCRUD';
 
@@ -40,9 +45,9 @@ const statusConfig: Record<StatusRastreador, { label: string; icon: React.Elemen
   manutencao: { label: 'Em Manutenção', icon: Wrench, color: 'bg-amber-500/10 text-amber-600 border-amber-500/30' },
   baixado: { label: 'Baixado', icon: XCircle, color: 'bg-red-500/10 text-red-600 border-red-500/30' },
   retorno_base: { label: 'Retorno Base', icon: Package, color: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' },
-  triagem: { label: 'Em Triagem', icon: Package, color: 'bg-purple-500/10 text-purple-600 border-purple-500/30' },
+  triagem: { label: 'Em Triagem', icon: Settings, color: 'bg-purple-500/10 text-purple-600 border-purple-500/30' },
   em_analise_plataforma: { label: 'Análise Plataforma', icon: Server, color: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/30' },
-  em_garantia: { label: 'Em Garantia', icon: Package, color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30' },
+  em_garantia: { label: 'Em Garantia', icon: FileText, color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30' },
 };
 
 const tipoMovimentacaoLabels: Record<string, string> = {
@@ -56,6 +61,60 @@ const tipoMovimentacaoLabels: Record<string, string> = {
   atribuicao_portador: 'Atribuição de Portador',
   remocao_portador: 'Remoção de Portador',
   troca_portador: 'Troca de Portador',
+  // Tipos de manutenção
+  retorno_base: 'Retorno à Base (Triagem)',
+  baixa_substituicao: 'Baixa por Substituição',
+  instalacao_substituicao: 'Instalação (Substituição)',
+  baixa_manutencao: 'Baixa por Manutenção',
+  inicio_triagem: 'Início da Triagem',
+  envio_plataforma: 'Envio para Plataforma',
+  envio_garantia: 'Envio para Garantia',
+  retorno_plataforma: 'Retorno da Plataforma',
+  retorno_garantia: 'Retorno da Garantia',
+};
+
+const ETAPA_MANUTENCAO_LABELS: Record<string, string> = {
+  aguardando_triagem: 'Aguardando Triagem',
+  em_triagem: 'Em Triagem',
+  aguardando_envio_plataforma: 'Aguardando Envio Plataforma',
+  em_analise_plataforma: 'Em Análise Plataforma',
+  aguardando_envio_garantia: 'Aguardando Envio Garantia',
+  em_garantia: 'Em Garantia',
+  concluido_estoque: 'Devolvido ao Estoque',
+  descartado: 'Descartado',
+};
+
+const ETAPA_MANUTENCAO_COLORS: Record<string, string> = {
+  aguardando_triagem: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30',
+  em_triagem: 'bg-purple-500/10 text-purple-600 border-purple-500/30',
+  aguardando_envio_plataforma: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/30',
+  em_analise_plataforma: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/30',
+  aguardando_envio_garantia: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30',
+  em_garantia: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30',
+  concluido_estoque: 'bg-green-500/10 text-green-600 border-green-500/30',
+  descartado: 'bg-red-500/10 text-red-600 border-red-500/30',
+};
+
+const MOTIVO_MANUTENCAO_LABELS: Record<string, string> = {
+  sem_sinal: 'Sem Sinal',
+  bateria_baixa: 'Bateria Baixa',
+  localizacao_incorreta: 'Localização Incorreta',
+  ignicao_incorreta: 'Ignição Incorreta',
+  solicitacao_associado: 'Solicitação do Associado',
+  preventiva: 'Manutenção Preventiva',
+  outro: 'Outro',
+};
+
+const RESULTADO_MANUTENCAO_LABELS: Record<string, string> = {
+  resolvido: 'Resolvido',
+  substituicao: 'Substituição',
+  nao_resolvido: 'Não Resolvido',
+};
+
+const RESULTADO_MANUTENCAO_COLORS: Record<string, string> = {
+  resolvido: 'bg-green-500/10 text-green-600 border-green-500/30',
+  substituicao: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+  nao_resolvido: 'bg-red-500/10 text-red-600 border-red-500/30',
 };
 
 export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: DetalhesRastreadorDialogProps) {
@@ -97,7 +156,7 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
     enabled: !!rastreadorId && open,
   });
 
-  // Query para buscar histórico de movimentações
+  // Query para buscar histórico de movimentações de estoque
   const { data: historico, isLoading: isLoadingHistorico } = useQuery({
     queryKey: ['rastreador-historico', rastreadorId],
     queryFn: async () => {
@@ -117,6 +176,119 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
         .eq('rastreador_id', rastreadorId!)
         .order('created_at', { ascending: false })
         .limit(10);
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!rastreadorId && open,
+  });
+
+  // Query para buscar serviço de manutenção ativo (se em manutenção de campo)
+  const { data: servicoManutencao } = useQuery({
+    queryKey: ['rastreador-servico-manutencao', rastreadorId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('servicos')
+        .select(`
+          id,
+          protocolo,
+          status,
+          data_agendada,
+          periodo,
+          motivo_manutencao,
+          observacoes,
+          profissional:profiles!servicos_profissional_id_fkey(nome)
+        `)
+        .eq('rastreador_id', rastreadorId!)
+        .eq('tipo', 'vistoria_manutencao')
+        .not('status', 'in', '("concluida","cancelada","aprovada")')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!rastreadorId && open && rastreador?.status === 'manutencao',
+  });
+
+  // Query para buscar manutenção interna ativa (se em triagem/plataforma/garantia)
+  const statusManutencaoInterna = ['retorno_base', 'triagem', 'em_analise_plataforma', 'em_garantia'];
+  const { data: manutencaoInterna } = useQuery({
+    queryKey: ['rastreador-manutencao-interna', rastreadorId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rastreador_manutencao_interna')
+        .select(`
+          id,
+          etapa,
+          diagnostico_inicial,
+          defeito_identificado,
+          encaminhado_para,
+          numero_protocolo_externo,
+          laudo_externo,
+          created_at,
+          servico_origem:servicos!rastreador_manutencao_interna_servico_origem_id_fkey(protocolo)
+        `)
+        .eq('rastreador_id', rastreadorId!)
+        .not('etapa', 'in', '("concluido_estoque","descartado")')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!rastreadorId && open && statusManutencaoInterna.includes(rastreador?.status || ''),
+  });
+
+  // Query para buscar histórico de serviços de manutenção (campo)
+  const { data: historicoServicosManutencao } = useQuery({
+    queryKey: ['rastreador-historico-servicos', rastreadorId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('servicos')
+        .select(`
+          id,
+          protocolo,
+          status,
+          resultado_manutencao,
+          concluida_em,
+          observacoes_analise,
+          profissional:profiles!servicos_profissional_id_fkey(nome)
+        `)
+        .eq('rastreador_id', rastreadorId!)
+        .eq('tipo', 'vistoria_manutencao')
+        .in('status', ['concluida', 'aprovada', 'cancelada'] as any)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!rastreadorId && open,
+  });
+
+  // Query para buscar histórico de manutenções internas (bancada)
+  const { data: historicoManutencaoInterna } = useQuery({
+    queryKey: ['rastreador-historico-manutencao-interna', rastreadorId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rastreador_manutencao_interna')
+        .select(`
+          id,
+          etapa,
+          acao_tomada,
+          laudo_externo,
+          encaminhado_para,
+          created_at,
+          resolvido_em,
+          resolvido_por_profile:profiles!rastreador_manutencao_interna_resolvido_por_fkey(nome)
+        `)
+        .eq('rastreador_id', rastreadorId!)
+        .in('etapa', ['concluido_estoque', 'descartado'] as any)
+        .order('created_at', { ascending: false })
+        .limit(5);
       
       if (error) throw error;
       return data;
@@ -173,6 +345,84 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
                   </div>
                 </div>
               </div>
+
+              {/* Manutenção de Campo Ativa */}
+              {rastreador.status === 'manutencao' && servicoManutencao && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-amber-600 uppercase tracking-wide flex items-center gap-2">
+                    <Wrench className="h-4 w-4" />
+                    Manutenção em Andamento
+                  </h3>
+                  <div className="rounded-lg border-2 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">{servicoManutencao.protocolo}</span>
+                      <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                        {servicoManutencao.status}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <p className="flex items-center gap-2">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        Motivo: {MOTIVO_MANUTENCAO_LABELS[servicoManutencao.motivo_manutencao || ''] || servicoManutencao.motivo_manutencao || '-'}
+                      </p>
+                      {servicoManutencao.data_agendada && (
+                        <p className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5" />
+                          Agendado: {format(new Date(servicoManutencao.data_agendada), 'dd/MM/yyyy', { locale: ptBR })} - {servicoManutencao.periodo || 'A definir'}
+                        </p>
+                      )}
+                      {servicoManutencao.profissional?.nome && (
+                        <p className="flex items-center gap-2">
+                          <User className="h-3.5 w-3.5" />
+                          Técnico: {servicoManutencao.profissional.nome}
+                        </p>
+                      )}
+                      {servicoManutencao.observacoes && (
+                        <p className="text-xs mt-2 italic">{servicoManutencao.observacoes}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Manutenção Interna Ativa */}
+              {statusManutencaoInterna.includes(rastreador.status || '') && manutencaoInterna && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-purple-600 uppercase tracking-wide flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Manutenção Interna (Bancada)
+                  </h3>
+                  <div className="rounded-lg border-2 border-purple-200 bg-purple-50 dark:bg-purple-950/20 dark:border-purple-900 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge variant="outline" className={ETAPA_MANUTENCAO_COLORS[manutencaoInterna.etapa] || 'bg-muted'}>
+                        {ETAPA_MANUTENCAO_LABELS[manutencaoInterna.etapa] || manutencaoInterna.etapa}
+                      </Badge>
+                      {manutencaoInterna.servico_origem?.protocolo && (
+                        <span className="text-xs text-muted-foreground">
+                          Origem: {manutencaoInterna.servico_origem.protocolo}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      {manutencaoInterna.diagnostico_inicial && (
+                        <p>Diagnóstico: {manutencaoInterna.diagnostico_inicial}</p>
+                      )}
+                      {manutencaoInterna.defeito_identificado && (
+                        <p>Defeito: {manutencaoInterna.defeito_identificado}</p>
+                      )}
+                      {manutencaoInterna.encaminhado_para && (
+                        <p>Encaminhado para: {manutencaoInterna.encaminhado_para}</p>
+                      )}
+                      {manutencaoInterna.numero_protocolo_externo && (
+                        <p className="font-mono">Protocolo Externo: {manutencaoInterna.numero_protocolo_externo}</p>
+                      )}
+                      {manutencaoInterna.laudo_externo && (
+                        <p className="text-xs mt-2 italic">Laudo: {manutencaoInterna.laudo_externo}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Informações Técnicas */}
               <div className="space-y-3">
@@ -235,7 +485,7 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
 
               <Separator />
 
-              {/* Histórico de Movimentações */}
+              {/* Histórico de Movimentações de Estoque */}
               <div className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                   <History className="h-4 w-4" />
@@ -288,6 +538,102 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
                   </p>
                 )}
               </div>
+
+              {/* Histórico de Manutenções de Campo */}
+              {historicoServicosManutencao && historicoServicosManutencao.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                      <Wrench className="h-4 w-4" />
+                      Histórico de Manutenções (Campo)
+                    </h3>
+                    <div className="space-y-2">
+                      {historicoServicosManutencao.map((s) => (
+                        <div key={s.id} className="rounded-lg border p-3 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{s.protocolo}</span>
+                            <Badge 
+                              variant="outline" 
+                              className={s.resultado_manutencao ? RESULTADO_MANUTENCAO_COLORS[s.resultado_manutencao] || 'bg-muted' : 'bg-muted'}
+                            >
+                              {s.resultado_manutencao 
+                                ? (RESULTADO_MANUTENCAO_LABELS[s.resultado_manutencao] || s.resultado_manutencao)
+                                : s.status}
+                            </Badge>
+                          </div>
+                          {s.observacoes_analise && (
+                            <p className="text-xs text-muted-foreground mt-1 italic">"{s.observacoes_analise}"</p>
+                          )}
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            {s.concluida_em && (
+                              <span>{format(new Date(s.concluida_em), "dd/MM/yyyy", { locale: ptBR })}</span>
+                            )}
+                            {s.profissional?.nome && (
+                              <>
+                                <span>•</span>
+                                <span className="flex items-center gap-1">
+                                  <User className="h-3 w-3" />
+                                  {s.profissional.nome}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Histórico de Manutenções Internas (Bancada) */}
+              {historicoManutencaoInterna && historicoManutencaoInterna.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      Histórico de Manutenções (Bancada)
+                    </h3>
+                    <div className="space-y-2">
+                      {historicoManutencaoInterna.map((m) => (
+                        <div key={m.id} className="rounded-lg border p-3 text-sm">
+                          <div className="flex items-center justify-between">
+                            <Badge 
+                              variant="outline" 
+                              className={ETAPA_MANUTENCAO_COLORS[m.etapa] || 'bg-muted'}
+                            >
+                              {m.etapa === 'concluido_estoque' && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                              {m.etapa === 'descartado' && <XCircle className="h-3 w-3 mr-1" />}
+                              {ETAPA_MANUTENCAO_LABELS[m.etapa] || m.etapa}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {m.resolvido_em 
+                                ? format(new Date(m.resolvido_em), "dd/MM/yyyy", { locale: ptBR })
+                                : format(new Date(m.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                            </span>
+                          </div>
+                          {m.acao_tomada && (
+                            <p className="text-xs mt-1">{m.acao_tomada}</p>
+                          )}
+                          {m.encaminhado_para && (
+                            <p className="text-xs text-muted-foreground">Encaminhado: {m.encaminhado_para}</p>
+                          )}
+                          {m.laudo_externo && (
+                            <p className="text-xs text-muted-foreground italic">Laudo: {m.laudo_externo}</p>
+                          )}
+                          {m.resolvido_por_profile?.nome && (
+                            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                              <User className="h-3 w-3" />
+                              {m.resolvido_por_profile.nome}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </ScrollArea>
         ) : (
