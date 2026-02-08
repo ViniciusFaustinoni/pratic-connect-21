@@ -1,160 +1,221 @@
 
-# Complementar Histórico Completo do Rastreador
+# Correção Completa: Sincronização de Status e Histórico de Rastreadores
 
-## Objetivo
-Aprimorar a aba "Movimentações" do drawer de detalhes do rastreador para exibir um histórico completo e unificado de tudo que acontece com o equipamento, incluindo manutenções de campo, manutenções internas, fotos tiradas durante os serviços e checklist de verificação.
+## Problemas Identificados
 
-## Situação Atual
+Após análise profunda do código em `useVistoriaManutencao.ts`, encontrei **4 cenários críticos** onde o status do rastreador **NÃO está sendo atualizado** ou o **histórico não está sendo registrado**:
 
-A aba "Movimentações" exibe apenas dados da tabela `estoque_movimentacoes`:
-- Entrada no estoque
-- Atribuição/remoção de portador
-- Instalação/manutenção/baixa
-- Transferências
+### 1. ❌ Cenário: "Não Resolvido" + "Reagendar" (Linhas 686-699)
+**Problema**: Quando uma manutenção não é resolvida e o técnico escolhe "reagendar":
+- Atualiza apenas `servicos.status = 'pendente'`
+- **NÃO atualiza `rastreadores.status = 'reagendar_manutencao'`**
+- **NÃO registra movimentação em `estoque_movimentacoes`**
 
-**O que falta:**
-- Histórico de manutenções de campo (tabela `servicos` com tipo `vistoria_manutencao`)
-- Fotos registradas durante as manutenções (campo `fotos_manutencao` em `servicos`)
-- Checklist de verificação técnica (campo `checklist_manutencao` em `servicos`)
-- Histórico de manutenção interna/bancada (tabela `rastreador_manutencao_interna`)
-
-## Solução
-
-### 1. Criar novo componente de Histórico Completo
-
-Criar `src/components/rastreadores/HistoricoCompletoRastreador.tsx` que consolida:
-
-**Timeline unificada ordenada por data com 3 tipos de eventos:**
-
-| Tipo | Fonte | Ícone | Cor |
-|------|-------|-------|-----|
-| Movimentação de Estoque | `estoque_movimentacoes` | Package | Verde |
-| Manutenção de Campo | `servicos` (tipo=vistoria_manutencao) | Wrench | Âmbar |
-| Manutenção Interna | `rastreador_manutencao_interna` | Settings | Roxo |
-
-### 2. Dados a exibir por tipo
-
-**Manutenção de Campo (servicos):**
-- Protocolo do serviço
-- Motivo da manutenção
-- Resultado (resolvido/substituição/não resolvido)
-- Técnico responsável
-- Data de conclusão
-- Observações/análise
-- Checklist de itens verificados (expansível)
-- Galeria de fotos (com modal de visualização)
-
-**Manutenção Interna (rastreador_manutencao_interna):**
-- Etapa atual/final
-- Diagnóstico inicial
-- Defeito identificado
-- Ação tomada
-- Encaminhado para (se aplicável)
-- Protocolo externo (se houver)
-- Laudo externo
-- Responsável pela resolução
-
-### 3. Galeria de Fotos de Manutenção
-
-Criar componente `FotosManutencaoGaleria.tsx`:
-- Exibe thumbnails das fotos
-- Categoria da foto (geral, conexão, LED, etc.)
-- Data do upload
-- Modal fullscreen ao clicar (usando ImageViewer existente)
-
-### 4. Expandir Checklist de Manutenção
-
-Exibir checklist colapsável com:
-- Lista de itens verificados
-- Status (ok/não ok) de cada item
-- Data/hora da verificação
-
-## Estrutura de Arquivos
-
+**Esperado**: 
 ```
-src/components/rastreadores/
-├── HistoricoCompletoRastreador.tsx     (NOVO - componente principal)
-├── FotosManutencaoGaleria.tsx          (NOVO - galeria de fotos)
-├── HistoricoMovimentacoesRastreador.tsx (manter como fallback)
-└── RastreadorDetailDrawer.tsx          (ATUALIZAR - usar novo componente)
+rastreador.status: manutencao → reagendar_manutencao
+estoque_movimentacoes: tipo='reagendamento', status_anterior='manutencao', status_novo='reagendar_manutencao'
 ```
 
-## Consultas de Dados
+### 2. ❌ Cenário: "Não Compareceu" (Linhas 784-792)
+**Problema**: Quando associado não comparece:
+- Atualiza apenas `servicos.status = 'nao_compareceu'`
+- **NÃO atualiza status do rastreador**
+- **NÃO registra movimentação no histórico**
 
-### Query: Manutenções de Campo
-```sql
-SELECT 
-  id, protocolo, status, resultado_manutencao,
-  motivo_manutencao, motivo_detalhe,
-  observacoes_analise, concluida_em, created_at,
-  fotos_manutencao, checklist_manutencao,
-  profissional:profiles!servicos_profissional_id_fkey(id, nome)
-FROM servicos
-WHERE rastreador_id = $1 
-  AND tipo = 'vistoria_manutencao'
-ORDER BY created_at DESC
+**Esperado**:
+```
+rastreador.status: manutencao → reagendar_manutencao (estado suspenso até decisão)
+estoque_movimentacoes: tipo='nao_comparecimento', com observações
 ```
 
-### Query: Manutenções Internas
-```sql
-SELECT 
-  id, etapa, diagnostico_inicial, defeito_identificado,
-  acao_tomada, encaminhado_para, numero_protocolo_externo,
-  laudo_externo, created_at, resolvido_em,
-  servico_origem:servicos(protocolo),
-  resolvido_por_profile:profiles(nome)
-FROM rastreador_manutencao_interna
-WHERE rastreador_id = $1
-ORDER BY created_at DESC
+### 3. ✅ Cenário: "Resolvido" (Linhas 499-579)
+**Status**: OK - Atualiza rastreador para 'instalado' e registra movimentação
+
+### 4. ✅ Cenário: "Substituição" (Linhas 581-679)
+**Status**: OK - Atualiza ambos rastreadores e registra movimentações
+
+### 5. ✅ Cenário: "Não Resolvido" + "Cancelar" (Linhas 701-738)
+**Status**: OK - Atualiza rastreador para 'instalado' e registra movimentação
+
+### 6. ✅ Cenário: Manutenção Cancelada Globalmente
+**Status**: OK (linhas 938-956) - Registra corretamente
+
+## Solução Proposta
+
+### Arquivo: `src/hooks/useVistoriaManutencao.ts`
+
+#### Correção 1: "Não Resolvido" + "Reagendar" (Linhas 686-699)
+
+**Antes**:
+```typescript
+if (acao === 'reagendar') {
+  // Reagendar: serviço volta para pendente
+  const { error: servicoUpdateError } = await supabase
+    .from('servicos')
+    .update({
+      status: 'pendente',
+      observacoes_analise: `Não resolvido: ${params.descricao}`,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', params.servicoId);
+
+  if (servicoUpdateError) {
+    throw new Error('Erro ao reagendar serviço');
+  }
+}
 ```
 
-## Interface Visual
+**Depois**:
+```typescript
+if (acao === 'reagendar') {
+  // Reagendar: serviço volta para pendente e rastreador para reagendar_manutencao
+  const { error: servicoUpdateError } = await supabase
+    .from('servicos')
+    .update({
+      status: 'pendente',
+      observacoes_analise: `Não resolvido: ${params.descricao}`,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', params.servicoId);
 
-```text
-┌──────────────────────────────────────────────┐
-│ ● [Movimentações] ● [Manutenções]            │  <- Sub-tabs
-├──────────────────────────────────────────────┤
-│                                              │
-│ 🔧 MAN-2026-00123              08/02/26 15:30│
-│    ┌────────────────────────────────────────┐│
-│    │ Motivo: Sem sinal                      ││
-│    │ Resultado: ✅ Resolvido                ││
-│    │ Técnico: João Silva                    ││
-│    │                                        ││
-│    │ 📋 Checklist (6/6 verificados)    [▼]  ││
-│    │                                        ││
-│    │ 📷 Fotos da manutenção (3)             ││
-│    │ ┌────┐ ┌────┐ ┌────┐                   ││
-│    │ │    │ │    │ │    │                   ││
-│    │ └────┘ └────┘ └────┘                   ││
-│    └────────────────────────────────────────┘│
-│                                              │
-│ ⚙️ Triagem Interna             05/02/26 10:00│
-│    ┌────────────────────────────────────────┐│
-│    │ Etapa: Concluído - Devolvido Estoque   ││
-│    │ Diagnóstico: Problema de antena        ││
-│    │ Ação: Substituição de componente       ││
-│    └────────────────────────────────────────┘│
-│                                              │
-│ 📦 retorno_manutencao          07/02/26 22:25│
-│    manutencao → instalado                   ││
-│    Correção manual: rastreador não foi...   ││
-└──────────────────────────────────────────────┘
+  if (servicoUpdateError) {
+    throw new Error('Erro ao reagendar serviço');
+  }
+
+  // Atualizar rastreador para aguardar novo agendamento
+  if (rastreadorAntigoId) {
+    const { error: rastreadorError } = await supabase
+      .from('rastreadores')
+      .update({
+        status: 'reagendar_manutencao',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', rastreadorAntigoId);
+
+    if (rastreadorError) {
+      console.error('[useRegistrarResultadoManutencao] Erro ao atualizar rastreador:', rastreadorError);
+      throw new Error('Erro ao atualizar status do rastreador');
+    }
+
+    // Registrar movimentação
+    await supabase.from('estoque_movimentacoes').insert({
+      tipo: 'alteracao_status',
+      quantidade: 1,
+      status_anterior: 'manutencao',
+      status_novo: 'reagendar_manutencao',
+      rastreador_id: rastreadorAntigoId,
+      observacoes: `Manutenção não resolvida - aguardando reagendamento: ${params.descricao}`,
+    });
+  }
+}
 ```
 
-## Detalhes Técnicos
+#### Correção 2: "Não Compareceu" (Linhas 784-792)
 
-1. **Unificação de eventos**: Combinar arrays das 3 fontes e ordenar por `created_at`
-2. **Tipos TypeScript**: Criar interfaces para cada tipo de evento
-3. **Lazy loading de fotos**: Carregar thumbnails apenas quando visíveis
-4. **Modal de foto**: Reutilizar `ImageViewer` existente em um Dialog
-5. **Acessibilidade**: Manter navegação por teclado na galeria
+**Antes**:
+```typescript
+export function useMarcarNaoCompareceu() {
+  const queryClient = useQueryClient();
 
-## Arquivos a Criar/Modificar
+  return useMutation({
+    mutationFn: async (params: MarcarNaoCompareceuParams) => {
+      const { error } = await supabase
+        .from('servicos')
+        .update({
+          status: 'nao_compareceu' as any,
+          observacoes_analise: params.observacao || 'Associado não compareceu',
+          updated_at: new Date().toISOString(),
+          // NÃO suspender proteção ainda - coordenador/diretor decide
+        })
+        .eq('id', params.servicoId);
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `HistoricoCompletoRastreador.tsx` | Criar | Componente principal do histórico unificado |
-| `FotosManutencaoGaleria.tsx` | Criar | Galeria de fotos com modal de visualização |
-| `RastreadorDetailDrawer.tsx` | Modificar | Substituir componente de movimentações pelo novo |
-| `index.ts` | Atualizar | Exportar novos componentes |
+      if (error) {
+        console.error('[useMarcarNaoCompareceu] Erro:', error);
+        throw new Error('Erro ao marcar não comparecimento');
+      }
+
+      return { servicoId: params.servicoId };
+    },
+```
+
+**Depois**:
+```typescript
+export function useMarcarNaoCompareceu() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: MarcarNaoCompareceuParams) => {
+      // 1. Buscar o rastreador_id do serviço
+      const { data: servico, error: servicoGetError } = await supabase
+        .from('servicos')
+        .select('rastreador_id')
+        .eq('id', params.servicoId)
+        .single();
+
+      if (servicoGetError || !servico) {
+        throw new Error('Erro ao buscar dados do serviço');
+      }
+
+      // 2. Atualizar status do serviço
+      const { error } = await supabase
+        .from('servicos')
+        .update({
+          status: 'nao_compareceu' as any,
+          observacoes_analise: params.observacao || 'Associado não compareceu',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', params.servicoId);
+
+      if (error) {
+        console.error('[useMarcarNaoCompareceu] Erro:', error);
+        throw new Error('Erro ao marcar não comparecimento');
+      }
+
+      // 3. Atualizar status do rastreador para 'reagendar_manutencao'
+      if (servico.rastreador_id) {
+        const { error: rastreadorError } = await supabase
+          .from('rastreadores')
+          .update({
+            status: 'reagendar_manutencao',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', servico.rastreador_id);
+
+        if (rastreadorError) {
+          console.error('[useMarcarNaoCompareceu] Erro ao atualizar rastreador:', rastreadorError);
+          throw new Error('Erro ao atualizar status do rastreador');
+        }
+
+        // 4. Registrar movimentação no histórico
+        await supabase.from('estoque_movimentacoes').insert({
+          tipo: 'alteracao_status',
+          quantidade: 1,
+          status_anterior: 'manutencao',
+          status_novo: 'reagendar_manutencao',
+          rastreador_id: servico.rastreador_id,
+          observacoes: `Não comparecimento: ${params.observacao || 'Associado ausente na data agendada'}`,
+        });
+      }
+
+      return { servicoId: params.servicoId };
+    },
+```
+
+## Resumo das Alterações
+
+| Cenário | Linha | Ação |
+|---------|-------|------|
+| Não Resolvido + Reagendar | 686-699 | ➕ Adicionar atualização de rastreador + movimentação |
+| Não Compareceu | 784-792 | ➕ Adicionar busca de rastreador_id + atualização + movimentação |
+| Resolvido | 499-579 | ✅ Sem alterações (já funciona) |
+| Substituição | 581-679 | ✅ Sem alterações (já funciona) |
+| Não Resolvido + Cancelar | 701-738 | ✅ Sem alterações (já funciona) |
+
+## Resultado Esperado
+
+Após as correções, **todos os 6 cenários de conclusão de manutenção** terão:
+- ✅ Status do rastreador atualizado corretamente
+- ✅ Movimentação registrada em `estoque_movimentacoes`
+- ✅ Histórico completo e auditável na aba "Histórico" do rastreador
+- ✅ Estados válidos conforme a máquina de estados definida em `rastreadores.ts`
