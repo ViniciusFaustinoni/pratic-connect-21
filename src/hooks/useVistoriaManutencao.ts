@@ -400,6 +400,13 @@ export function useAgendarVistoriaManutencao() {
 
   return useMutation({
     mutationFn: async (params: AgendarManutencaoParams) => {
+      // Buscar rastreador_id do serviço
+      const { data: servico } = await supabase
+        .from('servicos')
+        .select('rastreador_id')
+        .eq('id', params.servicoId)
+        .single();
+
       const updateData: Record<string, any> = {
         status: 'agendada',
         data_agendada: params.dataAgendada,
@@ -423,6 +430,18 @@ export function useAgendarVistoriaManutencao() {
       if (error) {
         console.error('[useAgendarVistoriaManutencao] Erro:', error);
         throw new Error('Erro ao agendar manutenção');
+      }
+
+      // Se rastreador estava em 'reagendar_manutencao', voltar para 'manutencao'
+      if (servico?.rastreador_id) {
+        await supabase
+          .from('rastreadores')
+          .update({ 
+            status: 'manutencao',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', servico.rastreador_id)
+          .eq('status', 'reagendar_manutencao');
       }
 
       // TODO: Se notificarWhatsApp, disparar notificação via n8n
@@ -807,6 +826,14 @@ export function useReagendarPosAusencia() {
 
   return useMutation({
     mutationFn: async (servicoId: string) => {
+      // Buscar rastreador_id do serviço
+      const { data: servico } = await supabase
+        .from('servicos')
+        .select('rastreador_id')
+        .eq('id', servicoId)
+        .single();
+
+      // Atualizar serviço para pendente
       const { error } = await supabase
         .from('servicos')
         .update({ 
@@ -821,6 +848,21 @@ export function useReagendarPosAusencia() {
       if (error) {
         console.error('[useReagendarPosAusencia] Erro:', error);
         throw new Error('Erro ao reagendar manutenção');
+      }
+
+      // Atualizar rastreador para 'reagendar_manutencao'
+      if (servico?.rastreador_id) {
+        const { error: rastreadorError } = await supabase
+          .from('rastreadores')
+          .update({ 
+            status: 'reagendar_manutencao',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', servico.rastreador_id);
+
+        if (rastreadorError) {
+          console.error('[useReagendarPosAusencia] Erro ao atualizar rastreador:', rastreadorError);
+        }
       }
 
       return { servicoId };
