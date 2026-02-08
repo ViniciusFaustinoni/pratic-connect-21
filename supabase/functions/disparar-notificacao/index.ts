@@ -153,6 +153,38 @@ const TEMPLATES: Record<string, Record<string, { titulo: string; mensagem: strin
       prioridade: 'normal'
     }
   },
+  manutencao: {
+    agendada: {
+      titulo: '🔧 Manutenção Agendada',
+      mensagem: 'Sua manutenção de rastreador foi agendada para {data} ({periodo}). Local: {local}. Técnico: {tecnico}.',
+      prioridade: 'alta'
+    },
+    lembrete_24h: {
+      titulo: '⏰ Lembrete: Manutenção Amanhã',
+      mensagem: 'Lembrete: Sua manutenção de rastreador está agendada para amanhã ({data}) no período da {periodo}.',
+      prioridade: 'alta'
+    },
+    tecnico_caminho: {
+      titulo: '🚗 Técnico a Caminho',
+      mensagem: 'O técnico {tecnico} está a caminho para realizar a manutenção do seu rastreador. Contato: {telefone_tecnico}.',
+      prioridade: 'alta'
+    },
+    concluida: {
+      titulo: '✅ Manutenção Concluída',
+      mensagem: 'A manutenção do rastreador do veículo {placa} foi concluída com sucesso!',
+      prioridade: 'normal'
+    },
+    protecao_suspensa: {
+      titulo: '⚠️ Proteção Suspensa',
+      mensagem: 'ATENÇÃO: Sua proteção (roubo, furto e colisão) foi suspensa devido ao não comparecimento na manutenção agendada. Entre em contato para regularizar.',
+      prioridade: 'urgente'
+    },
+    reagendada: {
+      titulo: '📅 Manutenção Reagendada',
+      mensagem: 'Sua manutenção foi reagendada para {data} ({periodo}). Local: {local}.',
+      prioridade: 'alta'
+    }
+  },
   sistema: {
     boas_vindas: {
       titulo: 'Bem-vindo à PRATIC!',
@@ -164,7 +196,7 @@ const TEMPLATES: Record<string, Record<string, { titulo: string; mensagem: strin
       mensagem: 'Uma nova versão do app está disponível. Atualize para ter acesso às novidades.',
       prioridade: 'baixa'
     },
-    manutencao: {
+    manutencao_sistema: {
       titulo: 'Manutenção Programada',
       mensagem: 'O sistema passará por manutenção em {data} das {hora_inicio} às {hora_fim}.',
       prioridade: 'normal'
@@ -184,7 +216,7 @@ function renderTemplate(template: string, dados: Record<string, unknown>): strin
 interface NotificacaoRequest {
   user_id?: string;
   associado_id?: string;
-  tipo: 'boleto' | 'sinistro' | 'assistencia' | 'rastreamento' | 'sistema';
+  tipo: 'boleto' | 'cobranca' | 'sinistro' | 'assistencia' | 'rastreamento' | 'manutencao' | 'sistema';
   subtipo: string;
   dados?: Record<string, unknown>;
   link?: string;
@@ -292,9 +324,11 @@ serve(async (req) => {
     // Determinar ícone baseado no tipo
     const iconeMap: Record<string, string> = {
       boleto: 'receipt',
+      cobranca: 'credit-card',
       sinistro: 'alert-triangle',
       assistencia: 'phone-call',
       rastreamento: 'map-pin',
+      manutencao: 'wrench',
       sistema: 'info'
     };
 
