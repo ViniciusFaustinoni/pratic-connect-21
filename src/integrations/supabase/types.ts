@@ -21426,6 +21426,7 @@ export type Database = {
         | "reservado"
         | "instalado"
         | "manutencao"
+        | "reagendar_manutencao"
         | "baixado"
         | "retorno_base"
         | "triagem"
@@ -21806,6 +21807,7 @@ export const Constants = {
         "reservado",
         "instalado",
         "manutencao",
+        "reagendar_manutencao",
         "baixado",
         "retorno_base",
         "triagem",

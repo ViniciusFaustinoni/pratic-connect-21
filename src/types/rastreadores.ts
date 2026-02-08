@@ -13,6 +13,7 @@ export type StatusRastreador =
   | 'reservado'             // Separado para uma instalação específica
   | 'instalado'             // No veículo do associado
   | 'manutencao'            // Vistoria aberta (campo)
+  | 'reagendar_manutencao'  // Aguardando nova data após ausência
   | 'retorno_base'          // Voltou do campo, aguarda triagem
   | 'triagem'               // Coordenador avaliando na bancada
   | 'em_analise_plataforma' // Na plataforma (Rede Veículos/Softruck)
@@ -24,6 +25,7 @@ export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
   reservado: 'Reservado',
   instalado: 'Instalado',
   manutencao: 'Em Manutenção (Campo)',
+  reagendar_manutencao: 'Reagendar Manutenção',
   retorno_base: 'Retorno Base',
   triagem: 'Em Triagem',
   em_analise_plataforma: 'Análise Plataforma',
@@ -36,6 +38,7 @@ export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
   reservado: 'bg-yellow-100 text-yellow-800',
   instalado: 'bg-emerald-100 text-emerald-800',
   manutencao: 'bg-orange-100 text-orange-800',
+  reagendar_manutencao: 'bg-amber-100 text-amber-800',
   retorno_base: 'bg-yellow-100 text-yellow-800',
   triagem: 'bg-purple-100 text-purple-800',
   em_analise_plataforma: 'bg-cyan-100 text-cyan-800',
@@ -61,7 +64,8 @@ export const TRANSICOES_STATUS_RASTREADOR: Record<StatusRastreador, StatusRastre
   estoque: ['reservado', 'instalado', 'manutencao', 'baixado'],
   reservado: ['instalado', 'estoque'],
   instalado: ['manutencao', 'estoque'],
-  manutencao: ['instalado', 'retorno_base', 'baixado'],
+  manutencao: ['instalado', 'reagendar_manutencao', 'retorno_base', 'baixado'],
+  reagendar_manutencao: ['manutencao', 'instalado'],
   retorno_base: ['triagem'],
   triagem: ['estoque', 'em_analise_plataforma', 'em_garantia', 'baixado'],
   em_analise_plataforma: ['triagem', 'estoque', 'baixado'],
