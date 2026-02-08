@@ -11,6 +11,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Radio, Server } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation } from '@tanstack/react-query';
@@ -19,6 +26,7 @@ import { AtribuirPortadorDialog } from '@/components/monitoramento/estoque/Atrib
 import { AtribuirPortadorLoteDialog } from '@/components/monitoramento/estoque/AtribuirPortadorLoteDialog';
 import { EnviarRetiradaModal } from '@/components/monitoramento/estoque/EnviarRetiradaModal';
 import { AgendarManutencaoUnificadoModal } from '@/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal';
+import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import {
   useRastreadores,
   useRastreadoresMetricas,
@@ -51,6 +59,10 @@ export default function Rastreadores() {
     const saved = localStorage.getItem('rastreadores-view-mode');
     return (saved as ViewMode) || 'cards';
   });
+  
+  // Estado do modal de mapa
+  const [mapaModalOpen, setMapaModalOpen] = useState(false);
+  const [rastreadorMapaId, setRastreadorMapaId] = useState<string | null>(null);
 
   const { data: rastreadores, isLoading } = useRastreadores(filters);
   const { data: metricas, isLoading: isLoadingMetricas } = useRastreadoresMetricas();
@@ -87,6 +99,18 @@ export default function Rastreadores() {
 
   const getPlataformaLabel = (codigo: string) => {
     return plataformasLabels?.[codigo] || codigo;
+  };
+  
+  const handleViewMap = (rastreadorId: string) => {
+    setRastreadorMapaId(rastreadorId);
+    setMapaModalOpen(true);
+  };
+  
+  const handleCloseMapModal = (open: boolean) => {
+    setMapaModalOpen(open);
+    if (!open) {
+      setRastreadorMapaId(null);
+    }
   };
 
   return (
@@ -127,6 +151,7 @@ export default function Rastreadores() {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               isDiretor={isDiretor}
+              onViewMap={handleViewMap}
             />
           </TabsContent>
 
@@ -149,6 +174,7 @@ export default function Rastreadores() {
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           isDiretor={isDiretor}
+          onViewMap={handleViewMap}
         />
       )}
 
@@ -169,6 +195,25 @@ export default function Rastreadores() {
           }
         }}
       />
+
+      {/* Modal de Mapa */}
+      <Dialog open={mapaModalOpen} onOpenChange={handleCloseMapModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Mapa do Rastreador</DialogTitle>
+            <DialogDescription>
+              Visualização em tempo real da posição do rastreador
+            </DialogDescription>
+          </DialogHeader>
+          {rastreadorMapaId && (
+            <MapaRastreador
+              rastreadorId={rastreadorMapaId}
+              altura="450px"
+              mostrarControles={true}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -188,6 +233,7 @@ interface RastreadoresContentProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   isDiretor: boolean;
+  onViewMap: (rastreadorId: string) => void;
 }
 
 function RastreadoresContent({
@@ -204,6 +250,7 @@ function RastreadoresContent({
   viewMode,
   onViewModeChange,
   isDiretor,
+  onViewMap,
 }: RastreadoresContentProps) {
   const queryClient = useQueryClient();
   const [portadorDialogOpen, setPortadorDialogOpen] = useState(false);
@@ -337,6 +384,7 @@ function RastreadoresContent({
           onWithdraw={handleWithdraw}
           onNewRastreador={onNewRastreador}
           getPlataformaLabel={getPlataformaLabel}
+          onViewMap={onViewMap}
         />
       ) : (
         <RastreadorTableView
@@ -354,6 +402,7 @@ function RastreadoresContent({
           onNewRastreador={onNewRastreador}
           getPlataformaLabel={getPlataformaLabel}
           isDiretor={isDiretor}
+          onViewMap={onViewMap}
         />
       )}
 

@@ -36,6 +36,7 @@ interface RastreadorCardProps {
   onViewDetails: () => void;
   onMaintenance?: () => void;
   onWithdraw?: () => void;
+  onViewMap?: () => void;
 }
 
 export function RastreadorCard({
@@ -46,6 +47,7 @@ export function RastreadorCard({
   onViewDetails,
   onMaintenance,
   onWithdraw,
+  onViewMap,
 }: RastreadorCardProps) {
   const isInstalled = rastreador.status === 'instalado';
   const isEstoque = rastreador.status === 'estoque';
@@ -265,7 +267,7 @@ export function RastreadorCard({
               </TooltipProvider>
             )}
 
-            {rastreador.ultima_posicao_lat && rastreador.ultima_posicao_lng && (
+            {onViewMap && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -273,12 +275,7 @@ export function RastreadorCard({
                       variant="outline"
                       size="sm"
                       className="gap-1.5"
-                      onClick={() => {
-                        window.open(
-                          `https://www.google.com/maps?q=${rastreador.ultima_posicao_lat},${rastreador.ultima_posicao_lng}`,
-                          '_blank'
-                        );
-                      }}
+                      onClick={onViewMap}
                     >
                       <MapPin className="h-4 w-4" />
                     </Button>

@@ -14,6 +14,7 @@ interface RastreadorGridViewProps {
   onWithdraw: (rastreador: RastreadorWithRelations) => void;
   onNewRastreador: () => void;
   getPlataformaLabel: (codigo: string) => string;
+  onViewMap?: (rastreadorId: string) => void;
 }
 
 export function RastreadorGridView({
@@ -26,6 +27,7 @@ export function RastreadorGridView({
   onWithdraw,
   onNewRastreador,
   getPlataformaLabel,
+  onViewMap,
 }: RastreadorGridViewProps) {
   if (isLoading) {
     return (
@@ -76,6 +78,11 @@ export function RastreadorGridView({
             onWithdraw={
               rastreador.status === 'instalado'
                 ? () => onWithdraw(rastreador)
+                : undefined
+            }
+            onViewMap={
+              rastreador.status === 'instalado' && onViewMap
+                ? () => onViewMap(rastreador.id)
                 : undefined
             }
           />
