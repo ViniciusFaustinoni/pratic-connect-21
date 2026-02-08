@@ -1,402 +1,348 @@
 
-# Plano de Implementação Completo: Vistoria de Manutenção
+# Plano: Melhorar Rastreadores "Em Manutenção" e Histórico Completo
 
-## Visao Geral
+## Resumo do Problema
 
-Este plano implementa TODAS as lacunas identificadas no diagnóstico do fluxo de Vistoria de Manutenção, seguindo o mapa de decisões completo com seus 18 desfechos possíveis.
+Após análise do código atual, identificamos as seguintes lacunas:
 
----
+1. **Histórico incompleto no dialog de detalhes**: O `DetalhesRastreadorDialog` só mostra movimentações de `estoque_movimentacoes`, mas falta:
+   - Histórico de manutenções de campo (tabela `servicos`)
+   - Histórico de manutenções internas (tabela `rastreador_manutencao_interna`)
 
-## Resumo das Lacunas a Implementar
+2. **Tipos de movimentação faltantes**: O mapeamento `tipoMovimentacaoLabels` não inclui todos os tipos usados nos hooks:
+   - `retorno_base`
+   - `baixa_substituicao`
+   - `instalacao_substituicao`
+   - `baixa_manutencao`
 
-| # | Lacuna | Prioridade |
-|---|--------|------------|
-| 1 | Notificação WhatsApp no agendamento (TODO) | Alta |
-| 2 | Template de notificação para manutenção | Alta |
-| 3 | Checklist de verificação na tela do técnico | Média |
-| 4 | Upload de fotos do reparo na manutenção | Média |
-| 5 | Rota da página ManutencaoInterna (faltando no App.tsx) | Alta |
-| 6 | PermissionGate na tela de Manutenção Interna | Média |
-| 7 | Controle de 48h para não comparecimento BASE | Baixa |
+3. **Rastreador em manutenção não mostra serviço vinculado**: Quando um rastreador está com status `manutencao`, o dialog não mostra qual serviço está associado (protocolo, data agendada, técnico)
 
----
-
-## Fase 1: Infraestrutura de Notificações
-
-### 1.1 Adicionar Templates de Manutenção na Edge Function
-
-**Arquivo:** `supabase/functions/disparar-notificacao/index.ts`
-
-Adicionar novo grupo de templates "manutencao" com os subtipos:
-
-```typescript
-manutencao: {
-  agendada: {
-    titulo: '🔧 Manutenção Agendada',
-    mensagem: 'Sua manutenção de rastreador foi agendada para {data} ({periodo}). Local: {local}. Técnico: {tecnico}.',
-    prioridade: 'alta'
-  },
-  lembrete_24h: {
-    titulo: '⏰ Lembrete: Manutenção Amanhã',
-    mensagem: 'Lembrete: Sua manutenção de rastreador está agendada para amanhã ({data}) no período da {periodo}.',
-    prioridade: 'alta'
-  },
-  tecnico_caminho: {
-    titulo: '🚗 Técnico a Caminho',
-    mensagem: 'O técnico {tecnico} está a caminho para realizar a manutenção do seu rastreador. Contato: {telefone_tecnico}.',
-    prioridade: 'alta'
-  },
-  concluida: {
-    titulo: '✅ Manutenção Concluída',
-    mensagem: 'A manutenção do rastreador do veículo {placa} foi concluída com sucesso!',
-    prioridade: 'normal'
-  },
-  protecao_suspensa: {
-    titulo: '⚠️ Proteção Suspensa',
-    mensagem: 'ATENÇÃO: Sua proteção (roubo, furto e colisão) foi suspensa devido ao não comparecimento na manutenção agendada. Entre em contato para regularizar.',
-    prioridade: 'urgente'
-  },
-  reagendada: {
-    titulo: '📅 Manutenção Reagendada',
-    mensagem: 'Sua manutenção foi reagendada para {data} ({periodo}). Local: {local}.',
-    prioridade: 'alta'
-  }
-}
-```
-
-Também adicionar tipo "manutencao" no interface NotificacaoRequest.
-
-### 1.2 Implementar Disparo de Notificação no Hook de Agendamento
-
-**Arquivo:** `src/hooks/useVistoriaManutencao.ts`
-
-Na mutation `useAgendarVistoriaManutencao`, substituir o `// TODO` por chamada real:
-
-```typescript
-// Linha ~428-431, substituir:
-if (params.notificarWhatsApp) {
-  console.log('[useAgendarVistoriaManutencao] Notificação WhatsApp pendente');
-}
-
-// Por:
-if (params.notificarWhatsApp) {
-  // Buscar dados do serviço para notificação
-  const { data: servicoData } = await supabase
-    .from('servicos')
-    .select(`
-      associado_id,
-      veiculo:veiculos(placa),
-      profissional:profiles!servicos_profissional_id_fkey(nome, telefone)
-    `)
-    .eq('id', params.servicoId)
-    .single();
-
-  if (servicoData?.associado_id) {
-    const periodoLabel = params.periodo === 'manha' ? 'manhã' : 'tarde';
-    const localLabel = params.localTipo === 'base' ? 'Nossa Base' : 'Seu Endereço (Rota)';
-    
-    await supabase.functions.invoke('disparar-notificacao', {
-      body: {
-        associado_id: servicoData.associado_id,
-        tipo: 'manutencao',
-        subtipo: 'agendada',
-        dados: {
-          data: params.dataAgendada,
-          periodo: periodoLabel,
-          local: localLabel,
-          tecnico: servicoData.profissional?.nome || 'A definir',
-          telefone_tecnico: servicoData.profissional?.telefone || '',
-          placa: servicoData.veiculo?.placa || '',
-        },
-        referencia_tipo: 'servico',
-        referencia_id: params.servicoId,
-      },
-    });
-  }
-}
-```
+4. **Falta histórico de manutenção interna**: Quando um rastreador passou pela bancada (triagem, plataforma, garantia), isso não aparece no histórico
 
 ---
 
-## Fase 2: Tela do Técnico - Checklist e Fotos
+## Alterações Propostas
 
-### 2.1 Adicionar Checklist de Verificação
+### 1. Expandir `tipoMovimentacaoLabels` no Dialog
 
-**Arquivo:** `src/pages/instalador/ExecutarManutencao.tsx`
+**Arquivo:** `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx`
 
-Adicionar seção de checklist ANTES do botão "Concluir Manutenção":
-
-```tsx
-// Novo estado
-const [checklistCompleto, setChecklistCompleto] = useState({
-  verificouSinal: false,
-  verificouBateria: false,
-  verificouFisico: false,
-  verificouFiacao: false,
-});
-
-// Componente de checklist (antes do botão Concluir)
-{isEmAndamento && (
-  <Card className="border-amber-200">
-    <CardHeader className="pb-2">
-      <CardTitle className="text-base flex items-center gap-2">
-        <ClipboardCheck className="h-4 w-4" />
-        Verificações
-      </CardTitle>
-    </CardHeader>
-    <CardContent className="space-y-3">
-      {[
-        { key: 'verificouSinal', label: 'Verificar sinal GPS/comunicação' },
-        { key: 'verificouBateria', label: 'Verificar tensão da bateria' },
-        { key: 'verificouFisico', label: 'Verificar estado físico do dispositivo' },
-        { key: 'verificouFiacao', label: 'Verificar fiação e conexões' },
-      ].map((item) => (
-        <div key={item.key} className="flex items-center gap-3">
-          <Checkbox
-            id={item.key}
-            checked={checklistCompleto[item.key]}
-            onCheckedChange={(checked) => 
-              setChecklistCompleto(prev => ({ ...prev, [item.key]: !!checked }))
-            }
-          />
-          <Label htmlFor={item.key} className="text-sm cursor-pointer">
-            {item.label}
-          </Label>
-        </div>
-      ))}
-    </CardContent>
-  </Card>
-)}
-```
-
-### 2.2 Adicionar Upload de Fotos do Reparo
-
-**Arquivo:** `src/pages/instalador/ExecutarManutencao.tsx`
-
-Adicionar seção de fotos no modal de resultado:
-
-```tsx
-// Novos estados
-const [fotosReparo, setFotosReparo] = useState<File[]>([]);
-const [uploading, setUploading] = useState(false);
-
-// Componente de upload (dentro do modal, antes da descrição)
-<div className="space-y-2">
-  <Label className="text-sm font-medium">
-    Fotos do Reparo (opcional)
-  </Label>
-  <div className="grid grid-cols-3 gap-2">
-    {fotosReparo.map((foto, idx) => (
-      <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-muted">
-        <img 
-          src={URL.createObjectURL(foto)} 
-          alt={`Foto ${idx + 1}`}
-          className="w-full h-full object-cover"
-        />
-        <button
-          type="button"
-          onClick={() => setFotosReparo(prev => prev.filter((_, i) => i !== idx))}
-          className="absolute top-1 right-1 bg-destructive text-white rounded-full p-1"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      </div>
-    ))}
-    {fotosReparo.length < 3 && (
-      <label className="aspect-square rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-primary">
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) setFotosReparo(prev => [...prev, file]);
-          }}
-        />
-        <Camera className="h-6 w-6 text-muted-foreground" />
-      </label>
-    )}
-  </div>
-  <p className="text-xs text-muted-foreground">
-    Tire fotos do rastreador após o reparo (máx. 3)
-  </p>
-</div>
-```
-
-Criar função de upload e integrar com o `handleConcluirComResultado`:
+Adicionar os tipos que faltam:
 
 ```typescript
-const uploadFotosReparo = async (servicoId: string): Promise<string[]> => {
-  const urls: string[] = [];
-  for (const foto of fotosReparo) {
-    const fileName = `manutencao/${servicoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
-    const { error } = await supabase.storage
-      .from('vistorias')
-      .upload(fileName, foto, { contentType: 'image/jpeg' });
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('vistorias').getPublicUrl(fileName);
-      urls.push(urlData.publicUrl);
-    }
-  }
-  return urls;
+const tipoMovimentacaoLabels: Record<string, string> = {
+  entrada_estoque: 'Entrada no Estoque',
+  saida_instalacao: 'Saída para Instalação',
+  retorno_estoque: 'Retorno ao Estoque',
+  envio_manutencao: 'Envio para Manutenção',
+  baixa: 'Baixa',
+  transferencia: 'Transferência',
+  alteracao_status: 'Alteração de Status',
+  atribuicao_portador: 'Atribuição de Portador',
+  remocao_portador: 'Remoção de Portador',
+  troca_portador: 'Troca de Portador',
+  // NOVOS
+  retorno_base: 'Retorno à Base (Triagem)',
+  baixa_substituicao: 'Baixa por Substituição',
+  instalacao_substituicao: 'Instalação (Substituição)',
+  baixa_manutencao: 'Baixa por Manutenção',
 };
 ```
 
----
+### 2. Adicionar Query de Serviço Ativo (se em manutenção)
 
-## Fase 3: Rota e Permissões da Manutenção Interna
+**Arquivo:** `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx`
 
-### 3.1 Adicionar Rota no App.tsx
+Buscar o serviço de manutenção vinculado quando status = `manutencao`:
 
-**Arquivo:** `src/App.tsx`
-
-Adicionar import e rota:
-
-```tsx
-// Import (linha ~80)
-import ManutencaoInterna from "./pages/monitoramento/ManutencaoInterna";
-
-// Rota (dentro das rotas de monitoramento, ~linha 280)
-<Route path="manutencao-interna" element={<ManutencaoInterna />} />
+```typescript
+// Query para buscar serviço de manutenção ativo
+const { data: servicoManutencao } = useQuery({
+  queryKey: ['rastreador-servico-manutencao', rastreadorId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('servicos')
+      .select(`
+        id,
+        protocolo,
+        status,
+        data_agendada,
+        periodo,
+        motivo_manutencao,
+        observacoes,
+        profissional:profiles!servicos_profissional_id_fkey(nome)
+      `)
+      .eq('rastreador_id', rastreadorId!)
+      .eq('tipo', 'vistoria_manutencao')
+      .not('status', 'in', '("concluida","cancelada","aprovada")')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data;
+  },
+  enabled: !!rastreadorId && open && rastreador?.status === 'manutencao',
+});
 ```
 
-### 3.2 Adicionar PermissionGate na Página
+### 3. Adicionar Query de Manutenção Interna (se em triagem/plataforma/garantia)
 
-**Arquivo:** `src/pages/monitoramento/ManutencaoInterna.tsx`
+```typescript
+// Query para buscar manutenção interna ativa
+const { data: manutencaoInterna } = useQuery({
+  queryKey: ['rastreador-manutencao-interna', rastreadorId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('rastreador_manutencao_interna')
+      .select(`
+        id,
+        etapa,
+        diagnostico_inicial,
+        defeito_identificado,
+        encaminhado_para,
+        numero_protocolo_externo,
+        laudo_externo,
+        created_at,
+        servico_origem:servicos!rastreador_manutencao_interna_servico_origem_id_fkey(protocolo)
+      `)
+      .eq('rastreador_id', rastreadorId!)
+      .not('etapa', 'in', '("concluido_estoque","descartado")')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data;
+  },
+  enabled: !!rastreadorId && open && ['retorno_base', 'triagem', 'em_analise_plataforma', 'em_garantia'].includes(rastreador?.status || ''),
+});
+```
 
-Envolver o conteúdo com PermissionGate:
+### 4. Adicionar Query de Histórico de Manutenções Internas Concluídas
+
+```typescript
+// Query para buscar histórico de manutenções internas
+const { data: historicoManutencaoInterna } = useQuery({
+  queryKey: ['rastreador-historico-manutencao-interna', rastreadorId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('rastreador_manutencao_interna')
+      .select(`
+        id,
+        etapa,
+        acao_tomada,
+        laudo_externo,
+        encaminhado_para,
+        created_at,
+        resolvido_em,
+        resolvido_por_profile:profiles!rastreador_manutencao_interna_resolvido_por_fkey(nome)
+      `)
+      .eq('rastreador_id', rastreadorId!)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    return data;
+  },
+  enabled: !!rastreadorId && open,
+});
+```
+
+### 5. Adicionar Query de Histórico de Serviços de Manutenção
+
+```typescript
+// Query para buscar histórico de serviços de manutenção
+const { data: historicoServicosManutencao } = useQuery({
+  queryKey: ['rastreador-historico-servicos', rastreadorId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('servicos')
+      .select(`
+        id,
+        protocolo,
+        status,
+        resultado_manutencao,
+        concluida_em,
+        observacoes_analise,
+        profissional:profiles!servicos_profissional_id_fkey(nome)
+      `)
+      .eq('rastreador_id', rastreadorId!)
+      .eq('tipo', 'vistoria_manutencao')
+      .in('status', ['concluida', 'aprovada', 'cancelada'] as any)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    return data;
+  },
+  enabled: !!rastreadorId && open,
+});
+```
+
+### 6. Adicionar Seção de "Manutenção Ativa" no Dialog
+
+Se o rastreador está em manutenção (campo ou interna), mostrar card destacado:
 
 ```tsx
-// Linha 114, envolver o return com:
-return (
-  <PermissionGate 
-    allowedRoles={['diretor', 'coordenador_monitoramento']}
-    fallback={
-      <div className="p-6 text-center text-muted-foreground">
-        Acesso restrito a Coordenador de Monitoramento e Diretor.
+{/* Manutenção de Campo Ativa */}
+{rastreador?.status === 'manutencao' && servicoManutencao && (
+  <div className="space-y-3">
+    <h3 className="font-semibold text-sm text-orange-600 uppercase tracking-wide flex items-center gap-2">
+      <Wrench className="h-4 w-4" />
+      Manutenção em Andamento
+    </h3>
+    <div className="rounded-lg border-2 border-orange-200 bg-orange-50 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-medium">{servicoManutencao.protocolo}</span>
+        <Badge variant="outline">{servicoManutencao.status}</Badge>
       </div>
-    }
-  >
-    <div className="min-h-screen">
-      {/* ... conteúdo existente ... */}
+      <div className="text-sm text-muted-foreground space-y-1">
+        <p>Motivo: {servicoManutencao.motivo_manutencao}</p>
+        {servicoManutencao.data_agendada && (
+          <p>Agendado: {format(new Date(servicoManutencao.data_agendada), 'dd/MM/yyyy')} - {servicoManutencao.periodo}</p>
+        )}
+        {servicoManutencao.profissional?.nome && (
+          <p>Técnico: {servicoManutencao.profissional.nome}</p>
+        )}
+      </div>
     </div>
-  </PermissionGate>
-);
+  </div>
+)}
+
+{/* Manutenção Interna Ativa */}
+{['retorno_base', 'triagem', 'em_analise_plataforma', 'em_garantia'].includes(rastreador?.status || '') && manutencaoInterna && (
+  <div className="space-y-3">
+    <h3 className="font-semibold text-sm text-purple-600 uppercase tracking-wide flex items-center gap-2">
+      <Settings className="h-4 w-4" />
+      Manutenção Interna (Bancada)
+    </h3>
+    <div className="rounded-lg border-2 border-purple-200 bg-purple-50 p-4">
+      <Badge className={ETAPA_MANUTENCAO_INTERNA_COLORS[manutencaoInterna.etapa]}>
+        {ETAPA_MANUTENCAO_INTERNA_LABELS[manutencaoInterna.etapa]}
+      </Badge>
+      <div className="text-sm text-muted-foreground space-y-1 mt-2">
+        {manutencaoInterna.diagnostico_inicial && <p>Diagnóstico: {manutencaoInterna.diagnostico_inicial}</p>}
+        {manutencaoInterna.encaminhado_para && <p>Encaminhado para: {manutencaoInterna.encaminhado_para}</p>}
+        {manutencaoInterna.numero_protocolo_externo && <p>Protocolo Externo: {manutencaoInterna.numero_protocolo_externo}</p>}
+      </div>
+    </div>
+  </div>
+)}
+```
+
+### 7. Adicionar Seções de Histórico Completo
+
+Após o histórico de movimentações, adicionar:
+
+```tsx
+{/* Histórico de Manutenções de Campo */}
+{historicoServicosManutencao && historicoServicosManutencao.length > 0 && (
+  <div className="space-y-3">
+    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+      <Wrench className="h-4 w-4" />
+      Histórico de Manutenções (Campo)
+    </h3>
+    <div className="space-y-2">
+      {historicoServicosManutencao.map((s) => (
+        <div key={s.id} className="rounded-lg border p-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">{s.protocolo}</span>
+            <Badge variant="outline" className={...}>{s.resultado_manutencao || s.status}</Badge>
+          </div>
+          {s.observacoes_analise && <p className="text-xs text-muted-foreground mt-1">{s.observacoes_analise}</p>}
+          <div className="text-xs text-muted-foreground mt-1">
+            {s.concluida_em && format(new Date(s.concluida_em), "dd/MM/yyyy")}
+            {s.profissional?.nome && ` • ${s.profissional.nome}`}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+{/* Histórico de Manutenções Internas */}
+{historicoManutencaoInterna && historicoManutencaoInterna.length > 0 && (
+  <div className="space-y-3">
+    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+      <Settings className="h-4 w-4" />
+      Histórico de Manutenções (Bancada)
+    </h3>
+    <div className="space-y-2">
+      {historicoManutencaoInterna.map((m) => (
+        <div key={m.id} className="rounded-lg border p-3 text-sm">
+          <div className="flex items-center justify-between">
+            <Badge variant="outline">{ETAPA_LABELS[m.etapa]}</Badge>
+            <span className="text-xs text-muted-foreground">
+              {format(new Date(m.created_at), "dd/MM/yyyy")}
+            </span>
+          </div>
+          {m.acao_tomada && <p className="text-xs mt-1">{m.acao_tomada}</p>}
+          {m.encaminhado_para && <p className="text-xs text-muted-foreground">Encaminhado: {m.encaminhado_para}</p>}
+          {m.resolvido_por_profile?.nome && <p className="text-xs text-muted-foreground">Por: {m.resolvido_por_profile.nome}</p>}
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 ```
 
 ---
 
-## Fase 4: Ajustes na Lógica de Negócio
+## Estrutura Final do Dialog de Detalhes
 
-### 4.1 Disparar Notificação ao Suspender Proteção
-
-**Arquivo:** `src/hooks/useVistoriaManutencao.ts`
-
-Na mutation `useCancelarVistoriaManutencao`, após suspender proteção:
-
-```typescript
-// Linha ~793-795, após setar protecao_suspensa = true:
-if (suspenderProtecao && servico?.associado_id) {
-  // Notificar associado sobre suspensão
-  await supabase.functions.invoke('disparar-notificacao', {
-    body: {
-      associado_id: servico.associado_id,
-      tipo: 'manutencao',
-      subtipo: 'protecao_suspensa',
-      dados: {},
-      referencia_tipo: 'servico',
-      referencia_id: servicoId,
-      forcar_envio: true, // Ignora preferências - é crítico
-    },
-  });
-}
 ```
-
-### 4.2 Disparar Notificação ao Concluir Manutenção
-
-**Arquivo:** `src/hooks/useVistoriaManutencao.ts`
-
-Na mutation `useRegistrarResultadoManutencao`, após sucesso:
-
-```typescript
-// Após linha ~520 (serviço concluído com sucesso):
-// Notificar associado
-const { data: servicoNotif } = await supabase
-  .from('servicos')
-  .select('associado_id, veiculo:veiculos(placa)')
-  .eq('id', params.servicoId)
-  .single();
-
-if (servicoNotif?.associado_id) {
-  await supabase.functions.invoke('disparar-notificacao', {
-    body: {
-      associado_id: servicoNotif.associado_id,
-      tipo: 'manutencao',
-      subtipo: 'concluida',
-      dados: {
-        placa: servicoNotif.veiculo?.placa || '',
-      },
-      referencia_tipo: 'servico',
-      referencia_id: params.servicoId,
-    },
-  });
-}
+┌────────────────────────────────────────────────────────────┐
+│  Detalhes do Rastreador                               [X]  │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  ┌─ Header Card ─────────────────────────────────────────┐ │
+│  │ RAT-123 [Em Manutenção] [Softruck] Portador: Técnico │ │
+│  └───────────────────────────────────────────────────────┘ │
+│                                                            │
+│  ┌─ MANUTENÇÃO ATIVA (se status = manutencao) ───────────┐ │
+│  │ MAN-001 • Agendado 08/02 Manhã • Técnico João         │ │
+│  │ Motivo: sem_sinal                                      │ │
+│  └───────────────────────────────────────────────────────┘ │
+│                                                            │
+│  ┌─ MANUTENÇÃO INTERNA (se status = triagem/etc) ────────┐ │
+│  │ [Em Triagem] • Diagnóstico: GPS com defeito           │ │
+│  └───────────────────────────────────────────────────────┘ │
+│                                                            │
+│  ──── Informações Técnicas ────                           │
+│  IMEI: 86266... │ S/N: ABC123 │ Plataforma: Softruck      │
+│                                                            │
+│  ──── Veículo Vinculado (se instalado) ────               │
+│  ABC-1234 • Fiat Strada • João Silva                      │
+│                                                            │
+│  ──── Datas ────                                          │
+│  Entrada: 01/01/2026 │ Última Comunicação: 07/02/2026     │
+│                                                            │
+│  ═══════════════════════════════════════════════════════  │
+│                                                            │
+│  ──── Histórico de Movimentações (últimas 10) ────        │
+│  • Alteração de Status: manutencao → instalado            │
+│    07/02/2026 14:00 • Admin                               │
+│  • Saída para Instalação                                  │
+│    01/02/2026 10:00 • NF: 12345                           │
+│                                                            │
+│  ──── Histórico de Manutenções Campo (últimas 5) ────     │
+│  • MAN-001 [Resolvido] • 05/02/2026 • Técnico João        │
+│    "Refiz fiação do positivo"                             │
+│                                                            │
+│  ──── Histórico de Manutenções Bancada (últimas 5) ────   │
+│  • [Devolvido ao Estoque] • 03/02/2026                    │
+│    Ação: Conserto na bancada                              │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Fase 5: Menu de Navegação
+## Arquivos a Modificar
 
-### 5.1 Adicionar Link para Manutenção Interna no Menu
-
-**Arquivo:** `src/components/layout/nav-items.ts` (ou similar)
-
-Adicionar item no menu de Monitoramento:
-
-```typescript
-{
-  title: 'Manutenção Interna',
-  href: '/monitoramento/manutencao-interna',
-  icon: Settings,
-  roles: ['diretor', 'coordenador_monitoramento'],
-}
-```
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx` | Adicionar queries e seções de histórico completo |
 
 ---
 
-## Resumo de Arquivos a Modificar
+## Resultado Esperado
 
-| Arquivo | Alterações |
-|---------|------------|
-| `supabase/functions/disparar-notificacao/index.ts` | Adicionar templates de "manutencao" |
-| `src/hooks/useVistoriaManutencao.ts` | Implementar disparo de notificações |
-| `src/pages/instalador/ExecutarManutencao.tsx` | Adicionar checklist e upload de fotos |
-| `src/App.tsx` | Adicionar rota `/monitoramento/manutencao-interna` |
-| `src/pages/monitoramento/ManutencaoInterna.tsx` | Adicionar PermissionGate |
-| `src/components/layout/Sidebar.tsx` ou nav config | Adicionar link no menu |
-
----
-
-## Fluxo de Testes Recomendados
-
-1. **Abertura**: Abrir manutenção de rastreador instalado, verificar se status muda para "manutencao"
-2. **Agendamento**: Agendar com notificação WhatsApp, verificar se template é enviado
-3. **Execução Técnico**: Entrar na tela, preencher checklist, tirar fotos
-4. **Resultado Resolvido**: Concluir como resolvido, verificar status volta para "instalado"
-5. **Resultado Substituição**: Testar troca de rastreador, verificar destino do antigo
-6. **Não Compareceu BASE**: Marcar não compareceu, cancelar com suspensão, verificar notificação
-7. **Manutenção Interna**: Acessar tela, testar triagem, encaminhar para plataforma, registrar laudo
-
----
-
-## Ordem de Implementação Sugerida
-
-1. Templates de notificação (Edge Function)
-2. Rota da Manutenção Interna (App.tsx)
-3. PermissionGate na tela interna
-4. Disparo de notificações nos hooks
-5. Checklist na tela do técnico
-6. Upload de fotos
-7. Link no menu
-
+1. Dialog de detalhes mostra **tudo** que aconteceu com o rastreador
+2. Se está em manutenção de campo, mostra o serviço ativo com data/técnico
+3. Se está em triagem/plataforma/garantia, mostra a etapa atual e protocolo externo
+4. Histórico completo de movimentações, serviços de campo e manutenções internas
+5. Labels corretos para todos os tipos de movimentação
