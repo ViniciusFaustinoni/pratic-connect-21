@@ -1,6 +1,13 @@
 export { RastreadorFormDialog } from './RastreadorFormDialog';
 export { RastreadorDetailDrawer } from './RastreadorDetailDrawer';
 export { RastreadorFilters } from './RastreadorFilters';
+export { RastreadorFiltersV2 } from './RastreadorFiltersV2';
+export { RastreadorMetrics } from './RastreadorMetrics';
+export { RastreadorCard } from './RastreadorCard';
+export { RastreadorGridView } from './RastreadorGridView';
+export { RastreadorTableView } from './RastreadorTableView';
+export { RastreadorListHeader, type ViewMode } from './RastreadorListHeader';
+export { RastreadorBatchActions } from './RastreadorBatchActions';
 export { MapaRastreador } from './MapaRastreador';
 export { MapaHistorico } from './MapaHistorico';
 export { BotaoRedefinirSenha } from './BotaoRedefinirSenha';
