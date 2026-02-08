@@ -1,4 +1,4 @@
-import { Radio, Loader2, Plus, Wifi, WifiOff, MoreHorizontal, Eye, Pencil, Wrench, PackageMinus, Trash2, UserPlus, Package } from 'lucide-react';
+import { Radio, Loader2, Plus, Wifi, WifiOff, MoreHorizontal, Eye, Pencil, Wrench, PackageMinus, Trash2, UserPlus, Package, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -44,6 +44,7 @@ interface RastreadorTableViewProps {
   onNewRastreador: () => void;
   getPlataformaLabel: (codigo: string) => string;
   isDiretor: boolean;
+  onViewMap?: (rastreadorId: string) => void;
 }
 
 export function RastreadorTableView({
@@ -61,6 +62,7 @@ export function RastreadorTableView({
   onNewRastreador,
   getPlataformaLabel,
   isDiretor,
+  onViewMap,
 }: RastreadorTableViewProps) {
   const rastreadoresEstoque = rastreadores?.filter(r => r.status === 'estoque') || [];
 
@@ -296,6 +298,12 @@ export function RastreadorTableView({
                       {isInstalled && (
                         <>
                           <DropdownMenuSeparator />
+                          {onViewMap && (
+                            <DropdownMenuItem onClick={() => onViewMap(rastreador.id)}>
+                              <MapPin className="mr-2 h-4 w-4" />
+                              Ver no Mapa
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             className="text-amber-600"
                             onClick={() => onMaintenance(rastreador)}
