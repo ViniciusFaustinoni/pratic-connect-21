@@ -112,15 +112,6 @@ export default function ManutencaoInterna() {
   };
 
   return (
-    <PermissionGate 
-      permission={['isDiretor', 'isCoordenadorMonitoramento']}
-      mode="any"
-      fallback={
-        <div className="p-6 text-center text-muted-foreground">
-          <p>Acesso restrito a Coordenador de Monitoramento e Diretor.</p>
-        </div>
-      }
-    >
     <div className="min-h-screen">
       <div className="space-y-6 p-6">
         {/* Header */}
@@ -385,6 +376,5 @@ export default function ManutencaoInterna() {
         />
       </div>
     </div>
-    </PermissionGate>
   );
 }
