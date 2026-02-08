@@ -36,8 +36,8 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AtribuirPortadorDialog } from '@/components/monitoramento/estoque/AtribuirPortadorDialog';
 import { AtribuirPortadorLoteDialog } from '@/components/monitoramento/estoque/AtribuirPortadorLoteDialog';
-import { EnviarManutencaoModal } from '@/components/monitoramento/estoque/EnviarManutencaoModal';
 import { EnviarRetiradaModal } from '@/components/monitoramento/estoque/EnviarRetiradaModal';
+import { AbrirManutencaoModal } from '@/components/monitoramento/manutencao';
 import {
   useRastreadores,
   useRastreadoresMetricas,
@@ -219,9 +219,6 @@ function RastreadoresContent({
   const [dialogManutencao, setDialogManutencao] = useState<{
     id: string;
     codigo: string;
-    imei: string | null;
-    status: 'estoque' | 'instalado' | 'manutencao' | 'baixado';
-    veiculo: { placa: string; modelo: string | null } | null;
   } | null>(null);
   const [dialogRetirada, setDialogRetirada] = useState<{
     id: string;
@@ -535,26 +532,19 @@ function RastreadoresContent({
                                 Ver Estoque
                               </DropdownMenuItem>
                             )}
-                            {(rastreador.status === 'instalado' || rastreador.status === 'estoque') && (
+                            {rastreador.status === 'instalado' && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
                                   onClick={() => setDialogManutencao({
                                     id: rastreador.id,
                                     codigo: rastreador.codigo,
-                                    imei: rastreador.imei,
-                                    status: rastreador.status as 'estoque' | 'instalado' | 'manutencao' | 'baixado',
-                                    veiculo: rastreador.veiculos ? {
-                                      placa: rastreador.veiculos.placa,
-                                      modelo: rastreador.veiculos.modelo
-                                    } : null,
                                   })}
                                 >
                                   <Wrench className="mr-2 h-4 w-4" />
-                                  Enviar para Manutenção
+                                  Abrir Manutenção
                                 </DropdownMenuItem>
-                                {rastreador.status === 'instalado' && (
-                                  <DropdownMenuItem 
+                                <DropdownMenuItem 
                                     onClick={() => setDialogRetirada({
                                       id: rastreador.id,
                                       codigo: rastreador.codigo,
@@ -570,7 +560,6 @@ function RastreadoresContent({
                                     <PackageMinus className="mr-2 h-4 w-4" />
                                     Retirar Rastreador
                                   </DropdownMenuItem>
-                                )}
                               </>
                             )}
                             {isDiretor && (
@@ -661,10 +650,10 @@ function RastreadoresContent({
         </AlertDialogContent>
       </AlertDialog>
 
-      <EnviarManutencaoModal
+      <AbrirManutencaoModal
         open={!!dialogManutencao}
-        onOpenChange={() => setDialogManutencao(null)}
-        rastreador={dialogManutencao}
+        onOpenChange={(open) => !open && setDialogManutencao(null)}
+        rastreadorPreSelecionado={dialogManutencao ? { id: dialogManutencao.id, codigo: dialogManutencao.codigo } : undefined}
       />
 
       <EnviarRetiradaModal
