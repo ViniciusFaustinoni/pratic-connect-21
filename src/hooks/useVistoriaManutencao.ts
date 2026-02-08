@@ -888,7 +888,7 @@ export function useCancelarVistoriaManutencao() {
 
       // Se tinha rastreador, voltar para 'instalado' (cancelamento não é baixa)
       if (servico?.rastreador_id) {
-        await supabase
+        const { error: rastreadorError } = await supabase
           .from('rastreadores')
           .update({ 
             status: 'instalado',
@@ -896,15 +896,23 @@ export function useCancelarVistoriaManutencao() {
           })
           .eq('id', servico.rastreador_id);
 
-        // Registrar movimentação
-        await supabase.from('estoque_movimentacoes').insert({
-          tipo: 'alteracao_status',
-          quantidade: 1,
-          status_anterior: 'manutencao',
-          status_novo: 'instalado',
-          rastreador_id: servico.rastreador_id,
-          observacoes: 'Manutenção cancelada - rastreador retornou ao status instalado',
-        });
+        if (rastreadorError) {
+          console.error('[useCancelarVistoriaManutencao] ERRO ao atualizar rastreador:', rastreadorError);
+          // Não lançar erro para não reverter o cancelamento, mas avisar o usuário
+          toast.warning('Atenção: rastreador pode precisar de ajuste manual', {
+            description: 'Verifique o status do rastreador na listagem.'
+          });
+        } else {
+          // Registrar movimentação apenas se update foi bem sucedido
+          await supabase.from('estoque_movimentacoes').insert({
+            tipo: 'retorno_manutencao',
+            quantidade: 1,
+            status_anterior: 'manutencao',
+            status_novo: 'instalado',
+            rastreador_id: servico.rastreador_id,
+            observacoes: motivo || 'Manutenção cancelada - rastreador retornou ao status instalado',
+          });
+        }
       }
 
       return { servicoId };
