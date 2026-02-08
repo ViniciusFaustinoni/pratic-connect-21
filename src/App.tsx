@@ -77,7 +77,6 @@ import DashboardCoordenador from "./pages/monitoramento/DashboardCoordenador";
 import Equipe from "./pages/monitoramento/Equipe";
 import FilaVistorias from "./pages/monitoramento/FilaVistorias";
 import VistoriasManutencao from "./pages/monitoramento/VistoriasManutencao";
-import ManutencaoInterna from "./pages/monitoramento/ManutencaoInterna";
 import GestaoRotas from "./pages/monitoramento/GestaoRotas";
 import Oficinas from "./pages/oficinas/Oficinas";
 import OrdensServico from "./pages/oficinas/OrdensServico";
@@ -481,7 +480,6 @@ const App = () => (
               <Route path="/monitoramento/calendario" element={<CalendarioInstalacoes />} />
               <Route path="/monitoramento/vistorias" element={<FilaVistorias />} />
               <Route path="/monitoramento/vistorias-manutencao" element={<VistoriasManutencao />} />
-              <Route path="/monitoramento/manutencao-interna" element={<ManutencaoInterna />} />
               <Route path="/monitoramento/vistorias-instalacoes" element={<VistoriasInstalacoes />} />
               <Route path="/monitoramento/realizar-vistoria" element={<Vistorias />} />
               

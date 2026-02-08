@@ -3,8 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Wrench, MapPin, Phone, Car, User, 
   Navigation, Play, CheckCircle2, Loader2, MessageCircle,
-  RefreshCw, XCircle, RotateCcw, Trash2, Search, AlertTriangle, UserX, CheckCircle,
-  ClipboardCheck, Camera, X
+  RefreshCw, XCircle, RotateCcw, Trash2, Search, AlertTriangle, UserX, CheckCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +16,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useServico, useIniciarServicoMutation } from '@/hooks/useServicos';
 import { 
   useRegistrarResultadoManutencao, 
@@ -31,7 +29,6 @@ import {
 } from '@/types/vistoriaManutencao';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
 
 export default function ExecutarManutencao() {
   const { id } = useParams<{ id: string }>();
@@ -51,18 +48,6 @@ export default function ExecutarManutencao() {
   // Para não resolvido
   const [acaoNaoResolvido, setAcaoNaoResolvido] = useState<AcaoNaoResolvido>('reagendar');
 
-  // Checklist de verificações
-  const [checklistCompleto, setChecklistCompleto] = useState({
-    verificouSinal: false,
-    verificouBateria: false,
-    verificouFisico: false,
-    verificouFiacao: false,
-  });
-
-  // Fotos do reparo
-  const [fotosReparo, setFotosReparo] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
-
   const { data: servico, isLoading } = useServico(id);
   const { mutate: iniciarServico, isPending: isIniciando } = useIniciarServicoMutation();
   const { data: rastreadoresDisponiveis, isLoading: loadingRastreadores } = useRastreadoresDoPortador();
@@ -79,25 +64,8 @@ export default function ExecutarManutencao() {
       setBuscaRastreador('');
       setDestinoRastreadorAntigo('retorno_base');
       setAcaoNaoResolvido('reagendar');
-      setFotosReparo([]);
     }
   }, [showResultadoModal]);
-
-  // Função para upload de fotos
-  const uploadFotosReparo = async (servicoId: string): Promise<string[]> => {
-    const urls: string[] = [];
-    for (const foto of fotosReparo) {
-      const fileName = `manutencao/${servicoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
-      const { error } = await supabase.storage
-        .from('vistorias')
-        .upload(fileName, foto, { contentType: 'image/jpeg' });
-      if (!error) {
-        const { data: urlData } = supabase.storage.from('vistorias').getPublicUrl(fileName);
-        urls.push(urlData.publicUrl);
-      }
-    }
-    return urls;
-  };
 
   const handleVoltar = () => {
     navigate('/instalador');
@@ -151,35 +119,20 @@ export default function ExecutarManutencao() {
       return;
     }
 
-    setUploading(true);
-    try {
-      // Fazer upload das fotos se houver
-      let fotosUrls: string[] = [];
-      if (fotosReparo.length > 0) {
-        fotosUrls = await uploadFotosReparo(id);
+    registrarResultado.mutate({
+      servicoId: id,
+      resultado,
+      descricao,
+      rastreadorNovoId: resultado === 'substituicao' ? rastreadorNovoId : undefined,
+      idPlataforma: resultado === 'substituicao' ? idPlataforma : undefined,
+      destinoRastreadorAntigo: resultado === 'substituicao' ? destinoRastreadorAntigo : undefined,
+      acaoNaoResolvido: resultado === 'nao_resolvido' ? acaoNaoResolvido : undefined,
+    }, {
+      onSuccess: () => {
+        setShowResultadoModal(false);
+        navigate('/instalador');
       }
-
-      registrarResultado.mutate({
-        servicoId: id,
-        resultado,
-        descricao: fotosUrls.length > 0 ? `${descricao}\n\nFotos: ${fotosUrls.join(', ')}` : descricao,
-        rastreadorNovoId: resultado === 'substituicao' ? rastreadorNovoId : undefined,
-        idPlataforma: resultado === 'substituicao' ? idPlataforma : undefined,
-        destinoRastreadorAntigo: resultado === 'substituicao' ? destinoRastreadorAntigo : undefined,
-        acaoNaoResolvido: resultado === 'nao_resolvido' ? acaoNaoResolvido : undefined,
-      }, {
-        onSuccess: () => {
-          setShowResultadoModal(false);
-          navigate('/instalador');
-        },
-        onSettled: () => {
-          setUploading(false);
-        }
-      });
-    } catch (error) {
-      setUploading(false);
-      toast.error('Erro ao fazer upload das fotos');
-    }
+    });
   };
 
   const handleNaoCompareceu = async () => {
@@ -376,39 +329,6 @@ export default function ExecutarManutencao() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">{servico.observacoes}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Checklist de Verificações (somente quando em andamento) */}
-        {isEmAndamento && (
-          <Card className="border-amber-200">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <ClipboardCheck className="h-4 w-4" />
-                Verificações
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[
-                { key: 'verificouSinal' as const, label: 'Verificar sinal GPS/comunicação' },
-                { key: 'verificouBateria' as const, label: 'Verificar tensão da bateria' },
-                { key: 'verificouFisico' as const, label: 'Verificar estado físico do dispositivo' },
-                { key: 'verificouFiacao' as const, label: 'Verificar fiação e conexões' },
-              ].map((item) => (
-                <div key={item.key} className="flex items-center gap-3">
-                  <Checkbox
-                    id={item.key}
-                    checked={checklistCompleto[item.key]}
-                    onCheckedChange={(checked) => 
-                      setChecklistCompleto(prev => ({ ...prev, [item.key]: !!checked }))
-                    }
-                  />
-                  <Label htmlFor={item.key} className="text-sm cursor-pointer">
-                    {item.label}
-                  </Label>
-                </div>
-              ))}
             </CardContent>
           </Card>
         )}
@@ -687,51 +607,6 @@ export default function ExecutarManutencao() {
                 </div>
               )}
 
-              {/* Fotos do Reparo (opcional) */}
-              {(resultado === 'resolvido' || resultado === 'substituicao') && (
-                <div className="space-y-2 pt-2 border-t">
-                  <Label className="text-sm font-medium">
-                    Fotos do Reparo (opcional)
-                  </Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {fotosReparo.map((foto, idx) => (
-                      <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-muted">
-                        <img 
-                          src={URL.createObjectURL(foto)} 
-                          alt={`Foto ${idx + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setFotosReparo(prev => prev.filter((_, i) => i !== idx))}
-                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                    {fotosReparo.length < 3 && (
-                      <label className="aspect-square rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-primary">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) setFotosReparo(prev => [...prev, file]);
-                          }}
-                        />
-                        <Camera className="h-6 w-6 text-muted-foreground" />
-                      </label>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Tire fotos do rastreador após o reparo (máx. 3)
-                  </p>
-                </div>
-              )}
-
               {/* Campo de descrição (sempre obrigatório) */}
               <div className="space-y-2 pt-2 border-t">
                 <Label className="text-sm font-medium">
@@ -767,15 +642,14 @@ export default function ExecutarManutencao() {
               disabled={
                 !descricao.trim() || 
                 (resultado === 'substituicao' && !rastreadorNovoId) ||
-                registrarResultado.isPending ||
-                uploading
+                registrarResultado.isPending
               }
               className="flex-1"
             >
-              {(registrarResultado.isPending || uploading) ? (
+              {registrarResultado.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {uploading ? 'Enviando fotos...' : 'Salvando...'}
+                  Salvando...
                 </>
               ) : (
                 'Confirmar'
