@@ -1,200 +1,108 @@
 
-# Plano: Unificação do Fluxo de Manutenção no Menu Rastreadores
-
-## Situação Atual
-
-Existem **múltiplos pontos de entrada fragmentados** para iniciar manutenções:
-
-| Local | Modal/Hook | Status criado |
-|-------|------------|---------------|
-| Menu **Rastreadores** | `AbrirManutencaoModal` + `useAbrirVistoriaManutencao` | `pendente` (sem data) |
-| Menu **Estoque** (antigo) | ~~Removido na última correção~~ | - |
-| Menu **Vistorias de Manutenção** | `AbrirManutencaoModal` (botão "Nova Manutenção") | `pendente` (sem data) |
-| `EnviarManutencaoModal` (não usado ativamente) | `useCriarManutencao` | `pendente` com data/período |
-
-O fluxo atual obriga o coordenador a usar **duas etapas**: primeiro abrir a manutenção (AbrirManutencaoModal) e depois agendar (AgendarManutencaoModal na tela VistoriasManutencao). Isso não está errado, mas é fragmentado.
-
-## Solução Proposta
-
-Unificar tudo em um **único modal no menu Rastreadores** que faz abertura + agendamento numa só operação, conforme solicitado.
+## Objetivo
+Corrigir o erro 500 ao excluir associado, causado por **contratos ainda existentes** que continuam referenciando `associados.id` via FK `fk_contratos_associado` (tabela `contratos.associado_id`). O motivo mais provável (e consistente com os logs e o schema) é que **a exclusão de contratos falha silenciosamente** por dependências que não estão sendo removidas antes — especialmente `comissoes_deducoes`, que tem FK para `contratos` **sem** `ON DELETE CASCADE`.
 
 ---
 
-## Arquivos a Criar
+## O que eu encontrei (diagnóstico com base no schema e no código atual)
+### 1) A constraint que está estourando
+- `fk_contratos_associado`: `contratos(associado_id) -> associados(id)`
 
-### 1. `src/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal.tsx`
+Ou seja: se existir **qualquer linha em `contratos`** com `associado_id = associadoId`, o delete do associado falha.
 
-Modal unificado que combina:
-- Campos de `AbrirManutencaoModal` (motivo, detalhes)
-- Campos de `AgendarManutencaoModal` (data, período, local, técnico, encaixe, WhatsApp)
-- Exibe dados do rastreador, veículo e associado
+### 2) Por que ainda sobram contratos mesmo com o “force delete”
+No `delete-associado/index.ts`, vocês chamam vários `.delete()`/`.update()` em sequência, mas **quase nenhuma chamada verifica `error`**.  
+Então, quando uma exclusão falha, o fluxo segue como se tivesse dado certo.
 
-Ao confirmar, executa tudo numa única operação criando o serviço já com `status: 'agendada'`.
+Ponto crítico: existe FK `comissoes_deducoes_contrato_id_fkey`:
+- `comissoes_deducoes(contrato_id) -> contratos(id)` **sem cascade**
+- Isso impede `DELETE FROM contratos WHERE id = ...` se houver deduções vinculadas.
+
+O schema confirma várias FKs para `contratos`, e as que tipicamente bloqueiam deleção (por não ter cascade) incluem:
+- `comissoes_deducoes.contrato_id` (sem ON DELETE)
+- `instalacoes.contrato_id` (sem ON DELETE) — esta já está sendo deletada no código
+- `instalacoes_pendentes_criacao.contrato_id` (sem ON DELETE) — esta já está sendo deletada no código
+
+Portanto, **falta limpar `comissoes_deducoes`** antes de excluir contratos.
 
 ---
 
-## Arquivos a Modificar
+## Mudanças planejadas (somente reorganização/correção, sem “reescrever do zero”)
 
-### 2. `src/hooks/useVistoriaManutencao.ts`
+### A) Corrigir a ordem e completar a limpeza de dependências antes de deletar `contratos`
+No edge function `supabase/functions/delete-associado/index.ts`:
 
-Adicionar novo hook **`useAbrirEAgendarManutencao`** que:
+1. Para cada contrato:
+   - Remover dependências que bloqueiam delete do contrato:
+     - **Adicionar**: `DELETE FROM comissoes_deducoes WHERE contrato_id = :id`
+     - (Opcional/segurança): deletar também `comissoes` (apesar de cascade existir, não atrapalha)
+   - Manter as limpezas já existentes:
+     - `instalacoes_pendentes_criacao`
+     - `instalacoes`
+     - `servicos`
+     - `asaas_cobrancas`
+     - `contratos_documentos`, `contratos_historico`, etc.
+     - `vistorias` + `blacklist_veiculos` vinculada
 
-```typescript
-interface AbrirEAgendarManutencaoParams {
-  rastreadorId: string;
-  motivo: MotivoManutencao;
-  motivoDetalhe?: string;
-  dataAgendada: string;
-  periodo: 'manha' | 'tarde';
-  localTipo: 'base' | 'rota';
-  localEndereco?: string;
-  profissionalId: string;
-  permiteEncaixe: boolean;
-  notificarWhatsApp: boolean;
-}
+2. Só então:
+   - Desvincular `veiculos.contrato_id = null`
+   - `DELETE FROM contratos WHERE id = :id`
+
+### B) Parar de ignorar falhas: checar `error` e registrar logs úteis
+Para cada operação crítica:
+- Capturar `{ error }`
+- Se error:
+  - `console.error()` com:
+    - tabela
+    - contrato_id / associado_id
+    - mensagem do Postgres
+  - retornar erro **mais diagnosticável** (ex: HTTP 409/500 com “qual tabela bloqueou e quantos registros ainda existem”).
+
+Isso evita o cenário atual em que o código “acha” que deletou, mas na prática não deletou.
+
+### C) Verificação final antes do delete do associado (com saída detalhada)
+Antes de executar:
+```ts
+await supabaseAdmin.from("associados").delete().eq("id", associadoId)
 ```
+fazer:
+1. `SELECT id FROM contratos WHERE associado_id = associadoId`
+2. Se existir algum:
+   - retornar `409 Conflict` com:
+     - lista de `contrato.id` restantes (limitada, ex: 10)
+     - contagem em tabelas bloqueadoras por contrato (principalmente `comissoes_deducoes`)
+   - Isso ajuda a confirmar 100% a causa na próxima tentativa.
 
-Executa:
-1. Busca dados do rastreador (veículo, associado)
-2. Atualiza rastreador: `instalado` → `manutencao`
-3. Registra movimentação em `estoque_movimentacoes`
-4. Cria serviço com `status: 'agendada'` (não `pendente`)
-5. Notifica WhatsApp se habilitado
-
----
-
-### 3. `src/pages/monitoramento/Rastreadores.tsx`
-
-**Modificar:**
-- Substituir `AbrirManutencaoModal` por `AgendarManutencaoUnificadoModal`
-- Ajustar estado `dialogManutencao` para incluir dados do veículo/associado
-- Manter opção apenas para rastreadores com `status === 'instalado'`
-- Alterar texto do dropdown de "Abrir Manutenção" para "Enviar para Manutenção"
+### D) Ajuste rápido de robustez (opcional, mas recomendado)
+- Trocar CORS headers para o padrão completo recomendado (não resolve FK, mas evita problemas de front).
+- Padronizar uma helper interna tipo `must()` para “falhar rápido” quando `error` acontecer (mantendo o arquivo simples).
 
 ---
 
-### 4. `src/pages/monitoramento/VistoriasManutencao.tsx`
-
-**Remover:**
-- Botão "Nova Manutenção" do header (linhas 114-119)
-- Modal `AbrirManutencaoModal` e seu estado `modalAbrir`
-- Imports relacionados
-
-Esta página passa a ser **apenas para gestão** de manutenções já criadas.
-
----
-
-## Fluxo Final
-
-```text
-MENU RASTREADORES (único ponto de entrada)
-         │
-         │ Coordenador clica "Enviar para Manutenção"
-         │ em rastreador com status 'instalado'
-         ▼
-┌──────────────────────────────────────────────────────────┐
-│ MODAL UNIFICADO "Agendar Manutenção"                     │
-├──────────────────────────────────────────────────────────┤
-│ INFORMAÇÕES (auto-preenchidas)                           │
-│ • Rastreador: RST-001234                                 │
-│ • Associado: João da Silva                               │
-│ • Veículo: VW Gol 2020 • ABC-1234                        │
-│ • Última comunicação: 03/02/2026 14:32                   │
-│                                                          │
-│ MOTIVO                                                   │
-│ [Selecione: sem_sinal / bateria_baixa / etc.]           │
-│ Detalhes: [___________________________________]          │
-│                                                          │
-│ AGENDAMENTO                                              │
-│ Data*: [📅 calendário - hoje até +2 dias]               │
-│ Período*: (○) Manhã  (○) Tarde                          │
-│ Local*: (○) Base  (○) Rota                              │
-│   └ Se Rota: [Endereço cadastrado ou informar outro]    │
-│ Técnico*: [Selecione profissional]                       │
-│                                                          │
-│ ☑ Notificar via WhatsApp                                │
-│ ☑ Permitir encaixe (só coord/diretor)                   │
-│                                                          │
-│ [Cancelar]  [Agendar Manutenção]                        │
-└──────────────────────────────────────────────────────────┘
-         │
-         │ Ao confirmar:
-         │ 1. rastreador.status → 'manutencao'
-         │ 2. estoque_movimentacoes.insert()
-         │ 3. servicos.insert({ status: 'agendada' })
-         ▼
-┌──────────────────────────────────────────────────────────┐
-│ FILA DE VISTORIAS / VISTORIAS DE MANUTENÇÃO              │
-│ • Manutenção aparece já agendada                         │
-│ • Técnico designado pode ver na sua fila                │
-│ • Coordenador pode gerenciar (cancelar, reagendar, etc.)│
-└──────────────────────────────────────────────────────────┘
-         │
-         ▼
-   TÉCNICO EXECUTA NO CAMPO
-   (ExecutarManutencao.tsx - sem alteração)
-```
+## Passo a passo de validação (como vamos provar que resolveu)
+1. Tentar excluir um associado que atualmente falha.
+2. Conferir logs do edge function:
+   - Deve aparecer limpeza de `comissoes_deducoes` por contrato.
+   - Deve aparecer `Contratos restantes: 0` antes de deletar associado.
+3. Confirmar no banco (test):
+   - `select count(*) from contratos where associado_id = '...'` deve ser 0 após o fluxo.
+4. Repetir com um associado que tenha histórico financeiro (maior chance de ter `comissoes_deducoes`).
 
 ---
 
-## Permissões
-
-O botão "Enviar para Manutenção" será visível apenas para:
-- **Diretor** (`isDiretor`)
-- **Coordenador de Monitoramento** (`isCoordenadorMonitoramento`)
-
-A checkbox "Permitir encaixe" também segue esta regra.
+## Se ainda falhar depois (plano de contingência)
+Se, após adicionar `comissoes_deducoes` + checagem de erro, ainda sobrar contrato:
+- A resposta 409 vai indicar quais contratos sobraram e, pelos logs, em qual tabela a deleção falhou.
+- Aí adicionamos a limpeza específica que estiver faltando (mesma abordagem, sem “reescrever”, apenas completar a lista de dependências reais).
 
 ---
 
-## Resumo das Alterações
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal.tsx` | **CRIAR** | Modal unificado com motivo + agendamento |
-| `src/hooks/useVistoriaManutencao.ts` | **ADICIONAR** | Hook `useAbrirEAgendarManutencao` |
-| `src/pages/monitoramento/Rastreadores.tsx` | **MODIFICAR** | Usar novo modal, ajustar dropdown e permissões |
-| `src/pages/monitoramento/VistoriasManutencao.tsx` | **MODIFICAR** | Remover botão "Nova Manutenção" e modal |
+## Arquivos envolvidos
+- `supabase/functions/delete-associado/index.ts` (ajustar ordem + deletar `comissoes_deducoes` + checar errors + verificação final)
 
 ---
 
-## O que NÃO será alterado
+## Observações importantes
+- Não vou alterar constraints agora (ex: transformar `fk_contratos_associado` em cascade), porque isso muda regra de integridade no banco e pode ter efeitos colaterais. A correção mais segura é garantir que o edge function delete tudo na ordem correta.
+- O erro mostrado é 100% compatível com “contrato não deletou por FK em tabela filha” + “código ignorou error” + “delete do associado estourou”.
 
-- `ExecutarManutencao.tsx` - Fluxo do técnico em campo
-- `ManutencaoInterna.tsx` - Bancada/triagem
-- Hooks de gestão existentes (`useAgendarVistoriaManutencao`, `useCancelarVistoriaManutencao`, etc.) - Continuam funcionando para reagendamentos
-- `AgendarManutencaoModal.tsx` - Será mantido para reagendamentos pós-ausência
-- `AbrirManutencaoModal.tsx` - Pode ser mantido ou deprecado (não mais usado após esta alteração)
-
----
-
-## Detalhes Técnicos
-
-### Estrutura do novo modal
-
-O modal será composto por:
-
-1. **Seção de informações** (somente leitura)
-   - Dados do rastreador vindos do dropdown
-   - Busca dados do veículo e associado via query
-
-2. **Seção de motivo** (reaproveitando lógica do AbrirManutencaoModal)
-   - Select com `MOTIVOS_MANUTENCAO_OPTIONS`
-   - Campo de texto para detalhes
-
-3. **Seção de agendamento** (reaproveitando lógica do AgendarManutencaoModal)
-   - Calendário (hoje até +2 dias, sem domingo)
-   - Botões de período com vagas (usa `useVagasPeriodo`)
-   - Radio de local (Base/Rota)
-   - Se Rota: seletor de endereço (cadastrado ou informar)
-   - Select de técnico (usa `useProfissionaisEquipe`)
-   - Checkbox notificar WhatsApp
-   - Checkbox encaixe (apenas para coord/diretor)
-
-### Dependências reutilizadas
-
-- `useVagasPeriodo` - Verificar vagas disponíveis
-- `useProfissionaisEquipe` - Listar técnicos
-- `usePermissions` - Verificar permissões
-- `buscarCep` - Autocomplete de endereço
-- `PERIODOS_DISPONIVEIS`, `getPeriodosDisponivelsPorHora` - Configuração de períodos
