@@ -1,348 +1,629 @@
 
-# Plano: Melhorar Rastreadores "Em Manutenção" e Histórico Completo
+# Plano de Implementacao - Vistoria de Manutencao (6 Tarefas)
 
-## Resumo do Problema
+## Resumo Executivo
 
-Após análise do código atual, identificamos as seguintes lacunas:
+Este plano cobre a implementacao de 6 funcionalidades para completar o fluxo de Vistoria de Manutencao:
 
-1. **Histórico incompleto no dialog de detalhes**: O `DetalhesRastreadorDialog` só mostra movimentações de `estoque_movimentacoes`, mas falta:
-   - Histórico de manutenções de campo (tabela `servicos`)
-   - Histórico de manutenções internas (tabela `rastreador_manutencao_interna`)
+| Tarefa | Descricao | Complexidade | Tempo Est. |
+|--------|-----------|--------------|------------|
+| VM-01 | Checklist Tecnico de Manutencao | Media | 30 min |
+| VM-02 | Upload de Fotos do Reparo | Media | 45 min |
+| VM-03 | Permissoes na Manutencao Interna | Facil | 20 min |
+| VM-04 | Modal de Reagendamento Pos-Ausencia | Facil | 25 min |
+| VM-05 | Notificacao WhatsApp (Edge Function) | Media | 35 min |
+| VM-06 | Status "Reservado" no Enum | Facil | 10 min |
 
-2. **Tipos de movimentação faltantes**: O mapeamento `tipoMovimentacaoLabels` não inclui todos os tipos usados nos hooks:
-   - `retorno_base`
-   - `baixa_substituicao`
-   - `instalacao_substituicao`
-   - `baixa_manutencao`
-
-3. **Rastreador em manutenção não mostra serviço vinculado**: Quando um rastreador está com status `manutencao`, o dialog não mostra qual serviço está associado (protocolo, data agendada, técnico)
-
-4. **Falta histórico de manutenção interna**: Quando um rastreador passou pela bancada (triagem, plataforma, garantia), isso não aparece no histórico
+**Total estimado: ~2h45min**
 
 ---
 
-## Alterações Propostas
+## Analise do Estado Atual
 
-### 1. Expandir `tipoMovimentacaoLabels` no Dialog
+### Componentes Existentes que Serao Reutilizados
 
-**Arquivo:** `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx`
+1. **`ChecklistItem.tsx`** - Ja existe em `src/components/instalador/` com logica de OK/NOK
+2. **`FotoCapture.tsx`** - Ja existe com compressao e preview
+3. **`usePermissions.ts`** - Hook completo com `isDiretor`, `isCoordenadorMonitoramento`
+4. **Bucket `vistorias`** - Ja existe (private) para armazenar fotos
 
-Adicionar os tipos que faltam:
+### Colunas que Faltam na Tabela `servicos`
 
-```typescript
-const tipoMovimentacaoLabels: Record<string, string> = {
-  entrada_estoque: 'Entrada no Estoque',
-  saida_instalacao: 'Saída para Instalação',
-  retorno_estoque: 'Retorno ao Estoque',
-  envio_manutencao: 'Envio para Manutenção',
-  baixa: 'Baixa',
-  transferencia: 'Transferência',
-  alteracao_status: 'Alteração de Status',
-  atribuicao_portador: 'Atribuição de Portador',
-  remocao_portador: 'Remoção de Portador',
-  troca_portador: 'Troca de Portador',
-  // NOVOS
-  retorno_base: 'Retorno à Base (Triagem)',
-  baixa_substituicao: 'Baixa por Substituição',
-  instalacao_substituicao: 'Instalação (Substituição)',
-  baixa_manutencao: 'Baixa por Manutenção',
-};
+- `checklist_manutencao` (jsonb)
+- `fotos_manutencao` (jsonb)
+- `whatsapp_notificado` (boolean)
+- `whatsapp_notificado_em` (timestamptz)
+
+### Enum `status_rastreador`
+
+Valores atuais: `estoque`, `instalado`, `manutencao`, `baixado`, `retorno_base`, `triagem`, `em_analise_plataforma`, `em_garantia`
+
+**Falta: `reservado`**
+
+---
+
+## VM-01: Checklist Tecnico de Manutencao
+
+### Arquivos a Criar
+
+**`src/components/instalador/ChecklistManutencao.tsx`**
+
+```text
+Componente que renderiza 6 itens de verificacao obrigatorios:
+
+ITENS DO CHECKLIST:
+1. "Verificar conexao eletrica do rastreador"
+   Desc: "Checar fios, conectores e aterramento"
+   
+2. "Verificar LED de status do equipamento"
+   Desc: "LED piscando = OK, apagado = sem energia"
+   
+3. "Testar sinal GPS"
+   Desc: "Verificar se rastreador esta transmitindo posicao"
+   
+4. "Verificar tensao da bateria do veiculo"
+   Desc: "Minimo 12V para funcionamento adequado"
+   
+5. "Inspecionar estado fisico do rastreador"
+   Desc: "Sem sinais de violacao, oxidacao ou dano"
+   
+6. "Verificar fixacao e posicionamento"
+   Desc: "Rastreador bem fixo e em local discreto"
+
+LAYOUT:
+- Card com titulo "Checklist de Manutencao" + icone ClipboardCheck
+- Barra de progresso no topo: "X de 6 verificacoes"
+- Cada item: Checkbox (h-5 w-5) + label bold + descricao menor
+- Altura minima 48px por item (touch-friendly)
+- Quando todos marcados: borda verde no card
+
+PROPS:
+- onComplete: () => void
+- disabled: boolean
+- checklistData: ChecklistItem[]
+- onChecklistChange: (items: ChecklistItem[]) => void
 ```
 
-### 2. Adicionar Query de Serviço Ativo (se em manutenção)
+### Arquivos a Modificar
 
-**Arquivo:** `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx`
+**`src/pages/instalador/ExecutarManutencao.tsx`**
 
-Buscar o serviço de manutenção vinculado quando status = `manutencao`:
+```text
+ADICIONAR:
+1. Import do ChecklistManutencao
+2. Estado para controlar checklist:
+   - const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
+   - const [checklistCompleto, setChecklistCompleto] = useState(false)
 
-```typescript
-// Query para buscar serviço de manutenção ativo
-const { data: servicoManutencao } = useQuery({
-  queryKey: ['rastreador-servico-manutencao', rastreadorId],
-  queryFn: async () => {
-    const { data } = await supabase
+3. Renderizar ChecklistManutencao ENTRE informacoes e botao:
+   - Condicao: isEmAndamento (apos clicar "Cheguei no Local")
+   - Posicao: antes do botao "Concluir Manutencao"
+
+4. Desabilitar botao "Concluir Manutencao":
+   - disabled={!checklistCompleto}
+
+5. Passar checklistData para handleConcluirComResultado
+```
+
+**`src/hooks/useVistoriaManutencao.ts`**
+
+```text
+MODIFICAR useRegistrarResultadoManutencao:
+
+1. Adicionar parametro checklistManutencao ao RegistrarResultadoParams:
+   checklistManutencao?: {
+     items: Array<{
+       id: string;
+       label: string;
+       checked: boolean;
+       checked_at: string;
+     }>;
+   };
+
+2. No update do servico, adicionar:
+   checklist_manutencao: params.checklistManutencao || null
+```
+
+### Migracao SQL
+
+```sql
+ALTER TABLE servicos 
+ADD COLUMN IF NOT EXISTS checklist_manutencao jsonb DEFAULT NULL;
+
+COMMENT ON COLUMN servicos.checklist_manutencao IS 
+'Checklist tecnico preenchido pelo vistoriador durante manutencao';
+```
+
+---
+
+## VM-02: Upload de Fotos do Reparo
+
+### Arquivos a Criar
+
+**`src/components/instalador/FotosManutencao.tsx`**
+
+```text
+Componente de upload de fotos para evidencia do reparo.
+
+FUNCIONALIDADES:
+- Botao "Adicionar Foto" (h-12, centralizado)
+- Abre camera (accept="image/*" capture="environment")
+- Aceita selecao da galeria
+- Minimo 2 fotos obrigatorias, maximo 6
+- Grid de previews (grid-cols-3 gap-2)
+- Cada preview: 80x80px, border-radius, botao X para remover
+- Contador: "X de 2 fotos minimas" (verde quando atingido)
+- Compressao: max 800px largura, quality 0.7
+
+CATEGORIAS (label abaixo de cada preview, selecionavel):
+- "Rastreador"
+- "Fiacao"
+- "Painel do veiculo"
+- "Geral"
+
+PROPS:
+- fotos: FotoManutencao[]
+- onFotosChange: (fotos: FotoManutencao[]) => void
+- minFotos?: number (default: 2)
+- maxFotos?: number (default: 6)
+- disabled?: boolean
+- obrigatorio?: boolean (default: true)
+
+TIPO FotoManutencao:
+{
+  file: File;
+  preview: string;
+  categoria: 'rastreador' | 'fiacao' | 'painel' | 'geral';
+}
+```
+
+### Arquivos a Modificar
+
+**`src/pages/instalador/ExecutarManutencao.tsx`**
+
+```text
+ADICIONAR:
+1. Import FotosManutencao
+2. Estado para fotos:
+   const [fotosManutencao, setFotosManutencao] = useState<FotoManutencao[]>([])
+
+3. Renderizar FotosManutencao DENTRO do modal de resultado:
+   - ANTES do botao de confirmar
+   - Obrigatorio para 'resolvido' e 'substituicao' (minimo 2)
+   - Opcional para 'nao_resolvido'
+
+4. Validacao antes de confirmar:
+   if ((resultado === 'resolvido' || resultado === 'substituicao') && fotosManutencao.length < 2) {
+     toast.error('Adicione pelo menos 2 fotos do reparo');
+     return;
+   }
+
+5. Passar fotos para handleConcluirComResultado
+```
+
+**`src/hooks/useVistoriaManutencao.ts`**
+
+```text
+MODIFICAR useRegistrarResultadoManutencao:
+
+1. Adicionar parametro fotos ao RegistrarResultadoParams:
+   fotos?: File[];
+
+2. Fazer upload das fotos ANTES de atualizar servico:
+   - Bucket: 'vistorias' (ja existe, private)
+   - Path: manutencao/{servicoId}/{timestamp}_{index}.jpg
+
+3. Salvar URLs no update:
+   fotos_manutencao: fotosUrls  // array de { url, categoria, uploaded_at }
+```
+
+**`src/components/monitoramento/manutencao/RegistrarResultadoModal.tsx`**
+
+```text
+ADICIONAR:
+1. Import FotosManutencao
+2. Estado para fotos
+3. Renderizar componente (OPCIONAL para admin)
+4. Passar fotos no submit
+```
+
+### Migracao SQL
+
+```sql
+ALTER TABLE servicos 
+ADD COLUMN IF NOT EXISTS fotos_manutencao jsonb DEFAULT '[]';
+
+COMMENT ON COLUMN servicos.fotos_manutencao IS 
+'Fotos do reparo/substituicao [{url, categoria, uploaded_at}]';
+```
+
+---
+
+## VM-03: Permissoes na Manutencao Interna
+
+### Arquivos a Modificar
+
+**`src/pages/monitoramento/ManutencaoInterna.tsx`**
+
+```text
+ADICIONAR no inicio do componente:
+
+1. Import usePermissions e ShieldAlert
+2. Verificacao de permissao:
+   const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
+   const temAcesso = isDiretor || isCoordenadorMonitoramento;
+   const podeDescartar = isDiretor; // SOMENTE diretor pode descartar
+
+3. Early return se nao tem acesso:
+   if (!temAcesso) {
+     return (
+       <div className="min-h-screen flex items-center justify-center">
+         <Card className="max-w-md">
+           <CardContent className="pt-6 text-center">
+             <ShieldAlert className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+             <h2 className="text-lg font-semibold">Acesso Restrito</h2>
+             <p className="text-muted-foreground mt-2">
+               Apenas Diretores e Coordenadores de Monitoramento podem acessar a Manutencao Interna.
+             </p>
+           </CardContent>
+         </Card>
+       </div>
+     );
+   }
+
+4. No dropdown de acoes, condicionar "Descartar":
+   {podeDescartar && item.etapa === 'em_triagem' && (
+     <>
+       <DropdownMenuSeparator />
+       <DropdownMenuItem 
+         onClick={() => handleAbrirModal(item, 'descarte')}
+         className="text-destructive"
+       >
+         <Trash2 className="h-4 w-4 mr-2" />
+         Descartar
+       </DropdownMenuItem>
+     </>
+   )}
+```
+
+**`src/hooks/useManutencaoInterna.ts`**
+
+```text
+VERIFICAR/ADICIONAR no useDescartarRastreador:
+- Registrar quem descartou:
+  descartado_por: user.id
+  descartado_em: new Date().toISOString()
+```
+
+---
+
+## VM-04: Modal de Reagendamento Pos-Ausencia
+
+### Arquivos a Criar
+
+**`src/components/monitoramento/manutencao/TratarAusenciaModal.tsx`**
+
+```text
+Modal especifico para quando associado nao compareceu.
+
+LAYOUT:
++----------------------------------------------+
+| ASSOCIADO NAO COMPARECEU              [X]    |
++----------------------------------------------+
+| Atencao: O associado nao compareceu          |
+|                                              |
+| Associado: [nome]                            |
+| Veiculo: [modelo - placa]                    |
+| Rastreador: [codigo]                         |
+| Data agendada: [data]                        |
+| Tipo: [Base / Rota]                          |
+|                                              |
+| ============================================ |
+| O QUE DESEJA FAZER?                          |
+|                                              |
+| (o) Reagendar manutencao                     |
+|     Agendar nova data para o associado       |
+|                                              |
+| (o) Cancelar e SUSPENDER protecao            |
+|     Associado ficara SEM protecao contra     |
+|     roubo, furto e colisao ate regularizar.  |
+|     [!] Esta acao notifica o associado.      |
+|                                              |
+| Observacao                                   |
+| [________________________________]           |
+|                                              |
+| [Voltar]  [Confirmar]                        |
++----------------------------------------------+
+
+COMPORTAMENTO:
+- Se "Reagendar": chama hook para mudar nao_compareceu -> pendente
+- Se "Cancelar + Suspender": AlertDialog de confirmacao, depois cancela com suspenderProtecao=true
+
+PROPS:
+- open: boolean
+- onClose: () => void
+- vistoria: VistoriaManutencao | null
+```
+
+### Arquivos a Modificar
+
+**`src/pages/monitoramento/VistoriasManutencao.tsx`**
+
+```text
+ADICIONAR:
+1. Import TratarAusenciaModal
+2. Estado para modal:
+   const [modalTratarAusencia, setModalTratarAusencia] = useState(false);
+
+3. Handler para abrir:
+   const handleTratarAusencia = (vistoria: VistoriaManutencao) => {
+     setVistoriaSelecionada(vistoria);
+     setModalTratarAusencia(true);
+   };
+
+4. Renderizar modal:
+   <TratarAusenciaModal 
+     open={modalTratarAusencia}
+     onClose={() => setModalTratarAusencia(false)}
+     vistoria={vistoriaSelecionada}
+   />
+```
+
+**`src/components/monitoramento/manutencao/ManutencaoTabela.tsx`**
+
+```text
+ADICIONAR prop e handler:
+- onTratarAusencia?: (vistoria: VistoriaManutencao) => void
+
+No dropdown, para status 'nao_compareceu':
+- Substituir "Reagendar" por "Tratar ausencia" que abre o modal especifico
+```
+
+**`src/hooks/useVistoriaManutencao.ts`**
+
+```text
+ADICIONAR hook useReagendarPosAusencia:
+
+export function useReagendarPosAusencia() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (servicoId: string) => {
+      const { error } = await supabase
+        .from('servicos')
+        .update({ 
+          status: 'pendente',
+          data_agendada: null,
+          periodo: null,
+          profissional_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', servicoId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao-metricas'] });
+      toast.success('Manutencao reagendada', {
+        description: 'Voltou para fila de agendamento.',
+      });
+    },
+  });
+}
+```
+
+---
+
+## VM-05: Notificacao WhatsApp (Edge Function)
+
+### Arquivos a Criar
+
+**`supabase/functions/notificar-manutencao-whatsapp/index.ts`**
+
+```text
+Edge Function para disparar notificacao via n8n.
+
+ENTRADA:
+{
+  telefone: string,
+  nome_associado: string,
+  data_agendada: string,
+  periodo: 'manha' | 'tarde',
+  tipo_local: 'base' | 'rota',
+  endereco?: string
+}
+
+MENSAGEM BASE:
+"Ola {nome}, sua Praticcar informa: foi agendada uma manutencao 
+do rastreador do seu veiculo para o dia {data} no periodo da {periodo}. 
+Por favor, compareca a nossa sede no endereco: {endereco}. 
+Prazo: 48 horas. Em caso de nao comparecimento, as protecoes contra 
+roubo, furto e colisao poderao ser suspensas. Duvidas? Entre em contato."
+
+MENSAGEM ROTA:
+"Ola {nome}, sua Praticcar informa: foi agendada uma visita tecnica 
+para manutencao do rastreador do seu veiculo para o dia {data} no 
+periodo da {periodo}. Nosso tecnico ira ate o endereco informado. 
+Por favor, esteja disponivel no local. Duvidas? Entre em contato."
+
+LOGICA:
+1. Verificar N8N_WEBHOOK_URL_MANUTENCAO
+2. Se nao configurada: log warn e retorna { success: false, reason: 'webhook_not_configured' }
+3. Montar mensagem conforme tipo_local
+4. POST para webhook n8n
+5. Retornar { success: true/false }
+```
+
+### Arquivos a Modificar
+
+**`src/hooks/useVistoriaManutencao.ts`**
+
+```text
+MODIFICAR useAgendarVistoriaManutencao:
+
+SUBSTITUIR o TODO (linha 428-431) por:
+
+if (params.notificarWhatsApp) {
+  try {
+    // Buscar telefone do associado
+    const { data: servicoData } = await supabase
       .from('servicos')
       .select(`
-        id,
-        protocolo,
-        status,
-        data_agendada,
-        periodo,
-        motivo_manutencao,
-        observacoes,
-        profissional:profiles!servicos_profissional_id_fkey(nome)
+        associado:associados(nome, telefone),
+        logradouro, numero, bairro, cidade, uf
       `)
-      .eq('rastreador_id', rastreadorId!)
-      .eq('tipo', 'vistoria_manutencao')
-      .not('status', 'in', '("concluida","cancelada","aprovada")')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return data;
-  },
-  enabled: !!rastreadorId && open && rastreador?.status === 'manutencao',
-});
+      .eq('id', params.servicoId)
+      .single();
+
+    const endereco = servicoData?.logradouro 
+      ? `${servicoData.logradouro}, ${servicoData.numero} - ${servicoData.bairro}, ${servicoData.cidade}/${servicoData.uf}`
+      : 'Sede Praticcar';
+
+    const { error: notifError } = await supabase.functions.invoke('notificar-manutencao-whatsapp', {
+      body: {
+        telefone: servicoData?.associado?.telefone,
+        nome_associado: servicoData?.associado?.nome,
+        data_agendada: params.dataAgendada,
+        periodo: params.periodo,
+        tipo_local: params.localTipo,
+        endereco,
+      }
+    });
+    
+    if (notifError) {
+      console.error('Erro ao notificar WhatsApp:', notifError);
+    } else {
+      // Registrar que foi notificado
+      await supabase
+        .from('servicos')
+        .update({
+          whatsapp_notificado: true,
+          whatsapp_notificado_em: new Date().toISOString(),
+        })
+        .eq('id', params.servicoId);
+    }
+  } catch (err) {
+    console.error('Falha na notificacao WhatsApp:', err);
+    // NAO bloqueia o agendamento
+  }
+}
 ```
 
-### 3. Adicionar Query de Manutenção Interna (se em triagem/plataforma/garantia)
+### Migracao SQL
 
-```typescript
-// Query para buscar manutenção interna ativa
-const { data: manutencaoInterna } = useQuery({
-  queryKey: ['rastreador-manutencao-interna', rastreadorId],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('rastreador_manutencao_interna')
-      .select(`
-        id,
-        etapa,
-        diagnostico_inicial,
-        defeito_identificado,
-        encaminhado_para,
-        numero_protocolo_externo,
-        laudo_externo,
-        created_at,
-        servico_origem:servicos!rastreador_manutencao_interna_servico_origem_id_fkey(protocolo)
-      `)
-      .eq('rastreador_id', rastreadorId!)
-      .not('etapa', 'in', '("concluido_estoque","descartado")')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return data;
-  },
-  enabled: !!rastreadorId && open && ['retorno_base', 'triagem', 'em_analise_plataforma', 'em_garantia'].includes(rastreador?.status || ''),
-});
-```
+```sql
+ALTER TABLE servicos 
+ADD COLUMN IF NOT EXISTS whatsapp_notificado boolean DEFAULT false,
+ADD COLUMN IF NOT EXISTS whatsapp_notificado_em timestamptz DEFAULT NULL;
 
-### 4. Adicionar Query de Histórico de Manutenções Internas Concluídas
-
-```typescript
-// Query para buscar histórico de manutenções internas
-const { data: historicoManutencaoInterna } = useQuery({
-  queryKey: ['rastreador-historico-manutencao-interna', rastreadorId],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('rastreador_manutencao_interna')
-      .select(`
-        id,
-        etapa,
-        acao_tomada,
-        laudo_externo,
-        encaminhado_para,
-        created_at,
-        resolvido_em,
-        resolvido_por_profile:profiles!rastreador_manutencao_interna_resolvido_por_fkey(nome)
-      `)
-      .eq('rastreador_id', rastreadorId!)
-      .order('created_at', { ascending: false })
-      .limit(5);
-    return data;
-  },
-  enabled: !!rastreadorId && open,
-});
-```
-
-### 5. Adicionar Query de Histórico de Serviços de Manutenção
-
-```typescript
-// Query para buscar histórico de serviços de manutenção
-const { data: historicoServicosManutencao } = useQuery({
-  queryKey: ['rastreador-historico-servicos', rastreadorId],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('servicos')
-      .select(`
-        id,
-        protocolo,
-        status,
-        resultado_manutencao,
-        concluida_em,
-        observacoes_analise,
-        profissional:profiles!servicos_profissional_id_fkey(nome)
-      `)
-      .eq('rastreador_id', rastreadorId!)
-      .eq('tipo', 'vistoria_manutencao')
-      .in('status', ['concluida', 'aprovada', 'cancelada'] as any)
-      .order('created_at', { ascending: false })
-      .limit(5);
-    return data;
-  },
-  enabled: !!rastreadorId && open,
-});
-```
-
-### 6. Adicionar Seção de "Manutenção Ativa" no Dialog
-
-Se o rastreador está em manutenção (campo ou interna), mostrar card destacado:
-
-```tsx
-{/* Manutenção de Campo Ativa */}
-{rastreador?.status === 'manutencao' && servicoManutencao && (
-  <div className="space-y-3">
-    <h3 className="font-semibold text-sm text-orange-600 uppercase tracking-wide flex items-center gap-2">
-      <Wrench className="h-4 w-4" />
-      Manutenção em Andamento
-    </h3>
-    <div className="rounded-lg border-2 border-orange-200 bg-orange-50 p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="font-medium">{servicoManutencao.protocolo}</span>
-        <Badge variant="outline">{servicoManutencao.status}</Badge>
-      </div>
-      <div className="text-sm text-muted-foreground space-y-1">
-        <p>Motivo: {servicoManutencao.motivo_manutencao}</p>
-        {servicoManutencao.data_agendada && (
-          <p>Agendado: {format(new Date(servicoManutencao.data_agendada), 'dd/MM/yyyy')} - {servicoManutencao.periodo}</p>
-        )}
-        {servicoManutencao.profissional?.nome && (
-          <p>Técnico: {servicoManutencao.profissional.nome}</p>
-        )}
-      </div>
-    </div>
-  </div>
-)}
-
-{/* Manutenção Interna Ativa */}
-{['retorno_base', 'triagem', 'em_analise_plataforma', 'em_garantia'].includes(rastreador?.status || '') && manutencaoInterna && (
-  <div className="space-y-3">
-    <h3 className="font-semibold text-sm text-purple-600 uppercase tracking-wide flex items-center gap-2">
-      <Settings className="h-4 w-4" />
-      Manutenção Interna (Bancada)
-    </h3>
-    <div className="rounded-lg border-2 border-purple-200 bg-purple-50 p-4">
-      <Badge className={ETAPA_MANUTENCAO_INTERNA_COLORS[manutencaoInterna.etapa]}>
-        {ETAPA_MANUTENCAO_INTERNA_LABELS[manutencaoInterna.etapa]}
-      </Badge>
-      <div className="text-sm text-muted-foreground space-y-1 mt-2">
-        {manutencaoInterna.diagnostico_inicial && <p>Diagnóstico: {manutencaoInterna.diagnostico_inicial}</p>}
-        {manutencaoInterna.encaminhado_para && <p>Encaminhado para: {manutencaoInterna.encaminhado_para}</p>}
-        {manutencaoInterna.numero_protocolo_externo && <p>Protocolo Externo: {manutencaoInterna.numero_protocolo_externo}</p>}
-      </div>
-    </div>
-  </div>
-)}
-```
-
-### 7. Adicionar Seções de Histórico Completo
-
-Após o histórico de movimentações, adicionar:
-
-```tsx
-{/* Histórico de Manutenções de Campo */}
-{historicoServicosManutencao && historicoServicosManutencao.length > 0 && (
-  <div className="space-y-3">
-    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-      <Wrench className="h-4 w-4" />
-      Histórico de Manutenções (Campo)
-    </h3>
-    <div className="space-y-2">
-      {historicoServicosManutencao.map((s) => (
-        <div key={s.id} className="rounded-lg border p-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="font-medium">{s.protocolo}</span>
-            <Badge variant="outline" className={...}>{s.resultado_manutencao || s.status}</Badge>
-          </div>
-          {s.observacoes_analise && <p className="text-xs text-muted-foreground mt-1">{s.observacoes_analise}</p>}
-          <div className="text-xs text-muted-foreground mt-1">
-            {s.concluida_em && format(new Date(s.concluida_em), "dd/MM/yyyy")}
-            {s.profissional?.nome && ` • ${s.profissional.nome}`}
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-
-{/* Histórico de Manutenções Internas */}
-{historicoManutencaoInterna && historicoManutencaoInterna.length > 0 && (
-  <div className="space-y-3">
-    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-      <Settings className="h-4 w-4" />
-      Histórico de Manutenções (Bancada)
-    </h3>
-    <div className="space-y-2">
-      {historicoManutencaoInterna.map((m) => (
-        <div key={m.id} className="rounded-lg border p-3 text-sm">
-          <div className="flex items-center justify-between">
-            <Badge variant="outline">{ETAPA_LABELS[m.etapa]}</Badge>
-            <span className="text-xs text-muted-foreground">
-              {format(new Date(m.created_at), "dd/MM/yyyy")}
-            </span>
-          </div>
-          {m.acao_tomada && <p className="text-xs mt-1">{m.acao_tomada}</p>}
-          {m.encaminhado_para && <p className="text-xs text-muted-foreground">Encaminhado: {m.encaminhado_para}</p>}
-          {m.resolvido_por_profile?.nome && <p className="text-xs text-muted-foreground">Por: {m.resolvido_por_profile.nome}</p>}
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+COMMENT ON COLUMN servicos.whatsapp_notificado IS 'Se o associado foi notificado via WhatsApp';
+COMMENT ON COLUMN servicos.whatsapp_notificado_em IS 'Timestamp da notificacao WhatsApp';
 ```
 
 ---
 
-## Estrutura Final do Dialog de Detalhes
+## VM-06: Status "Reservado" no Enum
 
+### Migracao SQL
+
+```sql
+-- Adicionar 'reservado' ao enum status_rastreador
+ALTER TYPE status_rastreador ADD VALUE IF NOT EXISTS 'reservado' AFTER 'estoque';
 ```
-┌────────────────────────────────────────────────────────────┐
-│  Detalhes do Rastreador                               [X]  │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  ┌─ Header Card ─────────────────────────────────────────┐ │
-│  │ RAT-123 [Em Manutenção] [Softruck] Portador: Técnico │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                            │
-│  ┌─ MANUTENÇÃO ATIVA (se status = manutencao) ───────────┐ │
-│  │ MAN-001 • Agendado 08/02 Manhã • Técnico João         │ │
-│  │ Motivo: sem_sinal                                      │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                            │
-│  ┌─ MANUTENÇÃO INTERNA (se status = triagem/etc) ────────┐ │
-│  │ [Em Triagem] • Diagnóstico: GPS com defeito           │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                            │
-│  ──── Informações Técnicas ────                           │
-│  IMEI: 86266... │ S/N: ABC123 │ Plataforma: Softruck      │
-│                                                            │
-│  ──── Veículo Vinculado (se instalado) ────               │
-│  ABC-1234 • Fiat Strada • João Silva                      │
-│                                                            │
-│  ──── Datas ────                                          │
-│  Entrada: 01/01/2026 │ Última Comunicação: 07/02/2026     │
-│                                                            │
-│  ═══════════════════════════════════════════════════════  │
-│                                                            │
-│  ──── Histórico de Movimentações (últimas 10) ────        │
-│  • Alteração de Status: manutencao → instalado            │
-│    07/02/2026 14:00 • Admin                               │
-│  • Saída para Instalação                                  │
-│    01/02/2026 10:00 • NF: 12345                           │
-│                                                            │
-│  ──── Histórico de Manutenções Campo (últimas 5) ────     │
-│  • MAN-001 [Resolvido] • 05/02/2026 • Técnico João        │
-│    "Refiz fiação do positivo"                             │
-│                                                            │
-│  ──── Histórico de Manutenções Bancada (últimas 5) ────   │
-│  • [Devolvido ao Estoque] • 03/02/2026                    │
-│    Ação: Conserto na bancada                              │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
+
+### Arquivos a Modificar
+
+**`src/types/rastreadores.ts`**
+
+```text
+MODIFICAR StatusRastreador (linha 11):
+
+export type StatusRastreador = 
+  | 'estoque'
+  | 'reservado'           // <-- ADICIONAR
+  | 'instalado'
+  | 'manutencao'
+  | 'retorno_base'
+  | 'triagem'
+  | 'em_analise_plataforma'
+  | 'em_garantia'
+  | 'baixado';
+
+ADICIONAR em STATUS_RASTREADOR_LABELS (linha 21):
+  reservado: 'Reservado',
+
+ADICIONAR em STATUS_RASTREADOR_COLORS (linha 32):
+  reservado: 'bg-yellow-100 text-yellow-800',
+
+MODIFICAR TRANSICOES_STATUS_RASTREADOR:
+  estoque: ['reservado', 'instalado', 'manutencao', 'baixado'],
+  reservado: ['instalado', 'estoque'],  // <-- ADICIONAR linha
+```
+
+**Pagina de Estoque de Rastreadores** (se existir filtro por status):
+
+```text
+Adicionar opcao 'reservado' nos filtros de status.
+Adicionar card de metrica "Reservados" (icone Clock, cor amarelo).
+```
+
+**`src/hooks/useVistoriaManutencao.ts`**
+
+```text
+VERIFICAR useRastreadoresParaSubstituicao (linha 853):
+- Ja filtra por status = 'estoque'
+- 'reservado' NAO sera incluido (correto!)
 ```
 
 ---
 
-## Arquivos a Modificar
+## Ordem de Implementacao Recomendada
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx` | Adicionar queries e seções de histórico completo |
+1. **VM-06** - Status Reservado (10 min) - Migracao simples
+2. **VM-03** - Permissoes Manutencao Interna (20 min) - Apenas adicionar guards
+3. **VM-01** - Checklist Tecnico (30 min) - Componente novo + integracao
+4. **VM-02** - Upload Fotos (45 min) - Componente + storage + integracao
+5. **VM-04** - Modal Reagendamento (25 min) - Modal novo + hook
+6. **VM-05** - WhatsApp Edge Function (35 min) - Edge function + integracao
 
 ---
 
-## Resultado Esperado
+## Migracoes SQL Consolidadas
 
-1. Dialog de detalhes mostra **tudo** que aconteceu com o rastreador
-2. Se está em manutenção de campo, mostra o serviço ativo com data/técnico
-3. Se está em triagem/plataforma/garantia, mostra a etapa atual e protocolo externo
-4. Histórico completo de movimentações, serviços de campo e manutenções internas
-5. Labels corretos para todos os tipos de movimentação
+```sql
+-- VM-01: Checklist
+ALTER TABLE servicos 
+ADD COLUMN IF NOT EXISTS checklist_manutencao jsonb DEFAULT NULL;
+
+-- VM-02: Fotos
+ALTER TABLE servicos 
+ADD COLUMN IF NOT EXISTS fotos_manutencao jsonb DEFAULT '[]';
+
+-- VM-05: WhatsApp
+ALTER TABLE servicos 
+ADD COLUMN IF NOT EXISTS whatsapp_notificado boolean DEFAULT false,
+ADD COLUMN IF NOT EXISTS whatsapp_notificado_em timestamptz DEFAULT NULL;
+
+-- VM-06: Status Reservado
+ALTER TYPE status_rastreador ADD VALUE IF NOT EXISTS 'reservado' AFTER 'estoque';
+```
+
+---
+
+## Arquivos Afetados (Resumo)
+
+| Arquivo | Acao | Tarefas |
+|---------|------|---------|
+| `src/components/instalador/ChecklistManutencao.tsx` | CRIAR | VM-01 |
+| `src/components/instalador/FotosManutencao.tsx` | CRIAR | VM-02 |
+| `src/components/monitoramento/manutencao/TratarAusenciaModal.tsx` | CRIAR | VM-04 |
+| `supabase/functions/notificar-manutencao-whatsapp/index.ts` | CRIAR | VM-05 |
+| `src/pages/instalador/ExecutarManutencao.tsx` | MODIFICAR | VM-01, VM-02 |
+| `src/hooks/useVistoriaManutencao.ts` | MODIFICAR | VM-01, VM-02, VM-04, VM-05 |
+| `src/pages/monitoramento/ManutencaoInterna.tsx` | MODIFICAR | VM-03 |
+| `src/pages/monitoramento/VistoriasManutencao.tsx` | MODIFICAR | VM-04 |
+| `src/components/monitoramento/manutencao/ManutencaoTabela.tsx` | MODIFICAR | VM-04 |
+| `src/components/monitoramento/manutencao/RegistrarResultadoModal.tsx` | MODIFICAR | VM-02 |
+| `src/types/rastreadores.ts` | MODIFICAR | VM-06 |
+
