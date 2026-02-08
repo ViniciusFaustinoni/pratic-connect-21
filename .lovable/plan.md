@@ -1,221 +1,218 @@
 
-# Correção Completa: Sincronização de Status e Histórico de Rastreadores
+# Redesign Completo: Página de Rastreadores
 
-## Problemas Identificados
+## Visão Geral
 
-Após análise profunda do código em `useVistoriaManutencao.ts`, encontrei **4 cenários críticos** onde o status do rastreador **NÃO está sendo atualizado** ou o **histórico não está sendo registrado**:
+Transformar a página `/monitoramento/rastreadores` de uma tabela densa e pouco intuitiva para uma interface moderna, fluida e focada na experiência do operador, inspirada no padrão visual já utilizado na página de "Equipe de Campo".
 
-### 1. ❌ Cenário: "Não Resolvido" + "Reagendar" (Linhas 686-699)
-**Problema**: Quando uma manutenção não é resolvida e o técnico escolhe "reagendar":
-- Atualiza apenas `servicos.status = 'pendente'`
-- **NÃO atualiza `rastreadores.status = 'reagendar_manutencao'`**
-- **NÃO registra movimentação em `estoque_movimentacoes`**
+---
 
-**Esperado**: 
-```
-rastreador.status: manutencao → reagendar_manutencao
-estoque_movimentacoes: tipo='reagendamento', status_anterior='manutencao', status_novo='reagendar_manutencao'
-```
+## Problemas Atuais Identificados
 
-### 2. ❌ Cenário: "Não Compareceu" (Linhas 784-792)
-**Problema**: Quando associado não comparece:
-- Atualiza apenas `servicos.status = 'nao_compareceu'`
-- **NÃO atualiza status do rastreador**
-- **NÃO registra movimentação no histórico**
+1. **Tabela densa**: Muitas colunas (11 colunas) dificultam a leitura em telas menores
+2. **Cards de métricas genéricos**: Sem hierarquia visual ou destaque adequado
+3. **Filtros em linha única**: Podem ficar apertados em mobile
+4. **Sem visualização de cards**: Apenas tabela, sem opção de grid
+5. **Ações escondidas**: Menu dropdown requer cliques extras
+6. **Falta de feedback visual**: Status de comunicação pouco destacado
+7. **Sem indicadores visuais de urgência**: Alertas não têm destaque visual
 
-**Esperado**:
-```
-rastreador.status: manutencao → reagendar_manutencao (estado suspenso até decisão)
-estoque_movimentacoes: tipo='nao_comparecimento', com observações
-```
+---
 
-### 3. ✅ Cenário: "Resolvido" (Linhas 499-579)
-**Status**: OK - Atualiza rastreador para 'instalado' e registra movimentação
+## Proposta de Redesign
 
-### 4. ✅ Cenário: "Substituição" (Linhas 581-679)
-**Status**: OK - Atualiza ambos rastreadores e registra movimentações
+### 1. Novo Layout de Métricas
 
-### 5. ✅ Cenário: "Não Resolvido" + "Cancelar" (Linhas 701-738)
-**Status**: OK - Atualiza rastreador para 'instalado' e registra movimentação
+Substituir os 4 cards atuais por uma barra de métricas mais compacta e visualmente rica:
 
-### 6. ✅ Cenário: Manutenção Cancelada Globalmente
-**Status**: OK (linhas 938-956) - Registra corretamente
-
-## Solução Proposta
-
-### Arquivo: `src/hooks/useVistoriaManutencao.ts`
-
-#### Correção 1: "Não Resolvido" + "Reagendar" (Linhas 686-699)
-
-**Antes**:
-```typescript
-if (acao === 'reagendar') {
-  // Reagendar: serviço volta para pendente
-  const { error: servicoUpdateError } = await supabase
-    .from('servicos')
-    .update({
-      status: 'pendente',
-      observacoes_analise: `Não resolvido: ${params.descricao}`,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', params.servicoId);
-
-  if (servicoUpdateError) {
-    throw new Error('Erro ao reagendar serviço');
-  }
-}
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📡 Total    │  ✅ Online    │  ⚠️ Atenção    │  🔴 Offline    │  📦 Estoque │
+│    12        │     5         │      2         │       3        │      4      │
+│ cadastrados  │  comunicando  │  1-24h sem     │  +24h sem      │  disponíveis│
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Depois**:
-```typescript
-if (acao === 'reagendar') {
-  // Reagendar: serviço volta para pendente e rastreador para reagendar_manutencao
-  const { error: servicoUpdateError } = await supabase
-    .from('servicos')
-    .update({
-      status: 'pendente',
-      observacoes_analise: `Não resolvido: ${params.descricao}`,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', params.servicoId);
+**Implementação**: Novo componente `RastreadorMetrics.tsx` seguindo o padrão de `EquipeMetrics.tsx`
 
-  if (servicoUpdateError) {
-    throw new Error('Erro ao reagendar serviço');
-  }
+### 2. Filtros Aprimorados
 
-  // Atualizar rastreador para aguardar novo agendamento
-  if (rastreadorAntigoId) {
-    const { error: rastreadorError } = await supabase
-      .from('rastreadores')
-      .update({
-        status: 'reagendar_manutencao',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', rastreadorAntigoId);
+Novo layout de filtros com:
+- Busca com largura maior
+- Filtros em chips clicáveis (toggle)
+- Indicador visual de filtros ativos
+- Botão de limpar todos os filtros
 
-    if (rastreadorError) {
-      console.error('[useRegistrarResultadoManutencao] Erro ao atualizar rastreador:', rastreadorError);
-      throw new Error('Erro ao atualizar status do rastreador');
-    }
-
-    // Registrar movimentação
-    await supabase.from('estoque_movimentacoes').insert({
-      tipo: 'alteracao_status',
-      quantidade: 1,
-      status_anterior: 'manutencao',
-      status_novo: 'reagendar_manutencao',
-      rastreador_id: rastreadorAntigoId,
-      observacoes: `Manutenção não resolvida - aguardando reagendamento: ${params.descricao}`,
-    });
-  }
-}
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🔍 [                  Buscar por IMEI, código, placa...                   ] │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Status: [●Todos] [Estoque] [Instalado] [Manutenção]  Plataforma: [▼ Todas] │
+│ Comunicação: [●Todos] [Online] [Atenção] [Offline]        [Limpar filtros] │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Correção 2: "Não Compareceu" (Linhas 784-792)
+### 3. Alternância Tabela / Cards
 
-**Antes**:
-```typescript
-export function useMarcarNaoCompareceu() {
-  const queryClient = useQueryClient();
+Adicionar toggle para escolher visualização:
 
-  return useMutation({
-    mutationFn: async (params: MarcarNaoCompareceuParams) => {
-      const { error } = await supabase
-        .from('servicos')
-        .update({
-          status: 'nao_compareceu' as any,
-          observacoes_analise: params.observacao || 'Associado não compareceu',
-          updated_at: new Date().toISOString(),
-          // NÃO suspender proteção ainda - coordenador/diretor decide
-        })
-        .eq('id', params.servicoId);
-
-      if (error) {
-        console.error('[useMarcarNaoCompareceu] Erro:', error);
-        throw new Error('Erro ao marcar não comparecimento');
-      }
-
-      return { servicoId: params.servicoId };
-    },
+```text
+┌───────────────────────────────────────────────────────────────────┐
+│ Lista de Rastreadores (12)            [📋 Tabela] [▦ Cards] [+] │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-**Depois**:
-```typescript
-export function useMarcarNaoCompareceu() {
-  const queryClient = useQueryClient();
+### 4. Novo Componente: RastreadorCard
 
-  return useMutation({
-    mutationFn: async (params: MarcarNaoCompareceuParams) => {
-      // 1. Buscar o rastreador_id do serviço
-      const { data: servico, error: servicoGetError } = await supabase
-        .from('servicos')
-        .select('rastreador_id')
-        .eq('id', params.servicoId)
-        .single();
+Cards visuais inspirados no `EquipeCard.tsx`:
 
-      if (servicoGetError || !servico) {
-        throw new Error('Erro ao buscar dados do serviço');
-      }
-
-      // 2. Atualizar status do serviço
-      const { error } = await supabase
-        .from('servicos')
-        .update({
-          status: 'nao_compareceu' as any,
-          observacoes_analise: params.observacao || 'Associado não compareceu',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', params.servicoId);
-
-      if (error) {
-        console.error('[useMarcarNaoCompareceu] Erro:', error);
-        throw new Error('Erro ao marcar não comparecimento');
-      }
-
-      // 3. Atualizar status do rastreador para 'reagendar_manutencao'
-      if (servico.rastreador_id) {
-        const { error: rastreadorError } = await supabase
-          .from('rastreadores')
-          .update({
-            status: 'reagendar_manutencao',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', servico.rastreador_id);
-
-        if (rastreadorError) {
-          console.error('[useMarcarNaoCompareceu] Erro ao atualizar rastreador:', rastreadorError);
-          throw new Error('Erro ao atualizar status do rastreador');
-        }
-
-        // 4. Registrar movimentação no histórico
-        await supabase.from('estoque_movimentacoes').insert({
-          tipo: 'alteracao_status',
-          quantidade: 1,
-          status_anterior: 'manutencao',
-          status_novo: 'reagendar_manutencao',
-          rastreador_id: servico.rastreador_id,
-          observacoes: `Não comparecimento: ${params.observacao || 'Associado ausente na data agendada'}`,
-        });
-      }
-
-      return { servicoId: params.servicoId };
-    },
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ ● [barra colorida status comunicação]                            │
+├──────────────────────────────────────────────────────────────────┤
+│  🔋                                                        [⋮]  │
+│  62667083403686              [Em Estoque] [● Online]            │
+│  IMEI: 62667083403686                                            │
+│  Plataforma: Softruck                                            │
+│  ─────────────────────────────────────────────────────────────── │
+│  🚗 LTB4J74 - Fiat Strada                                        │
+│  👤 Marcus Vinicius Faustinoni de Freitas                        │
+│  📧 dativoph@gmail.com                                           │
+│  ─────────────────────────────────────────────────────────────── │
+│  📡 Última comunicação: há 2 horas                               │
+│  📍 Velocidade: 0 km/h | Ignição: Desligada                      │
+│  ─────────────────────────────────────────────────────────────── │
+│  [👁️ Detalhes]  [🔧 Manutenção]  [📍 Localizar]                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## Resumo das Alterações
+**Características**:
+- Barra superior colorida indicando status de comunicação (verde/amarelo/vermelho)
+- Badge de status do rastreador
+- Informações organizadas em seções
+- Ações rápidas visíveis (não escondidas em dropdown)
+- Hover com elevação suave
 
-| Cenário | Linha | Ação |
-|---------|-------|------|
-| Não Resolvido + Reagendar | 686-699 | ➕ Adicionar atualização de rastreador + movimentação |
-| Não Compareceu | 784-792 | ➕ Adicionar busca de rastreador_id + atualização + movimentação |
-| Resolvido | 499-579 | ✅ Sem alterações (já funciona) |
-| Substituição | 581-679 | ✅ Sem alterações (já funciona) |
-| Não Resolvido + Cancelar | 701-738 | ✅ Sem alterações (já funciona) |
+### 5. Tabela Simplificada
 
-## Resultado Esperado
+Reduzir colunas da tabela de 11 para 7:
 
-Após as correções, **todos os 6 cenários de conclusão de manutenção** terão:
-- ✅ Status do rastreador atualizado corretamente
-- ✅ Movimentação registrada em `estoque_movimentacoes`
-- ✅ Histórico completo e auditável na aba "Histórico" do rastreador
-- ✅ Estados válidos conforme a máquina de estados definida em `rastreadores.ts`
+| Antes | Depois |
+|-------|--------|
+| Checkbox, Código, Nº Série, IMEI, Plataforma, Status, Portador, Comunicação, Veículo, Email Associado, Ações | Checkbox, IMEI/Código, Plataforma, Status, Veículo/Associado, Comunicação, Ações |
+
+**Melhorias**:
+- Combinar Código/IMEI em uma coluna com tooltip
+- Combinar Veículo/Associado em uma coluna compacta
+- Remover Nº Série e Email (disponíveis no drawer de detalhes)
+- Ícones de status de comunicação mais proeminentes
+
+### 6. Indicadores Visuais de Urgência
+
+Para rastreadores offline há muito tempo:
+- Badge pulsante vermelho
+- Linha com fundo levemente vermelho na tabela
+- Contador de horas/dias sem comunicação
+
+### 7. Barra de Seleção em Lote (Floating Bar)
+
+Aprimorar a barra atual:
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ✓ 3 selecionados    [👤 Atribuir Portador] [🔧 Manutenção em Lote] [✕ Limpar]│
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Estrutura de Arquivos
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/rastreadores/RastreadorMetrics.tsx` | Criar | Novo painel de métricas |
+| `src/components/rastreadores/RastreadorCard.tsx` | Criar | Card individual de rastreador |
+| `src/components/rastreadores/RastreadorFiltersV2.tsx` | Criar | Novos filtros com chips toggle |
+| `src/components/rastreadores/RastreadorGridView.tsx` | Criar | Grid de cards |
+| `src/components/rastreadores/RastreadorTableView.tsx` | Criar | Tabela simplificada extraída |
+| `src/components/rastreadores/RastreadorListHeader.tsx` | Criar | Header com toggle de visualização |
+| `src/pages/monitoramento/Rastreadores.tsx` | Reescrever | Página principal redesenhada |
+| `src/components/rastreadores/index.ts` | Atualizar | Exportar novos componentes |
+
+---
+
+## Detalhes Técnicos
+
+### RastreadorMetrics.tsx
+
+```tsx
+// Métricas exibidas:
+const metrics = [
+  { label: 'Total', value: metricas.total, icon: Radio, color: 'primary' },
+  { label: 'Online', value: metricas.online, icon: Wifi, color: 'emerald' },
+  { label: 'Atenção', value: metricas.alertas - metricas.offline, icon: AlertTriangle, color: 'amber' },
+  { label: 'Offline', value: metricas.offline, icon: WifiOff, color: 'red' },
+  { label: 'Estoque', value: metricas.estoque, icon: Package, color: 'blue' },
+];
+```
+
+### RastreadorCard.tsx
+
+```tsx
+// Estrutura principal
+<Card className="group overflow-hidden hover:shadow-lg transition-all">
+  {/* Barra de status de comunicação */}
+  <div className={cn(
+    "h-1",
+    isOnline && "bg-gradient-to-r from-emerald-500 to-emerald-400",
+    isAtencao && "bg-gradient-to-r from-amber-500 to-amber-400",
+    isOffline && "bg-gradient-to-r from-red-500 to-red-400",
+  )} />
+  
+  <CardContent className="p-4">
+    {/* Header com código e badges */}
+    {/* Informações do veículo/associado */}
+    {/* Dados de comunicação */}
+    {/* Ações rápidas */}
+  </CardContent>
+</Card>
+```
+
+### Estado de Visualização
+
+```tsx
+// Em Rastreadores.tsx
+const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
+// Persistir preferência no localStorage
+```
+
+### Animações
+
+Utilizar `framer-motion` (já instalado) para:
+- Transição suave entre visualizações (tabela ↔ cards)
+- Entrada animada dos cards
+- Feedback visual ao selecionar/deselecionar
+
+---
+
+## Fluxo de Interação Aprimorado
+
+1. **Usuário entra na página**: Vê métricas no topo, filtros abaixo, e grid de cards
+2. **Clica em card**: Drawer de detalhes abre lateralmente
+3. **Ações rápidas visíveis**: Botões de ação no próprio card
+4. **Filtros rápidos**: Chips de toggle para filtrar por status
+5. **Busca inteligente**: Busca por IMEI, código, placa ou nome do associado
+6. **Seleção em lote**: Checkboxes nos cards para operações em massa
+
+---
+
+## Resultado Visual Esperado
+
+Uma página que:
+- ✅ Exibe informações hierarquicamente (métricas → filtros → lista)
+- ✅ Permite alternar entre visão de cards e tabela
+- ✅ Destaca visualmente rastreadores que precisam de atenção
+- ✅ Oferece ações rápidas sem escondê-las em dropdowns
+- ✅ Funciona bem em desktop e mobile
+- ✅ Usa o mesmo padrão visual da página de Equipe
+- ✅ Proporciona feedback visual imediato (animações, cores, ícones)
