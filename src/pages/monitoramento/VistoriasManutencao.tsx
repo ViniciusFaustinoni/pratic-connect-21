@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { Plus, Wrench } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Wrench } from 'lucide-react';
 import { 
   ManutencaoMetricas, 
   ManutencaoFiltros, 
   ManutencaoTabela,
-  AbrirManutencaoModal,
   AgendarManutencaoModal,
   RegistrarResultadoModal,
   TratarAusenciaModal,
@@ -32,10 +30,8 @@ import {
 
 export default function VistoriasManutencao() {
   const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
-  const canOpenManutencao = isDiretor || isCoordenadorMonitoramento;
 
   const [filtros, setFiltros] = useState<FiltrosType>({});
-  const [modalAbrir, setModalAbrir] = useState(false);
   const [modalAgendar, setModalAgendar] = useState(false);
   const [modalResultado, setModalResultado] = useState(false);
   const [modalTratarAusencia, setModalTratarAusencia] = useState(false);
@@ -109,14 +105,10 @@ export default function VistoriasManutencao() {
           <p className="text-muted-foreground">
             Gestão de manutenções de rastreadores instalados
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Para iniciar uma nova manutenção, acesse o menu <strong>Rastreadores</strong> e clique em "Enviar para Manutenção"
+          </p>
         </div>
-
-        {canOpenManutencao && (
-          <Button onClick={() => setModalAbrir(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Manutenção
-          </Button>
-        )}
       </div>
 
       {/* Métricas */}
@@ -136,9 +128,7 @@ export default function VistoriasManutencao() {
         onTratarAusencia={handleTratarAusencia}
       />
 
-      {/* Modais */}
-      <AbrirManutencaoModal open={modalAbrir} onOpenChange={setModalAbrir} />
-      
+      {/* Modais de gestão */}
       <AgendarManutencaoModal 
         open={modalAgendar} 
         onOpenChange={setModalAgendar}

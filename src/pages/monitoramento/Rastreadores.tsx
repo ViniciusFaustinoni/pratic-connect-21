@@ -37,7 +37,8 @@ import { toast } from 'sonner';
 import { AtribuirPortadorDialog } from '@/components/monitoramento/estoque/AtribuirPortadorDialog';
 import { AtribuirPortadorLoteDialog } from '@/components/monitoramento/estoque/AtribuirPortadorLoteDialog';
 import { EnviarRetiradaModal } from '@/components/monitoramento/estoque/EnviarRetiradaModal';
-import { AbrirManutencaoModal } from '@/components/monitoramento/manutencao';
+import { AgendarManutencaoUnificadoModal } from '@/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal';
+import { usePermissions as usePermissionsHook } from '@/hooks/usePermissions';
 import {
   useRastreadores,
   useRastreadoresMetricas,
@@ -535,14 +536,15 @@ function RastreadoresContent({
                             {rastreador.status === 'instalado' && (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
+                                  className="text-amber-600"
                                   onClick={() => setDialogManutencao({
                                     id: rastreador.id,
                                     codigo: rastreador.codigo,
                                   })}
                                 >
-                                  <Wrench className="mr-2 h-4 w-4" />
-                                  Abrir Manutenção
+                                  <Wrench className="mr-2 h-4 w-4 text-amber-600" />
+                                  Enviar para Manutenção
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
                                     onClick={() => setDialogRetirada({
@@ -650,10 +652,10 @@ function RastreadoresContent({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AbrirManutencaoModal
+      <AgendarManutencaoUnificadoModal
         open={!!dialogManutencao}
         onOpenChange={(open) => !open && setDialogManutencao(null)}
-        rastreadorPreSelecionado={dialogManutencao ? { id: dialogManutencao.id, codigo: dialogManutencao.codigo } : undefined}
+        rastreador={dialogManutencao}
       />
 
       <EnviarRetiradaModal
