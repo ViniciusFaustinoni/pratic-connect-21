@@ -1,25 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Radio, Plus, Wifi, WifiOff, AlertTriangle, Loader2, MoreHorizontal, Eye, Pencil, Package, Server, UserPlus, X, Trash2, Wrench, PackageMinus } from 'lucide-react';
+import { Radio, Server } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -38,25 +19,26 @@ import { AtribuirPortadorDialog } from '@/components/monitoramento/estoque/Atrib
 import { AtribuirPortadorLoteDialog } from '@/components/monitoramento/estoque/AtribuirPortadorLoteDialog';
 import { EnviarRetiradaModal } from '@/components/monitoramento/estoque/EnviarRetiradaModal';
 import { AgendarManutencaoUnificadoModal } from '@/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal';
-import { usePermissions as usePermissionsHook } from '@/hooks/usePermissions';
 import {
   useRastreadores,
   useRastreadoresMetricas,
-  isRastreadorOnline,
   type RastreadorFilters as Filters,
+  type RastreadorWithRelations,
 } from '@/hooks/useRastreadores';
 import { usePlataformasLabels } from '@/hooks/usePlataformasCRUD';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   RastreadorFormDialog,
   RastreadorDetailDrawer,
-  RastreadorFilters,
+  RastreadorFiltersV2,
+  RastreadorMetrics,
+  RastreadorGridView,
+  RastreadorTableView,
+  RastreadorListHeader,
+  RastreadorBatchActions,
+  type ViewMode,
 } from '@/components/rastreadores';
 import { PlataformasConfigPanel } from '@/components/rastreadores/PlataformasConfigPanel';
-import {
-  STATUS_RASTREADOR_LABELS,
-  STATUS_RASTREADOR_COLORS,
-} from '@/types/database';
 
 export default function Rastreadores() {
   const [showForm, setShowForm] = useState(false);
@@ -64,13 +46,23 @@ export default function Rastreadores() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({});
   const [activeTab, setActiveTab] = useState('rastreadores');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    // Recuperar preferência do localStorage
+    const saved = localStorage.getItem('rastreadores-view-mode');
+    return (saved as ViewMode) || 'cards';
+  });
 
   const { data: rastreadores, isLoading } = useRastreadores(filters);
-  const { data: metricas } = useRastreadoresMetricas();
+  const { data: metricas, isLoading: isLoadingMetricas } = useRastreadoresMetricas();
   const { data: plataformasLabels } = usePlataformasLabels();
   const { isDiretor, isDesenvolvedor } = usePermissions();
 
   const canManagePlataformas = isDiretor || isDesenvolvedor;
+
+  // Salvar preferência de visualização
+  useEffect(() => {
+    localStorage.setItem('rastreadores-view-mode', viewMode);
+  }, [viewMode]);
 
   const handleOpenDetails = (id: string) => {
     setSelectedId(id);
@@ -99,19 +91,12 @@ export default function Rastreadores() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Rastreadores</h1>
-          <p className="text-muted-foreground">
-            Monitore a comunicação e status dos rastreadores
-          </p>
-        </div>
-        {activeTab === 'rastreadores' && (
-          <Button onClick={handleNewRastreador}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Rastreador
-          </Button>
-        )}
+      {/* Header da página */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Rastreadores</h1>
+        <p className="text-muted-foreground">
+          Monitore a comunicação e status dos rastreadores
+        </p>
       </div>
 
       {canManagePlataformas ? (
@@ -132,12 +117,16 @@ export default function Rastreadores() {
               rastreadores={rastreadores}
               metricas={metricas}
               isLoading={isLoading}
+              isLoadingMetricas={isLoadingMetricas}
               filters={filters}
               onFiltersChange={setFilters}
               onOpenDetails={handleOpenDetails}
               onEdit={handleEdit}
               onNewRastreador={handleNewRastreador}
               getPlataformaLabel={getPlataformaLabel}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              isDiretor={isDiretor}
             />
           </TabsContent>
 
@@ -150,12 +139,16 @@ export default function Rastreadores() {
           rastreadores={rastreadores}
           metricas={metricas}
           isLoading={isLoading}
+          isLoadingMetricas={isLoadingMetricas}
           filters={filters}
           onFiltersChange={setFilters}
           onOpenDetails={handleOpenDetails}
           onEdit={handleEdit}
           onNewRastreador={handleNewRastreador}
           getPlataformaLabel={getPlataformaLabel}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          isDiretor={isDiretor}
         />
       )}
 
@@ -185,27 +178,34 @@ interface RastreadoresContentProps {
   rastreadores: ReturnType<typeof useRastreadores>['data'];
   metricas: ReturnType<typeof useRastreadoresMetricas>['data'];
   isLoading: boolean;
+  isLoadingMetricas: boolean;
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
   onOpenDetails: (id: string) => void;
   onEdit: (id: string) => void;
   onNewRastreador: () => void;
   getPlataformaLabel: (codigo: string) => string;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+  isDiretor: boolean;
 }
 
 function RastreadoresContent({
   rastreadores,
   metricas,
   isLoading,
+  isLoadingMetricas,
   filters,
   onFiltersChange,
   onOpenDetails,
   onEdit,
   onNewRastreador,
   getPlataformaLabel,
+  viewMode,
+  onViewModeChange,
+  isDiretor,
 }: RastreadoresContentProps) {
   const queryClient = useQueryClient();
-  const { isDiretor } = usePermissions();
   const [portadorDialogOpen, setPortadorDialogOpen] = useState(false);
   const [loteDialogOpen, setLoteDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -248,11 +248,6 @@ function RastreadoresContent({
     },
   });
 
-  const handleExcluirRastreador = (rastreador: NonNullable<typeof rastreadores>[number]) => {
-    setRastreadorParaExcluir({ id: rastreador.id, codigo: rastreador.codigo });
-    setDialogExcluirAberto(true);
-  };
-
   // Rastreadores elegíveis para seleção (apenas status = 'estoque')
   const rastreadoresEstoque = rastreadores?.filter(r => r.status === 'estoque') || [];
 
@@ -279,7 +274,7 @@ function RastreadoresContent({
     queryClient.invalidateQueries({ queryKey: ['lista-rastreadores'] });
   };
 
-  const handleOpenPortadorDialog = (rastreador: NonNullable<typeof rastreadores>[number]) => {
+  const handleOpenPortadorDialog = (rastreador: RastreadorWithRelations) => {
     setRastreadorParaPortador({
       id: rastreador.id,
       codigo: rastreador.codigo,
@@ -288,335 +283,88 @@ function RastreadoresContent({
     });
     setPortadorDialogOpen(true);
   };
+
+  const handleMaintenance = (rastreador: RastreadorWithRelations) => {
+    setDialogManutencao({
+      id: rastreador.id,
+      codigo: rastreador.codigo,
+    });
+  };
+
+  const handleWithdraw = (rastreador: RastreadorWithRelations) => {
+    setDialogRetirada({
+      id: rastreador.id,
+      codigo: rastreador.codigo,
+      imei: rastreador.imei,
+      status: rastreador.status as 'estoque' | 'instalado' | 'manutencao' | 'baixado',
+      veiculo: rastreador.veiculos ? {
+        placa: rastreador.veiculos.placa,
+        modelo: rastreador.veiculos.modelo
+      } : null,
+    });
+  };
+
+  const handleDelete = (rastreador: RastreadorWithRelations) => {
+    setRastreadorParaExcluir({ id: rastreador.id, codigo: rastreador.codigo });
+    setDialogExcluirAberto(true);
+  };
+
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total</CardTitle>
-            <Radio className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metricas?.total || 0}</div>
-            <p className="text-xs text-muted-foreground">Rastreadores cadastrados</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Online</CardTitle>
-            <Wifi className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{metricas?.online || 0}</div>
-            <p className="text-xs text-muted-foreground">Comunicando normalmente</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Offline</CardTitle>
-            <WifiOff className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{metricas?.offline || 0}</div>
-            <p className="text-xs text-muted-foreground">Sem comunicação</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Alertas</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{metricas?.alertas || 0}</div>
-            <p className="text-xs text-muted-foreground">Requerem atenção</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Métricas */}
+      <RastreadorMetrics metricas={metricas} isLoading={isLoadingMetricas} />
 
-      <RastreadorFilters filters={filters} onFiltersChange={onFiltersChange} />
+      {/* Filtros */}
+      <RastreadorFiltersV2 filters={filters} onFiltersChange={onFiltersChange} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Rastreadores</CardTitle>
-          <CardDescription>
-            Todos os rastreadores e seu status de comunicação
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex h-[300px] items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : !rastreadores || rastreadores.length === 0 ? (
-            <div className="flex h-[300px] items-center justify-center rounded-lg border border-dashed">
-              <div className="text-center">
-                <Radio className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                <h3 className="mt-4 text-lg font-semibold">Nenhum rastreador</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Cadastre rastreadores para monitorar
-                </p>
-                <Button className="mt-4" onClick={onNewRastreador}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Novo Rastreador
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50px]">
-                    <Checkbox
-                      checked={rastreadoresEstoque.length > 0 && selectedIds.size === rastreadoresEstoque.length}
-                      onCheckedChange={(checked) => handleSelectAll(!!checked)}
-                      aria-label="Selecionar todos"
-                      disabled={rastreadoresEstoque.length === 0}
-                    />
-                  </TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Nº Série</TableHead>
-                  <TableHead>IMEI</TableHead>
-                  <TableHead>Plataforma</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Portador</TableHead>
-                  <TableHead>Comunicação</TableHead>
-                  <TableHead>Veículo</TableHead>
-                  <TableHead>Email Associado</TableHead>
-                  <TableHead className="w-[70px]">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rastreadores.map((rastreador) => {
-                  const isInstalled = rastreador.status === 'instalado';
-                  const online = isRastreadorOnline(rastreador.ultima_comunicacao);
-                  const isEstoque = rastreador.status === 'estoque';
+      {/* Header da lista com toggle de visualização */}
+      <RastreadorListHeader
+        viewMode={viewMode}
+        onViewModeChange={onViewModeChange}
+        totalCount={rastreadores?.length || 0}
+        onNewRastreador={onNewRastreador}
+      />
 
-                  return (
-                    <TableRow key={rastreador.id} className={selectedIds.has(rastreador.id) ? 'bg-muted/50' : ''}>
-                      <TableCell>
-                        {isEstoque ? (
-                          <Checkbox
-                            checked={selectedIds.has(rastreador.id)}
-                            onCheckedChange={(checked) => handleSelectOne(rastreador.id, !!checked)}
-                            aria-label={`Selecionar ${rastreador.codigo}`}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        ) : (
-                          <div className="w-4" />
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">{rastreador.codigo}</TableCell>
-                      <TableCell>
-                        {rastreador.numero_serie || '-'}
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono text-sm">
-                          {rastreador.imei || '-'}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {getPlataformaLabel(rastreador.plataforma)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={STATUS_RASTREADOR_COLORS[rastreador.status]}>
-                          {STATUS_RASTREADOR_LABELS[rastreador.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {rastreador.portador?.nome ? (
-                            <>
-                              <span className="text-sm font-medium">{rastreador.portador.nome}</span>
-                              {rastreador.status === 'estoque' && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenPortadorDialog(rastreador);
-                                  }}
-                                  title="Alterar portador"
-                                >
-                                  <UserPlus className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                                </Button>
-                              )}
-                            </>
-                          ) : rastreador.status === 'estoque' ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs border-primary/50 text-primary hover:bg-primary/10"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenPortadorDialog(rastreador);
-                              }}
-                            >
-                              <UserPlus className="h-3.5 w-3.5 mr-1" />
-                              Atribuir
-                            </Button>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {isInstalled ? (
-                          <Badge
-                            variant="outline"
-                            className={
-                              online
-                                ? 'border-green-500 text-green-600'
-                                : 'border-destructive text-destructive'
-                            }
-                          >
-                            {online ? (
-                              <>
-                                <Wifi className="mr-1 h-3 w-3" /> Online
-                              </>
-                            ) : (
-                              <>
-                                <WifiOff className="mr-1 h-3 w-3" /> Offline
-                              </>
-                            )}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {rastreador.veiculos ? (
-                          <div>
-                            <span className="font-medium">{rastreador.veiculos.placa}</span>
-                            {rastreador.veiculos.associados && (
-                              <span className="block text-xs text-muted-foreground">
-                                {rastreador.veiculos.associados.nome}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {rastreador.veiculos?.associados?.email ? (
-                          <span className="text-sm text-muted-foreground">
-                            {rastreador.veiculos.associados.email}
-                          </span>
-                        ) : (rastreador as any).associado_email ? (
-                          <span className="text-sm text-muted-foreground">
-                            {(rastreador as any).associado_email}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => onOpenDetails(rastreador.id)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              Ver Detalhes
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onEdit(rastreador.id)}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Editar
-                            </DropdownMenuItem>
-                            {rastreador.status === 'estoque' && (
-                              <DropdownMenuItem onClick={() => onOpenDetails(rastreador.id)}>
-                                <Package className="mr-2 h-4 w-4" />
-                                Ver Estoque
-                              </DropdownMenuItem>
-                            )}
-                            {rastreador.status === 'instalado' && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-amber-600"
-                                  onClick={() => setDialogManutencao({
-                                    id: rastreador.id,
-                                    codigo: rastreador.codigo,
-                                  })}
-                                >
-                                  <Wrench className="mr-2 h-4 w-4 text-amber-600" />
-                                  Enviar para Manutenção
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                    onClick={() => setDialogRetirada({
-                                      id: rastreador.id,
-                                      codigo: rastreador.codigo,
-                                      imei: rastreador.imei,
-                                      status: rastreador.status as 'estoque' | 'instalado' | 'manutencao' | 'baixado',
-                                      veiculo: rastreador.veiculos ? {
-                                        placa: rastreador.veiculos.placa,
-                                        modelo: rastreador.veiculos.modelo
-                                      } : null,
-                                    })}
-                                    className="text-destructive focus:text-destructive"
-                                  >
-                                    <PackageMinus className="mr-2 h-4 w-4" />
-                                    Retirar Rastreador
-                                  </DropdownMenuItem>
-                              </>
-                            )}
-                            {isDiretor && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => handleExcluirRastreador(rastreador)}
-                                  disabled={deleteRastreadorMutation.isPending}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Excluir
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Barra de ações em lote */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
-          <Card className="shadow-lg border-primary/20 bg-background">
-            <CardContent className="flex items-center gap-4 py-3 px-4">
-              <Badge variant="secondary" className="text-sm">
-                {selectedIds.size} selecionado(s)
-              </Badge>
-              <Button
-                size="sm"
-                onClick={() => setLoteDialogOpen(true)}
-              >
-                <UserPlus className="h-4 w-4 mr-1" />
-                Atribuir Portador
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setSelectedIds(new Set())}
-              >
-                <X className="h-4 w-4 mr-1" />
-                Limpar
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+      {/* Lista de rastreadores */}
+      {viewMode === 'cards' ? (
+        <RastreadorGridView
+          rastreadores={rastreadores}
+          isLoading={isLoading}
+          selectedIds={selectedIds}
+          onSelectOne={handleSelectOne}
+          onOpenDetails={onOpenDetails}
+          onMaintenance={handleMaintenance}
+          onWithdraw={handleWithdraw}
+          onNewRastreador={onNewRastreador}
+          getPlataformaLabel={getPlataformaLabel}
+        />
+      ) : (
+        <RastreadorTableView
+          rastreadores={rastreadores}
+          isLoading={isLoading}
+          selectedIds={selectedIds}
+          onSelectAll={handleSelectAll}
+          onSelectOne={handleSelectOne}
+          onOpenDetails={onOpenDetails}
+          onEdit={onEdit}
+          onMaintenance={handleMaintenance}
+          onWithdraw={handleWithdraw}
+          onAssignPortador={handleOpenPortadorDialog}
+          onDelete={handleDelete}
+          onNewRastreador={onNewRastreador}
+          getPlataformaLabel={getPlataformaLabel}
+          isDiretor={isDiretor}
+        />
       )}
 
+      {/* Barra de ações em lote */}
+      <RastreadorBatchActions
+        selectedCount={selectedIds.size}
+        onAssignPortador={() => setLoteDialogOpen(true)}
+        onClear={() => setSelectedIds(new Set())}
+      />
+
+      {/* Modais */}
       <AtribuirPortadorDialog
         open={portadorDialogOpen}
         onOpenChange={setPortadorDialogOpen}
