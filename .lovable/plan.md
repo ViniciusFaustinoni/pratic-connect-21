@@ -1,204 +1,167 @@
 
-# Plano: Novo Status "Reagendar Manutenção" para Rastreadores
+# Plano: Correção do Fluxo de Agendamento de Manutenção
 
-## Entendimento do Problema
+## Diagnóstico do Problema
 
-Quando o técnico marca "Associado Ausente" e o coordenador escolhe **reagendar** (ao invés de cancelar), o rastreador precisa de um status específico que indique claramente que está aguardando uma nova data de manutenção.
+### Situação Atual (incorreta)
 
-### Fluxo Atual (incorreto)
-```text
-Técnico marca "Ausente" → Rastreador: manutencao
-Coordenador reagenda   → Rastreador: manutencao (ambíguo!)
-```
+Existem **dois modais de agendamento** sendo usados em lugares diferentes:
 
-### Fluxo Desejado
-```text
-Técnico marca "Ausente" → Rastreador: manutencao
-Coordenador reagenda   → Rastreador: reagendar_manutencao (claro!)
-```
+| Local | Modal Usado | Ação |
+|-------|-------------|------|
+| Menu **Estoque** | `EnviarManutencaoModal` | "Agendar Manutenção" para rastreadores em estoque e instalados |
+| Menu **Rastreadores** | `EnviarManutencaoModal` | "Enviar para Manutenção" para rastreadores em estoque e instalados |
+| Menu **Vistorias de Manutenção** | `AgendarManutencaoModal` | Agendar manutenção já aberta (correto) |
+
+### Situação Desejada
+
+- O agendamento de manutenção deve existir **exclusivamente** no menu **Rastreadores**
+- Apenas rastreadores com status **instalado** podem ter manutenção agendada
+- O modal deve seguir o layout da foto (com Local, Técnico, Encaixe)
+- Menus **Estoque** e **Vistorias** NÃO devem exibir modais de agendamento
 
 ---
 
 ## Solução
 
-### 1. Criar novo status no enum
+### 1. Remover opção "Agendar Manutenção" do menu Estoque
 
-Adicionar o valor `reagendar_manutencao` ao enum `status_rastreador` no banco de dados.
+**Arquivo:** `src/components/monitoramento/estoque/ListaRastreadores.tsx`
 
-### 2. Atualizar tipos TypeScript
+Remover o bloco que exibe "Agendar Manutenção" no dropdown (linhas 455-471) e remover o modal `EnviarManutencaoModal` do componente.
 
-Modificar `src/types/rastreadores.ts`:
-- Adicionar `reagendar_manutencao` ao tipo `StatusRastreador`
-- Adicionar label: "Reagendar Manutenção"
-- Adicionar cor: laranja/amarelo (bg-amber-100 text-amber-800)
-- Atualizar transições permitidas
+### 2. Ajustar menu Rastreadores para usar o modal correto
 
-### 3. Modificar hook useReagendarPosAusencia
+**Arquivo:** `src/pages/monitoramento/Rastreadores.tsx`
 
-No arquivo `src/hooks/useVistoriaManutencao.ts`, após mudar o serviço para `pendente`, também atualizar o rastreador para `reagendar_manutencao`.
+- Remover a opção "Enviar para Manutenção" para rastreadores em `estoque` (manter apenas para `instalado`)
+- Substituir `EnviarManutencaoModal` pelo `AbrirManutencaoModal` que:
+  - Seleciona o motivo da manutenção
+  - Cria o serviço como pendente
+  - O agendamento de data/técnico acontece na tela VistoriasManutencao
 
-### 4. Modificar hook de agendamento
+### 3. Manter o fluxo em duas etapas (padrão atual do sistema)
 
-Quando o coordenador agendar uma nova data, o rastreador volta para `manutencao` (indicando que está em atendimento ativo).
+O sistema já possui o fluxo correto em duas etapas:
+1. **Abrir Manutenção** → Cria serviço com status `pendente` (sem data)
+2. **Agendar** → Coordenador atribui data, período e técnico
+
+Este fluxo está implementado em `VistoriasManutencao.tsx` e deve ser mantido.
+
+### 4. Alternativa: Modal único no menu Rastreadores (conforme imagem)
+
+Se o desejo é ter um modal único que já abre E agenda no menu Rastreadores:
+
+**Criar novo modal** `AbrirEAgendarManutencaoModal` que:
+- Mostra informações do rastreador/veículo/associado
+- Pede data, período, local (Base/Rota), técnico responsável
+- Opções de encaixe e notificação WhatsApp
+- Ao confirmar, cria o serviço já agendado
+
+Este modal seria uma combinação dos modais `AbrirManutencaoModal` + `AgendarManutencaoModal`.
 
 ---
 
-## Detalhes Técnicos
+## Alterações Detalhadas
 
-### Migração SQL
+### Arquivo 1: `src/components/monitoramento/estoque/ListaRastreadores.tsx`
 
-```sql
-ALTER TYPE status_rastreador ADD VALUE IF NOT EXISTS 'reagendar_manutencao' AFTER 'manutencao';
-```
+**Remover:**
+- Linhas 455-471: Bloco do dropdown que exibe "Agendar Manutenção"
+- Linhas 554-559: Modal `EnviarManutencaoModal`
+- Estado `dialogManutencao` e sua tipagem
+- Import do `EnviarManutencaoModal`
 
-### Alterações em src/types/rastreadores.ts
+### Arquivo 2: `src/pages/monitoramento/Rastreadores.tsx`
 
+**Modificar:**
+- Linhas 538-555: Remover condição `status === 'estoque'` para opção "Enviar para Manutenção"
+- Manter opção apenas para `status === 'instalado'`
+- Substituir `EnviarManutencaoModal` por `AbrirManutencaoModal`
+- Ajustar imports e estados
+
+**Antes:**
 ```typescript
-export type StatusRastreador = 
-  | 'estoque'
-  | 'reservado'
-  | 'instalado'
-  | 'manutencao'
-  | 'reagendar_manutencao'  // NOVO
-  | 'retorno_base'
-  | 'triagem'
-  | 'em_analise_plataforma'
-  | 'em_garantia'
-  | 'baixado';
-
-export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
-  // ... existentes ...
-  reagendar_manutencao: 'Reagendar Manutenção',
-};
-
-export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
-  // ... existentes ...
-  reagendar_manutencao: 'bg-amber-100 text-amber-800',
-};
-
-export const TRANSICOES_STATUS_RASTREADOR: Record<StatusRastreador, StatusRastreador[]> = {
-  // ... ajustar ...
-  manutencao: ['instalado', 'reagendar_manutencao', 'retorno_base', 'baixado'],
-  reagendar_manutencao: ['manutencao', 'instalado'],  // NOVO
-};
+{(rastreador.status === 'instalado' || rastreador.status === 'estoque') && (
+  // ...
+  <DropdownMenuItem onClick={() => setDialogManutencao({...})}>
+    <Wrench className="mr-2 h-4 w-4" />
+    Enviar para Manutenção
+  </DropdownMenuItem>
 ```
 
-### Alterações em src/hooks/useVistoriaManutencao.ts
-
-**Hook useReagendarPosAusencia** (adicionar update do rastreador):
+**Depois:**
 ```typescript
-export function useReagendarPosAusencia() {
-  return useMutation({
-    mutationFn: async (servicoId: string) => {
-      // Buscar rastreador_id
-      const { data: servico } = await supabase
-        .from('servicos')
-        .select('rastreador_id')
-        .eq('id', servicoId)
-        .single();
-
-      // Atualizar serviço
-      const { error } = await supabase
-        .from('servicos')
-        .update({ 
-          status: 'pendente',
-          data_agendada: null,
-          periodo: null,
-          profissional_id: null,
-        })
-        .eq('id', servicoId);
-      
-      if (error) throw new Error('Erro ao reagendar');
-
-      // Atualizar rastreador para novo status
-      if (servico?.rastreador_id) {
-        await supabase
-          .from('rastreadores')
-          .update({ 
-            status: 'reagendar_manutencao',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', servico.rastreador_id);
-      }
-
-      return { servicoId };
-    },
-  });
-}
+{rastreador.status === 'instalado' && (
+  // ...
+  <DropdownMenuItem onClick={() => setModalAbrirManutencao({
+    id: rastreador.id,
+    codigo: rastreador.codigo,
+  })}>
+    <Wrench className="mr-2 h-4 w-4" />
+    Abrir Manutenção
+  </DropdownMenuItem>
 ```
 
-**Hook useAgendarVistoriaManutencao** (voltar para manutencao ao agendar):
-```typescript
-// Ao agendar, verificar se rastreador está em 'reagendar_manutencao'
-// e voltar para 'manutencao'
-if (servico?.rastreador_id) {
-  await supabase
-    .from('rastreadores')
-    .update({ 
-      status: 'manutencao',
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', servico.rastreador_id)
-    .eq('status', 'reagendar_manutencao');
-}
+### Arquivo 3: `src/components/monitoramento/manutencao/AbrirManutencaoModal.tsx`
+
+**Nenhuma alteração** - Modal já funciona corretamente e pode receber `rastreadorPreSelecionado`.
+
+---
+
+## Fluxo Final Proposto
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  MENU RASTREADORES                                              │
+│  (Lista de rastreadores instalados)                             │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             │ Usuário clica "Abrir Manutenção"
+                             │ em rastreador INSTALADO
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  MODAL "ABRIR MANUTENÇÃO"                                       │
+│  - Mostra dados do rastreador/veículo/associado                 │
+│  - Usuário seleciona MOTIVO                                     │
+│  - Ao confirmar: cria serviço com status "pendente"             │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             │ Serviço aparece em 
+                             │ VistoriasManutencao
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  MENU VISTORIAS DE MANUTENÇÃO                                   │
+│  (Lista de manutenções pendentes)                               │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             │ Coordenador clica "Agendar"
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  MODAL "AGENDAR MANUTENÇÃO" (conforme foto)                     │
+│  - Data, Período                                                │
+│  - Local (Base/Rota)                                            │
+│  - Técnico Responsável                                          │
+│  - Opção de encaixe                                             │
+│  - Notificar via WhatsApp                                       │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-### Correção do rastreador atual
-
-Corrigir o rastreador que foi alterado incorretamente (se o serviço foi cancelado, está certo como `instalado`; mas se for reagendado futuramente, precisará do novo status).
 
 ---
 
 ## Resumo das Alterações
 
-| Arquivo | Ação |
-|---------|------|
-| Migração SQL | Adicionar `reagendar_manutencao` ao enum |
-| `src/types/rastreadores.ts` | Adicionar tipo, label, cor e transições |
-| `src/hooks/useVistoriaManutencao.ts` | Modificar useReagendarPosAusencia e useAgendarVistoriaManutencao |
-| `src/integrations/supabase/types.ts` | Atualizar tipo gerado |
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/monitoramento/estoque/ListaRastreadores.tsx` | Remover | Opção "Agendar Manutenção" e modal associado |
+| `src/pages/monitoramento/Rastreadores.tsx` | Modificar | Ajustar para usar `AbrirManutencaoModal` apenas para rastreadores instalados |
+| Nenhum arquivo novo | - | O sistema já possui os modais corretos |
 
 ---
 
-## Fluxo Final Completo
+## Resultado Esperado
 
-```text
-┌─────────────────────────────┐
-│ Manutenção aberta           │
-│ Rastreador: manutencao      │
-└─────────────┬───────────────┘
-              │
-              ▼
-┌─────────────────────────────┐
-│ Técnico marca "Ausente"     │
-│ Serviço: nao_compareceu     │
-│ Rastreador: manutencao      │
-└─────────────┬───────────────┘
-              │
-      ┌───────┴───────┐
-      │               │
-      ▼               ▼
-┌─────────────┐ ┌─────────────────────┐
-│ REAGENDAR   │ │ CANCELAR + SUSPENDER│
-└─────┬───────┘ └──────────┬──────────┘
-      │                    │
-      ▼                    ▼
-┌─────────────────────┐ ┌────────────────────┐
-│ Serviço: pendente   │ │ Serviço: cancelada │
-│ Rastreador:         │ │ Rastreador:        │
-│ reagendar_manutencao│ │ instalado          │
-└─────────┬───────────┘ └────────────────────┘
-          │
-          ▼
-┌─────────────────────┐
-│ Coordenador agenda  │
-│ nova data           │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│ Serviço: agendada   │
-│ Rastreador:         │
-│ manutencao          │
-└─────────────────────┘
-```
+1. Menu **Estoque**: Sem opção de agendamento de manutenção
+2. Menu **Rastreadores**: Opção "Abrir Manutenção" apenas para rastreadores **instalados**
+3. Menu **Vistorias de Manutenção**: Onde o coordenador agenda data/técnico (já funciona)
+4. Fluxo único e consistente em todo o sistema
