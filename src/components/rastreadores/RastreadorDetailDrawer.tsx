@@ -52,7 +52,7 @@ import {
 import { MapaRastreador } from './MapaRastreador';
 import { MapaHistorico } from './MapaHistorico';
 import { BotaoRedefinirSenha } from './BotaoRedefinirSenha';
-import { HistoricoMovimentacoesRastreador } from './HistoricoMovimentacoesRastreador';
+import { HistoricoCompletoRastreador } from './HistoricoCompletoRastreador';
 import { ComandoRastreadorDialog } from './ComandoRastreadorDialog';
 import { HistoricoComandos } from './HistoricoComandos';
 import { SubstituirEquipamentoDialog } from './SubstituirEquipamentoDialog';
@@ -211,7 +211,7 @@ export function RastreadorDetailDrawer({
                   Trajeto
                 </TabsTrigger>
                 <TabsTrigger value="movimentacoes">
-                  Movimentações
+                  Histórico
                 </TabsTrigger>
               </TabsList>
 
@@ -477,7 +477,7 @@ export function RastreadorDetailDrawer({
 
               <TabsContent value="movimentacoes" className="mt-4">
                 {rastreadorId && (
-                  <HistoricoMovimentacoesRastreador rastreadorId={rastreadorId} />
+                  <HistoricoCompletoRastreador rastreadorId={rastreadorId} />
                 )}
               </TabsContent>
 
