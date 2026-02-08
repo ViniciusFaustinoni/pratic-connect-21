@@ -19584,6 +19584,7 @@ export type Database = {
           contrato_id: string | null
           cotacao_id: string | null
           created_at: string
+          dados_parciais: Json | null
           data_agendada: string | null
           data_agendada_original: string | null
           em_rota_em: string | null
@@ -19639,6 +19640,7 @@ export type Database = {
           contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string
+          dados_parciais?: Json | null
           data_agendada?: string | null
           data_agendada_original?: string | null
           em_rota_em?: string | null
@@ -19694,6 +19696,7 @@ export type Database = {
           contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string
+          dados_parciais?: Json | null
           data_agendada?: string | null
           data_agendada_original?: string | null
           em_rota_em?: string | null

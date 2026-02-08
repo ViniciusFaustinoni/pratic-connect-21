@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Camera, Check, AlertTriangle, 
   Gauge, CheckCircle2, Loader2, Car, Video,
   ChevronDown, ChevronUp, XCircle, MapPin, Lock, ShieldCheck, ShieldX, MessageSquare,
-  MessageCircle, Phone
+  MessageCircle, Phone, CloudUpload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +20,7 @@ import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaV
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { useVistoriaCompleta } from '@/hooks/useVistorias';
+import { useVistoriaCompleta, useSalvarRascunhoVistoriaCompleta, DadosParciaisVistoria } from '@/hooks/useVistorias';
 import { 
   useAprovarVeiculoVistoria, 
   useRecusarVeiculoVistoria, 
@@ -46,6 +46,7 @@ export default function ExecutarVistoriaCompleta() {
   const uploadVideo = useUploadVideo360();
   const aprovarVeiculo = useAprovarVeiculoVistoria();
   const recusarVeiculo = useRecusarVeiculoVistoria();
+  const salvarRascunho = useSalvarRascunhoVistoriaCompleta();
 
   // Estado
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
@@ -54,6 +55,8 @@ export default function ExecutarVistoriaCompleta() {
   const [showConfirmacao, setShowConfirmacao] = useState(false);
   const [processando, setProcessando] = useState(false);
   const [openCategories, setOpenCategories] = useState<string[]>(['identificacao_motor']);
+  const [salvando, setSalvando] = useState(false);
+  const [dadosRestaurados, setDadosRestaurados] = useState(false);
   
   const [conferencia, setConferencia] = useState({
     placa: false, chassi: false, modelo: false, cor: false,
@@ -67,6 +70,72 @@ export default function ExecutarVistoriaCompleta() {
   const associado = vistoria?.associado || vistoria?.veiculo?.associado;
   const fotosEnviadas = vistoria?.fotos || [];
   const video360Url = (vistoria as any)?.video_360_url;
+
+  // ========== RESTAURAR DADOS SALVOS ==========
+  useEffect(() => {
+    if (vistoria && !dadosRestaurados) {
+      const dadosParciais = (vistoria as any).dados_parciais as DadosParciaisVistoria | null;
+      
+      // Restaurar conferência
+      if (dadosParciais?.conferencia) {
+        setConferencia(dadosParciais.conferencia);
+      }
+      
+      // Restaurar hodômetro (prioridade: km_atual > dados_parciais)
+      if (vistoria.km_atual) {
+        setHodometro(String(vistoria.km_atual));
+      } else if (dadosParciais?.hodometro) {
+        setHodometro(dadosParciais.hodometro);
+      }
+      
+      // Restaurar observações (prioridade: observacoes > dados_parciais)
+      if (vistoria.observacoes) {
+        setObservacoes(vistoria.observacoes);
+      } else if (dadosParciais?.observacoes) {
+        setObservacoes(dadosParciais.observacoes);
+      }
+      
+      // Restaurar categorias abertas
+      if (dadosParciais?.openCategories && dadosParciais.openCategories.length > 0) {
+        setOpenCategories(dadosParciais.openCategories);
+      }
+      
+      setDadosRestaurados(true);
+      console.log('[Vistoria] Dados restaurados:', { dadosParciais, km_atual: vistoria.km_atual });
+    }
+  }, [vistoria, dadosRestaurados]);
+
+  // ========== AUTO-SAVE COM DEBOUNCE ==========
+  useEffect(() => {
+    // Não salvar se não tiver vistoriaId ou dados ainda não foram restaurados
+    if (!vistoriaId || !dadosRestaurados) return;
+    
+    // Não salvar se a vistoria já foi finalizada
+    if (['aprovada', 'reprovada'].includes(vistoria?.status || '')) return;
+
+    setSalvando(true);
+    
+    const timeoutId = setTimeout(() => {
+      salvarRascunho.mutate({
+        vistoriaId,
+        dadosParciais: {
+          conferencia,
+          hodometro,
+          observacoes,
+          openCategories,
+        },
+        hodometro: hodometro ? parseInt(hodometro, 10) : undefined,
+        observacoes: observacoes || undefined,
+      }, {
+        onSettled: () => setSalvando(false),
+      });
+    }, 2000); // Debounce de 2 segundos
+
+    return () => {
+      clearTimeout(timeoutId);
+      setSalvando(false);
+    };
+  }, [conferencia, hodometro, observacoes, openCategories, vistoriaId, dadosRestaurados]);
 
   // Funções de contato
   const abrirWhatsApp = () => {
@@ -292,7 +361,15 @@ export default function ExecutarVistoriaCompleta() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white">Vistoria Completa</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-white">Vistoria Completa</p>
+              {salvando && (
+                <span className="text-xs text-slate-400 flex items-center gap-1">
+                  <CloudUpload className="h-3 w-3 animate-pulse" />
+                  Salvando...
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-400 truncate">{associado?.nome} | {veiculo?.placa}</p>
           </div>
           <Button

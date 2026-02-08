@@ -454,6 +454,61 @@ export function useSalvarRascunhoVistoria() {
   });
 }
 
+// Interface para dados parciais da vistoria em andamento
+export interface DadosParciaisVistoria {
+  conferencia?: {
+    placa: boolean;
+    chassi: boolean;
+    modelo: boolean;
+    cor: boolean;
+  };
+  hodometro?: string;
+  observacoes?: string;
+  openCategories?: string[];
+}
+
+// Hook para salvar rascunho de vistoria completa com auto-save (sem toast)
+export function useSalvarRascunhoVistoriaCompleta() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      vistoriaId, 
+      dadosParciais,
+      hodometro,
+      observacoes 
+    }: {
+      vistoriaId: string;
+      dadosParciais: DadosParciaisVistoria;
+      hodometro?: number;
+      observacoes?: string;
+    }) => {
+      // Cast para satisfazer o tipo Json do Supabase
+      const dadosParciaisJson = JSON.parse(JSON.stringify(dadosParciais));
+      
+      const { error } = await supabase
+        .from('vistorias')
+        .update({
+          dados_parciais: dadosParciaisJson,
+          km_atual: hodometro || null,
+          observacoes: observacoes || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', vistoriaId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      // Não invalidar queries para evitar recarregar a página durante edição
+      // O auto-save é silencioso
+    },
+    onError: (error) => {
+      console.error('[Auto-save] Erro ao salvar progresso:', error);
+      // Não mostrar toast de erro para não interromper o usuário
+    },
+  });
+}
+
 export function useVistoriasMetricas() {
   return useQuery({
     queryKey: ['vistorias-metricas'],
