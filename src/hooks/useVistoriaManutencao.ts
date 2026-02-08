@@ -506,16 +506,53 @@ export function useRegistrarResultadoManutencao() {
           });
         }
 
+        // Upload de fotos se houver
+        let fotosUrls: any[] = [];
+        if (params.fotos && params.fotos.length > 0) {
+          for (let i = 0; i < params.fotos.length; i++) {
+            const foto = params.fotos[i];
+            const categoria = params.fotosCategorias?.[i] || 'geral';
+            const timestamp = Date.now();
+            const path = `manutencao/${params.servicoId}/${timestamp}_${i}.jpg`;
+            
+            const { error: uploadError } = await supabase.storage
+              .from('vistorias')
+              .upload(path, foto);
+            
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage
+                .from('vistorias')
+                .getPublicUrl(path);
+              
+              fotosUrls.push({
+                url: urlData.publicUrl,
+                categoria,
+                uploaded_at: new Date().toISOString(),
+              });
+            }
+          }
+        }
+
         // 2. Atualizar serviço
+        const updateData: Record<string, any> = {
+          status: 'concluida',
+          concluida_em: new Date().toISOString(),
+          resultado_manutencao: 'resolvido',
+          observacoes_analise: params.descricao,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (params.checklistManutencao) {
+          updateData.checklist_manutencao = params.checklistManutencao;
+        }
+
+        if (fotosUrls.length > 0) {
+          updateData.fotos_manutencao = fotosUrls;
+        }
+
         const { error: servicoUpdateError } = await supabase
           .from('servicos')
-          .update({
-            status: 'concluida',
-            concluida_em: new Date().toISOString(),
-            resultado_manutencao: 'resolvido',
-            observacoes_analise: params.descricao,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('id', params.servicoId);
 
         if (servicoUpdateError) {
@@ -754,6 +791,52 @@ export function useMarcarNaoCompareceu() {
     onError: (error: Error) => {
       console.error('[useMarcarNaoCompareceu] Erro:', error);
       toast.error(error.message || 'Erro ao marcar não comparecimento');
+    },
+  });
+}
+
+// ============================================
+// MUTATION: REAGENDAR PÓS-AUSÊNCIA
+// ============================================
+
+/**
+ * Hook para reagendar uma manutenção após não comparecimento
+ */
+export function useReagendarPosAusencia() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (servicoId: string) => {
+      const { error } = await supabase
+        .from('servicos')
+        .update({ 
+          status: 'pendente',
+          data_agendada: null,
+          periodo: null,
+          profissional_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', servicoId);
+      
+      if (error) {
+        console.error('[useReagendarPosAusencia] Erro:', error);
+        throw new Error('Erro ao reagendar manutenção');
+      }
+
+      return { servicoId };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao-metricas'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      
+      toast.success('Manutenção reagendada', {
+        description: 'Voltou para fila de agendamento.',
+      });
+    },
+    onError: (error: Error) => {
+      console.error('[useReagendarPosAusencia] Erro:', error);
+      toast.error(error.message || 'Erro ao reagendar');
     },
   });
 }

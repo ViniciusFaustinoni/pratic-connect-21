@@ -10,6 +10,7 @@ export type PlataformaRastreador = 'rede_veiculos' | 'softruck';
  */
 export type StatusRastreador = 
   | 'estoque'               // Pronto para uso na base
+  | 'reservado'             // Separado para uma instalação específica
   | 'instalado'             // No veículo do associado
   | 'manutencao'            // Vistoria aberta (campo)
   | 'retorno_base'          // Voltou do campo, aguarda triagem
@@ -20,6 +21,7 @@ export type StatusRastreador =
 
 export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
   estoque: 'Em Estoque',
+  reservado: 'Reservado',
   instalado: 'Instalado',
   manutencao: 'Em Manutenção (Campo)',
   retorno_base: 'Retorno Base',
@@ -31,6 +33,7 @@ export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
 
 export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
   estoque: 'bg-green-100 text-green-800',
+  reservado: 'bg-yellow-100 text-yellow-800',
   instalado: 'bg-emerald-100 text-emerald-800',
   manutencao: 'bg-orange-100 text-orange-800',
   retorno_base: 'bg-yellow-100 text-yellow-800',
@@ -55,7 +58,8 @@ export type StatusManutencaoInterna = 'retorno_base' | 'triagem' | 'em_analise_p
  * Transições permitidas de status de rastreador
  */
 export const TRANSICOES_STATUS_RASTREADOR: Record<StatusRastreador, StatusRastreador[]> = {
-  estoque: ['instalado', 'manutencao', 'baixado'],
+  estoque: ['reservado', 'instalado', 'manutencao', 'baixado'],
+  reservado: ['instalado', 'estoque'],
   instalado: ['manutencao', 'estoque'],
   manutencao: ['instalado', 'retorno_base', 'baixado'],
   retorno_base: ['triagem'],

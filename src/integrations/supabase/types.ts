@@ -17152,6 +17152,7 @@ export type Database = {
           bairro: string | null
           cep: string | null
           checklist_data: Json | null
+          checklist_manutencao: Json | null
           cidade: string | null
           complemento: string | null
           concluida_em: string | null
@@ -17165,6 +17166,7 @@ export type Database = {
           data_suspensao: string | null
           em_rota_em: string | null
           encaixe_executado: boolean | null
+          fotos_manutencao: Json | null
           fotos_recusa: string[] | null
           hora_agendada: string | null
           id: string
@@ -17206,6 +17208,8 @@ export type Database = {
           veiculo_id: string | null
           video_360_url: string | null
           vistoria_origem_id: string | null
+          whatsapp_notificado: boolean | null
+          whatsapp_notificado_em: string | null
         }
         Insert: {
           analisado_em?: string | null
@@ -17221,6 +17225,7 @@ export type Database = {
           bairro?: string | null
           cep?: string | null
           checklist_data?: Json | null
+          checklist_manutencao?: Json | null
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
@@ -17234,6 +17239,7 @@ export type Database = {
           data_suspensao?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
+          fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
           hora_agendada?: string | null
           id?: string
@@ -17275,6 +17281,8 @@ export type Database = {
           veiculo_id?: string | null
           video_360_url?: string | null
           vistoria_origem_id?: string | null
+          whatsapp_notificado?: boolean | null
+          whatsapp_notificado_em?: string | null
         }
         Update: {
           analisado_em?: string | null
@@ -17290,6 +17298,7 @@ export type Database = {
           bairro?: string | null
           cep?: string | null
           checklist_data?: Json | null
+          checklist_manutencao?: Json | null
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
@@ -17303,6 +17312,7 @@ export type Database = {
           data_suspensao?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
+          fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
           hora_agendada?: string | null
           id?: string
@@ -17344,6 +17354,8 @@ export type Database = {
           veiculo_id?: string | null
           video_360_url?: string | null
           vistoria_origem_id?: string | null
+          whatsapp_notificado?: boolean | null
+          whatsapp_notificado_em?: string | null
         }
         Relationships: [
           {
@@ -21411,6 +21423,7 @@ export type Database = {
         | "cancelado"
       status_rastreador:
         | "estoque"
+        | "reservado"
         | "instalado"
         | "manutencao"
         | "baixado"
@@ -21790,6 +21803,7 @@ export const Constants = {
       ],
       status_rastreador: [
         "estoque",
+        "reservado",
         "instalado",
         "manutencao",
         "baixado",
