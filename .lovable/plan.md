@@ -1,106 +1,88 @@
 
-# Plano de Correção: Dados Desincronizados entre Tabelas
+# Plano de Correção: Erro de Enum "reagendar" ao Concluir Instalação
 
 ## Diagnóstico Completo
 
-### Problema 1: Vistoria VIS-2026-56262 na fila
-- **ID**: `c84dc7ed-bc5c-4d21-9513-531021456262`
-- **Tabela**: `servicos` (NÃO existe em `vistorias`)
-- **Tipo**: `vistoria_manutencao` 
-- **Status atual**: `pendente`
-- **Causa**: O registro foi criado diretamente na tabela `servicos` e nunca foi excluído. Se você deseja removê-lo, é necessário excluir da tabela `servicos`.
+### Causa Raiz Identificada
+A migration recente (`20260208023823...`) criou a função `sync_servicos_to_instalacao` com dois erros críticos:
 
-### Problema 2: Instalação em andamento não aparece no menu do instalador
-- **ID Instalação**: `1d381d93-6254-4838-80b6-62c416cfaf0f`
-- **ID Serviço correspondente**: `ff578a8f-6640-4e65-b578-54afe90798c7`
-- **Status em `instalacoes`**: `em_andamento` ✓
-- **Status em `servicos`**: `em_analise` ✗ (DEVERIA SER `em_andamento`)
-- **Causa**: O trigger de sincronização não propagou corretamente o status, ou algo atualizou o `servicos` diretamente sem passar pelo `instalacoes`.
+1. **Valor de enum incorreto**: Usa `'reagendar'` (não existe) em vez de `'reagendada'`
+2. **Valor inválido para instalacao**: Usa `'pendente'` que não existe em `status_instalacao`
 
-**Por que não aparece no menu?**  
-A RPC `buscar_tarefa_atual_profissional` filtra apenas por:
-```sql
-WHERE s.status IN ('em_rota', 'em_andamento', 'agendada')
+### Fluxo do Erro
+```text
+1. Código chama aprovarVeiculoMutation
+2. Tenta atualizar servicos.status = 'concluida'
+3. Trigger sync_servicos_to_instalacao dispara
+4. UPDATE instalacoes tenta aplicar CASE com valores inválidos
+5. Trigger sync_instalacao_update_to_servicos dispara (loop)
+6. Tenta fazer: (NEW.status::text)::status_servico
+7. Se qualquer conversão falhar → ERRO "invalid input value for enum"
 ```
-O status `em_analise` NÃO está nessa lista, então a tarefa fica invisível para o instalador.
+
+### Logs Confirmando
+```
+ERROR: invalid input value for enum status_servico: "reagendar"
+(múltiplas ocorrências)
+```
 
 ---
 
-## Soluções
+## Solução
 
-### Correção Imediata (SQL)
+### Migração de Correção
+Corrigir a função `sync_servicos_to_instalacao` com:
 
-**Executar manualmente via SQL Editor do Supabase:**
-
-```sql
--- 1. Corrigir status do serviço para voltar a aparecer no menu do instalador
-UPDATE servicos 
-SET status = 'em_andamento', 
-    updated_at = NOW()
-WHERE id = 'ff578a8f-6640-4e65-b578-54afe90798c7';
-
--- 2. Se deseja EXCLUIR a vistoria VIS-2026-56262 (manutenção pendente)
-DELETE FROM servicos 
-WHERE id = 'c84dc7ed-bc5c-4d21-9513-531021456262';
-```
-
-### Correção Estrutural (Prevenir problemas futuros)
-
-O ideal é corrigir o sistema para evitar que isso aconteça novamente. Há duas abordagens:
-
-**Opção A**: Atualizar a RPC para incluir `em_analise` como status ativo (se for um status válido para serviços em campo):
-
-```sql
--- Adicionar em_analise à lista de status ativos
-WHERE s.status IN ('em_rota', 'em_andamento', 'agendada', 'em_analise')
-```
-
-**Opção B**: Garantir que o trigger de sincronização sempre mantenha paridade. Criar um trigger reverso que propaga mudanças de `servicos` para `instalacoes`:
+1. **Status corretos**: Trocar `'reagendar'` por `'reagendada'`
+2. **Remover `'pendente'`**: Não existe em `status_instalacao`
+3. **Adicionar proteção contra loops**: Evitar que triggers disparem em cascata infinitamente
 
 ```sql
 CREATE OR REPLACE FUNCTION sync_servicos_to_instalacao()
 RETURNS TRIGGER AS $$
 BEGIN
+  -- Só sincroniza se tiver instalacao_origem_id definido
   IF NEW.instalacao_origem_id IS NOT NULL THEN
+    -- CORREÇÃO: Lista de status válidos para status_instalacao
+    -- status_instalacao = {agendada, em_rota, em_andamento, concluida, reagendada, cancelada}
     UPDATE instalacoes
     SET 
-      status = (NEW.status::text)::status_instalacao,
+      status = CASE 
+        WHEN NEW.status::text IN ('agendada', 'em_rota', 'em_andamento', 'concluida', 'reagendada', 'cancelada') 
+        THEN (NEW.status::text)::status_instalacao
+        ELSE status -- Mantém o status atual se não for mapeável
+      END,
       updated_at = NOW()
     WHERE id = NEW.instalacao_origem_id
-      AND status <> (NEW.status::text)::status_instalacao;
+      AND status::text IS DISTINCT FROM NEW.status::text;
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE TRIGGER trigger_sync_servicos_to_instalacao
-AFTER UPDATE ON servicos
-FOR EACH ROW
-WHEN (OLD.status IS DISTINCT FROM NEW.status)
-EXECUTE FUNCTION sync_servicos_to_instalacao();
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 ```
 
----
+### Possíveis Problemas Adicionais
 
-## Resumo das Ações
+Também verificar se o hook `useAprovarVeiculoServico` está preparado para casos onde:
+- `imeiRastreador` é `undefined` (veículo não precisa de rastreador)
+- O rastreador não é encontrado
 
-| Ação | Tipo | Descrição |
-|------|------|-----------|
-| Corrigir servico status | SQL imediato | Alterar status de `em_analise` para `em_andamento` |
-| Excluir vistoria pendente | SQL imediato | Deletar registro da tabela `servicos` |
-| (Opcional) Atualizar RPC | Migração | Adicionar `em_analise` à lista de status ativos |
-| (Opcional) Trigger bidirecional | Migração | Sincronizar `servicos` → `instalacoes` |
+O hook atualmente falha se não encontrar rastreador, mas o veículo pode dispensar rastreador.
 
 ---
 
-## Recomendação
+## Arquivos a Modificar
 
-Para resolver agora, execute os comandos SQL de correção imediata no SQL Editor do Supabase:
+| Arquivo | Alteração |
+|---------|-----------|
+| Nova migração SQL | Corrigir função `sync_servicos_to_instalacao` |
+| `src/hooks/useServicos.ts` | Verificar se `imeiRastreador` é opcional |
 
-1. Acesse o SQL Editor do Supabase
-2. Execute a query de correção do status
-3. Execute a query de exclusão da vistoria (se desejado)
+---
 
-Após isso, a instalação em andamento voltará a aparecer no menu do instalador imediatamente.
+## Validação
 
-Deseja que eu implemente a correção estrutural (trigger bidirecional) para prevenir problemas futuros?
+1. Aplicar a migração de correção
+2. Tentar concluir a instalação `ff578a8f-...` novamente
+3. Verificar nos logs que não há mais erro de enum
+4. Confirmar que o status mudou para `concluida` em ambas as tabelas
