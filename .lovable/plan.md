@@ -1,261 +1,106 @@
 
-# Plano: Persistência do Progresso da Vistoria ✅ IMPLEMENTADO
+# Plano de Correção: Dados Desincronizados entre Tabelas
 
-## Status: CONCLUÍDO em 2026-02-08
+## Diagnóstico Completo
 
-## Problema Resolvido
-Quando o vistoriador atualizava a página ou ocorria qualquer interrupção durante a vistoria no `ExecutarVistoriaCompleta.tsx`, todo o progresso era perdido.
+### Problema 1: Vistoria VIS-2026-56262 na fila
+- **ID**: `c84dc7ed-bc5c-4d21-9513-531021456262`
+- **Tabela**: `servicos` (NÃO existe em `vistorias`)
+- **Tipo**: `vistoria_manutencao` 
+- **Status atual**: `pendente`
+- **Causa**: O registro foi criado diretamente na tabela `servicos` e nunca foi excluído. Se você deseja removê-lo, é necessário excluir da tabela `servicos`.
 
-Os campos que **não persistem** atualmente:
-- Conferência de dados (placa, chassi, modelo, cor) 
-- Hodômetro digitado
-- Observações do vistoriador
-- Etapa/categoria em que estava trabalhando
+### Problema 2: Instalação em andamento não aparece no menu do instalador
+- **ID Instalação**: `1d381d93-6254-4838-80b6-62c416cfaf0f`
+- **ID Serviço correspondente**: `ff578a8f-6640-4e65-b578-54afe90798c7`
+- **Status em `instalacoes`**: `em_andamento` ✓
+- **Status em `servicos`**: `em_analise` ✗ (DEVERIA SER `em_andamento`)
+- **Causa**: O trigger de sincronização não propagou corretamente o status, ou algo atualizou o `servicos` diretamente sem passar pelo `instalacoes`.
 
-O que **já persiste** (via banco):
-- Fotos enviadas (tabela `vistoria_fotos`)
-- Vídeo 360° (coluna `vistorias.video_360_url`)
-
----
-
-## Solução Proposta
-
-Utilizar a coluna **`vistorias.observacoes`** (text) para persistir observações e criar uma nova coluna JSONB para persistir os dados parciais da vistoria (conferência, hodômetro, categorias abertas).
-
-### Estratégia de Persistência:
-1. **Auto-save**: Salvar automaticamente a cada alteração significativa (debounce 2s)
-2. **Restaurar ao carregar**: Quando a página abrir, carregar dados salvos do banco
-3. **Campos a persistir**:
-   - `conferencia` (objeto com placa, chassi, modelo, cor)
-   - `hodometro` (string/número)
-   - `observacoes` (texto)
-   - `openCategories` (array de IDs das categorias abertas)
+**Por que não aparece no menu?**  
+A RPC `buscar_tarefa_atual_profissional` filtra apenas por:
+```sql
+WHERE s.status IN ('em_rota', 'em_andamento', 'agendada')
+```
+O status `em_analise` NÃO está nessa lista, então a tarefa fica invisível para o instalador.
 
 ---
 
-## Alterações Necessárias
+## Soluções
 
-### 1. Migração de Banco de Dados
-Adicionar nova coluna `dados_parciais` (jsonb) na tabela `vistorias` para armazenar o estado intermediário.
+### Correção Imediata (SQL)
+
+**Executar manualmente via SQL Editor do Supabase:**
 
 ```sql
-ALTER TABLE vistorias 
-ADD COLUMN IF NOT EXISTS dados_parciais jsonb DEFAULT '{}'::jsonb;
+-- 1. Corrigir status do serviço para voltar a aparecer no menu do instalador
+UPDATE servicos 
+SET status = 'em_andamento', 
+    updated_at = NOW()
+WHERE id = 'ff578a8f-6640-4e65-b578-54afe90798c7';
 
-COMMENT ON COLUMN vistorias.dados_parciais IS 
-  'Dados parciais da vistoria em andamento (conferência, hodômetro, etc)';
+-- 2. Se deseja EXCLUIR a vistoria VIS-2026-56262 (manutenção pendente)
+DELETE FROM servicos 
+WHERE id = 'c84dc7ed-bc5c-4d21-9513-531021456262';
+```
+
+### Correção Estrutural (Prevenir problemas futuros)
+
+O ideal é corrigir o sistema para evitar que isso aconteça novamente. Há duas abordagens:
+
+**Opção A**: Atualizar a RPC para incluir `em_analise` como status ativo (se for um status válido para serviços em campo):
+
+```sql
+-- Adicionar em_analise à lista de status ativos
+WHERE s.status IN ('em_rota', 'em_andamento', 'agendada', 'em_analise')
+```
+
+**Opção B**: Garantir que o trigger de sincronização sempre mantenha paridade. Criar um trigger reverso que propaga mudanças de `servicos` para `instalacoes`:
+
+```sql
+CREATE OR REPLACE FUNCTION sync_servicos_to_instalacao()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.instalacao_origem_id IS NOT NULL THEN
+    UPDATE instalacoes
+    SET 
+      status = (NEW.status::text)::status_instalacao,
+      updated_at = NOW()
+    WHERE id = NEW.instalacao_origem_id
+      AND status <> (NEW.status::text)::status_instalacao;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER trigger_sync_servicos_to_instalacao
+AFTER UPDATE ON servicos
+FOR EACH ROW
+WHEN (OLD.status IS DISTINCT FROM NEW.status)
+EXECUTE FUNCTION sync_servicos_to_instalacao();
 ```
 
 ---
 
-### 2. Modificar `src/hooks/useVistorias.ts`
+## Resumo das Ações
 
-**Adicionar novo hook `useSalvarRascunhoVistoriaCompleta`**:
-
-```typescript
-interface DadosParciaisVistoria {
-  conferencia?: {
-    placa: boolean;
-    chassi: boolean;
-    modelo: boolean;
-    cor: boolean;
-  };
-  hodometro?: string;
-  observacoes?: string;
-  openCategories?: string[];
-}
-
-export function useSalvarRascunhoVistoriaCompleta() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ 
-      vistoriaId, 
-      dadosParciais,
-      hodometro,
-      observacoes 
-    }: {
-      vistoriaId: string;
-      dadosParciais: DadosParciaisVistoria;
-      hodometro?: number;
-      observacoes?: string;
-    }) => {
-      const { error } = await supabase
-        .from('vistorias')
-        .update({
-          dados_parciais: dadosParciais,
-          km_atual: hodometro || null,
-          observacoes: observacoes || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', vistoriaId);
-
-      if (error) throw error;
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ 
-        queryKey: ['vistoria-completa'] 
-      });
-    },
-  });
-}
-```
+| Ação | Tipo | Descrição |
+|------|------|-----------|
+| Corrigir servico status | SQL imediato | Alterar status de `em_analise` para `em_andamento` |
+| Excluir vistoria pendente | SQL imediato | Deletar registro da tabela `servicos` |
+| (Opcional) Atualizar RPC | Migração | Adicionar `em_analise` à lista de status ativos |
+| (Opcional) Trigger bidirecional | Migração | Sincronizar `servicos` → `instalacoes` |
 
 ---
 
-### 3. Modificar `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
+## Recomendação
 
-**A) Importar e usar o novo hook**
+Para resolver agora, execute os comandos SQL de correção imediata no SQL Editor do Supabase:
 
-**B) Adicionar useEffect para restaurar dados salvos**:
+1. Acesse o SQL Editor do Supabase
+2. Execute a query de correção do status
+3. Execute a query de exclusão da vistoria (se desejado)
 
-```typescript
-// Restaurar dados salvos ao carregar vistoria
-useEffect(() => {
-  if (vistoria) {
-    const dadosParciais = (vistoria as any).dados_parciais;
-    
-    if (dadosParciais?.conferencia) {
-      setConferencia(dadosParciais.conferencia);
-    }
-    if (dadosParciais?.hodometro) {
-      setHodometro(dadosParciais.hodometro);
-    }
-    if (dadosParciais?.observacoes) {
-      setObservacoes(dadosParciais.observacoes);
-    }
-    if (dadosParciais?.openCategories?.length > 0) {
-      setOpenCategories(dadosParciais.openCategories);
-    }
-    
-    // Também verificar km_atual e observacoes direto da vistoria
-    if (vistoria.km_atual) {
-      setHodometro(String(vistoria.km_atual));
-    }
-    if (vistoria.observacoes) {
-      setObservacoes(vistoria.observacoes);
-    }
-  }
-}, [vistoria]);
-```
+Após isso, a instalação em andamento voltará a aparecer no menu do instalador imediatamente.
 
-**C) Adicionar auto-save com debounce**:
-
-```typescript
-// Auto-save com debounce
-useEffect(() => {
-  if (!vistoriaId) return;
-  
-  const timeoutId = setTimeout(() => {
-    salvarRascunho.mutate({
-      vistoriaId,
-      dadosParciais: {
-        conferencia,
-        hodometro,
-        observacoes,
-        openCategories,
-      },
-      hodometro: hodometro ? parseInt(hodometro) : undefined,
-      observacoes: observacoes || undefined,
-    });
-  }, 2000); // Debounce de 2 segundos
-
-  return () => clearTimeout(timeoutId);
-}, [conferencia, hodometro, observacoes, openCategories, vistoriaId]);
-```
-
-**D) Adicionar indicador visual de salvamento**:
-
-```typescript
-const [salvando, setSalvando] = useState(false);
-
-// No header, mostrar status:
-{salvando && (
-  <span className="text-xs text-slate-400 flex items-center gap-1">
-    <Loader2 className="h-3 w-3 animate-spin" />
-    Salvando...
-  </span>
-)}
-```
-
----
-
-### 4. Atualizar query do `useVistoriaCompleta`
-
-Incluir o campo `dados_parciais` na query do banco:
-
-```typescript
-.select(`
-  *,
-  dados_parciais,  // <-- Adicionar aqui
-  veiculo:veiculos(...),
-  ...
-`)
-```
-
----
-
-## Fluxo Final
-
-```text
-VISTORIADOR ABRE VISTORIA
-         │
-         ▼
-┌──────────────────────────────────────────────┐
-│ useVistoriaCompleta busca dados             │
-│ ↳ Carrega dados_parciais, km_atual, etc     │
-└──────────────────┬───────────────────────────┘
-                   │
-         ▼ useEffect restaura estados
-                   │
-┌──────────────────┴───────────────────────────┐
-│ ESTADOS RESTAURADOS:                         │
-│ • conferencia ← dados_parciais.conferencia   │
-│ • hodometro ← dados_parciais.hodometro       │
-│ • observacoes ← dados_parciais.observacoes   │
-│ • openCategories ← dados_parciais.open...    │
-└──────────────────┬───────────────────────────┘
-                   │
-         ▼ Vistoriador continua trabalhando
-                   │
-┌──────────────────┴───────────────────────────┐
-│ A CADA ALTERAÇÃO (debounce 2s):             │
-│ useSalvarRascunhoVistoriaCompleta.mutate()  │
-│ ↳ Salva dados_parciais no banco             │
-└──────────────────┬───────────────────────────┘
-                   │
-         ▼ PÁGINA ATUALIZADA / INTERRUPÇÃO
-                   │
-         ▼ Vistoriador reabre a vistoria
-                   │
-┌──────────────────┴───────────────────────────┐
-│ PROGRESSO RESTAURADO AUTOMATICAMENTE        │
-│ • Conferência já marcada                     │
-│ • Hodômetro já preenchido                    │
-│ • Observações já digitadas                   │
-│ • Categorias que estava abertas             │
-└──────────────────────────────────────────────┘
-```
-
----
-
-## Resumo das Alterações
-
-| Arquivo | Ação |
-|---------|------|
-| **Migração SQL** | Adicionar coluna `dados_parciais` (jsonb) |
-| `src/hooks/useVistorias.ts` | Adicionar hook `useSalvarRascunhoVistoriaCompleta` |
-| `src/hooks/useVistorias.ts` | Atualizar query do `useVistoriaCompleta` para incluir `dados_parciais` |
-| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Restaurar dados ao carregar |
-| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Auto-save com debounce |
-| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Indicador visual de salvamento |
-
----
-
-## Benefícios
-
-1. **Tolerância a falhas**: Se o app travar, o navegador fechar, ou a conexão cair, o progresso está salvo
-2. **Experiência contínua**: Vistoriador pode pausar e continuar de onde parou
-3. **Multi-dispositivo**: Se precisar trocar de celular, pode continuar a vistoria
-4. **Sem ação manual**: O auto-save é transparente para o usuário
-5. **Baixo overhead**: Debounce evita requisições excessivas
+Deseja que eu implemente a correção estrutural (trigger bidirecional) para prevenir problemas futuros?
