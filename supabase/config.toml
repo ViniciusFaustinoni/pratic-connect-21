@@ -368,3 +368,6 @@ verify_jwt = false
 
 [functions.notificar-inicio-rota]
 verify_jwt = false
+
+[functions.notificar-manutencao-whatsapp]
+verify_jwt = false

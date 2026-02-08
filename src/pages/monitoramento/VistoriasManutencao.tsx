@@ -8,6 +8,7 @@ import {
   AbrirManutencaoModal,
   AgendarManutencaoModal,
   RegistrarResultadoModal,
+  TratarAusenciaModal,
 } from '@/components/monitoramento/manutencao';
 import { 
   useVistoriasManutencao, 
@@ -37,6 +38,7 @@ export default function VistoriasManutencao() {
   const [modalAbrir, setModalAbrir] = useState(false);
   const [modalAgendar, setModalAgendar] = useState(false);
   const [modalResultado, setModalResultado] = useState(false);
+  const [modalTratarAusencia, setModalTratarAusencia] = useState(false);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<VistoriaManutencao | null>(null);
   const [dialogCancelar, setDialogCancelar] = useState(false);
   const [dialogNaoCompareceu, setDialogNaoCompareceu] = useState(false);
@@ -59,6 +61,11 @@ export default function VistoriasManutencao() {
   const handleCancelar = (vistoria: VistoriaManutencao) => {
     setVistoriaSelecionada(vistoria);
     setDialogCancelar(true);
+  };
+
+  const handleTratarAusencia = (vistoria: VistoriaManutencao) => {
+    setVistoriaSelecionada(vistoria);
+    setModalTratarAusencia(true);
   };
 
   const handleNaoCompareceu = (vistoria: VistoriaManutencao) => {
@@ -126,6 +133,7 @@ export default function VistoriasManutencao() {
         onRegistrarResultado={handleRegistrarResultado}
         onMarcarNaoCompareceu={handleNaoCompareceu}
         onCancelar={handleCancelar}
+        onTratarAusencia={handleTratarAusencia}
       />
 
       {/* Modais */}
@@ -140,6 +148,12 @@ export default function VistoriasManutencao() {
       <RegistrarResultadoModal 
         open={modalResultado} 
         onOpenChange={setModalResultado}
+        vistoria={vistoriaSelecionada}
+      />
+
+      <TratarAusenciaModal
+        open={modalTratarAusencia}
+        onClose={() => setModalTratarAusencia(false)}
         vistoria={vistoriaSelecionada}
       />
 

@@ -293,6 +293,18 @@ export interface RegistrarResultadoParams {
   destinoRastreadorAntigo?: DestinoRastreadorSubstituido;
   // Se resultado = 'nao_resolvido'
   acaoNaoResolvido?: AcaoNaoResolvido;
+  // VM-01: Checklist de manutenção
+  checklistManutencao?: {
+    items: Array<{
+      id: string;
+      label: string;
+      checked: boolean;
+      checked_at: string | null;
+    }>;
+  };
+  // VM-02: Fotos de manutenção
+  fotos?: File[];
+  fotosCategorias?: string[];
 }
 
 /**

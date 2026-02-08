@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Wrench, MapPin, Phone, Car, User, 
@@ -27,6 +27,8 @@ import {
   type DestinoRastreadorSubstituido,
   type AcaoNaoResolvido,
 } from '@/types/vistoriaManutencao';
+import { ChecklistManutencao, type ChecklistManutencaoItem } from '@/components/instalador/ChecklistManutencao';
+import { FotosManutencao, type FotoManutencao } from '@/components/instalador/FotosManutencao';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -48,11 +50,29 @@ export default function ExecutarManutencao() {
   // Para não resolvido
   const [acaoNaoResolvido, setAcaoNaoResolvido] = useState<AcaoNaoResolvido>('reagendar');
 
+  // Checklist de manutenção (VM-01)
+  const [checklistItems, setChecklistItems] = useState<ChecklistManutencaoItem[]>([]);
+  const [checklistCompleto, setChecklistCompleto] = useState(false);
+
+  // Fotos de manutenção (VM-02)
+  const [fotosManutencao, setFotosManutencao] = useState<FotoManutencao[]>([]);
+
   const { data: servico, isLoading } = useServico(id);
   const { mutate: iniciarServico, isPending: isIniciando } = useIniciarServicoMutation();
   const { data: rastreadoresDisponiveis, isLoading: loadingRastreadores } = useRastreadoresDoPortador();
   const registrarResultado = useRegistrarResultadoManutencao();
   const marcarNaoCompareceu = useMarcarNaoCompareceu();
+
+  // Callbacks para checklist
+  const handleChecklistComplete = useCallback(() => {
+    setChecklistCompleto(true);
+  }, []);
+
+  const handleChecklistChange = useCallback((items: ChecklistManutencaoItem[]) => {
+    setChecklistItems(items);
+    const allChecked = items.every(item => item.checked);
+    setChecklistCompleto(allChecked);
+  }, []);
 
   // Resetar estados ao fechar modal
   useEffect(() => {
@@ -64,6 +84,7 @@ export default function ExecutarManutencao() {
       setBuscaRastreador('');
       setDestinoRastreadorAntigo('retorno_base');
       setAcaoNaoResolvido('reagendar');
+      setFotosManutencao([]);
     }
   }, [showResultadoModal]);
 
@@ -119,6 +140,26 @@ export default function ExecutarManutencao() {
       return;
     }
 
+    // Validar fotos obrigatórias para resolvido e substituicao
+    if ((resultado === 'resolvido' || resultado === 'substituicao') && fotosManutencao.length < 2) {
+      toast.error('Adicione pelo menos 2 fotos do reparo');
+      return;
+    }
+
+    // Preparar dados do checklist
+    const checklistData = checklistItems.length > 0 ? {
+      items: checklistItems.map(item => ({
+        id: item.id,
+        label: item.label,
+        checked: item.checked,
+        checked_at: item.checked_at,
+      })),
+    } : undefined;
+
+    // Extrair apenas os Files para o hook
+    const fotosFiles = fotosManutencao.map(f => f.file);
+    const fotosCategorias = fotosManutencao.map(f => f.categoria);
+
     registrarResultado.mutate({
       servicoId: id,
       resultado,
@@ -127,6 +168,9 @@ export default function ExecutarManutencao() {
       idPlataforma: resultado === 'substituicao' ? idPlataforma : undefined,
       destinoRastreadorAntigo: resultado === 'substituicao' ? destinoRastreadorAntigo : undefined,
       acaoNaoResolvido: resultado === 'nao_resolvido' ? acaoNaoResolvido : undefined,
+      checklistManutencao: checklistData,
+      fotos: fotosFiles,
+      fotosCategorias,
     }, {
       onSuccess: () => {
         setShowResultadoModal(false);
@@ -366,12 +410,20 @@ export default function ExecutarManutencao() {
             </>
           ) : isEmAndamento ? (
             <>
+              {/* Checklist de Manutenção (VM-01) */}
+              <ChecklistManutencao
+                onComplete={handleChecklistComplete}
+                onChecklistChange={handleChecklistChange}
+                disabled={false}
+              />
+
               <Button 
                 className="w-full bg-green-600 hover:bg-green-700" 
                 onClick={handleConcluir}
+                disabled={!checklistCompleto}
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                Concluir Manutenção
+                {checklistCompleto ? 'Concluir Manutenção' : 'Complete o checklist'}
               </Button>
               
               {/* Botão para associado ausente (apenas se for ROTA) */}
@@ -625,6 +677,28 @@ export default function ExecutarManutencao() {
                   rows={3}
                 />
               </div>
+
+              {/* Fotos de Manutenção (VM-02) - Aparece para resolvido e substituicao */}
+              {(resultado === 'resolvido' || resultado === 'substituicao') && (
+                <FotosManutencao
+                  fotos={fotosManutencao}
+                  onFotosChange={setFotosManutencao}
+                  minFotos={2}
+                  maxFotos={6}
+                  obrigatorio={true}
+                />
+              )}
+
+              {/* Fotos opcionais para não resolvido */}
+              {resultado === 'nao_resolvido' && (
+                <FotosManutencao
+                  fotos={fotosManutencao}
+                  onFotosChange={setFotosManutencao}
+                  minFotos={0}
+                  maxFotos={6}
+                  obrigatorio={false}
+                />
+              )}
             </div>
           </ScrollArea>
 
@@ -642,6 +716,7 @@ export default function ExecutarManutencao() {
               disabled={
                 !descricao.trim() || 
                 (resultado === 'substituicao' && !rastreadorNovoId) ||
+                ((resultado === 'resolvido' || resultado === 'substituicao') && fotosManutencao.length < 2) ||
                 registrarResultado.isPending
               }
               className="flex-1"

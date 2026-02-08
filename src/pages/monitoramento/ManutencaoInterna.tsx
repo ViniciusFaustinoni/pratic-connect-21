@@ -9,6 +9,7 @@ import {
   FileText,
   Trash2,
   RotateCcw,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { PermissionGate } from '@/components/PermissionGate';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   useManutencaoInternaLista,
   useManutencaoInternaMetricas,
@@ -58,6 +60,10 @@ import {
 } from '@/components/monitoramento/manutencao-interna';
 
 export default function ManutencaoInterna() {
+  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
+  const temAcesso = isDiretor || isCoordenadorMonitoramento;
+  const podeDescartar = isDiretor; // SOMENTE diretor pode descartar
+
   const [busca, setBusca] = useState('');
   const [etapaFiltro, setEtapaFiltro] = useState<EtapaManutencaoInterna | 'todas'>('todas');
   
@@ -74,6 +80,23 @@ export default function ManutencaoInterna() {
   );
   const { data: metricas, isLoading: loadingMetricas } = useManutencaoInternaMetricas();
   const iniciarTriagemMutation = useIniciarTriagem();
+
+  // Tela de acesso restrito
+  if (!temAcesso) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="max-w-md">
+          <CardContent className="pt-6 text-center">
+            <ShieldAlert className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h2 className="text-lg font-semibold">Acesso Restrito</h2>
+            <p className="text-muted-foreground mt-2">
+              Apenas Diretores e Coordenadores de Monitoramento podem acessar a Manutenção Interna.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Filtrar por busca
   const manutencoesFiltered = manutencoes?.filter((m) => {
@@ -320,14 +343,18 @@ export default function ManutencaoInterna() {
                                   <FileText className="h-4 w-4 mr-2" />
                                   Encaminhar Garantia
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  onClick={() => handleAbrirModal(item, 'descarte')}
-                                  className="text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Descartar
-                                </DropdownMenuItem>
+                                {podeDescartar && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      onClick={() => handleAbrirModal(item, 'descarte')}
+                                      className="text-destructive"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Descartar
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </>
                             )}
 
