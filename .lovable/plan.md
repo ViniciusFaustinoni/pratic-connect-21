@@ -1,151 +1,149 @@
 
-# Plano: Correção do Fluxo de Agendamento de Manutenção
+# Plano: Unificação do Fluxo de Manutenção no Menu Rastreadores
 
-## Diagnóstico do Problema
+## Situação Atual
 
-### Situação Atual (incorreta)
+Existem **múltiplos pontos de entrada fragmentados** para iniciar manutenções:
 
-Existem **dois modais de agendamento** sendo usados em lugares diferentes:
+| Local | Modal/Hook | Status criado |
+|-------|------------|---------------|
+| Menu **Rastreadores** | `AbrirManutencaoModal` + `useAbrirVistoriaManutencao` | `pendente` (sem data) |
+| Menu **Estoque** (antigo) | ~~Removido na última correção~~ | - |
+| Menu **Vistorias de Manutenção** | `AbrirManutencaoModal` (botão "Nova Manutenção") | `pendente` (sem data) |
+| `EnviarManutencaoModal` (não usado ativamente) | `useCriarManutencao` | `pendente` com data/período |
 
-| Local | Modal Usado | Ação |
-|-------|-------------|------|
-| Menu **Estoque** | `EnviarManutencaoModal` | "Agendar Manutenção" para rastreadores em estoque e instalados |
-| Menu **Rastreadores** | `EnviarManutencaoModal` | "Enviar para Manutenção" para rastreadores em estoque e instalados |
-| Menu **Vistorias de Manutenção** | `AgendarManutencaoModal` | Agendar manutenção já aberta (correto) |
+O fluxo atual obriga o coordenador a usar **duas etapas**: primeiro abrir a manutenção (AbrirManutencaoModal) e depois agendar (AgendarManutencaoModal na tela VistoriasManutencao). Isso não está errado, mas é fragmentado.
 
-### Situação Desejada
+## Solução Proposta
 
-- O agendamento de manutenção deve existir **exclusivamente** no menu **Rastreadores**
-- Apenas rastreadores com status **instalado** podem ter manutenção agendada
-- O modal deve seguir o layout da foto (com Local, Técnico, Encaixe)
-- Menus **Estoque** e **Vistorias** NÃO devem exibir modais de agendamento
+Unificar tudo em um **único modal no menu Rastreadores** que faz abertura + agendamento numa só operação, conforme solicitado.
 
 ---
 
-## Solução
+## Arquivos a Criar
 
-### 1. Remover opção "Agendar Manutenção" do menu Estoque
+### 1. `src/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal.tsx`
 
-**Arquivo:** `src/components/monitoramento/estoque/ListaRastreadores.tsx`
+Modal unificado que combina:
+- Campos de `AbrirManutencaoModal` (motivo, detalhes)
+- Campos de `AgendarManutencaoModal` (data, período, local, técnico, encaixe, WhatsApp)
+- Exibe dados do rastreador, veículo e associado
 
-Remover o bloco que exibe "Agendar Manutenção" no dropdown (linhas 455-471) e remover o modal `EnviarManutencaoModal` do componente.
-
-### 2. Ajustar menu Rastreadores para usar o modal correto
-
-**Arquivo:** `src/pages/monitoramento/Rastreadores.tsx`
-
-- Remover a opção "Enviar para Manutenção" para rastreadores em `estoque` (manter apenas para `instalado`)
-- Substituir `EnviarManutencaoModal` pelo `AbrirManutencaoModal` que:
-  - Seleciona o motivo da manutenção
-  - Cria o serviço como pendente
-  - O agendamento de data/técnico acontece na tela VistoriasManutencao
-
-### 3. Manter o fluxo em duas etapas (padrão atual do sistema)
-
-O sistema já possui o fluxo correto em duas etapas:
-1. **Abrir Manutenção** → Cria serviço com status `pendente` (sem data)
-2. **Agendar** → Coordenador atribui data, período e técnico
-
-Este fluxo está implementado em `VistoriasManutencao.tsx` e deve ser mantido.
-
-### 4. Alternativa: Modal único no menu Rastreadores (conforme imagem)
-
-Se o desejo é ter um modal único que já abre E agenda no menu Rastreadores:
-
-**Criar novo modal** `AbrirEAgendarManutencaoModal` que:
-- Mostra informações do rastreador/veículo/associado
-- Pede data, período, local (Base/Rota), técnico responsável
-- Opções de encaixe e notificação WhatsApp
-- Ao confirmar, cria o serviço já agendado
-
-Este modal seria uma combinação dos modais `AbrirManutencaoModal` + `AgendarManutencaoModal`.
+Ao confirmar, executa tudo numa única operação criando o serviço já com `status: 'agendada'`.
 
 ---
 
-## Alterações Detalhadas
+## Arquivos a Modificar
 
-### Arquivo 1: `src/components/monitoramento/estoque/ListaRastreadores.tsx`
+### 2. `src/hooks/useVistoriaManutencao.ts`
 
-**Remover:**
-- Linhas 455-471: Bloco do dropdown que exibe "Agendar Manutenção"
-- Linhas 554-559: Modal `EnviarManutencaoModal`
-- Estado `dialogManutencao` e sua tipagem
-- Import do `EnviarManutencaoModal`
+Adicionar novo hook **`useAbrirEAgendarManutencao`** que:
 
-### Arquivo 2: `src/pages/monitoramento/Rastreadores.tsx`
+```typescript
+interface AbrirEAgendarManutencaoParams {
+  rastreadorId: string;
+  motivo: MotivoManutencao;
+  motivoDetalhe?: string;
+  dataAgendada: string;
+  periodo: 'manha' | 'tarde';
+  localTipo: 'base' | 'rota';
+  localEndereco?: string;
+  profissionalId: string;
+  permiteEncaixe: boolean;
+  notificarWhatsApp: boolean;
+}
+```
+
+Executa:
+1. Busca dados do rastreador (veículo, associado)
+2. Atualiza rastreador: `instalado` → `manutencao`
+3. Registra movimentação em `estoque_movimentacoes`
+4. Cria serviço com `status: 'agendada'` (não `pendente`)
+5. Notifica WhatsApp se habilitado
+
+---
+
+### 3. `src/pages/monitoramento/Rastreadores.tsx`
 
 **Modificar:**
-- Linhas 538-555: Remover condição `status === 'estoque'` para opção "Enviar para Manutenção"
-- Manter opção apenas para `status === 'instalado'`
-- Substituir `EnviarManutencaoModal` por `AbrirManutencaoModal`
-- Ajustar imports e estados
-
-**Antes:**
-```typescript
-{(rastreador.status === 'instalado' || rastreador.status === 'estoque') && (
-  // ...
-  <DropdownMenuItem onClick={() => setDialogManutencao({...})}>
-    <Wrench className="mr-2 h-4 w-4" />
-    Enviar para Manutenção
-  </DropdownMenuItem>
-```
-
-**Depois:**
-```typescript
-{rastreador.status === 'instalado' && (
-  // ...
-  <DropdownMenuItem onClick={() => setModalAbrirManutencao({
-    id: rastreador.id,
-    codigo: rastreador.codigo,
-  })}>
-    <Wrench className="mr-2 h-4 w-4" />
-    Abrir Manutenção
-  </DropdownMenuItem>
-```
-
-### Arquivo 3: `src/components/monitoramento/manutencao/AbrirManutencaoModal.tsx`
-
-**Nenhuma alteração** - Modal já funciona corretamente e pode receber `rastreadorPreSelecionado`.
+- Substituir `AbrirManutencaoModal` por `AgendarManutencaoUnificadoModal`
+- Ajustar estado `dialogManutencao` para incluir dados do veículo/associado
+- Manter opção apenas para rastreadores com `status === 'instalado'`
+- Alterar texto do dropdown de "Abrir Manutenção" para "Enviar para Manutenção"
 
 ---
 
-## Fluxo Final Proposto
+### 4. `src/pages/monitoramento/VistoriasManutencao.tsx`
+
+**Remover:**
+- Botão "Nova Manutenção" do header (linhas 114-119)
+- Modal `AbrirManutencaoModal` e seu estado `modalAbrir`
+- Imports relacionados
+
+Esta página passa a ser **apenas para gestão** de manutenções já criadas.
+
+---
+
+## Fluxo Final
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  MENU RASTREADORES                                              │
-│  (Lista de rastreadores instalados)                             │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                             │ Usuário clica "Abrir Manutenção"
-                             │ em rastreador INSTALADO
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  MODAL "ABRIR MANUTENÇÃO"                                       │
-│  - Mostra dados do rastreador/veículo/associado                 │
-│  - Usuário seleciona MOTIVO                                     │
-│  - Ao confirmar: cria serviço com status "pendente"             │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                             │ Serviço aparece em 
-                             │ VistoriasManutencao
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  MENU VISTORIAS DE MANUTENÇÃO                                   │
-│  (Lista de manutenções pendentes)                               │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                             │ Coordenador clica "Agendar"
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  MODAL "AGENDAR MANUTENÇÃO" (conforme foto)                     │
-│  - Data, Período                                                │
-│  - Local (Base/Rota)                                            │
-│  - Técnico Responsável                                          │
-│  - Opção de encaixe                                             │
-│  - Notificar via WhatsApp                                       │
-└─────────────────────────────────────────────────────────────────┘
+MENU RASTREADORES (único ponto de entrada)
+         │
+         │ Coordenador clica "Enviar para Manutenção"
+         │ em rastreador com status 'instalado'
+         ▼
+┌──────────────────────────────────────────────────────────┐
+│ MODAL UNIFICADO "Agendar Manutenção"                     │
+├──────────────────────────────────────────────────────────┤
+│ INFORMAÇÕES (auto-preenchidas)                           │
+│ • Rastreador: RST-001234                                 │
+│ • Associado: João da Silva                               │
+│ • Veículo: VW Gol 2020 • ABC-1234                        │
+│ • Última comunicação: 03/02/2026 14:32                   │
+│                                                          │
+│ MOTIVO                                                   │
+│ [Selecione: sem_sinal / bateria_baixa / etc.]           │
+│ Detalhes: [___________________________________]          │
+│                                                          │
+│ AGENDAMENTO                                              │
+│ Data*: [📅 calendário - hoje até +2 dias]               │
+│ Período*: (○) Manhã  (○) Tarde                          │
+│ Local*: (○) Base  (○) Rota                              │
+│   └ Se Rota: [Endereço cadastrado ou informar outro]    │
+│ Técnico*: [Selecione profissional]                       │
+│                                                          │
+│ ☑ Notificar via WhatsApp                                │
+│ ☑ Permitir encaixe (só coord/diretor)                   │
+│                                                          │
+│ [Cancelar]  [Agendar Manutenção]                        │
+└──────────────────────────────────────────────────────────┘
+         │
+         │ Ao confirmar:
+         │ 1. rastreador.status → 'manutencao'
+         │ 2. estoque_movimentacoes.insert()
+         │ 3. servicos.insert({ status: 'agendada' })
+         ▼
+┌──────────────────────────────────────────────────────────┐
+│ FILA DE VISTORIAS / VISTORIAS DE MANUTENÇÃO              │
+│ • Manutenção aparece já agendada                         │
+│ • Técnico designado pode ver na sua fila                │
+│ • Coordenador pode gerenciar (cancelar, reagendar, etc.)│
+└──────────────────────────────────────────────────────────┘
+         │
+         ▼
+   TÉCNICO EXECUTA NO CAMPO
+   (ExecutarManutencao.tsx - sem alteração)
 ```
+
+---
+
+## Permissões
+
+O botão "Enviar para Manutenção" será visível apenas para:
+- **Diretor** (`isDiretor`)
+- **Coordenador de Monitoramento** (`isCoordenadorMonitoramento`)
+
+A checkbox "Permitir encaixe" também segue esta regra.
 
 ---
 
@@ -153,15 +151,50 @@ Este modal seria uma combinação dos modais `AbrirManutencaoModal` + `AgendarMa
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/components/monitoramento/estoque/ListaRastreadores.tsx` | Remover | Opção "Agendar Manutenção" e modal associado |
-| `src/pages/monitoramento/Rastreadores.tsx` | Modificar | Ajustar para usar `AbrirManutencaoModal` apenas para rastreadores instalados |
-| Nenhum arquivo novo | - | O sistema já possui os modais corretos |
+| `src/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal.tsx` | **CRIAR** | Modal unificado com motivo + agendamento |
+| `src/hooks/useVistoriaManutencao.ts` | **ADICIONAR** | Hook `useAbrirEAgendarManutencao` |
+| `src/pages/monitoramento/Rastreadores.tsx` | **MODIFICAR** | Usar novo modal, ajustar dropdown e permissões |
+| `src/pages/monitoramento/VistoriasManutencao.tsx` | **MODIFICAR** | Remover botão "Nova Manutenção" e modal |
 
 ---
 
-## Resultado Esperado
+## O que NÃO será alterado
 
-1. Menu **Estoque**: Sem opção de agendamento de manutenção
-2. Menu **Rastreadores**: Opção "Abrir Manutenção" apenas para rastreadores **instalados**
-3. Menu **Vistorias de Manutenção**: Onde o coordenador agenda data/técnico (já funciona)
-4. Fluxo único e consistente em todo o sistema
+- `ExecutarManutencao.tsx` - Fluxo do técnico em campo
+- `ManutencaoInterna.tsx` - Bancada/triagem
+- Hooks de gestão existentes (`useAgendarVistoriaManutencao`, `useCancelarVistoriaManutencao`, etc.) - Continuam funcionando para reagendamentos
+- `AgendarManutencaoModal.tsx` - Será mantido para reagendamentos pós-ausência
+- `AbrirManutencaoModal.tsx` - Pode ser mantido ou deprecado (não mais usado após esta alteração)
+
+---
+
+## Detalhes Técnicos
+
+### Estrutura do novo modal
+
+O modal será composto por:
+
+1. **Seção de informações** (somente leitura)
+   - Dados do rastreador vindos do dropdown
+   - Busca dados do veículo e associado via query
+
+2. **Seção de motivo** (reaproveitando lógica do AbrirManutencaoModal)
+   - Select com `MOTIVOS_MANUTENCAO_OPTIONS`
+   - Campo de texto para detalhes
+
+3. **Seção de agendamento** (reaproveitando lógica do AgendarManutencaoModal)
+   - Calendário (hoje até +2 dias, sem domingo)
+   - Botões de período com vagas (usa `useVagasPeriodo`)
+   - Radio de local (Base/Rota)
+   - Se Rota: seletor de endereço (cadastrado ou informar)
+   - Select de técnico (usa `useProfissionaisEquipe`)
+   - Checkbox notificar WhatsApp
+   - Checkbox encaixe (apenas para coord/diretor)
+
+### Dependências reutilizadas
+
+- `useVagasPeriodo` - Verificar vagas disponíveis
+- `useProfissionaisEquipe` - Listar técnicos
+- `usePermissions` - Verificar permissões
+- `buscarCep` - Autocomplete de endereço
+- `PERIODOS_DISPONIVEIS`, `getPeriodosDisponivelsPorHora` - Configuração de períodos
