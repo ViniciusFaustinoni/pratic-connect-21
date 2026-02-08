@@ -1066,3 +1066,221 @@ export function useRastreadoresInstalados(busca?: string) {
     },
   });
 }
+
+// ============================================
+// MUTATION: ABRIR E AGENDAR MANUTENÇÃO (UNIFICADO)
+// ============================================
+
+/**
+ * Parâmetros para abrir e agendar manutenção numa única operação
+ */
+export interface AbrirEAgendarManutencaoParams {
+  rastreadorId: string;
+  motivo: MotivoManutencao;
+  motivoDetalhe?: string;
+  dataAgendada: string;
+  periodo: 'manha' | 'tarde';
+  localTipo: LocalTipoManutencao;
+  localEndereco?: string;
+  profissionalId: string;
+  permiteEncaixe: boolean;
+  notificarWhatsApp: boolean;
+}
+
+/**
+ * Hook unificado para abrir E agendar manutenção numa única operação.
+ * Combina a lógica de useAbrirVistoriaManutencao + useAgendarVistoriaManutencao.
+ * 
+ * Fluxo:
+ * 1. Busca dados do rastreador (veiculo, associado)
+ * 2. Atualiza rastreador.status = 'manutencao'
+ * 3. Registra movimentação em estoque_movimentacoes
+ * 4. Cria serviço já com status = 'agendada' (não 'pendente')
+ * 5. Notifica via WhatsApp se habilitado
+ */
+export function useAbrirEAgendarManutencao() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: AbrirEAgendarManutencaoParams) => {
+      // 1. Buscar dados do rastreador
+      const { data: rastreador, error: rastreadorError } = await supabase
+        .from('rastreadores')
+        .select(`
+          id,
+          codigo,
+          veiculo_id,
+          plataforma,
+          veiculo:veiculos(
+            id,
+            associado_id,
+            placa,
+            associado:associados(
+              id,
+              nome,
+              telefone,
+              whatsapp,
+              logradouro,
+              numero,
+              bairro,
+              cidade,
+              uf,
+              cep,
+              endereco_latitude,
+              endereco_longitude
+            )
+          )
+        `)
+        .eq('id', params.rastreadorId)
+        .single();
+
+      if (rastreadorError) {
+        console.error('[useAbrirEAgendarManutencao] Erro ao buscar rastreador:', rastreadorError);
+        throw new Error('Erro ao buscar informações do rastreador');
+      }
+
+      // 2. Atualizar status do rastreador para manutenção
+      const { error: updateError } = await supabase
+        .from('rastreadores')
+        .update({ 
+          status: 'manutencao',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', params.rastreadorId);
+
+      if (updateError) {
+        console.error('[useAbrirEAgendarManutencao] Erro ao atualizar status:', updateError);
+        throw new Error('Erro ao atualizar status do rastreador');
+      }
+
+      // 3. Registrar movimentação de estoque
+      const { error: movError } = await supabase.from('estoque_movimentacoes').insert({
+        tipo: 'alteracao_status',
+        quantidade: 1,
+        status_anterior: 'instalado',
+        status_novo: 'manutencao',
+        rastreador_id: params.rastreadorId,
+        observacoes: `Manutenção aberta e agendada: ${params.motivo}${params.motivoDetalhe ? ` - ${params.motivoDetalhe}` : ''}`,
+      });
+
+      if (movError) {
+        console.error('[useAbrirEAgendarManutencao] Erro ao registrar movimentação:', movError);
+        // Não lançar erro, apenas log - movimentação é secundária
+      }
+
+      // 4. Criar serviço de manutenção JÁ AGENDADO
+      const veiculo = rastreador.veiculo as any;
+      const associado = veiculo?.associado;
+
+      // Se local_tipo = rota, usar endereço passado ou do associado
+      let logradouro = associado?.logradouro || null;
+      let numero = associado?.numero || null;
+      let bairro = associado?.bairro || null;
+      let cidade = associado?.cidade || null;
+      let uf = associado?.uf || null;
+      let cep = associado?.cep || null;
+      let latitude = associado?.endereco_latitude || null;
+      let longitude = associado?.endereco_longitude || null;
+
+      // Se tipo base, limpar endereço
+      if (params.localTipo === 'base') {
+        logradouro = null;
+        numero = null;
+        bairro = null;
+        cidade = null;
+        uf = null;
+        cep = null;
+        latitude = null;
+        longitude = null;
+      }
+
+      const servicoData = {
+        tipo: 'vistoria_manutencao' as const,
+        status: 'agendada' as const, // ← JÁ VAI DIRETO PARA AGENDADA
+        data_agendada: params.dataAgendada,
+        periodo: params.periodo,
+        rastreador_id: params.rastreadorId,
+        veiculo_id: veiculo?.id || null,
+        associado_id: associado?.id || null,
+        profissional_id: params.profissionalId,
+        local_vistoria: params.localTipo === 'rota' ? 'cliente' : 'base',
+        local_tipo_manutencao: params.localTipo,
+        permite_encaixe: params.permiteEncaixe,
+        // Campos específicos de manutenção
+        motivo_manutencao: params.motivo,
+        motivo_detalhe: params.motivoDetalhe || null,
+        observacoes: params.localTipo === 'rota' && params.localEndereco 
+          ? `Manutenção: ${params.motivo} | Endereço: ${params.localEndereco}`
+          : `Manutenção: ${params.motivo}`,
+        // Endereço
+        logradouro,
+        numero,
+        bairro,
+        cidade,
+        uf,
+        cep,
+        latitude,
+        longitude,
+      };
+
+      const { data: servico, error: servicoError } = await supabase
+        .from('servicos')
+        .insert(servicoData)
+        .select('id, protocolo')
+        .single();
+
+      if (servicoError) {
+        console.error('[useAbrirEAgendarManutencao] Erro ao criar serviço:', servicoError);
+        throw new Error('Erro ao criar agendamento de manutenção');
+      }
+
+      // 5. Notificar WhatsApp se habilitado
+      if (params.notificarWhatsApp && associado?.whatsapp) {
+        try {
+          // Chamar edge function de notificação
+          await supabase.functions.invoke('notificar-manutencao-whatsapp', {
+            body: {
+              servicoId: servico.id,
+              tipo: 'agendamento',
+            },
+          });
+
+          // Atualizar serviço com flag de notificação
+          await supabase
+            .from('servicos')
+            .update({
+              whatsapp_notificado: true,
+              whatsapp_notificado_em: new Date().toISOString(),
+            })
+            .eq('id', servico.id);
+        } catch (notifError) {
+          console.error('[useAbrirEAgendarManutencao] Erro ao notificar WhatsApp:', notifError);
+          // Não falhar se notificação der erro
+        }
+      }
+
+      return {
+        servicoId: servico.id,
+        protocolo: servico.protocolo,
+        rastreadorCodigo: rastreador.codigo,
+      };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao-metricas'] });
+      queryClient.invalidateQueries({ queryKey: ['lista-rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      
+      toast.success('Manutenção agendada com sucesso!', {
+        description: `Protocolo: ${data.protocolo || 'Gerado'}`,
+      });
+    },
+    onError: (error: Error) => {
+      console.error('[useAbrirEAgendarManutencao] Erro:', error);
+      toast.error(error.message || 'Erro ao agendar manutenção');
+    },
+  });
+}
