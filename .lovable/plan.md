@@ -1,108 +1,259 @@
 
-## Objetivo
-Corrigir o erro 500 ao excluir associado, causado por **contratos ainda existentes** que continuam referenciando `associados.id` via FK `fk_contratos_associado` (tabela `contratos.associado_id`). O motivo mais provável (e consistente com os logs e o schema) é que **a exclusão de contratos falha silenciosamente** por dependências que não estão sendo removidas antes — especialmente `comissoes_deducoes`, que tem FK para `contratos` **sem** `ON DELETE CASCADE`.
+# Plano: Persistência do Progresso da Vistoria
+
+## Problema Atual
+Quando o vistoriador atualiza a página ou ocorre qualquer interrupção durante a vistoria no `ExecutarVistoriaCompleta.tsx`, todo o progresso é perdido porque os estados são mantidos apenas localmente (`useState`).
+
+Os campos que **não persistem** atualmente:
+- Conferência de dados (placa, chassi, modelo, cor) 
+- Hodômetro digitado
+- Observações do vistoriador
+- Etapa/categoria em que estava trabalhando
+
+O que **já persiste** (via banco):
+- Fotos enviadas (tabela `vistoria_fotos`)
+- Vídeo 360° (coluna `vistorias.video_360_url`)
 
 ---
 
-## O que eu encontrei (diagnóstico com base no schema e no código atual)
-### 1) A constraint que está estourando
-- `fk_contratos_associado`: `contratos(associado_id) -> associados(id)`
+## Solução Proposta
 
-Ou seja: se existir **qualquer linha em `contratos`** com `associado_id = associadoId`, o delete do associado falha.
+Utilizar a coluna **`vistorias.observacoes`** (text) para persistir observações e criar uma nova coluna JSONB para persistir os dados parciais da vistoria (conferência, hodômetro, categorias abertas).
 
-### 2) Por que ainda sobram contratos mesmo com o “force delete”
-No `delete-associado/index.ts`, vocês chamam vários `.delete()`/`.update()` em sequência, mas **quase nenhuma chamada verifica `error`**.  
-Então, quando uma exclusão falha, o fluxo segue como se tivesse dado certo.
-
-Ponto crítico: existe FK `comissoes_deducoes_contrato_id_fkey`:
-- `comissoes_deducoes(contrato_id) -> contratos(id)` **sem cascade**
-- Isso impede `DELETE FROM contratos WHERE id = ...` se houver deduções vinculadas.
-
-O schema confirma várias FKs para `contratos`, e as que tipicamente bloqueiam deleção (por não ter cascade) incluem:
-- `comissoes_deducoes.contrato_id` (sem ON DELETE)
-- `instalacoes.contrato_id` (sem ON DELETE) — esta já está sendo deletada no código
-- `instalacoes_pendentes_criacao.contrato_id` (sem ON DELETE) — esta já está sendo deletada no código
-
-Portanto, **falta limpar `comissoes_deducoes`** antes de excluir contratos.
+### Estratégia de Persistência:
+1. **Auto-save**: Salvar automaticamente a cada alteração significativa (debounce 2s)
+2. **Restaurar ao carregar**: Quando a página abrir, carregar dados salvos do banco
+3. **Campos a persistir**:
+   - `conferencia` (objeto com placa, chassi, modelo, cor)
+   - `hodometro` (string/número)
+   - `observacoes` (texto)
+   - `openCategories` (array de IDs das categorias abertas)
 
 ---
 
-## Mudanças planejadas (somente reorganização/correção, sem “reescrever do zero”)
+## Alterações Necessárias
 
-### A) Corrigir a ordem e completar a limpeza de dependências antes de deletar `contratos`
-No edge function `supabase/functions/delete-associado/index.ts`:
+### 1. Migração de Banco de Dados
+Adicionar nova coluna `dados_parciais` (jsonb) na tabela `vistorias` para armazenar o estado intermediário.
 
-1. Para cada contrato:
-   - Remover dependências que bloqueiam delete do contrato:
-     - **Adicionar**: `DELETE FROM comissoes_deducoes WHERE contrato_id = :id`
-     - (Opcional/segurança): deletar também `comissoes` (apesar de cascade existir, não atrapalha)
-   - Manter as limpezas já existentes:
-     - `instalacoes_pendentes_criacao`
-     - `instalacoes`
-     - `servicos`
-     - `asaas_cobrancas`
-     - `contratos_documentos`, `contratos_historico`, etc.
-     - `vistorias` + `blacklist_veiculos` vinculada
+```sql
+ALTER TABLE vistorias 
+ADD COLUMN IF NOT EXISTS dados_parciais jsonb DEFAULT '{}'::jsonb;
 
-2. Só então:
-   - Desvincular `veiculos.contrato_id = null`
-   - `DELETE FROM contratos WHERE id = :id`
-
-### B) Parar de ignorar falhas: checar `error` e registrar logs úteis
-Para cada operação crítica:
-- Capturar `{ error }`
-- Se error:
-  - `console.error()` com:
-    - tabela
-    - contrato_id / associado_id
-    - mensagem do Postgres
-  - retornar erro **mais diagnosticável** (ex: HTTP 409/500 com “qual tabela bloqueou e quantos registros ainda existem”).
-
-Isso evita o cenário atual em que o código “acha” que deletou, mas na prática não deletou.
-
-### C) Verificação final antes do delete do associado (com saída detalhada)
-Antes de executar:
-```ts
-await supabaseAdmin.from("associados").delete().eq("id", associadoId)
+COMMENT ON COLUMN vistorias.dados_parciais IS 
+  'Dados parciais da vistoria em andamento (conferência, hodômetro, etc)';
 ```
-fazer:
-1. `SELECT id FROM contratos WHERE associado_id = associadoId`
-2. Se existir algum:
-   - retornar `409 Conflict` com:
-     - lista de `contrato.id` restantes (limitada, ex: 10)
-     - contagem em tabelas bloqueadoras por contrato (principalmente `comissoes_deducoes`)
-   - Isso ajuda a confirmar 100% a causa na próxima tentativa.
-
-### D) Ajuste rápido de robustez (opcional, mas recomendado)
-- Trocar CORS headers para o padrão completo recomendado (não resolve FK, mas evita problemas de front).
-- Padronizar uma helper interna tipo `must()` para “falhar rápido” quando `error` acontecer (mantendo o arquivo simples).
 
 ---
 
-## Passo a passo de validação (como vamos provar que resolveu)
-1. Tentar excluir um associado que atualmente falha.
-2. Conferir logs do edge function:
-   - Deve aparecer limpeza de `comissoes_deducoes` por contrato.
-   - Deve aparecer `Contratos restantes: 0` antes de deletar associado.
-3. Confirmar no banco (test):
-   - `select count(*) from contratos where associado_id = '...'` deve ser 0 após o fluxo.
-4. Repetir com um associado que tenha histórico financeiro (maior chance de ter `comissoes_deducoes`).
+### 2. Modificar `src/hooks/useVistorias.ts`
+
+**Adicionar novo hook `useSalvarRascunhoVistoriaCompleta`**:
+
+```typescript
+interface DadosParciaisVistoria {
+  conferencia?: {
+    placa: boolean;
+    chassi: boolean;
+    modelo: boolean;
+    cor: boolean;
+  };
+  hodometro?: string;
+  observacoes?: string;
+  openCategories?: string[];
+}
+
+export function useSalvarRascunhoVistoriaCompleta() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      vistoriaId, 
+      dadosParciais,
+      hodometro,
+      observacoes 
+    }: {
+      vistoriaId: string;
+      dadosParciais: DadosParciaisVistoria;
+      hodometro?: number;
+      observacoes?: string;
+    }) => {
+      const { error } = await supabase
+        .from('vistorias')
+        .update({
+          dados_parciais: dadosParciais,
+          km_atual: hodometro || null,
+          observacoes: observacoes || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', vistoriaId);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['vistoria-completa'] 
+      });
+    },
+  });
+}
+```
 
 ---
 
-## Se ainda falhar depois (plano de contingência)
-Se, após adicionar `comissoes_deducoes` + checagem de erro, ainda sobrar contrato:
-- A resposta 409 vai indicar quais contratos sobraram e, pelos logs, em qual tabela a deleção falhou.
-- Aí adicionamos a limpeza específica que estiver faltando (mesma abordagem, sem “reescrever”, apenas completar a lista de dependências reais).
+### 3. Modificar `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
+
+**A) Importar e usar o novo hook**
+
+**B) Adicionar useEffect para restaurar dados salvos**:
+
+```typescript
+// Restaurar dados salvos ao carregar vistoria
+useEffect(() => {
+  if (vistoria) {
+    const dadosParciais = (vistoria as any).dados_parciais;
+    
+    if (dadosParciais?.conferencia) {
+      setConferencia(dadosParciais.conferencia);
+    }
+    if (dadosParciais?.hodometro) {
+      setHodometro(dadosParciais.hodometro);
+    }
+    if (dadosParciais?.observacoes) {
+      setObservacoes(dadosParciais.observacoes);
+    }
+    if (dadosParciais?.openCategories?.length > 0) {
+      setOpenCategories(dadosParciais.openCategories);
+    }
+    
+    // Também verificar km_atual e observacoes direto da vistoria
+    if (vistoria.km_atual) {
+      setHodometro(String(vistoria.km_atual));
+    }
+    if (vistoria.observacoes) {
+      setObservacoes(vistoria.observacoes);
+    }
+  }
+}, [vistoria]);
+```
+
+**C) Adicionar auto-save com debounce**:
+
+```typescript
+// Auto-save com debounce
+useEffect(() => {
+  if (!vistoriaId) return;
+  
+  const timeoutId = setTimeout(() => {
+    salvarRascunho.mutate({
+      vistoriaId,
+      dadosParciais: {
+        conferencia,
+        hodometro,
+        observacoes,
+        openCategories,
+      },
+      hodometro: hodometro ? parseInt(hodometro) : undefined,
+      observacoes: observacoes || undefined,
+    });
+  }, 2000); // Debounce de 2 segundos
+
+  return () => clearTimeout(timeoutId);
+}, [conferencia, hodometro, observacoes, openCategories, vistoriaId]);
+```
+
+**D) Adicionar indicador visual de salvamento**:
+
+```typescript
+const [salvando, setSalvando] = useState(false);
+
+// No header, mostrar status:
+{salvando && (
+  <span className="text-xs text-slate-400 flex items-center gap-1">
+    <Loader2 className="h-3 w-3 animate-spin" />
+    Salvando...
+  </span>
+)}
+```
 
 ---
 
-## Arquivos envolvidos
-- `supabase/functions/delete-associado/index.ts` (ajustar ordem + deletar `comissoes_deducoes` + checar errors + verificação final)
+### 4. Atualizar query do `useVistoriaCompleta`
+
+Incluir o campo `dados_parciais` na query do banco:
+
+```typescript
+.select(`
+  *,
+  dados_parciais,  // <-- Adicionar aqui
+  veiculo:veiculos(...),
+  ...
+`)
+```
 
 ---
 
-## Observações importantes
-- Não vou alterar constraints agora (ex: transformar `fk_contratos_associado` em cascade), porque isso muda regra de integridade no banco e pode ter efeitos colaterais. A correção mais segura é garantir que o edge function delete tudo na ordem correta.
-- O erro mostrado é 100% compatível com “contrato não deletou por FK em tabela filha” + “código ignorou error” + “delete do associado estourou”.
+## Fluxo Final
 
+```text
+VISTORIADOR ABRE VISTORIA
+         │
+         ▼
+┌──────────────────────────────────────────────┐
+│ useVistoriaCompleta busca dados             │
+│ ↳ Carrega dados_parciais, km_atual, etc     │
+└──────────────────┬───────────────────────────┘
+                   │
+         ▼ useEffect restaura estados
+                   │
+┌──────────────────┴───────────────────────────┐
+│ ESTADOS RESTAURADOS:                         │
+│ • conferencia ← dados_parciais.conferencia   │
+│ • hodometro ← dados_parciais.hodometro       │
+│ • observacoes ← dados_parciais.observacoes   │
+│ • openCategories ← dados_parciais.open...    │
+└──────────────────┬───────────────────────────┘
+                   │
+         ▼ Vistoriador continua trabalhando
+                   │
+┌──────────────────┴───────────────────────────┐
+│ A CADA ALTERAÇÃO (debounce 2s):             │
+│ useSalvarRascunhoVistoriaCompleta.mutate()  │
+│ ↳ Salva dados_parciais no banco             │
+└──────────────────┬───────────────────────────┘
+                   │
+         ▼ PÁGINA ATUALIZADA / INTERRUPÇÃO
+                   │
+         ▼ Vistoriador reabre a vistoria
+                   │
+┌──────────────────┴───────────────────────────┐
+│ PROGRESSO RESTAURADO AUTOMATICAMENTE        │
+│ • Conferência já marcada                     │
+│ • Hodômetro já preenchido                    │
+│ • Observações já digitadas                   │
+│ • Categorias que estava abertas             │
+└──────────────────────────────────────────────┘
+```
+
+---
+
+## Resumo das Alterações
+
+| Arquivo | Ação |
+|---------|------|
+| **Migração SQL** | Adicionar coluna `dados_parciais` (jsonb) |
+| `src/hooks/useVistorias.ts` | Adicionar hook `useSalvarRascunhoVistoriaCompleta` |
+| `src/hooks/useVistorias.ts` | Atualizar query do `useVistoriaCompleta` para incluir `dados_parciais` |
+| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Restaurar dados ao carregar |
+| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Auto-save com debounce |
+| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Indicador visual de salvamento |
+
+---
+
+## Benefícios
+
+1. **Tolerância a falhas**: Se o app travar, o navegador fechar, ou a conexão cair, o progresso está salvo
+2. **Experiência contínua**: Vistoriador pode pausar e continuar de onde parou
+3. **Multi-dispositivo**: Se precisar trocar de celular, pode continuar a vistoria
+4. **Sem ação manual**: O auto-save é transparente para o usuário
+5. **Baixo overhead**: Debounce evita requisições excessivas
