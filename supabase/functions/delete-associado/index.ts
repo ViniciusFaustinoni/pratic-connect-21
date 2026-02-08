@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
       // Não bloquear exclusão por erro na plataforma externa
     }
 
-    // 1. Fetch all contracts for this associate
+    // 1. Fetch all contracts for this associate (by associado_id)
     const { data: contratos } = await supabaseAdmin
       .from("contratos")
       .select("id, cotacao_id")
@@ -202,6 +202,51 @@ Deno.serve(async (req) => {
         // Delete the contract itself
         await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
       }
+    }
+
+    // 2.1 NOVO: Excluir QUALQUER contrato que ainda referencie este associado (por segurança)
+    // Isso garante que não haja contratos órfãos ou criados por outras rotas
+    const { data: contratosRestantes } = await supabaseAdmin
+      .from("contratos")
+      .select("id")
+      .eq("associado_id", associadoId);
+    
+    if (contratosRestantes && contratosRestantes.length > 0) {
+      console.log(`[delete-associado] Encontrados ${contratosRestantes.length} contratos restantes, excluindo...`);
+      
+      for (const contrato of contratosRestantes) {
+        // Limpar dependências básicas
+        await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("servicos").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("asaas_cobrancas").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("contratos_documentos").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("contratos_historico").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("documentos_solicitados").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("gastos_beneficios").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("instalacoes").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("vistorias").delete().eq("contrato_id", contrato.id);
+        
+        // Desvincular veículo
+        await supabaseAdmin
+          .from("veiculos")
+          .update({ contrato_id: null })
+          .eq("contrato_id", contrato.id);
+        
+        // Excluir contrato
+        await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
+      }
+    }
+
+    // 2.2 NOVO: Forçar exclusão final de qualquer contrato restante (última linha de defesa)
+    const { error: contratosForceDeleteError } = await supabaseAdmin
+      .from("contratos")
+      .delete()
+      .eq("associado_id", associadoId);
+    
+    if (contratosForceDeleteError) {
+      console.error(`[delete-associado] Erro ao forçar exclusão de contratos: ${contratosForceDeleteError.message}`);
+    } else {
+      console.log(`[delete-associado] Verificação final de contratos concluída`);
     }
 
     // 2.5. NOVO: Excluir cotações órfãs vinculadas a leads do associado
