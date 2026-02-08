@@ -1,157 +1,204 @@
 
-# Correção do Fluxo de Manutenção - Rastreador Inconsistente
+# Plano: Novo Status "Reagendar Manutenção" para Rastreadores
 
-## Diagnóstico do Problema
+## Entendimento do Problema
 
-### O que aconteceu (linha do tempo real)
+Quando o técnico marca "Associado Ausente" e o coordenador escolhe **reagendar** (ao invés de cancelar), o rastreador precisa de um status específico que indique claramente que está aguardando uma nova data de manutenção.
 
+### Fluxo Atual (incorreto)
 ```text
-1. Instalação concluída (rastreador: instalado)
-2. Manutenção aberta (rastreador: manutencao, serviço: agendada)
-3. Técnico foi ao local
-4. Técnico clicou "Associado Ausente" (serviço: nao_compareceu)
-   → Rastreador CONTINUA em 'manutencao' (CORRETO!)
-   → Serviço vai para coordenador decidir
-
-5. Coordenador cancelou COM suspensão de proteção (serviço: cancelada)
-   → PROBLEMA: Rastreador NÃO voltou para 'instalado'
+Técnico marca "Ausente" → Rastreador: manutencao
+Coordenador reagenda   → Rastreador: manutencao (ambíguo!)
 ```
 
-### Estado atual no banco
-
-| Entidade | Status Atual | Status Esperado |
-|----------|--------------|-----------------|
-| Serviço `94c2fd9d...` | `cancelada` + `protecao_suspensa = true` | Correto |
-| Rastreador `3f41f3c1...` | `manutencao` | Deveria ser `instalado` |
-
-### Causa raiz
-
-O hook `useCancelarVistoriaManutencao` (linhas 891-897) faz o update do rastreador **sem capturar o erro**:
-
-```typescript
-// Código atual - erro ignorado silenciosamente
-await supabase
-  .from('rastreadores')
-  .update({ status: 'instalado' })
-  .eq('id', servico.rastreador_id);
-// Se falhar aqui, ninguém sabe!
+### Fluxo Desejado
+```text
+Técnico marca "Ausente" → Rastreador: manutencao
+Coordenador reagenda   → Rastreador: reagendar_manutencao (claro!)
 ```
-
-O update do rastreador falhou (possivelmente por RLS, timeout ou constraint), mas o código continuou sem alertar.
 
 ---
 
 ## Solução
 
-### Parte 1: Correção Imediata (SQL)
+### 1. Criar novo status no enum
 
-Corrigir o rastreador que está em estado inconsistente:
+Adicionar o valor `reagendar_manutencao` ao enum `status_rastreador` no banco de dados.
 
-```sql
-UPDATE rastreadores
-SET 
-  status = 'instalado',
-  updated_at = NOW()
-WHERE id = '3f41f3c1-cbe5-47fc-b305-d1291abc407d';
+### 2. Atualizar tipos TypeScript
 
-INSERT INTO estoque_movimentacoes (
-  tipo, quantidade, status_anterior, status_novo, 
-  rastreador_id, observacoes
-) VALUES (
-  'alteracao_status', 1, 'manutencao', 'instalado',
-  '3f41f3c1-cbe5-47fc-b305-d1291abc407d',
-  'Correção manual: rastreador não foi atualizado quando manutenção foi cancelada'
-);
-```
+Modificar `src/types/rastreadores.ts`:
+- Adicionar `reagendar_manutencao` ao tipo `StatusRastreador`
+- Adicionar label: "Reagendar Manutenção"
+- Adicionar cor: laranja/amarelo (bg-amber-100 text-amber-800)
+- Atualizar transições permitidas
 
-### Parte 2: Prevenção Futura (Código)
+### 3. Modificar hook useReagendarPosAusencia
 
-Modificar o hook `useCancelarVistoriaManutencao` em `src/hooks/useVistoriaManutencao.ts` para capturar e alertar sobre erros no update do rastreador.
+No arquivo `src/hooks/useVistoriaManutencao.ts`, após mudar o serviço para `pendente`, também atualizar o rastreador para `reagendar_manutencao`.
 
-#### Alteração proposta (linhas 889-908)
+### 4. Modificar hook de agendamento
 
-```typescript
-// Se tinha rastreador, voltar para 'instalado' (cancelamento não é baixa)
-if (servico?.rastreador_id) {
-  const { error: rastreadorError } = await supabase
-    .from('rastreadores')
-    .update({ 
-      status: 'instalado',
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', servico.rastreador_id);
-
-  if (rastreadorError) {
-    console.error('[useCancelarVistoriaManutencao] ERRO ao atualizar rastreador:', rastreadorError);
-    // Não lançar erro para não reverter o cancelamento, mas avisar o usuário
-    toast.warning('Atenção: rastreador pode precisar de ajuste manual', {
-      description: 'Verifique o status do rastreador na listagem.'
-    });
-  } else {
-    // Registrar movimentação apenas se update foi bem sucedido
-    await supabase.from('estoque_movimentacoes').insert({
-      tipo: 'alteracao_status',
-      quantidade: 1,
-      status_anterior: 'manutencao',
-      status_novo: 'instalado',
-      rastreador_id: servico.rastreador_id,
-      observacoes: motivo || 'Manutenção cancelada - rastreador retornou ao status instalado',
-    });
-  }
-}
-```
-
----
-
-## Resumo das Alterações
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| Banco de dados | SQL | Corrigir status do rastreador para `instalado` |
-| `src/hooks/useVistoriaManutencao.ts` | Modificar | Adicionar tratamento de erro no cancelamento (linhas 889-908) |
+Quando o coordenador agendar uma nova data, o rastreador volta para `manutencao` (indicando que está em atendimento ativo).
 
 ---
 
 ## Detalhes Técnicos
 
-### O fluxo correto de "Associado Ausente"
+### Migração SQL
 
-```text
-                      ┌─────────────────────────────┐
-                      │  Técnico marca              │
-                      │  "Associado Ausente"        │
-                      └─────────────┬───────────────┘
-                                    │
-                                    ▼
-                      ┌─────────────────────────────┐
-                      │  Serviço: nao_compareceu    │
-                      │  Rastreador: manutencao     │
-                      │  (MANTÉM em manutenção!)    │
-                      └─────────────┬───────────────┘
-                                    │
-              ┌─────────────────────┴─────────────────────┐
-              │                                           │
-              ▼                                           ▼
-┌─────────────────────────┐               ┌─────────────────────────┐
-│  Coordenador clica      │               │  Coordenador clica      │
-│  "Reagendar"            │               │  "Cancelar + Suspender" │
-└───────────┬─────────────┘               └───────────┬─────────────┘
-            │                                         │
-            ▼                                         ▼
-┌─────────────────────────┐               ┌─────────────────────────┐
-│  Serviço: pendente      │               │  Serviço: cancelada     │
-│  Rastreador: manutencao │               │  protecao_suspensa: true│
-│  (continua manutenção)  │               │  Rastreador: instalado  │
-│                         │               │  (volta para instalado) │
-│  → Coordenador agenda   │               └─────────────────────────┘
-│    nova data com opção  │
-│    de encaixe           │
-└─────────────────────────┘
+```sql
+ALTER TYPE status_rastreador ADD VALUE IF NOT EXISTS 'reagendar_manutencao' AFTER 'manutencao';
 ```
 
-### Por que rastreador FICA em `manutencao` no reagendamento
+### Alterações em src/types/rastreadores.ts
 
-Quando o coordenador escolhe **reagendar**, o rastreador continua em `manutencao` porque:
-- O problema ainda não foi resolvido
-- Vai haver uma nova tentativa de atendimento
-- Só volta para `instalado` quando a manutenção for **concluída** ou **cancelada**
+```typescript
+export type StatusRastreador = 
+  | 'estoque'
+  | 'reservado'
+  | 'instalado'
+  | 'manutencao'
+  | 'reagendar_manutencao'  // NOVO
+  | 'retorno_base'
+  | 'triagem'
+  | 'em_analise_plataforma'
+  | 'em_garantia'
+  | 'baixado';
+
+export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
+  // ... existentes ...
+  reagendar_manutencao: 'Reagendar Manutenção',
+};
+
+export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
+  // ... existentes ...
+  reagendar_manutencao: 'bg-amber-100 text-amber-800',
+};
+
+export const TRANSICOES_STATUS_RASTREADOR: Record<StatusRastreador, StatusRastreador[]> = {
+  // ... ajustar ...
+  manutencao: ['instalado', 'reagendar_manutencao', 'retorno_base', 'baixado'],
+  reagendar_manutencao: ['manutencao', 'instalado'],  // NOVO
+};
+```
+
+### Alterações em src/hooks/useVistoriaManutencao.ts
+
+**Hook useReagendarPosAusencia** (adicionar update do rastreador):
+```typescript
+export function useReagendarPosAusencia() {
+  return useMutation({
+    mutationFn: async (servicoId: string) => {
+      // Buscar rastreador_id
+      const { data: servico } = await supabase
+        .from('servicos')
+        .select('rastreador_id')
+        .eq('id', servicoId)
+        .single();
+
+      // Atualizar serviço
+      const { error } = await supabase
+        .from('servicos')
+        .update({ 
+          status: 'pendente',
+          data_agendada: null,
+          periodo: null,
+          profissional_id: null,
+        })
+        .eq('id', servicoId);
+      
+      if (error) throw new Error('Erro ao reagendar');
+
+      // Atualizar rastreador para novo status
+      if (servico?.rastreador_id) {
+        await supabase
+          .from('rastreadores')
+          .update({ 
+            status: 'reagendar_manutencao',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', servico.rastreador_id);
+      }
+
+      return { servicoId };
+    },
+  });
+}
+```
+
+**Hook useAgendarVistoriaManutencao** (voltar para manutencao ao agendar):
+```typescript
+// Ao agendar, verificar se rastreador está em 'reagendar_manutencao'
+// e voltar para 'manutencao'
+if (servico?.rastreador_id) {
+  await supabase
+    .from('rastreadores')
+    .update({ 
+      status: 'manutencao',
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', servico.rastreador_id)
+    .eq('status', 'reagendar_manutencao');
+}
+```
+
+### Correção do rastreador atual
+
+Corrigir o rastreador que foi alterado incorretamente (se o serviço foi cancelado, está certo como `instalado`; mas se for reagendado futuramente, precisará do novo status).
+
+---
+
+## Resumo das Alterações
+
+| Arquivo | Ação |
+|---------|------|
+| Migração SQL | Adicionar `reagendar_manutencao` ao enum |
+| `src/types/rastreadores.ts` | Adicionar tipo, label, cor e transições |
+| `src/hooks/useVistoriaManutencao.ts` | Modificar useReagendarPosAusencia e useAgendarVistoriaManutencao |
+| `src/integrations/supabase/types.ts` | Atualizar tipo gerado |
+
+---
+
+## Fluxo Final Completo
+
+```text
+┌─────────────────────────────┐
+│ Manutenção aberta           │
+│ Rastreador: manutencao      │
+└─────────────┬───────────────┘
+              │
+              ▼
+┌─────────────────────────────┐
+│ Técnico marca "Ausente"     │
+│ Serviço: nao_compareceu     │
+│ Rastreador: manutencao      │
+└─────────────┬───────────────┘
+              │
+      ┌───────┴───────┐
+      │               │
+      ▼               ▼
+┌─────────────┐ ┌─────────────────────┐
+│ REAGENDAR   │ │ CANCELAR + SUSPENDER│
+└─────┬───────┘ └──────────┬──────────┘
+      │                    │
+      ▼                    ▼
+┌─────────────────────┐ ┌────────────────────┐
+│ Serviço: pendente   │ │ Serviço: cancelada │
+│ Rastreador:         │ │ Rastreador:        │
+│ reagendar_manutencao│ │ instalado          │
+└─────────┬───────────┘ └────────────────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ Coordenador agenda  │
+│ nova data           │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ Serviço: agendada   │
+│ Rastreador:         │
+│ manutencao          │
+└─────────────────────┘
+```
