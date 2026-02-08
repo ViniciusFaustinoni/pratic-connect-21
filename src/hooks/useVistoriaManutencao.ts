@@ -425,9 +425,45 @@ export function useAgendarVistoriaManutencao() {
         throw new Error('Erro ao agendar manutenção');
       }
 
-      // TODO: Se notificarWhatsApp, disparar notificação via n8n
+      // Disparar notificação WhatsApp se solicitado
       if (params.notificarWhatsApp) {
-        console.log('[useAgendarVistoriaManutencao] Notificação WhatsApp pendente');
+        try {
+          // Buscar dados do serviço para notificação
+          const { data: servicoData } = await supabase
+            .from('servicos')
+            .select(`
+              associado_id,
+              veiculo:veiculos(placa),
+              profissional:profiles!servicos_profissional_id_fkey(nome, telefone)
+            `)
+            .eq('id', params.servicoId)
+            .single();
+
+          if (servicoData?.associado_id) {
+            const periodoLabel = params.periodo === 'manha' ? 'manhã' : 'tarde';
+            const localLabel = params.localTipo === 'base' ? 'Nossa Base' : 'Seu Endereço (Rota)';
+            
+            await supabase.functions.invoke('disparar-notificacao', {
+              body: {
+                associado_id: servicoData.associado_id,
+                tipo: 'manutencao',
+                subtipo: 'agendada',
+                dados: {
+                  data: params.dataAgendada,
+                  periodo: periodoLabel,
+                  local: localLabel,
+                  tecnico: (servicoData.profissional as any)?.nome || 'A definir',
+                  telefone_tecnico: (servicoData.profissional as any)?.telefone || '',
+                  placa: (servicoData.veiculo as any)?.placa || '',
+                },
+                referencia_tipo: 'servico',
+                referencia_id: params.servicoId,
+              },
+            });
+          }
+        } catch (notifError) {
+          console.error('[useAgendarVistoriaManutencao] Erro ao enviar notificação:', notifError);
+        }
       }
 
       return { servicoId: params.servicoId };
@@ -520,6 +556,32 @@ export function useRegistrarResultadoManutencao() {
 
         if (servicoUpdateError) {
           throw new Error('Erro ao concluir serviço');
+        }
+
+        // 3. Notificar associado que manutenção foi concluída
+        try {
+          const { data: servicoNotif } = await supabase
+            .from('servicos')
+            .select('associado_id, veiculo:veiculos(placa)')
+            .eq('id', params.servicoId)
+            .single();
+
+          if (servicoNotif?.associado_id) {
+            await supabase.functions.invoke('disparar-notificacao', {
+              body: {
+                associado_id: servicoNotif.associado_id,
+                tipo: 'manutencao',
+                subtipo: 'concluida',
+                dados: {
+                  placa: (servicoNotif.veiculo as any)?.placa || '',
+                },
+                referencia_tipo: 'servico',
+                referencia_id: params.servicoId,
+              },
+            });
+          }
+        } catch (notifError) {
+          console.error('[useRegistrarResultadoManutencao] Erro ao enviar notificação:', notifError);
         }
 
       } else if (params.resultado === 'substituicao') {
@@ -801,6 +863,35 @@ export function useCancelarVistoriaManutencao() {
 
       if (error) {
         throw new Error('Erro ao cancelar manutenção');
+      }
+
+      // Se suspendeu proteção, notificar associado
+      if (suspenderProtecao && servico?.rastreador_id) {
+        try {
+          // Buscar associado_id via rastreador -> veiculo
+          const { data: rastreadorData } = await supabase
+            .from('rastreadores')
+            .select('veiculo:veiculos(associado_id)')
+            .eq('id', servico.rastreador_id)
+            .single();
+
+          const associadoId = (rastreadorData?.veiculo as any)?.associado_id;
+          if (associadoId) {
+            await supabase.functions.invoke('disparar-notificacao', {
+              body: {
+                associado_id: associadoId,
+                tipo: 'manutencao',
+                subtipo: 'protecao_suspensa',
+                dados: {},
+                referencia_tipo: 'servico',
+                referencia_id: servicoId,
+                forcar_envio: true, // Ignora preferências - é crítico
+              },
+            });
+          }
+        } catch (notifError) {
+          console.error('[useCancelarVistoriaManutencao] Erro ao enviar notificação:', notifError);
+        }
       }
 
       // Se tinha rastreador, voltar para 'instalado' (cancelamento não é baixa)
