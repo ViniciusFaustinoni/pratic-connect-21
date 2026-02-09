@@ -1,49 +1,48 @@
 
+# Corrigir Design Mobile da ExecutarRetirada
 
-# Corrigir Layout da Pagina ExecutarRetirada
+## Problema
 
-## Problemas Identificados (screenshot)
-
-1. **Footer fixo sobreposto pela bottom nav**: O footer com "Concluir Retirada" e "Associado Ausente" usa `fixed bottom-0`, mas a bottom nav do `InstaladorLayout` fica por cima, cortando o texto de validacao e tornando botoes parcialmente inacessiveis.
-2. **Texto de validacao cortado**: As mensagens como "Complete o checklist", "Selecione integridade" aparecem truncadas e sobrepostas pela barra de navegacao.
+O footer (botoes "Concluir Retirada" e "Associado Ausente") se estende pela largura total da tela, enquanto a bottom nav do layout usa `max-w-md mx-auto`. Isso cria uma inconsistencia visual onde os botoes ficam maiores que o conteudo da pagina. Alem disso, o texto de validacao ainda fica parcialmente cortado.
 
 ## Solucao
 
 ### Arquivo: `src/pages/instalador/ExecutarRetirada.tsx`
 
-**Mudanca no footer (linha 729):** Adicionar `bottom-16` (ou `bottom-20` com safe area) ao invez de `bottom-0`, para posicionar o footer ACIMA da bottom nav do InstaladorLayout que tem ~64px de altura.
+**1. Footer - adicionar `max-w-md mx-auto` para alinhar com a bottom nav (linha 729):**
 
-```
+```typescript
 // De:
-<footer className="fixed bottom-0 left-0 right-0 border-t border-slate-700 bg-slate-800 p-4 space-y-2">
-
-// Para:
 <footer className="fixed bottom-16 left-0 right-0 border-t border-slate-700 bg-slate-800 p-4 pb-2 space-y-2 z-40">
-```
-
-**Ajustar padding inferior do container (linha 370):** Aumentar de `pb-40` para `pb-56` para acomodar o footer reposicionado + espaco extra.
-
-```
-// De:
-<div className="flex min-h-screen flex-col bg-slate-900 pb-40">
 
 // Para:
+<footer className="fixed bottom-16 left-0 right-0 border-t border-slate-700 bg-slate-800 p-4 pb-2 space-y-2 z-40 max-w-md mx-auto">
+```
+
+**2. Container raiz - limitar largura para consistencia mobile (linha 370):**
+
+```typescript
+// De:
 <div className="flex min-h-screen flex-col bg-slate-900 pb-56">
-```
-
-**Tambem corrigir a tela de erro (linha 364):** O botao "Voltar" ainda aponta para `/vistoriador/tarefas`.
-
-```
-// De:
-<Button onClick={() => navigate('/vistoriador/tarefas')}>Voltar</Button>
 
 // Para:
-<Button onClick={() => navigate('/instalador/tarefas')}>Voltar</Button>
+<div className="flex min-h-screen flex-col bg-slate-900 pb-56 max-w-md mx-auto">
 ```
+
+**3. Tela de erro - mesmo tratamento (linha 361):**
+
+```typescript
+// De:
+<div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 p-4">
+
+// Para:
+<div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 p-4 max-w-md mx-auto">
+```
+
+**4. Modal de confirmacao - ja usa `max-w-md`, sem mudanca necessaria.**
 
 ## Resultado
 
-- O footer ficara visivel acima da barra de navegacao
-- Todo o texto de validacao sera legivel
-- Os botoes serao totalmente clicaveis no mobile
-
+- Footer, conteudo e bottom nav ficam todos alinhados dentro do `max-w-md`
+- Design harmonico e consistente no mobile
+- Botoes nao se estendem alem da area visivel do app
