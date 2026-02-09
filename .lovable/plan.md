@@ -1,168 +1,112 @@
 
-# CancelarAssociadoDialog — Formulario Completo de Cancelamento
+# ExcluirAssociadoDialog + Sub-badges + Menu de Acoes
 
 ## Resumo
 
-Criar um dialog completo de cancelamento que substitui o AlertDialog basico atual. O novo componente orquestra todas as integracoes (processar-pos-retirada, ASAAS, Autentique, WhatsApp) em sequencia, com progress steps visiveis e tratamento de erros resiliente.
-
-## Arquivos Envolvidos
-
-### Novo
-- `src/components/cadastro/CancelarAssociadoDialog.tsx` — Dialog completo de cancelamento
-
-### Modificados
-- `src/pages/cadastro/AssociadoDetalhe.tsx` — Substituir AlertDialog pelo novo componente
-- `supabase/functions/disparar-notificacao/index.ts` — Adicionar template de cancelamento (tipo `cobranca`, subtipo `cancelamento`)
-
-### Nao alterados
-- `SuspenderAssociadoDialog` — intacto (usado apenas como referencia visual)
-- `RastreadorVinculadoModal` — intacto
-- `useAssociados.ts` — intacto
-- `useAsaas.ts` — intacto
-- `processar-pos-retirada/index.ts` — intacto
-- `autentique-create/index.ts` — intacto
+Criar componente ExcluirAssociadoDialog com 3 variantes (inadimplencia, exclusao_diretoria, busca_apreensao), adicionar sub-badges de tipo_saida na lista de associados, e novas opcoes no menu de acoes do AssociadoDetalhe com controle de permissao.
 
 ---
 
-## Passo 1 — CancelarAssociadoDialog.tsx
+## Passo 1 — Novo componente ExcluirAssociadoDialog
 
-### Props
-```typescript
-interface CancelarAssociadoDialogProps {
-  open: boolean;
-  onClose: () => void;
-  associado: { id: string; nome: string; status: string; pendencia_rastreador: boolean };
-  onSuccess: () => void;
-}
-```
+**Arquivo:** `src/components/cadastro/ExcluirAssociadoDialog.tsx` (novo)
 
-### Layout (mesmo padrao do SuspenderAssociadoDialog)
+Componente que recebe `tipoExclusao` e renderiza campos especificos para cada variante:
 
-1. **Checklist automatica no topo** (busca dados ao abrir):
-   - Rastreador devolvido: le `associado.pendencia_rastreador`
-   - Situacao financeira: consulta `asaas_cobrancas` com status PENDING/OVERDUE
+**Estrutura geral (reutiliza padroes do CancelarAssociadoDialog):**
+- Mesma verificacao de `pendencia_rastreador` com Alert destrutivo
+- Mesmos progress steps visuais (StepIcon, updateStep)
+- Mesmo padrao de chamada a `processar-pos-retirada`
 
-2. **Bloqueio** se `pendencia_rastreador = true`:
-   - Alert destructive com mensagem explicativa
-   - Botao "Confirmar Cancelamento" permanece desabilitado
+**Campos por variante:**
 
-3. **Formulario** (quando sem pendencia):
-   - Select com 8 motivos (solicitacao_associado, insatisfacao, concorrente, venda_veiculo, dificuldade_financeira, mudanca_cidade, falecimento, outro)
-   - Input texto livre quando "Outro" selecionado (obrigatorio)
-   - Textarea observacoes (opcional, max 500 chars)
+- **inadimplencia**: Card com dias de inadimplencia (calculado a partir da cobranca OVERDUE mais antiga), total em aberto, Select de acao de cobranca (4 opcoes), checkbox de confirmacao
+- **exclusao_diretoria**: Input "Numero da Ata", DatePicker "Data da decisao", Textarea "Motivo" (min 20 chars), Select "Fundamento regulamentar" (14 opcoes do regulamento 3.5/3.6), 2 checkboxes obrigatorios (processo administrativo + notificacao com defesa)
+- **busca_apreensao**: Input "Numero do processo" (opcional), Input "Vara/Tribunal" (opcional), Textarea "Motivo" (obrigatorio), Checkbox "Encaminhar para modulo Juridico"
 
-4. **Card financeiro**:
-   - Total em aberto (soma de PENDING + OVERDUE da `asaas_cobrancas`)
-   - Pro-rata estimado (dias restantes do mes x mensalidade diaria, calculado com dados do contrato/plano)
-   - Info: "Sera gerado boleto final consolidado"
+**Fluxo ao confirmar:**
+1. Chamar `processar-pos-retirada` com `motivo_retirada = tipoExclusao` — se falhar, parar
+2. Para inadimplencia: NAO cancela cobrancas (mantidas para cobranca), salva acao selecionada no metadata do historico
+3. Para exclusao_diretoria: salva numero_ata, data_decisao, fundamento no metadata; envia notificacao formal via `disparar-notificacao`
+4. Para busca_apreensao: se checkbox juridico marcado, registra em metadata para encaminhamento
+5. Em TODOS: notificar via WhatsApp com `disparar-notificacao` (subtipo = tipoExclusao)
+6. Toast de sucesso + onSuccess()
 
-5. **Checkboxes obrigatorios**:
-   - Confirmo cancelamento
-   - Sera gerado termo via Autentique
+---
 
-6. **Footer**: Voltar (outline) + Confirmar Cancelamento (destructive, desabilitado ate preencher tudo)
+## Passo 2 — Sub-badges de tipo_saida na lista
 
-### Fluxo ao confirmar (handleCancelamento)
+**Arquivo:** `src/pages/cadastro/Associados.tsx`
 
-Executa em sequencia com progress steps visiveis:
+Na coluna de Status da tabela (linha ~590-593), apos o Badge principal de status, adicionar sub-badge condicional quando `status = 'cancelado'` ou `status = 'bloqueado'`:
 
 ```text
-Passo 1: Chamar processar-pos-retirada (motivo = cancelamento_voluntario)
-  - Se falhar: toast.error, parar
-  
-Passo 2: Cancelar cobrancas ASAAS futuras
-  - Buscar asaas_cobrancas com status PENDING e data_vencimento > hoje
-  - Para cada: supabase.functions.invoke('asaas-cobrancas', { action: 'cancelar', asaas_id })
-  - Atualizar associado: asaas_recorrencia_cancelada = true
-  - Se falhar: marcar asaas_recorrencia_cancelada = false, registrar erro, continuar
-
-Passo 3: Gerar boleto final (se valor > 0)
-  - Usar useAsaas.criarCobranca com tipo 'boleto_final_cancelamento'
-  - Valor = debitos em aberto
-  - Atualizar associado: boleto_final_gerado = true
-  - Se falhar: registrar erro, continuar
-
-Passo 4: Gerar termo Autentique
-  - Chamar autentique-create com contratoId do associado
-  - Se falhar: registrar erro, continuar (termo pode ser gerado depois)
-
-Passo 5: Notificar WhatsApp
-  - Chamar disparar-notificacao com tipo 'cobranca', subtipo 'cancelamento'
-  - Se falhar: registrar erro, continuar
-
-Passo 6: toast.success + onSuccess()
+cancelamento_voluntario -> Badge cinza pequeno "Voluntario"
+inadimplencia -> Badge laranja "Inadimplencia"
+exclusao_diretoria -> Badge vermelho "Exclusao Diretoria"
+busca_apreensao -> Badge vermelho escuro "Busca e Apreensao"
+bloqueado (sem tipo_saida) -> Badge cinza escuro "Bloqueado Judicial"
 ```
 
-### Progress Steps UI
-
-Enquanto processa, substituir o formulario por lista de steps:
-```text
-[spinner] Processando cancelamento...
-[spinner] Cancelando cobrancas futuras...
-[spinner] Gerando boleto final...
-[spinner] Gerando termo de cancelamento...
-[spinner] Enviando notificacao...
-[check] Concluido!
-```
-
-Cada step muda de spinner para check verde ao completar, ou X vermelho se falhar (com mensagem).
+O campo `tipo_saida` ja esta disponivel pois o `useAssociados` faz `select('*')`.
 
 ---
 
-## Passo 2 — Integrar na AssociadoDetalhe.tsx
+## Passo 3 — Novas opcoes no menu do AssociadoDetalhe
 
-### Mudancas pontuais
+**Arquivo:** `src/pages/cadastro/AssociadoDetalhe.tsx`
 
-1. Importar `CancelarAssociadoDialog`
-2. Remover o bloco `AlertDialog` de cancelamento (linhas 1616-1631)
-3. Adicionar no JSX:
-```tsx
-<CancelarAssociadoDialog
-  open={cancelarDialogOpen}
-  onClose={() => setCancelarDialogOpen(false)}
-  associado={{
-    id: id || '',
-    nome: associado.nome,
-    status: associado.status,
-    pendencia_rastreador: (associado as any).pendencia_rastreador || false,
-  }}
-  onSuccess={() => { setCancelarDialogOpen(false); refetch(); }}
-/>
-```
-
-4. Simplificar `handleCancelar`: remover toda logica de verificacao de rastreador e cancelamento direto -- o novo dialog cuida de tudo internamente. O botao de "Cancelar Associacao" no dropdown agora apenas abre `setCancelarDialogOpen(true)`.
-
-5. Manter `handleConfirmRastreadorModal` e `RastreadorVinculadoModal` intactos (sao usados para o fluxo de retirada quando ha rastreador instalado).
-
-**Observacao importante**: A logica de verificacao de rastreador instalado (que abre o `RastreadorVinculadoModal`) sera movida para DENTRO do `CancelarAssociadoDialog` -- quando o usuario clica "Confirmar" e ha rastreador instalado, o dialog fecha e abre o modal de rastreador. Isso mantem o fluxo existente sem alterar o `RastreadorVinculadoModal`.
+1. Importar `ExcluirAssociadoDialog`
+2. Adicionar 3 novos estados:
+   - `excluirDialogOpen: boolean`
+   - `tipoExclusao: 'inadimplencia' | 'exclusao_diretoria' | 'busca_apreensao' | null`
+3. No DropdownMenu existente (linha ~661-678), ADICIONAR apos "Cancelar Associacao":
+   - Separador
+   - "Excluir por Inadimplencia" (icone DollarSign, cor laranja)
+   - "Excluir por Decisao da Diretoria" (icone AlertTriangle, cor vermelha)
+   - "Busca e Apreensao" (icone Shield, cor vermelha escura)
+4. Estas opcoes so aparecem para perfis com permissao: usar `usePermissions` para verificar `isDiretor || isGerencia || isDesenvolvedor || isAdminMaster`
+5. Adicionar o componente `ExcluirAssociadoDialog` no JSX, junto aos outros dialogs existentes
 
 ---
 
-## Passo 3 — Template de cancelamento no disparar-notificacao
+## Passo 4 — Templates de notificacao no disparar-notificacao
 
-Adicionar no objeto `TEMPLATES` dentro da edge function:
+**Arquivo:** `supabase/functions/disparar-notificacao/index.ts`
 
-```typescript
-// Dentro de 'cobranca':
-cancelamento: {
-  titulo: 'Cancelamento Processado',
-  mensagem: 'Olá! Seu cancelamento na Praticcar foi processado. Termo de cancelamento enviado para assinatura. {complemento_boleto}Obrigado por ter sido nosso associado!',
-  prioridade: 'alta'
-},
-```
-
-Tambem adicionar `'cobranca'` ao type union de `tipo` no `NotificacaoRequest` (ja esta la).
+Adicionar 3 novos subtipos dentro de `cobranca` (ou criar tipo `exclusao`):
+- `inadimplencia`: "Seu cadastro foi encerrado por inadimplencia. Debitos em aberto serao encaminhados para cobranca."
+- `exclusao_diretoria`: "Seu cadastro foi encerrado por decisao da diretoria conforme regulamento interno."
+- `busca_apreensao`: "Seu cadastro foi bloqueado. Encaminhado ao departamento juridico."
 
 Deploy da edge function apos alteracao.
 
 ---
 
-## Validacoes e edge cases
+## Arquivos afetados
 
-- Se `processar-pos-retirada` falhar: para tudo, nao continua
-- Se ASAAS falhar: continua, marca `asaas_recorrencia_cancelada = false`
-- Se Autentique falhar: continua, log no console
-- Se WhatsApp falhar: continua, log no console
-- Se nao ha debitos em aberto: pula geracao de boleto final
-- Se associado nao tem contrato/cotacao vinculados: pula Autentique com warning
-- Botao desabilitado durante processamento (previne double-click)
+| Arquivo | Acao |
+|---------|------|
+| `src/components/cadastro/ExcluirAssociadoDialog.tsx` | Novo |
+| `src/pages/cadastro/Associados.tsx` | Adicionar sub-badges |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Adicionar menu + dialog |
+| `supabase/functions/disparar-notificacao/index.ts` | Adicionar templates |
+
+## O que NAO sera alterado
+
+- CancelarAssociadoDialog (PR-02) — intacto
+- SuspenderAssociadoDialog — intacto
+- processar-pos-retirada (PR-01) — intacto
+- useAssociados hook — intacto
+- Tabelas do banco — nenhuma migration necessaria (colunas ja existem)
+
+## Detalhes tecnicos
+
+### Permissoes
+As novas opcoes de exclusao usam `usePermissions()` do hook existente. Condicao: `isDiretor || isGerencia || isDesenvolvedor || isAdminMaster`. Isso cobre diretor, gerente_comercial, supervisor_vendas, desenvolvedor e admin_master.
+
+### DatePicker na exclusao por diretoria
+Usar o padrao Shadcn com Popover + Calendar (ja existente no projeto), com `pointer-events-auto` conforme documentado.
+
+### Metadata do historico
+O `processar-pos-retirada` ja aceita o campo `motivo_retirada` e registra em `associados_historico`. Os dados adicionais (numero_ata, fundamento, acao_cobranca) serao salvos via update direto no registro de historico apos a chamada, usando o campo `metadata` (jsonb) ja existente.
