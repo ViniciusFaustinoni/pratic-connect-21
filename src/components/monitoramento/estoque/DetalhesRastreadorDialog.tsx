@@ -1,9 +1,7 @@
-import { useState, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -14,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Input } from '@/components/ui/input';
 import {
   Package,
   Car,
@@ -31,9 +28,6 @@ import {
   FileText,
   CheckCircle2,
   AlertCircle,
-  Pencil,
-  Check,
-  X,
 } from 'lucide-react';
 import { usePlataformasLabels } from '@/hooks/usePlataformasCRUD';
 
@@ -142,34 +136,7 @@ interface TimelineItem {
 }
 
 export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: DetalhesRastreadorDialogProps) {
-  const queryClient = useQueryClient();
   const { data: plataformasLabels } = usePlataformasLabels();
-  const [editandoCampo, setEditandoCampo] = useState<string | null>(null);
-  const [valorEditado, setValorEditado] = useState('');
-
-  const handleIniciarEdicao = useCallback((campo: string, valorAtual: string) => {
-    setEditandoCampo(campo);
-    setValorEditado(valorAtual === '-' ? '' : valorAtual);
-  }, []);
-
-  const handleSalvarCampo = useCallback(async () => {
-    if (!editandoCampo || !rastreadorId) return;
-    const { error } = await supabase
-      .from('rastreadores')
-      .update({ [editandoCampo]: valorEditado || null })
-      .eq('id', rastreadorId);
-    if (error) {
-      toast.error('Erro ao salvar');
-    } else {
-      toast.success('Campo atualizado');
-      queryClient.invalidateQueries({ queryKey: ['rastreador-detalhes', rastreadorId] });
-    }
-    setEditandoCampo(null);
-  }, [editandoCampo, valorEditado, rastreadorId, queryClient]);
-
-  const handleCancelarEdicao = useCallback(() => {
-    setEditandoCampo(null);
-  }, []);
 
   // Query para buscar dados completos do rastreador
   const { data: rastreador, isLoading } = useQuery({
@@ -492,30 +459,9 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
                 </h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <InfoRow label="IMEI" value={rastreador.imei || '-'} mono />
-                  <EditableInfoRow
-                    label="Número de Série"
-                    value={rastreador.numero_serie || '-'}
-                    campo="numero_serie"
-                    editandoCampo={editandoCampo}
-                    valorEditado={valorEditado}
-                    onIniciarEdicao={handleIniciarEdicao}
-                    onSalvar={handleSalvarCampo}
-                    onCancelar={handleCancelarEdicao}
-                    onChange={setValorEditado}
-                  />
+                  <InfoRow label="Número de Série" value={rastreador.numero_serie || '-'} />
                   <InfoRow label="Plataforma" value={plataformasLabels?.[rastreador.plataforma] || rastreador.plataforma || '-'} />
-                  <EditableInfoRow
-                    label="ID na Plataforma"
-                    value={rastreador.id_plataforma || '-'}
-                    campo="id_plataforma"
-                    editandoCampo={editandoCampo}
-                    valorEditado={valorEditado}
-                    onIniciarEdicao={handleIniciarEdicao}
-                    onSalvar={handleSalvarCampo}
-                    onCancelar={handleCancelarEdicao}
-                    onChange={setValorEditado}
-                    mono
-                  />
+                  <InfoRow label="ID na Plataforma" value={rastreador.id_plataforma || '-'} mono />
                 </div>
               </div>
 
@@ -651,58 +597,5 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
   );
 }
 
-interface EditableInfoRowProps {
-  label: string;
-  value: string;
-  campo: string;
-  editandoCampo: string | null;
-  valorEditado: string;
-  onIniciarEdicao: (campo: string, valor: string) => void;
-  onSalvar: () => void;
-  onCancelar: () => void;
-  onChange: (valor: string) => void;
-  mono?: boolean;
-}
 
-function EditableInfoRow({ label, value, campo, editandoCampo, valorEditado, onIniciarEdicao, onSalvar, onCancelar, onChange, mono }: EditableInfoRowProps) {
-  const isEditing = editandoCampo === campo;
 
-  return (
-    <div className="rounded-lg border bg-muted/20 p-3">
-      <div className="flex items-center justify-between mb-0.5">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        {!isEditing && (
-          <button
-            onClick={() => onIniciarEdicao(campo, value)}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            title="Editar"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-      {isEditing ? (
-        <div className="flex items-center gap-1.5">
-          <Input
-            value={valorEditado}
-            onChange={(e) => onChange(e.target.value)}
-            className="h-7 text-sm"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onSalvar();
-              if (e.key === 'Escape') onCancelar();
-            }}
-          />
-          <button onClick={onSalvar} className="text-green-600 hover:text-green-700 shrink-0">
-            <Check className="h-4 w-4" />
-          </button>
-          <button onClick={onCancelar} className="text-red-600 hover:text-red-700 shrink-0">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      ) : (
-        <div className={mono ? 'font-mono text-sm' : 'text-sm'}>{value}</div>
-      )}
-    </div>
-  );
-}
