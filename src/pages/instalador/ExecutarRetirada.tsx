@@ -243,7 +243,7 @@ export default function ExecutarRetirada() {
       
       toast.success('Registrado como não compareceu. Coordenador será notificado.');
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
-      navigate('/vistoriador/tarefas');
+      navigate('/instalador/tarefas');
     } catch (e: any) {
       toast.error(e.message || 'Erro ao registrar ausência');
     } finally {
@@ -367,11 +367,11 @@ export default function ExecutarRetirada() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-900 pb-32">
+    <div className="flex min-h-screen flex-col bg-slate-900 pb-40">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-800 px-4 py-3">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/vistoriador/tarefas')} className="text-slate-400">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/instalador/tarefas')} className="text-slate-400">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 min-w-0">
@@ -777,7 +777,7 @@ export default function ExecutarRetirada() {
                   Uma nova ordem de instalação foi criada para o veículo substituto.
                 </p>
               )}
-              <Button onClick={() => navigate('/vistoriador/tarefas')} className="mt-4 w-full bg-blue-600 hover:bg-blue-700">
+              <Button onClick={() => navigate('/instalador/tarefas')} className="mt-4 w-full bg-blue-600 hover:bg-blue-700">
                 Voltar para Tarefas
               </Button>
             </CardContent>
