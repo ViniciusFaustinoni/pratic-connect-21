@@ -24,7 +24,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AtribuirPortadorDialog } from '@/components/monitoramento/estoque/AtribuirPortadorDialog';
 import { AtribuirPortadorLoteDialog } from '@/components/monitoramento/estoque/AtribuirPortadorLoteDialog';
-import { EnviarRetiradaModal } from '@/components/monitoramento/estoque/EnviarRetiradaModal';
+import { AbrirRetiradaModal } from '@/components/monitoramento/retirada/AbrirRetiradaModal';
 import { AgendarManutencaoUnificadoModal } from '@/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import {
@@ -271,9 +271,6 @@ function RastreadoresContent({
   const [dialogRetirada, setDialogRetirada] = useState<{
     id: string;
     codigo: string;
-    imei: string | null;
-    status: 'estoque' | 'instalado' | 'manutencao' | 'baixado';
-    veiculo: { placa: string; modelo: string | null } | null;
   } | null>(null);
 
   const deleteRastreadorMutation = useMutation({
@@ -342,12 +339,6 @@ function RastreadoresContent({
     setDialogRetirada({
       id: rastreador.id,
       codigo: rastreador.codigo,
-      imei: rastreador.imei,
-      status: rastreador.status as 'estoque' | 'instalado' | 'manutencao' | 'baixado',
-      veiculo: rastreador.veiculos ? {
-        placa: rastreador.veiculos.placa,
-        modelo: rastreador.veiculos.modelo
-      } : null,
     });
   };
 
@@ -455,9 +446,9 @@ function RastreadoresContent({
         rastreador={dialogManutencao}
       />
 
-      <EnviarRetiradaModal
+      <AbrirRetiradaModal
         open={!!dialogRetirada}
-        onOpenChange={() => setDialogRetirada(null)}
+        onOpenChange={(open) => !open && setDialogRetirada(null)}
         rastreador={dialogRetirada}
       />
     </>

@@ -263,12 +263,12 @@ A verificação será feita na página `Rastreadores.tsx` antes de passar o call
 
 ## Checklist de Implementação
 
-- [ ] Criar pasta `src/components/monitoramento/retirada/`
-- [ ] Criar `AbrirRetiradaModal.tsx`
-- [ ] Criar `useRetiradaRastreador.ts`
-- [ ] Atualizar imports em `Rastreadores.tsx`
-- [ ] Atualizar estado e handler de retirada
-- [ ] Adicionar verificação de permissão no callback `onWithdraw`
-- [ ] Remover `EnviarRetiradaModal.tsx`
+- [x] Criar pasta `src/components/monitoramento/retirada/`
+- [x] Criar `AbrirRetiradaModal.tsx`
+- [x] Criar `useRetiradaRastreador.ts`
+- [x] Atualizar imports em `Rastreadores.tsx`
+- [x] Atualizar estado e handler de retirada
+- [x] Adicionar verificação de permissão no callback `onWithdraw`
+- [x] Remover `EnviarRetiradaModal.tsx`
 - [ ] Testar fluxo completo
 
