@@ -588,9 +588,22 @@ export default function Associados() {
                       {associado.planos?.nome || '—'}
                     </TableCell>
                     <TableCell onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
-                      <Badge className={statusColors[associado.status]}>
-                        {STATUS_ASSOCIADO_LABELS[associado.status]}
-                      </Badge>
+                      <div className="flex flex-col gap-1">
+                        <Badge className={statusColors[associado.status]}>
+                          {STATUS_ASSOCIADO_LABELS[associado.status]}
+                        </Badge>
+                        {(associado.status === 'cancelado' || associado.status === 'bloqueado') && (() => {
+                          const ts = (associado as any).tipo_saida;
+                          if (associado.status === 'bloqueado' && !ts) {
+                            return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gray-800 text-white border-gray-800 w-fit">Bloqueado Judicial</Badge>;
+                          }
+                          if (ts === 'cancelamento_voluntario') return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border-gray-300 w-fit">Voluntário</Badge>;
+                          if (ts === 'inadimplencia') return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-300 w-fit">Inadimplência</Badge>;
+                          if (ts === 'exclusao_diretoria') return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 w-fit">Exclusão Diretoria</Badge>;
+                          if (ts === 'busca_apreensao') return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-200 text-red-900 border-red-400 w-fit">Busca e Apreensão</Badge>;
+                          return null;
+                        })()}
+                      </div>
                     </TableCell>
                     <TableCell onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                       {formatDate(associado.data_adesao)}
