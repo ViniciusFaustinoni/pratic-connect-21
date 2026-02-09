@@ -262,7 +262,7 @@ serve(async (req) => {
       // SINCRONIZAÇÃO SEGURA: Atualiza email e telefone se diferentes
       // Endereço e outros dados NÃO são sobrescritos automaticamente
       // ═══════════════════════════════════════════════════════════════
-      const updateData: Record<string, string> = {};
+      const updateData: Record<string, string | null> = {};
 
       // EMAIL: só atualiza se cotação tem valor novo e diferente
       if (emailFinal && emailFinal.trim() !== '' && emailFinal !== associadoExistente.email) {
@@ -288,6 +288,11 @@ serve(async (req) => {
           `"${associadoExistente.telefone || '(vazio)'}" → "${telefoneFinal}" ` +
           `(cotação ${cotacao_id})`
         );
+      }
+
+      // RG: sincronizar se disponível na cotação
+      if (cotacao.cliente_rg && cotacao.cliente_rg.trim() !== '') {
+        updateData.rg = cotacao.cliente_rg;
       }
 
       console.log('[DEBUG-SYNC] updateData a ser aplicado:', updateData);
@@ -468,6 +473,7 @@ serve(async (req) => {
           uf: cotacao.cliente_uf || null,
           cep: cotacao.cliente_cep || null,
           data_nascimento: cotacao.cliente_data_nascimento || null,
+          rg: cotacao.cliente_rg || null,
         })
         .select('id')
         .single();
