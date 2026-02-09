@@ -1,103 +1,155 @@
 
-# Substituicao de Veiculo — Tabela, Types e Hook
+
+# Wizard de Substituicao de Veiculo — Pagina + Steps 1 a 4
 
 ## Resumo
 
-Criar a infraestrutura completa para o fluxo de substituicao de veiculo: tabela no banco, colunas auxiliares em veiculos, tipos TypeScript e hook com 8 funcoes.
+Criar a pagina principal de substituicao com stepper visual de 6 passos, e os componentes dos 4 primeiros steps: Elegibilidade, Evento Ativo, Novo Veiculo, e Beneficios. Os steps 5 e 6 (Financeiro e Aprovacao) ficam para o proximo PR.
 
 ---
 
-## Passo 1 — Migration: Tabela substituicoes_veiculo + colunas em veiculos
+## Arquivos a criar
 
-Uma unica migration SQL com:
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/pages/cadastro/SubstituicaoVeiculoPage.tsx` | Pagina principal com stepper e orquestracao dos steps |
+| `src/components/substituicao/SubstituicaoStepper.tsx` | Stepper visual de 6 passos (baseado no CotacaoStepper) |
+| `src/components/substituicao/StepElegibilidade.tsx` | Step 1: checklist de elegibilidade |
+| `src/components/substituicao/StepEventoAtivo.tsx` | Step 2: tratamento de evento (3 opcoes) |
+| `src/components/substituicao/StepNovoVeiculo.tsx` | Step 3: formulario do novo veiculo com FIPE |
+| `src/components/substituicao/StepBeneficios.tsx` | Step 4: selecao de beneficios adicionais |
 
-1. `CREATE TABLE substituicoes_veiculo` com todas as 40+ colunas conforme especificado (status, snapshot veiculo antigo/novo, financeiro, evento bloqueante, carencia, aprovacao, consultor, autentique, metadata)
-2. 3 indices (associado_id, status, veiculo_antigo_id)
-3. RLS habilitada com 2 policies:
-   - `funcionario_full_access`: full access para usuarios com tipo = 'funcionario'
-   - `associado_select_proprio`: SELECT apenas para o proprio associado (via cadeia usuarios -> associados)
-4. `ALTER TABLE veiculos` adicionando 5 colunas: `principal`, `substituido_por`, `data_inativacao`, `motivo_inativacao`, `substituicao_id`
-5. `UPDATE veiculos SET principal = true WHERE ativo = true AND principal IS NULL` para marcar veiculos ativos existentes
+## Arquivo a modificar
 
----
-
-## Passo 2 — Types: src/types/substituicao.ts
-
-Novo arquivo com:
-
-- `StatusSubstituicao` — union type com 9 valores (iniciada, aguardando_retirada, aguardando_vistoria, aguardando_financeiro, aguardando_aprovacao, aprovada, rejeitada, efetivada, cancelada_pelo_associado)
-- `ResolucaoEvento` — 3 valores
-- `TipoEventoBloqueante` — 4 valores
-- `SubstituicaoVeiculo` — interface completa mapeando todas as colunas da tabela
-- `DadosNovoVeiculo` — interface para dados de entrada do novo veiculo (placa, marca, modelo, FIPE, coberturas)
-- Labels e cores para badges de status
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/App.tsx` | Adicionar rota `/cadastro/associados/:associadoId/substituicao` |
 
 ---
 
-## Passo 3 — Hook: src/hooks/useSubstituicaoVeiculo.ts
+## Detalhes por arquivo
 
-Hook com 8 funcoes, seguindo o padrao de useAssociados/useVeiculos (react-query):
+### 1. SubstituicaoStepper.tsx
 
-1. **useSubstituicoes(associado_id?)** — query para listar substituicoes, com join em associados e veiculos
-2. **useSubstituicao(id)** — query para buscar uma substituicao especifica com relacoes
-3. **useIniciarSubstituicao()** — mutation que cria registro com status 'iniciada', salvando snapshot do veiculo antigo (placa, modelo, fipe, mensalidade, cota)
-4. **useAtualizarSubstituicao()** — mutation generica para update de campos
-5. **useAprovarSubstituicao()** — mutation que seta aprovado_por, aprovado_em, status = 'aprovada'
-6. **useRejeitarSubstituicao()** — mutation que seta motivo_rejeicao, rejeitado_por, rejeitado_em, status = 'rejeitada'
-7. **useEfetivarSubstituicao()** — mutation complexa que executa a efetivacao (marcar veiculo antigo como inativo com substituido_por, criar/vincular veiculo novo como principal, atualizar status para 'efetivada')
-8. **useVerificarElegibilidade(associado_id)** — query que verifica:
-   - Adimplencia: busca cobrancas com status em aberto (PENDING/OVERDUE) na tabela asaas_cobrancas ou cobrancas
-   - Rastreador: le pendencia_rastreador do associado
-   - Evento ativo: busca sinistros do veiculo do associado com status diferente de 'concluido' e 'negado'
-   - Retorna { adimplente, rastreador_devolvido, evento_ativo: { tem, tipo, evento_id }, elegivel }
+Componente visual baseado no `CotacaoStepper` existente, adaptado para 6 steps:
+1. Elegibilidade
+2. Eventos
+3. Novo Veiculo
+4. Beneficios
+5. Financeiro (placeholder, nao implementado ainda)
+6. Aprovacao (placeholder, nao implementado ainda)
 
-Cada mutation invalida queries `['substituicoes']` e relevantes apos sucesso.
+Mesma estrutura visual: circulos com check/numero, linhas conectoras, responsivo desktop/mobile.
+
+### 2. SubstituicaoVeiculoPage.tsx
+
+Pagina principal que:
+- Recebe `associadoId` via `useParams()`
+- Busca dados do associado com `useAssociados` ou query direta
+- Busca veiculo ativo do associado (ativo = true, principal = true)
+- Gerencia estado do stepper (step atual, steps completos)
+- Gerencia estado compartilhado entre steps (dados do novo veiculo, beneficios selecionados, dados de elegibilidade)
+- Breadcrumb: Home > Cadastro > Associados > Nome > Substituicao
+- Renderiza o step correto conforme o estado atual
+
+### 3. StepElegibilidade.tsx
+
+Props: `associadoId`, `onNext`, `onEventoDetectado(evento)`
+
+- Chama `useVerificarElegibilidade(associadoId)` ao montar
+- Exibe checklist visual com 3 itens (adimplencia, rastreador, eventos)
+- Cada item mostra icone verde/vermelho/amarelo + texto descritivo
+- Se `pendencia_rastreador = true`: Alert destructive + botao "Agendar retirada" (link para servicos)
+- Se `evento_ativo.tem && tipo === 'proprio'`: seta flag para mostrar Step 2
+- Botao "Proximo" habilitado apenas se `adimplente AND rastreador_devolvido AND (sem evento proprio)`
+- Se tem evento proprio: botao "Proximo" leva ao Step 2
+- Se nao tem evento ou so terceiros: botao "Proximo" pula Step 2 e vai ao Step 3
+
+### 4. StepEventoAtivo.tsx
+
+Props: `evento`, `substituicaoId`, `onNext`, `onBack`
+
+So renderiza se o veiculo tem evento do proprio em andamento.
+
+Exibe card com dados do evento (tipo, status, data, numero).
+
+3 opcoes via RadioGroup com cards expandidos:
+
+**A) Aguardar finalizacao**
+- Cria/atualiza registro em `substituicoes_veiculo` com `resolucao_evento = 'aguardar_finalizacao'`
+- Toast informativo, nao avanca (substituicao fica em espera)
+
+**B) Cancelar com termo**
+- Alerta que o associado perde direito ao reparo
+- Cria registro com `resolucao_evento = 'cancelar_com_termo'`
+- Chama `autentique-create` para gerar termo de desistencia
+- Apos gerar, avanca ao Step 3
+
+**C) Inclusao temporaria**
+- Info: pagara 2 mensalidades temporariamente
+- Cria registro com `resolucao_evento = 'inclusao_temporaria'`
+- Redireciona para fluxo de inclusao (ou avanca com flag)
+
+### 5. StepNovoVeiculo.tsx
+
+Props: `veiculoAntigo`, `dadosNovoVeiculo`, `setDadosNovoVeiculo`, `onNext`, `onBack`
+
+Formulario com:
+- Placa (mascara ABC-1D23/ABC-1234) — ao digitar placa completa, verifica se ja existe com `buscarVeiculoPorPlaca`
+- Consulta FIPE: usa `useFipe().getByPlaca` para busca automatica, e `useFipeLookup` para busca manual (marca > modelo > ano)
+- Dados adicionais: cor (Select), combustivel (Select), chassi, renavam
+- Uso aplicativo: Switch + Select plataforma
+- Card comparativo: tabela antigo vs novo (modelo, placa, FIPE, diferenca)
+- Alert se FIPE > R$ 120.000
+- Botao "Proximo" habilitado quando campos obrigatorios preenchidos e FIPE consultada
+
+### 6. StepBeneficios.tsx
+
+Props: `veiculoAntigo`, `dadosNovoVeiculo`, `beneficiosSelecionados`, `setBeneficiosSelecionados`, `onNext`, `onBack`
+
+- Card "Beneficios do veiculo antigo" (somente visualizacao)
+- Card "Beneficios do novo veiculo" (editavel):
+  - Checkboxes para cada beneficio com preco mensal
+  - Select para faixa de Danos a Terceiros
+  - Opcao "100% FIPE para APP" so aparece se `uso_aplicativo = true`
+- Resumo financeiro:
+  - Mensalidade base (calculada pelo FIPE do novo veiculo — simplificada como percentual ou tabela fixa)
+  - Adicionais selecionados
+  - Total mensal estimado
+  - Diferenca da mensalidade anterior
+- Botao "Proximo" sempre habilitado (beneficios sao opcionais)
 
 ---
 
-## Passo 4 — Registrar no config.toml
+## Rota no App.tsx
 
-Nenhuma edge function nova neste passo. Tabela usa acesso direto via supabase client.
+Adicionar na secao de cadastro (apos a rota `:id`):
+
+```text
+<Route path="/cadastro/associados/:associadoId/substituicao" element={<SubstituicaoVeiculoPage />} />
+```
+
+Importar `SubstituicaoVeiculoPage` com lazy loading (mesmo padrao de outras paginas).
 
 ---
-
-## Arquivos afetados
-
-| Arquivo | Acao |
-|---------|------|
-| Migration SQL | Nova tabela + ALTER veiculos |
-| `src/types/substituicao.ts` | Novo |
-| `src/hooks/useSubstituicaoVeiculo.ts` | Novo |
-| `src/integrations/supabase/types.ts` | Atualizado automaticamente pela migration |
 
 ## O que NAO sera alterado
 
-- Nenhum componente frontend existente
-- Nenhum hook existente
-- Nenhuma edge function existente
-- useFipe, useFipeLookup — intactos
-- CancelarAssociadoDialog, ExcluirAssociadoDialog — intactos
+- EtapaConsultaFipe — intacto (usado apenas como referencia visual)
+- CotacaoStepper — intacto (usado apenas como referencia visual)
+- useSubstituicaoVeiculo — intacto (ja esta pronto)
+- useFipe / useFipeLookup — intactos (serao consumidos, nao modificados)
+- useVeiculos — intacto
+- Nenhuma pagina existente
+- Nenhuma edge function
 
-## Detalhes tecnicos
+## Dependencias ja existentes no projeto
 
-### Elegibilidade
+- `useVerificarElegibilidade` do hook `useSubstituicaoVeiculo`
+- `useIniciarSubstituicao` e `useAtualizarSubstituicao` do mesmo hook
+- `useFipe` (getByPlaca) e `useFipeLookup` (busca manual marca/modelo/ano)
+- `buscarVeiculoPorPlaca` de `useVeiculos`
+- Componentes UI: Card, Alert, Button, Select, Input, Switch, RadioGroup, Checkbox, Label, Badge
+- `PlacaInput` de `MaskedInputs`
+- Roteamento com `react-router-dom` (useParams, useNavigate)
 
-A query de elegibilidade faz 3 consultas paralelas (Promise.all):
-1. `asaas_cobrancas` ou `cobrancas` com status em aberto para o associado
-2. `associados` para ler `pendencia_rastreador`
-3. `sinistros` com `veiculo_id` do veiculo ativo do associado e status NOT IN ('concluido', 'negado', 'encerrado')
-
-O resultado `elegivel` e true apenas se: adimplente AND !pendencia_rastreador AND (!evento_ativo.tem OR evento_ativo.tipo === 'terceiros_paralelo')
-
-### Efetivacao (useEfetivarSubstituicao)
-
-A mutation de efetivacao faz:
-1. Marcar veiculo antigo: `ativo = false, principal = false, substituido_por = veiculo_novo_id, data_inativacao = now(), motivo_inativacao = 'substituicao', substituicao_id = id`
-2. Marcar veiculo novo: `ativo = true, principal = true, substituicao_id = id`
-3. Atualizar substituicao: `status = 'efetivada', updated_at = now()`
-4. Registrar em `associados_historico`
-5. Invalidar queries de veiculos e substituicoes
-
-### RLS
-
-A policy de associado usa subquery encadeada: `associado_id = (SELECT id FROM associados WHERE user_id = (SELECT id FROM usuarios WHERE auth_id = auth.uid()))`. Isso garante que o associado so ve suas proprias substituicoes.
