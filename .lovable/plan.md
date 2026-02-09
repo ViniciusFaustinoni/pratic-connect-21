@@ -1,397 +1,296 @@
 
-
-# Plano: Melhorar Tela de Execução de Retirada (ExecutarRetirada.tsx)
+# Plano: Implementar Sistema de Multa de Retirada
 
 ## 📋 Resumo Executivo
 
-Este plano modifica a tela existente `ExecutarRetirada.tsx` (459 linhas) para adicionar funcionalidades críticas que o técnico precisa no campo, seguindo os padrões já estabelecidos em `ExecutarManutencao.tsx`.
+Implementar o sistema de multa de R$ 400 para retiradas (não devolução, não comparecimento, aparelho danificado) com suporte a cobrança automática via ASAAS e registro manual para financeiro.
 
 ---
 
-## 🔍 Análise do Estado Atual
+## 🔍 Análise de Padrões Encontrados
 
-### O que já existe em ExecutarRetirada.tsx:
-- Header com botões de contato (WhatsApp, telefone)
-- Conferência de dados do veículo (placa, chassi, modelo, cor)
-- Upload de fotos por categorias (usando FotoCapture)
-- Upload de vídeo 360° (usando VideoCapture)
-- Assinatura do cliente (usando SignaturePad)
-- Campo de observações
-- Botão "Concluir Retirada" que chama edge function `concluir-retirada`
-- Modal de confirmação após conclusão
-- Barra de progresso de fotos
+### Hooks Existentes Reutilizáveis
+- **useAsaas.ts**: Já possui `criarCobranca()` mutation que integra com edge function `asaas-cobrancas`. Padrão: 
+  ```typescript
+  criarCobranca({
+    billingType: 'BOLETO',
+    value: 400,
+    dueDate: 'YYYY-MM-DD',
+    description: 'Multa rastreador',
+    associado_id,
+  })
+  ```
 
-### O que FALTA:
-1. Seção de localização do rastreador (fotos da instalação original)
-2. Informações do motivo e sub-tipo da retirada
-3. Botão "Cheguei no Local" (mudança de status agendada → em_andamento)
-4. Checklist específico de retirada
-5. Seleção de integridade do aparelho
-6. Botão "Associado Ausente"
-7. Validação de fotos mínimas (3 obrigatórias)
-8. Lógica diferenciada para aparelho danificado (→ retorno_base)
+### Tipos Já Definidos
+- **src/types/retirada.ts**: Contém `FormaCobrancaMulta` com labels e `VALOR_MULTA_NAO_DEVOLUCAO = 400.00`
+- **supabase types**: Tabela `servicos` já tem campos `multa_aplicada`, `multa_asaas_id`, `multa_cobrada_em`, `multa_valor`, `multa_motivo`, `multa_forma_cobranca`, `cancelamento_bloqueado_ate_devolucao`
+
+### Padrão de Modal Encontrado
+- **TratarAusenciaModal.tsx** (manutenção): Referência estrutural para modais de ação pós-serviço com RadioGroup para opções múltiplas
 
 ---
 
-## 📦 Modificações Planejadas
+## 📦 Arquivos a Criar/Modificar
 
-### 1. Nova Query: Buscar Fotos da Instalação Original
+### 1. CRIAR: `src/hooks/useMultaRetirada.ts`
 
-Adicionar query para buscar o serviço de instalação anterior do rastreador:
+Novo hook com 3 mutations:
 
+#### **useAplicarMulta()**
 ```typescript
-// Nova query - buscar instalação original do rastreador
-const { data: instalacaoOriginal } = useQuery({
-  queryKey: ['instalacao-original', rastreador?.id],
-  queryFn: async () => {
-    if (!rastreador?.id) return null;
-    
-    // Buscar último serviço de instalação concluído deste rastreador
-    const { data, error } = await supabase
-      .from('servicos')
-      .select(`
-        id, observacoes, created_at, checklist_data,
-        profissional:profiles!profissional_id(nome)
-      `)
-      .eq('rastreador_id', rastreador.id)
-      .eq('tipo', 'instalacao')
-      .eq('status', 'concluida')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-    
-    if (error) return null;
-    
-    // Buscar fotos associadas (se existirem)
-    const { data: fotos } = await supabase
-      .from('servico_fotos')
-      .select('tipo, arquivo_url')
-      .eq('servico_id', data.id);
-    
-    return { ...data, fotos: fotos || [] };
-  },
-  enabled: !!rastreador?.id,
-});
+interface AplicarMultaParams {
+  servicoId: string;
+  motivo: 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado';
+  formaCobranca: 'automatica_asaas' | 'manual_financeiro';
+  bloquearCancelamento: boolean;
+}
+
+// Ações:
+// 1. Atualiza servicos:
+//    - multa_aplicada = true
+//    - multa_valor = 400.00
+//    - multa_motivo = motivo
+//    - multa_cobrada_em = now()
+//    - multa_forma_cobranca = formaCobranca
+//    - cancelamento_bloqueado_ate_devolucao = bloquearCancelamento
+// 2. Se formaCobranca = 'automatica_asaas':
+//    - Chamar useAsaas().criarCobranca() passando associado_id + valor 400
+//    - Salvar multa_asaas_id retornado (ou 'PENDENTE_CONFIG' em erro)
+// 3. Se formaCobranca = 'manual_financeiro':
+//    - Apenas registrar no banco
+// 4. Invalidar queries: ['retiradas'], ['servicos']
 ```
 
-**Localização**: Linha ~39-57, após a query principal do serviço
+**Tratamento de Erro ASAAS**: Se falhar, registra multa com `multa_asaas_id = 'PENDENTE_CONFIG'` e toast.warning ao invés de error.
 
----
-
-### 2. Nova Seção: Localização do Rastreador (Topo)
-
-Componente visual a ser adicionado no início da `<main>`:
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  📍 LOCALIZAÇÃO DO RASTREADOR NO VEÍCULO                    │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  [foto1]  [foto2]  [foto3]  (fotos da instalação)          │
-│                                                             │
-│  Observação do instalador: "Instalado atrás do              │
-│  porta-luvas, lado esquerdo, preso com abraçadeira"         │
-│                                                             │
-│  ℹ️ Data da instalação: dd/mm/aaaa                           │
-│  ℹ️ Instalador: [nome de quem instalou]                      │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Se não houver fotos**: Mostrar alerta amarelo com "⚠️ Fotos de instalação não encontradas. Consulte o coordenador antes de prosseguir."
-
-**Localização**: Linha ~293, início da `<main>` antes de "Conferência de Dados"
-
----
-
-### 3. Nova Seção: Informações do Serviço de Retirada
-
-Mostrar dados específicos da retirada já agendada:
-
-- **Motivo**: Badge colorido (Cancelamento = cinza, Inadimplência = vermelho, etc.)
-- **Sub-tipo**: "Somente Retirada" ou "Retirada + Nova Instalação"
-- **Se substituição com nova instalação**: Dados do novo veículo (placa, modelo)
-- Nome do associado, telefone, placa atual
-
-**Localização**: Após seção de localização, antes de "Conferência de Dados"
-
----
-
-### 4. Adicionar Botão "Cheguei no Local"
-
-Seguir padrão de `ExecutarManutencao.tsx` (linhas 382-410):
-
+#### **useCancelarMulta()**
 ```typescript
-// Importar hook
-import { useIniciarServicoMutation } from '@/hooks/useServicos';
+interface CancelarMultaParams {
+  servicoId: string;
+}
 
-// No componente
-const { mutate: iniciarServico, isPending: isIniciando } = useIniciarServicoMutation();
-
-const handleCheguei = () => {
-  if (servicoId) {
-    iniciarServico(servicoId, {
-      onSuccess: () => {
-        toast.success('Chegada registrada! Agora você pode realizar a retirada.');
-      }
-    });
-  }
-};
-
-// Status check
-const isAgendada = servico?.status === 'agendada';
-const isEmAndamento = servico?.status === 'em_andamento';
+// Requer: isDiretor
+// Ações:
+// - multa_aplicada = false
+// - cancelamento_bloqueado_ate_devolucao = false
+// - Registra em histórico quem cancelou e quando
 ```
 
-**UI**: Botão grande azul "Cheguei no Local" visível quando status = 'agendada'. Após clique, libera as seções de execução.
+#### **useConsultarMultas()**
+```typescript
+interface FiltrosMulta {
+  formaCobranca?: 'automatica_asaas' | 'manual_financeiro';
+  associadoNome?: string;
+  dataDe?: string;
+  dataAte?: string;
+}
 
-**Localização**: Footer da página ou antes da seção de conferência
+// Query que lista:
+// - Todos os serviços com multa_aplicada = true
+// - Join com associados, veiculos, rastreadores
+// - Retorna paginávelou listar sem paginação
+```
 
 ---
 
-### 5. Novo Componente: ChecklistRetirada
+### 2. CRIAR: `src/components/monitoramento/retirada/AplicarMultaModal.tsx`
 
-Criar componente similar a `ChecklistManutencao.tsx`:
+Modal estruturado como TratarAusenciaModal:
 
+**Props:**
 ```typescript
-// src/components/instalador/ChecklistRetirada.tsx
-
-const CHECKLIST_RETIRADA_ITEMS = [
-  { id: 'acabamento_desmontado', label: 'Acabamento do veículo desmontado com cuidado', description: 'Remover painéis necessários sem danificar' },
-  { id: 'rastreador_localizado', label: 'Rastreador localizado e removido', description: 'Encontrar e desconectar o equipamento' },
-  { id: 'fios_isolados', label: 'Fios cortados e isolados corretamente', description: 'Sem risco de curto-circuito' },
-  { id: 'chip_removido', label: 'Chip removido do módulo', description: 'Retirar SIM card do rastreador' },
-  { id: 'acabamento_recolocado', label: 'Acabamento do veículo recolocado', description: 'Painéis e acabamentos no lugar' },
-  { id: 'integridade_verificada', label: 'Aparelho verificado visualmente', description: 'Checar estado físico do rastreador' },
-];
-```
-
-**Comportamento**:
-- Progresso com barra visual
-- Checkboxes grandes (mobile-friendly)
-- Salva em `checklist_retirada` (JSONB)
-- Botão de resultado só habilitado quando 100%
-
-**Localização novo arquivo**: `src/components/instalador/ChecklistRetirada.tsx`
-**Localização na tela**: Após botão "Cheguei no Local", antes das fotos
-
----
-
-### 6. Validar Mínimo de 3 Fotos Obrigatórias
-
-Modificar lógica de fotos para exigir pelo menos 3:
-1. Rastreador removido (aparelho na mão)
-2. Fios isolados no veículo
-3. Acabamento recolocado
-
-```typescript
-// Fotos obrigatórias específicas de retirada
-const FOTOS_RETIRADA_OBRIGATORIAS = [
-  { id: 'rastreador_removido', nome: 'Rastreador Removido', obrigatoria: true },
-  { id: 'fios_isolados', nome: 'Fios Isolados', obrigatoria: true },
-  { id: 'acabamento_recolocado', nome: 'Acabamento Recolocado', obrigatoria: true },
-];
-
-// Validação
-const fotosRetiradaCompletas = FOTOS_RETIRADA_OBRIGATORIAS
-  .every(f => fotosEnviadas[f.id]);
-```
-
-**Localização**: Modificar a seção de fotos existente (linhas 330-377)
-
----
-
-### 7. Nova Seção: Integridade do Aparelho
-
-Select obrigatório após fotos:
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  📋 ESTADO DO APARELHO RETIRADO                             │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Como está o aparelho?                                      │
-│                                                             │
-│  ( ) ✅ Íntegro (bom estado, pode voltar ao estoque)        │
-│  ( ) ⚠️ Danificado (dano físico visível)                    │
-│  ( ) 🔓 Violado (sinais de abertura/adulteração)            │
-│  ( ) 💧 Molhado/Oxidado (umidade ou oxidação)               │
-│                                                             │
-│  [Se não íntegro: campo de observação obrigatório]          │
-│  [Alerta: "Multa de R$400 será sugerida automaticamente"]   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Estado**:
-```typescript
-const [integridade, setIntegridade] = useState<IntegridadeAparelho | null>(null);
-const [obsIntegridade, setObsIntegridade] = useState('');
-```
-
-**Localização**: Após seção de fotos, antes do vídeo 360°
-
----
-
-### 8. Modificar Edge Function concluir-retirada
-
-A edge function existente envia o rastreador para `status: 'estoque'` sempre. Precisamos adicionar lógica para:
-
-- Se `integridade === 'integro'`: rastreador → `estoque`
-- Se `integridade !== 'integro'`: rastreador → `retorno_base` (triagem)
-- Se `sub_tipo === 'retirada_com_nova_instalacao'`: criar novo serviço de instalação
-
-**Modificações no body da requisição**:
-```typescript
-body: {
-  servicoId,
-  rastreadorId: rastreador.id,
-  veiculoId: veiculo.id,
-  profissionalId: profile.id,
-  hodometro: parseInt(hodometro),
-  assinaturaUrl,
-  observacoes: observacoes.trim() || undefined,
-  // NOVOS CAMPOS:
-  integridade,
-  obsIntegridade: integridade !== 'integro' ? obsIntegridade : undefined,
-  checklistRetirada: checklistItems,
-  videoUrl,
-  fotosUrls: Object.values(fotosEnviadas),
-  criarNovaInstalacao: servico.sub_tipo_retirada === 'retirada_com_nova_instalacao',
-  novoVeiculoId: servico.novo_veiculo_id,
+interface AplicarMultaModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  retirada: {
+    id: string; // servico.id
+    associado?: { nome: string; cpf: string };
+    rastreador?: { codigo: string };
+    integridade?: IntegridadeAparelho;
+  } | null;
+  motivo?: 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado'; // Pré-selecionado
 }
 ```
 
-**Localização edge function**: `supabase/functions/concluir-retirada/index.ts`
+**Seções:**
+1. **Header**: "💰 Aplicar Multa de Rastreador" com ícone do lucide-react
+2. **Info do Serviço**: Card com Associado, CPF, Rastreador (não editável)
+3. **Motivo da Multa**: RadioGroup com 3 opções (se não pré-selecionado, pode mudar)
+4. **Forma de Cobrança**: RadioGroup com 2 opções (Automática ASAAS / Manual)
+5. **Checkbox Bloquear**: "Bloquear finalização do cancelamento até resolução"
+6. **Valor**: R$ 400,00 (fixo, apenas exibição)
+7. **Footer**: Botões Cancelar + "Confirmar Multa"
+
+**Comportamento:**
+- Se escolher Automática → mostrar mensagem "Boleto/PIX será gerado via ASAAS"
+- Se escolher Manual → mostrar "Financeiro será notificado"
+- Se integridade for danificado/violado/molhado → checkbox pré-marcado
+- Ao confirmar: usar `useAplicarMulta().mutate()`
 
 ---
 
-### 9. Adicionar Botão "Associado Ausente"
+### 3. MODIFICAR: `src/hooks/useRetiradaRastreador.ts`
 
-Similar a `ExecutarManutencao.tsx` (linhas 429-444):
+Adicionar tipo `MotivoMulta` para exports:
+```typescript
+export type MotivoMulta = 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado';
+```
+
+---
+
+### 4. ADICIONAR: Tipos em `src/types/retirada.ts`
 
 ```typescript
-const handleNaoCompareceu = async () => {
-  if (!servicoId) return;
-  
-  // Usar hook de marcar não compareceu (pode ser reaproveitado de manutenção)
-  // OU criar mutation inline:
-  const { error } = await supabase
-    .from('servicos')
-    .update({
-      status: 'nao_compareceu',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', servicoId);
-  
-  if (error) {
-    toast.error('Erro ao registrar ausência');
-    return;
-  }
-  
-  // Rastreador continua como 'retirada_pendente'
-  toast.success('Registrado como não compareceu. Coordenador será notificado.');
-  navigate('/vistoriador/tarefas');
+export type MotivoMulta = 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado';
+
+export const MOTIVO_MULTA_LABELS: Record<MotivoMulta, string> = {
+  nao_devolveu: 'Não devolução do equipamento',
+  nao_compareceu: 'Não comparecimento à retirada',
+  aparelho_danificado: 'Aparelho devolvido danificado/violado',
 };
 ```
 
-**UI**: Botão outline laranja "Associado Ausente" visível quando status = 'em_andamento'
+---
 
-**Localização**: No footer, ao lado do botão "Concluir Retirada"
+## 🔗 Integração com Componentes Existentes
+
+### Em `RetiradasPage.tsx` (Quando for criada):
+
+Na tabela de retiradas, adicionar coluna/indicador visual:
+- Ícone 💰 se `multa_aplicada = true`
+  - Tooltip: "Multa R$400 — [motivo] — [forma]"
+- Ícone 🔒 se `cancelamento_bloqueado_ate_devolucao = true`
+  - Tooltip: "Cancelamento bloqueado até resolução"
+
+No dropdown de ações:
+- Se status `concluida` E integridade != 'integro': botão "Aplicar Multa (danificado)"
+  - Abre `AplicarMultaModal` com `motivo` pré-selecionado como `'aparelho_danificado'`
+- Se status `nao_compareceu`: botão "Aplicar Multa (48h)"
+  - Abre `AplicarMultaModal` com `motivo` pré-selecionado como `'nao_compareceu'`
+- Se status `concluida`: botão "Aplicar Multa" genérico
+  - Abre `AplicarMultaModal` sem pré-seleção
+
+### Em `TratarAusenciaRetirada.tsx` (Quando for criada):
+
+Se coordenador escolher "Aplicar multa":
+- Fechar este modal
+- Abrir `AplicarMultaModal` com `motivo = 'nao_compareceu'`
+
+### Sugestão pós-retirada danificada (em ExecutarRetirada.tsx):
+
+Após técnico concluir retirada com `integridade != 'integro'`:
+- Toast toast.warning(): "⚠️ Rastreador devolvido danificado. Considere aplicar multa de R$400."
+- Destacar linha na tabela em cor amarela/laranja (quando RetiradasPage for exibir)
 
 ---
 
-### 10. Validação Final Antes de Concluir
+## 🔐 Permissões
 
-Atualizar condição `podeConfirmar`:
+- **Aplicar multa**: Diretor, Coordenador de Monitoramento
+- **Cancelar multa**: Diretor apenas (validação no hook com `usePermissions`)
+- **Consultar relatório**: Financeiro, Diretor
 
-```typescript
-const podeConfirmar = 
-  conferenciaCompleta &&           // Dados conferidos
-  checklistCompleto &&             // 6 itens do checklist OK
-  fotosRetiradaCompletas &&        // 3 fotos obrigatórias
-  videoEnviado &&                  // Vídeo 360° OK
-  assinaturaEnviada &&             // Assinatura OK
-  integridade !== null &&          // Integridade selecionada
-  (integridade === 'integro' || obsIntegridade.trim().length > 0); // Obs se danificado
+---
+
+## 🎯 Fluxos de Integração
+
+### Fluxo 1: Não Devolução (48h estourou)
+```
+Coordenador vê retirada pendente com data_agendada + 48h vencida
+→ Clica "Aplicar Multa (não devolução)"
+→ Abre AplicarMultaModal com motivo pré-selecionado
+→ Escolhe forma cobrança
+→ Confirma
+→ useAplicarMulta executa (cria cobrança ASAAS se automática)
+→ Tabela atualiza com ícone 💰
 ```
 
----
-
-## 📁 Arquivos a Modificar
-
-| Arquivo | Tipo | Ação |
-|---------|------|------|
-| `src/pages/instalador/ExecutarRetirada.tsx` | Página | Modificar extensivamente |
-| `src/components/instalador/ChecklistRetirada.tsx` | Componente | **CRIAR NOVO** |
-| `supabase/functions/concluir-retirada/index.ts` | Edge Function | Modificar para novos campos |
-| `src/types/retirada.ts` | Tipos | Já existe, usar os tipos definidos |
-
----
-
-## 📊 Fluxo Atualizado da Tela
-
-```text
-1. Técnico abre ExecutarRetirada (status = 'agendada')
-              ↓
-2. VÊ: Localização do rastreador (fotos + obs da instalação)
-              ↓
-3. VÊ: Informações do serviço (motivo, sub-tipo, dados)
-              ↓
-4. CLICA: "Cheguei no Local" → status = 'em_andamento'
-              ↓
-5. LIBERA: Checklist de retirada (6 itens)
-              ↓
-6. LIBERA: Upload de fotos (mínimo 3)
-              ↓
-7. SELECIONA: Integridade do aparelho
-              ↓
-8. GRAVA: Vídeo 360°
-              ↓
-9. CAPTURA: Assinatura do cliente
-              ↓
-10. CLICA: "Concluir Retirada" 
-    OU: "Associado Ausente" (se não compareceu)
-              ↓
-11. Edge function processa:
-    - Se íntegro: rastreador → estoque
-    - Se danificado: rastreador → retorno_base
-    - Se substituição: cria novo serviço instalação
+### Fluxo 2: Não Comparecimento
+```
+Técnico marca "Associado Ausente" em ExecutarRetirada
+→ Status muda para 'nao_compareceu'
+→ Coordenador vê retirada com status nao_compareceu
+→ Clica "Tratar Ausência" (de outro prompt)
+→ Modal oferece: reagendar OU aplicar multa
+→ Se aplicar multa: abre AplicarMultaModal com motivo 'nao_compareceu'
+→ (resto igual fluxo 1)
 ```
 
----
-
-## 🔒 Permissões
-
-A tela já é acessada apenas por profissionais com serviços atribuídos. Nenhuma modificação de permissão necessária.
+### Fluxo 3: Aparelho Danificado
+```
+Técnico seleciona integridade != 'integro' em ExecutarRetirada
+→ Conclui retirada
+→ Toast: "Considere aplicar multa"
+→ Coordenador vê retirada com ícone de dano
+→ Clica "Aplicar Multa (danificado)"
+→ Abre AplicarMultaModal com motivo pré-selecionado
+→ (resto igual fluxo 1)
+```
 
 ---
 
 ## ⚠️ Considerações Técnicas
 
-1. **Fotos de instalação inexistentes**: O banco atual não tem registros de `instalacao_fotos` ou `servico_fotos` para instalações. O código deve exibir graciosamente o alerta "Fotos não encontradas".
+1. **ASAAS Fallback**: Se edge function `asaas-cobrancas` falhar, salvar `multa_asaas_id = 'PENDENTE_CONFIG'` e não impedir o fluxo. Toast.warning ao invés de error.
 
-2. **Hook useIniciarServicoMutation**: Já existe e pode ser reutilizado de `useServicos.ts`.
+2. **Reutilização useAsaas**: O hook `useAsaas.criarCobranca()` já existe e integra com a edge function. Apenas chamar com params corretos.
 
-3. **Reaproveitamento**: O componente `ChecklistRetirada` seguirá a mesma estrutura de `ChecklistManutencao.tsx`, facilitando manutenção.
+3. **Edge Function Não Precisa Ser Criada**: A edge function `asaas-cobrancas` já existe com action `'criar'`. Usar conforme protocolo estabelecido.
 
-4. **Edge function**: Modificar para aceitar novos parâmetros sem quebrar chamadas existentes (retrocompatibilidade).
+4. **Bloqueio de Cancelamento**: Campo `cancelamento_bloqueado_ate_devolucao` já existe na tabela. Lógica de validação será feita em outro prompt quando integrar com módulo de Cadastro.
+
+5. **Campos no Banco**: Todos os campos necessários já existem em `servicos`:
+   - multa_aplicada
+   - multa_valor
+   - multa_motivo
+   - multa_cobrada_em
+   - multa_forma_cobranca
+   - multa_asaas_id
+   - cancelamento_bloqueado_ate_devolucao
+
+---
+
+## 📊 Estrutura de Dados
+
+### Mutation Body para useAplicarMulta
+```typescript
+{
+  servicoId: string;
+  motivo: 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado';
+  formaCobranca: 'automatica_asaas' | 'manual_financeiro';
+  bloquearCancelamento: boolean;
+}
+```
+
+### Response
+```typescript
+{
+  success: boolean;
+  servicoId: string;
+  multaId?: string; // Se automática
+  asaasId?: string; // ID da cobrança no ASAAS (ou 'PENDENTE_CONFIG')
+}
+```
 
 ---
 
 ## ✅ Checklist de Implementação
 
-- [ ] Criar query para buscar instalação original do rastreador
-- [ ] Adicionar seção "Localização do Rastreador" no topo
-- [ ] Adicionar seção "Informações do Serviço"
-- [ ] Importar e usar `useIniciarServicoMutation` para botão "Cheguei"
-- [ ] Criar componente `ChecklistRetirada.tsx`
-- [ ] Integrar checklist na tela
-- [ ] Modificar seção de fotos para validar 3 obrigatórias
-- [ ] Adicionar seção de seleção de integridade
-- [ ] Adicionar botão "Associado Ausente"
-- [ ] Atualizar validação `podeConfirmar`
-- [ ] Modificar `handleConcluir` para enviar novos campos
-- [ ] Atualizar edge function `concluir-retirada` para novos campos
-- [ ] Testar fluxo completo
+- [ ] Criar `src/hooks/useMultaRetirada.ts` com mutations/queries
+- [ ] Criar `src/components/monitoramento/retirada/AplicarMultaModal.tsx`
+- [ ] Adicionar tipos em `src/types/retirada.ts`
+- [ ] Exportar `AplicarMultaModal` em componentes/retirada/index.ts (se existir)
+- [ ] Integrar indicadores visuais (💰, 🔒) em RetiradasPage (quando for criada)
+- [ ] Integrar botões de ação (Aplicar Multa) em RetiradasPage (quando for criada)
+- [ ] Integrar sugestão de multa em ExecutarRetirada.tsx (após conclusão com dano)
+- [ ] Testar fluxo automático ASAAS + fallback manual
+
+---
+
+## 🔗 Dependências Externas
+
+- **useAsaas()**: Hook existente em `src/hooks/useAsaas.ts` — usar para cobrança automática
+- **Edge Function asaas-cobrancas**: Já existe, não precisa criar
+- **usePermissions()**: Para validar que apenas Diretor cancela multa
+- **Components UI**: Dialog, RadioGroup, Badge, Button, Checkbox (já existem)
 
