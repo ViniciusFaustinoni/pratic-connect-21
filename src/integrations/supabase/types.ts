@@ -18611,6 +18611,281 @@ export type Database = {
         }
         Relationships: []
       }
+      substituicoes_veiculo: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          associado_id: string
+          autentique_documento_id: string | null
+          autentique_status: string | null
+          beneficios_novos: Json | null
+          carencia_dias: number | null
+          cobranca_taxa_asaas_id: string | null
+          comissao_creditada: boolean | null
+          consultor_id: string | null
+          contrato_novo_id: string | null
+          cota_participacao_antiga: number | null
+          cota_participacao_nova: number | null
+          created_at: string | null
+          criado_por: string | null
+          data_fim_carencia: string | null
+          data_inicio_carencia: string | null
+          diferenca_mensalidade: number | null
+          evento_bloqueante_id: string | null
+          id: string
+          mensalidade_antiga: number | null
+          mensalidade_nova: number | null
+          motivo_rejeicao: string | null
+          observacoes: string | null
+          pontos_consultor: number | null
+          rejeitado_em: string | null
+          rejeitado_por: string | null
+          resolucao_evento: string | null
+          servico_instalacao_id: string | null
+          servico_retirada_id: string | null
+          status: string
+          taxa_substituicao: number | null
+          termo_desistencia_evento_url: string | null
+          tipo_evento_bloqueante: string | null
+          updated_at: string | null
+          valor_prorata: number | null
+          veiculo_antigo_fipe: number | null
+          veiculo_antigo_id: string
+          veiculo_antigo_modelo: string | null
+          veiculo_antigo_placa: string | null
+          veiculo_novo_fipe: number | null
+          veiculo_novo_id: string | null
+          veiculo_novo_modelo: string | null
+          veiculo_novo_placa: string | null
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          associado_id: string
+          autentique_documento_id?: string | null
+          autentique_status?: string | null
+          beneficios_novos?: Json | null
+          carencia_dias?: number | null
+          cobranca_taxa_asaas_id?: string | null
+          comissao_creditada?: boolean | null
+          consultor_id?: string | null
+          contrato_novo_id?: string | null
+          cota_participacao_antiga?: number | null
+          cota_participacao_nova?: number | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_fim_carencia?: string | null
+          data_inicio_carencia?: string | null
+          diferenca_mensalidade?: number | null
+          evento_bloqueante_id?: string | null
+          id?: string
+          mensalidade_antiga?: number | null
+          mensalidade_nova?: number | null
+          motivo_rejeicao?: string | null
+          observacoes?: string | null
+          pontos_consultor?: number | null
+          rejeitado_em?: string | null
+          rejeitado_por?: string | null
+          resolucao_evento?: string | null
+          servico_instalacao_id?: string | null
+          servico_retirada_id?: string | null
+          status?: string
+          taxa_substituicao?: number | null
+          termo_desistencia_evento_url?: string | null
+          tipo_evento_bloqueante?: string | null
+          updated_at?: string | null
+          valor_prorata?: number | null
+          veiculo_antigo_fipe?: number | null
+          veiculo_antigo_id: string
+          veiculo_antigo_modelo?: string | null
+          veiculo_antigo_placa?: string | null
+          veiculo_novo_fipe?: number | null
+          veiculo_novo_id?: string | null
+          veiculo_novo_modelo?: string | null
+          veiculo_novo_placa?: string | null
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          associado_id?: string
+          autentique_documento_id?: string | null
+          autentique_status?: string | null
+          beneficios_novos?: Json | null
+          carencia_dias?: number | null
+          cobranca_taxa_asaas_id?: string | null
+          comissao_creditada?: boolean | null
+          consultor_id?: string | null
+          contrato_novo_id?: string | null
+          cota_participacao_antiga?: number | null
+          cota_participacao_nova?: number | null
+          created_at?: string | null
+          criado_por?: string | null
+          data_fim_carencia?: string | null
+          data_inicio_carencia?: string | null
+          diferenca_mensalidade?: number | null
+          evento_bloqueante_id?: string | null
+          id?: string
+          mensalidade_antiga?: number | null
+          mensalidade_nova?: number | null
+          motivo_rejeicao?: string | null
+          observacoes?: string | null
+          pontos_consultor?: number | null
+          rejeitado_em?: string | null
+          rejeitado_por?: string | null
+          resolucao_evento?: string | null
+          servico_instalacao_id?: string | null
+          servico_retirada_id?: string | null
+          status?: string
+          taxa_substituicao?: number | null
+          termo_desistencia_evento_url?: string | null
+          tipo_evento_bloqueante?: string | null
+          updated_at?: string | null
+          valor_prorata?: number | null
+          veiculo_antigo_fipe?: number | null
+          veiculo_antigo_id?: string
+          veiculo_antigo_modelo?: string | null
+          veiculo_antigo_placa?: string | null
+          veiculo_novo_fipe?: number | null
+          veiculo_novo_id?: string | null
+          veiculo_novo_modelo?: string | null
+          veiculo_novo_placa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_contrato_novo_id_fkey"
+            columns: ["contrato_novo_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_servico_instalacao_id_fkey"
+            columns: ["servico_instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_servico_retirada_id_fkey"
+            columns: ["servico_retirada_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_novo_id_fkey"
+            columns: ["veiculo_novo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_novo_id_fkey"
+            columns: ["veiculo_novo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_novo_id_fkey"
+            columns: ["veiculo_novo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_novo_id_fkey"
+            columns: ["veiculo_novo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_veiculo_novo_id_fkey"
+            columns: ["veiculo_novo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tabela_precos: {
         Row: {
           ativo: boolean | null
@@ -19391,13 +19666,16 @@ export type Database = {
           combustivel: string | null
           cor: string | null
           created_at: string
+          data_inativacao: string | null
           faixa_cota_id: string | null
           id: string
           marca: string
           modelo: string
+          motivo_inativacao: string | null
           motivo_recusa_veiculo: string | null
           placa: string
           plataforma_app: string | null
+          principal: boolean | null
           quantidade_cotas: number | null
           recusado_em: string | null
           recusado_por: string | null
@@ -19409,6 +19687,8 @@ export type Database = {
           softruck_vehicle_id: string | null
           status: Database["public"]["Enums"]["status_veiculo"] | null
           status_sga: string | null
+          substituicao_id: string | null
+          substituido_por: string | null
           updated_at: string
           uso_aplicativo: boolean | null
           valor_fipe: number | null
@@ -19431,13 +19711,16 @@ export type Database = {
           combustivel?: string | null
           cor?: string | null
           created_at?: string
+          data_inativacao?: string | null
           faixa_cota_id?: string | null
           id?: string
           marca: string
           modelo: string
+          motivo_inativacao?: string | null
           motivo_recusa_veiculo?: string | null
           placa: string
           plataforma_app?: string | null
+          principal?: boolean | null
           quantidade_cotas?: number | null
           recusado_em?: string | null
           recusado_por?: string | null
@@ -19449,6 +19732,8 @@ export type Database = {
           softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
           status_sga?: string | null
+          substituicao_id?: string | null
+          substituido_por?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null
@@ -19471,13 +19756,16 @@ export type Database = {
           combustivel?: string | null
           cor?: string | null
           created_at?: string
+          data_inativacao?: string | null
           faixa_cota_id?: string | null
           id?: string
           marca?: string
           modelo?: string
+          motivo_inativacao?: string | null
           motivo_recusa_veiculo?: string | null
           placa?: string
           plataforma_app?: string | null
+          principal?: boolean | null
           quantidade_cotas?: number | null
           recusado_em?: string | null
           recusado_por?: string | null
@@ -19489,6 +19777,8 @@ export type Database = {
           softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
           status_sga?: string | null
+          substituicao_id?: string | null
+          substituido_por?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null
@@ -19543,6 +19833,48 @@ export type Database = {
             columns: ["faixa_cota_id"]
             isOneToOne: false
             referencedRelation: "faixas_cotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "veiculos_substituicao_id_fkey"
+            columns: ["substituicao_id"]
+            isOneToOne: false
+            referencedRelation: "substituicoes_veiculo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "veiculos_substituido_por_fkey"
+            columns: ["substituido_por"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "veiculos_substituido_por_fkey"
+            columns: ["substituido_por"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "veiculos_substituido_por_fkey"
+            columns: ["substituido_por"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "veiculos_substituido_por_fkey"
+            columns: ["substituido_por"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "veiculos_substituido_por_fkey"
+            columns: ["substituido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
             referencedColumns: ["id"]
           },
         ]
@@ -21355,6 +21687,10 @@ export type Database = {
           total: number
           visualizados: number
         }[]
+      }
+      get_associado_id_for_user: {
+        Args: { p_auth_user_id: string }
+        Returns: string
       }
       get_current_profile_id: { Args: never; Returns: string }
       get_estatisticas_assistencia_dia: {

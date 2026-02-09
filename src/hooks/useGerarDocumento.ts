@@ -14,7 +14,6 @@ const LOGO_PADRAO_BASE64 = '';
 
 // Helper para evitar deep type instantiation em veiculos
 const queryVeiculoPrincipal = async (associadoId: string): Promise<any> => {
-  // @ts-expect-error - veiculos table has deep type instantiation
   const result = await supabase
     .from('veiculos')
     .select('id, marca, modelo, ano_modelo, placa, chassi, renavam, cor, valor_fipe')
