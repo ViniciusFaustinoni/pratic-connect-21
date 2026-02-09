@@ -14,6 +14,7 @@ import {
   Wrench,
   MapPin,
   Package,
+  PackageX,
   Radio,
   Rocket,
   TrendingUp,
@@ -176,6 +177,7 @@ const menuConfig: {
         { title: 'Equipe', url: '/monitoramento/equipe', icon: Users, permission: 'canManageEquipeEstoque' },
         { title: 'Instalações', url: '/monitoramento/instalacoes', icon: Wrench },
         { title: 'Vistorias', url: '/monitoramento/vistorias', icon: ClipboardCheck },
+        { title: 'Retiradas', url: '/monitoramento/retiradas', icon: PackageX },
         { title: 'Calendário', url: '/monitoramento/calendario', icon: Calendar },
         { title: 'Estoque', url: '/monitoramento/estoque', icon: Package, permission: 'canManageEquipeEstoque' },
         { 
