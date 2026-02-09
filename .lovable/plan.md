@@ -1,42 +1,73 @@
 
-# Corrigir Cor do Veiculo LTB4J74
 
-## Diagnostico
+# Correcao Automatica de Dados do Veiculo e Melhoria do OCR
 
-O veiculo com placa `LTB4J74` tem a cor **VERMELHA** registrada tanto na tabela `veiculos` quanto na `cotacoes`, porem o documento oficial (CRLV) mostra **AZUL**.
+## Problema
 
-### Origem do problema
+Quando o OCR extrai dados incorretos (como a cor "VERMELHA" ao inves de "AZUL"), essa informacao errada se propaga para as tabelas `cotacoes` e `veiculos` e nao ha forma de corrigir sem acesso direto ao banco de dados.
 
-O fluxo de dados e:
-1. Upload do CRLV -> OCR (Gemini) extrai `cor` -> salva na `cotacoes.veiculo_cor`
-2. Ao gerar contrato, `ContratoWizard.tsx` copia `cor` da cotacao para o veiculo
+## Solucao em 2 Partes
 
-O OCR provavelmente extraiu a cor incorretamente neste caso especifico (falha pontual da IA), ou a cor foi digitada/alterada manualmente antes da geracao do contrato. O codigo de fluxo em si esta correto -- ele confia no valor extraido/informado.
+### Parte 1: Correcao Imediata dos Dados (SQL)
 
-## Solucao
-
-### 1. Corrigir o dado no banco de dados (UPDATE direto)
-
-Atualizar a cor de `VERMELHA` para `AZUL` em ambas as tabelas:
+Executar os UPDATEs diretamente para corrigir o veiculo LTB4J74:
 
 ```sql
--- Tabela veiculos
 UPDATE veiculos SET cor = 'AZUL' WHERE placa = 'LTB4J74';
-
--- Tabela cotacoes
 UPDATE cotacoes SET veiculo_cor = 'AZUL' WHERE veiculo_placa = 'LTB4J74';
 ```
 
-### 2. Nenhuma alteracao de codigo necessaria
+### Parte 2: Tela de Edicao de Dados do Veiculo na Retirada
 
-O fluxo OCR esta funcionando corretamente em termos de logica:
-- O prompt do Gemini ja pede para extrair `cor` do CRLV (linha 77 do `document-ocr/index.ts`)
-- O `ContratoWizard.tsx` mapeia `dados.cor` corretamente (linha 464)
-- A `CotacaoPublicaCompleta.tsx` persiste `dados.cor` na cotacao (linha 309)
+Permitir que o tecnico corrija dados do veiculo diretamente na tela de retirada quando identificar divergencia.
 
-Este foi um erro pontual de extracao do OCR para este documento especifico, nao um bug sistêmico. Erros pontuais de OCR sao esperados e por isso o sistema permite edicao manual da cor no formulario do contrato.
+**Arquivo: `src/pages/instalador/ExecutarRetirada.tsx`**
 
-## Resultado
+Na secao de "Conferencia de Dados" (linhas 570-600), ao lado de cada campo (placa, chassi, modelo, cor), adicionar um botao de edicao que abre um input inline. Ao salvar, atualiza diretamente na tabela `veiculos` e `cotacoes`.
 
-- A cor do veiculo `LTB4J74` sera corrigida para **AZUL** em todas as tabelas
-- A tela de retirada exibira a cor correta
+Mudancas:
+1. Adicionar estado `editandoCampo` para controlar qual campo esta em edicao
+2. Adicionar estado `valoresEditados` para armazenar valores temporarios
+3. No campo "Cor", ao clicar no icone de editar, transformar o texto em um input editavel
+4. Ao confirmar, chamar `supabase.from('veiculos').update({ cor: novoValor })` e tambem `supabase.from('cotacoes').update({ veiculo_cor: novoValor })`
+5. Invalidar a query `servico-retirada` para refletir imediatamente
+
+### Parte 3: Melhorar o Prompt do OCR para Cor
+
+**Arquivo: `supabase/functions/document-ocr/index.ts`**
+
+Na secao do CRLV (linhas 68-80), adicionar instrucoes mais especificas para extracao de cor:
+
+```
+- cor (ex: PRATA, PRETO, BRANCO, AZUL, VERMELHA, CINZA)
+  IMPORTANTE: A cor esta geralmente no campo rotulado "COR" ou "COR PREDOMINANTE".
+  NAO confunda com outros campos. Leia EXATAMENTE o que esta escrito no campo de cor.
+  Se houver duvida, priorize o texto literal do campo "COR" no documento.
+```
+
+## Detalhes Tecnicos
+
+### Fluxo de edicao na tela de retirada
+
+```text
+Tecnico ve dado errado
+  -> Clica no icone de editar ao lado do campo
+  -> Campo vira input editavel
+  -> Tecnico digita o valor correto
+  -> Clica em confirmar (check)
+  -> Sistema atualiza tabela 'veiculos' (cor)
+  -> Sistema atualiza tabela 'cotacoes' (veiculo_cor)
+  -> UI atualiza automaticamente via invalidacao de query
+  -> Toast de confirmacao
+```
+
+### Campos editaveis
+
+Apenas o campo **cor** sera editavel pelo tecnico na tela de retirada, pois e o campo mais propenso a erros de OCR e o mais facil de verificar visualmente. Placa, chassi e modelo sao dados mais criticos que devem ser corrigidos pelo escritorio.
+
+### Impacto
+
+- Tecnico pode corrigir a cor do veiculo em campo, sem depender do escritorio
+- Dados corrigidos refletem imediatamente na tela
+- OCR tera instrucoes mais claras para evitar erros futuros de cor
+- Nenhuma alteracao de banco de dados (schema) necessaria -- usa tabelas existentes
