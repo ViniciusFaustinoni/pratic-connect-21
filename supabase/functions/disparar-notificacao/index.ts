@@ -70,6 +70,11 @@ const TEMPLATES: Record<string, Record<string, { titulo: string; mensagem: strin
       titulo: '🎉 Conta Reativada!',
       mensagem: 'Sua conta foi reativada com sucesso! Sua proteção veicular está ativa novamente.',
       prioridade: 'alta'
+    },
+    cancelamento: {
+      titulo: 'Cancelamento Processado',
+      mensagem: 'Olá! Seu cancelamento na Praticcar foi processado. Termo de cancelamento enviado para assinatura. {complemento_boleto}Obrigado por ter sido nosso associado!',
+      prioridade: 'alta'
     }
   },
   sinistro: {
@@ -184,7 +189,7 @@ function renderTemplate(template: string, dados: Record<string, unknown>): strin
 interface NotificacaoRequest {
   user_id?: string;
   associado_id?: string;
-  tipo: 'boleto' | 'sinistro' | 'assistencia' | 'rastreamento' | 'sistema';
+  tipo: 'boleto' | 'cobranca' | 'sinistro' | 'assistencia' | 'rastreamento' | 'sistema';
   subtipo: string;
   dados?: Record<string, unknown>;
   link?: string;
