@@ -76,6 +76,7 @@ import VistoriasInstalacoes from "./pages/monitoramento/VistoriasInstalacoes";
 import DashboardCoordenador from "./pages/monitoramento/DashboardCoordenador";
 import Equipe from "./pages/monitoramento/Equipe";
 import FilaVistorias from "./pages/monitoramento/FilaVistorias";
+import RetiradasPage from "./pages/monitoramento/RetiradasPage";
 import VistoriasManutencao from "./pages/monitoramento/VistoriasManutencao";
 import GestaoRotas from "./pages/monitoramento/GestaoRotas";
 import Oficinas from "./pages/oficinas/Oficinas";
@@ -481,6 +482,7 @@ const App = () => (
               <Route path="/monitoramento/vistorias" element={<FilaVistorias />} />
               <Route path="/monitoramento/vistorias-manutencao" element={<VistoriasManutencao />} />
               <Route path="/monitoramento/vistorias-instalacoes" element={<VistoriasInstalacoes />} />
+              <Route path="/monitoramento/retiradas" element={<RetiradasPage />} />
               <Route path="/monitoramento/realizar-vistoria" element={<Vistorias />} />
               
               {/* Marketing */}
