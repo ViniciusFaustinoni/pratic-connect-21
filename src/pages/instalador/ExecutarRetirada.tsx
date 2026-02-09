@@ -262,8 +262,10 @@ export default function ExecutarRetirada() {
         .upload(fileName, file);
       if (uploadError) throw uploadError;
       
-      const { data: { publicUrl } } = supabase.storage.from('vistorias').getPublicUrl(fileName);
-      setFotosEnviadas(prev => ({ ...prev, [tipo]: publicUrl }));
+      const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
+      if (signedData?.signedUrl) {
+        setFotosEnviadas(prev => ({ ...prev, [tipo]: signedData.signedUrl }));
+      }
       toast.success('Foto enviada!');
     } catch (e) {
       toast.error('Erro ao enviar foto');
@@ -283,8 +285,10 @@ export default function ExecutarRetirada() {
         .upload(fileName, file);
       if (uploadError) throw uploadError;
       
-      const { data: { publicUrl } } = supabase.storage.from('vistorias').getPublicUrl(fileName);
-      setVideoUrl(publicUrl);
+      const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
+      if (signedData?.signedUrl) {
+        setVideoUrl(signedData.signedUrl);
+      }
       toast.success('Vídeo enviado!');
     } catch (e) {
       toast.error('Erro ao enviar vídeo');
@@ -303,8 +307,10 @@ export default function ExecutarRetirada() {
         .upload(fileName, file);
       if (uploadError) throw uploadError;
       
-      const { data: { publicUrl } } = supabase.storage.from('vistorias').getPublicUrl(fileName);
-      setAssinaturaUrl(publicUrl);
+      const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
+      if (signedData?.signedUrl) {
+        setAssinaturaUrl(signedData.signedUrl);
+      }
       toast.success('Assinatura capturada!');
     } catch (e) {
       toast.error('Erro ao capturar assinatura');
