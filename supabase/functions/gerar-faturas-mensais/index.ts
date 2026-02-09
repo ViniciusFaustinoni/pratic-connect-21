@@ -194,60 +194,102 @@ serve(async (req) => {
     // 5. Processar cada associado
     for (const associado of (associados || [])) {
       try {
-        // Pegar primeiro veículo ativo
-        const veiculos = (associado.veiculos || []).filter((v: any) => v.status === 'ativo');
-        if (veiculos.length === 0) continue;
-        
-        const veiculo = veiculos[0] as any;
-        const valorFipe = veiculo.valor_fipe || 50000;
-        const cotas = veiculo.quantidade_cotas || 
-                      (veiculo.faixas_cotas as any)?.quantidade_cotas || 
-                      Math.ceil(valorFipe / 5000);
+        // Buscar TODOS os veículos ativos do associado
+        const veiculosAtivos = (associado.veiculos || []).filter((v: any) => v.status === 'ativo');
+        if (veiculosAtivos.length === 0) continue;
 
-        // Calcular composição da fatura
+        if (veiculosAtivos.length > 1) {
+          console.log(`[MULTI-VEICULO] Associado ${associado.id} (${associado.nome}): ${veiculosAtivos.length} veículos ativos`);
+        }
+
+        // Calcular pró-rata (igual para todos os veículos do mesmo associado)
         const proRata = calcularProRata(associado.data_adesao, fechamento.mes, fechamento.ano);
-        
-        // Calcular composição da fatura verificando cobertura específica de cada benefício
-        const composicao: ComposicaoFatura = {
-          taxa_administrativa: getTaxaAdministrativa(valorFipe),
-          // Colisão e incêndio requerem cobertura total
-          rateio_colisao: veiculo.cobertura_total ? (valorPorCotaBeneficio['colisao'] || 0) * cotas : 0,
-          rateio_incendio: veiculo.cobertura_total ? (valorPorCotaBeneficio['incendio'] || 0) * cotas : 0,
-          // Roubo/furto: cobertura específica OU cobertura total
-          rateio_roubo_furto: (veiculo.cobertura_roubo_furto || veiculo.cobertura_total) 
-            ? (valorPorCotaBeneficio['roubo_furto'] || 0) * cotas : 0,
-          // Vidros: cobertura específica (não depende de cobertura_total)
-          rateio_vidros: veiculo.cobertura_vidros ? (valorPorCotaBeneficio['vidros'] || 0) * cotas : 0,
-          // Terceiros: cobertura específica (não depende de cobertura_total)
-          rateio_terceiros: veiculo.cobertura_terceiros ? (valorPorCotaBeneficio['terceiros'] || 0) * cotas : 0,
-          // Assistência 24h: cobertura específica (true por padrão)
-          rateio_assistencia: veiculo.cobertura_assistencia !== false 
-            ? (valorPorCotaBeneficio['assistencia'] || 0) * cotas : 0,
-          adicionais: 0, // TODO: buscar adicionais do contrato (rastreador, etc)
-          adicionais_detalhes: {},
+
+        // Calcular composição individual de CADA veículo e somar
+        let totalGeral = 0;
+        let subtotalRateioGeral = 0;
+        let taxaAdminGeral = 0;
+        const composicoesPorVeiculo: Array<{
+          veiculo: any;
+          valorFipe: number;
+          cotas: number;
+          composicao: ComposicaoFatura;
+          subtotalRateio: number;
+        }> = [];
+
+        for (const veiculo of veiculosAtivos) {
+          const v = veiculo as any;
+          const valorFipe = v.valor_fipe || 50000;
+          const cotas = v.quantidade_cotas || 
+                        (v.faixas_cotas as any)?.quantidade_cotas || 
+                        Math.ceil(valorFipe / 5000);
+
+          const composicao: ComposicaoFatura = {
+            taxa_administrativa: getTaxaAdministrativa(valorFipe),
+            rateio_colisao: v.cobertura_total ? (valorPorCotaBeneficio['colisao'] || 0) * cotas : 0,
+            rateio_incendio: v.cobertura_total ? (valorPorCotaBeneficio['incendio'] || 0) * cotas : 0,
+            rateio_roubo_furto: (v.cobertura_roubo_furto || v.cobertura_total) 
+              ? (valorPorCotaBeneficio['roubo_furto'] || 0) * cotas : 0,
+            rateio_vidros: v.cobertura_vidros ? (valorPorCotaBeneficio['vidros'] || 0) * cotas : 0,
+            rateio_terceiros: v.cobertura_terceiros ? (valorPorCotaBeneficio['terceiros'] || 0) * cotas : 0,
+            rateio_assistencia: v.cobertura_assistencia !== false 
+              ? (valorPorCotaBeneficio['assistencia'] || 0) * cotas : 0,
+            adicionais: 0,
+            adicionais_detalhes: {},
+            fator_prorata: proRata,
+            total: 0,
+          };
+
+          const subtotalRateio = composicao.rateio_colisao + 
+                                 composicao.rateio_roubo_furto + 
+                                 composicao.rateio_incendio +
+                                 composicao.rateio_vidros +
+                                 composicao.rateio_terceiros +
+                                 composicao.rateio_assistencia;
+
+          composicao.total = (composicao.taxa_administrativa + subtotalRateio + composicao.adicionais) * proRata;
+
+          totalGeral += composicao.total;
+          subtotalRateioGeral += subtotalRateio * proRata;
+          taxaAdminGeral += composicao.taxa_administrativa * proRata;
+
+          composicoesPorVeiculo.push({ veiculo: v, valorFipe, cotas, composicao, subtotalRateio });
+        }
+
+        // Montar descrição e resumo
+        const placas = composicoesPorVeiculo.map(c => c.veiculo.placa);
+        const descricaoVeiculos = veiculosAtivos.length === 1
+          ? placas[0]
+          : `${veiculosAtivos.length} veículos: ${placas.join(', ')}`;
+
+        const composicaoResumo = {
+          veiculos: composicoesPorVeiculo.map(c => ({
+            veiculo_id: c.veiculo.id,
+            placa: c.veiculo.placa,
+            valor_fipe: c.valorFipe,
+            cotas: c.cotas,
+            valor: c.composicao.total,
+          })),
+          quantidade_veiculos: veiculosAtivos.length,
+          taxa_administrativa_total: taxaAdminGeral,
+          rateio_total: subtotalRateioGeral,
           fator_prorata: proRata,
-          total: 0,
+          total: totalGeral,
         };
 
-        // Calcular total
-        const subtotalRateio = composicao.rateio_colisao + 
-                               composicao.rateio_roubo_furto + 
-                               composicao.rateio_incendio +
-                               composicao.rateio_vidros +
-                               composicao.rateio_terceiros +
-                               composicao.rateio_assistencia;
-        
-        composicao.total = (composicao.taxa_administrativa + subtotalRateio + composicao.adicionais) * proRata;
+        if (veiculosAtivos.length > 1) {
+          console.log(`[MULTI-VEICULO] ${associado.nome}: total R$ ${totalGeral.toFixed(2)} (${placas.join(', ')})`);
+        }
 
         // Se é preview, apenas adicionar ao resultado
         if (body.preview) {
           resultados.faturas.push({
             associado_id: associado.id,
             associado_nome: associado.nome,
-            veiculo_placa: veiculo.placa,
-            valor_fipe: valorFipe,
-            cotas,
-            composicao,
+            veiculos: composicaoResumo.veiculos,
+            quantidade_veiculos: veiculosAtivos.length,
+            composicao_total: totalGeral,
+            composicao_resumo: composicaoResumo,
           });
           resultados.geradas++;
           continue;
@@ -275,12 +317,12 @@ serve(async (req) => {
           dataVencimento.setMonth(dataVencimento.getMonth() + 1);
         }
 
-        // Criar cobrança no ASAAS
+        // Criar cobrança no ASAAS (boleto unificado)
         const asaasClienteId = associado.asaas_clientes?.[0]?.asaas_id;
         let asaasCobranca: any = null;
 
-        if (asaasClienteId && ASAAS_API_KEY && composicao.total > 0) {
-          const descricao = `Fatura ${competencia} - ${associado.nome}\nTaxa Admin: R$ ${composicao.taxa_administrativa.toFixed(2)}\nRateio: R$ ${subtotalRateio.toFixed(2)}`;
+        if (asaasClienteId && ASAAS_API_KEY && totalGeral > 0) {
+          const descricao = `Fatura ${competencia} - ${associado.nome} - ${descricaoVeiculos}\nTaxa Admin: R$ ${taxaAdminGeral.toFixed(2)}\nRateio: R$ ${subtotalRateioGeral.toFixed(2)}`;
           
           const asaasResponse = await fetch(`${ASAAS_API_URL}/payments`, {
             method: 'POST',
@@ -290,8 +332,8 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               customer: asaasClienteId,
-              billingType: 'UNDEFINED', // Permite boleto e PIX
-              value: Math.round(composicao.total * 100) / 100,
+              billingType: 'UNDEFINED',
+              value: Math.round(totalGeral * 100) / 100,
               dueDate: dataVencimento.toISOString().split('T')[0],
               description: descricao,
               externalReference: `${associado.id}-${competencia}-rateio`,
@@ -301,7 +343,6 @@ serve(async (req) => {
           if (asaasResponse.ok) {
             asaasCobranca = await asaasResponse.json();
             
-            // Buscar QRCode PIX
             try {
               const pixResponse = await fetch(`${ASAAS_API_URL}/payments/${asaasCobranca.id}/pixQrCode`, {
                 headers: { 'access_token': ASAAS_API_KEY },
@@ -320,7 +361,7 @@ serve(async (req) => {
           }
         }
 
-        // Inserir cobrança no banco
+        // Inserir cobrança unificada no banco (veiculo_id = null para multi-veículo)
         const { data: cobrancaInserida, error: insertError } = await supabase
           .from('asaas_cobrancas')
           .insert({
@@ -328,7 +369,7 @@ serve(async (req) => {
             asaas_id: asaasCobranca?.id || `LOCAL-${Date.now()}-${associado.id.slice(0, 8)}`,
             tipo: 'mensalidade_rateio',
             competencia,
-            valor: composicao.total,
+            valor: totalGeral,
             data_emissao: new Date().toISOString().split('T')[0],
             data_vencimento: dataVencimento.toISOString().split('T')[0],
             status: 'PENDING',
@@ -339,8 +380,8 @@ serve(async (req) => {
             mes_referencia: fechamento.mes,
             ano_referencia: fechamento.ano,
             modelo_cobranca: 'rateio',
-            composicao_resumo: composicao,
-            veiculo_id: veiculo.id,
+            composicao_resumo: composicaoResumo,
+            veiculo_id: veiculosAtivos.length === 1 ? (veiculosAtivos[0] as any).id : null,
           })
           .select()
           .single();
@@ -349,26 +390,28 @@ serve(async (req) => {
           throw new Error(`Erro ao inserir cobrança: ${insertError.message}`);
         }
 
-        // Inserir composição detalhada
+        // Inserir composição detalhada — UMA LINHA POR VEÍCULO
         if (cobrancaInserida) {
-          await supabase.from('cobrancas_composicao').insert({
-            cobranca_id: cobrancaInserida.id,
-            valor_taxa_administrativa: composicao.taxa_administrativa,
-            valor_rateio_colisao: composicao.rateio_colisao,
-            valor_rateio_roubo_furto: composicao.rateio_roubo_furto,
-            valor_rateio_incendio: composicao.rateio_incendio,
-            valor_rateio_vidros: composicao.rateio_vidros,
-            valor_rateio_terceiros: composicao.rateio_terceiros,
-            valor_rateio_assistencia: composicao.rateio_assistencia,
-            valor_adicionais: composicao.adicionais,
-            valor_adicionais_detalhes: composicao.adicionais_detalhes,
-            fator_prorata: composicao.fator_prorata,
-            dias_ativos: Math.round(composicao.fator_prorata * 30),
-            veiculo_id: veiculo.id,
-            valor_fipe: valorFipe,
-            quantidade_cotas: cotas,
-            faixa_id: veiculo.faixa_cota_id,
-          });
+          for (const item of composicoesPorVeiculo) {
+            await supabase.from('cobrancas_composicao').insert({
+              cobranca_id: cobrancaInserida.id,
+              valor_taxa_administrativa: item.composicao.taxa_administrativa,
+              valor_rateio_colisao: item.composicao.rateio_colisao,
+              valor_rateio_roubo_furto: item.composicao.rateio_roubo_furto,
+              valor_rateio_incendio: item.composicao.rateio_incendio,
+              valor_rateio_vidros: item.composicao.rateio_vidros,
+              valor_rateio_terceiros: item.composicao.rateio_terceiros,
+              valor_rateio_assistencia: item.composicao.rateio_assistencia,
+              valor_adicionais: item.composicao.adicionais,
+              valor_adicionais_detalhes: item.composicao.adicionais_detalhes,
+              fator_prorata: item.composicao.fator_prorata,
+              dias_ativos: Math.round(item.composicao.fator_prorata * 30),
+              veiculo_id: item.veiculo.id,
+              valor_fipe: item.valorFipe,
+              quantidade_cotas: item.cotas,
+              faixa_id: item.veiculo.faixa_cota_id,
+            });
+          }
         }
 
         // Enviar WhatsApp se solicitado
@@ -376,18 +419,22 @@ serve(async (req) => {
           const telefone = associado.whatsapp || associado.telefone;
           if (telefone) {
             try {
-              const valorFormatado = composicao.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+              const valorFormatado = totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
               const dataFormatada = dataVencimento.toLocaleDateString('pt-BR');
               
+              const veiculosInfo = veiculosAtivos.length > 1
+                ? `\n🚗 *${veiculosAtivos.length} veículos:* ${placas.join(', ')}`
+                : `\n🚗 *Veículo:* ${placas[0]}`;
+
               const mensagem = `📄 *Fatura Rateio ${competencia}*
 
 Olá ${associado.nome.split(' ')[0]}! 👋
 
-Sua fatura de *${valorFormatado}* está disponível.
+Sua fatura de *${valorFormatado}* está disponível.${veiculosInfo}
 
 📊 *Composição:*
-• Taxa Admin: R$ ${composicao.taxa_administrativa.toFixed(2)}
-• Rateio: R$ ${subtotalRateio.toFixed(2)}
+• Taxa Admin: R$ ${taxaAdminGeral.toFixed(2)}
+• Rateio: R$ ${subtotalRateioGeral.toFixed(2)}
 
 📅 Vencimento: *${dataFormatada}*
 
@@ -400,7 +447,6 @@ ${asaasCobranca.bankSlipUrl ? `📋 Boleto: ${asaasCobranca.bankSlipUrl}` : ''}`
                 body: { telefone: telefone.replace(/\D/g, ''), mensagem },
               });
               
-              // Marcar como enviado
               await supabase
                 .from('asaas_cobrancas')
                 .update({ enviada_whatsapp: true, enviada_whatsapp_em: new Date().toISOString() })
@@ -417,7 +463,8 @@ ${asaasCobranca.bankSlipUrl ? `📋 Boleto: ${asaasCobranca.bankSlipUrl}` : ''}`
         resultados.faturas.push({
           associado_id: associado.id,
           associado_nome: associado.nome,
-          valor: composicao.total,
+          valor: totalGeral,
+          quantidade_veiculos: veiculosAtivos.length,
           asaas_id: asaasCobranca?.id,
         });
 
