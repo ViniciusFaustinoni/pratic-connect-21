@@ -291,7 +291,7 @@ export function useRetiradas(filters?: RetiradaFilters) {
         .from('servicos')
         .select(`
           *,
-          associado:associados(id, nome, telefone, cpf),
+          associado:associados!servicos_associado_id_fkey(id, nome, telefone, cpf),
           veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, marca, modelo),
           rastreador:rastreadores(id, codigo, imei),
           profissional:profiles!servicos_profissional_id_fkey(id, nome)

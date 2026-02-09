@@ -269,7 +269,7 @@ export function useServicos(filters?: ServicoFilters) {
         .from('servicos')
         .select(`
           *,
-          associado:associados(id, nome, telefone, whatsapp, cpf, email),
+          associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp, cpf, email),
           veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, marca, modelo, cor, ano_fabricacao, ano_modelo),
           profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone),
           cotacao:cotacoes(id, numero),
@@ -340,7 +340,7 @@ export function useServico(id: string | undefined) {
         .from('servicos')
         .select(`
           *,
-          associado:associados(id, nome, telefone, whatsapp, cpf, email),
+          associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp, cpf, email),
           veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, marca, modelo, cor, ano_fabricacao, ano_modelo),
           profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone),
           cotacao:cotacoes(id, numero),

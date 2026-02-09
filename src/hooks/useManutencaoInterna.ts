@@ -191,7 +191,7 @@ export function useManutencaoInternaDetalhe(id: string | undefined) {
             motivo_manutencao,
             observacoes_analise,
             veiculo:veiculos(id, placa, marca, modelo),
-            associado:associados(id, nome, telefone)
+            associado:associados!servicos_associado_id_fkey(id, nome, telefone)
           ),
           resolvido_por_profile:profiles!rastreador_manutencao_interna_resolvido_por_fkey(id, nome)
         `)
