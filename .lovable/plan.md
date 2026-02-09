@@ -1,85 +1,63 @@
 
-# ExcluirAssociadoDialog + Sub-badges + Menu de Acoes
+# Substituicao de Veiculo — Tabela, Types e Hook
 
 ## Resumo
 
-Criar componente ExcluirAssociadoDialog com 3 variantes (inadimplencia, exclusao_diretoria, busca_apreensao), adicionar sub-badges de tipo_saida na lista de associados, e novas opcoes no menu de acoes do AssociadoDetalhe com controle de permissao.
+Criar a infraestrutura completa para o fluxo de substituicao de veiculo: tabela no banco, colunas auxiliares em veiculos, tipos TypeScript e hook com 8 funcoes.
 
 ---
 
-## Passo 1 — Novo componente ExcluirAssociadoDialog
+## Passo 1 — Migration: Tabela substituicoes_veiculo + colunas em veiculos
 
-**Arquivo:** `src/components/cadastro/ExcluirAssociadoDialog.tsx` (novo)
+Uma unica migration SQL com:
 
-Componente que recebe `tipoExclusao` e renderiza campos especificos para cada variante:
-
-**Estrutura geral (reutiliza padroes do CancelarAssociadoDialog):**
-- Mesma verificacao de `pendencia_rastreador` com Alert destrutivo
-- Mesmos progress steps visuais (StepIcon, updateStep)
-- Mesmo padrao de chamada a `processar-pos-retirada`
-
-**Campos por variante:**
-
-- **inadimplencia**: Card com dias de inadimplencia (calculado a partir da cobranca OVERDUE mais antiga), total em aberto, Select de acao de cobranca (4 opcoes), checkbox de confirmacao
-- **exclusao_diretoria**: Input "Numero da Ata", DatePicker "Data da decisao", Textarea "Motivo" (min 20 chars), Select "Fundamento regulamentar" (14 opcoes do regulamento 3.5/3.6), 2 checkboxes obrigatorios (processo administrativo + notificacao com defesa)
-- **busca_apreensao**: Input "Numero do processo" (opcional), Input "Vara/Tribunal" (opcional), Textarea "Motivo" (obrigatorio), Checkbox "Encaminhar para modulo Juridico"
-
-**Fluxo ao confirmar:**
-1. Chamar `processar-pos-retirada` com `motivo_retirada = tipoExclusao` — se falhar, parar
-2. Para inadimplencia: NAO cancela cobrancas (mantidas para cobranca), salva acao selecionada no metadata do historico
-3. Para exclusao_diretoria: salva numero_ata, data_decisao, fundamento no metadata; envia notificacao formal via `disparar-notificacao`
-4. Para busca_apreensao: se checkbox juridico marcado, registra em metadata para encaminhamento
-5. Em TODOS: notificar via WhatsApp com `disparar-notificacao` (subtipo = tipoExclusao)
-6. Toast de sucesso + onSuccess()
+1. `CREATE TABLE substituicoes_veiculo` com todas as 40+ colunas conforme especificado (status, snapshot veiculo antigo/novo, financeiro, evento bloqueante, carencia, aprovacao, consultor, autentique, metadata)
+2. 3 indices (associado_id, status, veiculo_antigo_id)
+3. RLS habilitada com 2 policies:
+   - `funcionario_full_access`: full access para usuarios com tipo = 'funcionario'
+   - `associado_select_proprio`: SELECT apenas para o proprio associado (via cadeia usuarios -> associados)
+4. `ALTER TABLE veiculos` adicionando 5 colunas: `principal`, `substituido_por`, `data_inativacao`, `motivo_inativacao`, `substituicao_id`
+5. `UPDATE veiculos SET principal = true WHERE ativo = true AND principal IS NULL` para marcar veiculos ativos existentes
 
 ---
 
-## Passo 2 — Sub-badges de tipo_saida na lista
+## Passo 2 — Types: src/types/substituicao.ts
 
-**Arquivo:** `src/pages/cadastro/Associados.tsx`
+Novo arquivo com:
 
-Na coluna de Status da tabela (linha ~590-593), apos o Badge principal de status, adicionar sub-badge condicional quando `status = 'cancelado'` ou `status = 'bloqueado'`:
-
-```text
-cancelamento_voluntario -> Badge cinza pequeno "Voluntario"
-inadimplencia -> Badge laranja "Inadimplencia"
-exclusao_diretoria -> Badge vermelho "Exclusao Diretoria"
-busca_apreensao -> Badge vermelho escuro "Busca e Apreensao"
-bloqueado (sem tipo_saida) -> Badge cinza escuro "Bloqueado Judicial"
-```
-
-O campo `tipo_saida` ja esta disponivel pois o `useAssociados` faz `select('*')`.
+- `StatusSubstituicao` — union type com 9 valores (iniciada, aguardando_retirada, aguardando_vistoria, aguardando_financeiro, aguardando_aprovacao, aprovada, rejeitada, efetivada, cancelada_pelo_associado)
+- `ResolucaoEvento` — 3 valores
+- `TipoEventoBloqueante` — 4 valores
+- `SubstituicaoVeiculo` — interface completa mapeando todas as colunas da tabela
+- `DadosNovoVeiculo` — interface para dados de entrada do novo veiculo (placa, marca, modelo, FIPE, coberturas)
+- Labels e cores para badges de status
 
 ---
 
-## Passo 3 — Novas opcoes no menu do AssociadoDetalhe
+## Passo 3 — Hook: src/hooks/useSubstituicaoVeiculo.ts
 
-**Arquivo:** `src/pages/cadastro/AssociadoDetalhe.tsx`
+Hook com 8 funcoes, seguindo o padrao de useAssociados/useVeiculos (react-query):
 
-1. Importar `ExcluirAssociadoDialog`
-2. Adicionar 3 novos estados:
-   - `excluirDialogOpen: boolean`
-   - `tipoExclusao: 'inadimplencia' | 'exclusao_diretoria' | 'busca_apreensao' | null`
-3. No DropdownMenu existente (linha ~661-678), ADICIONAR apos "Cancelar Associacao":
-   - Separador
-   - "Excluir por Inadimplencia" (icone DollarSign, cor laranja)
-   - "Excluir por Decisao da Diretoria" (icone AlertTriangle, cor vermelha)
-   - "Busca e Apreensao" (icone Shield, cor vermelha escura)
-4. Estas opcoes so aparecem para perfis com permissao: usar `usePermissions` para verificar `isDiretor || isGerencia || isDesenvolvedor || isAdminMaster`
-5. Adicionar o componente `ExcluirAssociadoDialog` no JSX, junto aos outros dialogs existentes
+1. **useSubstituicoes(associado_id?)** — query para listar substituicoes, com join em associados e veiculos
+2. **useSubstituicao(id)** — query para buscar uma substituicao especifica com relacoes
+3. **useIniciarSubstituicao()** — mutation que cria registro com status 'iniciada', salvando snapshot do veiculo antigo (placa, modelo, fipe, mensalidade, cota)
+4. **useAtualizarSubstituicao()** — mutation generica para update de campos
+5. **useAprovarSubstituicao()** — mutation que seta aprovado_por, aprovado_em, status = 'aprovada'
+6. **useRejeitarSubstituicao()** — mutation que seta motivo_rejeicao, rejeitado_por, rejeitado_em, status = 'rejeitada'
+7. **useEfetivarSubstituicao()** — mutation complexa que executa a efetivacao (marcar veiculo antigo como inativo com substituido_por, criar/vincular veiculo novo como principal, atualizar status para 'efetivada')
+8. **useVerificarElegibilidade(associado_id)** — query que verifica:
+   - Adimplencia: busca cobrancas com status em aberto (PENDING/OVERDUE) na tabela asaas_cobrancas ou cobrancas
+   - Rastreador: le pendencia_rastreador do associado
+   - Evento ativo: busca sinistros do veiculo do associado com status diferente de 'concluido' e 'negado'
+   - Retorna { adimplente, rastreador_devolvido, evento_ativo: { tem, tipo, evento_id }, elegivel }
+
+Cada mutation invalida queries `['substituicoes']` e relevantes apos sucesso.
 
 ---
 
-## Passo 4 — Templates de notificacao no disparar-notificacao
+## Passo 4 — Registrar no config.toml
 
-**Arquivo:** `supabase/functions/disparar-notificacao/index.ts`
-
-Adicionar 3 novos subtipos dentro de `cobranca` (ou criar tipo `exclusao`):
-- `inadimplencia`: "Seu cadastro foi encerrado por inadimplencia. Debitos em aberto serao encaminhados para cobranca."
-- `exclusao_diretoria`: "Seu cadastro foi encerrado por decisao da diretoria conforme regulamento interno."
-- `busca_apreensao`: "Seu cadastro foi bloqueado. Encaminhado ao departamento juridico."
-
-Deploy da edge function apos alteracao.
+Nenhuma edge function nova neste passo. Tabela usa acesso direto via supabase client.
 
 ---
 
@@ -87,26 +65,39 @@ Deploy da edge function apos alteracao.
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/cadastro/ExcluirAssociadoDialog.tsx` | Novo |
-| `src/pages/cadastro/Associados.tsx` | Adicionar sub-badges |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Adicionar menu + dialog |
-| `supabase/functions/disparar-notificacao/index.ts` | Adicionar templates |
+| Migration SQL | Nova tabela + ALTER veiculos |
+| `src/types/substituicao.ts` | Novo |
+| `src/hooks/useSubstituicaoVeiculo.ts` | Novo |
+| `src/integrations/supabase/types.ts` | Atualizado automaticamente pela migration |
 
 ## O que NAO sera alterado
 
-- CancelarAssociadoDialog (PR-02) — intacto
-- SuspenderAssociadoDialog — intacto
-- processar-pos-retirada (PR-01) — intacto
-- useAssociados hook — intacto
-- Tabelas do banco — nenhuma migration necessaria (colunas ja existem)
+- Nenhum componente frontend existente
+- Nenhum hook existente
+- Nenhuma edge function existente
+- useFipe, useFipeLookup — intactos
+- CancelarAssociadoDialog, ExcluirAssociadoDialog — intactos
 
 ## Detalhes tecnicos
 
-### Permissoes
-As novas opcoes de exclusao usam `usePermissions()` do hook existente. Condicao: `isDiretor || isGerencia || isDesenvolvedor || isAdminMaster`. Isso cobre diretor, gerente_comercial, supervisor_vendas, desenvolvedor e admin_master.
+### Elegibilidade
 
-### DatePicker na exclusao por diretoria
-Usar o padrao Shadcn com Popover + Calendar (ja existente no projeto), com `pointer-events-auto` conforme documentado.
+A query de elegibilidade faz 3 consultas paralelas (Promise.all):
+1. `asaas_cobrancas` ou `cobrancas` com status em aberto para o associado
+2. `associados` para ler `pendencia_rastreador`
+3. `sinistros` com `veiculo_id` do veiculo ativo do associado e status NOT IN ('concluido', 'negado', 'encerrado')
 
-### Metadata do historico
-O `processar-pos-retirada` ja aceita o campo `motivo_retirada` e registra em `associados_historico`. Os dados adicionais (numero_ata, fundamento, acao_cobranca) serao salvos via update direto no registro de historico apos a chamada, usando o campo `metadata` (jsonb) ja existente.
+O resultado `elegivel` e true apenas se: adimplente AND !pendencia_rastreador AND (!evento_ativo.tem OR evento_ativo.tipo === 'terceiros_paralelo')
+
+### Efetivacao (useEfetivarSubstituicao)
+
+A mutation de efetivacao faz:
+1. Marcar veiculo antigo: `ativo = false, principal = false, substituido_por = veiculo_novo_id, data_inativacao = now(), motivo_inativacao = 'substituicao', substituicao_id = id`
+2. Marcar veiculo novo: `ativo = true, principal = true, substituicao_id = id`
+3. Atualizar substituicao: `status = 'efetivada', updated_at = now()`
+4. Registrar em `associados_historico`
+5. Invalidar queries de veiculos e substituicoes
+
+### RLS
+
+A policy de associado usa subquery encadeada: `associado_id = (SELECT id FROM associados WHERE user_id = (SELECT id FROM usuarios WHERE auth_id = auth.uid()))`. Isso garante que o associado so ve suas proprias substituicoes.
