@@ -5,7 +5,7 @@ import {
   Gauge, CheckCircle2, Loader2, Car, Video,
   ChevronDown, ChevronUp, MessageSquare, PackageMinus,
   MessageCircle, Phone, MapPin, Play, UserX, Info,
-  AlertCircle, RefreshCw
+  AlertCircle, RefreshCw, Pencil, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -137,6 +137,11 @@ export default function ExecutarRetirada() {
   const [hodometro, setHodometro] = useState('');
   const [observacoes, setObservacoes] = useState('');
   
+  // Edição inline de cor
+  const [editandoCor, setEditandoCor] = useState(false);
+  const [corEditada, setCorEditada] = useState('');
+  const [salvandoCor, setSalvandoCor] = useState(false);
+  
   // Integridade do aparelho
   const [integridade, setIntegridade] = useState<IntegridadeAparelho | null>(null);
   const [obsIntegridade, setObsIntegridade] = useState('');
@@ -167,6 +172,38 @@ export default function ExecutarRetirada() {
     const allChecked = items.every(item => item.checked);
     setChecklistCompleto(allChecked);
   }, []);
+
+  // Salvar cor editada
+  const handleSalvarCor = useCallback(async () => {
+    if (!veiculo?.id || !corEditada.trim()) return;
+    setSalvandoCor(true);
+    try {
+      const novaCor = corEditada.trim().toUpperCase();
+      
+      const { error: errVeiculo } = await supabase
+        .from('veiculos')
+        .update({ cor: novaCor })
+        .eq('id', veiculo.id);
+      if (errVeiculo) throw errVeiculo;
+
+      // Atualizar cotações vinculadas
+      if (veiculo.placa) {
+        await supabase
+          .from('cotacoes')
+          .update({ veiculo_cor: novaCor })
+          .eq('veiculo_placa', veiculo.placa);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['servico-retirada', servicoId] });
+      setEditandoCor(false);
+      toast.success(`Cor atualizada para ${novaCor}`);
+    } catch (err) {
+      console.error('Erro ao atualizar cor:', err);
+      toast.error('Erro ao atualizar cor do veículo');
+    } finally {
+      setSalvandoCor(false);
+    }
+  }, [veiculo?.id, veiculo?.placa, corEditada, queryClient, servicoId]);
 
   // Funções de contato
   const abrirWhatsApp = () => {
@@ -573,14 +610,48 @@ export default function ExecutarRetirada() {
                   { key: 'placa', label: 'Placa', value: veiculo?.placa },
                   { key: 'chassi', label: 'Chassi', value: veiculo?.chassi },
                   { key: 'modelo', label: 'Modelo', value: `${veiculo?.marca} ${veiculo?.modelo}` },
-                  { key: 'cor', label: 'Cor', value: veiculo?.cor || 'Não informada' },
+                  { key: 'cor', label: 'Cor', value: veiculo?.cor || 'Não informada', editavel: true },
                 ].map(item => (
                   <div key={item.key} className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-2">
                     <Checkbox
                       checked={conferencia[item.key as keyof typeof conferencia]}
                       onCheckedChange={(c) => setConferencia(prev => ({ ...prev, [item.key]: !!c }))}
                     />
-                    <span className="flex-1 text-sm text-slate-300">{item.label}: <span className="font-medium text-white">{item.value}</span></span>
+                    {item.key === 'cor' && editandoCor ? (
+                      <div className="flex flex-1 items-center gap-2">
+                        <span className="text-sm text-slate-300">{item.label}:</span>
+                        <Input
+                          value={corEditada}
+                          onChange={(e) => setCorEditada(e.target.value.toUpperCase())}
+                          className="h-7 flex-1 border-slate-600 bg-slate-800 text-sm uppercase text-white"
+                          autoFocus
+                          onKeyDown={(e) => e.key === 'Enter' && handleSalvarCor()}
+                        />
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-green-400" onClick={handleSalvarCor} disabled={salvandoCor}>
+                          {salvandoCor ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400" onClick={() => setEditandoCor(false)} disabled={salvandoCor}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="flex-1 text-sm text-slate-300">
+                        {item.label}: <span className="font-medium text-white">{item.value}</span>
+                      </span>
+                    )}
+                    {item.editavel && !editandoCor && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-slate-400 hover:text-blue-400"
+                        onClick={() => {
+                          setCorEditada(veiculo?.cor || '');
+                          setEditandoCor(true);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 ))}
                 <div>

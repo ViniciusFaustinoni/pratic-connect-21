@@ -74,7 +74,10 @@ Extrair OBRIGATORIAMENTE:
 - modelo (ex: COROLLA XEI, GOL 1.0, CIVIC)
 - ano_fabricacao (APENAS o número do ano de fabricação, ex: 2013)
 - ano_modelo (APENAS o número do ano do modelo, ex: 2014)
-- cor (ex: PRATA, PRETO, BRANCO)
+- cor (ex: PRATA, PRETO, BRANCO, AZUL, VERMELHA, CINZA, BEGE, VERDE, AMARELA, MARROM, DOURADA, VINHO)
+  IMPORTANTE: A cor está geralmente no campo rotulado "COR" ou "COR PREDOMINANTE".
+  NÃO confunda com outros campos próximos. Leia EXATAMENTE o que está escrito no campo de cor do documento.
+  Se houver dúvida, priorize o texto literal do campo "COR" no documento.
 - combustivel (ex: FLEX, GASOLINA, DIESEL)
 - motor (número do motor, ex: M155966, 1234ABC5678)
 - nome_proprietario (nome completo do proprietário)
