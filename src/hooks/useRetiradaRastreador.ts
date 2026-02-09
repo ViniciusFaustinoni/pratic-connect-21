@@ -242,12 +242,13 @@ export function useAbrirRetirada() {
         try {
           await supabase.functions.invoke('notificar-retirada-whatsapp', {
             body: {
-              servicoId: servico.id,
-              associadoNome: associadoData.nome,
-              associadoTelefone: associadoData.telefone || associadoData.whatsapp,
-              dataAgendada: params.dataAgendada,
+              telefone: associadoData.telefone || associadoData.whatsapp,
+              nome_associado: associadoData.nome,
+              veiculo_modelo: veiculoData ? `${veiculoData.marca} ${veiculoData.modelo}` : '',
+              veiculo_placa: veiculoData?.placa || '',
+              data_agendada: params.dataAgendada,
               periodo: params.periodo,
-              veiculoPlaca: veiculoData?.placa,
+              local: params.localTipo === 'base' ? 'Sede Praticcar' : (params.localEndereco || 'Endereço do associado'),
               motivo: params.motivo,
             },
           });
