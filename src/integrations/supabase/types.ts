@@ -1569,9 +1569,12 @@ export type Database = {
         Row: {
           aprovado_em: string | null
           aprovado_por: string | null
+          asaas_recorrencia_cancelada: boolean | null
           avatar_url: string | null
           bairro: string | null
           bloqueado: boolean | null
+          boleto_final_gerado: boolean | null
+          cancelado_por: string | null
           cep: string | null
           cidade: string | null
           codigo_hinova: number | null
@@ -1583,6 +1586,7 @@ export type Database = {
           data_ativacao: string | null
           data_bloqueio: string | null
           data_cancelamento: string | null
+          data_efetiva_saida: string | null
           data_nascimento: string | null
           data_primeiro_boleto_pago: string | null
           dia_vencimento: number | null
@@ -1600,6 +1604,7 @@ export type Database = {
           pendencia_rastreador: boolean | null
           pendencia_rastreador_servico_id: string | null
           plano_id: string | null
+          pode_reativar: boolean | null
           primeiro_boleto_gerado: boolean | null
           profissao: string | null
           qtd_boletos_pagos: number | null
@@ -1610,6 +1615,7 @@ export type Database = {
           status: Database["public"]["Enums"]["status_associado"]
           telefone: string
           telefone_secundario: string | null
+          tipo_saida: string | null
           uf: string | null
           updated_at: string
           user_id: string | null
@@ -1619,9 +1625,12 @@ export type Database = {
         Insert: {
           aprovado_em?: string | null
           aprovado_por?: string | null
+          asaas_recorrencia_cancelada?: boolean | null
           avatar_url?: string | null
           bairro?: string | null
           bloqueado?: boolean | null
+          boleto_final_gerado?: boolean | null
+          cancelado_por?: string | null
           cep?: string | null
           cidade?: string | null
           codigo_hinova?: number | null
@@ -1633,6 +1642,7 @@ export type Database = {
           data_ativacao?: string | null
           data_bloqueio?: string | null
           data_cancelamento?: string | null
+          data_efetiva_saida?: string | null
           data_nascimento?: string | null
           data_primeiro_boleto_pago?: string | null
           dia_vencimento?: number | null
@@ -1650,6 +1660,7 @@ export type Database = {
           pendencia_rastreador?: boolean | null
           pendencia_rastreador_servico_id?: string | null
           plano_id?: string | null
+          pode_reativar?: boolean | null
           primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
           qtd_boletos_pagos?: number | null
@@ -1660,6 +1671,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_associado"]
           telefone: string
           telefone_secundario?: string | null
+          tipo_saida?: string | null
           uf?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1669,9 +1681,12 @@ export type Database = {
         Update: {
           aprovado_em?: string | null
           aprovado_por?: string | null
+          asaas_recorrencia_cancelada?: boolean | null
           avatar_url?: string | null
           bairro?: string | null
           bloqueado?: boolean | null
+          boleto_final_gerado?: boolean | null
+          cancelado_por?: string | null
           cep?: string | null
           cidade?: string | null
           codigo_hinova?: number | null
@@ -1683,6 +1698,7 @@ export type Database = {
           data_ativacao?: string | null
           data_bloqueio?: string | null
           data_cancelamento?: string | null
+          data_efetiva_saida?: string | null
           data_nascimento?: string | null
           data_primeiro_boleto_pago?: string | null
           dia_vencimento?: number | null
@@ -1700,6 +1716,7 @@ export type Database = {
           pendencia_rastreador?: boolean | null
           pendencia_rastreador_servico_id?: string | null
           plano_id?: string | null
+          pode_reativar?: boolean | null
           primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
           qtd_boletos_pagos?: number | null
@@ -1710,6 +1727,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_associado"]
           telefone?: string
           telefone_secundario?: string | null
+          tipo_saida?: string | null
           uf?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1791,6 +1809,7 @@ export type Database = {
       }
       associados_historico: {
         Row: {
+          acao: string | null
           associado_id: string
           contrato_id: string | null
           created_at: string | null
@@ -1798,14 +1817,19 @@ export type Database = {
           dados_novos: Json | null
           descricao: string
           documento_id: string | null
+          executado_por: string | null
           id: string
           instalacao_id: string | null
           metadata: Json | null
+          motivo: string | null
+          status_anterior: string | null
+          status_novo: string | null
           tipo: string
           usuario_id: string | null
           veiculo_id: string | null
         }
         Insert: {
+          acao?: string | null
           associado_id: string
           contrato_id?: string | null
           created_at?: string | null
@@ -1813,14 +1837,19 @@ export type Database = {
           dados_novos?: Json | null
           descricao: string
           documento_id?: string | null
+          executado_por?: string | null
           id?: string
           instalacao_id?: string | null
           metadata?: Json | null
+          motivo?: string | null
+          status_anterior?: string | null
+          status_novo?: string | null
           tipo: string
           usuario_id?: string | null
           veiculo_id?: string | null
         }
         Update: {
+          acao?: string | null
           associado_id?: string
           contrato_id?: string | null
           created_at?: string | null
@@ -1828,9 +1857,13 @@ export type Database = {
           dados_novos?: Json | null
           descricao?: string
           documento_id?: string | null
+          executado_por?: string | null
           id?: string
           instalacao_id?: string | null
           metadata?: Json | null
+          motivo?: string | null
+          status_anterior?: string | null
+          status_novo?: string | null
           tipo?: string
           usuario_id?: string | null
           veiculo_id?: string | null

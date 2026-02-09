@@ -374,3 +374,6 @@ verify_jwt = false
 
 [functions.notificar-retirada-whatsapp]
 verify_jwt = false
+
+[functions.processar-pos-retirada]
+verify_jwt = false
