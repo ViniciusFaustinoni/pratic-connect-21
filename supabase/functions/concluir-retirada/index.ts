@@ -13,6 +13,14 @@ interface RequestBody {
   hodometro?: number;
   assinaturaUrl?: string;
   observacoes?: string;
+  // Novos campos
+  integridade?: 'integro' | 'danificado' | 'violado' | 'molhado';
+  obsIntegridade?: string;
+  checklistRetirada?: Array<{ id: string; label: string; checked: boolean; checked_at: string | null }>;
+  videoUrl?: string;
+  fotosUrls?: string[];
+  criarNovaInstalacao?: boolean;
+  novoVeiculoId?: string;
 }
 
 Deno.serve(async (req) => {
@@ -28,7 +36,12 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body: RequestBody = await req.json();
-    const { servicoId, rastreadorId, veiculoId, profissionalId, hodometro, assinaturaUrl, observacoes } = body;
+    const { 
+      servicoId, rastreadorId, veiculoId, profissionalId, 
+      hodometro, assinaturaUrl, observacoes,
+      integridade, obsIntegridade, checklistRetirada,
+      videoUrl, fotosUrls, criarNovaInstalacao, novoVeiculoId
+    } = body;
 
     console.log('=== CONCLUIR RETIRADA DE RASTREADOR ===');
     console.log('Payload:', JSON.stringify(body));
@@ -64,12 +77,20 @@ Deno.serve(async (req) => {
       .eq('id', veiculoId)
       .single();
 
+    // Buscar dados do serviço para pegar informações adicionais
+    const { data: servicoData } = await supabase
+      .from('servicos')
+      .select('associado_id, motivo_retirada, sub_tipo_retirada, novo_veiculo_id')
+      .eq('id', servicoId)
+      .single();
+
     let associado = null;
-    if (veiculo?.associado_id) {
+    const associadoId = servicoData?.associado_id || veiculo?.associado_id;
+    if (associadoId) {
       const { data: associadoData } = await supabase
         .from('associados')
         .select('id, cpf, nome')
-        .eq('id', veiculo.associado_id)
+        .eq('id', associadoId)
         .single();
       associado = associadoData;
     }
@@ -90,7 +111,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             rastreadorId: rastreador.id,
             motivo: 'retirada_rastreador',
-            atualizarBancoLocal: false, // Faremos isso manualmente
+            atualizarBancoLocal: false,
           }),
         });
 
@@ -134,11 +155,16 @@ Deno.serve(async (req) => {
       plataformaDesativada = true;
     }
 
-    // 4. Atualizar rastreador: status = estoque, veiculo_id = null, portador_id = profissional
+    // 4. Determinar status de destino do rastreador baseado na integridade
+    // Se íntegro: estoque | Se não íntegro: retorno_base (triagem)
+    const novoStatusRastreador = integridade === 'integro' ? 'estoque' : 'retorno_base';
+    console.log(`Integridade: ${integridade} → Novo status rastreador: ${novoStatusRastreador}`);
+
+    // 5. Atualizar rastreador
     const { error: updateRastreadorError } = await supabase
       .from('rastreadores')
       .update({
-        status: 'estoque',
+        status: novoStatusRastreador,
         veiculo_id: null,
         portador_id: profissionalId,
         id_plataforma: null,
@@ -154,7 +180,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 5. Limpar IDs de plataforma do veículo
+    // 6. Limpar IDs de plataforma do veículo
     if (veiculo) {
       await supabase
         .from('veiculos')
@@ -166,37 +192,56 @@ Deno.serve(async (req) => {
         .eq('id', veiculoId);
     }
 
-    // 6. Registrar movimentação de estoque
+    // 7. Registrar movimentação de estoque
     await supabase.from('estoque_movimentacoes').insert({
       tipo: 'desinstalacao',
       quantidade: 1,
       status_anterior: 'instalado',
-      status_novo: 'estoque',
+      status_novo: novoStatusRastreador,
       rastreador_id: rastreadorId,
-      observacoes: `Retirada de rastreador. ${observacoes || ''}`.trim(),
+      observacoes: `Retirada de rastreador. Integridade: ${integridade || 'não informada'}. ${observacoes || ''}`.trim(),
     });
 
-    // 7. Registrar movimentação no histórico de rastreadores
+    // 8. Registrar movimentação no histórico de rastreadores
     await supabase.from('rastreadores_movimentacoes').insert({
       rastreador_id: rastreadorId,
       tipo: 'desinstalacao',
       origem_status: 'instalado',
-      destino_status: 'estoque',
+      destino_status: novoStatusRastreador,
       veiculo_id: veiculoId,
-      observacoes: `Retirada realizada. Rastreador atribuído ao portador. ${observacoes || ''}`.trim(),
+      observacoes: `Retirada realizada. Integridade: ${integridade || 'não informada'}. ${obsIntegridade || ''} ${observacoes || ''}`.trim(),
     });
 
-    // 8. Concluir serviço
+    // 9. Concluir serviço com campos adicionais
+    const updateServicoData: Record<string, unknown> = {
+      status: 'concluida',
+      concluida_em: new Date().toISOString(),
+      km_atual: hodometro || null,
+      assinatura_cliente_url: assinaturaUrl || null,
+      video_360_url: videoUrl || null,
+      observacoes: observacoes || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Adicionar campos de checklist se existirem
+    if (checklistRetirada) {
+      updateServicoData.checklist_retirada = { items: checklistRetirada };
+    }
+
+    // Adicionar integridade
+    if (integridade) {
+      updateServicoData.integridade_aparelho = integridade;
+      if (integridade !== 'integro') {
+        updateServicoData.obs_integridade = obsIntegridade || null;
+        // Sugerir multa (não aplicar automaticamente)
+        updateServicoData.multa_sugerida = true;
+        updateServicoData.multa_valor_sugerido = 400;
+      }
+    }
+
     const { error: updateServicoError } = await supabase
       .from('servicos')
-      .update({
-        status: 'concluida',
-        concluida_em: new Date().toISOString(),
-        km_atual: hodometro || null,
-        assinatura_cliente_url: assinaturaUrl || null,
-        observacoes: observacoes || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateServicoData)
       .eq('id', servicoId);
 
     if (updateServicoError) {
@@ -207,10 +252,41 @@ Deno.serve(async (req) => {
       );
     }
 
+    // 10. Se é substituição com nova instalação, criar novo serviço de instalação
+    let novoServicoInstalacaoId = null;
+    const finalNovoVeiculoId = novoVeiculoId || servicoData?.novo_veiculo_id;
+    
+    if (criarNovaInstalacao && finalNovoVeiculoId) {
+      console.log('Criando novo serviço de instalação para veículo:', finalNovoVeiculoId);
+      
+      const { data: novoServico, error: novoServicoError } = await supabase
+        .from('servicos')
+        .insert({
+          tipo: 'instalacao',
+          status: 'pendente',
+          associado_id: associadoId,
+          veiculo_id: finalNovoVeiculoId,
+          rastreador_id: rastreadorId, // Mesmo rastreador será reinstalado
+          observacoes: `Instalação decorrente de substituição de veículo. Serviço de retirada: ${servicoId}`,
+          created_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+      
+      if (novoServicoError) {
+        console.error('Erro ao criar serviço de instalação:', novoServicoError);
+        // Não falhar a operação por isso, apenas logar
+      } else {
+        novoServicoInstalacaoId = novoServico?.id;
+        console.log('Novo serviço de instalação criado:', novoServicoInstalacaoId);
+      }
+    }
+
     const tempoTotal = Date.now() - startTime;
     console.log('=== RETIRADA CONCLUÍDA COM SUCESSO ===');
     console.log('Tempo total:', tempoTotal, 'ms');
     console.log('Plataforma desativada:', plataformaDesativada);
+    console.log('Integridade:', integridade, '→ Status:', novoStatusRastreador);
 
     return new Response(
       JSON.stringify({
@@ -219,8 +295,11 @@ Deno.serve(async (req) => {
         rastreadorId,
         veiculoId,
         servicoId,
+        novoStatusRastreador,
+        integridade,
         plataformaDesativada,
         plataformaErro,
+        novoServicoInstalacaoId,
         tempoTotal,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
