@@ -358,7 +358,7 @@ export default function ExecutarRetirada() {
 
   if (error || !servico) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 p-4">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 p-4 max-w-md mx-auto">
         <AlertTriangle className="h-12 w-12 text-red-500" />
         <p className="text-center text-slate-300">Serviço não encontrado.</p>
         <Button onClick={() => navigate('/instalador/tarefas')}>Voltar</Button>
@@ -367,7 +367,7 @@ export default function ExecutarRetirada() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-900 pb-56">
+    <div className="flex min-h-screen flex-col bg-slate-900 pb-56 max-w-md mx-auto">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-800 px-4 py-3">
         <div className="flex items-center gap-3">
@@ -726,7 +726,7 @@ export default function ExecutarRetirada() {
 
       {/* Footer */}
       {isEmAndamento && (
-        <footer className="fixed bottom-16 left-0 right-0 border-t border-slate-700 bg-slate-800 p-4 pb-2 space-y-2 z-40">
+        <footer className="fixed bottom-16 left-0 right-0 border-t border-slate-700 bg-slate-800 p-4 pb-2 space-y-2 z-40 max-w-md mx-auto">
           <Button 
             onClick={handleConcluir} 
             disabled={!podeConfirmar || processando} 
