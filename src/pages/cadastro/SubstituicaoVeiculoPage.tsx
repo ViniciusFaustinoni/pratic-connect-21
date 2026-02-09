@@ -10,6 +10,7 @@ import { StepElegibilidade } from '@/components/substituicao/StepElegibilidade';
 import { StepEventoAtivo } from '@/components/substituicao/StepEventoAtivo';
 import { StepNovoVeiculo } from '@/components/substituicao/StepNovoVeiculo';
 import { StepBeneficios } from '@/components/substituicao/StepBeneficios';
+import { StepFinanceiro } from '@/components/substituicao/StepFinanceiro';
 import { useIniciarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
 import { toast } from 'sonner';
 import type { DadosNovoVeiculo } from '@/types/substituicao';
@@ -40,7 +41,7 @@ export default function SubstituicaoVeiculoPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('associados')
-        .select('id, nome, cpf, status')
+        .select('id, nome, cpf, status, dia_vencimento')
         .eq('id', associadoId!)
         .single();
       if (error) throw error;
@@ -129,10 +130,16 @@ export default function SubstituicaoVeiculoPage() {
     setCurrentStep(4);
   };
 
-  // Step 4 -> next (goes to step 5 placeholder)
+  // Step 4 -> next
   const handleBeneficiosNext = () => {
     completeStep(4);
-    toast.info('Steps 5 e 6 (Financeiro e Aprovação) serão implementados na próxima fase.');
+    setCurrentStep(5);
+  };
+
+  // Step 5 -> confirmar (envia para aprovação)
+  const handleFinanceiroConfirmar = () => {
+    completeStep(5);
+    toast.success('Substituição enviada para aprovação!');
   };
 
   if (loadingAssociado || loadingVeiculo) {
@@ -250,10 +257,24 @@ export default function SubstituicaoVeiculoPage() {
         />
       )}
 
-      {currentStep >= 5 && (
+      {currentStep === 5 && (
+        <StepFinanceiro
+          substituicaoId={substituicaoId}
+          associadoId={associadoId!}
+          diaVencimento={associado?.dia_vencimento || 10}
+          veiculoAntigo={veiculoAntigoResumo}
+          dadosNovoVeiculo={dadosNovoVeiculo}
+          beneficiosSelecionados={beneficiosSelecionados}
+          onConfirmar={handleFinanceiroConfirmar}
+          onBack={() => setCurrentStep(4)}
+          onIniciarSubstituicao={handleIniciarSubstituicao}
+        />
+      )}
+
+      {currentStep >= 6 && (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Os steps Financeiro e Aprovação serão implementados na próxima fase.</p>
+            <p className="text-muted-foreground">O step de Aprovação será implementado na próxima fase.</p>
           </CardContent>
         </Card>
       )}
