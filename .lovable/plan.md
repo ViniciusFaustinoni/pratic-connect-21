@@ -1,113 +1,168 @@
 
-# Edge Function processar-pos-retirada + Migrations
+# CancelarAssociadoDialog — Formulario Completo de Cancelamento
 
-## Passo 1 — Migration: Novas colunas em associados
+## Resumo
 
-Adicionar 6 colunas na tabela `associados` (que ja tem `motivo_cancelamento` e `data_cancelamento`):
+Criar um dialog completo de cancelamento que substitui o AlertDialog basico atual. O novo componente orquestra todas as integracoes (processar-pos-retirada, ASAAS, Autentique, WhatsApp) em sequencia, com progress steps visiveis e tratamento de erros resiliente.
 
-```sql
-ALTER TABLE associados 
-ADD COLUMN IF NOT EXISTS pode_reativar boolean DEFAULT true,
-ADD COLUMN IF NOT EXISTS tipo_saida varchar(50),
-ADD COLUMN IF NOT EXISTS data_efetiva_saida timestamptz,
-ADD COLUMN IF NOT EXISTS cancelado_por uuid REFERENCES auth.users(id),
-ADD COLUMN IF NOT EXISTS boleto_final_gerado boolean DEFAULT false,
-ADD COLUMN IF NOT EXISTS asaas_recorrencia_cancelada boolean DEFAULT false;
+## Arquivos Envolvidos
+
+### Novo
+- `src/components/cadastro/CancelarAssociadoDialog.tsx` — Dialog completo de cancelamento
+
+### Modificados
+- `src/pages/cadastro/AssociadoDetalhe.tsx` — Substituir AlertDialog pelo novo componente
+- `supabase/functions/disparar-notificacao/index.ts` — Adicionar template de cancelamento (tipo `cobranca`, subtipo `cancelamento`)
+
+### Nao alterados
+- `SuspenderAssociadoDialog` — intacto (usado apenas como referencia visual)
+- `RastreadorVinculadoModal` — intacto
+- `useAssociados.ts` — intacto
+- `useAsaas.ts` — intacto
+- `processar-pos-retirada/index.ts` — intacto
+- `autentique-create/index.ts` — intacto
+
+---
+
+## Passo 1 — CancelarAssociadoDialog.tsx
+
+### Props
+```typescript
+interface CancelarAssociadoDialogProps {
+  open: boolean;
+  onClose: () => void;
+  associado: { id: string; nome: string; status: string; pendencia_rastreador: boolean };
+  onSuccess: () => void;
+}
 ```
 
-## Passo 2 — Migration: Novas colunas em associados_historico
+### Layout (mesmo padrao do SuspenderAssociadoDialog)
 
-A tabela ja possui `metadata` e `created_at`. Adicionar as 4 colunas restantes:
+1. **Checklist automatica no topo** (busca dados ao abrir):
+   - Rastreador devolvido: le `associado.pendencia_rastreador`
+   - Situacao financeira: consulta `asaas_cobrancas` com status PENDING/OVERDUE
 
-```sql
-ALTER TABLE associados_historico
-ADD COLUMN IF NOT EXISTS acao varchar(50),
-ADD COLUMN IF NOT EXISTS status_anterior varchar(50),
-ADD COLUMN IF NOT EXISTS status_novo varchar(50),
-ADD COLUMN IF NOT EXISTS motivo text,
-ADD COLUMN IF NOT EXISTS executado_por uuid REFERENCES auth.users(id);
-```
+2. **Bloqueio** se `pendencia_rastreador = true`:
+   - Alert destructive com mensagem explicativa
+   - Botao "Confirmar Cancelamento" permanece desabilitado
 
-## Passo 3 — Edge Function: processar-pos-retirada
+3. **Formulario** (quando sem pendencia):
+   - Select com 8 motivos (solicitacao_associado, insatisfacao, concorrente, venda_veiculo, dificuldade_financeira, mudanca_cidade, falecimento, outro)
+   - Input texto livre quando "Outro" selecionado (obrigatorio)
+   - Textarea observacoes (opcional, max 500 chars)
 
-Criar `supabase/functions/processar-pos-retirada/index.ts` seguindo o mesmo padrao do `concluir-retirada`.
+4. **Card financeiro**:
+   - Total em aberto (soma de PENDING + OVERDUE da `asaas_cobrancas`)
+   - Pro-rata estimado (dias restantes do mes x mensalidade diaria, calculado com dados do contrato/plano)
+   - Info: "Sera gerado boleto final consolidado"
 
-Recebe: `servico_id`, `associado_id`, `motivo_retirada`, `executado_por`.
+5. **Checkboxes obrigatorios**:
+   - Confirmo cancelamento
+   - Sera gerado termo via Autentique
 
-Logica (switch em `motivo_retirada`):
+6. **Footer**: Voltar (outline) + Confirmar Cancelamento (destructive, desabilitado ate preencher tudo)
+
+### Fluxo ao confirmar (handleCancelamento)
+
+Executa em sequencia com progress steps visiveis:
 
 ```text
-cancelamento_voluntario:
-  -> status = cancelado, tipo_saida = cancelamento_voluntario, pode_reativar = true
-  -> Inativa veiculo
-  -> Registra historico
+Passo 1: Chamar processar-pos-retirada (motivo = cancelamento_voluntario)
+  - Se falhar: toast.error, parar
+  
+Passo 2: Cancelar cobrancas ASAAS futuras
+  - Buscar asaas_cobrancas com status PENDING e data_vencimento > hoje
+  - Para cada: supabase.functions.invoke('asaas-cobrancas', { action: 'cancelar', asaas_id })
+  - Atualizar associado: asaas_recorrencia_cancelada = true
+  - Se falhar: marcar asaas_recorrencia_cancelada = false, registrar erro, continuar
 
-inadimplencia:
-  -> status = cancelado, tipo_saida = inadimplencia, pode_reativar = true
-  -> Inativa veiculo
-  -> Registra historico
+Passo 3: Gerar boleto final (se valor > 0)
+  - Usar useAsaas.criarCobranca com tipo 'boleto_final_cancelamento'
+  - Valor = debitos em aberto
+  - Atualizar associado: boleto_final_gerado = true
+  - Se falhar: registrar erro, continuar
 
-exclusao_diretoria:
-  -> status = cancelado, tipo_saida = exclusao_diretoria, pode_reativar = false
-  -> Inativa veiculo
-  -> Registra historico
+Passo 4: Gerar termo Autentique
+  - Chamar autentique-create com contratoId do associado
+  - Se falhar: registrar erro, continuar (termo pode ser gerado depois)
 
-substituicao_veiculo:
-  -> NAO muda status (associado continua ativo)
-  -> NAO inativa veiculo
-  -> Registra historico com acao = substituicao
+Passo 5: Notificar WhatsApp
+  - Chamar disparar-notificacao com tipo 'cobranca', subtipo 'cancelamento'
+  - Se falhar: registrar erro, continuar
 
-busca_apreensao:
-  -> status = bloqueado, tipo_saida = busca_apreensao, pode_reativar = false
-  -> Inativa veiculo
-  -> Registra historico
+Passo 6: toast.success + onSuccess()
 ```
 
-Validacoes antes do switch:
-- Servico deve existir e estar concluido
-- Associado deve existir
-- pendencia_rastreador deve ser false
+### Progress Steps UI
 
-Em todos os casos (exceto substituicao), executa:
-```sql
-UPDATE veiculos SET ativo = false, status = 'cancelado' WHERE associado_id = X AND ativo = true
+Enquanto processa, substituir o formulario por lista de steps:
+```text
+[spinner] Processando cancelamento...
+[spinner] Cancelando cobrancas futuras...
+[spinner] Gerando boleto final...
+[spinner] Gerando termo de cancelamento...
+[spinner] Enviando notificacao...
+[check] Concluido!
 ```
 
-## Passo 4 — Registrar no config.toml
+Cada step muda de spinner para check verde ao completar, ou X vermelho se falhar (com mensagem).
 
-Adicionar `[functions.processar-pos-retirada]` com `verify_jwt = false`.
+---
 
-## Passo 5 — Deploy
+## Passo 2 — Integrar na AssociadoDetalhe.tsx
 
-Fazer deploy da edge function.
+### Mudancas pontuais
 
-## Detalhes tecnicos
+1. Importar `CancelarAssociadoDialog`
+2. Remover o bloco `AlertDialog` de cancelamento (linhas 1616-1631)
+3. Adicionar no JSX:
+```tsx
+<CancelarAssociadoDialog
+  open={cancelarDialogOpen}
+  onClose={() => setCancelarDialogOpen(false)}
+  associado={{
+    id: id || '',
+    nome: associado.nome,
+    status: associado.status,
+    pendencia_rastreador: (associado as any).pendencia_rastreador || false,
+  }}
+  onSuccess={() => { setCancelarDialogOpen(false); refetch(); }}
+/>
+```
 
-### Validacao de pre-condicoes
+4. Simplificar `handleCancelar`: remover toda logica de verificacao de rastreador e cancelamento direto -- o novo dialog cuida de tudo internamente. O botao de "Cancelar Associacao" no dropdown agora apenas abre `setCancelarDialogOpen(true)`.
 
-A funcao verifica 3 condicoes antes de processar:
-1. Servico existe e status = 'concluida' (nao 'concluido' — verificar valor real no banco)
-2. Associado existe
-3. pendencia_rastreador = false
+5. Manter `handleConfirmRastreadorModal` e `RastreadorVinculadoModal` intactos (sao usados para o fluxo de retirada quando ha rastreador instalado).
 
-### Historico
+**Observacao importante**: A logica de verificacao de rastreador instalado (que abre o `RastreadorVinculadoModal`) sera movida para DENTRO do `CancelarAssociadoDialog` -- quando o usuario clica "Confirmar" e ha rastreador instalado, o dialog fecha e abre o modal de rastreador. Isso mantem o fluxo existente sem alterar o `RastreadorVinculadoModal`.
 
-Cada caminho insere em `associados_historico` com:
-- associado_id, tipo = 'status_alterado', descricao, dados_anteriores, dados_novos (campos existentes)
-- acao, status_anterior, status_novo, motivo, executado_por (campos novos)
+---
 
-### Retorno
+## Passo 3 — Template de cancelamento no disparar-notificacao
 
-Retorna JSON com `success`, `acao`, `proximo_passo` indicando o que o sistema/usuario deve fazer em seguida (ex: cancelar recorrencia ASAAS, notificar formalmente, iniciar fluxo de substituicao).
+Adicionar no objeto `TEMPLATES` dentro da edge function:
 
-### Arquivos afetados
+```typescript
+// Dentro de 'cobranca':
+cancelamento: {
+  titulo: 'Cancelamento Processado',
+  mensagem: 'Olá! Seu cancelamento na Praticcar foi processado. Termo de cancelamento enviado para assinatura. {complemento_boleto}Obrigado por ter sido nosso associado!',
+  prioridade: 'alta'
+},
+```
 
-1. Migration SQL (2 ALTER TABLEs)
-2. `supabase/functions/processar-pos-retirada/index.ts` (novo)
-3. `supabase/config.toml` (adicionar entrada)
+Tambem adicionar `'cobranca'` ao type union de `tipo` no `NotificacaoRequest` (ja esta la).
 
-### O que NAO sera alterado
+Deploy da edge function apos alteracao.
 
-- `supabase/functions/concluir-retirada/index.ts` — permanece intacto
-- Nenhum componente frontend sera modificado
-- Nenhuma tabela existente tera colunas removidas ou renomeadas
+---
+
+## Validacoes e edge cases
+
+- Se `processar-pos-retirada` falhar: para tudo, nao continua
+- Se ASAAS falhar: continua, marca `asaas_recorrencia_cancelada = false`
+- Se Autentique falhar: continua, log no console
+- Se WhatsApp falhar: continua, log no console
+- Se nao ha debitos em aberto: pula geracao de boleto final
+- Se associado nao tem contrato/cotacao vinculados: pula Autentique com warning
+- Botao desabilitado durante processamento (previne double-click)
