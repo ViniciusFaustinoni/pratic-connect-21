@@ -17139,20 +17139,26 @@ export type Database = {
       }
       servicos: {
         Row: {
+          acabamento_recolocado: boolean | null
           analisado_em: string | null
           analisado_por: string | null
           assinatura_autentique_id: string | null
           assinatura_cliente_url: string | null
           assinatura_concluida_em: string | null
+          assinatura_devolucao_url: string | null
           assinatura_documento_url: string | null
           assinatura_enviada_em: string | null
           assinatura_status: string | null
           associado_id: string | null
           avarias: string | null
           bairro: string | null
+          cancelamento_bloqueado_ate_devolucao: boolean | null
           cep: string | null
           checklist_data: Json | null
           checklist_manutencao: Json | null
+          checklist_retirada: Json | null
+          chip_cancelado: boolean | null
+          chip_presente: boolean | null
           cidade: string | null
           complemento: string | null
           concluida_em: string | null
@@ -17164,8 +17170,11 @@ export type Database = {
           data_agendada: string
           data_agendada_original: string | null
           data_suspensao: string | null
+          debitos_conferidos_em: string | null
+          debitos_conferidos_por: string | null
           em_rota_em: string | null
           encaixe_executado: boolean | null
+          fios_isolados: boolean | null
           fotos_manutencao: Json | null
           fotos_recusa: string[] | null
           hora_agendada: string | null
@@ -17173,23 +17182,34 @@ export type Database = {
           imei_rastreador: string | null
           iniciada_em: string | null
           instalacao_origem_id: string | null
+          integridade_aparelho: string | null
           km_atual: number | null
           latitude: number | null
           lead_id: string | null
           local_tipo_manutencao: string | null
           local_vistoria: string | null
+          localizacao_rastreador: Json | null
           logradouro: string | null
           longitude: number | null
           modalidade: string | null
           motivo_detalhe: string | null
           motivo_manutencao: string | null
           motivo_reprovacao: string | null
+          motivo_retirada: string | null
+          multa_aplicada: boolean | null
+          multa_asaas_id: string | null
+          multa_cobrada_em: string | null
+          multa_forma_cobranca: string | null
+          multa_motivo: string | null
+          multa_valor: number | null
+          novo_veiculo_id: string | null
           numero: string | null
           observacoes: string | null
           observacoes_analise: string | null
           origem: string | null
           periodo: Database["public"]["Enums"]["periodo_servico"]
           permite_encaixe: boolean | null
+          plataforma_desativada: boolean | null
           profissional_id: string | null
           protecao_suspensa: boolean | null
           protocolo: string | null
@@ -17199,9 +17219,13 @@ export type Database = {
           rastreador_substituto_id: string | null
           ressalvas: string | null
           resultado_manutencao: string | null
+          retirada_video_360_url: string | null
           rota_id: string | null
           sinistro_id: string | null
+          solicitado_por_modulo: string | null
           status: Database["public"]["Enums"]["status_servico"]
+          sub_tipo_retirada: string | null
+          tem_debitos_pendentes: boolean | null
           tipo: Database["public"]["Enums"]["tipo_servico"]
           uf: string | null
           updated_at: string
@@ -17212,20 +17236,26 @@ export type Database = {
           whatsapp_notificado_em: string | null
         }
         Insert: {
+          acabamento_recolocado?: boolean | null
           analisado_em?: string | null
           analisado_por?: string | null
           assinatura_autentique_id?: string | null
           assinatura_cliente_url?: string | null
           assinatura_concluida_em?: string | null
+          assinatura_devolucao_url?: string | null
           assinatura_documento_url?: string | null
           assinatura_enviada_em?: string | null
           assinatura_status?: string | null
           associado_id?: string | null
           avarias?: string | null
           bairro?: string | null
+          cancelamento_bloqueado_ate_devolucao?: boolean | null
           cep?: string | null
           checklist_data?: Json | null
           checklist_manutencao?: Json | null
+          checklist_retirada?: Json | null
+          chip_cancelado?: boolean | null
+          chip_presente?: boolean | null
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
@@ -17237,8 +17267,11 @@ export type Database = {
           data_agendada: string
           data_agendada_original?: string | null
           data_suspensao?: string | null
+          debitos_conferidos_em?: string | null
+          debitos_conferidos_por?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
+          fios_isolados?: boolean | null
           fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
           hora_agendada?: string | null
@@ -17246,23 +17279,34 @@ export type Database = {
           imei_rastreador?: string | null
           iniciada_em?: string | null
           instalacao_origem_id?: string | null
+          integridade_aparelho?: string | null
           km_atual?: number | null
           latitude?: number | null
           lead_id?: string | null
           local_tipo_manutencao?: string | null
           local_vistoria?: string | null
+          localizacao_rastreador?: Json | null
           logradouro?: string | null
           longitude?: number | null
           modalidade?: string | null
           motivo_detalhe?: string | null
           motivo_manutencao?: string | null
           motivo_reprovacao?: string | null
+          motivo_retirada?: string | null
+          multa_aplicada?: boolean | null
+          multa_asaas_id?: string | null
+          multa_cobrada_em?: string | null
+          multa_forma_cobranca?: string | null
+          multa_motivo?: string | null
+          multa_valor?: number | null
+          novo_veiculo_id?: string | null
           numero?: string | null
           observacoes?: string | null
           observacoes_analise?: string | null
           origem?: string | null
           periodo?: Database["public"]["Enums"]["periodo_servico"]
           permite_encaixe?: boolean | null
+          plataforma_desativada?: boolean | null
           profissional_id?: string | null
           protecao_suspensa?: boolean | null
           protocolo?: string | null
@@ -17272,9 +17316,13 @@ export type Database = {
           rastreador_substituto_id?: string | null
           ressalvas?: string | null
           resultado_manutencao?: string | null
+          retirada_video_360_url?: string | null
           rota_id?: string | null
           sinistro_id?: string | null
+          solicitado_por_modulo?: string | null
           status?: Database["public"]["Enums"]["status_servico"]
+          sub_tipo_retirada?: string | null
+          tem_debitos_pendentes?: boolean | null
           tipo: Database["public"]["Enums"]["tipo_servico"]
           uf?: string | null
           updated_at?: string
@@ -17285,20 +17333,26 @@ export type Database = {
           whatsapp_notificado_em?: string | null
         }
         Update: {
+          acabamento_recolocado?: boolean | null
           analisado_em?: string | null
           analisado_por?: string | null
           assinatura_autentique_id?: string | null
           assinatura_cliente_url?: string | null
           assinatura_concluida_em?: string | null
+          assinatura_devolucao_url?: string | null
           assinatura_documento_url?: string | null
           assinatura_enviada_em?: string | null
           assinatura_status?: string | null
           associado_id?: string | null
           avarias?: string | null
           bairro?: string | null
+          cancelamento_bloqueado_ate_devolucao?: boolean | null
           cep?: string | null
           checklist_data?: Json | null
           checklist_manutencao?: Json | null
+          checklist_retirada?: Json | null
+          chip_cancelado?: boolean | null
+          chip_presente?: boolean | null
           cidade?: string | null
           complemento?: string | null
           concluida_em?: string | null
@@ -17310,8 +17364,11 @@ export type Database = {
           data_agendada?: string
           data_agendada_original?: string | null
           data_suspensao?: string | null
+          debitos_conferidos_em?: string | null
+          debitos_conferidos_por?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
+          fios_isolados?: boolean | null
           fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
           hora_agendada?: string | null
@@ -17319,23 +17376,34 @@ export type Database = {
           imei_rastreador?: string | null
           iniciada_em?: string | null
           instalacao_origem_id?: string | null
+          integridade_aparelho?: string | null
           km_atual?: number | null
           latitude?: number | null
           lead_id?: string | null
           local_tipo_manutencao?: string | null
           local_vistoria?: string | null
+          localizacao_rastreador?: Json | null
           logradouro?: string | null
           longitude?: number | null
           modalidade?: string | null
           motivo_detalhe?: string | null
           motivo_manutencao?: string | null
           motivo_reprovacao?: string | null
+          motivo_retirada?: string | null
+          multa_aplicada?: boolean | null
+          multa_asaas_id?: string | null
+          multa_cobrada_em?: string | null
+          multa_forma_cobranca?: string | null
+          multa_motivo?: string | null
+          multa_valor?: number | null
+          novo_veiculo_id?: string | null
           numero?: string | null
           observacoes?: string | null
           observacoes_analise?: string | null
           origem?: string | null
           periodo?: Database["public"]["Enums"]["periodo_servico"]
           permite_encaixe?: boolean | null
+          plataforma_desativada?: boolean | null
           profissional_id?: string | null
           protecao_suspensa?: boolean | null
           protocolo?: string | null
@@ -17345,9 +17413,13 @@ export type Database = {
           rastreador_substituto_id?: string | null
           ressalvas?: string | null
           resultado_manutencao?: string | null
+          retirada_video_360_url?: string | null
           rota_id?: string | null
           sinistro_id?: string | null
+          solicitado_por_modulo?: string | null
           status?: Database["public"]["Enums"]["status_servico"]
+          sub_tipo_retirada?: string | null
+          tem_debitos_pendentes?: boolean | null
           tipo?: Database["public"]["Enums"]["tipo_servico"]
           uf?: string | null
           updated_at?: string
@@ -17448,6 +17520,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "servicos_novo_veiculo_id_fkey"
+            columns: ["novo_veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_novo_veiculo_id_fkey"
+            columns: ["novo_veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "servicos_novo_veiculo_id_fkey"
+            columns: ["novo_veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "servicos_novo_veiculo_id_fkey"
+            columns: ["novo_veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "servicos_novo_veiculo_id_fkey"
+            columns: ["novo_veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "servicos_profissional_id_fkey"
@@ -21435,6 +21542,7 @@ export type Database = {
         | "triagem"
         | "em_analise_plataforma"
         | "em_garantia"
+        | "retirada_pendente"
       status_rota: "pendente" | "em_andamento" | "concluida" | "cancelada"
       status_servico:
         | "pendente"
@@ -21816,6 +21924,7 @@ export const Constants = {
         "triagem",
         "em_analise_plataforma",
         "em_garantia",
+        "retirada_pendente",
       ],
       status_rota: ["pendente", "em_andamento", "concluida", "cancelada"],
       status_servico: [

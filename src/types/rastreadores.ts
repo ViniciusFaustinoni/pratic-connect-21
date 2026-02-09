@@ -12,6 +12,7 @@ export type StatusRastreador =
   | 'estoque'               // Pronto para uso na base
   | 'reservado'             // Separado para uma instalação específica
   | 'instalado'             // No veículo do associado
+  | 'retirada_pendente'     // Instalado, mas com ordem de retirada aberta
   | 'manutencao'            // Vistoria aberta (campo)
   | 'reagendar_manutencao'  // Aguardando nova data após ausência
   | 'retorno_base'          // Voltou do campo, aguarda triagem
@@ -24,6 +25,7 @@ export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
   estoque: 'Em Estoque',
   reservado: 'Reservado',
   instalado: 'Instalado',
+  retirada_pendente: 'Retirada Pendente',
   manutencao: 'Em Manutenção (Campo)',
   reagendar_manutencao: 'Reagendar Manutenção',
   retorno_base: 'Retorno Base',
@@ -37,6 +39,7 @@ export const STATUS_RASTREADOR_COLORS: Record<StatusRastreador, string> = {
   estoque: 'bg-green-100 text-green-800',
   reservado: 'bg-yellow-100 text-yellow-800',
   instalado: 'bg-emerald-100 text-emerald-800',
+  retirada_pendente: 'bg-red-100 text-red-800',
   manutencao: 'bg-orange-100 text-orange-800',
   reagendar_manutencao: 'bg-amber-100 text-amber-800',
   retorno_base: 'bg-yellow-100 text-yellow-800',
@@ -63,7 +66,8 @@ export type StatusManutencaoInterna = 'retorno_base' | 'triagem' | 'em_analise_p
 export const TRANSICOES_STATUS_RASTREADOR: Record<StatusRastreador, StatusRastreador[]> = {
   estoque: ['reservado', 'instalado', 'manutencao', 'baixado'],
   reservado: ['instalado', 'estoque'],
-  instalado: ['manutencao', 'estoque'],
+  instalado: ['manutencao', 'retirada_pendente', 'estoque'],
+  retirada_pendente: ['estoque', 'instalado'], // Volta para estoque após retirada concluída
   manutencao: ['instalado', 'reagendar_manutencao', 'retorno_base', 'baixado'],
   reagendar_manutencao: ['manutencao', 'instalado'],
   retorno_base: ['triagem'],

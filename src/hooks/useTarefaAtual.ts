@@ -304,7 +304,7 @@ export function useTarefasHistorico(dias: number = 7) {
           data_agendada,
           concluida_em,
           associado:associados(nome),
-          veiculo:veiculos(placa, marca, modelo),
+          veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo),
           bairro,
           cidade
         `)
