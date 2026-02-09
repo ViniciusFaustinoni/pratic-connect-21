@@ -247,6 +247,56 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 4.1 Cancelar contratos ativos do associado (EXCETO substituição)
+    if (motivo_retirada !== 'substituicao_veiculo') {
+      const { data: contratosAtivos, error: contratosError } = await supabase
+        .from('contratos')
+        .select('id, cotacao_id, status')
+        .eq('associado_id', associado_id)
+        .in('status', ['ativo', 'assinado', 'pendente', 'pendente_assinatura', 'enviado', 'rascunho']);
+
+      if (contratosError) {
+        console.error('Erro ao buscar contratos ativos:', contratosError);
+      } else if (contratosAtivos && contratosAtivos.length > 0) {
+        console.log(`Cancelando ${contratosAtivos.length} contrato(s) ativo(s)`);
+
+        // Cancelar cada contrato
+        const contratoIds = contratosAtivos.map(c => c.id);
+        const { error: updateContratosError } = await supabase
+          .from('contratos')
+          .update({
+            status: 'cancelado',
+            data_cancelamento: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .in('id', contratoIds);
+
+        if (updateContratosError) {
+          console.error('Erro ao cancelar contratos:', updateContratosError);
+        } else {
+          console.log('Contratos cancelados com sucesso');
+        }
+
+        // Atualizar cotações vinculadas
+        const cotacaoIds = contratosAtivos.map(c => c.cotacao_id).filter(Boolean) as string[];
+        if (cotacaoIds.length > 0) {
+          const { error: updateCotacoesError } = await supabase
+            .from('cotacoes')
+            .update({
+              status_contratacao: 'cancelado',
+              updated_at: new Date().toISOString(),
+            })
+            .in('id', cotacaoIds);
+
+          if (updateCotacoesError) {
+            console.error('Erro ao atualizar cotações:', updateCotacoesError);
+          } else {
+            console.log('Cotações atualizadas para cancelado');
+          }
+        }
+      }
+    }
+
     // 5. Registrar histórico em TODOS os casos
     const descricaoMap: Record<string, string> = {
       cancelamento_voluntario: 'Cancelamento voluntário após devolução de rastreador',
