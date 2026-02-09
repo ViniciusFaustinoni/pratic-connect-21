@@ -1,52 +1,77 @@
 
+# Correcao Urgente: Fatura Ignora Segundo Veiculo
 
-# Plano: Corrigir Protecao do Veiculo, RG/Sexo e Documentos
+## O Problema
 
-## Problema 1: Veiculo mostra "Cobertura Total Ativa" mesmo cancelado
+Existem **duas** edge functions de geracao de faturas, e **ambas** tem o mesmo bug:
 
-**Causa raiz:** A funcao `processar-pos-retirada` atualiza o veiculo para `status = 'cancelado'` mas nunca reseta os campos `cobertura_total` e `cobertura_roubo_furto`. O componente `BadgeCoberturaCompact` so verifica esses booleans, sem considerar o status do veiculo.
-
-**Dados atuais no banco:**
-```text
-veiculo.status = 'cancelado'
-veiculo.cobertura_total = true  (deveria ser false)
-veiculo.cobertura_roubo_furto = true  (deveria ser false)
+1. **`gerar-faturas-mensais`** (modelo rateio/pos-pago) - linha 201:
+```
+const veiculo = veiculos[0] as any;  // BUG: so pega o primeiro
 ```
 
-**Correcoes:**
-
-1. **Edge Function `processar-pos-retirada`**: Ao inativar veiculos, tambem resetar `cobertura_total = false` e `cobertura_roubo_furto = false`
-
-2. **Componente `BadgeCoberturaCompact`**: Adicionar verificacao do status do veiculo — se `status === 'cancelado'` ou `status === 'inativo'`, nao mostrar badge de protecao ativa
-
-3. **Migration SQL**: Corrigir dados existentes no banco:
-```sql
-UPDATE veiculos SET cobertura_total = false, cobertura_roubo_furto = false
-WHERE status IN ('cancelado', 'inativo');
+2. **`gerar-cobrancas-mensais`** (modelo plano fixo) - linha 136:
 ```
+const valorMensalidade = (associado.planos as any)?.valor_mensalidade || 150;
+// Nem busca veiculos - usa valor fixo do plano
+```
+
+A segunda funcao (`gerar-cobrancas-mensais`) tem um problema diferente: ela nem consulta veiculos, usa o valor fixo do plano do associado. Neste caso, nao ha bug de "ignorar segundo veiculo" porque o valor ja vem do plano. O bug critico esta na **`gerar-faturas-mensais`** (rateio).
 
 ---
 
-## Problema 2: RG e Sexo vazios nos detalhes
+## Correcao: `gerar-faturas-mensais/index.ts`
 
-**Causa raiz:** Os campos `rg` e `sexo` estao `NULL` no banco de dados. A interface mostra corretamente "—" para campos vazios. O problema e que o fluxo de cadastro via cotacao (OCR da CNH) extrai esses dados mas nao os persiste na tabela `associados`.
+### O que muda
 
-**Correcao:**
+Em vez de pegar `veiculos[0]` e calcular a composicao para um unico veiculo, o sistema vai:
 
-Verificar e atualizar o fluxo `contrato-gerar` (Edge Function) para incluir `rg` e `sexo` ao criar/atualizar o associado a partir dos dados da cotacao. Os campos ja existem na cotacao (`cotacoes.rg` e `cotacoes.sexo` ou dados extraidos do OCR da CNH).
+1. **Iterar TODOS os veiculos ativos** e calcular a composicao individual de cada um (taxa administrativa, rateios por cobertura, cotas)
+2. **Somar os totais** para gerar um unico boleto ASAAS unificado
+3. **Registrar uma linha em `cobrancas_composicao` POR VEICULO** (a tabela ja suporta `veiculo_id`)
+4. **Salvar metadata com detalhes** de cada veiculo na cobranca principal via `composicao_resumo`
+5. **Melhorar a descricao** do boleto ASAAS para mostrar quantidade de veiculos quando > 1
+6. **Adicionar log de auditoria** para associados multi-veiculo
 
-**Verificacao adicional:** Consultar se a tabela `cotacoes` tem esses dados para o associado atual, para confirmar se o problema e na geracao ou na captura.
+### Detalhes tecnicos
 
----
+**Trecho atual (linhas 197-230):**
+```
+const veiculo = veiculos[0] as any;
+// ... calcula composicao para 1 veiculo
+```
 
-## Problema 3: Documentos com campos vazios
+**Sera substituido por:**
+```
+// Para cada veiculo ativo, calcular composicao individual
+let totalGeral = 0;
+const composicoesPorVeiculo = [];
 
-**Causa raiz:** A aba de documentos mostra "—" na coluna "Veiculo" para documentos vindos da tabela `contratos_documentos` porque o mapeamento (`fonte: 'cotacao'`) define `veiculo: null` fixo. Esses documentos (CNH, CRLV, Comprovante de Residencia) vem da cotacao e nao tem vinculo direto com veiculo.
+for (const veiculo of veiculosAtivos) {
+  const valorFipe = veiculo.valor_fipe || 50000;
+  const cotas = veiculo.quantidade_cotas || ...;
+  const composicao = { taxa_administrativa, rateios... };
+  totalGeral += composicao.total;
+  composicoesPorVeiculo.push({ veiculo, composicao });
+}
+```
 
-**Correcoes:**
+**Na insercao da cobranca:**
+- `valor` = soma de todos os veiculos (totalGeral)
+- `veiculo_id` = null (cobranca unificada, nao pertence a um unico veiculo)
+- `composicao_resumo` = JSON com array de { placa, valor, cotas } por veiculo
 
-1. Para documentos pessoais (CNH, comprovante_residencia), a coluna veiculo deve mostrar "Pessoal" em vez de "—"
-2. Para CRLV que tem vinculo com veiculo na cotacao, buscar a placa do veiculo vinculado
+**Na insercao de `cobrancas_composicao`:**
+- Uma linha por veiculo (ja suportado pela tabela)
+- Cada linha com seu respectivo `veiculo_id`, `valor_fipe`, `quantidade_cotas`
+
+**Na descricao ASAAS:**
+- 1 veiculo: `Fatura 2026-02 - Nome - ABC1234`
+- 2+ veiculos: `Fatura 2026-02 - Nome - 2 veiculos: ABC1234, XYZ5678`
+
+### A funcao `gerar-cobrancas-mensais` (modelo plano fixo)
+
+Esta funcao usa `valor_mensalidade` do plano do associado, nao calcula por veiculo. Nao tem o mesmo bug, pois o valor vem do plano. **Nao sera alterada** nesta correcao — se o modelo de plano fixo precisar somar por veiculo, e uma mudanca de regra de negocio separada.
 
 ---
 
@@ -54,12 +79,10 @@ Verificar e atualizar o fluxo `contrato-gerar` (Edge Function) para incluir `rg`
 
 | Arquivo | Alteracao |
 |---------|----------|
-| `supabase/functions/processar-pos-retirada/index.ts` | Resetar `cobertura_total` e `cobertura_roubo_furto` ao cancelar veiculo |
-| `src/components/veiculos/BadgeCobertura.tsx` | Aceitar prop `veiculoStatus` e nao mostrar cobertura se cancelado/inativo |
-| `src/pages/cadastro/Associados.tsx` | Passar `veiculoStatus` ao `BadgeCoberturaCompact` |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Mapear tipo de documento pessoal vs veiculo na coluna "Veiculo" |
-| Migration SQL | Corrigir veiculos cancelados que ainda tem cobertura ativa |
+| `supabase/functions/gerar-faturas-mensais/index.ts` | Iterar todos veiculos ativos, somar composicoes, registrar por veiculo |
 
-### Sobre RG e Sexo
-Os campos estao vazios no banco de dados — nao e um bug de exibicao. Sera necessario verificar se o fluxo de OCR/cotacao captura esses dados e os persiste. Se a cotacao tiver os dados, o `contrato-gerar` sera atualizado para inclui-los. Caso contrario, e uma lacuna no formulario de cadastro que precisara ser preenchida manualmente.
-
+### O que NAO sera alterado
+- `gerar-cobrancas-mensais` (modelo diferente, valor fixo do plano)
+- Nenhuma outra edge function
+- Nenhum componente frontend
+- Nenhuma tabela de banco (cobrancas_composicao ja suporta veiculo_id)
