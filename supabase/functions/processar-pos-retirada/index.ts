@@ -99,6 +99,19 @@ Deno.serve(async (req) => {
     const statusAnterior = associado.status;
     let resultado: ResultadoProcessamento;
 
+    // Resolver user_id para cancelado_por (FK aponta para auth.users)
+    let canceladoPorUserId: string | null = null;
+    try {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .or(`id.eq.${executado_por},user_id.eq.${executado_por}`)
+        .single();
+      canceladoPorUserId = profileData?.user_id || executado_por;
+    } catch {
+      canceladoPorUserId = null; // Se não encontrar, não bloquear o cancelamento
+    }
+
     // 3. SWITCH no motivo_retirada
     switch (motivo_retirada) {
       case 'cancelamento_voluntario': {
@@ -111,7 +124,7 @@ Deno.serve(async (req) => {
             data_cancelamento: new Date().toISOString(),
             motivo_cancelamento: 'Cancelamento voluntário',
             pode_reativar: true,
-            cancelado_por: executado_por,
+            cancelado_por: canceladoPorUserId,
             updated_at: new Date().toISOString(),
           })
           .eq('id', associado_id);
@@ -134,7 +147,7 @@ Deno.serve(async (req) => {
             data_cancelamento: new Date().toISOString(),
             motivo_cancelamento: 'Inadimplência',
             pode_reativar: true,
-            cancelado_por: executado_por,
+            cancelado_por: canceladoPorUserId,
             updated_at: new Date().toISOString(),
           })
           .eq('id', associado_id);
@@ -157,7 +170,7 @@ Deno.serve(async (req) => {
             data_cancelamento: new Date().toISOString(),
             motivo_cancelamento: 'Exclusão por decisão da diretoria',
             pode_reativar: false,
-            cancelado_por: executado_por,
+            cancelado_por: canceladoPorUserId,
             updated_at: new Date().toISOString(),
           })
           .eq('id', associado_id);
@@ -193,7 +206,7 @@ Deno.serve(async (req) => {
             bloqueado: true,
             motivo_bloqueio: 'Busca e apreensão',
             data_bloqueio: new Date().toISOString(),
-            cancelado_por: executado_por,
+            cancelado_por: canceladoPorUserId,
             updated_at: new Date().toISOString(),
           })
           .eq('id', associado_id);
@@ -271,7 +284,7 @@ Deno.serve(async (req) => {
         status_anterior: statusAnterior,
         status_novo: statusNovoMap[motivo_retirada],
         motivo: descricaoMap[motivo_retirada],
-        executado_por,
+        executado_por: canceladoPorUserId,
         metadata: { servico_id, motivo_retirada, processado_em: new Date().toISOString() },
       });
 
