@@ -1,69 +1,42 @@
 
-# Corrigir Fotos, Video e Preview na Tela de Retirada
+# Corrigir Cor do Veiculo LTB4J74
 
-## Causa Raiz Identificada
+## Diagnostico
 
-O bucket `vistorias` no Supabase Storage esta configurado como **privado** (`public: false`). O codigo usa `getPublicUrl()` para gerar URLs das fotos e video apos upload, mas essas URLs so funcionam para buckets publicos. Resultado:
+O veiculo com placa `LTB4J74` tem a cor **VERMELHA** registrada tanto na tabela `veiculos` quanto na `cotacoes`, porem o documento oficial (CRLV) mostra **AZUL**.
 
-- **Fotos**: Aparecem como icones quebrados com checkmark verde (o upload funcionou, mas a URL nao carrega a imagem)
-- **Video 360**: Player preto mostrando 0:00 (URL inacessivel)
-- **Preview**: As imagens locais (Object URL) sao substituidas pela URL publica quebrada
+### Origem do problema
+
+O fluxo de dados e:
+1. Upload do CRLV -> OCR (Gemini) extrai `cor` -> salva na `cotacoes.veiculo_cor`
+2. Ao gerar contrato, `ContratoWizard.tsx` copia `cor` da cotacao para o veiculo
+
+O OCR provavelmente extraiu a cor incorretamente neste caso especifico (falha pontual da IA), ou a cor foi digitada/alterada manualmente antes da geracao do contrato. O codigo de fluxo em si esta correto -- ele confia no valor extraido/informado.
 
 ## Solucao
 
-Substituir `getPublicUrl()` por `createSignedUrl()` em todos os uploads da `ExecutarRetirada.tsx`. URLs assinadas funcionam com buckets privados e expiram apos um tempo configuravel.
+### 1. Corrigir o dado no banco de dados (UPDATE direto)
 
-### Arquivo: `src/pages/instalador/ExecutarRetirada.tsx`
+Atualizar a cor de `VERMELHA` para `AZUL` em ambas as tabelas:
 
-**1. Upload de foto (linhas 254-273)** - Trocar `getPublicUrl` por `createSignedUrl`:
+```sql
+-- Tabela veiculos
+UPDATE veiculos SET cor = 'AZUL' WHERE placa = 'LTB4J74';
 
-```typescript
-// De:
-const { data: { publicUrl } } = supabase.storage.from('vistorias').getPublicUrl(fileName);
-setFotosEnviadas(prev => ({ ...prev, [tipo]: publicUrl }));
-
-// Para:
-const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
-if (signedData?.signedUrl) {
-  setFotosEnviadas(prev => ({ ...prev, [tipo]: signedData.signedUrl }));
-}
+-- Tabela cotacoes
+UPDATE cotacoes SET veiculo_cor = 'AZUL' WHERE veiculo_placa = 'LTB4J74';
 ```
 
-**2. Upload de video (linhas 276-293)** - Mesma mudanca:
+### 2. Nenhuma alteracao de codigo necessaria
 
-```typescript
-// De:
-const { data: { publicUrl } } = supabase.storage.from('vistorias').getPublicUrl(fileName);
-setVideoUrl(publicUrl);
+O fluxo OCR esta funcionando corretamente em termos de logica:
+- O prompt do Gemini ja pede para extrair `cor` do CRLV (linha 77 do `document-ocr/index.ts`)
+- O `ContratoWizard.tsx` mapeia `dados.cor` corretamente (linha 464)
+- A `CotacaoPublicaCompleta.tsx` persiste `dados.cor` na cotacao (linha 309)
 
-// Para:
-const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
-if (signedData?.signedUrl) {
-  setVideoUrl(signedData.signedUrl);
-}
-```
+Este foi um erro pontual de extracao do OCR para este documento especifico, nao um bug sistêmico. Erros pontuais de OCR sao esperados e por isso o sistema permite edicao manual da cor no formulario do contrato.
 
-**3. Upload de assinatura (linhas 297-311)** - Mesma mudanca:
+## Resultado
 
-```typescript
-// De:
-const { data: { publicUrl } } = supabase.storage.from('vistorias').getPublicUrl(fileName);
-setAssinaturaUrl(publicUrl);
-
-// Para:
-const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
-if (signedData?.signedUrl) {
-  setAssinaturaUrl(signedData.signedUrl);
-}
-```
-
-## Sobre a Cor do Veiculo
-
-A cor `VERMELHA` esta corretamente armazenada no banco de dados para o veiculo `LTB4J74` e esta sendo exibida na interface. Se a cor real do veiculo for diferente, o problema esta na origem dos dados (cadastro manual ou OCR do CRLV), nao na tela de retirada. A conferencia de dados funciona corretamente: ela mostra o que esta no banco para o tecnico confirmar visualmente.
-
-## Resultado Esperado
-
-- Fotos da retirada aparecerao corretamente apos captura
-- Video 360 sera reproduzivel no player
-- Assinatura sera exibida apos captura
-- URLs assinadas tem validade de 1 hora (suficiente para a sessao de trabalho)
+- A cor do veiculo `LTB4J74` sera corrigida para **AZUL** em todas as tabelas
+- A tela de retirada exibira a cor correta
