@@ -85,6 +85,7 @@ import { SuspenderAssociadoDialog } from '@/components/associados/SuspenderAssoc
 import { AssociadoSuspensoAlert } from '@/components/associados/AssociadoSuspensoAlert';
 import { RastreadorVinculadoModal } from '@/components/cadastro/RastreadorVinculadoModal';
 import { CancelarAssociadoDialog } from '@/components/cadastro/CancelarAssociadoDialog';
+import { ExcluirAssociadoDialog, type TipoExclusao } from '@/components/cadastro/ExcluirAssociadoDialog';
 import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -239,11 +240,13 @@ const getStatusCobrancaClass = (status: string) => {
 export default function AssociadoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAnalistaCadastroOnly } = usePermissions();
+  const { isAnalistaCadastroOnly, isDiretor, isGerencia, isDesenvolvedor, isAdminMaster } = usePermissions();
   
   const [activeTab, setActiveTab] = useState('resumo');
   const [suspenderDialogOpen, setSuspenderDialogOpen] = useState(false);
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
+  const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
+  const [tipoExclusao, setTipoExclusao] = useState<TipoExclusao | null>(null);
   const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string }>({ open: false, url: '', tipo: '' });
   const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
   const [veiculoEditar, setVeiculoEditar] = useState<typeof veiculos extends (infer T)[] ? T : never | null>(null);
@@ -675,6 +678,29 @@ export default function AssociadoDetalhe() {
                   >
                     <XCircle className="mr-2 h-4 w-4" /> Cancelar Associação
                   </DropdownMenuItem>
+                  {(isDiretor || isGerencia || isDesenvolvedor || isAdminMaster) && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => { setTipoExclusao('inadimplencia'); setExcluirDialogOpen(true); }}
+                        className="text-orange-600 focus:text-orange-600"
+                      >
+                        <DollarSign className="mr-2 h-4 w-4" /> Excluir por Inadimplência
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => { setTipoExclusao('exclusao_diretoria'); setExcluirDialogOpen(true); }}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <AlertTriangle className="mr-2 h-4 w-4" /> Excluir por Decisão da Diretoria
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => { setTipoExclusao('busca_apreensao'); setExcluirDialogOpen(true); }}
+                        className="text-red-900 focus:text-red-900"
+                      >
+                        <Shield className="mr-2 h-4 w-4" /> Busca e Apreensão
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -1582,6 +1608,21 @@ export default function AssociadoDetalhe() {
         }}
         onSuccess={() => { setCancelarDialogOpen(false); refetch(); }}
       />
+
+      {tipoExclusao && (
+        <ExcluirAssociadoDialog
+          open={excluirDialogOpen}
+          onClose={() => { setExcluirDialogOpen(false); setTipoExclusao(null); }}
+          associado={{
+            id: id || '',
+            nome: associado.nome,
+            status: associado.status,
+            pendencia_rastreador: (associado as any).pendencia_rastreador || false,
+          }}
+          tipoExclusao={tipoExclusao}
+          onSuccess={() => { setExcluirDialogOpen(false); setTipoExclusao(null); refetch(); }}
+        />
+      )}
 
       {/* MODAL DETALHES DO VEÍCULO */}
       <VeiculoDetalhesModal

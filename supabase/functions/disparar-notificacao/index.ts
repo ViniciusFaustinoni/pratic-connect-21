@@ -75,6 +75,21 @@ const TEMPLATES: Record<string, Record<string, { titulo: string; mensagem: strin
       titulo: 'Cancelamento Processado',
       mensagem: 'Olá! Seu cancelamento na Praticcar foi processado. Termo de cancelamento enviado para assinatura. {complemento_boleto}Obrigado por ter sido nosso associado!',
       prioridade: 'alta'
+    },
+    inadimplencia: {
+      titulo: 'Cadastro Encerrado por Inadimplência',
+      mensagem: 'Seu cadastro foi encerrado por inadimplência. Débitos em aberto serão encaminhados para cobrança.',
+      prioridade: 'urgente'
+    },
+    exclusao_diretoria: {
+      titulo: 'Cadastro Encerrado por Decisão da Diretoria',
+      mensagem: 'Seu cadastro foi encerrado por decisão da diretoria conforme regulamento interno.',
+      prioridade: 'alta'
+    },
+    busca_apreensao: {
+      titulo: 'Cadastro Bloqueado',
+      mensagem: 'Seu cadastro foi bloqueado. Encaminhado ao departamento jurídico.',
+      prioridade: 'urgente'
     }
   },
   sinistro: {
