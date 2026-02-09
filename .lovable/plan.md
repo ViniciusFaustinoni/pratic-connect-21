@@ -1,45 +1,58 @@
 
-# Plano: Corrigir Erro PGRST201 - Ambiguidade de Relacionamento
 
-## Problema Raiz
+# Corrigir Problemas da Tela de Retirada no Mobile
 
-A migration que adicionou `pendencia_rastreador_servico_id UUID REFERENCES servicos(id)` na tabela `associados` criou um **segundo FK** entre `servicos` e `associados`. Agora existem dois caminhos:
+## Problemas Identificados
 
-1. `servicos.associado_id` -> `associados.id` (o original)
-2. `associados.pendencia_rastreador_servico_id` -> `servicos.id` (o novo)
+### Problema 1: "Serviço indisponível" no mobile
+A tela que aparece **nao e** "servico indisponivel" -- e a tela de **"Localizacao Desativada"** (`TelaLocalizacaoBloqueada`). No `InstaladorLayout`, a condicao `deveBloqueiarPorLocalizacao` e:
 
-O PostgREST retorna erro **PGRST201** porque nao sabe qual relacionamento usar quando a query faz `associado:associados(...)`.
-
-Isso afeta **TODAS** as queries que usam `useServicos` -- nao apenas a RetiradasPage.
-
-## Solucao
-
-Modificar **1 arquivo**: `src/hooks/useServicos.ts`
-
-Na query principal do `useServicos()` (linha ~272), alterar o join de `associados` para especificar explicitamente o FK:
-
-**De:**
 ```
-associado:associados(id, nome, telefone, whatsapp, cpf, email)
+geoState.status === 'denied' || geoState.status === 'unavailable'
+  && tarefaAtual !== null
 ```
 
-**Para:**
-```
-associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp, cpf, email)
-```
+Em navegadores mobile (e no preview do Lovable), a geolocalizacao muitas vezes retorna `denied` ou `unavailable`, bloqueando toda a interface mesmo quando o profissional so precisa ver dados do servico. A tela de execucao de retirada fica inacessivel.
 
-Tambem verificar e corrigir o mesmo problema em outras queries do mesmo arquivo que fazem join com `associados` (ex: `useServico`, `useTarefaDoDia`, etc.).
+**Solucao:** Permitir acesso a paginas de execucao (`/instalador/retirada/*`, `/instalador/vistoria/*`, `/instalador/manutencao/*`) mesmo sem geolocalizacao. A localizacao e necessaria para **iniciar servico** e **rastreamento**, nao para visualizar/executar o checklist.
 
-## Arquivos Afetados
+### Problema 2: Bottom nav sobrepoe conteudo (screenshot)
+A `ExecutarRetirada.tsx` usa `pb-32` na raiz, mas a `InstaladorLayout` ja adiciona `pb-16` via `main`. O resultado e que o bottom nav ainda sobrepoe o botao "Concluir Retirada" e mensagens de validacao, porque o `pb-32` e insuficiente quando a nav tem `safe-area-inset-bottom`.
+
+**Solucao:** Aumentar o padding inferior e usar `pb-safe` para garantir compatibilidade com dispositivos com barra inferior (notch).
+
+---
+
+## Arquivos a Modificar
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/hooks/useServicos.ts` | Adicionar `!servicos_associado_id_fkey` em todos os joins `associado:associados(...)` |
-| `src/hooks/useRetiradaRastreador.ts` | Mesmo fix na query `useRetiradas` (linha ~293) |
+| `src/components/instalador/InstaladorLayout.tsx` | Nao bloquear localizacao em rotas de execucao |
+| `src/pages/instalador/ExecutarRetirada.tsx` | Ajustar padding inferior + corrigir navegacao "Voltar" |
 
-## Impacto
+---
 
-- Corrige a RetiradasPage que mostra 0 resultados
-- Corrige qualquer outra pagina que use `useServicos` e esteja silenciosamente falhando
-- Nao requer migration SQL
-- Nao requer mudancas de schema
+## Detalhamento
+
+### 1. InstaladorLayout.tsx
+
+Na linha 55, modificar a condicao de bloqueio para excluir paginas de execucao:
+
+```typescript
+// Rotas de execucao nao devem ser bloqueadas por localizacao
+const isRotaExecucao = location.pathname.match(
+  /\/instalador\/(retirada|vistoria|manutencao|instalacao)\//
+);
+
+const deveBloqueiarPorLocalizacao = 
+  !isVistoriadorBase &&
+  !isRotaExecucao &&  // <-- NOVO: nao bloquear execucao
+  (geoState.status === 'denied' || geoState.status === 'unavailable') &&
+  tarefaAtual !== null;
+```
+
+### 2. ExecutarRetirada.tsx
+
+- Trocar `pb-32` por `pb-40` para dar mais espaco ao bottom nav + safe area
+- Corrigir navegacao de "Voltar" de `/vistoriador/tarefas` para `/instalador/tarefas` (3 ocorrencias nas linhas 246, 374, 780)
+
