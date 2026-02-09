@@ -47,6 +47,8 @@ import Vendedores from "./pages/vendas/Vendedores";
 import VendedorHistorico from "./pages/vendas/VendedorHistorico";
 import Associados from "./pages/cadastro/Associados";
 import SubstituicaoVeiculoPage from "./pages/cadastro/SubstituicaoVeiculoPage";
+import SubstituicoesPendentesPage from "./pages/cadastro/SubstituicoesPendentesPage";
+import SubstituicaoDetalhePage from "./pages/cadastro/SubstituicaoDetalhePage";
 import AssociadoDetalhe from "./pages/cadastro/AssociadoDetalhe";
 import GerarTermo from "./pages/cadastro/GerarTermo";
 import Veiculos from "./pages/cadastro/Veiculos";
@@ -383,6 +385,8 @@ const App = () => (
               <Route path="/cadastro/associados" element={<Associados />} />
               <Route path="/cadastro/associados/:id" element={<AssociadoDetalhe />} />
               <Route path="/cadastro/associados/:associadoId/substituicao" element={<SubstituicaoVeiculoPage />} />
+              <Route path="/cadastro/substituicoes" element={<SubstituicoesPendentesPage />} />
+              <Route path="/cadastro/substituicoes/:id" element={<SubstituicaoDetalhePage />} />
               <Route path="/cadastro/veiculos" element={<Veiculos />} />
               <Route path="/cadastro/documentos" element={<Documentos />} />
               <Route path="/cadastro/fila-documentos" element={<FilaDocumentos />} />

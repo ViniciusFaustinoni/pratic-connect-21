@@ -56,6 +56,7 @@ import {
   User,
   Puzzle,
   Ban,
+  RefreshCw,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -165,6 +166,7 @@ const menuConfig: {
         { title: 'Propostas Pendentes', url: '/cadastro/propostas', icon: ClipboardCheck },
         { title: 'Associados', url: '/cadastro/associados', icon: Users },
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
+        { title: 'Substituições', url: '/cadastro/substituicoes', icon: RefreshCw },
     ],
   },
   {

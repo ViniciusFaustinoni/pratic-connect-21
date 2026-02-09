@@ -377,3 +377,6 @@ verify_jwt = false
 
 [functions.processar-pos-retirada]
 verify_jwt = false
+
+[functions.efetivar-substituicao]
+verify_jwt = false

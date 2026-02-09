@@ -7,7 +7,7 @@ import {
   FileCheck, FileText, Clock, Edit, AlertTriangle, Loader2,
   Receipt, MoreHorizontal, CheckCircle, XCircle, Pause, Play, Plus,
   CreditCard, Shield, Eye, ExternalLink, Wifi, WifiOff, Send, History,
-  TrendingUp, DollarSign, Camera, Image, Radio, RefreshCw, MessagesSquare, Map
+  TrendingUp, DollarSign, Camera, Image, Radio, RefreshCw, MessagesSquare, Map, ArrowLeftRight
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
@@ -620,6 +620,11 @@ export default function AssociadoDetalhe() {
                 <Map className="mr-2 h-4 w-4" />
                 Abrir no Mapa
               </Button>
+              {status === 'ativo' && (
+                <Button variant="outline" onClick={() => navigate(`/cadastro/associados/${id}/substituicao`)}>
+                  <ArrowLeftRight className="mr-2 h-4 w-4" /> Substituir Veículo
+                </Button>
+              )}
               {status === 'ativo' && (
                 <Button variant="outline" className="text-yellow-600" onClick={() => setSuspenderDialogOpen(true)}>
                   <Pause className="mr-2 h-4 w-4" /> Suspender
