@@ -337,12 +337,23 @@ export function useAtivarContrato() {
 
       if (updateLeadError) console.error('Erro ao atualizar lead:', updateLeadError);
 
-      // 8. Registrar histórico
+      // 8. Registrar histórico no lead
       await supabase.from('leads_historico').insert({
         lead_id: lead.id,
         acao: 'ganho',
         descricao: `Contrato ${contrato.numero} ativado. Associado criado automaticamente.`,
         etapa_nova: 'ganho',
+      });
+
+      // 8.1 Registrar histórico no associado
+      await supabase.from('associados_historico').insert({
+        associado_id: novoAssociado.id,
+        tipo: 'contrato_assinado',
+        descricao: `Contrato ${contrato.numero} ativado e associado vinculado`,
+        acao: 'ativacao',
+        status_anterior: 'em_analise',
+        status_novo: 'ativo',
+        metadata: { contrato_id: contratoId, contrato_numero: contrato.numero },
       });
 
       // 9. Criar notificação para vendedor

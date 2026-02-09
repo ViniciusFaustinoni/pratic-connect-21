@@ -18,6 +18,8 @@ export interface AtivacaoContrato {
   veiculo_placa: string | null;
   // IDs para SGA
   associado_id: string | null;
+  // Status do associado (para refletir cancelamento)
+  associado_status: string | null;
   // Pagamento de adesão
   adesao_paga: boolean;
   // Dados do veículo para SGA
@@ -93,8 +95,18 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
         vendedores?.forEach(v => vendedoresMap.set(v.id, { id: v.id, nome: v.nome }));
       }
 
-      // Buscar vistorias de entrada para cada associado
+      // Buscar status dos associados
       const associadoIds = filteredContratos.map(c => c.associado_id).filter(Boolean) as string[];
+      let associadosStatusMap = new Map<string, string>();
+      if (associadoIds.length > 0) {
+        const { data: assocData } = await supabase
+          .from('associados')
+          .select('id, status')
+          .in('id', associadoIds);
+        assocData?.forEach(a => associadosStatusMap.set(a.id, a.status));
+      }
+
+      // Buscar vistorias de entrada para cada associado
       let vistoriasData: Array<{ id: string; status: string | null; modalidade: string | null; created_at: string; associado_id: string }> = [];
       if (associadoIds.length > 0) {
         const { data, error } = await supabase
@@ -167,6 +179,8 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
           veiculo_placa: contrato.veiculo_placa,
           // IDs para SGA
           associado_id: contrato.associado_id,
+          // Status do associado
+          associado_status: contrato.associado_id ? associadosStatusMap.get(contrato.associado_id) || null : null,
           // Pagamento de adesão
           adesao_paga: contrato.adesao_paga ?? false,
           // Dados do veículo para SGA

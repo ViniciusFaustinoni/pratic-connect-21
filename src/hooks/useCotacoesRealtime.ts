@@ -218,6 +218,23 @@ export function useCotacoesRealtime() {
           }
         }
       )
+      // Escutar mudanças no histórico de associados (atualiza timeline em tempo real)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'associados_historico',
+        },
+        (payload) => {
+          console.log('[useCotacoesRealtime] Novo evento no histórico do associado:', payload.new);
+          const evento = payload.new as { associado_id?: string };
+          if (evento.associado_id) {
+            queryClient.invalidateQueries({ queryKey: ['associado-historico-completo', evento.associado_id] });
+          }
+          queryClient.invalidateQueries({ queryKey: ['associado-historico-completo'] });
+        }
+      )
       .subscribe((status) => {
         console.log('[useCotacoesRealtime] Status da subscription:', status);
       });

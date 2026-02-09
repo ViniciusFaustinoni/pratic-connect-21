@@ -67,12 +67,16 @@ export function AtivacaoTableRow({
     : false;
   const sgaOk = contrato.veiculo?.sincronizado_hinova === true;
 
-  // Status
-  const isAtivo = contrato.status === "ativo";
-  const isProntoParaAtivar = assinaturaOk && vistoriaOk && !isAtivo;
+  // Status - cruzar com associado
+  const isCancelado = contrato.status === 'cancelado' || (contrato as any).associado_status === 'cancelado';
+  const isAtivo = contrato.status === 'ativo' && !isCancelado;
+  const isProntoParaAtivar = assinaturaOk && vistoriaOk && !isAtivo && !isCancelado;
   const todosRequisitos = assinaturaOk && pagamentoOk && vistoriaOk && sgaOk;
 
   const getStatusBadge = () => {
+    if (isCancelado) {
+      return <Badge className="bg-red-500/15 text-red-600 border-red-500/30">Cancelado</Badge>;
+    }
     if (isAtivo) {
       return <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30">Ativo</Badge>;
     }
@@ -85,7 +89,8 @@ export function AtivacaoTableRow({
   return (
     <TableRow className={cn(
       "hover:bg-muted/30",
-      isAtivo && "bg-emerald-500/5"
+      isAtivo && "bg-emerald-500/5",
+      isCancelado && "bg-red-500/5 opacity-60"
     )}>
       {/* Cliente */}
       <TableCell>
@@ -143,7 +148,7 @@ export function AtivacaoTableRow({
         <div className="flex items-center gap-2">
           {getStatusBadge()}
           
-          {!isAtivo && (
+          {!isAtivo && !isCancelado && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">

@@ -34,7 +34,8 @@ type EtapaVenda =
   | 'vistoria_realizada'
   | 'em_analise'
   | 'associado_ativo'
-  | 'veiculo_recusado';
+  | 'veiculo_recusado'
+  | 'cancelado';
 
 const statusConfig: Record<StatusCotacaoExtended, { 
   label: string; 
@@ -146,11 +147,23 @@ const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgCol
     color: 'text-red-600 dark:text-red-400',
     bgColor: 'bg-red-500/20',
   },
+  cancelado: {
+    label: 'Cancelado',
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-500/20',
+  },
 };
 
 // Função para determinar a etapa da venda - CORRIGIDA para verificar pagamento antes de vistoria
 export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
-  // PRIORIDADE MÁXIMA: Se veículo foi recusado, mostrar imediatamente
+  // PRIORIDADE MÁXIMA: Cancelamento
+  const associadoStatus = cotacao.contrato?.associados?.status;
+  const contratoStatus = cotacao.contrato?.status;
+  if (associadoStatus === 'cancelado' || contratoStatus === 'cancelado' || cotacao.status_contratacao === 'cancelado') {
+    return 'cancelado';
+  }
+
+  // PRIORIDADE ALTA: Se veículo foi recusado, mostrar imediatamente
   if (cotacao.status === 'recusada' || cotacao.status_contratacao === 'veiculo_recusado') {
     return 'veiculo_recusado';
   }
@@ -163,7 +176,6 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
   if (cotacao.status === 'rascunho' && !temContratacaoAtiva && !cotacao.contrato) return null;
   
   // PRIORIDADE 1: Status do associado APENAS para etapas finais (pós-vistoria)
-  const associadoStatus = cotacao.contrato?.associados?.status;
   if (associadoStatus === 'ativo') return 'associado_ativo';
   if (associadoStatus === 'em_analise') return 'em_analise';
   
@@ -176,7 +188,6 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
   
   // PRIORIDADE 3: Verificar se pagamento foi feito ANTES de considerar vistoria agendada
   const adesaoPaga = cotacao.contrato?.adesao_paga;
-  const contratoStatus = cotacao.contrato?.status;
   
   // Se contrato existe e foi assinado, verificar pagamento primeiro
   if (contratoStatus === 'assinado' || contratoStatus === 'ativo') {
