@@ -1,48 +1,69 @@
 
-# Corrigir Design Mobile da ExecutarRetirada
+# Corrigir Fotos, Video e Preview na Tela de Retirada
 
-## Problema
+## Causa Raiz Identificada
 
-O footer (botoes "Concluir Retirada" e "Associado Ausente") se estende pela largura total da tela, enquanto a bottom nav do layout usa `max-w-md mx-auto`. Isso cria uma inconsistencia visual onde os botoes ficam maiores que o conteudo da pagina. Alem disso, o texto de validacao ainda fica parcialmente cortado.
+O bucket `vistorias` no Supabase Storage esta configurado como **privado** (`public: false`). O codigo usa `getPublicUrl()` para gerar URLs das fotos e video apos upload, mas essas URLs so funcionam para buckets publicos. Resultado:
+
+- **Fotos**: Aparecem como icones quebrados com checkmark verde (o upload funcionou, mas a URL nao carrega a imagem)
+- **Video 360**: Player preto mostrando 0:00 (URL inacessivel)
+- **Preview**: As imagens locais (Object URL) sao substituidas pela URL publica quebrada
 
 ## Solucao
 
+Substituir `getPublicUrl()` por `createSignedUrl()` em todos os uploads da `ExecutarRetirada.tsx`. URLs assinadas funcionam com buckets privados e expiram apos um tempo configuravel.
+
 ### Arquivo: `src/pages/instalador/ExecutarRetirada.tsx`
 
-**1. Footer - adicionar `max-w-md mx-auto` para alinhar com a bottom nav (linha 729):**
+**1. Upload de foto (linhas 254-273)** - Trocar `getPublicUrl` por `createSignedUrl`:
 
 ```typescript
 // De:
-<footer className="fixed bottom-16 left-0 right-0 border-t border-slate-700 bg-slate-800 p-4 pb-2 space-y-2 z-40">
+const { data: { publicUrl } } = supabase.storage.from('vistorias').getPublicUrl(fileName);
+setFotosEnviadas(prev => ({ ...prev, [tipo]: publicUrl }));
 
 // Para:
-<footer className="fixed bottom-16 left-0 right-0 border-t border-slate-700 bg-slate-800 p-4 pb-2 space-y-2 z-40 max-w-md mx-auto">
+const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
+if (signedData?.signedUrl) {
+  setFotosEnviadas(prev => ({ ...prev, [tipo]: signedData.signedUrl }));
+}
 ```
 
-**2. Container raiz - limitar largura para consistencia mobile (linha 370):**
+**2. Upload de video (linhas 276-293)** - Mesma mudanca:
 
 ```typescript
 // De:
-<div className="flex min-h-screen flex-col bg-slate-900 pb-56">
+const { data: { publicUrl } } = supabase.storage.from('vistorias').getPublicUrl(fileName);
+setVideoUrl(publicUrl);
 
 // Para:
-<div className="flex min-h-screen flex-col bg-slate-900 pb-56 max-w-md mx-auto">
+const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
+if (signedData?.signedUrl) {
+  setVideoUrl(signedData.signedUrl);
+}
 ```
 
-**3. Tela de erro - mesmo tratamento (linha 361):**
+**3. Upload de assinatura (linhas 297-311)** - Mesma mudanca:
 
 ```typescript
 // De:
-<div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 p-4">
+const { data: { publicUrl } } = supabase.storage.from('vistorias').getPublicUrl(fileName);
+setAssinaturaUrl(publicUrl);
 
 // Para:
-<div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 p-4 max-w-md mx-auto">
+const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
+if (signedData?.signedUrl) {
+  setAssinaturaUrl(signedData.signedUrl);
+}
 ```
 
-**4. Modal de confirmacao - ja usa `max-w-md`, sem mudanca necessaria.**
+## Sobre a Cor do Veiculo
 
-## Resultado
+A cor `VERMELHA` esta corretamente armazenada no banco de dados para o veiculo `LTB4J74` e esta sendo exibida na interface. Se a cor real do veiculo for diferente, o problema esta na origem dos dados (cadastro manual ou OCR do CRLV), nao na tela de retirada. A conferencia de dados funciona corretamente: ela mostra o que esta no banco para o tecnico confirmar visualmente.
 
-- Footer, conteudo e bottom nav ficam todos alinhados dentro do `max-w-md`
-- Design harmonico e consistente no mobile
-- Botoes nao se estendem alem da area visivel do app
+## Resultado Esperado
+
+- Fotos da retirada aparecerao corretamente apos captura
+- Video 360 sera reproduzivel no player
+- Assinatura sera exibida apos captura
+- URLs assinadas tem validade de 1 hora (suficiente para a sessao de trabalho)
