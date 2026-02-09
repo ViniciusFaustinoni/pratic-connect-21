@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { Search, AlertTriangle, Loader2, Car } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,10 +24,13 @@ interface VeiculoAntigo {
 
 interface StepNovoVeiculoProps {
   veiculoAntigo: VeiculoAntigo;
+  associadoId: string;
+  substituicaoId: string | null;
   dadosNovoVeiculo: Partial<DadosNovoVeiculo>;
   setDadosNovoVeiculo: (dados: Partial<DadosNovoVeiculo>) => void;
-  onNext: () => void;
+  onNext: (veiculoNovoId?: string) => void;
   onBack: () => void;
+  onIniciarSubstituicao: () => Promise<string>;
 }
 
 const CORES = ['Branco', 'Preto', 'Prata', 'Vermelho', 'Azul', 'Cinza', 'Outro'];
@@ -34,15 +39,19 @@ const PLATAFORMAS = ['Uber', '99', 'iFood', 'Outro'];
 
 export function StepNovoVeiculo({
   veiculoAntigo,
+  associadoId,
+  substituicaoId,
   dadosNovoVeiculo,
   setDadosNovoVeiculo,
   onNext,
   onBack,
+  onIniciarSubstituicao,
 }: StepNovoVeiculoProps) {
   const fipe = useFipe();
   const [placaExiste, setPlacaExiste] = useState(false);
   const [verificandoPlaca, setVerificandoPlaca] = useState(false);
   const [consultandoFipe, setConsultandoFipe] = useState(false);
+  const [criandoVeiculo, setCriandoVeiculo] = useState(false);
   const [chassi, setChassi] = useState('');
   const [renavam, setRenavam] = useState('');
 
@@ -95,6 +104,63 @@ export function StepNovoVeiculo({
 
   const fipeConsultada = !!dados.valor_fipe && dados.valor_fipe > 0;
   const camposObrigatorios = dados.placa && dados.marca && dados.modelo && dados.cor && dados.combustivel && fipeConsultada;
+
+  // Criar veículo no banco e avançar
+  const handleCriarVeiculoEAvancar = useCallback(async () => {
+    if (!camposObrigatorios) return;
+    setCriandoVeiculo(true);
+    try {
+      // Garantir que a substituição existe
+      let substId = substituicaoId;
+      if (!substId) {
+        substId = await onIniciarSubstituicao();
+      }
+
+      // Criar veículo com status em_analise
+      const { data: novoVeiculo, error } = await supabase
+        .from('veiculos')
+        .insert({
+          associado_id: associadoId,
+          placa: dados.placa!,
+          marca: dados.marca!,
+          modelo: dados.modelo!,
+          ano_fabricacao: dados.ano_fabricacao || null,
+          ano_modelo: dados.ano_modelo || null,
+          cor: dados.cor,
+          combustivel: dados.combustivel,
+          codigo_fipe: dados.codigo_fipe || null,
+          valor_fipe: dados.valor_fipe || 0,
+          uso_aplicativo: dados.uso_aplicativo || false,
+          plataforma_app: dados.plataforma_app || null,
+          status: 'em_analise',
+          ativo: false,
+          principal: false,
+          substituicao_id: substId,
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      // Atualizar substituição com dados do novo veículo
+      await supabase
+        .from('substituicoes_veiculo')
+        .update({
+          veiculo_novo_id: novoVeiculo.id,
+          veiculo_novo_placa: dados.placa,
+          veiculo_novo_modelo: `${dados.marca || ''} ${dados.modelo || ''}`.trim(),
+          veiculo_novo_fipe: dados.valor_fipe || 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', substId);
+
+      onNext(novoVeiculo.id);
+    } catch (err) {
+      toast.error('Erro ao salvar veículo: ' + (err as Error).message);
+    } finally {
+      setCriandoVeiculo(false);
+    }
+  }, [dados, camposObrigatorios, associadoId, substituicaoId, onIniciarSubstituicao, onNext]);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -288,7 +354,8 @@ export function StepNovoVeiculo({
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>Voltar</Button>
-        <Button onClick={onNext} disabled={!camposObrigatorios || placaExiste}>
+        <Button onClick={handleCriarVeiculoEAvancar} disabled={!camposObrigatorios || placaExiste || criandoVeiculo}>
+          {criandoVeiculo && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           Próximo
         </Button>
       </div>

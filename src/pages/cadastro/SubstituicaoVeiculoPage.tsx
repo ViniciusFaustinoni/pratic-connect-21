@@ -125,7 +125,7 @@ export default function SubstituicaoVeiculoPage() {
   };
 
   // Step 3 -> next
-  const handleNovoVeiculoNext = () => {
+  const handleNovoVeiculoNext = (veiculoNovoId?: string) => {
     completeStep(3);
     setCurrentStep(4);
   };
@@ -233,6 +233,8 @@ export default function SubstituicaoVeiculoPage() {
       {currentStep === 3 && (
         <StepNovoVeiculo
           veiculoAntigo={veiculoAntigoResumo}
+          associadoId={associadoId!}
+          substituicaoId={substituicaoId}
           dadosNovoVeiculo={dadosNovoVeiculo}
           setDadosNovoVeiculo={setDadosNovoVeiculo}
           onNext={handleNovoVeiculoNext}
@@ -243,6 +245,7 @@ export default function SubstituicaoVeiculoPage() {
               setCurrentStep(2);
             }
           }}
+          onIniciarSubstituicao={handleIniciarSubstituicao}
         />
       )}
 
