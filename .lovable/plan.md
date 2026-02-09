@@ -1,296 +1,341 @@
 
-# Plano: Implementar Sistema de Multa de Retirada
+# Plano: Integrar Cancelamento (Cadastro) com Retirada (Monitoramento)
 
-## 📋 Resumo Executivo
+## Objetivo
 
-Implementar o sistema de multa de R$ 400 para retiradas (não devolução, não comparecimento, aparelho danificado) com suporte a cobrança automática via ASAAS e registro manual para financeiro.
-
----
-
-## 🔍 Análise de Padrões Encontrados
-
-### Hooks Existentes Reutilizáveis
-- **useAsaas.ts**: Já possui `criarCobranca()` mutation que integra com edge function `asaas-cobrancas`. Padrão: 
-  ```typescript
-  criarCobranca({
-    billingType: 'BOLETO',
-    value: 400,
-    dueDate: 'YYYY-MM-DD',
-    description: 'Multa rastreador',
-    associado_id,
-  })
-  ```
-
-### Tipos Já Definidos
-- **src/types/retirada.ts**: Contém `FormaCobrancaMulta` com labels e `VALOR_MULTA_NAO_DEVOLUCAO = 400.00`
-- **supabase types**: Tabela `servicos` já tem campos `multa_aplicada`, `multa_asaas_id`, `multa_cobrada_em`, `multa_valor`, `multa_motivo`, `multa_forma_cobranca`, `cancelamento_bloqueado_ate_devolucao`
-
-### Padrão de Modal Encontrado
-- **TratarAusenciaModal.tsx** (manutenção): Referência estrutural para modais de ação pós-serviço com RadioGroup para opções múltiplas
+Conectar o fluxo de cancelamento de associado no Cadastro com o processo de retirada de rastreador no Monitoramento, garantindo que o cancelamento definitivo só seja finalizado após devolução do rastreador ou pagamento da multa.
 
 ---
 
-## 📦 Arquivos a Criar/Modificar
+## Arquivos a Modificar/Criar
 
-### 1. CRIAR: `src/hooks/useMultaRetirada.ts`
-
-Novo hook com 3 mutations:
-
-#### **useAplicarMulta()**
-```typescript
-interface AplicarMultaParams {
-  servicoId: string;
-  motivo: 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado';
-  formaCobranca: 'automatica_asaas' | 'manual_financeiro';
-  bloquearCancelamento: boolean;
-}
-
-// Ações:
-// 1. Atualiza servicos:
-//    - multa_aplicada = true
-//    - multa_valor = 400.00
-//    - multa_motivo = motivo
-//    - multa_cobrada_em = now()
-//    - multa_forma_cobranca = formaCobranca
-//    - cancelamento_bloqueado_ate_devolucao = bloquearCancelamento
-// 2. Se formaCobranca = 'automatica_asaas':
-//    - Chamar useAsaas().criarCobranca() passando associado_id + valor 400
-//    - Salvar multa_asaas_id retornado (ou 'PENDENTE_CONFIG' em erro)
-// 3. Se formaCobranca = 'manual_financeiro':
-//    - Apenas registrar no banco
-// 4. Invalidar queries: ['retiradas'], ['servicos']
-```
-
-**Tratamento de Erro ASAAS**: Se falhar, registra multa com `multa_asaas_id = 'PENDENTE_CONFIG'` e toast.warning ao invés de error.
-
-#### **useCancelarMulta()**
-```typescript
-interface CancelarMultaParams {
-  servicoId: string;
-}
-
-// Requer: isDiretor
-// Ações:
-// - multa_aplicada = false
-// - cancelamento_bloqueado_ate_devolucao = false
-// - Registra em histórico quem cancelou e quando
-```
-
-#### **useConsultarMultas()**
-```typescript
-interface FiltrosMulta {
-  formaCobranca?: 'automatica_asaas' | 'manual_financeiro';
-  associadoNome?: string;
-  dataDe?: string;
-  dataAte?: string;
-}
-
-// Query que lista:
-// - Todos os serviços com multa_aplicada = true
-// - Join com associados, veiculos, rastreadores
-// - Retorna paginávelou listar sem paginação
-```
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/hooks/useAssociados.ts` | Modificar | Interceptar cancelamento para verificar rastreador vinculado |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Modificar | Substituir AlertDialog simples por modal inteligente |
+| `src/pages/cadastro/Associados.tsx` | Modificar | Mesma lógica para cancelamento da lista |
+| `src/components/cadastro/RastreadorVinculadoModal.tsx` | **CRIAR** | Modal de aviso quando há rastreador |
+| `supabase/functions/notificar-retirada-whatsapp/index.ts` | **CRIAR** | Edge function para WhatsApp de retirada |
+| `supabase/functions/concluir-retirada/index.ts` | Modificar | Desbloquear cancelamento quando retirada concluída |
 
 ---
 
-### 2. CRIAR: `src/components/monitoramento/retirada/AplicarMultaModal.tsx`
+## Detalhamento Técnico
 
-Modal estruturado como TratarAusenciaModal:
+### 1. Criar Modal `RastreadorVinculadoModal.tsx`
+
+Novo componente em `src/components/cadastro/`:
 
 **Props:**
 ```typescript
-interface AplicarMultaModalProps {
+interface RastreadorVinculadoModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  retirada: {
-    id: string; // servico.id
-    associado?: { nome: string; cpf: string };
-    rastreador?: { codigo: string };
-    integridade?: IntegridadeAparelho;
-  } | null;
-  motivo?: 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado'; // Pré-selecionado
+  associado: { id: string; nome: string };
+  rastreador: { id: string; codigo: string; plataforma: string };
+  veiculo: { id: string; placa: string; marca: string; modelo: string };
+  onConfirm: (acao: 'criar_retirada' | 'apenas_registrar') => Promise<void>;
+  isLoading?: boolean;
 }
 ```
 
-**Seções:**
-1. **Header**: "💰 Aplicar Multa de Rastreador" com ícone do lucide-react
-2. **Info do Serviço**: Card com Associado, CPF, Rastreador (não editável)
-3. **Motivo da Multa**: RadioGroup com 3 opções (se não pré-selecionado, pode mudar)
-4. **Forma de Cobrança**: RadioGroup com 2 opções (Automática ASAAS / Manual)
-5. **Checkbox Bloquear**: "Bloquear finalização do cancelamento até resolução"
-6. **Valor**: R$ 400,00 (fixo, apenas exibição)
-7. **Footer**: Botões Cancelar + "Confirmar Multa"
-
-**Comportamento:**
-- Se escolher Automática → mostrar mensagem "Boleto/PIX será gerado via ASAAS"
-- Se escolher Manual → mostrar "Financeiro será notificado"
-- Se integridade for danificado/violado/molhado → checkbox pré-marcado
-- Ao confirmar: usar `useAplicarMulta().mutate()`
+**Layout:**
+- Alerta com ícone de aviso
+- Dados do rastreador e veículo
+- Mensagem explicativa sobre bloqueio de cancelamento
+- RadioGroup com 2 opções:
+  1. "Criar solicitação de retirada automaticamente" (vai para fila do Monitoramento)
+  2. "Apenas registrar cancelamento" (pendência criada)
+- Botões: Voltar + Prosseguir
 
 ---
 
-### 3. MODIFICAR: `src/hooks/useRetiradaRastreador.ts`
+### 2. Modificar `useAssociados.ts` (Hook cancelarAssociado)
 
-Adicionar tipo `MotivoMulta` para exports:
+Na mutation `cancelarAssociado`, ANTES de atualizar status:
+
 ```typescript
-export type MotivoMulta = 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado';
+// 0. Verificar se há rastreador vinculado (NÃO cancelar se tiver)
+const { data: veiculosComRastreador } = await supabase
+  .from('veiculos')
+  .select(`
+    id, placa, marca, modelo,
+    rastreador:rastreadores!inner(id, codigo, plataforma, status)
+  `)
+  .eq('associado_id', id)
+  .not('rastreador', 'is', null)
+  .eq('rastreador.status', 'instalado');
+
+if (veiculosComRastreador && veiculosComRastreador.length > 0) {
+  // Retornar info do rastreador para frontend decidir
+  return {
+    temRastreador: true,
+    veiculos: veiculosComRastreador,
+  };
+}
 ```
 
+Criar uma nova mutation `cancelarAssociadoComRetirada` que:
+1. Cria serviço de retirada com `solicitado_por_modulo: 'cadastro'`
+2. Marca `pendencia_rastreador: true` no associado
+3. Atualiza status para 'cancelado' mas com bloqueio
+
 ---
 
-### 4. ADICIONAR: Tipos em `src/types/retirada.ts`
+### 3. Modificar `AssociadoDetalhe.tsx`
 
+**Estado adicional:**
 ```typescript
-export type MotivoMulta = 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado';
+const [rastreadorModal, setRastreadorModal] = useState<{
+  open: boolean;
+  rastreador?: any;
+  veiculo?: any;
+} | null>(null);
+```
 
-export const MOTIVO_MULTA_LABELS: Record<MotivoMulta, string> = {
-  nao_devolveu: 'Não devolução do equipamento',
-  nao_compareceu: 'Não comparecimento à retirada',
-  aparelho_danificado: 'Aparelho devolvido danificado/violado',
+**Modificar handleCancelar:**
+```typescript
+const handleCancelar = async () => {
+  if (!id) return;
+  
+  // Verificar rastreador antes de cancelar
+  const { data: veiculosComRastreador } = await supabase
+    .from('veiculos')
+    .select(`id, placa, marca, modelo, rastreador:rastreadores!inner(id, codigo, plataforma)`)
+    .eq('associado_id', id)
+    .eq('rastreador.status', 'instalado');
+
+  if (veiculosComRastreador && veiculosComRastreador.length > 0) {
+    // Abrir modal de aviso
+    const v = veiculosComRastreador[0];
+    setRastreadorModal({
+      open: true,
+      rastreador: v.rastreador[0],
+      veiculo: v,
+    });
+    setCancelarDialogOpen(false);
+    return;
+  }
+
+  // Sem rastreador - cancelamento normal
+  cancelarAssociado({ id, motivo: 'Cancelado pelo administrador' });
+  setCancelarDialogOpen(false);
+  navigate('/cadastro/associados');
 };
 ```
 
----
-
-## 🔗 Integração com Componentes Existentes
-
-### Em `RetiradasPage.tsx` (Quando for criada):
-
-Na tabela de retiradas, adicionar coluna/indicador visual:
-- Ícone 💰 se `multa_aplicada = true`
-  - Tooltip: "Multa R$400 — [motivo] — [forma]"
-- Ícone 🔒 se `cancelamento_bloqueado_ate_devolucao = true`
-  - Tooltip: "Cancelamento bloqueado até resolução"
-
-No dropdown de ações:
-- Se status `concluida` E integridade != 'integro': botão "Aplicar Multa (danificado)"
-  - Abre `AplicarMultaModal` com `motivo` pré-selecionado como `'aparelho_danificado'`
-- Se status `nao_compareceu`: botão "Aplicar Multa (48h)"
-  - Abre `AplicarMultaModal` com `motivo` pré-selecionado como `'nao_compareceu'`
-- Se status `concluida`: botão "Aplicar Multa" genérico
-  - Abre `AplicarMultaModal` sem pré-seleção
-
-### Em `TratarAusenciaRetirada.tsx` (Quando for criada):
-
-Se coordenador escolher "Aplicar multa":
-- Fechar este modal
-- Abrir `AplicarMultaModal` com `motivo = 'nao_compareceu'`
-
-### Sugestão pós-retirada danificada (em ExecutarRetirada.tsx):
-
-Após técnico concluir retirada com `integridade != 'integro'`:
-- Toast toast.warning(): "⚠️ Rastreador devolvido danificado. Considere aplicar multa de R$400."
-- Destacar linha na tabela em cor amarela/laranja (quando RetiradasPage for exibir)
-
----
-
-## 🔐 Permissões
-
-- **Aplicar multa**: Diretor, Coordenador de Monitoramento
-- **Cancelar multa**: Diretor apenas (validação no hook com `usePermissions`)
-- **Consultar relatório**: Financeiro, Diretor
-
----
-
-## 🎯 Fluxos de Integração
-
-### Fluxo 1: Não Devolução (48h estourou)
-```
-Coordenador vê retirada pendente com data_agendada + 48h vencida
-→ Clica "Aplicar Multa (não devolução)"
-→ Abre AplicarMultaModal com motivo pré-selecionado
-→ Escolhe forma cobrança
-→ Confirma
-→ useAplicarMulta executa (cria cobrança ASAAS se automática)
-→ Tabela atualiza com ícone 💰
-```
-
-### Fluxo 2: Não Comparecimento
-```
-Técnico marca "Associado Ausente" em ExecutarRetirada
-→ Status muda para 'nao_compareceu'
-→ Coordenador vê retirada com status nao_compareceu
-→ Clica "Tratar Ausência" (de outro prompt)
-→ Modal oferece: reagendar OU aplicar multa
-→ Se aplicar multa: abre AplicarMultaModal com motivo 'nao_compareceu'
-→ (resto igual fluxo 1)
-```
-
-### Fluxo 3: Aparelho Danificado
-```
-Técnico seleciona integridade != 'integro' em ExecutarRetirada
-→ Conclui retirada
-→ Toast: "Considere aplicar multa"
-→ Coordenador vê retirada com ícone de dano
-→ Clica "Aplicar Multa (danificado)"
-→ Abre AplicarMultaModal com motivo pré-selecionado
-→ (resto igual fluxo 1)
-```
-
----
-
-## ⚠️ Considerações Técnicas
-
-1. **ASAAS Fallback**: Se edge function `asaas-cobrancas` falhar, salvar `multa_asaas_id = 'PENDENTE_CONFIG'` e não impedir o fluxo. Toast.warning ao invés de error.
-
-2. **Reutilização useAsaas**: O hook `useAsaas.criarCobranca()` já existe e integra com a edge function. Apenas chamar com params corretos.
-
-3. **Edge Function Não Precisa Ser Criada**: A edge function `asaas-cobrancas` já existe com action `'criar'`. Usar conforme protocolo estabelecido.
-
-4. **Bloqueio de Cancelamento**: Campo `cancelamento_bloqueado_ate_devolucao` já existe na tabela. Lógica de validação será feita em outro prompt quando integrar com módulo de Cadastro.
-
-5. **Campos no Banco**: Todos os campos necessários já existem em `servicos`:
-   - multa_aplicada
-   - multa_valor
-   - multa_motivo
-   - multa_cobrada_em
-   - multa_forma_cobranca
-   - multa_asaas_id
-   - cancelamento_bloqueado_ate_devolucao
-
----
-
-## 📊 Estrutura de Dados
-
-### Mutation Body para useAplicarMulta
+**Handler do modal:**
 ```typescript
-{
-  servicoId: string;
-  motivo: 'nao_devolveu' | 'nao_compareceu' | 'aparelho_danificado';
-  formaCobranca: 'automatica_asaas' | 'manual_financeiro';
-  bloquearCancelamento: boolean;
+const handleConfirmRastreadorModal = async (acao: 'criar_retirada' | 'apenas_registrar') => {
+  if (!rastreadorModal || !id) return;
+  
+  if (acao === 'criar_retirada') {
+    // Usar hook de abrir retirada
+    await criarSolicitacaoRetirada({
+      rastreadorId: rastreadorModal.rastreador.id,
+      motivo: 'cancelamento_voluntario',
+      solicitadoPorModulo: 'cadastro',
+      bloquearCancelamento: true,
+    });
+  }
+  
+  // Atualizar associado com pendência
+  await supabase.from('associados').update({
+    status: 'cancelado',
+    pendencia_rastreador: true,
+    pendencia_rastreador_servico_id: /* ID do serviço se criou */,
+    motivo_cancelamento: 'Cancelado pelo administrador',
+    data_cancelamento: new Date().toISOString(),
+  }).eq('id', id);
+  
+  setRastreadorModal(null);
+  navigate('/cadastro/associados');
+};
+```
+
+**Banner de pendência** (adicionar no topo da página):
+```tsx
+{associado.pendencia_rastreador && (
+  <Alert variant="destructive" className="mb-4">
+    <AlertTriangle className="h-4 w-4" />
+    <AlertDescription>
+      <strong>Pendência de rastreador:</strong> O cancelamento não pode ser 
+      finalizado até a devolução do equipamento ou pagamento da multa (R$ 400,00).
+    </AlertDescription>
+  </Alert>
+)}
+```
+
+---
+
+### 4. Criar Edge Function `notificar-retirada-whatsapp`
+
+Baseada no padrão de `notificar-manutencao-whatsapp`:
+
+```typescript
+// supabase/functions/notificar-retirada-whatsapp/index.ts
+
+interface NotificacaoRetiradaPayload {
+  telefone: string;
+  nome_associado: string;
+  veiculo_modelo: string;
+  veiculo_placa: string;
+  data_agendada: string;
+  periodo: 'manha' | 'tarde';
+  local: string;
+  motivo: string;
 }
+
+// Usar variável: N8N_WEBHOOK_URL_RETIRADA
+// Mensagem: "Prezado(a) [nome], informamos que a retirada do equipamento 
+// rastreador do veículo [modelo • placa] está agendada para [data] 
+// no período da [período]. Local: [local]. Prazo: 48 horas. Em caso de 
+// não comparecimento, será aplicada multa de R$400 conforme regulamento. Praticcar."
 ```
 
-### Response
+---
+
+### 5. Modificar Edge Function `concluir-retirada`
+
+Adicionar lógica para desbloquear cancelamento:
+
 ```typescript
-{
-  success: boolean;
-  servicoId: string;
-  multaId?: string; // Se automática
-  asaasId?: string; // ID da cobrança no ASAAS (ou 'PENDENTE_CONFIG')
+// Após atualizar serviço e rastreador...
+
+// 11. Se cancelamento estava bloqueado, desbloquear
+const { data: servicoAtual } = await supabase
+  .from('servicos')
+  .select('cancelamento_bloqueado_ate_devolucao, associado_id')
+  .eq('id', servicoId)
+  .single();
+
+if (servicoAtual?.cancelamento_bloqueado_ate_devolucao && servicoAtual.associado_id) {
+  await supabase.from('associados').update({
+    pendencia_rastreador: false,
+    pendencia_rastreador_servico_id: null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', servicoAtual.associado_id);
+  
+  console.log('Cancelamento desbloqueado para associado:', servicoAtual.associado_id);
 }
 ```
 
 ---
 
-## ✅ Checklist de Implementação
+### 6. Hook para Solicitação de Retirada do Cadastro
 
-- [ ] Criar `src/hooks/useMultaRetirada.ts` com mutations/queries
-- [ ] Criar `src/components/monitoramento/retirada/AplicarMultaModal.tsx`
-- [ ] Adicionar tipos em `src/types/retirada.ts`
-- [ ] Exportar `AplicarMultaModal` em componentes/retirada/index.ts (se existir)
-- [ ] Integrar indicadores visuais (💰, 🔒) em RetiradasPage (quando for criada)
-- [ ] Integrar botões de ação (Aplicar Multa) em RetiradasPage (quando for criada)
-- [ ] Integrar sugestão de multa em ExecutarRetirada.tsx (após conclusão com dano)
-- [ ] Testar fluxo automático ASAAS + fallback manual
+Adicionar função em `useRetiradaRastreador.ts`:
+
+```typescript
+export function useCriarSolicitacaoRetiradaCadastro() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (params: {
+      rastreadorId: string;
+      veiculoId: string;
+      associadoId: string;
+      motivo: MotivoRetirada;
+    }) => {
+      // Criar serviço de retirada com status 'pendente' (sem agendamento)
+      const { data, error } = await supabase.from('servicos').insert({
+        tipo: 'vistoria_retirada',
+        status: 'pendente', // Monitoramento vai agendar
+        rastreador_id: params.rastreadorId,
+        veiculo_id: params.veiculoId,
+        associado_id: params.associadoId,
+        motivo_retirada: params.motivo,
+        solicitado_por_modulo: 'cadastro',
+        cancelamento_bloqueado_ate_devolucao: true,
+      }).select('id').single();
+      
+      if (error) throw error;
+      return data;
+    },
+    // ... invalidações
+  });
+}
+```
 
 ---
 
-## 🔗 Dependências Externas
+## Migration SQL (Campos Pendência)
 
-- **useAsaas()**: Hook existente em `src/hooks/useAsaas.ts` — usar para cobrança automática
-- **Edge Function asaas-cobrancas**: Já existe, não precisa criar
-- **usePermissions()**: Para validar que apenas Diretor cancela multa
-- **Components UI**: Dialog, RadioGroup, Badge, Button, Checkbox (já existem)
+```sql
+-- Adicionar campos de pendência de rastreador
+ALTER TABLE associados 
+ADD COLUMN IF NOT EXISTS pendencia_rastreador BOOLEAN DEFAULT false;
 
+ALTER TABLE associados 
+ADD COLUMN IF NOT EXISTS pendencia_rastreador_servico_id UUID 
+REFERENCES servicos(id) ON DELETE SET NULL;
+
+-- Índice para queries
+CREATE INDEX IF NOT EXISTS idx_associados_pendencia_rastreador 
+ON associados(pendencia_rastreador) WHERE pendencia_rastreador = true;
+
+COMMENT ON COLUMN associados.pendencia_rastreador IS 
+'Indica se o associado tem rastreador pendente de devolução (bloqueia finalização de cancelamento)';
+
+COMMENT ON COLUMN associados.pendencia_rastreador_servico_id IS 
+'ID do serviço de retirada vinculado à pendência';
+```
+
+---
+
+## Fluxo Visual
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                     MÓDULO DE CADASTRO                           │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. Usuário clica "Cancelar Associado"                          │
+│                    ↓                                             │
+│  2. Sistema verifica: tem rastreador instalado?                  │
+│                    ↓                                             │
+│        ┌──────────┴──────────┐                                   │
+│       SIM                   NÃO                                  │
+│        ↓                     ↓                                   │
+│  Abre Modal de            Cancela                                │
+│  Rastreador Vinculado     normalmente                            │
+│        ↓                                                         │
+│  Opções:                                                         │
+│  • Criar retirada → Serviço "pendente" no Monitoramento         │
+│  • Apenas registrar → Flag de pendência                          │
+│        ↓                                                         │
+│  Associado.status = 'cancelado'                                  │
+│  Associado.pendencia_rastreador = true                           │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+                              ↓
+┌──────────────────────────────────────────────────────────────────┐
+│                  MÓDULO DE MONITORAMENTO                         │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Alerta: "X retiradas solicitadas pelo Cadastro"                │
+│                    ↓                                             │
+│  Coordenador agenda retirada (data, técnico)                     │
+│                    ↓                                             │
+│  Técnico executa retirada                                        │
+│                    ↓                                             │
+│  Edge function concluir-retirada:                                │
+│  • Rastreador → estoque/retorno_base                             │
+│  • Associado.pendencia_rastreador = false ← DESBLOQUEIA          │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Checklist de Implementação
+
+- [ ] Criar migration SQL para campos `pendencia_rastreador`
+- [ ] Criar componente `RastreadorVinculadoModal.tsx`
+- [ ] Modificar `AssociadoDetalhe.tsx` para verificar rastreador antes de cancelar
+- [ ] Modificar `Associados.tsx` (lista) com mesma lógica
+- [ ] Adicionar mutation `useCriarSolicitacaoRetiradaCadastro` em `useRetiradaRastreador.ts`
+- [ ] Criar edge function `notificar-retirada-whatsapp`
+- [ ] Modificar `concluir-retirada` para desbloquear cancelamento
+- [ ] Adicionar banner de pendência na ficha do associado
+- [ ] Testar fluxo completo end-to-end
