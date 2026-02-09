@@ -294,7 +294,13 @@ export default function AssociadoDetalhe() {
 
   const todosDocumentos = [
     ...(documentos || []).map(d => ({ ...d, fonte: 'documentos' as const })),
-    ...(documentosCotacao || []).map(d => ({ ...d, fonte: 'cotacao' as const, veiculo: null })),
+    ...(documentosCotacao || []).map(d => {
+      const tiposDocPessoal = ['cnh', 'cnh_frente', 'cnh_verso', 'comprovante_residencia', 'selfie', 'rg', 'rg_frente', 'rg_verso'];
+      const isPessoal = tiposDocPessoal.includes(d.tipo);
+      const isCrlv = d.tipo === 'crlv' || d.tipo === 'crlv_digital';
+      const veiculoLabel = isPessoal ? 'Pessoal' : isCrlv && veiculos?.[0]?.placa ? veiculos[0].placa : null;
+      return { ...d, fonte: 'cotacao' as const, veiculo: veiculoLabel ? { placa: veiculoLabel } : null };
+    }),
   ].map(d => ({
     ...d,
     status: (status === 'ativo' && d.status === 'pendente') ? 'aprovado' : d.status

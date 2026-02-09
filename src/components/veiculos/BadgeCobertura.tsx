@@ -82,15 +82,20 @@ export function BadgeCobertura({
 interface BadgeCoberturaCompactProps {
   coberturaTotal?: boolean | null;
   coberturaRouboFurto?: boolean | null;
+  veiculoStatus?: string | null;
   className?: string;
 }
 
 export function BadgeCoberturaCompact({
   coberturaTotal,
   coberturaRouboFurto,
+  veiculoStatus,
   className,
 }: BadgeCoberturaCompactProps) {
-  if (coberturaTotal) {
+  // Se veículo cancelado/inativo, sempre mostrar sem cobertura
+  const isCancelado = veiculoStatus === 'cancelado' || veiculoStatus === 'inativo';
+
+  if (!isCancelado && coberturaTotal) {
     return (
       <TooltipProvider>
         <Tooltip>
@@ -107,7 +112,7 @@ export function BadgeCoberturaCompact({
     );
   }
 
-  if (coberturaRouboFurto) {
+  if (!isCancelado && coberturaRouboFurto) {
     return (
       <TooltipProvider>
         <Tooltip>

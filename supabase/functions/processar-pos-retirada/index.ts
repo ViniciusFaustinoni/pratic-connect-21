@@ -234,6 +234,8 @@ Deno.serve(async (req) => {
         .update({
           ativo: false,
           status: 'cancelado',
+          cobertura_total: false,
+          cobertura_roubo_furto: false,
           updated_at: new Date().toISOString(),
         })
         .eq('associado_id', associado_id)

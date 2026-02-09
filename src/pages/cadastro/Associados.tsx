@@ -580,6 +580,7 @@ export default function Associados() {
                           <BadgeCoberturaCompact
                             coberturaTotal={associado.veiculos[0].cobertura_total}
                             coberturaRouboFurto={associado.veiculos[0].cobertura_roubo_furto}
+                            veiculoStatus={associado.veiculos[0].status}
                           />
                         </div>
                       ) : '—'}
