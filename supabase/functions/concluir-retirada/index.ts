@@ -252,7 +252,34 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 10. Se é substituição com nova instalação, criar novo serviço de instalação
+    // 10. Desbloquear cancelamento do associado se estava bloqueado
+    const { data: servicoAtualizado } = await supabase
+      .from('servicos')
+      .select('cancelamento_bloqueado_ate_devolucao, associado_id')
+      .eq('id', servicoId)
+      .single();
+
+    if (servicoAtualizado?.cancelamento_bloqueado_ate_devolucao && servicoAtualizado.associado_id) {
+      console.log('Desbloqueando cancelamento para associado:', servicoAtualizado.associado_id);
+      
+      const { error: updateAssociadoError } = await supabase
+        .from('associados')
+        .update({
+          pendencia_rastreador: false,
+          pendencia_rastreador_servico_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', servicoAtualizado.associado_id);
+
+      if (updateAssociadoError) {
+        console.error('Erro ao desbloquear cancelamento:', updateAssociadoError);
+        // Não falhar a operação principal
+      } else {
+        console.log('Cancelamento desbloqueado com sucesso');
+      }
+    }
+
+    // 11. Se é substituição com nova instalação, criar novo serviço de instalação
     let novoServicoInstalacaoId = null;
     const finalNovoVeiculoId = novoVeiculoId || servicoData?.novo_veiculo_id;
     

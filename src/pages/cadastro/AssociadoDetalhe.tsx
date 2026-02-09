@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,6 +83,9 @@ import { useVeiculosComRastreador, getStatusComunicacaoBadgeClass, getStatusComu
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { SuspenderAssociadoDialog } from '@/components/associados/SuspenderAssociadoDialog';
 import { AssociadoSuspensoAlert } from '@/components/associados/AssociadoSuspensoAlert';
+import { RastreadorVinculadoModal } from '@/components/cadastro/RastreadorVinculadoModal';
+import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
+import { supabase } from '@/integrations/supabase/client';
 
 // ============================================
 // UTILITÁRIOS
@@ -247,6 +251,17 @@ export default function AssociadoDetalhe() {
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
   const [veiculoSelecionadoId, setVeiculoSelecionadoId] = useState<string | null>(null);
   const [selecionarVeiculoOpen, setSelecionarVeiculoOpen] = useState(false);
+  
+  // Estado do modal de rastreador vinculado (cancelamento)
+  const [rastreadorModalOpen, setRastreadorModalOpen] = useState(false);
+  const [rastreadorModalData, setRastreadorModalData] = useState<{
+    rastreador: { id: string; codigo: string; plataforma: string | null };
+    veiculo: { id: string; placa: string; marca: string | null; modelo: string | null };
+  } | null>(null);
+  const [isProcessingCancelamento, setIsProcessingCancelamento] = useState(false);
+  
+  // Hook para criar solicitação de retirada
+  const criarSolicitacaoRetirada = useCriarSolicitacaoRetiradaCadastro();
 
   // Data fetching
   const { data: associado, isLoading, refetch } = useAssociado(id);
@@ -331,11 +346,104 @@ export default function AssociadoDetalhe() {
     if (id) reativarAssociado(id);
   };
 
-  const handleCancelar = () => {
+  const handleCancelar = async () => {
     if (!id) return;
+    
+    // Verificar se há rastreador vinculado antes de cancelar
+    const { data: veiculosComRastreadorInstalado } = await supabase
+      .from('veiculos')
+      .select(`
+        id, placa, marca, modelo,
+        rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, plataforma, status)
+      `)
+      .eq('associado_id', id);
+
+    // Filtrar veículos que realmente têm rastreador instalado
+    const veiculosComRastreador = veiculosComRastreadorInstalado?.filter(v => {
+      const rastreadores = v.rastreador as any[];
+      return rastreadores?.some(r => r.status === 'instalado');
+    });
+
+    if (veiculosComRastreador && veiculosComRastreador.length > 0) {
+      // Tem rastreador instalado — abrir modal de aviso
+      const v = veiculosComRastreador[0];
+      const rastreadorInstalado = (v.rastreador as any[]).find(r => r.status === 'instalado');
+      
+      setRastreadorModalData({
+        rastreador: {
+          id: rastreadorInstalado.id,
+          codigo: rastreadorInstalado.codigo,
+          plataforma: rastreadorInstalado.plataforma,
+        },
+        veiculo: {
+          id: v.id,
+          placa: v.placa,
+          marca: v.marca,
+          modelo: v.modelo,
+        },
+      });
+      setCancelarDialogOpen(false);
+      setRastreadorModalOpen(true);
+      return;
+    }
+
+    // Sem rastreador — cancelamento normal
     cancelarAssociado({ id, motivo: 'Cancelado pelo administrador' });
     setCancelarDialogOpen(false);
     navigate('/cadastro/associados');
+  };
+
+  const handleConfirmRastreadorModal = async (acao: 'criar_retirada' | 'apenas_registrar') => {
+    if (!rastreadorModalData || !id || !associado) return;
+    
+    setIsProcessingCancelamento(true);
+    
+    try {
+      let servicoId: string | null = null;
+      
+      if (acao === 'criar_retirada') {
+        // Criar solicitação de retirada no Monitoramento
+        const result = await criarSolicitacaoRetirada.mutateAsync({
+          rastreadorId: rastreadorModalData.rastreador.id,
+          veiculoId: rastreadorModalData.veiculo.id,
+          associadoId: id,
+          motivo: 'cancelamento_voluntario',
+        });
+        servicoId = result.id;
+      }
+      
+      // Atualizar associado com pendência e status cancelado
+      const { error: updateError } = await supabase
+        .from('associados')
+        .update({
+          status: 'cancelado',
+          pendencia_rastreador: true,
+          pendencia_rastreador_servico_id: servicoId,
+          motivo_cancelamento: 'Cancelado pelo administrador',
+          data_cancelamento: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (updateError) {
+        throw updateError;
+      }
+      
+      toast.success('Cancelamento registrado', {
+        description: acao === 'criar_retirada' 
+          ? 'Solicitação de retirada criada. Monitoramento irá agendar.'
+          : 'Pendência de rastreador registrada.',
+      });
+      
+      setRastreadorModalOpen(false);
+      setRastreadorModalData(null);
+      navigate('/cadastro/associados');
+    } catch (error) {
+      console.error('[handleConfirmRastreadorModal] Erro:', error);
+      toast.error('Erro ao processar cancelamento');
+    } finally {
+      setIsProcessingCancelamento(false);
+    }
   };
 
   // ============================================
@@ -447,6 +555,17 @@ export default function AssociadoDetalhe() {
           motivo={associado.motivo_bloqueio}
           dataBloqueio={associado.data_bloqueio}
         />
+      )}
+
+      {/* BANNER DE PENDÊNCIA DE RASTREADOR */}
+      {(associado as any).pendencia_rastreador && (
+        <Alert variant="destructive" className="border-destructive/50">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Pendência de rastreador:</strong> O cancelamento não pode ser finalizado 
+            até a devolução do equipamento ou pagamento da multa (R$ 400,00).
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* HEADER CARD */}
@@ -1579,6 +1698,19 @@ export default function AssociadoDetalhe() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* MODAL RASTREADOR VINCULADO (CANCELAMENTO) */}
+      {rastreadorModalData && (
+        <RastreadorVinculadoModal
+          open={rastreadorModalOpen}
+          onOpenChange={setRastreadorModalOpen}
+          associado={{ id: id || '', nome: associado.nome }}
+          rastreador={rastreadorModalData.rastreador}
+          veiculo={rastreadorModalData.veiculo}
+          onConfirm={handleConfirmRastreadorModal}
+          isLoading={isProcessingCancelamento}
+        />
+      )}
     </div>
   );
 }

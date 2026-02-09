@@ -1597,6 +1597,8 @@ export type Database = {
           motivo_cancelamento: string | null
           nome: string
           numero: string | null
+          pendencia_rastreador: boolean | null
+          pendencia_rastreador_servico_id: string | null
           plano_id: string | null
           primeiro_boleto_gerado: boolean | null
           profissao: string | null
@@ -1645,6 +1647,8 @@ export type Database = {
           motivo_cancelamento?: string | null
           nome: string
           numero?: string | null
+          pendencia_rastreador?: boolean | null
+          pendencia_rastreador_servico_id?: string | null
           plano_id?: string | null
           primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
@@ -1693,6 +1697,8 @@ export type Database = {
           motivo_cancelamento?: string | null
           nome?: string
           numero?: string | null
+          pendencia_rastreador?: boolean | null
+          pendencia_rastreador_servico_id?: string | null
           plano_id?: string | null
           primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
@@ -1737,6 +1743,13 @@ export type Database = {
             columns: ["contrato_id"]
             isOneToOne: false
             referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_pendencia_rastreador_servico_id_fkey"
+            columns: ["pendencia_rastreador_servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
             referencedColumns: ["id"]
           },
           {

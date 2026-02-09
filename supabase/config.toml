@@ -371,3 +371,6 @@ verify_jwt = false
 
 [functions.notificar-manutencao-whatsapp]
 verify_jwt = false
+
+[functions.notificar-retirada-whatsapp]
+verify_jwt = false
