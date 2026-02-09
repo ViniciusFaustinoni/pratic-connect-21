@@ -5,6 +5,57 @@ import { format } from 'date-fns';
 import type { Periodo } from '@/data/autovistoriaConfig';
 import type { MotivoRetirada, SubTipoRetirada, ModuloOrigem } from '@/types/retirada';
 
+// =============== MUTATION: CRIAR SOLICITAÇÃO DE RETIRADA DO CADASTRO ===============
+
+export interface CriarSolicitacaoRetiradaCadastroParams {
+  rastreadorId: string;
+  veiculoId: string;
+  associadoId: string;
+  motivo: MotivoRetirada;
+}
+
+export function useCriarSolicitacaoRetiradaCadastro() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: CriarSolicitacaoRetiradaCadastroParams) => {
+      // Criar serviço de retirada com status 'pendente' (Monitoramento vai agendar)
+      const { data, error } = await supabase
+        .from('servicos')
+        .insert({
+          tipo: 'vistoria_retirada' as const,
+          status: 'pendente' as const,
+          rastreador_id: params.rastreadorId,
+          veiculo_id: params.veiculoId,
+          associado_id: params.associadoId,
+          motivo_retirada: params.motivo as unknown as string,
+          solicitado_por_modulo: 'cadastro' as unknown as string,
+          cancelamento_bloqueado_ate_devolucao: true,
+        } as any)
+        .select('id, protocolo')
+        .single();
+
+      if (error) {
+        console.error('[useCriarSolicitacaoRetiradaCadastro] Erro ao criar serviço:', error);
+        throw new Error('Erro ao criar solicitação de retirada');
+      }
+
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['retiradas'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      toast.success('Solicitação de retirada criada!', {
+        description: `Protocolo: ${data.protocolo}`,
+      });
+    },
+    onError: (error: Error) => {
+      console.error('[useCriarSolicitacaoRetiradaCadastro] Erro:', error);
+      toast.error(error.message || 'Erro ao criar solicitação de retirada');
+    },
+  });
+}
+
 // =============== TIPOS ===============
 
 export interface AbrirRetiradaParams {
