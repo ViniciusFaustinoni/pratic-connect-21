@@ -309,6 +309,28 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 12. Se retirada é por substituição de veículo, avançar status da substituição
+    if (servicoData?.motivo_retirada === 'substituicao_veiculo') {
+      try {
+        const { data: substituicao } = await supabase
+          .from('substituicoes_veiculo')
+          .select('id, status')
+          .eq('servico_retirada_id', servicoId)
+          .single();
+
+        if (substituicao && substituicao.status === 'aguardando_retirada') {
+          await supabase
+            .from('substituicoes_veiculo')
+            .update({ status: 'aguardando_vistoria', updated_at: new Date().toISOString() })
+            .eq('id', substituicao.id);
+          console.log('Substituição avançada para aguardando_vistoria:', substituicao.id);
+        }
+      } catch (err) {
+        console.error('Erro ao avançar substituição:', err);
+        // Não falhar a operação principal
+      }
+    }
+
     const tempoTotal = Date.now() - startTime;
     console.log('=== RETIRADA CONCLUÍDA COM SUCESSO ===');
     console.log('Tempo total:', tempoTotal, 'ms');

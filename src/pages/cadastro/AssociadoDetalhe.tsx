@@ -88,6 +88,7 @@ import { CancelarAssociadoDialog } from '@/components/cadastro/CancelarAssociado
 import { ExcluirAssociadoDialog, type TipoExclusao } from '@/components/cadastro/ExcluirAssociadoDialog';
 import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
 import { supabase } from '@/integrations/supabase/client';
+import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoStatusCard';
 
 // ============================================
 // UTILITÁRIOS
@@ -527,6 +528,11 @@ export default function AssociadoDetalhe() {
             até a devolução do equipamento ou pagamento da multa (R$ 400,00).
           </AlertDescription>
         </Alert>
+      )}
+
+      {/* BANNER DE SUBSTITUIÇÃO EM ANDAMENTO */}
+      {id && status === 'ativo' && (
+        <SubstituicaoStatusCard associadoId={id} />
       )}
 
       {/* HEADER CARD */}
