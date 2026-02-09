@@ -58,6 +58,14 @@ export function useAtivarRastreador() {
           throw new Error(data?.error || 'Erro ao ativar dispositivo na Softruck');
         }
 
+        // Salvar id_plataforma retornado pela integração
+        if (data.softruck_device_id) {
+          await supabase
+            .from('rastreadores')
+            .update({ id_plataforma: data.softruck_device_id })
+            .eq('id', data.rastreador_id || rastreadorExistente.id);
+        }
+
         return {
           success: true,
           rastreadorId: data.rastreador_id,
@@ -82,6 +90,14 @@ export function useAtivarRastreador() {
 
         if (!data?.success) {
           throw new Error(data?.error || 'Erro ao vincular na Rede Veículos');
+        }
+
+        // Salvar id_plataforma retornado pela integração
+        if (data.rede_veiculos_veiculo_id) {
+          await supabase
+            .from('rastreadores')
+            .update({ id_plataforma: data.rede_veiculos_veiculo_id })
+            .eq('id', data.rastreador_id || rastreadorExistente.id);
         }
 
         return {

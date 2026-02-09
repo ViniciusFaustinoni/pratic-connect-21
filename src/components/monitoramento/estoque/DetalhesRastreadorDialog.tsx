@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 import {
   Package,
   Car,
@@ -28,6 +31,9 @@ import {
   FileText,
   CheckCircle2,
   AlertCircle,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import { usePlataformasLabels } from '@/hooks/usePlataformasCRUD';
 
@@ -61,7 +67,6 @@ const tipoMovimentacaoLabels: Record<string, string> = {
   atribuicao_portador: 'Atribuição de Portador',
   remocao_portador: 'Remoção de Portador',
   troca_portador: 'Troca de Portador',
-  // Tipos de manutenção
   retorno_base: 'Retorno à Base (Triagem)',
   baixa_substituicao: 'Baixa por Substituição',
   instalacao_substituicao: 'Instalação (Substituição)',
@@ -117,8 +122,54 @@ const RESULTADO_MANUTENCAO_COLORS: Record<string, string> = {
   nao_resolvido: 'bg-red-500/10 text-red-600 border-red-500/30',
 };
 
+const TIPO_SERVICO_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+  instalacao: { label: 'Instalação', icon: Car, color: 'text-blue-600 bg-blue-500/10 border-blue-500/30' },
+  vistoria_manutencao: { label: 'Manutenção de Campo', icon: Wrench, color: 'text-amber-600 bg-amber-500/10 border-amber-500/30' },
+  vistoria_retirada: { label: 'Retirada', icon: Package, color: 'text-red-600 bg-red-500/10 border-red-500/30' },
+};
+
+interface TimelineItem {
+  id: string;
+  tipo: 'movimentacao' | 'servico' | 'manutencao_interna';
+  label: string;
+  data: string;
+  detalhes?: string;
+  usuario?: string;
+  icon: React.ElementType;
+  color: string;
+  badge?: { label: string; color: string };
+  statusTransicao?: { de: string; para: string };
+}
+
 export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: DetalhesRastreadorDialogProps) {
+  const queryClient = useQueryClient();
   const { data: plataformasLabels } = usePlataformasLabels();
+  const [editandoCampo, setEditandoCampo] = useState<string | null>(null);
+  const [valorEditado, setValorEditado] = useState('');
+
+  const handleIniciarEdicao = useCallback((campo: string, valorAtual: string) => {
+    setEditandoCampo(campo);
+    setValorEditado(valorAtual === '-' ? '' : valorAtual);
+  }, []);
+
+  const handleSalvarCampo = useCallback(async () => {
+    if (!editandoCampo || !rastreadorId) return;
+    const { error } = await supabase
+      .from('rastreadores')
+      .update({ [editandoCampo]: valorEditado || null })
+      .eq('id', rastreadorId);
+    if (error) {
+      toast.error('Erro ao salvar');
+    } else {
+      toast.success('Campo atualizado');
+      queryClient.invalidateQueries({ queryKey: ['rastreador-detalhes', rastreadorId] });
+    }
+    setEditandoCampo(null);
+  }, [editandoCampo, valorEditado, rastreadorId, queryClient]);
+
+  const handleCancelarEdicao = useCallback(() => {
+    setEditandoCampo(null);
+  }, []);
 
   // Query para buscar dados completos do rastreador
   const { data: rastreador, isLoading } = useQuery({
@@ -127,76 +178,91 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
       const { data, error } = await supabase
         .from('rastreadores')
         .select(`
-          id,
-          codigo,
-          imei,
-          numero_serie,
-          plataforma,
-          id_plataforma,
-          status,
-          ultima_comunicacao,
-          created_at,
-          updated_at,
-          portador_id,
+          id, codigo, imei, numero_serie, plataforma, id_plataforma, status,
+          ultima_comunicacao, created_at, updated_at, portador_id,
           portador:profiles!rastreadores_portador_id_fkey(id, nome),
           veiculo:veiculos!rastreadores_veiculo_id_fkey(
-            id,
-            placa,
-            modelo,
-            marca,
+            id, placa, modelo, marca,
             associado:associados(id, nome, cpf)
           )
         `)
         .eq('id', rastreadorId!)
         .single();
-      
       if (error) throw error;
       return data;
     },
     enabled: !!rastreadorId && open,
+    refetchInterval: 30000,
   });
 
-  // Query para buscar histórico de movimentações de estoque
-  const { data: historico, isLoading: isLoadingHistorico } = useQuery({
-    queryKey: ['rastreador-historico', rastreadorId],
+  // Query unificada: movimentações de estoque
+  const { data: historicoMovimentacoes } = useQuery({
+    queryKey: ['rastreador-historico-mov', rastreadorId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('estoque_movimentacoes')
         .select(`
-          id,
-          tipo,
-          quantidade,
-          status_anterior,
-          status_novo,
-          nota_fiscal,
-          observacoes,
-          created_at,
+          id, tipo, status_anterior, status_novo, nota_fiscal, observacoes, created_at,
           usuario:profiles!estoque_movimentacoes_usuario_id_fkey(nome)
         `)
         .eq('rastreador_id', rastreadorId!)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
     enabled: !!rastreadorId && open,
+    refetchInterval: 30000,
   });
 
-  // Query para buscar serviço de manutenção ativo (se em manutenção de campo)
+  // Query unificada: TODOS os serviços vinculados ao rastreador
+  const { data: historicoServicos } = useQuery({
+    queryKey: ['rastreador-historico-servicos-completo', rastreadorId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('servicos')
+        .select(`
+          id, tipo, status, protocolo, created_at, concluida_em,
+          resultado_manutencao, observacoes_analise,
+          profissional:profiles!servicos_profissional_id_fkey(nome)
+        `)
+        .eq('rastreador_id', rastreadorId!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!rastreadorId && open,
+    refetchInterval: 30000,
+  });
+
+  // Query unificada: TODAS as manutenções internas
+  const { data: historicoManutencaoInterna } = useQuery({
+    queryKey: ['rastreador-historico-manutencao-completo', rastreadorId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rastreador_manutencao_interna')
+        .select(`
+          id, etapa, diagnostico_inicial, defeito_identificado, acao_tomada,
+          encaminhado_para, laudo_externo, created_at, resolvido_em,
+          resolvido_por_profile:profiles!rastreador_manutencao_interna_resolvido_por_fkey(nome),
+          servico_origem:servicos!rastreador_manutencao_interna_servico_origem_id_fkey(protocolo)
+        `)
+        .eq('rastreador_id', rastreadorId!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!rastreadorId && open,
+    refetchInterval: 30000,
+  });
+
+  // Query para manutenção de campo ativa
   const { data: servicoManutencao } = useQuery({
     queryKey: ['rastreador-servico-manutencao', rastreadorId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('servicos')
         .select(`
-          id,
-          protocolo,
-          status,
-          data_agendada,
-          periodo,
-          motivo_manutencao,
-          observacoes,
+          id, protocolo, status, data_agendada, periodo, motivo_manutencao, observacoes,
           profissional:profiles!servicos_profissional_id_fkey(nome)
         `)
         .eq('rastreador_id', rastreadorId!)
@@ -205,14 +271,13 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      
       if (error) throw error;
       return data;
     },
     enabled: !!rastreadorId && open && rastreador?.status === 'manutencao',
   });
 
-  // Query para buscar manutenção interna ativa (se em triagem/plataforma/garantia)
+  // Query para manutenção interna ativa
   const statusManutencaoInterna = ['retorno_base', 'triagem', 'em_analise_plataforma', 'em_garantia'];
   const { data: manutencaoInterna } = useQuery({
     queryKey: ['rastreador-manutencao-interna', rastreadorId],
@@ -220,14 +285,8 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
       const { data, error } = await supabase
         .from('rastreador_manutencao_interna')
         .select(`
-          id,
-          etapa,
-          diagnostico_inicial,
-          defeito_identificado,
-          encaminhado_para,
-          numero_protocolo_externo,
-          laudo_externo,
-          created_at,
+          id, etapa, diagnostico_inicial, defeito_identificado, encaminhado_para,
+          numero_protocolo_externo, laudo_externo, created_at,
           servico_origem:servicos!rastreador_manutencao_interna_servico_origem_id_fkey(protocolo)
         `)
         .eq('rastreador_id', rastreadorId!)
@@ -235,66 +294,67 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      
       if (error) throw error;
       return data;
     },
     enabled: !!rastreadorId && open && statusManutencaoInterna.includes(rastreador?.status || ''),
   });
 
-  // Query para buscar histórico de serviços de manutenção (campo)
-  const { data: historicoServicosManutencao } = useQuery({
-    queryKey: ['rastreador-historico-servicos', rastreadorId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('servicos')
-        .select(`
-          id,
-          protocolo,
-          status,
-          resultado_manutencao,
-          concluida_em,
-          observacoes_analise,
-          profissional:profiles!servicos_profissional_id_fkey(nome)
-        `)
-        .eq('rastreador_id', rastreadorId!)
-        .eq('tipo', 'vistoria_manutencao')
-        .in('status', ['concluida', 'aprovada', 'cancelada'] as any)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!rastreadorId && open,
+  // Consolidar timeline unificada
+  const timelineItems: TimelineItem[] = [];
+
+  // Movimentações de estoque
+  historicoMovimentacoes?.forEach((mov) => {
+    timelineItems.push({
+      id: `mov-${mov.id}`,
+      tipo: 'movimentacao',
+      label: tipoMovimentacaoLabels[mov.tipo] || mov.tipo,
+      data: mov.created_at,
+      detalhes: [mov.nota_fiscal ? `NF: ${mov.nota_fiscal}` : '', mov.observacoes || ''].filter(Boolean).join(' • '),
+      usuario: mov.usuario?.nome,
+      icon: Package,
+      color: 'text-emerald-600',
+      statusTransicao: mov.status_anterior && mov.status_novo ? { de: mov.status_anterior, para: mov.status_novo } : undefined,
+    });
   });
 
-  // Query para buscar histórico de manutenções internas (bancada)
-  const { data: historicoManutencaoInterna } = useQuery({
-    queryKey: ['rastreador-historico-manutencao-interna', rastreadorId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rastreador_manutencao_interna')
-        .select(`
-          id,
-          etapa,
-          acao_tomada,
-          laudo_externo,
-          encaminhado_para,
-          created_at,
-          resolvido_em,
-          resolvido_por_profile:profiles!rastreador_manutencao_interna_resolvido_por_fkey(nome)
-        `)
-        .eq('rastreador_id', rastreadorId!)
-        .in('etapa', ['concluido_estoque', 'descartado'] as any)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!rastreadorId && open,
+  // Serviços de campo
+  historicoServicos?.forEach((s) => {
+    const tipoConfig = TIPO_SERVICO_LABELS[s.tipo] || { label: s.tipo, icon: FileText, color: 'text-muted-foreground bg-muted border-muted' };
+    timelineItems.push({
+      id: `svc-${s.id}`,
+      tipo: 'servico',
+      label: tipoConfig.label,
+      data: s.concluida_em || s.created_at,
+      detalhes: [s.protocolo, s.observacoes_analise].filter(Boolean).join(' — '),
+      usuario: s.profissional?.nome,
+      icon: tipoConfig.icon,
+      color: tipoConfig.color.split(' ')[0],
+      badge: s.resultado_manutencao
+        ? { label: RESULTADO_MANUTENCAO_LABELS[s.resultado_manutencao] || s.resultado_manutencao, color: RESULTADO_MANUTENCAO_COLORS[s.resultado_manutencao] || 'bg-muted' }
+        : { label: s.status, color: 'bg-muted' },
+    });
   });
+
+  // Manutenções internas
+  historicoManutencaoInterna?.forEach((m) => {
+    timelineItems.push({
+      id: `mi-${m.id}`,
+      tipo: 'manutencao_interna',
+      label: `Manutenção Interna — ${ETAPA_MANUTENCAO_LABELS[m.etapa] || m.etapa}`,
+      data: m.resolvido_em || m.created_at,
+      detalhes: [m.diagnostico_inicial, m.acao_tomada, m.laudo_externo ? `Laudo: ${m.laudo_externo}` : ''].filter(Boolean).join(' • '),
+      usuario: m.resolvido_por_profile?.nome,
+      icon: Settings,
+      color: 'text-purple-600',
+      badge: { label: ETAPA_MANUTENCAO_LABELS[m.etapa] || m.etapa, color: ETAPA_MANUTENCAO_COLORS[m.etapa] || 'bg-muted' },
+    });
+  });
+
+  // Ordenar por data decrescente
+  timelineItems.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
+  const isLoadingTimeline = !historicoMovimentacoes && !historicoServicos && !historicoManutencaoInterna;
 
   const status = (rastreador?.status as StatusRastreador) || 'estoque';
   const config = statusConfig[status] || statusConfig.estoque;
@@ -432,9 +492,30 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
                 </h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <InfoRow label="IMEI" value={rastreador.imei || '-'} mono />
-                  <InfoRow label="Número de Série" value={rastreador.numero_serie || '-'} />
+                  <EditableInfoRow
+                    label="Número de Série"
+                    value={rastreador.numero_serie || '-'}
+                    campo="numero_serie"
+                    editandoCampo={editandoCampo}
+                    valorEditado={valorEditado}
+                    onIniciarEdicao={handleIniciarEdicao}
+                    onSalvar={handleSalvarCampo}
+                    onCancelar={handleCancelarEdicao}
+                    onChange={setValorEditado}
+                  />
                   <InfoRow label="Plataforma" value={plataformasLabels?.[rastreador.plataforma] || rastreador.plataforma || '-'} />
-                  <InfoRow label="ID na Plataforma" value={rastreador.id_plataforma || '-'} mono />
+                  <EditableInfoRow
+                    label="ID na Plataforma"
+                    value={rastreador.id_plataforma || '-'}
+                    campo="id_plataforma"
+                    editandoCampo={editandoCampo}
+                    valorEditado={valorEditado}
+                    onIniciarEdicao={handleIniciarEdicao}
+                    onSalvar={handleSalvarCampo}
+                    onCancelar={handleCancelarEdicao}
+                    onChange={setValorEditado}
+                    mono
+                  />
                 </div>
               </div>
 
@@ -472,168 +553,83 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
                   Datas
                 </h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <InfoRow 
-                    label="Entrada no Sistema" 
-                    value={rastreador.created_at ? format(new Date(rastreador.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-'} 
+                  <InfoRow
+                    label="Entrada no Sistema"
+                    value={rastreador.created_at ? format(new Date(rastreador.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-'}
                   />
-                  <InfoRow 
-                    label="Última Comunicação" 
-                    value={rastreador.ultima_comunicacao ? format(new Date(rastreador.ultima_comunicacao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Sem comunicação'} 
+                  <InfoRow
+                    label="Última Comunicação"
+                    value={rastreador.ultima_comunicacao ? format(new Date(rastreador.ultima_comunicacao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Sem comunicação'}
                   />
                 </div>
               </div>
 
               <Separator />
 
-              {/* Histórico de Movimentações de Estoque */}
+              {/* Timeline Unificada */}
               <div className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                   <History className="h-4 w-4" />
-                  Histórico de Movimentações
+                  Histórico Completo
                 </h3>
-                {isLoadingHistorico ? (
+                {isLoadingTimeline ? (
                   <div className="space-y-2">
                     <Skeleton className="h-16 w-full" />
                     <Skeleton className="h-16 w-full" />
                   </div>
-                ) : historico && historico.length > 0 ? (
-                  <div className="space-y-2">
-                    {historico.map((mov) => (
-                      <div key={mov.id} className="rounded-lg border p-3 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">
-                            {tipoMovimentacaoLabels[mov.tipo] || mov.tipo}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(mov.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                          </span>
+                ) : timelineItems.length > 0 ? (
+                  <div className="relative space-y-0">
+                    {/* Linha vertical da timeline */}
+                    <div className="absolute left-4 top-2 bottom-2 w-px bg-border" />
+                    {timelineItems.map((item, idx) => {
+                      const Icon = item.icon;
+                      return (
+                        <div key={item.id} className="relative pl-10 py-3 first:pt-0 last:pb-0">
+                          {/* Ícone na timeline */}
+                          <div className={`absolute left-2 top-3 first:top-0 w-5 h-5 rounded-full border-2 border-background bg-background flex items-center justify-center`}>
+                            <Icon className={`h-3.5 w-3.5 ${item.color}`} />
+                          </div>
+                          <div className="rounded-lg border p-3 text-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium">{item.label}</span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {item.badge && (
+                                  <Badge variant="outline" className={`text-xs ${item.badge.color}`}>
+                                    {item.badge.label}
+                                  </Badge>
+                                )}
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {format(new Date(item.data), "dd/MM/yy HH:mm", { locale: ptBR })}
+                                </span>
+                              </div>
+                            </div>
+                            {item.statusTransicao && (
+                              <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
+                                <span>{statusConfig[item.statusTransicao.de as StatusRastreador]?.label || item.statusTransicao.de}</span>
+                                <ArrowRight className="h-3 w-3" />
+                                <span>{statusConfig[item.statusTransicao.para as StatusRastreador]?.label || item.statusTransicao.para}</span>
+                              </div>
+                            )}
+                            {item.detalhes && (
+                              <p className="text-xs text-muted-foreground mt-1">{item.detalhes}</p>
+                            )}
+                            {item.usuario && (
+                              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                                <User className="h-3 w-3" />
+                                {item.usuario}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        {mov.status_anterior && mov.status_novo && (
-                          <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
-                            <span>{statusConfig[mov.status_anterior as StatusRastreador]?.label || mov.status_anterior}</span>
-                            <ArrowRight className="h-3 w-3" />
-                            <span>{statusConfig[mov.status_novo as StatusRastreador]?.label || mov.status_novo}</span>
-                          </div>
-                        )}
-                        {mov.nota_fiscal && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            NF: {mov.nota_fiscal}
-                          </div>
-                        )}
-                        {mov.observacoes && (
-                          <p className="text-xs text-muted-foreground mt-1">{mov.observacoes}</p>
-                        )}
-                        {mov.usuario && (
-                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                            <User className="h-3 w-3" />
-                            {mov.usuario.nome}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    Nenhuma movimentação registrada
+                    Nenhum registro no histórico
                   </p>
                 )}
               </div>
-
-              {/* Histórico de Manutenções de Campo */}
-              {historicoServicosManutencao && historicoServicosManutencao.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                      <Wrench className="h-4 w-4" />
-                      Histórico de Manutenções (Campo)
-                    </h3>
-                    <div className="space-y-2">
-                      {historicoServicosManutencao.map((s) => (
-                        <div key={s.id} className="rounded-lg border p-3 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{s.protocolo}</span>
-                            <Badge 
-                              variant="outline" 
-                              className={s.resultado_manutencao ? RESULTADO_MANUTENCAO_COLORS[s.resultado_manutencao] || 'bg-muted' : 'bg-muted'}
-                            >
-                              {s.resultado_manutencao 
-                                ? (RESULTADO_MANUTENCAO_LABELS[s.resultado_manutencao] || s.resultado_manutencao)
-                                : s.status}
-                            </Badge>
-                          </div>
-                          {s.observacoes_analise && (
-                            <p className="text-xs text-muted-foreground mt-1 italic">"{s.observacoes_analise}"</p>
-                          )}
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                            {s.concluida_em && (
-                              <span>{format(new Date(s.concluida_em), "dd/MM/yyyy", { locale: ptBR })}</span>
-                            )}
-                            {s.profissional?.nome && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3" />
-                                  {s.profissional.nome}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* Histórico de Manutenções Internas (Bancada) */}
-              {historicoManutencaoInterna && historicoManutencaoInterna.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      Histórico de Manutenções (Bancada)
-                    </h3>
-                    <div className="space-y-2">
-                      {historicoManutencaoInterna.map((m) => (
-                        <div key={m.id} className="rounded-lg border p-3 text-sm">
-                          <div className="flex items-center justify-between">
-                            <Badge 
-                              variant="outline" 
-                              className={ETAPA_MANUTENCAO_COLORS[m.etapa] || 'bg-muted'}
-                            >
-                              {m.etapa === 'concluido_estoque' && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                              {m.etapa === 'descartado' && <XCircle className="h-3 w-3 mr-1" />}
-                              {ETAPA_MANUTENCAO_LABELS[m.etapa] || m.etapa}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {m.resolvido_em 
-                                ? format(new Date(m.resolvido_em), "dd/MM/yyyy", { locale: ptBR })
-                                : format(new Date(m.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                            </span>
-                          </div>
-                          {m.acao_tomada && (
-                            <p className="text-xs mt-1">{m.acao_tomada}</p>
-                          )}
-                          {m.encaminhado_para && (
-                            <p className="text-xs text-muted-foreground">Encaminhado: {m.encaminhado_para}</p>
-                          )}
-                          {m.laudo_externo && (
-                            <p className="text-xs text-muted-foreground italic">Laudo: {m.laudo_externo}</p>
-                          )}
-                          {m.resolvido_por_profile?.nome && (
-                            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                              <User className="h-3 w-3" />
-                              {m.resolvido_por_profile.nome}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
           </ScrollArea>
         ) : (
@@ -651,6 +647,62 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
     <div className="rounded-lg border bg-muted/20 p-3">
       <div className="text-xs text-muted-foreground mb-0.5">{label}</div>
       <div className={mono ? 'font-mono text-sm' : 'text-sm'}>{value}</div>
+    </div>
+  );
+}
+
+interface EditableInfoRowProps {
+  label: string;
+  value: string;
+  campo: string;
+  editandoCampo: string | null;
+  valorEditado: string;
+  onIniciarEdicao: (campo: string, valor: string) => void;
+  onSalvar: () => void;
+  onCancelar: () => void;
+  onChange: (valor: string) => void;
+  mono?: boolean;
+}
+
+function EditableInfoRow({ label, value, campo, editandoCampo, valorEditado, onIniciarEdicao, onSalvar, onCancelar, onChange, mono }: EditableInfoRowProps) {
+  const isEditing = editandoCampo === campo;
+
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        {!isEditing && (
+          <button
+            onClick={() => onIniciarEdicao(campo, value)}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            title="Editar"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      {isEditing ? (
+        <div className="flex items-center gap-1.5">
+          <Input
+            value={valorEditado}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-7 text-sm"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSalvar();
+              if (e.key === 'Escape') onCancelar();
+            }}
+          />
+          <button onClick={onSalvar} className="text-green-600 hover:text-green-700 shrink-0">
+            <Check className="h-4 w-4" />
+          </button>
+          <button onClick={onCancelar} className="text-red-600 hover:text-red-700 shrink-0">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className={mono ? 'font-mono text-sm' : 'text-sm'}>{value}</div>
+      )}
     </div>
   );
 }
