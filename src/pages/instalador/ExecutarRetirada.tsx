@@ -72,7 +72,7 @@ export default function ExecutarRetirada() {
         .from('servicos')
         .select(`
           *,
-          associado:associados(id, nome, telefone, cpf, whatsapp),
+          associado:associados!servicos_associado_id_fkey(id, nome, telefone, cpf, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, marca, modelo, cor, chassi),
           rastreador:rastreadores!servicos_rastreador_id_fkey(id, codigo, imei, plataforma),
           novo_veiculo:veiculos!servicos_novo_veiculo_id_fkey(id, placa, marca, modelo)
