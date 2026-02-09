@@ -84,6 +84,7 @@ import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { SuspenderAssociadoDialog } from '@/components/associados/SuspenderAssociadoDialog';
 import { AssociadoSuspensoAlert } from '@/components/associados/AssociadoSuspensoAlert';
 import { RastreadorVinculadoModal } from '@/components/cadastro/RastreadorVinculadoModal';
+import { CancelarAssociadoDialog } from '@/components/cadastro/CancelarAssociadoDialog';
 import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -346,51 +347,8 @@ export default function AssociadoDetalhe() {
     if (id) reativarAssociado(id);
   };
 
-  const handleCancelar = async () => {
-    if (!id) return;
-    
-    // Verificar se há rastreador vinculado antes de cancelar
-    const { data: veiculosComRastreadorInstalado } = await supabase
-      .from('veiculos')
-      .select(`
-        id, placa, marca, modelo,
-        rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, plataforma, status)
-      `)
-      .eq('associado_id', id);
-
-    // Filtrar veículos que realmente têm rastreador instalado
-    const veiculosComRastreador = veiculosComRastreadorInstalado?.filter(v => {
-      const rastreadores = v.rastreador as any[];
-      return rastreadores?.some(r => r.status === 'instalado');
-    });
-
-    if (veiculosComRastreador && veiculosComRastreador.length > 0) {
-      // Tem rastreador instalado — abrir modal de aviso
-      const v = veiculosComRastreador[0];
-      const rastreadorInstalado = (v.rastreador as any[]).find(r => r.status === 'instalado');
-      
-      setRastreadorModalData({
-        rastreador: {
-          id: rastreadorInstalado.id,
-          codigo: rastreadorInstalado.codigo,
-          plataforma: rastreadorInstalado.plataforma,
-        },
-        veiculo: {
-          id: v.id,
-          placa: v.placa,
-          marca: v.marca,
-          modelo: v.modelo,
-        },
-      });
-      setCancelarDialogOpen(false);
-      setRastreadorModalOpen(true);
-      return;
-    }
-
-    // Sem rastreador — cancelamento normal
-    cancelarAssociado({ id, motivo: 'Cancelado pelo administrador' });
-    setCancelarDialogOpen(false);
-    navigate('/cadastro/associados');
+  const handleCancelar = () => {
+    setCancelarDialogOpen(true);
   };
 
   const handleConfirmRastreadorModal = async (acao: 'criar_retirada' | 'apenas_registrar') => {
@@ -1613,22 +1571,17 @@ export default function AssociadoDetalhe() {
         isLoading={isSuspendendo}
       />
 
-      <AlertDialog open={cancelarDialogOpen} onOpenChange={setCancelarDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancelar Associação</AlertDialogTitle>
-            <AlertDialogDescription>
-              Cancelar <strong>{associado.nome}</strong>? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Manter</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelar} className="bg-destructive hover:bg-destructive/90">
-              {isCancelando ? 'Cancelando...' : 'Cancelar'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <CancelarAssociadoDialog
+        open={cancelarDialogOpen}
+        onClose={() => setCancelarDialogOpen(false)}
+        associado={{
+          id: id || '',
+          nome: associado.nome,
+          status: associado.status,
+          pendencia_rastreador: (associado as any).pendencia_rastreador || false,
+        }}
+        onSuccess={() => { setCancelarDialogOpen(false); refetch(); }}
+      />
 
       {/* MODAL DETALHES DO VEÍCULO */}
       <VeiculoDetalhesModal
