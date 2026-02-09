@@ -67,7 +67,7 @@ export function useVistoriasManutencao(filtros?: ManutencaoFiltros) {
           rastreador_id,
           profissional_id,
           associado:associados(id, nome, telefone, whatsapp, cpf, email),
-          veiculo:veiculos(id, placa, marca, modelo, cor, ano_fabricacao),
+          veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, marca, modelo, cor, ano_fabricacao),
           rastreador:rastreadores!servicos_rastreador_id_fkey(id, codigo, imei, plataforma),
           profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone)
         `)
@@ -227,7 +227,7 @@ export function useVistoriaManutencaoDetalhe(id: string | undefined) {
         .select(`
           *,
           associado:associados(id, nome, telefone, whatsapp, cpf, email),
-          veiculo:veiculos(id, placa, marca, modelo, cor, ano_fabricacao),
+          veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, marca, modelo, cor, ano_fabricacao),
           rastreador:rastreadores!servicos_rastreador_id_fkey(id, codigo, imei, plataforma, ultima_comunicacao),
           profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone)
         `)
