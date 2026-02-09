@@ -1,155 +1,132 @@
 
 
-# Wizard de Substituicao de Veiculo — Pagina + Steps 1 a 4
+# Plano: Comunicacao entre Processos - Status, Historico e Movimentacoes
 
-## Resumo
+## Diagnostico dos Problemas Encontrados
 
-Criar a pagina principal de substituicao com stepper visual de 6 passos, e os componentes dos 4 primeiros steps: Elegibilidade, Evento Ativo, Novo Veiculo, e Beneficios. Os steps 5 e 6 (Financeiro e Aprovacao) ficam para o proximo PR.
+### Problema 1: Contrato continua "ativo" quando associado e cancelado
+O `processar-pos-retirada` atualiza o associado e o veiculo para "cancelado", mas **nao toca no contrato**. Resultado: a aba Ativacoes mostra o registro como "Ativo" (badge verde) porque le o `contratos.status`.
 
----
+**Dados atuais no banco:**
+- `contratos.status = 'ativo'` (errado - deveria ser 'cancelado')
+- `associados.status = 'cancelado'` (correto)
+- `veiculos.status = 'cancelado'` (correto)
 
-## Arquivos a criar
+### Problema 2: Cotacoes nao reflete cancelamento
+A funcao `getEtapaVenda()` verifica `cotacao.contrato.associados.status`, mas como o contrato ainda esta "ativo", a cotacao mostra "Vistoria Realizada" em vez de refletir que o associado foi cancelado.
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/pages/cadastro/SubstituicaoVeiculoPage.tsx` | Pagina principal com stepper e orquestracao dos steps |
-| `src/components/substituicao/SubstituicaoStepper.tsx` | Stepper visual de 6 passos (baseado no CotacaoStepper) |
-| `src/components/substituicao/StepElegibilidade.tsx` | Step 1: checklist de elegibilidade |
-| `src/components/substituicao/StepEventoAtivo.tsx` | Step 2: tratamento de evento (3 opcoes) |
-| `src/components/substituicao/StepNovoVeiculo.tsx` | Step 3: formulario do novo veiculo com FIPE |
-| `src/components/substituicao/StepBeneficios.tsx` | Step 4: selecao de beneficios adicionais |
+### Problema 3: Ativacoes nao tem visibilidade do cancelamento
+O hook `useAtivacoes` busca contratos e filtra por status, mas nao cruza com o status do associado. Um contrato "ativo" com associado "cancelado" aparece como "Ativo" na lista.
 
-## Arquivo a modificar
+### Problema 4: Historico incompleto
+A funcao `useAtivarContrato` (em `useContratos.ts`) ativa o contrato e cria associado, mas **nao registra evento no `associados_historico`** do tipo `contrato_assinado` ou `contrato_ativado`. Tambem falta registro quando o contrato e cancelado.
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/App.tsx` | Adicionar rota `/cadastro/associados/:associadoId/substituicao` |
-
----
-
-## Detalhes por arquivo
-
-### 1. SubstituicaoStepper.tsx
-
-Componente visual baseado no `CotacaoStepper` existente, adaptado para 6 steps:
-1. Elegibilidade
-2. Eventos
-3. Novo Veiculo
-4. Beneficios
-5. Financeiro (placeholder, nao implementado ainda)
-6. Aprovacao (placeholder, nao implementado ainda)
-
-Mesma estrutura visual: circulos com check/numero, linhas conectoras, responsivo desktop/mobile.
-
-### 2. SubstituicaoVeiculoPage.tsx
-
-Pagina principal que:
-- Recebe `associadoId` via `useParams()`
-- Busca dados do associado com `useAssociados` ou query direta
-- Busca veiculo ativo do associado (ativo = true, principal = true)
-- Gerencia estado do stepper (step atual, steps completos)
-- Gerencia estado compartilhado entre steps (dados do novo veiculo, beneficios selecionados, dados de elegibilidade)
-- Breadcrumb: Home > Cadastro > Associados > Nome > Substituicao
-- Renderiza o step correto conforme o estado atual
-
-### 3. StepElegibilidade.tsx
-
-Props: `associadoId`, `onNext`, `onEventoDetectado(evento)`
-
-- Chama `useVerificarElegibilidade(associadoId)` ao montar
-- Exibe checklist visual com 3 itens (adimplencia, rastreador, eventos)
-- Cada item mostra icone verde/vermelho/amarelo + texto descritivo
-- Se `pendencia_rastreador = true`: Alert destructive + botao "Agendar retirada" (link para servicos)
-- Se `evento_ativo.tem && tipo === 'proprio'`: seta flag para mostrar Step 2
-- Botao "Proximo" habilitado apenas se `adimplente AND rastreador_devolvido AND (sem evento proprio)`
-- Se tem evento proprio: botao "Proximo" leva ao Step 2
-- Se nao tem evento ou so terceiros: botao "Proximo" pula Step 2 e vai ao Step 3
-
-### 4. StepEventoAtivo.tsx
-
-Props: `evento`, `substituicaoId`, `onNext`, `onBack`
-
-So renderiza se o veiculo tem evento do proprio em andamento.
-
-Exibe card com dados do evento (tipo, status, data, numero).
-
-3 opcoes via RadioGroup com cards expandidos:
-
-**A) Aguardar finalizacao**
-- Cria/atualiza registro em `substituicoes_veiculo` com `resolucao_evento = 'aguardar_finalizacao'`
-- Toast informativo, nao avanca (substituicao fica em espera)
-
-**B) Cancelar com termo**
-- Alerta que o associado perde direito ao reparo
-- Cria registro com `resolucao_evento = 'cancelar_com_termo'`
-- Chama `autentique-create` para gerar termo de desistencia
-- Apos gerar, avanca ao Step 3
-
-**C) Inclusao temporaria**
-- Info: pagara 2 mensalidades temporariamente
-- Cria registro com `resolucao_evento = 'inclusao_temporaria'`
-- Redireciona para fluxo de inclusao (ou avanca com flag)
-
-### 5. StepNovoVeiculo.tsx
-
-Props: `veiculoAntigo`, `dadosNovoVeiculo`, `setDadosNovoVeiculo`, `onNext`, `onBack`
-
-Formulario com:
-- Placa (mascara ABC-1D23/ABC-1234) — ao digitar placa completa, verifica se ja existe com `buscarVeiculoPorPlaca`
-- Consulta FIPE: usa `useFipe().getByPlaca` para busca automatica, e `useFipeLookup` para busca manual (marca > modelo > ano)
-- Dados adicionais: cor (Select), combustivel (Select), chassi, renavam
-- Uso aplicativo: Switch + Select plataforma
-- Card comparativo: tabela antigo vs novo (modelo, placa, FIPE, diferenca)
-- Alert se FIPE > R$ 120.000
-- Botao "Proximo" habilitado quando campos obrigatorios preenchidos e FIPE consultada
-
-### 6. StepBeneficios.tsx
-
-Props: `veiculoAntigo`, `dadosNovoVeiculo`, `beneficiosSelecionados`, `setBeneficiosSelecionados`, `onNext`, `onBack`
-
-- Card "Beneficios do veiculo antigo" (somente visualizacao)
-- Card "Beneficios do novo veiculo" (editavel):
-  - Checkboxes para cada beneficio com preco mensal
-  - Select para faixa de Danos a Terceiros
-  - Opcao "100% FIPE para APP" so aparece se `uso_aplicativo = true`
-- Resumo financeiro:
-  - Mensalidade base (calculada pelo FIPE do novo veiculo — simplificada como percentual ou tabela fixa)
-  - Adicionais selecionados
-  - Total mensal estimado
-  - Diferenca da mensalidade anterior
-- Botao "Proximo" sempre habilitado (beneficios sao opcionais)
+### Problema 5: Cotacoes nao atualiza status_contratacao ao cancelar
+O `status_contratacao` da cotacao fica congelado em `pagamento_ok` mesmo depois do cancelamento do associado.
 
 ---
 
-## Rota no App.tsx
+## Plano de Implementacao
 
-Adicionar na secao de cadastro (apos a rota `:id`):
+### 1. Edge Function `processar-pos-retirada` - Cancelar contrato junto
+
+**Arquivo:** `supabase/functions/processar-pos-retirada/index.ts`
+
+Adicionar apos a inativacao de veiculos (passo 4), um novo passo que cancela todos os contratos ativos do associado:
 
 ```text
-<Route path="/cadastro/associados/:associadoId/substituicao" element={<SubstituicaoVeiculoPage />} />
+// 4.1 Cancelar contratos ativos (EXCETO substituicao)
+if (motivo_retirada !== 'substituicao_veiculo') {
+  - Buscar contratos com associado_id e status IN ('ativo','assinado','pendente')
+  - Atualizar para status = 'cancelado', data_cancelamento = now()
+  - Atualizar cotacao vinculada: status_contratacao = 'cancelado'
+  - Cancelar documento Autentique se existir (via autentique-cancel)
+}
 ```
 
-Importar `SubstituicaoVeiculoPage` com lazy loading (mesmo padrao de outras paginas).
+### 2. `getEtapaVenda()` - Adicionar etapa "cancelado"
+
+**Arquivos:** `src/components/cotacoes/CotacoesTable.tsx` e `CotacaoCard.tsx`
+
+Adicionar nova etapa no tipo `EtapaVenda`:
+- `'cancelado'` com label "Cancelado", cor vermelha
+
+Na logica de `getEtapaVenda()`, adicionar no inicio (apos veiculo_recusado):
+```text
+if (associadoStatus === 'cancelado') return 'cancelado';
+if (contratoStatus === 'cancelado') return 'cancelado';
+```
+
+### 3. Ativacoes - Refletir status real
+
+**Arquivo:** `src/hooks/useAtivacoes.ts`
+
+Na query de ativacoes, cruzar com o status do associado:
+- Buscar `associados.status` junto com os dados
+- Adicionar campo `associado_status` ao tipo `AtivacaoContrato`
+- No componente `AtivacaoTableRow`, se `associado_status === 'cancelado'`, mostrar badge "Cancelado" em vermelho em vez de "Ativo"
+- No filtro "Ativados", excluir registros cujo associado esteja cancelado
+
+### 4. Registrar historico em todas as acoes criticas
+
+**Arquivo:** `src/hooks/useContratos.ts` (funcao `useAtivarContrato`)
+
+Adicionar ao final da mutacao:
+```text
+await supabase.from('associados_historico').insert({
+  associado_id,
+  tipo: 'contrato_assinado',
+  descricao: 'Contrato ativado e associado vinculado',
+  ...
+})
+```
+
+**Arquivo:** `src/hooks/useAtivacoes.ts` (funcao `useAtivarContrato`)
+
+Mesma correcao - registrar no historico quando contrato e ativado.
+
+### 5. Realtime - Invalidar queries corretas
+
+**Arquivo:** `src/hooks/useCotacoesRealtime.ts`
+
+Verificar que mudancas em `associados` invalidam `['ativacoes']` (ja faz), e tambem que mudancas em `contratos` invalidam `['ativacoes']` (ja faz).
+
+Adicionar invalidacao de `['associado-historico-completo']` quando houver mudanca em `associados_historico`:
+
+```text
+.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'associados_historico' }, () => {
+  queryClient.invalidateQueries({ queryKey: ['associado-historico-completo'] });
+})
+```
+
+### 6. Corrigir dado atual no banco (one-time fix)
+
+Como o contrato do MARCUS ficou "ativo" indevidamente, sera necessario um UPDATE manual:
+
+```sql
+UPDATE contratos SET status = 'cancelado', data_cancelamento = NOW()
+WHERE associado_id IN (SELECT id FROM associados WHERE status = 'cancelado')
+AND status = 'ativo';
+```
 
 ---
 
-## O que NAO sera alterado
+## Resumo das Alteracoes
 
-- EtapaConsultaFipe — intacto (usado apenas como referencia visual)
-- CotacaoStepper — intacto (usado apenas como referencia visual)
-- useSubstituicaoVeiculo — intacto (ja esta pronto)
-- useFipe / useFipeLookup — intactos (serao consumidos, nao modificados)
-- useVeiculos — intacto
-- Nenhuma pagina existente
-- Nenhuma edge function
+| Arquivo | Alteracao |
+|---------|----------|
+| `supabase/functions/processar-pos-retirada/index.ts` | Adicionar cancelamento de contratos e cotacoes |
+| `src/components/cotacoes/CotacoesTable.tsx` | Adicionar etapa 'cancelado' em getEtapaVenda |
+| `src/components/cotacoes/CotacaoCard.tsx` | Adicionar etapa 'cancelado' (mesma logica) |
+| `src/hooks/useAtivacoes.ts` | Cruzar com associado.status, mostrar cancelados |
+| `src/components/ativacao/AtivacaoTableRow.tsx` | Badge "Cancelado" quando associado cancelado |
+| `src/hooks/useContratos.ts` | Registrar historico ao ativar contrato |
+| `src/hooks/useCotacoesRealtime.ts` | Invalidar historico do associado em tempo real |
+| Migration SQL | Corrigir dados inconsistentes existentes |
 
-## Dependencias ja existentes no projeto
-
-- `useVerificarElegibilidade` do hook `useSubstituicaoVeiculo`
-- `useIniciarSubstituicao` e `useAtualizarSubstituicao` do mesmo hook
-- `useFipe` (getByPlaca) e `useFipeLookup` (busca manual marca/modelo/ano)
-- `buscarVeiculoPorPlaca` de `useVeiculos`
-- Componentes UI: Card, Alert, Button, Select, Input, Switch, RadioGroup, Checkbox, Label, Badge
-- `PlacaInput` de `MaskedInputs`
-- Roteamento com `react-router-dom` (useParams, useNavigate)
+### O que NAO sera alterado
+- Nenhuma edge function existente alem da `processar-pos-retirada`
+- Nenhuma pagina existente (layout/UI)
+- Logica de criacao de cotacoes
+- Fluxo publico do associado
 
