@@ -72,6 +72,26 @@ export const FORMA_COBRANCA_MULTA_LABELS: Record<FormaCobrancaMulta, string> = {
 };
 
 /**
+ * Motivo da aplicação de multa R$400
+ */
+export type MotivoMulta = 
+  | 'nao_devolveu'       // Associado não devolveu o rastreador (48h estourou)
+  | 'nao_compareceu'     // Associado não compareceu à retirada agendada
+  | 'aparelho_danificado'; // Rastreador devolvido danificado/violado/molhado
+
+export const MOTIVO_MULTA_LABELS: Record<MotivoMulta, string> = {
+  nao_devolveu: 'Não devolução do equipamento',
+  nao_compareceu: 'Não comparecimento à retirada',
+  aparelho_danificado: 'Aparelho devolvido danificado/violado',
+};
+
+export const MOTIVO_MULTA_COLORS: Record<MotivoMulta, string> = {
+  nao_devolveu: 'bg-red-100 text-red-800',
+  nao_compareceu: 'bg-orange-100 text-orange-800',
+  aparelho_danificado: 'bg-yellow-100 text-yellow-800',
+};
+
+/**
  * Módulo que originou a solicitação de retirada
  */
 export type ModuloOrigem = 
