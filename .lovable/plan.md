@@ -1,73 +1,94 @@
 
 
-# Correcao Automatica de Dados do Veiculo e Melhoria do OCR
+# Melhorias nos Detalhes do Rastreador (Estoque)
 
-## Problema
+## Problemas Identificados
 
-Quando o OCR extrai dados incorretos (como a cor "VERMELHA" ao inves de "AZUL"), essa informacao errada se propaga para as tabelas `cotacoes` e `veiculos` e nao ha forma de corrigir sem acesso direto ao banco de dados.
+### 1. Numero de Serie e ID da Plataforma vazios
+O rastreador `862667083494305` tem `numero_serie = null` e `id_plataforma = null` no banco de dados. Isso ocorre porque:
+- O fluxo de ativacao Softruck (`useAtivarRastreador`) nao atualiza esses campos apos vincular o dispositivo na plataforma
+- A Edge Function `softruck-ativar-dispositivo` retorna o `softruck_device_id`, mas ele nao e salvo no campo `id_plataforma` da tabela `rastreadores`
 
-## Solucao em 2 Partes
+### 2. Historico incompleto e desatualizado
+O historico exibido mostra apenas 1 registro da tabela `estoque_movimentacoes`, mas existem 4 servicos vinculados ao rastreador (instalacao, 2 manutencoes, retirada) que nao aparecem. O componente `DetalhesRastreadorDialog` consulta servicos apenas na secao de manutencao, nao consolida uma timeline unificada.
 
-### Parte 1: Correcao Imediata dos Dados (SQL)
+---
 
-Executar os UPDATEs diretamente para corrigir o veiculo LTB4J74:
+## Solucao
+
+### Parte 1: Salvar `id_plataforma` na ativacao
+
+**Arquivo: `src/hooks/useAtivarRastreador.ts`**
+
+No retorno da integracao Softruck (apos sucesso), adicionar um UPDATE na tabela `rastreadores` para gravar o `id_plataforma` retornado pela Edge Function:
 
 ```sql
-UPDATE veiculos SET cor = 'AZUL' WHERE placa = 'LTB4J74';
-UPDATE cotacoes SET veiculo_cor = 'AZUL' WHERE veiculo_placa = 'LTB4J74';
+UPDATE rastreadores SET id_plataforma = softruck_device_id WHERE id = rastreador_id
 ```
 
-### Parte 2: Tela de Edicao de Dados do Veiculo na Retirada
+O mesmo para Rede Veiculos, salvando o `rede_veiculos_veiculo_id` como `id_plataforma`.
 
-Permitir que o tecnico corrija dados do veiculo diretamente na tela de retirada quando identificar divergencia.
+### Parte 2: Permitir edicao de Numero de Serie e ID Plataforma
 
-**Arquivo: `src/pages/instalador/ExecutarRetirada.tsx`**
+**Arquivo: `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx`**
 
-Na secao de "Conferencia de Dados" (linhas 570-600), ao lado de cada campo (placa, chassi, modelo, cor), adicionar um botao de edicao que abre um input inline. Ao salvar, atualiza diretamente na tabela `veiculos` e `cotacoes`.
+Na secao "Informacoes Tecnicas", tornar os campos "Numero de Serie" e "ID na Plataforma" editaveis inline (icone de lapis). Ao salvar, atualiza diretamente na tabela `rastreadores`.
 
-Mudancas:
-1. Adicionar estado `editandoCampo` para controlar qual campo esta em edicao
-2. Adicionar estado `valoresEditados` para armazenar valores temporarios
-3. No campo "Cor", ao clicar no icone de editar, transformar o texto em um input editavel
-4. Ao confirmar, chamar `supabase.from('veiculos').update({ cor: novoValor })` e tambem `supabase.from('cotacoes').update({ veiculo_cor: novoValor })`
-5. Invalidar a query `servico-retirada` para refletir imediatamente
+### Parte 3: Timeline unificada do historico
 
-### Parte 3: Melhorar o Prompt do OCR para Cor
+**Arquivo: `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx`**
 
-**Arquivo: `supabase/functions/document-ocr/index.ts`**
+Consolidar o historico em uma unica timeline cronologica mesclando:
+- `estoque_movimentacoes` (movimentacoes de estoque)
+- `servicos` vinculados ao rastreador (instalacao, manutencao, retirada) -- todos os tipos e status
+- `rastreador_manutencao_interna` (triagem/bancada)
 
-Na secao do CRLV (linhas 68-80), adicionar instrucoes mais especificas para extracao de cor:
+Cada item tera um icone e cor diferente por tipo, e serao ordenados por data decrescente.
 
-```
-- cor (ex: PRATA, PRETO, BRANCO, AZUL, VERMELHA, CINZA)
-  IMPORTANTE: A cor esta geralmente no campo rotulado "COR" ou "COR PREDOMINANTE".
-  NAO confunda com outros campos. Leia EXATAMENTE o que esta escrito no campo de cor.
-  Se houver duvida, priorize o texto literal do campo "COR" no documento.
-```
+### Parte 4: Auto-refresh do historico
+
+Adicionar `refetchInterval: 30000` (30 segundos) nas queries de historico para manter os dados atualizados enquanto o dialog estiver aberto.
+
+---
 
 ## Detalhes Tecnicos
 
-### Fluxo de edicao na tela de retirada
+### Campos editaveis (Parte 2)
 
-```text
-Tecnico ve dado errado
-  -> Clica no icone de editar ao lado do campo
-  -> Campo vira input editavel
-  -> Tecnico digita o valor correto
-  -> Clica em confirmar (check)
-  -> Sistema atualiza tabela 'veiculos' (cor)
-  -> Sistema atualiza tabela 'cotacoes' (veiculo_cor)
-  -> UI atualiza automaticamente via invalidacao de query
-  -> Toast de confirmacao
+Adicionar estados `editandoCampo` e `valorEditado` no componente. Ao clicar no icone de edicao:
+- Campo se transforma em input
+- Ao confirmar, executa `supabase.from('rastreadores').update({ [campo]: valor }).eq('id', rastreadorId)`
+- Invalida query `rastreador-detalhes`
+
+### Timeline unificada (Parte 3)
+
+Nova query que busca servicos vinculados ao rastreador:
+
+```typescript
+const { data: historicoServicos } = useQuery({
+  queryKey: ['rastreador-historico-servicos-completo', rastreadorId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('servicos')
+      .select('id, tipo, status, protocolo, created_at, concluida_em, profissional:profiles!servicos_profissional_id_fkey(nome)')
+      .eq('rastreador_id', rastreadorId)
+      .order('created_at', { ascending: false });
+    return data;
+  },
+});
 ```
 
-### Campos editaveis
+Mesclar com `estoque_movimentacoes` e `rastreador_manutencao_interna` em um array unificado, ordenado por data.
 
-Apenas o campo **cor** sera editavel pelo tecnico na tela de retirada, pois e o campo mais propenso a erros de OCR e o mais facil de verificar visualmente. Placa, chassi e modelo sao dados mais criticos que devem ser corrigidos pelo escritorio.
+### Mapeamento de tipos de servico para exibicao
 
-### Impacto
+```text
+instalacao       -> "Instalacao" (icone Car, cor azul)
+vistoria_manutencao -> "Manutencao de Campo" (icone Wrench, cor amarelo)
+vistoria_retirada   -> "Retirada" (icone Package, cor vermelho)
+```
 
-- Tecnico pode corrigir a cor do veiculo em campo, sem depender do escritorio
-- Dados corrigidos refletem imediatamente na tela
-- OCR tera instrucoes mais claras para evitar erros futuros de cor
-- Nenhuma alteracao de banco de dados (schema) necessaria -- usa tabelas existentes
+### Arquivos afetados
+
+1. `src/hooks/useAtivarRastreador.ts` -- salvar id_plataforma apos ativacao
+2. `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx` -- edicao inline + timeline unificada + auto-refresh
