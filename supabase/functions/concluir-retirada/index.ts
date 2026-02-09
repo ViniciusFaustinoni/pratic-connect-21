@@ -331,6 +331,59 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 13. Registrar no histórico do associado (sempre, independente do motivo)
+    if (associadoId) {
+      try {
+        await supabase.from('associados_historico').insert({
+          associado_id: associadoId,
+          tipo: 'status_alterado',
+          descricao: `Retirada de rastreador concluída. Código: ${rastreador.codigo}. Integridade: ${integridade || 'não informada'}. Motivo: ${servicoData?.motivo_retirada || 'não informado'}`,
+          dados_novos: {
+            rastreador_id: rastreadorId,
+            rastreador_codigo: rastreador.codigo,
+            integridade,
+            motivo_retirada: servicoData?.motivo_retirada,
+            novo_status_rastreador: novoStatusRastreador,
+            plataforma_desativada: plataformaDesativada,
+          },
+          acao: 'retirada_concluida',
+          motivo: servicoData?.motivo_retirada || 'retirada',
+          metadata: { servico_id: servicoId, profissional_id: profissionalId },
+        });
+        console.log('Histórico do associado registrado');
+      } catch (err) {
+        console.error('Erro ao registrar histórico do associado:', err);
+      }
+    }
+
+    // 14. Chamar processar-pos-retirada automaticamente (cancela associado, inativa veículos, etc.)
+    let posRetiradaResult = null;
+    if (associadoId && servicoData?.motivo_retirada && servicoData.motivo_retirada !== 'substituicao_veiculo') {
+      try {
+        console.log('Chamando processar-pos-retirada automaticamente...');
+        const posRetiradaResponse = await fetch(`${supabaseUrl}/functions/v1/processar-pos-retirada`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            servico_id: servicoId,
+            associado_id: associadoId,
+            motivo_retirada: servicoData.motivo_retirada,
+            executado_por: profissionalId,
+          }),
+        });
+        posRetiradaResult = await posRetiradaResponse.json();
+        console.log('Resultado processar-pos-retirada:', JSON.stringify(posRetiradaResult));
+      } catch (err) {
+        console.error('Erro ao chamar processar-pos-retirada:', err);
+        posRetiradaResult = { success: false, error: String(err) };
+      }
+    } else if (servicoData?.motivo_retirada === 'substituicao_veiculo') {
+      console.log('Substituição de veículo: associado permanece ativo, pós-retirada não executada');
+    }
+
     const tempoTotal = Date.now() - startTime;
     console.log('=== RETIRADA CONCLUÍDA COM SUCESSO ===');
     console.log('Tempo total:', tempoTotal, 'ms');
@@ -349,6 +402,7 @@ Deno.serve(async (req) => {
         plataformaDesativada,
         plataformaErro,
         novoServicoInstalacaoId,
+        posRetiradaResult,
         tempoTotal,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
