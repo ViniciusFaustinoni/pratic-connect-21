@@ -52,8 +52,14 @@ export function InstaladorLayout() {
 
   // Condição: bloquear se localização negada/indisponível E tem tarefa ativa
   // Vistoriador base não precisa de GPS
+  // Rotas de execução não devem ser bloqueadas por localização
+  const isRotaExecucao = location.pathname.match(
+    /\/instalador\/(retirada|vistoria|manutencao|instalacao)\//
+  );
+
   const deveBloqueiarPorLocalizacao = 
     !isVistoriadorBase &&
+    !isRotaExecucao &&
     (geoState.status === 'denied' || geoState.status === 'unavailable') &&
     tarefaAtual !== null;
 
