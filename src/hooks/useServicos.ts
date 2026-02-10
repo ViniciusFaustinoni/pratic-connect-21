@@ -190,6 +190,8 @@ export interface TarefaAtual {
   em_rota_em: string | null;
   instalacao_origem_id: string | null;
   vistoria_origem_id: string | null;
+  contato_realizado_em: string | null;
+  contato_tipo: string | null;
 }
 
 // Filtros para listagem de serviços
@@ -426,6 +428,8 @@ export function useTarefaAtualServico() {
         instalacao_origem_id: tarefa.instalacao_origem_id,
         vistoria_origem_id: tarefa.vistoria_origem_id,
         permite_encaixe: tarefa.permite_encaixe ?? false,
+        contato_realizado_em: tarefa.contato_realizado_em || null,
+        contato_tipo: tarefa.contato_tipo || null,
       };
     },
     enabled: !!profissionalId,

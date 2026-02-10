@@ -614,9 +614,22 @@ export function MapaVistoriasContent() {
                       <h3 className="font-bold text-sm">{vistoriador.vistoriador_nome}</h3>
                     </div>
                     <div className="text-xs space-y-1 mb-2">
-                      <p className="flex items-center gap-1 text-green-600">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                        Em serviço
+                      <p className={`flex items-center gap-1 ${
+                        vistoriador.status_operacional === 'em_andamento' ? 'text-blue-600' :
+                        vistoriador.status_operacional === 'em_rota' ? 'text-purple-600' :
+                        vistoriador.status_operacional === 'em_contato' ? 'text-amber-600' :
+                        'text-green-600'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full animate-pulse ${
+                          vistoriador.status_operacional === 'em_andamento' ? 'bg-blue-500' :
+                          vistoriador.status_operacional === 'em_rota' ? 'bg-purple-500' :
+                          vistoriador.status_operacional === 'em_contato' ? 'bg-amber-500' :
+                          'bg-green-500'
+                        }`} />
+                        {vistoriador.status_operacional === 'em_andamento' ? 'Realizando Tarefa' :
+                         vistoriador.status_operacional === 'em_rota' ? 'Em Rota' :
+                         vistoriador.status_operacional === 'em_contato' ? 'Em Contato com Associado' :
+                         'Aguardando Atribuição'}
                       </p>
                       <p className="text-muted-foreground">
                         Atualizado: {formatDistanceToNow(new Date(vistoriador.updated_at), { 

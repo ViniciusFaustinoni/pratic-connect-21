@@ -1,4 +1,4 @@
-import { Users, Signal, Navigation, Wrench, SignalZero } from 'lucide-react';
+import { Users, Signal, Navigation, Wrench, SignalZero, MessageCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { ProfissionalEquipe } from '@/hooks/useEquipe';
@@ -12,6 +12,7 @@ export function EquipeMetrics({ profissionais }: EquipeMetricsProps) {
   const online = profissionais.filter(p => p.status_operacional === 'disponivel_operacional').length;
   const emRota = profissionais.filter(p => p.status_operacional === 'em_rota').length;
   const emAndamento = profissionais.filter(p => p.status_operacional === 'em_andamento').length;
+  const emContato = profissionais.filter(p => p.status_operacional === 'em_contato').length;
   const offline = profissionais.filter(p => p.status_operacional === 'offline').length;
 
   const metrics = [
@@ -23,11 +24,11 @@ export function EquipeMetrics({ profissionais }: EquipeMetricsProps) {
       iconBg: 'bg-primary/20',
     },
     {
-      label: 'Online',
-      value: online,
-      icon: Signal,
-      className: 'bg-emerald-500/10 text-emerald-500',
-      iconBg: 'bg-emerald-500/20',
+      label: 'Realizando Tarefa',
+      value: emAndamento,
+      icon: Wrench,
+      className: 'bg-blue-500/10 text-blue-500',
+      iconBg: 'bg-blue-500/20',
     },
     {
       label: 'Em Rota',
@@ -37,11 +38,18 @@ export function EquipeMetrics({ profissionais }: EquipeMetricsProps) {
       iconBg: 'bg-purple-500/20',
     },
     {
-      label: 'Em Andamento',
-      value: emAndamento,
-      icon: Wrench,
-      className: 'bg-blue-500/10 text-blue-500',
-      iconBg: 'bg-blue-500/20',
+      label: 'Em Contato',
+      value: emContato,
+      icon: MessageCircle,
+      className: 'bg-amber-500/10 text-amber-500',
+      iconBg: 'bg-amber-500/20',
+    },
+    {
+      label: 'Aguardando',
+      value: online,
+      icon: Signal,
+      className: 'bg-emerald-500/10 text-emerald-500',
+      iconBg: 'bg-emerald-500/20',
     },
     {
       label: 'Offline',
@@ -53,7 +61,7 @@ export function EquipeMetrics({ profissionais }: EquipeMetricsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {metrics.map((metric) => (
         <Card 
           key={metric.label} 

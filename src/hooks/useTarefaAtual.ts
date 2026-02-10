@@ -94,6 +94,8 @@ export function useTarefaAtual() {
         confirmacao_whatsapp: tarefa.confirmacao_whatsapp || null,
         confirmado_via_whatsapp_em: tarefa.confirmado_via_whatsapp_em || null,
         permite_encaixe: tarefa.permite_encaixe ?? false,
+        contato_realizado_em: tarefa.contato_realizado_em || null,
+        contato_tipo: tarefa.contato_tipo || null,
       };
     },
     enabled: !!profissionalId,

@@ -17210,6 +17210,8 @@ export type Database = {
           concluida_em: string | null
           confirmacao_whatsapp: string | null
           confirmado_via_whatsapp_em: string | null
+          contato_realizado_em: string | null
+          contato_tipo: string | null
           contrato_id: string | null
           cotacao_id: string | null
           created_at: string
@@ -17307,6 +17309,8 @@ export type Database = {
           concluida_em?: string | null
           confirmacao_whatsapp?: string | null
           confirmado_via_whatsapp_em?: string | null
+          contato_realizado_em?: string | null
+          contato_tipo?: string | null
           contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string
@@ -17404,6 +17408,8 @@ export type Database = {
           concluida_em?: string | null
           confirmacao_whatsapp?: string | null
           confirmado_via_whatsapp_em?: string | null
+          contato_realizado_em?: string | null
+          contato_tipo?: string | null
           contrato_id?: string | null
           cotacao_id?: string | null
           created_at?: string
@@ -21471,6 +21477,8 @@ export type Database = {
           cidade: string
           confirmacao_whatsapp: string
           confirmado_via_whatsapp_em: string
+          contato_realizado_em: string
+          contato_tipo: string
           contrato_id: string
           cotacao_id: string
           data_agendada: string
