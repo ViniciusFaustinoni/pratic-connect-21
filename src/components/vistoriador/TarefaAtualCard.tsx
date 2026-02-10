@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { TarefaAtual, useIniciarTarefa, useIniciarRota, TarefaAtualComConfirmacao } from '@/hooks/useTarefaAtual';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
+import { useRegistrarContato } from '@/hooks/useRegistrarContato';
 import { TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
 import { isManutencao } from '@/hooks/useCriarManutencao';
 import { isRetirada } from '@/hooks/useCriarRetirada';
@@ -32,6 +33,8 @@ interface TarefaAtualCardProps {
     confirmacao_whatsapp?: string | null;
     confirmado_via_whatsapp_em?: string | null;
     permite_encaixe?: boolean;
+    contato_realizado_em?: string | null;
+    contato_tipo?: string | null;
     cliente: {
       id: string;
       nome: string;
@@ -47,6 +50,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const { mutate: iniciarTarefa, isPending: isIniciando } = useIniciarTarefa();
   const { mutate: iniciarRota, isPending: isIniciandoRota } = useIniciarRota();
   const { buscarProximaTarefa, isLoading: isBuscandoProxima } = useIniciarServico();
+  const { mutate: registrarContato, isPending: isRegistrandoContato } = useRegistrarContato();
   
   // Estado para atualização em tempo real (a cada minuto)
   const [agora, setAgora] = useState(new Date());
@@ -106,6 +110,10 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
 
   const ligarCliente = () => {
     if (tarefa.cliente.telefone) {
+      // Registrar contato se ainda não foi feito
+      if (!tarefa.contato_realizado_em) {
+        registrarContato({ tarefaId: tarefa.id, tipo: 'ligacao' });
+      }
       window.open(`tel:${tarefa.cliente.telefone}`, '_self');
     }
   };
@@ -113,6 +121,10 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const abrirWhatsApp = () => {
     const numero = tarefa.cliente.whatsapp || tarefa.cliente.telefone;
     if (numero) {
+      // Registrar contato se ainda não foi feito
+      if (!tarefa.contato_realizado_em) {
+        registrarContato({ tarefaId: tarefa.id, tipo: 'whatsapp' });
+      }
       const numeroLimpo = numero.replace(/\D/g, '');
       const mensagem = encodeURIComponent(
         `Olá ${tarefa.cliente.nome?.split(' ')[0] || ''}, sou o técnico da PRATIC. ` +
@@ -121,6 +133,8 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
       window.open(`https://wa.me/55${numeroLimpo}?text=${mensagem}`, '_blank');
     }
   };
+
+  const contatoRealizado = !!tarefa.contato_realizado_em;
 
   const handleIniciarRota = () => {
     iniciarRota({ tarefaId: tarefa.id });
@@ -245,17 +259,31 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
               size="icon"
               onClick={abrirWhatsApp}
               disabled={!tarefa.cliente.whatsapp && !tarefa.cliente.telefone}
-              className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+              className={cn(
+                "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950",
+                contatoRealizado && tarefa.contato_tipo === 'whatsapp' && "border-green-500 bg-green-50 dark:bg-green-950"
+              )}
             >
-              <MessageCircle className="h-4 w-4" />
+              {contatoRealizado && tarefa.contato_tipo === 'whatsapp' ? (
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+              ) : (
+                <MessageCircle className="h-4 w-4" />
+              )}
             </Button>
             <Button
               variant="outline"
               size="icon"
               onClick={ligarCliente}
               disabled={!tarefa.cliente.telefone}
+              className={cn(
+                contatoRealizado && tarefa.contato_tipo === 'ligacao' && "border-green-500 bg-green-50 dark:bg-green-950"
+              )}
             >
-              <Phone className="h-4 w-4" />
+              {contatoRealizado && tarefa.contato_tipo === 'ligacao' ? (
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+              ) : (
+                <Phone className="h-4 w-4" />
+              )}
             </Button>
           </div>
 
@@ -309,11 +337,27 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
           {/* Ações */}
           <div className="space-y-3 pt-2">
             {isAgendada ? (
-              // Tarefa atribuída manualmente - mostrar botão para iniciar rota
+              // Tarefa atribuída - contato obrigatório antes de iniciar percurso
               <div className="space-y-2">
+                {/* Mensagem de orientação quando contato não foi feito */}
+                {!contatoRealizado && (
+                  <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md py-2 px-3">
+                    <MessageCircle className="h-4 w-4 flex-shrink-0" />
+                    <span>Entre em contato com o associado antes de iniciar o percurso</span>
+                  </div>
+                )}
+                
+                {/* Feedback de contato realizado */}
+                {contatoRealizado && (
+                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-500/10 rounded-md py-2 px-3">
+                    <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                    <span>Contato realizado via {tarefa.contato_tipo === 'whatsapp' ? 'WhatsApp' : 'Ligação'}</span>
+                  </div>
+                )}
+
                 <Button
                   onClick={handleIniciarRota}
-                  disabled={isIniciandoRota || !podeIniciarPorHorario}
+                  disabled={isIniciandoRota || !podeIniciarPorHorario || !contatoRealizado}
                   className="w-full gap-2"
                 >
                   {isIniciandoRota ? (
@@ -321,7 +365,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                   ) : (
                     <Route className="h-4 w-4" />
                   )}
-                  Iniciar Rota
+                  Iniciar Percurso
                 </Button>
                 
                 {/* Feedback visual quando bloqueado por horário */}

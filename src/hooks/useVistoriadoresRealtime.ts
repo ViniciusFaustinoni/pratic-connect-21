@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
 import { subMinutes } from "date-fns";
+import { StatusOperacional } from "./useEquipe";
 
 export interface VistoriadorLocalizacao {
   vistoriador_id: string;
@@ -11,6 +12,7 @@ export interface VistoriadorLocalizacao {
   em_servico: boolean;
   updated_at: string;
   telefone: string | null;
+  status_operacional: StatusOperacional;
 }
 
 export function useVistoriadoresRealtime() {
@@ -19,7 +21,6 @@ export function useVistoriadoresRealtime() {
   const query = useQuery({
     queryKey: ['vistoriadores-localizacao-realtime'],
     queryFn: async (): Promise<VistoriadorLocalizacao[]> => {
-      // Buscar apenas vistoriadores com localização atualizada nos últimos 60 minutos
       const cutoffTime = subMinutes(new Date(), 60).toISOString();
       
       const { data, error } = await supabase
@@ -43,18 +44,54 @@ export function useVistoriadoresRealtime() {
         throw error;
       }
 
-      // Transformar dados para o formato esperado
-      return (data || []).map((item: any) => ({
-        vistoriador_id: item.vistoriador_id,
-        vistoriador_nome: item.profiles?.nome || 'Vistoriador',
-        latitude: item.latitude,
-        longitude: item.longitude,
-        em_servico: item.em_servico,
-        updated_at: item.updated_at,
-        telefone: item.profiles?.telefone || null,
-      }));
+      if (!data?.length) return [];
+
+      // Buscar tarefas ativas dos profissionais para determinar status operacional
+      const profissionalIds = data.map((item: any) => item.vistoriador_id);
+      const { data: tarefasAtivas } = await supabase
+        .from('servicos')
+        .select('profissional_id, status, contato_realizado_em')
+        .in('profissional_id', profissionalIds)
+        .in('status', ['em_rota', 'em_andamento', 'agendada']);
+
+      const tarefaPorProfissional: Record<string, { status: string; contato_realizado_em: string | null }> = {};
+      tarefasAtivas?.forEach(t => {
+        if (t.profissional_id) {
+          const existente = tarefaPorProfissional[t.profissional_id];
+          const prioridade = (s: string) => s === 'em_andamento' ? 1 : s === 'em_rota' ? 2 : 3;
+          if (!existente || prioridade(t.status) < prioridade(existente.status)) {
+            tarefaPorProfissional[t.profissional_id] = {
+              status: t.status,
+              contato_realizado_em: t.contato_realizado_em,
+            };
+          }
+        }
+      });
+
+      return data.map((item: any) => {
+        const tarefa = tarefaPorProfissional[item.vistoriador_id];
+        let status_operacional: StatusOperacional = 'disponivel_operacional';
+        if (tarefa?.status === 'em_andamento') {
+          status_operacional = 'em_andamento';
+        } else if (tarefa?.status === 'em_rota') {
+          status_operacional = 'em_rota';
+        } else if (tarefa?.status === 'agendada' && tarefa?.contato_realizado_em) {
+          status_operacional = 'em_contato';
+        }
+
+        return {
+          vistoriador_id: item.vistoriador_id,
+          vistoriador_nome: item.profiles?.nome || 'Vistoriador',
+          latitude: item.latitude,
+          longitude: item.longitude,
+          em_servico: item.em_servico,
+          updated_at: item.updated_at,
+          telefone: item.profiles?.telefone || null,
+          status_operacional,
+        };
+      });
     },
-    refetchInterval: 30000, // Fallback: refetch a cada 30 segundos
+    refetchInterval: 30000,
   });
 
   // Supabase Realtime para atualizações instantâneas
@@ -70,7 +107,6 @@ export function useVistoriadoresRealtime() {
         },
         (payload) => {
           console.log('Atualização de localização recebida:', payload);
-          // Invalidar cache para recarregar dados
           queryClient.invalidateQueries({ 
             queryKey: ['vistoriadores-localizacao-realtime'] 
           });

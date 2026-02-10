@@ -17,6 +17,7 @@ import {
   Radio,
   Clock,
   TrendingUp,
+  MessageCircle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,7 +67,7 @@ const STATUS_OPERACIONAL_CONFIG: Record<StatusOperacional, {
   dotColor: string;
 }> = {
   em_andamento: {
-    label: 'Em Andamento',
+    label: 'Realizando Tarefa',
     className: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
     icon: <Wrench className="h-3 w-3" />,
     dotColor: 'bg-blue-500',
@@ -77,8 +78,14 @@ const STATUS_OPERACIONAL_CONFIG: Record<StatusOperacional, {
     icon: <Navigation className="h-3 w-3" />,
     dotColor: 'bg-purple-500',
   },
+  em_contato: {
+    label: 'Em Contato',
+    className: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    icon: <MessageCircle className="h-3 w-3" />,
+    dotColor: 'bg-amber-500',
+  },
   disponivel_operacional: {
-    label: 'Online',
+    label: 'Aguardando Atribuição',
     className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
     icon: <Signal className="h-3 w-3" />,
     dotColor: 'bg-emerald-500 animate-pulse',
@@ -121,6 +128,7 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
         profissional.status_operacional === 'disponivel_operacional' && 'bg-gradient-to-r from-emerald-500 to-emerald-400',
         profissional.status_operacional === 'em_andamento' && 'bg-gradient-to-r from-blue-500 to-blue-400',
         profissional.status_operacional === 'em_rota' && 'bg-gradient-to-r from-purple-500 to-purple-400',
+        profissional.status_operacional === 'em_contato' && 'bg-gradient-to-r from-amber-500 to-amber-400',
         profissional.status_operacional === 'offline' && 'bg-muted',
       )} />
 

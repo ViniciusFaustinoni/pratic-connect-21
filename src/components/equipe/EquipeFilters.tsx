@@ -1,4 +1,4 @@
-import { Search, Wrench, Navigation, Signal, SignalZero, Filter } from 'lucide-react';
+import { Search, Wrench, Navigation, Signal, SignalZero, MessageCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -87,7 +87,7 @@ export function EquipeFilters({
             <SelectItem value="em_andamento">
               <span className="flex items-center gap-2">
                 <Wrench className="h-3 w-3 text-blue-500" />
-                Em Andamento
+                Realizando Tarefa
               </span>
             </SelectItem>
             <SelectItem value="em_rota">
@@ -96,10 +96,16 @@ export function EquipeFilters({
                 Em Rota
               </span>
             </SelectItem>
+            <SelectItem value="em_contato">
+              <span className="flex items-center gap-2">
+                <MessageCircle className="h-3 w-3 text-amber-500" />
+                Em Contato
+              </span>
+            </SelectItem>
             <SelectItem value="disponivel_operacional">
               <span className="flex items-center gap-2">
                 <Signal className="h-3 w-3 text-emerald-500" />
-                Online
+                Aguardando Atribuição
               </span>
             </SelectItem>
             <SelectItem value="offline">

@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, subMinutes } from 'date-fns';
 
 export type StatusProfissional = 'disponivel' | 'indisponivel' | 'ferias' | 'afastado';
-export type StatusOperacional = 'em_andamento' | 'em_rota' | 'disponivel_operacional' | 'offline';
+export type StatusOperacional = 'em_contato' | 'em_andamento' | 'em_rota' | 'disponivel_operacional' | 'offline';
 
 export interface ProfissionalEquipe {
   id: string;
@@ -111,23 +111,25 @@ export function useProfissionaisEquipe() {
         };
       });
 
-      // 6. Buscar tarefas ativas (em_rota ou em_andamento) para determinar status operacional
+      // 6. Buscar tarefas ativas (em_rota, em_andamento ou agendada com contato) da tabela servicos
       const { data: tarefasAtivas } = await supabase
-        .from('instalacoes')
-        .select('id, instalador_responsavel_id, status')
-        .in('instalador_responsavel_id', profileIds)
-        .in('status', ['em_rota', 'em_andamento']);
+        .from('servicos')
+        .select('id, profissional_id, status, contato_realizado_em')
+        .in('profissional_id', profileIds)
+        .in('status', ['em_rota', 'em_andamento', 'agendada']);
 
-      const tarefaAtivaPorProfissional: Record<string, { id: string; tipo: 'instalacao'; status: string }> = {};
+      const tarefaAtivaPorProfissional: Record<string, { id: string; tipo: 'instalacao'; status: string; contato_realizado_em: string | null }> = {};
       tarefasAtivas?.forEach(tarefa => {
-        if (tarefa.instalador_responsavel_id) {
-          // Priorizar em_andamento sobre em_rota
-          const existente = tarefaAtivaPorProfissional[tarefa.instalador_responsavel_id];
-          if (!existente || (tarefa.status === 'em_andamento' && existente.status === 'em_rota')) {
-            tarefaAtivaPorProfissional[tarefa.instalador_responsavel_id] = {
+        if (tarefa.profissional_id) {
+          const existente = tarefaAtivaPorProfissional[tarefa.profissional_id];
+          // Priorizar: em_andamento > em_rota > agendada
+          const prioridade = (s: string) => s === 'em_andamento' ? 1 : s === 'em_rota' ? 2 : 3;
+          if (!existente || prioridade(tarefa.status) < prioridade(existente.status)) {
+            tarefaAtivaPorProfissional[tarefa.profissional_id] = {
               id: tarefa.id,
               tipo: 'instalacao',
               status: tarefa.status,
+              contato_realizado_em: tarefa.contato_realizado_em,
             };
           }
         }
@@ -159,6 +161,8 @@ export function useProfissionaisEquipe() {
             status_operacional = 'em_andamento';
           } else if (tarefaAtiva?.status === 'em_rota') {
             status_operacional = 'em_rota';
+          } else if (tarefaAtiva?.status === 'agendada' && tarefaAtiva?.contato_realizado_em) {
+            status_operacional = 'em_contato';
           } else {
             status_operacional = 'disponivel_operacional';
           }
