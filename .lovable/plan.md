@@ -1,88 +1,167 @@
 
-# Correcao Urgente: Fatura Ignora Segundo Veiculo
+# Plano: Etapa de Contato Obrigatorio e Badges de Status Operacional
 
-## O Problema
+## Visao Geral
 
-Existem **duas** edge functions de geracao de faturas, e **ambas** tem o mesmo bug:
-
-1. **`gerar-faturas-mensais`** (modelo rateio/pos-pago) - linha 201:
-```
-const veiculo = veiculos[0] as any;  // BUG: so pega o primeiro
-```
-
-2. **`gerar-cobrancas-mensais`** (modelo plano fixo) - linha 136:
-```
-const valorMensalidade = (associado.planos as any)?.valor_mensalidade || 150;
-// Nem busca veiculos - usa valor fixo do plano
-```
-
-A segunda funcao (`gerar-cobrancas-mensais`) tem um problema diferente: ela nem consulta veiculos, usa o valor fixo do plano do associado. Neste caso, nao ha bug de "ignorar segundo veiculo" porque o valor ja vem do plano. O bug critico esta na **`gerar-faturas-mensais`** (rateio).
+Implementar um novo passo obrigatorio no fluxo de tarefas do profissional de campo: **contato previo com o associado** antes de iniciar o percurso. Alem disso, atualizar os badges de status operacional para refletir com maior granularidade a etapa em que o profissional se encontra.
 
 ---
 
-## Correcao: `gerar-faturas-mensais/index.ts`
+## Fluxo Atual vs Novo Fluxo
 
-### O que muda
+```text
+FLUXO ATUAL:
+  Tarefa Atribuida (agendada)
+     -> [Iniciar Rota] -> em_rota
+        -> [Cheguei no Local] -> em_andamento
+           -> [Executar]
 
-Em vez de pegar `veiculos[0]` e calcular a composicao para um unico veiculo, o sistema vai:
-
-1. **Iterar TODOS os veiculos ativos** e calcular a composicao individual de cada um (taxa administrativa, rateios por cobertura, cotas)
-2. **Somar os totais** para gerar um unico boleto ASAAS unificado
-3. **Registrar uma linha em `cobrancas_composicao` POR VEICULO** (a tabela ja suporta `veiculo_id`)
-4. **Salvar metadata com detalhes** de cada veiculo na cobranca principal via `composicao_resumo`
-5. **Melhorar a descricao** do boleto ASAAS para mostrar quantidade de veiculos quando > 1
-6. **Adicionar log de auditoria** para associados multi-veiculo
-
-### Detalhes tecnicos
-
-**Trecho atual (linhas 197-230):**
+NOVO FLUXO:
+  Tarefa Atribuida (agendada)
+     -> Botoes de contato (WhatsApp / Ligacao) - OBRIGATORIO
+        -> [Registra momento do contato no banco]
+        -> [Iniciar Percurso] (desbloqueado apos contato)
+           -> em_rota
+              -> [Cheguei no Local / Iniciar Tarefa] -> em_andamento
+                 -> [Executar]
 ```
-const veiculo = veiculos[0] as any;
-// ... calcula composicao para 1 veiculo
-```
-
-**Sera substituido por:**
-```
-// Para cada veiculo ativo, calcular composicao individual
-let totalGeral = 0;
-const composicoesPorVeiculo = [];
-
-for (const veiculo of veiculosAtivos) {
-  const valorFipe = veiculo.valor_fipe || 50000;
-  const cotas = veiculo.quantidade_cotas || ...;
-  const composicao = { taxa_administrativa, rateios... };
-  totalGeral += composicao.total;
-  composicoesPorVeiculo.push({ veiculo, composicao });
-}
-```
-
-**Na insercao da cobranca:**
-- `valor` = soma de todos os veiculos (totalGeral)
-- `veiculo_id` = null (cobranca unificada, nao pertence a um unico veiculo)
-- `composicao_resumo` = JSON com array de { placa, valor, cotas } por veiculo
-
-**Na insercao de `cobrancas_composicao`:**
-- Uma linha por veiculo (ja suportado pela tabela)
-- Cada linha com seu respectivo `veiculo_id`, `valor_fipe`, `quantidade_cotas`
-
-**Na descricao ASAAS:**
-- 1 veiculo: `Fatura 2026-02 - Nome - ABC1234`
-- 2+ veiculos: `Fatura 2026-02 - Nome - 2 veiculos: ABC1234, XYZ5678`
-
-### A funcao `gerar-cobrancas-mensais` (modelo plano fixo)
-
-Esta funcao usa `valor_mensalidade` do plano do associado, nao calcula por veiculo. Nao tem o mesmo bug, pois o valor vem do plano. **Nao sera alterada** nesta correcao — se o modelo de plano fixo precisar somar por veiculo, e uma mudanca de regra de negocio separada.
 
 ---
+
+## Alteracoes no Banco de Dados (Migration)
+
+Adicionar 2 colunas na tabela `servicos`:
+
+| Coluna | Tipo | Default | Descricao |
+|--------|------|---------|-----------|
+| `contato_realizado_em` | `timestamptz` | `null` | Momento em que o profissional clicou em WhatsApp ou Ligacao |
+| `contato_tipo` | `text` | `null` | Tipo do contato: `'whatsapp'` ou `'ligacao'` |
+
+**Porque novas colunas e nao reuso de `confirmacao_whatsapp`?**
+O campo `confirmacao_whatsapp` registra a confirmacao automatica enviada pelo sistema ao cliente (matinal / pre-servico). O novo campo `contato_realizado_em` registra a acao **manual do profissional** antes de iniciar o percurso. Sao conceitos distintos.
+
+---
+
+## Atualizacao da RPC `buscar_tarefa_atual_profissional`
+
+Adicionar os 2 novos campos (`contato_realizado_em`, `contato_tipo`) no retorno da funcao, para que o hook `useTarefaAtual` receba essa informacao e o card possa condicionar a habilitacao do botao "Iniciar Percurso".
+
+---
+
+## Alteracoes no Frontend
+
+### 1. Hook `useTarefaAtual.ts`
+
+- Mapear os novos campos `contato_realizado_em` e `contato_tipo` no retorno do hook.
+- Expor esses campos no tipo `TarefaAtual`.
+
+### 2. Novo hook `useRegistrarContato.ts`
+
+Mutation que:
+- Recebe `tarefaId`, `tipo` (`'whatsapp'` | `'ligacao'`)
+- Atualiza `servicos` com `contato_realizado_em = now()` e `contato_tipo = tipo`
+- Invalida cache da `tarefa-atual`
+
+### 3. Componente `TarefaAtualCard.tsx` (alteracao principal)
+
+**Quando status = `agendada`:**
+
+- Os botoes de WhatsApp e Ligacao (que ja existem) passam a chamar tambem `useRegistrarContato` alem de abrir o link externo.
+- O botao "Iniciar Rota" e renomeado para **"Iniciar Percurso"**.
+- O botao "Iniciar Percurso" fica **desabilitado** enquanto `contato_realizado_em` for `null`.
+- Exibir mensagem de orientacao: "Entre em contato com o associado antes de iniciar o percurso".
+- Apos o clique em WhatsApp ou Ligacao, mostrar feedback visual (check verde ao lado do botao clicado e desbloquear "Iniciar Percurso").
+
+**Quando status = `em_rota`:**
+- Manter botoes "Navegar" e "Cheguei no Local" como esta (sem alteracao).
+
+**Quando status = `em_andamento`:**
+- Manter botao "Executar" como esta (sem alteracao).
+
+### 4. Status Operacional - Novo valor `em_contato`
+
+**Tipo `StatusOperacional`** no `useEquipe.ts`:
+- Adicionar o valor `'em_contato'` ao tipo union.
+- Valores finais: `'em_contato' | 'em_andamento' | 'em_rota' | 'disponivel_operacional' | 'offline'`
+
+**Logica de determinacao (em `useEquipe.ts`):**
+```text
+Se nao esta em servico -> offline
+Se esta em servico:
+  - Se tarefa em_andamento -> 'em_andamento' (label: "Realizando Tarefa")
+  - Se tarefa em_rota -> 'em_rota' (label: "Em Rota")
+  - Se tarefa agendada E contato_realizado_em != null -> 'em_contato' (label: "Em Contato com Associado")
+  - Se tarefa agendada E contato_realizado_em == null -> 'disponivel_operacional' (label: "Aguardando Atribuicao")
+  - Se sem tarefa -> 'disponivel_operacional' (label: "Aguardando Atribuicao")
+```
+
+**Nota:** O hook `useEquipe` atualmente busca tarefas ativas na tabela `instalacoes`. Sera necessario atualizar para buscar tambem na tabela `servicos` (que e a tabela unificada e atual), incluindo o campo `contato_realizado_em`.
+
+### 5. Labels e cores dos badges
+
+| Status Operacional | Label Atual | Nova Label | Cor |
+|---------------------|-------------|------------|-----|
+| `em_andamento` | Em Andamento | **Realizando Tarefa** | Azul (mantem) |
+| `em_rota` | Em Rota | **Em Rota** (mantem) | Roxo (mantem) |
+| `em_contato` | -- (novo) | **Em Contato com Associado** | Amarelo/Amber |
+| `disponivel_operacional` | Online | **Aguardando Atribuicao** | Verde (mantem) |
+| `offline` | Offline | **Offline** (mantem) | Cinza (mantem) |
+
+### 6. Componentes de monitoramento afetados
+
+**`EquipeCard.tsx`:**
+- Adicionar config para o novo status `em_contato` em `STATUS_OPERACIONAL_CONFIG`.
+- Icone: `MessageCircle` (lucide).
+- Cor da barra topo: gradiente amber.
+
+**`EquipeFilters.tsx`:**
+- Adicionar opcao `em_contato` no dropdown "Operacional".
+- Icone: `MessageCircle`.
+
+**`EquipeMetrics.tsx`:**
+- Adicionar contagem de `em_contato` nas metricas.
+
+**`MapaVistoriasContent.tsx` (mapa do coordenador):**
+- No popup dos vistoriadores em campo, substituir o texto fixo "Em servico" pelo status operacional dinamico ("Em Contato com Associado", "Em Rota", "Realizando Tarefa", "Aguardando Atribuicao").
+- Isso requer que o hook `useVistoriadoresRealtime` passe a retornar o status operacional (buscando a tarefa ativa do profissional).
+
+### 7. Hook `useVistoriadoresRealtime.ts`
+
+Atualizar para incluir o status operacional de cada vistoriador:
+- Buscar a tarefa ativa do profissional (da tabela `servicos`) junto com o campo `contato_realizado_em`.
+- Calcular e retornar `status_operacional` seguindo a mesma logica do `useEquipe`.
+- Adicionar campo `status_operacional` na interface `VistoriadorLocalizacao`.
+
+---
+
+## Arquivos a Criar
+
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/hooks/useRegistrarContato.ts` | Mutation para registrar contato (whatsapp/ligacao) no servico |
+| Migration SQL | Adicionar colunas `contato_realizado_em` e `contato_tipo` em `servicos` |
 
 ## Arquivos a Alterar
 
 | Arquivo | Alteracao |
-|---------|----------|
-| `supabase/functions/gerar-faturas-mensais/index.ts` | Iterar todos veiculos ativos, somar composicoes, registrar por veiculo |
+|---------|-----------|
+| `supabase/migrations/` (nova migration) | Adicionar colunas + atualizar RPC `buscar_tarefa_atual_profissional` |
+| `src/hooks/useTarefaAtual.ts` | Mapear novos campos `contato_realizado_em` e `contato_tipo` |
+| `src/hooks/useServicos.ts` | Adicionar campos ao tipo `TarefaAtual` / `Servico` |
+| `src/components/vistoriador/TarefaAtualCard.tsx` | Botoes de contato registram clique; "Iniciar Percurso" bloqueado ate contato |
+| `src/hooks/useEquipe.ts` | Novo status `em_contato`, buscar tarefa de `servicos` (nao `instalacoes`), novos labels |
+| `src/components/equipe/EquipeCard.tsx` | Config para `em_contato`, novos labels |
+| `src/components/equipe/EquipeFilters.tsx` | Opcao `em_contato` no filtro |
+| `src/components/equipe/EquipeMetrics.tsx` | Contagem de `em_contato` |
+| `src/hooks/useVistoriadoresRealtime.ts` | Incluir status operacional calculado |
+| `src/components/mapa/MapaVistoriasContent.tsx` | Exibir status operacional no popup do vistoriador |
+| `src/integrations/supabase/types.ts` | Tipos auto-gerados (atualizados pela migration) |
 
-### O que NAO sera alterado
-- `gerar-cobrancas-mensais` (modelo diferente, valor fixo do plano)
-- Nenhuma outra edge function
-- Nenhum componente frontend
-- Nenhuma tabela de banco (cobrancas_composicao ja suporta veiculo_id)
+---
+
+## O que NAO sera alterado
+
+- Edge functions de atribuicao (`atribuir-proxima-tarefa`, `cron-atribuir-tarefas`) -- nao dependem do contato.
+- Fluxo de execucao de vistoria/instalacao/manutencao -- esses ja assumem que o profissional chegou.
+- `MapaMobileContent.tsx` (mapa do profissional) -- nao mostra status operacional.
+- Nenhuma logica de WhatsApp automatizado (Evolution API).
