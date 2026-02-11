@@ -189,9 +189,6 @@ import RedesSociais from "./pages/marketing/RedesSociais";
 import DistribuicaoConfig from "./pages/vendas/DistribuicaoConfig";
 import PlanosBeneficios from "./pages/vendas/PlanosBeneficios";
 import VendasConfig from "./pages/vendas/VendasConfig";
-import Comissoes from "./pages/vendas/Comissoes";
-import ComissoesConfig from "./pages/vendas/ComissoesConfig";
-import MinhasComissoes from "./pages/vendas/MinhasComissoes";
 import { VendasNotificationListener } from "./components/notifications/VendasNotificationListener";
 
 // Documentos
@@ -374,9 +371,6 @@ const App = () => (
               <Route path="/vendas/vendedores" element={<Vendedores />} />
               <Route path="/vendas/vendedores/:id" element={<VendedorHistorico />} />
               <Route path="/vendas/configuracoes" element={<VendasConfig />} />
-              <Route path="/vendas/comissoes" element={<Comissoes />} />
-              <Route path="/vendas/comissoes/config" element={<ComissoesConfig />} />
-              <Route path="/vendas/minhas-comissoes" element={<MinhasComissoes />} />
               
               {/* Auditoria */}
               <Route path="/auditoria/vendedores" element={<AuditoriaVendedores />} />
