@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import type { TarefaAtual } from './useServicos';
 import { useAuth } from '@/contexts/AuthContext';
 import { backgroundLocationService } from '@/services/backgroundLocationService';
+import { format } from 'date-fns';
+import { getHojeBrasilia } from '@/lib/date-utils';
 
 interface IniciarServicoResult {
   resultado: 'atribuida' | 'ja_tem_tarefa' | 'sem_tarefas';
@@ -362,6 +364,41 @@ export function useIniciarServico() {
       // Chamar a edge function para atribuir tarefa
       await atribuirTarefaMutation.mutateAsync({ latitude, longitude });
 
+      // Criar turno automaticamente ao iniciar serviço
+      if (profile?.id) {
+        try {
+          const hoje = format(getHojeBrasilia(), 'yyyy-MM-dd');
+          
+          // Buscar saldo do dia anterior
+          const { data: turnoAnterior } = await supabase
+            .from('turnos_profissionais')
+            .select('saldo_anterior_minutos')
+            .eq('profissional_id', profile.id)
+            .lt('data', hoje)
+            .order('data', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          const saldoAnterior = turnoAnterior?.saldo_anterior_minutos || 0;
+
+          await supabase
+            .from('turnos_profissionais')
+            .upsert({
+              profissional_id: profile.id,
+              data: hoje,
+              inicio_turno: new Date().toISOString(),
+              status: 'ativo',
+              saldo_anterior_minutos: saldoAnterior,
+            }, { onConflict: 'profissional_id,data' });
+
+          console.log('[useIniciarServico] Turno criado/atualizado automaticamente');
+          queryClient.invalidateQueries({ queryKey: ['turno-profissional'] });
+          queryClient.invalidateQueries({ queryKey: ['jornadas-profissionais'] });
+        } catch (turnoError) {
+          console.error('[useIniciarServico] Erro ao criar turno automático:', turnoError);
+        }
+      }
+
       // Verificar se está em plataforma nativa para usar background location
       if (backgroundLocationService.isNativePlatform() && profile?.id) {
         console.log('[useIniciarServico] Plataforma nativa detectada - iniciando background location');
@@ -431,6 +468,26 @@ export function useIniciarServico() {
           updated_at: new Date().toISOString()
         })
         .eq('vistoriador_id', profile.id);
+
+      // Encerrar turno ativo do dia
+      try {
+        const hoje = format(getHojeBrasilia(), 'yyyy-MM-dd');
+        await supabase
+          .from('turnos_profissionais')
+          .update({ 
+            status: 'encerrado', 
+            fim_turno: new Date().toISOString() 
+          })
+          .eq('profissional_id', profile.id)
+          .eq('data', hoje)
+          .neq('status', 'encerrado');
+
+        console.log('[useIniciarServico] Turno encerrado automaticamente');
+        queryClient.invalidateQueries({ queryKey: ['turno-profissional'] });
+        queryClient.invalidateQueries({ queryKey: ['jornadas-profissionais'] });
+      } catch (turnoError) {
+        console.error('[useIniciarServico] Erro ao encerrar turno:', turnoError);
+      }
 
       refetchStatus();
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
