@@ -73,7 +73,7 @@ export function usePushNotificationsProfissional() {
 
       try {
         const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
+        const subscription = await (registration as any).pushManager.getSubscription();
 
         if (subscription) {
           // Verificar se existe no banco
@@ -140,7 +140,7 @@ export function usePushNotificationsProfissional() {
       }
 
       // Criar subscription
-      const subscription = await registration.pushManager.subscribe({
+      const subscription = await (registration as any).pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       });
@@ -197,7 +197,7 @@ export function usePushNotificationsProfissional() {
 
     try {
       const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
+      const subscription = await (registration as any).pushManager.getSubscription();
 
       if (subscription) {
         // Remover do navegador
