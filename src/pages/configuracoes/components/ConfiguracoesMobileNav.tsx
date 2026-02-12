@@ -46,7 +46,7 @@ const menuItems: MenuSection[] = [
   {
     category: 'Geral',
     items: [
-      { path: '/configuracoes/empresa', label: 'Empresa', icon: Building2 },
+      
       { path: '/configuracoes/integracoes', label: 'Integrações', icon: Plug },
       { path: '/configuracoes/sistema', label: 'Sistema', icon: Settings },
     ]
