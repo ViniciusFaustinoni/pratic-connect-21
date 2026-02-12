@@ -115,6 +115,7 @@ interface MenuItem {
   icon: LucideIcon;
   permission?: PermissionKey;
   color?: string;
+  hideForDiretor?: boolean;
 }
 
 interface MenuGroup {
@@ -364,8 +365,8 @@ const menuConfig: {
       permission: 'canManageCadastro',
       color: MENU_COLORS.documentos,
       items: [
-        { title: 'Gerar Documento', url: '/documentos/gerar', icon: FilePlus },
-        { title: 'Histórico', url: '/documentos/historico', icon: History },
+        { title: 'Gerar Documento', url: '/documentos/gerar', icon: FilePlus, hideForDiretor: true },
+        { title: 'Histórico', url: '/documentos/historico', icon: History, hideForDiretor: true },
         { title: 'Templates', url: '/documentos/templates', icon: FileCode },
         { title: 'Aditivos', url: '/documentos/aditivos', icon: FileText },
       ],
@@ -481,7 +482,10 @@ export function AppSidebar() {
     items.some((item) => location.pathname.startsWith(item.url));
 
   const filterByPermission = (items: MenuItem[]) => 
-    items.filter(item => !item.permission || permissions.hasPermission(item.permission));
+    items.filter(item => {
+      if (item.hideForDiretor && permissions.isDiretor) return false;
+      return !item.permission || permissions.hasPermission(item.permission);
+    });
 
   const filterGroups = (groups: MenuGroup[]) =>
     groups
