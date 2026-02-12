@@ -378,7 +378,7 @@ serve(async (req) => {
         associado_id,
         veiculo_id,
         local_vistoria,
-        associado:associados(nome, telefone, whatsapp),
+        associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
         veiculo:veiculos(placa, marca, modelo, cor)
       `)
       .is('profissional_id', null)
@@ -419,7 +419,7 @@ serve(async (req) => {
         associado_id,
         veiculo_id,
         local_vistoria,
-        associado:associados(nome, telefone, whatsapp),
+        associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
         veiculo:veiculos(placa, marca, modelo, cor)
       `)
       .is('profissional_id', null)
