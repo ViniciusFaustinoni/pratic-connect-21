@@ -6,13 +6,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Car, Shield, DollarSign, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Car, Shield, DollarSign, ExternalLink, GripVertical } from 'lucide-react';
 import { formatCurrency } from '@/types/termo-filiacao';
+import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
+import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
 
 const TIPOS_REGRA = [
   { tipo: 'veiculo_0km' as const, label: 'Veículo 0KM', desc: 'Identificado automaticamente via CRLV (sem placa ou procedência "Novo")', icon: Car },
@@ -127,7 +128,7 @@ export default function AditivoForm() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="descricao">Descrição</Label>
-              <Textarea id="descricao" value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição breve do aditivo" />
+              <Input id="descricao" value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição breve do aditivo" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -143,17 +144,27 @@ export default function AditivoForm() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Conteúdo HTML</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Conteúdo do Aditivo</CardTitle></CardHeader>
           <CardContent>
-            <Textarea
-              value={conteudoHtml}
-              onChange={e => setConteudoHtml(e.target.value)}
-              placeholder="Conteúdo HTML do aditivo com variáveis {{associado.nome}}, {{veiculo.placa}}, etc."
-              className="min-h-[200px] font-mono text-sm"
-            />
-            <p className="text-xs text-muted-foreground mt-2">
-              Use variáveis como {'{{associado.nome}}'}, {'{{veiculo.placa}}'}, {'{{plano.nome}}'} etc.
-            </p>
+            <div className="grid lg:grid-cols-[1fr_280px] gap-4">
+              <TemplateEditor
+                value={conteudoHtml}
+                onChange={setConteudoHtml}
+                placeholder="Digite o conteúdo do aditivo aqui... Use {{variavel}} para inserir variáveis dinâmicas."
+              />
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <GripVertical className="h-3 w-3" />
+                  Arraste ou clique para inserir
+                </p>
+                <VariaveisSelector onSelect={(variavel) => {
+                  const ed = getTemplateEditor();
+                  if (ed && ed.isEditable) {
+                    ed.chain().focus().insertContent(variavel).run();
+                  }
+                }} />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
