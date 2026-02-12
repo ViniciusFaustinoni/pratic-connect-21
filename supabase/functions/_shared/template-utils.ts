@@ -519,7 +519,6 @@ export function ehVeiculoZeroKm(veiculo: any): boolean {
  * Verifica se rastreador é obrigatório
  */
 export function exigeRastreador(veiculo: any): { exige: boolean; motivo: string | null } {
-  // Diesel sempre exige
   if (veiculo.combustivel?.toLowerCase() === 'diesel') {
     return { exige: true, motivo: 'Veículo a diesel' };
   }
@@ -528,15 +527,136 @@ export function exigeRastreador(veiculo: any): { exige: boolean; motivo: string 
   const categoria = (veiculo.categoria || '').toLowerCase();
   const isMoto = categoria.includes('moto') || categoria.includes('ciclomotor');
   
-  // Moto com FIPE > R$ 9.000
   if (isMoto && valorFipe > 9000) {
     return { exige: true, motivo: `Valor FIPE acima de R$ 9.000` };
   }
   
-  // Carro com FIPE > R$ 20.000
   if (!isMoto && valorFipe > 20000) {
     return { exige: true, motivo: `Valor FIPE acima de R$ 20.000` };
   }
   
   return { exige: false, motivo: null };
+}
+
+// ============= ADITIVOS DINÂMICOS =============
+
+interface RegraAditivo {
+  tipo: string;
+  ativo: boolean;
+  valor_config?: string;
+}
+
+interface TermoAditivo {
+  id: string;
+  nome: string;
+  conteudo_html: string | null;
+  regras: RegraAditivo[];
+  ordem: number;
+}
+
+function avaliarRegraEdge(regra: RegraAditivo, veiculo: any, fipeLimite: number): boolean {
+  if (!regra.ativo) return false;
+
+  switch (regra.tipo) {
+    case 'veiculo_0km':
+      return ehVeiculoZeroKm(veiculo);
+    
+    case 'veiculo_blindado': {
+      const obs = (veiculo.observacoes || '').toLowerCase();
+      return obs.includes('blindad') || obs.includes('blindagem');
+    }
+    
+    case 'fipe_acima_de':
+      return (veiculo.valor_fipe || 0) >= fipeLimite;
+    
+    default:
+      return false;
+  }
+}
+
+/**
+ * Busca aditivos ativos do banco, avalia regras contra dados do veículo,
+ * e retorna o HTML concatenado dos aditivos aplicáveis (com variáveis substituídas).
+ */
+export async function buscarEGerarAditivos(
+  supabase: any,
+  dadosVeiculo: any,
+  dadosTemplate: any
+): Promise<string> {
+  // 1. Buscar aditivos ativos ordenados
+  const { data: aditivos, error: aditivosError } = await supabase
+    .from('termos_aditivos')
+    .select('id, nome, conteudo_html, regras, ordem')
+    .eq('ativo', true)
+    .order('ordem', { ascending: true });
+
+  if (aditivosError || !aditivos || aditivos.length === 0) {
+    console.log('[template-utils] Nenhum aditivo ativo encontrado:', aditivosError?.message);
+    return '';
+  }
+
+  // 2. Buscar limite FIPE das configurações
+  const { data: configData } = await supabase
+    .from('configuracoes')
+    .select('valor')
+    .eq('chave', 'aditivo_fipe_limite')
+    .maybeSingle();
+
+  const fipeLimite = configData ? Number(configData.valor) : 100000;
+
+  // 3. Avaliar regras e filtrar aditivos aplicáveis
+  const aditivosAplicaveis: TermoAditivo[] = [];
+
+  for (const aditivo of aditivos) {
+    const regras = (aditivo.regras || []) as RegraAditivo[];
+    
+    // Se não tem regras, não anexa automaticamente
+    if (regras.length === 0) continue;
+    
+    const algumaRegraBate = regras.some(r => avaliarRegraEdge(r, dadosVeiculo, fipeLimite));
+    if (algumaRegraBate) {
+      aditivosAplicaveis.push(aditivo);
+    }
+  }
+
+  if (aditivosAplicaveis.length === 0) {
+    console.log('[template-utils] Nenhum aditivo aplicável para este veículo');
+    return '';
+  }
+
+  console.log(`[template-utils] ${aditivosAplicaveis.length} aditivo(s) aplicável(is):`, 
+    aditivosAplicaveis.map(a => a.nome).join(', '));
+
+  // 4. Gerar HTML dos aditivos aplicáveis
+  let htmlFinal = '';
+
+  for (const aditivo of aditivosAplicaveis) {
+    let conteudo = aditivo.conteudo_html || '';
+    
+    // Substituir variáveis no conteúdo do aditivo
+    if (conteudo && dadosTemplate) {
+      conteudo = substituirVariaveis(conteudo, dadosTemplate);
+    }
+
+    htmlFinal += `
+<div class="section page-break" style="margin-top: 30pt; border: 2px solid #1e40af; padding: 15pt; border-radius: 4pt;">
+  <h2 class="section-title" style="color: #1e40af;">
+    ${aditivo.nome}
+  </h2>
+  <p style="text-align: center; font-size: 9pt; color: #666; margin-bottom: 15pt;">
+    (Anexo ao Termo de Afiliação)
+  </p>
+  ${conteudo}
+  <div style="margin-top: 40pt; text-align: center;">
+    <p>Local: _________________ Data: ____/____/____</p>
+    <div style="margin-top: 30pt;">
+      <p>_________________________________________</p>
+      <p style="font-size: 9pt;">Assinatura do Associado</p>
+    </div>
+  </div>
+</div>
+`;
+  }
+
+  return htmlFinal;
 }

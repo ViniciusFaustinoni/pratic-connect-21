@@ -7,6 +7,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao } from "../_shared/termo-afiliacao-template.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
+import { buscarEGerarAditivos, substituirVariaveis, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, markdownParaHTML } from "../_shared/template-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -149,9 +150,58 @@ serve(async (req) => {
       contrato.associados
     );
 
-    // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============
-    const contratoHTML = generateTermoAfiliacao(templateData);
+    // ============= BUSCAR TEMPLATE DO BANCO =============
+    const { data: templateDB, error: templateError } = await supabase
+      .from("documento_templates")
+      .select("id, codigo, nome, conteudo, config_layout")
+      .eq("is_default_autentique", true)
+      .eq("ativo", true)
+      .maybeSingle();
 
+    const usandoTemplateBanco = !templateError && templateDB?.conteudo;
+
+    // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============
+    let contratoHTML: string;
+    let templateUsado: string;
+
+    if (usandoTemplateBanco) {
+      // Usar template dinâmico do banco (mesma lógica do autentique-create)
+      const conteudoPreenchido = substituirVariaveis(templateDB.conteudo, templateData);
+      const conteudoHTML = markdownParaHTML(conteudoPreenchido);
+      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData);
+
+      contratoHTML = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Termo de Afiliação - ${contrato.numero}</title>
+  ${generateStyles()}
+</head>
+<body>
+  <div class="page">
+    ${generateHeader(templateData)}
+    ${conteudoHTML}
+    ${aditivosHTML}
+    ${generateSecaoAssinatura(templateData)}
+    ${generateFooter(templateData)}
+  </div>
+</body>
+</html>`;
+      templateUsado = `${templateDB.codigo} (banco de dados)`;
+    } else {
+      // Fallback: template hardcoded + aditivos dinâmicos
+      contratoHTML = generateTermoAfiliacao(templateData);
+      
+      // Injetar aditivos dinâmicos antes do </body>
+      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData);
+      if (aditivosHTML) {
+        contratoHTML = contratoHTML.replace('</body>', `${aditivosHTML}</body>`);
+      }
+      templateUsado = "Termo de Afiliação (hardcoded fallback + aditivos dinâmicos)";
+    }
+
+    console.log(`[autentique-create-by-token] Template usado: ${templateUsado}`);
     console.log('[autentique-create-by-token] HTML gerado, tamanho:', contratoHTML.length, 'bytes');
 
     // ============= ENVIAR PARA AUTENTIQUE =============
@@ -379,7 +429,7 @@ serve(async (req) => {
       dados: { 
         autentique_id: document.id, 
         link: signatureLink,
-        template_usado: "Termo de Afiliação v2"
+        template_usado: templateUsado
       },
     });
 
