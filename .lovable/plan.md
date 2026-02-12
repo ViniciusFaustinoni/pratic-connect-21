@@ -1,37 +1,49 @@
 
-# Termo de Saida de Veiculo - Conclusao de OS
+
+# Termo de Cancelamento + Troca de Titularidade via IA
 
 ## Resumo
 
-Criar um novo fluxo de assinatura digital "Termo de Saida de Veiculo", acionado quando uma Ordem de Servico (OS) e marcada como "concluido". O termo sera enviado para assinatura via Autentique, o associado recebera uma mensagem no WhatsApp informando que o veiculo esta pronto, e o modal da OS exibira o link de assinatura com atualizacao em tempo real.
+Implementar um fluxo completo onde o associado, via IA (chat ou WhatsApp), pode solicitar **cancelamento** ou **troca de titularidade**. A IA coleta os dados, cria a solicitacao pendente, agenda vistoria (com retirada de rastreador no cancelamento) e gera o **Termo de Cancelamento** para assinatura via Autentique.
 
 ---
 
-## Arquitetura do Fluxo
+## Visao Geral do Fluxo
 
 ```text
-OS marcada como "concluido" (OSStatusDialog ou botao dedicado)
+Associado fala com IA (App Chat ou WhatsApp)
+  "Quero cancelar" ou "Quero trocar a titularidade"
         |
         v
-1. WhatsApp: Envia mensagem ao associado ("Veiculo pronto!")
-2. Edge Function: autentique-os-saida-create
-   - Busca template do tipo "termo_saida_veiculo"
-   - Substitui variaveis (OS, oficina, associado, veiculo, sinistro)
-   - Envia HTML para Autentique API
-   - Salva autentique_documento_id e autentique_url na tabela ordens_servico
+IA confirma intencao e coleta dados:
+  - CANCELAMENTO: motivo, confirmacao
+  - TROCA TITULARIDADE: dados do novo titular (nome, CPF, email, telefone)
         |
         v
-Modal de Conclusao de OS
-  - Exibe dados de contato do associado (telefone, whatsapp, email)
-  - Botao "Enviar para Assinatura" -> chama a edge function
-  - Exibe link de assinatura (copiar / WhatsApp)
-  - Polling automatico detecta assinatura e atualiza a tela
-  - Quando assinado: badge verde "Veiculo Liberado"
+IA cria solicitacao em chat_solicitacoes_ia
+  tipo = "cancelamento" ou "troca_titularidade"
+  status = "pendente"
         |
         v
-Webhook Autentique (autentique-webhook)
-  - Fallback: busca em ordens_servico.autentique_documento_id
-  - Atualiza termo_saida_assinado = true, salva PDF
+Diretor aprova em SolicitacoesIA.tsx
+        |
+        v
+Edge Function aprovar-solicitacao-ia:
+  1. Agenda vistoria do tipo adequado
+  2. Se CANCELAMENTO: tipo_servico = vistoria_retirada (retirada de rastreador)
+  3. Se TROCA: tipo_servico = vistoria_entrada (vistoria do veiculo para novo titular)
+  4. Envia link de envio de documentos (troca) ou notificacao (cancelamento)
+        |
+        v
+Vistoriador executa vistoria (mesmo fluxo existente)
+  - Fotos, video, assinatura
+  - Se CANCELAMENTO: informa IMEI do rastreador retirado (atribui ao seu porte)
+  - Se TROCA: vistoria completa do veiculo
+        |
+        v
+Pos-vistoria:
+  CANCELAMENTO -> Gera Termo de Cancelamento (Autentique) -> Associado assina
+  TROCA -> Gera Termo de Cancelamento para titular atual + Termo de Filiacao para novo titular
 ```
 
 ---
@@ -40,70 +52,96 @@ Webhook Autentique (autentique-webhook)
 
 ### 1. Banco de Dados
 
-**Adicionar colunas na tabela `ordens_servico`:**
-- `autentique_documento_id` (text, nullable)
-- `autentique_url` (text, nullable)
-- `termo_saida_assinado` (boolean, default false)
-- `termo_saida_assinado_em` (timestamptz, nullable)
-- `termo_saida_url` (text, nullable) - URL do PDF assinado
+**Novo document_type:**
+- `code: 'termo_cancelamento'`, `name: 'Termo de Cancelamento'`
 
-**Inserir novo `document_type`:**
-- `code: 'termo_saida_veiculo'`, `name: 'Termo de Saida de Veiculo'`
+**Adicionar colunas em `chat_solicitacoes_ia`:**
+- `dados_novo_titular` (jsonb, nullable) - para troca de titularidade (nome, CPF, email, telefone do novo associado)
 
-### 2. Nova Edge Function: `autentique-os-saida-create`
+**Nota:** Os tipos `tipo_servico` do enum `tipo_servico` ja incluem `vistoria_retirada` (para cancelamento). Para troca de titularidade, sera usada uma nova vistoria do tipo `instalacao` ou `vistoria_entrada` para o novo titular. O campo `origem` da tabela `servicos` sera usado para identificar a origem ("troca_titularidade" ou "cancelamento_ia").
 
-Recebe `ordem_servico_id` como parametro:
-- Busca OS com associado, veiculo, oficina e sinistro vinculado
-- Busca template is_default do tipo `termo_saida_veiculo`
-- Cria mapeamento de variaveis especificas da OS:
-  - `os.numero`, `os.data_entrada`, `os.data_conclusao`, `os.valor_orcamento`, `os.valor_aprovado`
-  - `oficina.nome`, `oficina.cnpj`, `oficina.endereco`, `oficina.telefone`
-  - Variaveis de associado, veiculo, evento (se vinculado) e empresa
-- Gera HTML com layout padrao (generateStyles, generateHeader adaptado)
-- Envia para Autentique, salva IDs na tabela ordens_servico
+### 2. Atualizar `assistente-chat` (IA do App)
 
-### 3. Atualizar `autentique-webhook`
+Adicionar ao SYSTEM_PROMPT novas instrucoes:
+- Reconhecer intencoes de "cancelar", "sair da associacao", "trocar titularidade", "vendi meu carro"
+- Fluxo de **cancelamento**: confirmar intencao, coletar motivo, avisar sobre retirada de rastreador obrigatoria, criar solicitacao
+- Fluxo de **troca de titularidade**: confirmar intencao, coletar dados do novo titular (nome, CPF, email, telefone), criar solicitacao
 
-Adicionar terceiro fallback apos sinistros:
-- Buscar em `ordens_servico.autentique_documento_id`
-- Se encontrar OS e evento for `signature.accepted`:
-  - Atualizar `termo_saida_assinado = true`, `termo_saida_assinado_em`, `termo_saida_url`
-  - Registrar em `ordens_servico_historico`
+Adicionar novas tools:
+- `criar_solicitacao_cancelamento`: cria solicitacao com tipo "cancelamento" e dados (motivo, confirmacao)
+- `criar_solicitacao_troca_titularidade`: cria solicitacao com tipo "troca_titularidade" e dados (novo_nome, novo_cpf, novo_email, novo_telefone)
 
-### 4. Novo Componente: `OSConclusaoModal`
+### 3. Atualizar `whatsapp-webhook` (IA do WhatsApp)
 
-Modal dedicado para a conclusao da OS, exibido quando o status muda para "concluido":
+Espelhar as mesmas novas tools e instrucoes do `assistente-chat` para que o fluxo funcione tambem via WhatsApp.
 
-- **Dados do associado**: nome, telefone, whatsapp, email (com botoes de acao)
-- **Botao "Enviar para Assinatura"**: chama `autentique-os-saida-create`
-- **Link de assinatura**: exibido apos envio, com botao copiar e botao WhatsApp
-- **Status em tempo real**: polling a cada 15s via `useAutentiqueStatus`
-- **Badge "Veiculo Liberado"**: quando `termo_saida_assinado = true`
+### 4. Atualizar `aprovar-solicitacao-ia`
 
-### 5. Integrar na pagina `OrdemServicoDetalhe.tsx`
+Adicionar tratamento para os novos tipos:
 
-- Adicionar botao/opcao "Concluir OS" no dropdown de acoes (quando status permite)
-- Ao clicar, abre o `OSConclusaoModal`
-- O modal:
-  1. Atualiza status para "concluido"
-  2. Envia WhatsApp ao associado (veiculo pronto)
-  3. Permite enviar termo para assinatura
-- Card de assinatura visivel na pagina de detalhe quando `autentique_url` existir
+**Cancelamento:**
+- Criar servico do tipo `vistoria_retirada` (agendamento de retirada de rastreador)
+- Enviar WhatsApp notificando agendamento
+- Marcar origem = 'cancelamento_ia'
 
-### 6. Envio de WhatsApp na conclusao
+**Troca de titularidade:**
+- Criar servico do tipo `vistoria_entrada` para vistoria do veiculo
+- Gerar link unico para o novo titular enviar documentos (usar fluxo existente de cotacao/link ou criar pagina publica simplificada)
+- Enviar WhatsApp notificando ambos (titular atual e novo)
+- Marcar origem = 'troca_titularidade'
 
-Quando a OS e marcada como concluida, enviar mensagem via `whatsapp-send-text`:
-- Mensagem: "Ola [nome]! Seu veiculo [marca modelo] placa [placa] esta pronto! O reparo na oficina [oficina] foi concluido. Voce recebera um termo de saida para assinatura. Duvidas? Entre em contato."
+### 5. Atualizar `SolicitacoesIA.tsx`
 
-### 7. Variaveis do VariaveisSelector
+- Reconhecer e exibir os novos tipos "cancelamento" e "troca_titularidade"
+- Exibir dados do novo titular (quando troca)
+- Exibir motivo (quando cancelamento)
+- Icones e labels adequados
 
-Adicionar novo grupo "evento" com as variaveis ja existentes no backend e novo grupo "os" (Ordem de Servico):
-- `os.numero`, `os.data_entrada`, `os.data_conclusao`, `os.valor_orcamento`, `os.valor_aprovado`, `os.observacoes`
-- `oficina.nome`, `oficina.cnpj`, `oficina.telefone`, `oficina.endereco`
+### 6. Nova Edge Function: `autentique-cancelamento-create`
 
-### 8. Template de variaveis da OS em `template-utils.ts`
+Gera o Termo de Cancelamento via Autentique:
+- Busca template do tipo `termo_cancelamento`
+- Substitui variaveis: associado, veiculo, contrato, motivo, data
+- Envia para Autentique
+- Salva documento_id no contrato ou no registro de cancelamento
 
-Adicionar funcao de mapeamento para variaveis de OS/oficina que a nova edge function usara.
+Variaveis do template:
+```text
+associado.nome, cpf, telefone, email, endereco
+veiculo.placa, marca, modelo, ano, cor, chassi
+contrato.numero, data_inicio, valor_mensal
+cancelamento.motivo, cancelamento.data
+empresa.*
+sistema.data_atual
+```
+
+### 7. Integrar assinatura no fluxo de conclusao
+
+**Cancelamento:**
+- Apos a vistoria de retirada ser concluida (concluir-retirada), gerar automaticamente o Termo de Cancelamento via `autentique-cancelamento-create`
+- Associado assina via email (Autentique)
+- Webhook atualiza status
+
+**Troca de titularidade:**
+- Apos vistoria concluida:
+  1. Gerar Termo de Cancelamento para titular atual -> assina
+  2. Criar novo associado/contrato com dados do novo titular
+  3. Gerar Termo de Filiacao para novo titular (autentique-create existente) -> assina
+  4. Transferir veiculo para o novo associado
+
+### 8. Atualizar `autentique-webhook`
+
+Adicionar fallback para Termos de Cancelamento (buscar em contratos por um novo campo ou tabela de cancelamentos).
+
+### 9. Fluxo do Vistoriador (App)
+
+Para **cancelamento com retirada**: O fluxo ja existe via `vistoria_retirada`. O vistoriador:
+- Informa o IMEI do rastreador retirado
+- O rastreador e atribuido ao porte do profissional (portador_id)
+- Status do rastreador muda para 'estoque'
+- Tudo isso ja funciona via `concluir-retirada`
+
+Para **troca de titularidade**: Usa o fluxo de vistoria padrao (fotos, video, assinatura).
 
 ---
 
@@ -111,62 +149,89 @@ Adicionar funcao de mapeamento para variaveis de OS/oficina que a nova edge func
 
 | Arquivo | Acao |
 |---|---|
-| Migration SQL | Colunas em ordens_servico + novo document_type |
-| `supabase/functions/autentique-os-saida-create/index.ts` | NOVO |
-| `supabase/functions/autentique-webhook/index.ts` | Fallback para ordens_servico |
-| `src/components/oficinas/OSConclusaoModal.tsx` | NOVO - Modal de conclusao |
-| `src/pages/oficina/OrdemServicoDetalhe.tsx` | Integrar modal + card assinatura |
-| `src/hooks/useOrdensServico.ts` | Incluir campos autentique no select |
-| `src/components/documentos/VariaveisSelector.tsx` | Grupos evento e os |
-| `supabase/functions/_shared/template-utils.ts` | Variaveis OS/oficina |
+| Migration SQL | Novo document_type + coluna dados_novo_titular |
+| `supabase/functions/assistente-chat/index.ts` | Novas tools e instrucoes |
+| `supabase/functions/whatsapp-webhook/index.ts` | Novas tools e instrucoes |
+| `supabase/functions/aprovar-solicitacao-ia/index.ts` | Tratar cancelamento e troca |
+| `supabase/functions/autentique-cancelamento-create/index.ts` | NOVO |
+| `supabase/functions/autentique-webhook/index.ts` | Fallback cancelamento |
+| `supabase/functions/concluir-retirada/index.ts` | Chamar autentique-cancelamento apos conclusao |
+| `supabase/functions/_shared/template-utils.ts` | Variaveis de cancelamento |
+| `src/pages/diretoria/SolicitacoesIA.tsx` | Exibir novos tipos |
 | `supabase/config.toml` | Registrar nova edge function |
 
 ---
 
 ## Detalhes Tecnicos
 
-### Novas variaveis para templates de OS:
+### Novas tools no assistente-chat:
 ```text
-os.numero
-os.data_entrada
-os.data_conclusao
-os.data_previsao
-os.valor_orcamento
-os.valor_aprovado
-os.observacoes
-oficina.nome
-oficina.cnpj
-oficina.telefone
-oficina.whatsapp
-oficina.endereco
+criar_solicitacao_cancelamento:
+  - motivo (string): Motivo do cancelamento
+  - confirmacao (boolean): Associado confirmou que deseja cancelar
+
+criar_solicitacao_troca_titularidade:
+  - novo_nome (string): Nome completo do novo titular
+  - novo_cpf (string): CPF do novo titular
+  - novo_email (string): Email do novo titular
+  - novo_telefone (string): Telefone/WhatsApp do novo titular
+  - motivo (string): "venda_veiculo" ou outro
 ```
 
-### Mensagem WhatsApp na conclusao:
+### Instrucoes adicionais para a IA:
 ```text
-Ola {{associado.nome}}!
+## CANCELAMENTO E TROCA DE TITULARIDADE
 
-Seu veiculo *{{veiculo.marca}} {{veiculo.modelo}}* placa *{{veiculo.placa}}* esta pronto!
+Quando o associado manifestar interesse em:
+- "Quero cancelar", "Quero sair", "Nao quero mais"
+- "Vendi meu carro", "Quero trocar o titular"
 
-O reparo na oficina *{{oficina.nome}}* foi concluido com sucesso.
+### Cancelamento:
+1. Confirme: "Voce tem certeza que deseja cancelar sua filiacao?"
+2. Colete motivo
+3. Informe: "Sera necessario agendar a retirada do rastreador do veiculo"
+4. Crie a solicitacao
 
-Voce recebera um Termo de Saida de Veiculo no seu email para assinatura digital.
+### Troca de Titularidade:
+1. Confirme: "Voce vendeu o veiculo e deseja transferir para o novo proprietario?"
+2. Colete: nome, CPF, email e telefone do novo titular
+3. Informe: "Sera agendada uma vistoria do veiculo e o novo titular recebera um link para envio de documentos"
+4. Crie a solicitacao
+```
 
-Em caso de duvidas, entre em contato conosco.
+### Mensagem WhatsApp apos aprovacao (cancelamento):
+```text
+Ola {{associado.nome}},
+
+Sua solicitacao de cancelamento foi recebida.
+
+Sera agendada a retirada do rastreador do seu veiculo *{{veiculo.marca}} {{veiculo.modelo}}* placa *{{veiculo.placa}}*.
+
+Voce recebera o agendamento em breve.
 
 ABP PraticCar
 ```
 
-### OSConclusaoModal - Comportamento:
-1. Ao abrir: mostra dados do associado (contato) + resumo da OS
-2. Botao "Concluir e Notificar": muda status para concluido + envia WhatsApp
-3. Botao "Enviar Termo para Assinatura": chama edge function
-4. Apos envio: exibe link com polling automatico
-5. Quando assinado: mostra badge verde "Veiculo Liberado" + link PDF
-
-### Webhook - Terceiro fallback:
+### Mensagem WhatsApp apos aprovacao (troca titularidade):
 ```text
-1. Buscar em contratos.autentique_documento_id
-2. Se nao encontrar -> buscar em sinistros.autentique_documento_id
-3. Se nao encontrar -> buscar em ordens_servico.autentique_documento_id
-4. Se encontrar OS: atualizar termo_saida_assinado, salvar PDF
+Ola {{associado.nome}},
+
+Sua solicitacao de troca de titularidade foi recebida.
+
+Sera agendada uma vistoria do veiculo *{{veiculo.marca}} {{veiculo.modelo}}* placa *{{veiculo.placa}}*.
+
+O novo titular recebera um link para envio de documentos.
+
+ABP PraticCar
 ```
+
+### Sequencia de execucao recomendada:
+1. Migration (document_type + coluna)
+2. Edge function `autentique-cancelamento-create`
+3. Atualizar `assistente-chat` e `whatsapp-webhook` (tools)
+4. Atualizar `aprovar-solicitacao-ia` (novos tipos)
+5. Atualizar `SolicitacoesIA.tsx` (UI)
+6. Atualizar `autentique-webhook` (fallback)
+7. Atualizar `concluir-retirada` (gerar termo apos retirada)
+8. Deploy de todas as edge functions
+
