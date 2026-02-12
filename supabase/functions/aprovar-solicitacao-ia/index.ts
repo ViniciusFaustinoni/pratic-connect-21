@@ -226,13 +226,11 @@ serve(async (req) => {
       // Criar chamado de assistência
       console.log("[aprovar-solicitacao-ia] Criando assistência...", dados);
 
-      // Gerar protocolo
       const now = new Date();
       const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
       const random = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
       const protocolo = `ASS-${dateStr}-${random}`;
 
-      // Buscar veículo se não informado
       let veiculoId = dados.veiculo_id;
       if (!veiculoId) {
         const { data: veiculos } = await supabaseAdmin
@@ -244,7 +242,6 @@ serve(async (req) => {
         veiculoId = veiculos?.[0]?.id;
       }
 
-      // Criar chamado
       const { data: chamado, error: chamError } = await supabaseAdmin
         .from("chamados_assistencia")
         .insert({
@@ -271,6 +268,151 @@ serve(async (req) => {
 
       resultado_id = chamado.id;
       resultado_protocolo = chamado.protocolo;
+
+    } else if (solicitacao.tipo === "cancelamento") {
+      // CANCELAMENTO: Criar serviço de vistoria_retirada
+      console.log("[aprovar-solicitacao-ia] Processando cancelamento...", dados);
+
+      let veiculoId = dados.veiculo_id;
+      if (!veiculoId) {
+        const { data: veiculos } = await supabaseAdmin
+          .from("veiculos")
+          .select("id")
+          .eq("associado_id", solicitacao.associado_id)
+          .eq("status", "ativo")
+          .limit(1);
+        veiculoId = veiculos?.[0]?.id;
+      }
+
+      // Criar serviço de retirada de rastreador
+      const { data: servico, error: servError } = await supabaseAdmin
+        .from("servicos")
+        .insert({
+          tipo: "vistoria_retirada",
+          tipo_servico: "vistoria_retirada",
+          status: "pendente",
+          associado_id: solicitacao.associado_id,
+          veiculo_id: veiculoId,
+          origem: "cancelamento_ia",
+          motivo_retirada: dados.motivo as string || "solicitacao_associado",
+          observacoes: `Cancelamento solicitado via IA. Motivo: ${dados.motivo || "Não informado"}`,
+        })
+        .select("id")
+        .single();
+
+      if (servError) {
+        console.error("[aprovar-solicitacao-ia] Erro ao criar serviço de retirada:", servError);
+        return new Response(JSON.stringify({ success: false, error: "Erro ao criar serviço de retirada" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      resultado_id = servico.id;
+      resultado_protocolo = `RET-${servico.id.substring(0, 8).toUpperCase()}`;
+
+      // Enviar WhatsApp notificando o associado
+      try {
+        const { data: associado } = await supabaseAdmin
+          .from("associados")
+          .select("nome, whatsapp, telefone")
+          .eq("id", solicitacao.associado_id)
+          .single();
+
+        const { data: veiculo } = await supabaseAdmin
+          .from("veiculos")
+          .select("marca, modelo, placa")
+          .eq("id", veiculoId)
+          .maybeSingle();
+
+        if (associado) {
+          const telefoneAssociado = associado.whatsapp || associado.telefone;
+          if (telefoneAssociado) {
+            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de cancelamento foi recebida.\n\nSerá agendada a retirada do rastreador do seu veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nVocê receberá o agendamento em breve.\n\nABP PraticCar`;
+
+            await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({ telefone: telefoneAssociado, mensagem }),
+            });
+          }
+        }
+      } catch (whatsErr) {
+        console.error("[aprovar-solicitacao-ia] Erro ao enviar WhatsApp de cancelamento:", whatsErr);
+      }
+
+    } else if (solicitacao.tipo === "troca_titularidade") {
+      // TROCA DE TITULARIDADE: Criar serviço de vistoria para o veículo
+      console.log("[aprovar-solicitacao-ia] Processando troca de titularidade...", dados);
+
+      const dadosNovoTitular = solicitacao.dados_novo_titular as Record<string, string> | null;
+
+      let veiculoId = dados.veiculo_id;
+      if (!veiculoId) {
+        const { data: veiculos } = await supabaseAdmin
+          .from("veiculos")
+          .select("id")
+          .eq("associado_id", solicitacao.associado_id)
+          .eq("status", "ativo")
+          .limit(1);
+        veiculoId = veiculos?.[0]?.id;
+      }
+
+      // Criar serviço de vistoria para troca
+      const { data: servico, error: servError } = await supabaseAdmin
+        .from("servicos")
+        .insert({
+          tipo: "vistoria",
+          tipo_servico: "vistoria_entrada",
+          status: "pendente",
+          associado_id: solicitacao.associado_id,
+          veiculo_id: veiculoId,
+          origem: "troca_titularidade",
+          observacoes: `Troca de titularidade via IA. Novo titular: ${dadosNovoTitular?.nome || "N/I"} (CPF: ${dadosNovoTitular?.cpf || "N/I"})`,
+        })
+        .select("id")
+        .single();
+
+      if (servError) {
+        console.error("[aprovar-solicitacao-ia] Erro ao criar vistoria de troca:", servError);
+        return new Response(JSON.stringify({ success: false, error: "Erro ao criar vistoria" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      resultado_id = servico.id;
+      resultado_protocolo = `TRC-${servico.id.substring(0, 8).toUpperCase()}`;
+
+      // Enviar WhatsApp notificando ambos
+      try {
+        const { data: associado } = await supabaseAdmin
+          .from("associados")
+          .select("nome, whatsapp, telefone")
+          .eq("id", solicitacao.associado_id)
+          .single();
+
+        const { data: veiculo } = await supabaseAdmin
+          .from("veiculos")
+          .select("marca, modelo, placa")
+          .eq("id", veiculoId)
+          .maybeSingle();
+
+        if (associado) {
+          const telefoneAssociado = associado.whatsapp || associado.telefone;
+          if (telefoneAssociado) {
+            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de troca de titularidade foi recebida.\n\nSerá agendada uma vistoria do veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nO novo titular receberá um link para envio de documentos.\n\nABP PraticCar`;
+
+            await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({ telefone: telefoneAssociado, mensagem }),
+            });
+          }
+        }
+      } catch (whatsErr) {
+        console.error("[aprovar-solicitacao-ia] Erro ao enviar WhatsApp de troca:", whatsErr);
+      }
     }
 
     // Atualizar solicitação como aprovada
@@ -286,10 +428,16 @@ serve(async (req) => {
 
     console.log(`[aprovar-solicitacao-ia] Solicitação ${solicitacao_id} aprovada - ${solicitacao.tipo} ${resultado_protocolo}`);
 
+    const tipoLabel = solicitacao.tipo === "sinistro" ? "Sinistro"
+      : solicitacao.tipo === "assistencia" ? "Assistência"
+      : solicitacao.tipo === "cancelamento" ? "Cancelamento"
+      : solicitacao.tipo === "troca_titularidade" ? "Troca de Titularidade"
+      : solicitacao.tipo;
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: `${solicitacao.tipo === "sinistro" ? "Sinistro" : "Assistência"} criado com sucesso`,
+        message: `${tipoLabel} processado com sucesso`,
         resultado_id,
         protocolo: resultado_protocolo,
       }),

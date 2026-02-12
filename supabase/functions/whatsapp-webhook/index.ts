@@ -319,8 +319,25 @@ const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsAp
 ## Formato de Resposta
 - Respostas curtas e diretas (máximo 3-4 parágrafos)
 - Use emojis com moderação 🚗
-- Quebre mensagens longas em partes`;
+- Quebre mensagens longas em partes
 
+## CANCELAMENTO E TROCA DE TITULARIDADE
+
+Quando o associado manifestar interesse em:
+- "Quero cancelar", "Quero sair", "Não quero mais"
+- "Vendi meu carro", "Quero trocar o titular"
+
+### Cancelamento:
+1. Confirme: "Você tem certeza que deseja cancelar sua filiação?"
+2. Colete o motivo
+3. Informe: "Será necessário agendar a retirada do rastreador do veículo"
+4. Crie a solicitação com criar_solicitacao_cancelamento
+
+### Troca de Titularidade:
+1. Confirme: "Você vendeu o veículo e deseja transferir para o novo proprietário?"
+2. Colete: nome, CPF, email e telefone do novo titular
+3. Informe: "Será agendada uma vistoria do veículo e o novo titular receberá um link para envio de documentos"
+4. Crie a solicitação com criar_solicitacao_troca_titularidade`;
 // System prompt para confirmação de agendamento
 const CONFIRMACAO_SYSTEM_PROMPT = `Você é o Assistente de Confirmação de Agendamentos da PRATIC.
 
@@ -579,6 +596,39 @@ const tools = [
     name: "enviar_contato_prestador",
     description: "Envia o cartão de contato do prestador de serviço (guincho, chaveiro, etc.) do chamado de assistência ativo. Use quando o associado quiser o contato do guincho ou prestador.",
     parameters: { type: "object", properties: {}, required: [] },
+  },
+},
+{
+  type: "function",
+  function: {
+    name: "criar_solicitacao_cancelamento",
+    description: "Cria uma solicitação de cancelamento de filiação. Use APENAS após confirmar que o associado realmente deseja cancelar e coletar o motivo.",
+    parameters: {
+      type: "object",
+      properties: {
+        motivo: { type: "string", description: "Motivo do cancelamento" },
+        confirmacao: { type: "boolean", description: "Se o associado confirmou o cancelamento" },
+      },
+      required: ["motivo", "confirmacao"],
+    },
+  },
+},
+{
+  type: "function",
+  function: {
+    name: "criar_solicitacao_troca_titularidade",
+    description: "Cria uma solicitação de troca de titularidade. Use APENAS após coletar todos os dados do novo titular.",
+    parameters: {
+      type: "object",
+      properties: {
+        novo_nome: { type: "string", description: "Nome completo do novo titular" },
+        novo_cpf: { type: "string", description: "CPF do novo titular" },
+        novo_email: { type: "string", description: "Email do novo titular" },
+        novo_telefone: { type: "string", description: "Telefone/WhatsApp do novo titular" },
+        motivo: { type: "string", description: "Motivo da troca" },
+      },
+      required: ["novo_nome", "novo_cpf", "novo_email", "novo_telefone"],
+    },
   },
 },
 ];
@@ -1261,6 +1311,71 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
           message: "Erro ao enviar contato. Tente novamente mais tarde."
         });
       }
+    }
+
+    case "criar_solicitacao_cancelamento": {
+      if (!args.confirmacao) {
+        return JSON.stringify({ sucesso: false, message: "O associado precisa confirmar que deseja cancelar." });
+      }
+
+      const { data: veiculos } = await supabase
+        .from("veiculos")
+        .select("id")
+        .eq("associado_id", associadoId)
+        .eq("status", "ativo")
+        .limit(1);
+
+      const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
+        associado_id: associadoId,
+        tipo: "cancelamento",
+        dados: {
+          veiculo_id: veiculos?.[0]?.id,
+          motivo: args.motivo,
+          confirmacao: true,
+          origem: "whatsapp",
+        },
+        status: "pendente",
+      }).select("id").single();
+
+      if (error) throw error;
+
+      return JSON.stringify({
+        sucesso: true,
+        message: "Solicitação de cancelamento registrada! A diretoria irá analisar. Será necessário agendar a retirada do rastreador.",
+      });
+    }
+
+    case "criar_solicitacao_troca_titularidade": {
+      const { data: veiculos } = await supabase
+        .from("veiculos")
+        .select("id")
+        .eq("associado_id", associadoId)
+        .eq("status", "ativo")
+        .limit(1);
+
+      const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
+        associado_id: associadoId,
+        tipo: "troca_titularidade",
+        dados: {
+          veiculo_id: veiculos?.[0]?.id,
+          motivo: args.motivo || "venda_veiculo",
+          origem: "whatsapp",
+        },
+        dados_novo_titular: {
+          nome: args.novo_nome,
+          cpf: args.novo_cpf,
+          email: args.novo_email,
+          telefone: args.novo_telefone,
+        },
+        status: "pendente",
+      }).select("id").single();
+
+      if (error) throw error;
+
+      return JSON.stringify({
+        sucesso: true,
+        message: "Solicitação de troca de titularidade registrada! A diretoria irá analisar. Será agendada uma vistoria do veículo.",
+      });
     }
 
     default:

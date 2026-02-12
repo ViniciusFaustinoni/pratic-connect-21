@@ -384,6 +384,36 @@ Deno.serve(async (req) => {
       console.log('Substituição de veículo: associado permanece ativo, pós-retirada não executada');
     }
 
+    // 15. Se origem for cancelamento_ia, gerar Termo de Cancelamento automaticamente
+    let termoCancelamentoResult = null;
+    const { data: servicoCompleto } = await supabase
+      .from('servicos')
+      .select('origem')
+      .eq('id', servicoId)
+      .single();
+
+    if (servicoCompleto?.origem === 'cancelamento_ia' && associadoId) {
+      try {
+        console.log('Gerando Termo de Cancelamento automaticamente...');
+        const termoResponse = await fetch(`${supabaseUrl}/functions/v1/autentique-cancelamento-create`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            associado_id: associadoId,
+            motivo: servicoData?.motivo_retirada || 'Solicitação do associado via IA',
+          }),
+        });
+        termoCancelamentoResult = await termoResponse.json();
+        console.log('Resultado autentique-cancelamento-create:', JSON.stringify(termoCancelamentoResult));
+      } catch (err) {
+        console.error('Erro ao gerar termo de cancelamento:', err);
+        termoCancelamentoResult = { success: false, error: String(err) };
+      }
+    }
+
     const tempoTotal = Date.now() - startTime;
     console.log('=== RETIRADA CONCLUÍDA COM SUCESSO ===');
     console.log('Tempo total:', tempoTotal, 'ms');
@@ -403,6 +433,7 @@ Deno.serve(async (req) => {
         plataformaErro,
         novoServicoInstalacaoId,
         posRetiradaResult,
+        termoCancelamentoResult,
         tempoTotal,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
