@@ -383,3 +383,6 @@ verify_jwt = false
 
 [functions.autentique-evento-create]
 verify_jwt = false
+
+[functions.autentique-os-saida-create]
+verify_jwt = false

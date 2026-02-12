@@ -477,7 +477,92 @@ serve(async (req) => {
         );
       }
 
-      console.log("[autentique-webhook] ❌ Documento NÃO ENCONTRADO em contratos nem sinistros");
+      // ========== FALLBACK 3: Buscar em ordens_servico ==========
+      console.log("[autentique-webhook] Sinistro não encontrado, tentando buscar em ordens_servico...");
+
+      const { data: osDoc, error: osError } = await supabase
+        .from("ordens_servico")
+        .select(`
+          *,
+          associado:associados(id, nome, cpf, telefone, whatsapp, email)
+        `)
+        .eq("autentique_documento_id", documentId)
+        .maybeSingle();
+
+      if (!osError && osDoc) {
+        console.log(`[autentique-webhook] ✓ Ordem de Serviço encontrada: ${osDoc.numero}`);
+
+        const signerData = payload.event?.data?.user;
+        const signerName = signerData?.name || osDoc.associado?.nome || "Associado";
+
+        if (eventType === "signature.accepted" || (eventType === "signature.updated" && payload.event?.data?.signed)) {
+          console.log(`[autentique-webhook] 🎉 Termo de Saída de Veículo OS ${osDoc.numero} ASSINADO por ${signerName}`);
+
+          await supabase
+            .from("ordens_servico")
+            .update({
+              termo_saida_assinado: true,
+              termo_saida_assinado_em: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", osDoc.id);
+
+          // Registrar histórico
+          await supabase.from("ordens_servico_historico").insert({
+            ordem_servico_id: osDoc.id,
+            status_novo: osDoc.status,
+            observacao: `Termo de Saída de Veículo assinado eletronicamente por ${signerName} via Autentique`,
+          });
+
+          // Tentar baixar PDF assinado
+          try {
+            const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
+            if (autentiqueApiKey) {
+              const pdfQuery = `query { document(id: "${documentId}") { files { signed } } }`;
+              const pdfResp = await fetch(AUTENTIQUE_API_URL, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${autentiqueApiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ query: pdfQuery }),
+              });
+              const pdfData = await pdfResp.json();
+              const signedUrl = pdfData.data?.document?.files?.signed;
+
+              if (signedUrl) {
+                const pdfResponse = await fetch(signedUrl);
+                if (pdfResponse.ok) {
+                  const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer());
+                  const fileName = `ordens-servico/${osDoc.id}/termo-saida-assinado-${Date.now()}.pdf`;
+
+                  await supabase.storage.from("contratos-assinados").upload(fileName, pdfBytes, {
+                    contentType: "application/pdf",
+                    upsert: false,
+                  });
+
+                  const { data: urlData } = supabase.storage.from("contratos-assinados").getPublicUrl(fileName);
+
+                  await supabase
+                    .from("ordens_servico")
+                    .update({ termo_saida_url: urlData.publicUrl })
+                    .eq("id", osDoc.id);
+
+                  console.log("[autentique-webhook] ✓ PDF assinado do termo de saída salvo");
+                }
+              }
+            }
+          } catch (pdfErr: any) {
+            console.error("[autentique-webhook] Erro ao baixar PDF do termo de saída:", pdfErr.message);
+          }
+        } else if (eventType === "signature.viewed") {
+          console.log(`[autentique-webhook] Termo de saída OS ${osDoc.numero} visualizado`);
+        }
+
+        return new Response(
+          JSON.stringify({ received: true, processed: eventType, type: "ordem_servico", documentId }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log("[autentique-webhook] ❌ Documento NÃO ENCONTRADO em contratos, sinistros nem ordens_servico");
       return new Response(JSON.stringify({ received: true, message: "Document not found" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

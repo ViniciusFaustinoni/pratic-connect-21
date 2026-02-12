@@ -11,6 +11,7 @@ import { useOrdemServico, useOSItens, useOSHistorico, useDeleteOSItem } from '@/
 import { OSStatusDialog } from '@/components/oficinas/OSStatusDialog';
 import { OSItemFormDialog } from '@/components/oficinas/OSItemFormDialog';
 import { OSTimeline } from '@/components/oficinas/OSTimeline';
+import { OSConclusaoModal } from '@/components/oficinas/OSConclusaoModal';
 import { useState } from 'react';
 import {
   STATUS_ORDEM_SERVICO_LABELS,
@@ -23,6 +24,7 @@ export default function OrdemServicoDetalhe() {
   const navigate = useNavigate();
   const [statusOpen, setStatusOpen] = useState(false);
   const [itemOpen, setItemOpen] = useState(false);
+  const [conclusaoOpen, setConclusaoOpen] = useState(false);
 
   const { data: os, isLoading } = useOrdemServico(id);
   const { data: itens } = useOSItens(id);
@@ -64,7 +66,17 @@ export default function OrdemServicoDetalhe() {
             Criado em {format(new Date(os.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
           </p>
         </div>
-        <Button onClick={() => setStatusOpen(true)}>Atualizar Status</Button>
+        {os.status !== 'concluido' && os.status !== 'cancelado' && (
+          <Button variant="default" onClick={() => setConclusaoOpen(true)}>
+            Concluir OS
+          </Button>
+        )}
+        {(os.status === 'concluido' && ((os as any).autentique_url || !(os as any).termo_saida_assinado)) && (
+          <Button variant="default" onClick={() => setConclusaoOpen(true)}>
+            Termo de Saída
+          </Button>
+        )}
+        <Button variant="outline" onClick={() => setStatusOpen(true)}>Atualizar Status</Button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -200,6 +212,7 @@ export default function OrdemServicoDetalhe() {
 
       <OSStatusDialog os={os} open={statusOpen} onOpenChange={setStatusOpen} />
       <OSItemFormDialog osId={os.id} open={itemOpen} onOpenChange={setItemOpen} />
+      <OSConclusaoModal os={os} open={conclusaoOpen} onOpenChange={setConclusaoOpen} />
     </div>
   );
 }
