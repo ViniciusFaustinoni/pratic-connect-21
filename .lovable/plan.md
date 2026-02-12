@@ -1,67 +1,107 @@
 
 
-# Corrigir erro "value too long for type character varying(20)"
+# Correcao de Variaveis no Termo de Filiacao (Autentique)
 
-## Problema
+## Problema Identificado
 
-Ao salvar os dados extraidos via OCR na pagina publica de cotacao (proposta), o PATCH para a tabela `cotacoes` retorna erro 400 porque um ou mais valores extraidos pelo OCR excedem o limite de caracteres das colunas `varchar(20)`.
+Ao analisar o PDF assinado do Termo de Filiacao (CTR-20260212181635-YMYO0F), foi identificado que:
 
-As colunas afetadas sao campos que recebem dados de OCR e tem limites muito restritivos:
+1. Na pagina 1, o texto `{{plano.descricao}}` aparece como variavel bruta (nao substituida), exibido ACIMA do cabecalho da empresa
+2. Na pagina 3, a MESMA variavel esta corretamente substituida com as coberturas do plano
+3. O CNPJ da empresa aparece como `00.000.000/0001-00` (dado placeholder na tabela `configuracoes`)
 
-| Coluna | Limite Atual | Pode receber valores maiores |
-|---|---|---|
-| `cliente_rg` | varchar(20) | Sim - RG pode ter formatacao longa |
-| `cliente_rg_orgao` | varchar(20) | Sim - Ex: "DETRAN/RJ", "SSP/SP" (ok, mas OCR pode extrair texto extra) |
-| `cliente_cnh` | varchar(20) | Sim - numero da CNH com formatacao |
-| `cliente_cnh_categoria` | varchar(10) | Geralmente ok |
-| `cliente_telefone_secundario` | varchar(20) | Pode exceder com formatacao |
-| `veiculo_combustivel` | varchar(20) | Sim - Ex: "ALCOOL/GASOLINA/GNV" pode exceder |
-| `combustivel` | varchar(20) | Mesmo caso |
-| `categoria` | varchar(20) | OCR pode extrair texto longo |
-| `codigo_fipe` | varchar(20) | Geralmente ok |
-| `telefone1_solicitante` | varchar(20) | Pode exceder com formatacao |
-| `telefone2_solicitante` | varchar(20) | Pode exceder com formatacao |
+A variavel `plano.descricao` esta mapeada corretamente em `template-utils.ts` (linha 82) e a substituicao funciona (pagina 3 confirma). O problema na pagina 1 e causado pela renderizacao do Autentique: o conversor HTML-para-PDF do Autentique gera uma pagina de capa/resumo que extrai texto do HTML e exibe ANTES do conteudo renderizado. Esse texto extraido nao passa pela nossa substituicao de variaveis.
 
 ## Solucao
 
-Duas acoes combinadas:
+Duas acoes combinadas para resolver:
 
-### 1. Migration: Aumentar limites das colunas
+### 1. Remover variaveis residuais do HTML final
 
-Alterar as colunas mais propensos a erro para limites mais seguros (varchar(50) ou varchar(100)), especialmente as que recebem dados de OCR.
+Adicionar uma funcao `limparVariaveisNaoSubstituidas` que, APOS a substituicao de variaveis, remove qualquer `{{variavel}}` que nao foi mapeada, substituindo por texto vazio ou traco. Isso garante que mesmo que o Autentique extraia texto bruto, nao havera variaveis visiveis.
 
-### 2. Truncar valores no frontend antes de salvar
+### 2. Melhorar o mapeamento para cobrir edge cases
 
-Adicionar truncamento preventivo no `useCotacaoContratacao.ts` para garantir que valores nunca excedam o limite, mesmo apos o aumento.
+Garantir que o mapeamento trate todos os campos que possam vir nulos ou vazios de forma mais robusta, especialmente:
+- `plano.descricao` deve ter fallback mais robusto
+- Adicionar log de debug para variáveis nao substituidas
+
+### 3. CSS para evitar overflow na pagina 1
+
+Adicionar regras CSS que previnem content overflow na primeira pagina do PDF:
+- `page-break-before: always` no conteudo do template
+- Overflow hidden no container principal
 
 ---
 
 ## Detalhes Tecnicos
 
-### Migration SQL
+### Arquivo: `supabase/functions/_shared/template-utils.ts`
 
-```sql
-ALTER TABLE cotacoes
-  ALTER COLUMN cliente_rg TYPE varchar(50),
-  ALTER COLUMN cliente_rg_orgao TYPE varchar(50),
-  ALTER COLUMN cliente_cnh TYPE varchar(50),
-  ALTER COLUMN cliente_cnh_categoria TYPE varchar(20),
-  ALTER COLUMN veiculo_combustivel TYPE varchar(50),
-  ALTER COLUMN combustivel TYPE varchar(50),
-  ALTER COLUMN categoria TYPE varchar(50),
-  ALTER COLUMN telefone1_solicitante TYPE varchar(30),
-  ALTER COLUMN telefone2_solicitante TYPE varchar(30),
-  ALTER COLUMN cliente_telefone_secundario TYPE varchar(30);
+**Adicionar funcao de limpeza pos-substituicao (apos linha 122):**
+
+```typescript
+export function limparVariaveisNaoSubstituidas(html: string): string {
+  // Remove qualquer {{variavel}} que nao foi substituida
+  return html.replace(/\{\{[^}]+\}\}/g, '—');
+}
 ```
 
-### Truncamento no `useCotacaoContratacao.ts`
+**Atualizar `substituirVariaveis` para incluir limpeza automatica:**
 
-Adicionar funcao auxiliar `truncar(valor, max)` que limita o tamanho antes de enviar ao banco, aplicada a todos os campos varchar ao salvar dados pessoais (linhas 395-422).
+A funcao `substituirVariaveis` passara a chamar `limparVariaveisNaoSubstituidas` no final, garantindo que NENHUMA variavel bruta apareca no HTML enviado ao Autentique.
 
-### Arquivos modificados
+### Arquivo: `supabase/functions/autentique-create-by-token/index.ts`
+
+Adicionar chamada de limpeza apos gerar o HTML:
+
+```typescript
+// Apos gerar conteudoHTML
+contratoHTML = limparVariaveisNaoSubstituidas(contratoHTML);
+```
+
+Adicionar log de debug para identificar variaveis nao substituidas:
+
+```typescript
+const variaveisRestantes = contratoHTML.match(/\{\{[^}]+\}\}/g);
+if (variaveisRestantes) {
+  console.warn('[autentique-create-by-token] Variaveis nao substituidas:', variaveisRestantes);
+}
+```
+
+### CSS: Prevenir overflow na pagina de capa
+
+Adicionar ao `generateStyles()`:
+
+```css
+.page {
+  overflow: hidden;
+}
+
+.section:first-child {
+  page-break-before: avoid;
+}
+```
+
+---
+
+## Nota sobre o CNPJ
+
+O CNPJ `00.000.000/0001-00` e um dado placeholder na tabela `configuracoes` (chave `empresa_cnpj`). Isso nao e um bug de codigo — o valor precisa ser atualizado pelo administrador no banco de dados com o CNPJ real da empresa. O mesmo vale para `empresa_telefone` que esta como `(00) 0000-0000`.
+
+---
+
+## Arquivos Modificados
 
 | Arquivo | Acao |
 |---|---|
-| Migration SQL | Aumentar limites de colunas |
-| `src/hooks/useCotacaoContratacao.ts` | Truncar valores antes do update |
+| `supabase/functions/_shared/template-utils.ts` | Adicionar `limparVariaveisNaoSubstituidas` + limpeza automatica |
+| `supabase/functions/autentique-create-by-token/index.ts` | Chamar limpeza + log de debug |
+| `supabase/functions/autentique-create/index.ts` | Mesma limpeza (se existir) |
+
+## Impacto
+
+- Nenhuma variavel `{{...}}` aparecera como texto bruto nos PDFs
+- Log de variaveis nao mapeadas facilita debug futuro
+- Correcao preventiva para todos os termos (filiacao, cancelamento, saida de veiculo)
 
