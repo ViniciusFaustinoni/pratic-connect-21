@@ -9,7 +9,7 @@ export { default as NotificacoesConfig } from './Notificacoes';
 export { default as Usuarios } from './Usuarios';
 export { default as UsuarioForm } from './UsuarioForm';
 export { default as Perfis } from './Perfis';
-export { default as Empresa } from './Empresa';
+
 export { default as Integracoes } from './Integracoes';
 export { default as Logs } from './Logs';
 export { default as Sistema } from './Sistema';
