@@ -105,11 +105,9 @@ export default function TemplateForm() {
   // Inserir variável no editor TipTap na posição do cursor
   const handleInserirVariavel = (variavel: string) => {
     const ed = getTemplateEditor();
-    if (ed) {
+    if (ed && ed.isEditable) {
+      // Garante que o editor está focado antes de inserir
       ed.chain().focus().insertContent(variavel).run();
-    } else {
-      const conteudoAtual = form.getValues('conteudo');
-      form.setValue('conteudo', conteudoAtual + variavel);
     }
   };
 
