@@ -18055,6 +18055,8 @@ export type Database = {
           alerta_recem_ativado: boolean | null
           analista_id: string | null
           associado_id: string
+          autentique_documento_id: string | null
+          autentique_url: string | null
           avaliacao_comentario: string | null
           avaliacao_data: string | null
           avaliacao_nota: number | null
@@ -18133,6 +18135,8 @@ export type Database = {
           alerta_recem_ativado?: boolean | null
           analista_id?: string | null
           associado_id: string
+          autentique_documento_id?: string | null
+          autentique_url?: string | null
           avaliacao_comentario?: string | null
           avaliacao_data?: string | null
           avaliacao_nota?: number | null
@@ -18211,6 +18215,8 @@ export type Database = {
           alerta_recem_ativado?: boolean | null
           analista_id?: string | null
           associado_id?: string
+          autentique_documento_id?: string | null
+          autentique_url?: string | null
           avaliacao_comentario?: string | null
           avaliacao_data?: string | null
           avaliacao_nota?: number | null

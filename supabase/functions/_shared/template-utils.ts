@@ -544,6 +544,22 @@ export function generateSecaoAssinatura(dados: TermoAfiliacaoData): string {
 `;
 }
 
+// ============= SUBSTITUIÇÃO DE VARIÁVEIS PARA EVENTO =============
+
+/**
+ * Substitui variáveis {{...}} usando mapeamento direto (não depende de TermoAfiliacaoData)
+ */
+export function substituirVariaveisEvento(conteudo: string, variaveis: Record<string, string>): string {
+  let resultado = conteudo;
+  for (const [chave, valor] of Object.entries(variaveis)) {
+    resultado = resultado.replace(
+      new RegExp(`\\{\\{\\s*${chave.replace('.', '\\.')}\\s*\\}\\}`, 'gi'),
+      valor || '—'
+    );
+  }
+  return resultado;
+}
+
 // ============= MARKDOWN PARA HTML =============
 
 /**

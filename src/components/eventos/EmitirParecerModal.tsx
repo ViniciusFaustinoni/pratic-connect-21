@@ -191,6 +191,26 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
         console.error('[EmitirParecer] Erro ao notificar:', notifErr);
         // Não falhar a operação por erro de notificação
       }
+
+      // 5. Se aprovado, enviar Termo de Entrada de Evento para assinatura via Autentique
+      if (resultado === 'aprovado') {
+        try {
+          console.log('[EmitirParecer] Enviando Termo de Entrada de Evento para assinatura...');
+          const { data: termoData, error: termoError } = await supabase.functions.invoke('autentique-evento-create', {
+            body: { sinistro_id: sinistro.id },
+          });
+          if (termoError) {
+            console.error('[EmitirParecer] Erro ao criar termo:', termoError);
+            toast.warning('Parecer aprovado, mas houve erro ao enviar o termo para assinatura. Tente novamente pela tela do sinistro.');
+          } else {
+            console.log('[EmitirParecer] ✓ Termo enviado:', termoData);
+            toast.success('Termo de Entrada de Evento enviado para assinatura!');
+          }
+        } catch (termoErr) {
+          console.error('[EmitirParecer] Erro ao enviar termo:', termoErr);
+          toast.warning('Parecer aprovado, mas não foi possível enviar o termo para assinatura.');
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Parecer registrado com sucesso!', {
