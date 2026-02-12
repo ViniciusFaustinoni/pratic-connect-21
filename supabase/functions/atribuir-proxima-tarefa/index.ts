@@ -379,7 +379,7 @@ serve(async (req) => {
         veiculo_id,
         local_vistoria,
         associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
-        veiculo:veiculos(placa, marca, modelo, cor)
+        veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo, cor)
       `)
       .is('profissional_id', null)
       .in('status', ['pendente', 'agendada'])
@@ -420,7 +420,7 @@ serve(async (req) => {
         veiculo_id,
         local_vistoria,
         associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
-        veiculo:veiculos(placa, marca, modelo, cor)
+        veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo, cor)
       `)
       .is('profissional_id', null)
       .in('status', ['pendente', 'agendada'])
