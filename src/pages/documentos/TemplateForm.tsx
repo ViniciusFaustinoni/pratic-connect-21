@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { TemplateEditor } from '@/components/documentos/TemplateEditor';
+import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
 import { ArrowLeft, Save, FileText, PenTool, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -43,7 +43,7 @@ export default function TemplateForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = !!id;
-  const editorRef = useRef<HTMLTextAreaElement>(null);
+  
   
   const { podeCriarTemplate, podeEditarTemplate } = useDocumentoPermissoes();
   const { data: template, isLoading: loadingTemplate } = useDocumentoTemplate(id);
@@ -102,10 +102,15 @@ export default function TemplateForm() {
     }
   };
 
-  // Inserir variável no editor
+  // Inserir variável no editor TipTap na posição do cursor
   const handleInserirVariavel = (variavel: string) => {
-    const conteudoAtual = form.getValues('conteudo');
-    form.setValue('conteudo', conteudoAtual + variavel);
+    const ed = getTemplateEditor();
+    if (ed) {
+      ed.chain().focus().insertContent(variavel).run();
+    } else {
+      const conteudoAtual = form.getValues('conteudo');
+      form.setValue('conteudo', conteudoAtual + variavel);
+    }
   };
 
   const onSubmit = async (data: TemplateFormData) => {
