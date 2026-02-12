@@ -196,6 +196,8 @@ import TemplatesList from "./pages/documentos/TemplatesList";
 import GerarDocumento from "./pages/documentos/GerarDocumento";
 import DocumentosHistorico from "./pages/documentos/DocumentosHistorico";
 import TemplateForm from "./pages/documentos/TemplateForm";
+import AditivosList from "./pages/documentos/Aditivos";
+import AditivoForm from "./pages/documentos/AditivoForm";
 
 // Diretoria
 import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
@@ -511,6 +513,9 @@ const App = () => (
               <Route path="/documentos/templates" element={<TemplatesList />} />
               <Route path="/documentos/templates/novo" element={<TemplateForm />} />
               <Route path="/documentos/templates/:id" element={<TemplateForm />} />
+              <Route path="/documentos/aditivos" element={<AditivosList />} />
+              <Route path="/documentos/aditivos/novo" element={<AditivoForm />} />
+              <Route path="/documentos/aditivos/:id" element={<AditivoForm />} />
 
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />

@@ -19184,6 +19184,45 @@ export type Database = {
           },
         ]
       }
+      termos_aditivos: {
+        Row: {
+          ativo: boolean
+          conteudo_html: string | null
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          ordem: number
+          regras: Json
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo_html?: string | null
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          ordem?: number
+          regras?: Json
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          conteudo_html?: string | null
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          ordem?: number
+          regras?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       treinamentos: {
         Row: {
           carga_horaria: number | null
