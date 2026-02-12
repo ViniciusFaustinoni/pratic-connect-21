@@ -1,34 +1,37 @@
 
-# Termo de Entrada de Evento - Assinatura Digital via Autentique
+# Termo de Saida de Veiculo - Conclusao de OS
 
 ## Resumo
 
-Criar um novo fluxo de assinatura digital para o "Termo de Entrada de Evento", acionado quando um sinistro e aprovado (parecer aprovado). O termo sera gerado via Autentique, e o link de assinatura sera exibido no painel e enviado ao associado via IA/WhatsApp. A pagina do associado reconhecera automaticamente a assinatura, atualizando o status.
+Criar um novo fluxo de assinatura digital "Termo de Saida de Veiculo", acionado quando uma Ordem de Servico (OS) e marcada como "concluido". O termo sera enviado para assinatura via Autentique, o associado recebera uma mensagem no WhatsApp informando que o veiculo esta pronto, e o modal da OS exibira o link de assinatura com atualizacao em tempo real.
 
 ---
 
 ## Arquitetura do Fluxo
 
 ```text
-Parecer Aprovado (EmitirParecerModal)
+OS marcada como "concluido" (OSStatusDialog ou botao dedicado)
         |
         v
-Edge Function: autentique-evento-create
-  - Busca template do tipo "termo_entrada_evento" no banco
-  - Substitui variaveis (sinistro, associado, veiculo)
-  - Envia HTML para Autentique API
-  - Salva autentique_documento_id e link na tabela sinistros
+1. WhatsApp: Envia mensagem ao associado ("Veiculo pronto!")
+2. Edge Function: autentique-os-saida-create
+   - Busca template do tipo "termo_saida_veiculo"
+   - Substitui variaveis (OS, oficina, associado, veiculo, sinistro)
+   - Envia HTML para Autentique API
+   - Salva autentique_documento_id e autentique_url na tabela ordens_servico
         |
         v
-Link de assinatura disponivel
-  - Exibido no SinistroDetalhe.tsx (card + botao copiar/enviar)
-  - Enviado via WhatsApp/IA ao associado
+Modal de Conclusao de OS
+  - Exibe dados de contato do associado (telefone, whatsapp, email)
+  - Botao "Enviar para Assinatura" -> chama a edge function
+  - Exibe link de assinatura (copiar / WhatsApp)
+  - Polling automatico detecta assinatura e atualiza a tela
+  - Quando assinado: badge verde "Veiculo Liberado"
         |
         v
 Webhook Autentique (autentique-webhook)
-  - Detecta que o documento pertence a um sinistro (nao contrato)
-  - Atualiza sinistros: termo_anuencia_assinado = true
-  - Baixa PDF assinado e anexa ao sinistro
+  - Fallback: busca em ordens_servico.autentique_documento_id
+  - Atualiza termo_saida_assinado = true, salva PDF
 ```
 
 ---
@@ -37,80 +40,70 @@ Webhook Autentique (autentique-webhook)
 
 ### 1. Banco de Dados
 
-**Adicionar colunas na tabela `sinistros`:**
-- `autentique_documento_id` (text, nullable) - ID do documento no Autentique
-- `autentique_url` (text, nullable) - Link de assinatura
+**Adicionar colunas na tabela `ordens_servico`:**
+- `autentique_documento_id` (text, nullable)
+- `autentique_url` (text, nullable)
+- `termo_saida_assinado` (boolean, default false)
+- `termo_saida_assinado_em` (timestamptz, nullable)
+- `termo_saida_url` (text, nullable) - URL do PDF assinado
 
-**Adicionar novo `document_type`:**
-- Inserir na tabela `document_types` um registro com `code: 'termo_entrada_evento'`
+**Inserir novo `document_type`:**
+- `code: 'termo_saida_veiculo'`, `name: 'Termo de Saida de Veiculo'`
 
-Nota: as colunas `termo_anuencia_assinado`, `termo_anuencia_url` e `termo_anuencia_assinado_em` ja existem na tabela sinistros e serao reutilizadas.
+### 2. Nova Edge Function: `autentique-os-saida-create`
 
-### 2. Nova Edge Function: `autentique-evento-create`
-
-Baseada na mesma logica do `autentique-create`, mas adaptada para sinistros:
-
-- Recebe `sinistro_id` como parametro
-- Busca sinistro com associado, veiculo e contrato ativo
-- Busca template do banco por `document_type_id` do tipo `termo_entrada_evento` (ou pelo campo `is_default` dentro desse tipo)
-- Cria mapeamento de variaveis especificas do evento (protocolo, tipo sinistro, valor aprovado, parecer, dados do veiculo e associado)
-- Gera HTML usando `generateStyles()`, `generateHeader()`, `markdownParaHTML()` e `generateFooter()`
-- Envia para Autentique API via GraphQL multipart
-- Atualiza `sinistros` com `autentique_documento_id` e `autentique_url`
-- Registra no `sinistro_historico`
+Recebe `ordem_servico_id` como parametro:
+- Busca OS com associado, veiculo, oficina e sinistro vinculado
+- Busca template is_default do tipo `termo_saida_veiculo`
+- Cria mapeamento de variaveis especificas da OS:
+  - `os.numero`, `os.data_entrada`, `os.data_conclusao`, `os.valor_orcamento`, `os.valor_aprovado`
+  - `oficina.nome`, `oficina.cnpj`, `oficina.endereco`, `oficina.telefone`
+  - Variaveis de associado, veiculo, evento (se vinculado) e empresa
+- Gera HTML com layout padrao (generateStyles, generateHeader adaptado)
+- Envia para Autentique, salva IDs na tabela ordens_servico
 
 ### 3. Atualizar `autentique-webhook`
 
-O webhook atualmente so busca contratos. Precisa tambem buscar sinistros:
+Adicionar terceiro fallback apos sinistros:
+- Buscar em `ordens_servico.autentique_documento_id`
+- Se encontrar OS e evento for `signature.accepted`:
+  - Atualizar `termo_saida_assinado = true`, `termo_saida_assinado_em`, `termo_saida_url`
+  - Registrar em `ordens_servico_historico`
 
-- Apos nao encontrar contrato pelo `autentique_documento_id`, fazer fallback buscando em `sinistros.autentique_documento_id`
-- Se encontrar sinistro:
-  - No evento `signature.accepted`: atualizar `termo_anuencia_assinado = true`, `termo_anuencia_assinado_em`, `termo_anuencia_url` (PDF)
-  - Baixar PDF assinado e salvar no storage
-  - Registrar no `sinistro_historico`
-  - Enviar notificacao ao responsavel do evento
+### 4. Novo Componente: `OSConclusaoModal`
 
-### 4. Integrar no `EmitirParecerModal`
+Modal dedicado para a conclusao da OS, exibido quando o status muda para "concluido":
 
-Quando o parecer for "aprovado":
-- Apos salvar o parecer com sucesso, chamar `autentique-evento-create` automaticamente
-- Exibir toast informando que o termo foi enviado para assinatura
-- Se falhar, exibir aviso mas nao bloquear a aprovacao
+- **Dados do associado**: nome, telefone, whatsapp, email (com botoes de acao)
+- **Botao "Enviar para Assinatura"**: chama `autentique-os-saida-create`
+- **Link de assinatura**: exibido apos envio, com botao copiar e botao WhatsApp
+- **Status em tempo real**: polling a cada 15s via `useAutentiqueStatus`
+- **Badge "Veiculo Liberado"**: quando `termo_saida_assinado = true`
 
-### 5. Exibir no `SinistroDetalhe.tsx`
+### 5. Integrar na pagina `OrdemServicoDetalhe.tsx`
 
-Adicionar um card/secao visivel quando `sinistro.autentique_url` existir:
+- Adicionar botao/opcao "Concluir OS" no dropdown de acoes (quando status permite)
+- Ao clicar, abre o `OSConclusaoModal`
+- O modal:
+  1. Atualiza status para "concluido"
+  2. Envia WhatsApp ao associado (veiculo pronto)
+  3. Permite enviar termo para assinatura
+- Card de assinatura visivel na pagina de detalhe quando `autentique_url` existir
 
-- Mostrar status da assinatura (Aguardando / Assinado)
-- Botao para copiar link de assinatura
-- Botao para enviar via WhatsApp
-- Se `termo_anuencia_assinado = true`, mostrar badge verde e link para o PDF
-- Polling automatico via `useAutentiqueStatus` para atualizar em tempo real
+### 6. Envio de WhatsApp na conclusao
 
-### 6. Template de Variaveis do Evento
+Quando a OS e marcada como concluida, enviar mensagem via `whatsapp-send-text`:
+- Mensagem: "Ola [nome]! Seu veiculo [marca modelo] placa [placa] esta pronto! O reparo na oficina [oficina] foi concluido. Voce recebera um termo de saida para assinatura. Duvidas? Entre em contato."
 
-Criar funcao `criarMapeamentoVariaveisEvento()` em `template-utils.ts` com:
+### 7. Variaveis do VariaveisSelector
 
-```text
-evento.protocolo
-evento.tipo (colisao, roubo, etc.)
-evento.data_ocorrencia
-evento.local
-evento.descricao
-evento.parecer
-evento.valor_aprovado
-evento.tipo_dano (parcial / perda_total)
-associado.nome, cpf, telefone, email, endereco
-veiculo.placa, marca, modelo, ano, cor, chassi, valor_fipe
-empresa.* (mesmos campos existentes)
-sistema.data_atual, hora_atual
-```
+Adicionar novo grupo "evento" com as variaveis ja existentes no backend e novo grupo "os" (Ordem de Servico):
+- `os.numero`, `os.data_entrada`, `os.data_conclusao`, `os.valor_orcamento`, `os.valor_aprovado`, `os.observacoes`
+- `oficina.nome`, `oficina.cnpj`, `oficina.telefone`, `oficina.endereco`
 
-### 7. Permitir criar template no painel de Documentos
+### 8. Template de variaveis da OS em `template-utils.ts`
 
-- O novo `document_type` "Termo de Entrada de Evento" aparecera automaticamente na listagem de tipos
-- O usuario podera criar/editar templates para esse tipo usando o editor rich-text existente
-- O template marcado como `is_default` dentro desse tipo sera usado pela edge function
+Adicionar funcao de mapeamento para variaveis de OS/oficina que a nova edge function usara.
 
 ---
 
@@ -118,18 +111,62 @@ sistema.data_atual, hora_atual
 
 | Arquivo | Acao |
 |---|---|
-| Migration SQL | Adicionar colunas + inserir document_type |
-| `supabase/functions/autentique-evento-create/index.ts` | NOVO - Edge function |
-| `supabase/functions/_shared/template-utils.ts` | Adicionar `criarMapeamentoVariaveisEvento()` |
-| `supabase/functions/autentique-webhook/index.ts` | Buscar sinistros alem de contratos |
-| `src/components/eventos/EmitirParecerModal.tsx` | Chamar autentique-evento-create apos aprovacao |
-| `src/pages/eventos/SinistroDetalhe.tsx` | Card de assinatura do termo |
+| Migration SQL | Colunas em ordens_servico + novo document_type |
+| `supabase/functions/autentique-os-saida-create/index.ts` | NOVO |
+| `supabase/functions/autentique-webhook/index.ts` | Fallback para ordens_servico |
+| `src/components/oficinas/OSConclusaoModal.tsx` | NOVO - Modal de conclusao |
+| `src/pages/oficina/OrdemServicoDetalhe.tsx` | Integrar modal + card assinatura |
+| `src/hooks/useOrdensServico.ts` | Incluir campos autentique no select |
+| `src/components/documentos/VariaveisSelector.tsx` | Grupos evento e os |
+| `supabase/functions/_shared/template-utils.ts` | Variaveis OS/oficina |
 | `supabase/config.toml` | Registrar nova edge function |
 
 ---
 
-## Observacoes
+## Detalhes Tecnicos
 
-- O template do termo devera ser criado pelo usuario no painel de documentos, usando o editor TipTap com as variaveis de evento
-- O webhook do Autentique ja esta configurado e recebera os eventos normalmente - apenas precisamos adicionar a logica de busca por sinistros
-- A mesma logica de auto-refresh usada na assinatura de contratos (polling) sera reutilizada na tela do sinistro
+### Novas variaveis para templates de OS:
+```text
+os.numero
+os.data_entrada
+os.data_conclusao
+os.data_previsao
+os.valor_orcamento
+os.valor_aprovado
+os.observacoes
+oficina.nome
+oficina.cnpj
+oficina.telefone
+oficina.whatsapp
+oficina.endereco
+```
+
+### Mensagem WhatsApp na conclusao:
+```text
+Ola {{associado.nome}}!
+
+Seu veiculo *{{veiculo.marca}} {{veiculo.modelo}}* placa *{{veiculo.placa}}* esta pronto!
+
+O reparo na oficina *{{oficina.nome}}* foi concluido com sucesso.
+
+Voce recebera um Termo de Saida de Veiculo no seu email para assinatura digital.
+
+Em caso de duvidas, entre em contato conosco.
+
+ABP PraticCar
+```
+
+### OSConclusaoModal - Comportamento:
+1. Ao abrir: mostra dados do associado (contato) + resumo da OS
+2. Botao "Concluir e Notificar": muda status para concluido + envia WhatsApp
+3. Botao "Enviar Termo para Assinatura": chama edge function
+4. Apos envio: exibe link com polling automatico
+5. Quando assinado: mostra badge verde "Veiculo Liberado" + link PDF
+
+### Webhook - Terceiro fallback:
+```text
+1. Buscar em contratos.autentique_documento_id
+2. Se nao encontrar -> buscar em sinistros.autentique_documento_id
+3. Se nao encontrar -> buscar em ordens_servico.autentique_documento_id
+4. Se encontrar OS: atualizar termo_saida_assinado, salvar PDF
+```
