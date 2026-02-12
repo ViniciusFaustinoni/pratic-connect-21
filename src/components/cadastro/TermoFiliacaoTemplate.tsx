@@ -10,17 +10,16 @@ import {
   calcularCotaParticipacao,
   calcularPrimeiraMensalidade,
 } from '@/types/termo-filiacao';
+import { type TermoAditivo } from '@/hooks/useAditivos';
 
 interface TermoFiliacaoTemplateProps {
   dados: DadosTermoFiliacao;
-  incluirTermo0km: boolean;
-  incluirTermoRastreador: boolean;
+  aditivos?: TermoAditivo[];
 }
 
 export function TermoFiliacaoTemplate({ 
   dados, 
-  incluirTermo0km, 
-  incluirTermoRastreador 
+  aditivos = [] 
 }: TermoFiliacaoTemplateProps) {
   const { cliente, veiculo, plano, contrato, empresa } = dados;
   
@@ -224,10 +223,6 @@ export function TermoFiliacaoTemplate({
             </div>
           ))}
         </div>
-        
-        <div style={{ backgroundColor: '#eff6ff', border: '1px solid #1e40af', borderRadius: '4pt', padding: '10pt', margin: '10pt 0' }}>
-          <strong>Rastreador Veicular:</strong> {incluirTermoRastreador ? 'Obrigatório (instalação por técnico credenciado)' : 'Não obrigatório para este veículo'}
-        </div>
       </div>
 
       {/* SEÇÃO 4: VALORES E CONDIÇÕES */}
@@ -414,25 +409,27 @@ export function TermoFiliacaoTemplate({
         </div>
       </div>
 
-      {/* TERMO ADITIVO 0KM (CONDICIONAL) */}
-      {incluirTermo0km && (
-        <div style={{ marginTop: '30pt', border: '2px solid #dc2626', padding: '15pt', borderRadius: '4pt', pageBreakBefore: 'always' }}>
-          <h2 style={{ fontSize: '12pt', fontWeight: 'bold', color: '#dc2626', marginBottom: '10pt', paddingBottom: '4pt', borderBottom: '1px solid #e5e7eb' }}>
-            TERMO ADITIVO DE VEÍCULO 0KM
+      {/* ADITIVOS DINÂMICOS */}
+      {aditivos.map((aditivo) => (
+        <div key={aditivo.id} style={{ marginTop: '30pt', border: '2px solid #1e40af', padding: '15pt', borderRadius: '4pt', pageBreakBefore: 'always' }}>
+          <h2 style={{ fontSize: '12pt', fontWeight: 'bold', color: '#1e40af', marginBottom: '10pt', paddingBottom: '4pt', borderBottom: '1px solid #e5e7eb' }}>
+            {aditivo.nome}
           </h2>
           
-          {[
-            { titulo: 'Cláusula Primeira', texto: 'O presente Termo Aditivo tem por objeto regulamentar a proteção de veículo zero quilômetro (0 km) que ainda não possua placa no momento da adesão à Associação.' },
-            { titulo: 'Cláusula Segunda', texto: 'O associado compromete-se a providenciar o devido emplacamento do veículo junto aos órgãos de trânsito competentes, dentro do prazo legal estabelecido pelo CONTRAN.' },
-            { titulo: 'Cláusula Terceira', texto: 'O associado declara estar ciente de que, caso não realize o emplacamento no prazo legal, a proteção de roubo e furto será imediatamente suspensa.' },
-            { titulo: 'Cláusula Quarta', texto: 'A cobertura será restabelecida automaticamente a partir da apresentação da documentação comprobatória de emplacamento do veículo.' },
-            { titulo: 'Cláusula Quinta', texto: 'A responsabilidade pelo emplacamento do veículo zero quilômetro é exclusiva do associado.' },
-          ].map((clausula, index) => (
-            <div key={index} style={{ marginBottom: '12pt', textAlign: 'justify' }}>
-              <p style={{ fontWeight: 'bold', marginBottom: '4pt' }}>{clausula.titulo}</p>
-              <p style={{ fontSize: '9pt', lineHeight: 1.4 }}>{clausula.texto}</p>
-            </div>
-          ))}
+          {aditivo.descricao && (
+            <p style={{ marginBottom: '12pt', fontSize: '9pt', fontStyle: 'italic', color: '#666666' }}>
+              {aditivo.descricao}
+            </p>
+          )}
+          
+          {aditivo.conteudo_html ? (
+            <div 
+              style={{ fontSize: '9pt', lineHeight: 1.4, color: '#333333' }}
+              dangerouslySetInnerHTML={{ __html: aditivo.conteudo_html }}
+            />
+          ) : (
+            <p style={{ fontSize: '9pt', color: '#666666' }}>Conteúdo do aditivo não disponível.</p>
+          )}
           
           <div style={{ marginTop: '40pt', textAlign: 'center' }}>
             <p style={{ marginBottom: '50pt' }}>Local: _________________________ Data: ____/____/________</p>
@@ -442,41 +439,8 @@ export function TermoFiliacaoTemplate({
             </div>
           </div>
         </div>
-      )}
+      ))}
 
-      {/* TERMO RASTREADOR (CONDICIONAL) */}
-      {incluirTermoRastreador && (
-        <div style={{ marginTop: '30pt', border: '2px solid #7c3aed', padding: '15pt', borderRadius: '4pt', pageBreakBefore: 'always' }}>
-          <h2 style={{ fontSize: '12pt', fontWeight: 'bold', color: '#7c3aed', marginBottom: '10pt', paddingBottom: '4pt', borderBottom: '1px solid #e5e7eb' }}>
-            TERMO DE RESPONSABILIDADE - EQUIPAMENTO RASTREADOR
-          </h2>
-          
-          <p style={{ marginBottom: '12pt', textAlign: 'justify', fontSize: '9pt', lineHeight: 1.4 }}>
-            Pelo presente termo, o(a) associado(a) abaixo qualificado(a) declara ter recebido em regime de COMODATO o equipamento rastreador para instalação no veículo cadastrado, assumindo inteira responsabilidade pela sua guarda e conservação.
-          </p>
-          
-          {[
-            { titulo: '1. DO EQUIPAMENTO', texto: `O equipamento rastreador é de propriedade exclusiva da ${empresa.nome}, sendo cedido em comodato ao associado durante a vigência da filiação.` },
-            { titulo: '2. DO RASTREAMENTO', texto: 'O associado tem ciência e autoriza o rastreamento 24 (vinte e quatro) horas do veículo cadastrado, para fins de monitoramento e recuperação em caso de sinistro.' },
-            { titulo: '3. DA DEVOLUÇÃO', texto: 'O associado compromete-se a devolver o equipamento em perfeito estado de funcionamento quando do desligamento do PSM, no prazo máximo de 15 (quinze) dias.' },
-            { titulo: '4. DA MULTA', texto: 'A não devolução do equipamento no prazo estipulado acarretará multa de R$ 400,00 (quatrocentos reais), valor que poderá ser cobrado judicialmente.' },
-            { titulo: '5. DO TÍTULO EXECUTIVO', texto: 'O presente termo tem força de título executivo extrajudicial, nos termos do Art. 784 do Código de Processo Civil.' },
-          ].map((item, index) => (
-            <div key={index} style={{ marginBottom: '12pt', textAlign: 'justify' }}>
-              <p style={{ fontWeight: 'bold', marginBottom: '4pt' }}>{item.titulo}</p>
-              <p style={{ fontSize: '9pt', lineHeight: 1.4 }}>{item.texto}</p>
-            </div>
-          ))}
-          
-          <div style={{ marginTop: '40pt', textAlign: 'center' }}>
-            <p style={{ marginBottom: '50pt' }}>Local: _________________________ Data: ____/____/________</p>
-            <div style={{ borderTop: '1px solid #333333', width: '280px', margin: '0 auto', paddingTop: '6pt' }}>
-              <p style={{ fontWeight: 'bold' }}>{cliente.nome}</p>
-              <p style={{ fontSize: '8pt', color: '#666666' }}>CPF: {formatCPF(cliente.cpf)}</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* RODAPÉ */}
       <div style={{ marginTop: '30pt', textAlign: 'center', fontSize: '8pt', color: '#666666', borderTop: '1px solid #e5e7eb', paddingTop: '10pt' }}>

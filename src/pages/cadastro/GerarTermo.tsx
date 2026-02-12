@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +31,8 @@ import {
   exigeRastreador,
   formatCurrency 
 } from '@/types/termo-filiacao';
+import { useAvaliarAditivos } from '@/hooks/useAvaliarAditivos';
+import { useAditivos, type TermoAditivo } from '@/hooks/useAditivos';
 
 // Mock do associado selecionado
 const mockAssociado: DadosTermoFiliacao = {
@@ -114,13 +116,30 @@ export default function GerarTermo() {
   const [busca, setBusca] = useState('');
   const [previewAberto, setPreviewAberto] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [aditivosSelecionados, setAditivosSelecionados] = useState<string[]>([]);
   
   // Dados do associado selecionado (usando mock por enquanto)
   const associado = mockAssociado;
   
-  // Cálculos condicionais
-  const veiculo0km = ehVeiculoZeroKm(associado.veiculo);
-  const rastreador = exigeRastreador(associado.veiculo);
+  // Buscar aditivos e avaliar quais se aplicam
+  const { data: aditivos = [], isLoading: loadingAditivos } = useAditivos(true);
+  const { aditivosAvaliados, isLoading: loadingAvaliacao } = useAvaliarAditivos({
+    placa: associado.veiculo.placa,
+    procedencia: associado.veiculo.procedencia,
+    blindado: false,
+    valorFipe: associado.veiculo.valorFipe,
+    observacoes: '',
+  });
+  
+  // Pré-selecionar aditivos que batem com as regras
+  useMemo(() => {
+    if (aditivosAvaliados.length > 0) {
+      const automaticos = aditivosAvaliados
+        .filter(({ autoSelecionado }) => autoSelecionado)
+        .map(({ aditivo }) => aditivo.id);
+      setAditivosSelecionados(automaticos);
+    }
+  }, [aditivosAvaliados]);
   
   const handleGerarPDF = async () => {
     setGerando(true);
@@ -257,65 +276,74 @@ export default function GerarTermo() {
         </CardContent>
       </Card>
       
-      {/* Documentos a Gerar */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Documentos a Gerar
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-            <Checkbox id="proposta" checked disabled />
-            <div className="flex-1">
-              <Label htmlFor="proposta" className="font-medium cursor-pointer">
-                Proposta de Filiação
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Documento principal com todos os termos e condições
-              </p>
-            </div>
-            <Badge>Obrigatório</Badge>
-          </div>
-          
-          <div className={`flex items-start gap-3 p-3 rounded-lg ${veiculo0km ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-muted/50 opacity-50'}`}>
-            <Checkbox id="termo0km" checked={veiculo0km} disabled />
-            <div className="flex-1">
-              <Label htmlFor="termo0km" className="font-medium cursor-pointer">
-                Termo Aditivo 0KM
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Termos específicos para veículos sem emplacamento
-              </p>
-            </div>
-            {veiculo0km && (
-              <Badge variant="outline" className="border-amber-500 text-amber-600">
-                <Info className="h-3 w-3 mr-1" />
-                Veículo sem placa
-              </Badge>
-            )}
-          </div>
-          
-          <div className={`flex items-start gap-3 p-3 rounded-lg ${rastreador.exige ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-muted/50 opacity-50'}`}>
-            <Checkbox id="termoRastreador" checked={rastreador.exige} disabled />
-            <div className="flex-1">
-              <Label htmlFor="termoRastreador" className="font-medium cursor-pointer">
-                Termo Responsabilidade Rastreador
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Comodato do equipamento rastreador
-              </p>
-            </div>
-            {rastreador.exige && (
-              <Badge variant="outline" className="border-purple-500 text-purple-600">
-                <Info className="h-3 w-3 mr-1" />
-                {rastreador.motivo}
-              </Badge>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+       {/* Documentos a Gerar */}
+       <Card>
+         <CardHeader>
+           <CardTitle className="flex items-center gap-2">
+             <FileText className="h-5 w-5" />
+             Documentos a Gerar
+           </CardTitle>
+         </CardHeader>
+         <CardContent className="space-y-4">
+           <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+             <Checkbox id="proposta" checked disabled />
+             <div className="flex-1">
+               <Label htmlFor="proposta" className="font-medium cursor-pointer">
+                 Proposta de Filiação
+               </Label>
+               <p className="text-sm text-muted-foreground">
+                 Documento principal com todos os termos e condições
+               </p>
+             </div>
+             <Badge>Obrigatório</Badge>
+           </div>
+           
+           {loadingAditivos || loadingAvaliacao ? (
+             <p className="text-sm text-muted-foreground py-4">Carregando aditivos...</p>
+           ) : (
+             <>
+               {aditivosAvaliados.map(({ aditivo, autoSelecionado }) => (
+                 <div
+                   key={aditivo.id}
+                   className={`flex items-start gap-3 p-3 rounded-lg ${
+                     aditivosSelecionados.includes(aditivo.id)
+                       ? autoSelecionado 
+                         ? 'bg-green-500/10 border border-green-500/20'
+                         : 'bg-blue-500/10 border border-blue-500/20'
+                       : 'bg-muted/50 opacity-50'
+                   }`}
+                 >
+                   <Checkbox
+                     id={aditivo.id}
+                     checked={aditivosSelecionados.includes(aditivo.id)}
+                     onCheckedChange={(checked) => {
+                       if (checked) {
+                         setAditivosSelecionados([...aditivosSelecionados, aditivo.id]);
+                       } else {
+                         setAditivosSelecionados(aditivosSelecionados.filter(id => id !== aditivo.id));
+                       }
+                     }}
+                   />
+                   <div className="flex-1">
+                     <Label htmlFor={aditivo.id} className="font-medium cursor-pointer">
+                       {aditivo.nome}
+                     </Label>
+                     {aditivo.descricao && (
+                       <p className="text-sm text-muted-foreground">{aditivo.descricao}</p>
+                     )}
+                   </div>
+                   {autoSelecionado && (
+                     <Badge variant="outline" className="border-green-500 text-green-600">
+                       <Info className="h-3 w-3 mr-1" />
+                       Automático
+                     </Badge>
+                   )}
+                 </div>
+               ))}
+             </>
+           )}
+         </CardContent>
+       </Card>
       
       {/* Botões de Ação */}
       <div className="flex flex-wrap gap-3 justify-end">
@@ -342,32 +370,30 @@ export default function GerarTermo() {
         </Button>
       </div>
       
-      {/* Modal de Preview */}
-      <Dialog open={previewAberto} onOpenChange={setPreviewAberto}>
-        <DialogContent className="max-w-5xl max-h-[90vh] p-0">
-          <DialogHeader className="p-6 pb-0">
-            <DialogTitle>Preview do Termo de Filiação</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="max-h-[calc(90vh-100px)]">
-            <div className="p-6">
-              <TermoFiliacaoTemplate
-                dados={associado}
-                incluirTermo0km={veiculo0km}
-                incluirTermoRastreador={rastreador.exige}
-              />
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Template oculto para geração do PDF */}
-      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-        <TermoFiliacaoTemplate
-          dados={associado}
-          incluirTermo0km={veiculo0km}
-          incluirTermoRastreador={rastreador.exige}
-        />
-      </div>
+       {/* Modal de Preview */}
+       <Dialog open={previewAberto} onOpenChange={setPreviewAberto}>
+         <DialogContent className="max-w-5xl max-h-[90vh] p-0">
+           <DialogHeader className="p-6 pb-0">
+             <DialogTitle>Preview do Termo de Filiação</DialogTitle>
+           </DialogHeader>
+           <ScrollArea className="max-h-[calc(90vh-100px)]">
+             <div className="p-6">
+               <TermoFiliacaoTemplate
+                 dados={associado}
+                 aditivos={aditivos.filter(a => aditivosSelecionados.includes(a.id))}
+               />
+             </div>
+           </ScrollArea>
+         </DialogContent>
+       </Dialog>
+       
+       {/* Template oculto para geração do PDF */}
+       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+         <TermoFiliacaoTemplate
+           dados={associado}
+           aditivos={aditivos.filter(a => aditivosSelecionados.includes(a.id))}
+         />
+       </div>
     </div>
   );
 }
