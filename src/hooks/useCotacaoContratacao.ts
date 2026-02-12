@@ -384,6 +384,12 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
   });
 
+  // Truncar valor para não exceder limite do banco
+  const truncar = (valor: string | null | undefined, max: number): string | null => {
+    if (!valor) return null;
+    return valor.length > max ? valor.substring(0, max) : valor;
+  };
+
   // Salvar dados pessoais
   const salvarDadosPessoais = useMutation({
     mutationFn: async (dados: DadosPessoaisForm) => {
@@ -395,7 +401,7 @@ export function useCotacaoContratacao(token: string | undefined) {
         .update({
           nome_solicitante: dados.nome,
           email_solicitante: dados.email,
-          telefone1_solicitante: dados.telefone,
+          telefone1_solicitante: truncar(dados.telefone, 30),
           cliente_cpf: dados.cpf,
           cliente_data_nascimento: dados.data_nascimento,
           cliente_cep: dados.cep,
@@ -408,17 +414,17 @@ export function useCotacaoContratacao(token: string | undefined) {
           status_contratacao: 'dados_preenchidos',
           
           // Dados de documentos pessoais (RG/CNH) extraídos via OCR
-          cliente_rg: dados.rg || null,
-          cliente_rg_orgao: dados.rg_orgao || null,
-          cliente_cnh: dados.cnh || null,
+          cliente_rg: truncar(dados.rg, 50),
+          cliente_rg_orgao: truncar(dados.rg_orgao, 50),
+          cliente_cnh: truncar(dados.cnh, 50),
           cliente_cnh_validade: dados.cnh_validade || null,
-          cliente_cnh_categoria: dados.cnh_categoria || null,
+          cliente_cnh_categoria: truncar(dados.cnh_categoria, 20),
           
           // Dados do veículo extraídos do CRLV via OCR (necessários para SGA Hinova e Termo)
           veiculo_chassi: dados.veiculo_chassi || null,
           veiculo_renavam: dados.veiculo_renavam || null,
           veiculo_cor: dados.veiculo_cor || null,
-          veiculo_combustivel: dados.veiculo_combustivel || null,
+          veiculo_combustivel: truncar(dados.veiculo_combustivel, 50),
           veiculo_ano_fabricacao: dados.veiculo_ano_fabricacao || null,
         })
         .eq('id', cotacao.id);
