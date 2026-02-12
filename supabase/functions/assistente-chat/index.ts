@@ -89,6 +89,24 @@ Após coletar os dados básicos (tipo, data, local, descrição) do sinistro:
    
 4. **Finalize a solicitação** após receber os arquivos (ou se o usuário optar por não enviar)
 
+## CANCELAMENTO E TROCA DE TITULARIDADE
+
+Quando o associado manifestar interesse em:
+- "Quero cancelar", "Quero sair", "Não quero mais"
+- "Vendi meu carro", "Quero trocar o titular"
+
+### Cancelamento:
+1. Confirme: "Você tem certeza que deseja cancelar sua filiação?"
+2. Colete o motivo do cancelamento
+3. Informe: "Será necessário agendar a retirada do rastreador do veículo"
+4. Crie a solicitação usando a tool criar_solicitacao_cancelamento
+
+### Troca de Titularidade:
+1. Confirme: "Você vendeu o veículo e deseja transferir para o novo proprietário?"
+2. Colete: nome completo, CPF, email e telefone do novo titular
+3. Informe: "Será agendada uma vistoria do veículo e o novo titular receberá um link para envio de documentos"
+4. Crie a solicitação usando a tool criar_solicitacao_troca_titularidade
+
 ## Formato de Respostas
 - Use Markdown para formatar (negrito, listas, etc.)
 - Seja conciso mas completo
@@ -234,7 +252,7 @@ const tools = [
       },
     },
   },
-  {
+   {
     type: "function",
     function: {
       name: "reverse_geocode",
@@ -252,6 +270,60 @@ const tools = [
           },
         },
         required: ["latitude", "longitude"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "criar_solicitacao_cancelamento",
+      description: "Cria uma solicitação de cancelamento de filiação. Use APENAS após confirmar que o associado realmente deseja cancelar e coletar o motivo.",
+      parameters: {
+        type: "object",
+        properties: {
+          motivo: {
+            type: "string",
+            description: "Motivo do cancelamento informado pelo associado",
+          },
+          confirmacao: {
+            type: "boolean",
+            description: "Se o associado confirmou que deseja cancelar",
+          },
+        },
+        required: ["motivo", "confirmacao"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "criar_solicitacao_troca_titularidade",
+      description: "Cria uma solicitação de troca de titularidade. Use APENAS após coletar todos os dados do novo titular.",
+      parameters: {
+        type: "object",
+        properties: {
+          novo_nome: {
+            type: "string",
+            description: "Nome completo do novo titular",
+          },
+          novo_cpf: {
+            type: "string",
+            description: "CPF do novo titular",
+          },
+          novo_email: {
+            type: "string",
+            description: "Email do novo titular",
+          },
+          novo_telefone: {
+            type: "string",
+            description: "Telefone/WhatsApp do novo titular",
+          },
+          motivo: {
+            type: "string",
+            description: "Motivo da troca (ex: venda_veiculo)",
+          },
+        },
+        required: ["novo_nome", "novo_cpf", "novo_email", "novo_telefone"],
       },
     },
   },
@@ -513,6 +585,75 @@ async function executeTool(
             error: geocodeResult.error || "Endereço não encontrado",
           });
         }
+      }
+
+      case "criar_solicitacao_cancelamento": {
+        if (!args.confirmacao) {
+          return JSON.stringify({ sucesso: false, message: "O associado precisa confirmar que deseja cancelar." });
+        }
+
+        let veiculoId = null;
+        const { data: veiculos } = await supabase
+          .from("veiculos")
+          .select("id")
+          .eq("associado_id", associadoId)
+          .eq("status", "ativo")
+          .limit(1);
+        veiculoId = veiculos?.[0]?.id;
+
+        const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
+          associado_id: associadoId,
+          tipo: "cancelamento",
+          dados: {
+            veiculo_id: veiculoId,
+            motivo: args.motivo,
+            confirmacao: true,
+          },
+          status: "pendente",
+        }).select("id").single();
+
+        if (error) throw error;
+
+        return JSON.stringify({
+          sucesso: true,
+          message: "Solicitação de cancelamento registrada com sucesso! A diretoria irá analisar sua solicitação. Será necessário agendar a retirada do rastreador do veículo.",
+          id: data.id,
+        });
+      }
+
+      case "criar_solicitacao_troca_titularidade": {
+        let veiculoId = null;
+        const { data: veiculos } = await supabase
+          .from("veiculos")
+          .select("id")
+          .eq("associado_id", associadoId)
+          .eq("status", "ativo")
+          .limit(1);
+        veiculoId = veiculos?.[0]?.id;
+
+        const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
+          associado_id: associadoId,
+          tipo: "troca_titularidade",
+          dados: {
+            veiculo_id: veiculoId,
+            motivo: args.motivo || "venda_veiculo",
+          },
+          dados_novo_titular: {
+            nome: args.novo_nome,
+            cpf: args.novo_cpf,
+            email: args.novo_email,
+            telefone: args.novo_telefone,
+          },
+          status: "pendente",
+        }).select("id").single();
+
+        if (error) throw error;
+
+        return JSON.stringify({
+          sucesso: true,
+          message: "Solicitação de troca de titularidade registrada! A diretoria irá analisar. Será agendada uma vistoria do veículo e o novo titular receberá um link para envio de documentos.",
+          id: data.id,
+        });
       }
 
       default:

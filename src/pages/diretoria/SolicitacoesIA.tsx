@@ -44,12 +44,20 @@ interface SolicitacaoDados {
   localizacao?: string;
   descricao?: string;
   veiculo_id?: string;
+  motivo?: string;
+  confirmacao?: boolean;
 }
 
 interface SolicitacaoIA {
   id: string;
-  tipo: 'sinistro' | 'assistencia';
+  tipo: 'sinistro' | 'assistencia' | 'cancelamento' | 'troca_titularidade';
   dados: SolicitacaoDados;
+  dados_novo_titular?: {
+    nome?: string;
+    cpf?: string;
+    email?: string;
+    telefone?: string;
+  } | null;
   status: string;
   created_at: string;
   aprovado_em?: string | null;
@@ -76,7 +84,7 @@ export default function SolicitacoesIA() {
       let query = supabase
         .from('chat_solicitacoes_ia')
         .select(`
-          id, tipo, dados, status, created_at, aprovado_em, associado_id,
+          id, tipo, dados, dados_novo_titular, status, created_at, aprovado_em, associado_id,
           associado:associados!chat_solicitacoes_ia_associado_id_fkey(nome, telefone, whatsapp)
         `)
         .order('created_at', { ascending: false });
@@ -139,11 +147,15 @@ export default function SolicitacoesIA() {
 
   const getTipoIcon = (tipo: string) => {
     if (tipo === 'sinistro') return <ShieldAlert className="h-5 w-5 text-destructive" />;
+    if (tipo === 'cancelamento') return <XCircle className="h-5 w-5 text-orange-500" />;
+    if (tipo === 'troca_titularidade') return <User className="h-5 w-5 text-blue-500" />;
     return <Truck className="h-5 w-5 text-primary" />;
   };
 
   const getTipoLabel = (tipo: string) => {
     if (tipo === 'sinistro') return 'Sinistro';
+    if (tipo === 'cancelamento') return 'Cancelamento';
+    if (tipo === 'troca_titularidade') return 'Troca de Titularidade';
     return 'Assistência 24h';
   };
 
@@ -319,6 +331,30 @@ export default function SolicitacoesIA() {
                             <div>
                               <p className="text-xs text-muted-foreground">Descrição</p>
                               <p className="text-sm">{dados.descricao as string}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cancelamento */}
+                        {solicitacao.tipo === 'cancelamento' && dados.motivo && (
+                          <div className="flex items-start gap-2 sm:col-span-2">
+                            <AlertTriangle className="h-4 w-4 text-orange-500 mt-0.5" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">Motivo do Cancelamento</p>
+                              <p className="text-sm font-medium">{dados.motivo as string}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Troca de Titularidade - dados do novo titular */}
+                        {solicitacao.tipo === 'troca_titularidade' && solicitacao.dados_novo_titular && (
+                          <div className="sm:col-span-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-2">Dados do Novo Titular</p>
+                            <div className="grid gap-1 text-sm">
+                              <p><strong>Nome:</strong> {solicitacao.dados_novo_titular.nome}</p>
+                              <p><strong>CPF:</strong> {solicitacao.dados_novo_titular.cpf}</p>
+                              <p><strong>Email:</strong> {solicitacao.dados_novo_titular.email}</p>
+                              <p><strong>Telefone:</strong> {solicitacao.dados_novo_titular.telefone}</p>
                             </div>
                           </div>
                         )}

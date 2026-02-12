@@ -562,7 +562,47 @@ serve(async (req) => {
         );
       }
 
-      console.log("[autentique-webhook] ❌ Documento NÃO ENCONTRADO em contratos, sinistros nem ordens_servico");
+      // ========== FALLBACK 4: Buscar em contratos (cancelamento) ==========
+      console.log("[autentique-webhook] OS não encontrada, tentando buscar termo de cancelamento...");
+
+      const { data: cancelamentoContrato } = await supabase
+        .from("contratos")
+        .select("*, associado:associados(id, nome, cpf)")
+        .eq("autentique_cancelamento_id", documentId)
+        .maybeSingle();
+
+      if (cancelamentoContrato) {
+        console.log(`[autentique-webhook] ✓ Termo de cancelamento encontrado: contrato ${cancelamentoContrato.numero}`);
+        const signerData = payload.event?.data?.user;
+        const signerName = signerData?.name || cancelamentoContrato.associado?.nome || "Associado";
+
+        if (eventType === "signature.accepted" || (eventType === "signature.updated" && payload.event?.data?.signed)) {
+          console.log(`[autentique-webhook] 🎉 Termo de Cancelamento ASSINADO por ${signerName}`);
+
+          await supabase.from("contratos_historico").insert({
+            contrato_id: cancelamentoContrato.id,
+            evento: "cancelamento_assinado",
+            descricao: `Termo de Cancelamento assinado por ${signerName} via Autentique`,
+            dados: { signer_name: signerName },
+          });
+
+          if (cancelamentoContrato.associado?.id) {
+            await supabase.from("associados_historico").insert({
+              associado_id: cancelamentoContrato.associado.id,
+              tipo: "documento_assinado",
+              descricao: `Termo de Cancelamento assinado eletronicamente por ${signerName}`,
+              metadata: { autentique_id: documentId, via: "autentique" },
+            });
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ received: true, processed: eventType, type: "cancelamento", documentId }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log("[autentique-webhook] ❌ Documento NÃO ENCONTRADO em contratos, sinistros, ordens_servico nem cancelamentos");
       return new Response(JSON.stringify({ received: true, message: "Document not found" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

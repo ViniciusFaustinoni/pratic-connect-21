@@ -4243,6 +4243,7 @@ export type Database = {
           associado_id: string
           created_at: string
           dados: Json
+          dados_novo_titular: Json | null
           id: string
           motivo_rejeicao: string | null
           resultado_id: string | null
@@ -4256,6 +4257,7 @@ export type Database = {
           associado_id: string
           created_at?: string
           dados: Json
+          dados_novo_titular?: Json | null
           id?: string
           motivo_rejeicao?: string | null
           resultado_id?: string | null
@@ -4269,6 +4271,7 @@ export type Database = {
           associado_id?: string
           created_at?: string
           dados?: Json
+          dados_novo_titular?: Json | null
           id?: string
           motivo_rejeicao?: string | null
           resultado_id?: string | null
