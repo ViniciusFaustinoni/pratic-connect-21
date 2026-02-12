@@ -528,7 +528,7 @@ serve(async (req) => {
         const { data: instalacoesPendentes } = await supabase
           .from('instalacoes')
           .select('id, status, data_agendada, instalador_responsavel_id')
-          .in('status', ['agendada', 'pendente'])
+          .in('status', ['agendada'])
           .limit(5);
           
         if (instalacoesPendentes && instalacoesPendentes.length > 0) {

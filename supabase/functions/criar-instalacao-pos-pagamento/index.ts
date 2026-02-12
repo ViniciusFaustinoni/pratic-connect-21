@@ -210,26 +210,54 @@ serve(async (req) => {
         ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}`
         : `Responsável: ${cotacao.vistoria_responsavel_nome || ''} - ${cotacao.vistoria_responsavel_telefone || ''}`;
     } else if (tipoVistoria === 'autovistoria') {
-      // AUTOVISTORIA: Usar campos vistoria_completa_* para data/hora/endereço
-      // A instalação é agendada para APÓS a autovistoria ser aprovada (vistoria completa)
-      console.log('[CriarInstalacaoPosPagamento] Modo: autovistoria → usando dados de vistoria_completa_*');
+      // AUTOVISTORIA: Tentar vistoria_completa_* primeiro, FALLBACK para vistoria_*
+      console.log('[CriarInstalacaoPosPagamento] Modo: autovistoria');
       dataAgendada = cotacao.vistoria_completa_data_agendada;
-      // Priorizar período sobre horário (novo fluxo)
       periodoAgendado = (cotacao as any).vistoria_completa_periodo || cotacao.vistoria_completa_horario_agendado;
-      endereco = {
-        cep: cotacao.vistoria_completa_endereco_cep || '',
-        logradouro: cotacao.vistoria_completa_endereco_logradouro || '',
-        numero: cotacao.vistoria_completa_endereco_numero || '',
-        bairro: cotacao.vistoria_completa_endereco_bairro || '',
-        cidade: cotacao.vistoria_completa_endereco_cidade || '',
-        estado: cotacao.vistoria_completa_endereco_estado || '',
-        // Coordenadas: compartilhadas em vistoria_endereco_* (frontend salva lá para todos os tipos)
-        latitude: cotacao.vistoria_endereco_latitude,
-        longitude: cotacao.vistoria_endereco_longitude,
-      };
-      obsResponsavel = cotacao.vistoria_completa_responsavel_eu_mesmo
-        ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}`
-        : `Responsável: ${cotacao.vistoria_completa_responsavel_nome || ''} - ${cotacao.vistoria_completa_responsavel_telefone || ''}`;
+      
+      if (dataAgendada) {
+        // Dados completos disponíveis
+        console.log('[CriarInstalacaoPosPagamento] Usando dados de vistoria_completa_*');
+        endereco = {
+          cep: cotacao.vistoria_completa_endereco_cep || '',
+          logradouro: cotacao.vistoria_completa_endereco_logradouro || '',
+          numero: cotacao.vistoria_completa_endereco_numero || '',
+          bairro: cotacao.vistoria_completa_endereco_bairro || '',
+          cidade: cotacao.vistoria_completa_endereco_cidade || '',
+          estado: cotacao.vistoria_completa_endereco_estado || '',
+          latitude: cotacao.vistoria_endereco_latitude,
+          longitude: cotacao.vistoria_endereco_longitude,
+        };
+        obsResponsavel = cotacao.vistoria_completa_responsavel_eu_mesmo
+          ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}`
+          : `Responsável: ${cotacao.vistoria_completa_responsavel_nome || ''} - ${cotacao.vistoria_completa_responsavel_telefone || ''}`;
+      } else {
+        // FALLBACK: vistoria_completa_* está vazio, usar vistoria_* simples
+        console.log('[CriarInstalacaoPosPagamento] FALLBACK: vistoria_completa_* vazio, usando vistoria_*');
+        dataAgendada = cotacao.vistoria_data_agendada;
+        periodoAgendado = (cotacao as any).vistoria_periodo || cotacao.vistoria_horario_agendado;
+        
+        // Se ainda não tem data, usar data de amanhã como fallback para encaixes
+        if (!dataAgendada && cotacao.vistoria_permite_encaixe) {
+          const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+          dataAgendada = amanha;
+          console.log(`[CriarInstalacaoPosPagamento] Sem data agendada mas permite encaixe - usando amanhã: ${amanha}`);
+        }
+        
+        endereco = {
+          cep: cotacao.vistoria_endereco_cep || '',
+          logradouro: cotacao.vistoria_endereco_logradouro || '',
+          numero: cotacao.vistoria_endereco_numero || '',
+          bairro: cotacao.vistoria_endereco_bairro || '',
+          cidade: cotacao.vistoria_endereco_cidade || '',
+          estado: cotacao.vistoria_endereco_estado || '',
+          latitude: cotacao.vistoria_endereco_latitude,
+          longitude: cotacao.vistoria_endereco_longitude,
+        };
+        obsResponsavel = cotacao.vistoria_responsavel_eu_mesmo
+          ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}`
+          : `Responsável: ${cotacao.vistoria_responsavel_nome || ''} - ${cotacao.vistoria_responsavel_telefone || ''}`;
+      }
     } else {
       // FALLBACK para outros tipos futuros: usar vistoria_completa_*
       console.log(`[CriarInstalacaoPosPagamento] Modo: fallback (tipo=${tipoVistoria}) → usando dados de vistoria_completa_*`);
