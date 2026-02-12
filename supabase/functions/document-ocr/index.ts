@@ -238,6 +238,128 @@ IMPORTANTE:
 - Se encontrar, retorne APENAS: {"cpf": "XXX.XXX.XXX-XX"}
 - Se realmente não conseguir ler, retorne: {"cpf": "ilegivel"}`;
 
+/**
+ * Tenta reparar um JSON truncado pela IA (max_tokens atingido).
+ * Estratégia: remover string incompleta no final, fechar chaves/colchetes pendentes.
+ */
+function tryRepairTruncatedJSON(raw: string): object | null {
+  let s = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  
+  // Corrigir placeholders
+  s = s.replace(/_CONFIDENCE_/g, '0.95');
+  s = s.replace(/:\s*_[A-Z_]+_/g, ': null');
+
+  // Tentar parse direto primeiro (caso já funcione)
+  try { return JSON.parse(s); } catch { /* continue */ }
+
+  // Remover trailing comma antes de tentar fechar
+  s = s.replace(/,\s*$/, '');
+
+  // Se termina no meio de uma string (aspas não fechadas), truncar a última string
+  // Contar aspas (ignorando escaped)
+  let inString = false;
+  let lastQuoteIndex = -1;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\' && inString) { i++; continue; }
+    if (s[i] === '"') {
+      inString = !inString;
+      lastQuoteIndex = i;
+    }
+  }
+
+  if (inString && lastQuoteIndex >= 0) {
+    // Estamos dentro de uma string não fechada - truncar no início dessa string
+    // Encontrar o início do valor da string (a aspas de abertura)
+    // Precisamos remover desde a última key:value incompleta
+    // Estratégia: cortar tudo após a última aspas de abertura e fechar com aspas
+    s = s.substring(0, lastQuoteIndex + 1);
+    // Agora s termina com uma aspas de abertura - precisamos adicionar conteúdo vazio + fechar
+    // Voltar mais: remover a key incompleta
+    // Encontrar a última vírgula ou { ou [ antes dessa posição
+    const beforeKey = s.lastIndexOf(',', lastQuoteIndex - 1);
+    const beforeBrace = s.lastIndexOf('{', lastQuoteIndex - 1);
+    const beforeBracket = s.lastIndexOf('[', lastQuoteIndex - 1);
+    const cutPoint = Math.max(beforeKey, beforeBrace, beforeBracket);
+    
+    if (cutPoint >= 0) {
+      if (s[cutPoint] === ',') {
+        s = s.substring(0, cutPoint); // remover a vírgula e tudo depois
+      } else {
+        s = s.substring(0, cutPoint + 1); // manter o { ou [
+      }
+    }
+  }
+
+  // Remover trailing comma novamente
+  s = s.replace(/,\s*$/, '');
+
+  // Contar chaves e colchetes abertos
+  let openBraces = 0;
+  let openBrackets = 0;
+  inString = false;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\' && inString) { i++; continue; }
+    if (s[i] === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (s[i] === '{') openBraces++;
+    if (s[i] === '}') openBraces--;
+    if (s[i] === '[') openBrackets++;
+    if (s[i] === ']') openBrackets--;
+  }
+
+  // Fechar pendentes
+  for (let i = 0; i < openBrackets; i++) s += ']';
+  for (let i = 0; i < openBraces; i++) s += '}';
+
+  try {
+    return JSON.parse(s);
+  } catch {
+    console.error('[OCR] Reparo de JSON falhou. Tentando extração via regex...');
+  }
+
+  // Fallback: extrair campos básicos via regex
+  try {
+    const tipoMatch = raw.match(/"tipo_detectado"\s*:\s*"([^"]+)"/);
+    const sugestaoMatch = raw.match(/"sugestao"\s*:\s*"([^"]+)"/);
+    const motivoMatch = raw.match(/"motivo"\s*:\s*"([^"]+)"/);
+    const confiancaMatch = raw.match(/"confianca"\s*:\s*([\d.]+)/);
+    const legivelMatch = raw.match(/"legivel"\s*:\s*(true|false)/);
+    const validoMatch = raw.match(/"valido"\s*:\s*(true|false)/);
+    const sucessoMatch = raw.match(/"sucesso"\s*:\s*(true|false)/);
+
+    if (tipoMatch) {
+      // Extrair dados básicos também
+      const dados: Record<string, string | null> = {};
+      const dadosFields = ['nome', 'cpf', 'rg', 'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'nome_proprietario', 'categoria', 'numero_registro', 'validade'];
+      for (const field of dadosFields) {
+        const m = raw.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
+        if (m) dados[field] = m[1];
+      }
+      // Extrair anos
+      const anoFabMatch = raw.match(/"ano_fabricacao"\s*:\s*(\d+)/);
+      const anoModMatch = raw.match(/"ano_modelo"\s*:\s*(\d+)/);
+      if (anoFabMatch) dados['ano_fabricacao'] = anoFabMatch[1];
+      if (anoModMatch) dados['ano_modelo'] = anoModMatch[1];
+
+      return {
+        tipo_detectado: tipoMatch[1],
+        sucesso: sucessoMatch ? sucessoMatch[1] === 'true' : true,
+        dados,
+        legivel: legivelMatch ? legivelMatch[1] === 'true' : true,
+        valido: validoMatch ? validoMatch[1] === 'true' : true,
+        sugestao: sugestaoMatch?.[1] || 'revisar',
+        motivo: motivoMatch?.[1] || 'Resposta da IA foi truncada - dados parciais recuperados',
+        confianca: confiancaMatch ? parseFloat(confiancaMatch[1]) : 0.5,
+        _reparado: true,
+      };
+    }
+  } catch {
+    // Falhou completamente
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -343,7 +465,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
             ],
           },
         ],
-        max_tokens: 2500,
+        max_tokens: 4000,
         temperature: 0.1,
       }),
     });
@@ -413,14 +535,21 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       
       result = JSON.parse(cleanContent);
     } catch (parseError) {
-      console.error('Failed to parse OCR result:', content);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Erro ao interpretar resultado da análise',
-          rawResponse: content,
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.warn('[OCR] JSON.parse falhou, tentando reparar JSON truncado...');
+      const repaired = tryRepairTruncatedJSON(content);
+      if (repaired) {
+        console.warn('[OCR] JSON reparado com sucesso após truncamento');
+        result = repaired;
+      } else {
+        console.error('[OCR] Reparo falhou. Conteúdo bruto:', content);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Erro ao interpretar resultado da análise',
+            rawResponse: content,
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     console.log('OCR result:', result);
