@@ -128,7 +128,7 @@ export const generateStyles = (): string => `
 <style>
   @page {
     size: A4;
-    margin: 20mm;
+    margin: 15mm 18mm;
   }
   
   * {
@@ -140,8 +140,8 @@ export const generateStyles = (): string => `
   body {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 10pt;
-    line-height: 1.15;
-    color: #333333;
+    line-height: 1.4;
+    color: #222222;
     background: #ffffff;
   }
   
@@ -150,106 +150,153 @@ export const generateStyles = (): string => `
     margin: 0 auto;
   }
   
-  /* CABEÇALHO */
+  /* ===== CABEÇALHO ===== */
   .header {
     text-align: center;
-    margin-bottom: 20pt;
-    padding-bottom: 10pt;
-    border-bottom: 2px solid #1e40af;
+    margin-bottom: 14pt;
   }
-  
-  .header-logo {
-    font-size: 18pt;
-    font-weight: bold;
-    color: #1e40af;
+
+  .header-gradient {
+    background: linear-gradient(90deg, #c41e3a 0%, #1a1a6e 100%);
+    height: 8px;
+    margin-bottom: 10pt;
+  }
+
+  .header-logo-area {
     margin-bottom: 6pt;
   }
-  
+
+  .header-logo-area img {
+    max-height: 55px;
+    max-width: 180px;
+  }
+
   .header-empresa {
-    font-size: 9pt;
-    color: #666666;
-    margin-bottom: 4pt;
+    font-size: 8pt;
+    color: #444;
+    line-height: 1.3;
+    margin-bottom: 8pt;
   }
-  
+
   .header-titulo {
-    font-size: 16pt;
-    font-weight: bold;
-    color: #1e40af;
-    margin-top: 12pt;
-    margin-bottom: 4pt;
-  }
-  
-  .header-numero {
+    background: #1a1a6e;
+    color: #ffffff;
     font-size: 11pt;
     font-weight: bold;
+    padding: 6pt 10pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
   }
-  
-  /* SEÇÕES */
+
+  .header-numero {
+    font-size: 10pt;
+    font-weight: bold;
+    padding: 4pt 0;
+    border-bottom: 2px solid #1a1a6e;
+    margin-bottom: 10pt;
+  }
+
+  /* ===== SEÇÕES ===== */
   .section {
-    margin-bottom: 16pt;
+    margin-bottom: 10pt;
     page-break-inside: avoid;
   }
   
   .section-title {
-    font-size: 12pt;
+    background: #1a1a6e;
+    color: #ffffff;
+    font-size: 9pt;
     font-weight: bold;
-    color: #1e40af;
-    margin-bottom: 10pt;
-    padding-bottom: 4pt;
-    border-bottom: 1px solid #e5e7eb;
+    padding: 4pt 8pt;
+    text-transform: uppercase;
+    margin-bottom: 0;
+    letter-spacing: 0.3pt;
   }
   
   .section-subtitle {
-    font-size: 10pt;
+    font-size: 9pt;
     font-weight: bold;
-    color: #374151;
-    margin-top: 10pt;
-    margin-bottom: 6pt;
+    color: #1a1a6e;
+    text-align: center;
+    text-transform: uppercase;
+    padding: 6pt 0;
+    margin: 8pt 0 4pt 0;
+    border-top: 1px solid #1a1a6e;
+    border-bottom: 1px solid #1a1a6e;
   }
-  
-  /* CAMPOS */
+
+  /* ===== GRID DE CAMPOS (estilo tabela) ===== */
+  .fields-grid {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 8pt;
+    font-size: 9pt;
+  }
+
+  .fields-grid td {
+    border: 1px solid #999;
+    padding: 3pt 5pt;
+    vertical-align: top;
+  }
+
+  .fields-grid .field-label {
+    font-weight: bold;
+    font-size: 7pt;
+    text-transform: uppercase;
+    color: #333;
+    display: block;
+    margin-bottom: 1pt;
+  }
+
+  .fields-grid .field-value {
+    font-size: 9pt;
+    color: #111;
+  }
+
+  /* Campos inline legados */
   .field-row {
     display: flex;
     flex-wrap: wrap;
-    margin-bottom: 6pt;
+    margin-bottom: 4pt;
   }
   
   .field {
-    margin-right: 20pt;
-    margin-bottom: 4pt;
+    margin-right: 16pt;
+    margin-bottom: 3pt;
   }
   
   .field-label {
     font-weight: bold;
     display: inline;
+    font-size: 9pt;
   }
   
   .field-value {
     display: inline;
+    font-size: 9pt;
   }
   
   .field-full {
     width: 100%;
-    margin-bottom: 6pt;
+    margin-bottom: 4pt;
   }
   
-  /* TABELAS */
+  /* ===== TABELAS ===== */
   .table-valores {
     width: 100%;
     border-collapse: collapse;
-    margin: 12pt 0;
-    font-size: 10pt;
+    margin: 8pt 0;
+    font-size: 9pt;
   }
   
-  .table-valores td {
-    padding: 8pt 10pt;
-    border: 1px solid #d1d5db;
+  .table-valores td,
+  .table-valores th {
+    padding: 4pt 6pt;
+    border: 1px solid #999;
   }
   
   .table-valores td:first-child {
-    background-color: #f9fafb;
     font-weight: normal;
-    width: 60%;
   }
   
   .table-valores td:last-child {
@@ -257,22 +304,46 @@ export const generateStyles = (): string => `
     font-weight: bold;
   }
   
-  .table-valores .header-row td {
-    background-color: #1e40af;
+  .table-valores .header-row td,
+  .table-valores thead th {
+    background-color: #1a1a6e;
     color: white;
     font-weight: bold;
     text-align: center;
   }
-  
-  /* COBERTURAS */
+
+  /* Tabelas do TipTap */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6pt 0;
+    font-size: 9pt;
+  }
+
+  table td,
+  table th {
+    border: 1px solid #999;
+    padding: 3pt 5pt;
+    vertical-align: top;
+  }
+
+  table th,
+  table thead td {
+    background-color: #1a1a6e;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 8pt;
+    text-transform: uppercase;
+  }
+
+  /* ===== COBERTURAS ===== */
   .cobertura-list {
-    margin: 10pt 0;
+    margin: 6pt 0;
   }
   
   .cobertura-item {
-    font-family: 'Courier New', monospace;
-    font-size: 10pt;
-    margin-bottom: 4pt;
+    font-size: 9pt;
+    margin-bottom: 2pt;
     padding-left: 5pt;
   }
   
@@ -281,15 +352,16 @@ export const generateStyles = (): string => `
     font-weight: bold;
   }
   
-  /* DECLARAÇÕES */
+  /* ===== DECLARAÇÕES / CORPO ===== */
   .declaracao {
-    margin-bottom: 12pt;
+    margin-bottom: 8pt;
     text-align: justify;
   }
   
   .declaracao-titulo {
     font-weight: bold;
-    margin-bottom: 4pt;
+    margin-bottom: 3pt;
+    font-size: 9pt;
   }
   
   .declaracao-texto {
@@ -297,34 +369,33 @@ export const generateStyles = (): string => `
     line-height: 1.4;
   }
   
-  /* DESTAQUE */
+  /* ===== DESTAQUE ===== */
   .highlight-box {
-    background-color: #eff6ff;
-    border: 1px solid #1e40af;
-    border-radius: 4pt;
-    padding: 10pt;
-    margin: 10pt 0;
+    background-color: #f0f4ff;
+    border: 1px solid #1a1a6e;
+    padding: 8pt;
+    margin: 8pt 0;
+    font-size: 9pt;
   }
   
   .nota-rodape {
-    font-size: 8pt;
+    font-size: 7pt;
     color: #666666;
     font-style: italic;
-    margin-top: 8pt;
+    margin-top: 6pt;
   }
   
-  /* ASSINATURA */
+  /* ===== ASSINATURA ===== */
   .signature-area {
-    margin-top: 40pt;
-    padding-top: 20pt;
-    border-top: 1px solid #e5e7eb;
+    margin-top: 30pt;
+    padding-top: 15pt;
     page-break-inside: avoid;
   }
   
   .signature-local-data {
     text-align: center;
-    margin-bottom: 50pt;
-    font-size: 10pt;
+    margin-bottom: 40pt;
+    font-size: 9pt;
   }
   
   .signature-block {
@@ -336,64 +407,67 @@ export const generateStyles = (): string => `
   
   .signature-line {
     border-top: 1px solid #333333;
-    width: 280px;
+    width: 260px;
     margin: 0 auto;
-    padding-top: 6pt;
-    font-size: 9pt;
+    padding-top: 4pt;
+    font-size: 8pt;
   }
   
   .signature-name {
     font-weight: bold;
-    font-size: 10pt;
+    font-size: 9pt;
   }
   
   .signature-doc {
-    font-size: 8pt;
+    font-size: 7pt;
     color: #666666;
   }
   
   .signature-role {
-    font-size: 9pt;
+    font-size: 8pt;
     color: #374151;
   }
   
-  /* RODAPÉ */
+  /* ===== RODAPÉ ===== */
   .footer {
-    margin-top: 30pt;
+    margin-top: 20pt;
     text-align: center;
-    font-size: 8pt;
-    color: #666666;
-    border-top: 1px solid #e5e7eb;
-    padding-top: 10pt;
+    font-size: 7pt;
+    color: #888;
+    border-top: 2px solid #1a1a6e;
+    padding-top: 6pt;
   }
   
-  /* PÁGINA */
+  /* ===== PAGINAÇÃO ===== */
   .page-break {
     page-break-after: always;
   }
   
-  /* MARKDOWN CONVERTED */
+  /* ===== MARKDOWN/TIPTAP CONVERTED ===== */
   h1, h2, h3, h4, h5, h6 {
-    margin-top: 16pt;
-    margin-bottom: 8pt;
+    margin-top: 10pt;
+    margin-bottom: 4pt;
   }
   
-  h1 { font-size: 16pt; color: #1e40af; }
-  h2 { font-size: 14pt; color: #1e40af; }
-  h3 { font-size: 12pt; color: #374151; }
+  h1 { font-size: 12pt; color: #1a1a6e; }
+  h2 { font-size: 11pt; color: #1a1a6e; background: #1a1a6e; color: #fff; padding: 4pt 8pt; text-transform: uppercase; }
+  h3 { font-size: 10pt; color: #1a1a6e; text-transform: uppercase; border-bottom: 1px solid #1a1a6e; padding-bottom: 2pt; }
   
   p {
-    margin-bottom: 8pt;
+    margin-bottom: 6pt;
     text-align: justify;
+    font-size: 9pt;
+    line-height: 1.4;
   }
   
   ul, ol {
-    margin-left: 20pt;
-    margin-bottom: 8pt;
+    margin-left: 16pt;
+    margin-bottom: 6pt;
+    font-size: 9pt;
   }
   
   li {
-    margin-bottom: 4pt;
+    margin-bottom: 2pt;
   }
   
   strong, b {
@@ -411,17 +485,16 @@ export const generateStyles = (): string => `
 export function generateHeader(dados: TermoAfiliacaoData): string {
   return `
 <div class="header">
-  <div style="text-align: center; margin-bottom: 8pt;">
-    <img src="https://pratic-connect-21.lovable.app/images/logo-praticcar.jpg" alt="Logo PraticCar" style="max-height: 60px; max-width: 200px;" onerror="this.style.display='none'" />
+  <div class="header-gradient"></div>
+  <div class="header-logo-area">
+    <img src="https://pratic-connect-21.lovable.app/images/logo-praticcar.jpg" alt="Logo PraticCar" onerror="this.style.display='none'" />
   </div>
   <div class="header-empresa">
-    ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR<br>
-    CNPJ: ${dados.empresa.cnpj}<br>
-    ${dados.empresa.logradouro}, ${dados.empresa.numero} - ${dados.empresa.bairro}<br>
-    ${dados.empresa.cidade}/${dados.empresa.uf} - CEP ${dados.empresa.cep}
+    ${dados.empresa.razao_social || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'}<br>
+    CNPJ: ${dados.empresa.cnpj} | ${dados.empresa.logradouro}, ${dados.empresa.numero} - ${dados.empresa.bairro} - ${dados.empresa.cidade}/${dados.empresa.uf} - CEP ${dados.empresa.cep}
   </div>
   <div class="header-titulo">TERMO DE AFILIAÇÃO AO PROGRAMA DE SOCORRO MÚTUO</div>
-  <div class="header-numero">Nº ${dados.contrato.numero}</div>
+  <div class="header-numero">Contrato Nº ${dados.contrato.numero}</div>
 </div>
 `;
 }
