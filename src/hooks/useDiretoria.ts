@@ -39,12 +39,22 @@ export function useDiretoria() {
   // Salvar configuração
   const salvarConfigMutation = useMutation({
     mutationFn: async ({ chave, valor }: { chave: string; valor: string }) => {
+      // Verificar se profile existe antes de referenciar
+      let updatedBy: string | null = null;
+      if (profile?.id) {
+        const { data: profileExists } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', profile.id)
+          .maybeSingle();
+        updatedBy = profileExists?.id || null;
+      }
       const { error } = await supabase
         .from('configuracoes')
         .update({ 
           valor, 
           updated_at: new Date().toISOString(),
-          updated_by: profile?.id
+          updated_by: updatedBy
         })
         .eq('chave', chave);
       if (error) throw error;
