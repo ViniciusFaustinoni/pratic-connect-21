@@ -591,9 +591,10 @@ export default function GerarDocumento() {
                 </div>
               ) : (
                 <ScrollArea className="h-[500px] border rounded-lg p-4 bg-muted/30">
-                  <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                    {previewConteudo || 'Carregando preview...'}
-                  </div>
+                  <div
+                    className="prose prose-sm dark:prose-invert max-w-none leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: previewConteudo || '<p class="text-muted-foreground">Carregando preview...</p>' }}
+                  />
                 </ScrollArea>
               )}
             </CardContent>
