@@ -186,10 +186,8 @@ export default function TemplateForm() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Coluna Principal */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Informações Básicas */}
+          <div className="space-y-6">
+              {/* Informações Básicas - Full width */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -342,49 +340,45 @@ export default function TemplateForm() {
                 </CardContent>
               </Card>
 
-              {/* Editor de Conteúdo */}
+              {/* Editor de Conteúdo + Variáveis lado a lado */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Conteúdo do Documento</CardTitle>
                   <CardDescription>
-                    Use {'{{variavel}}'} para inserir dados dinâmicos. Clique nas variáveis ao lado para inserir.
+                    Use {'{{variavel}}'} para inserir dados dinâmicos. Arraste ou clique nas variáveis ao lado para inserir.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <FormField
-                    control={form.control}
-                    name="conteudo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <TemplateEditor
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Digite o conteúdo do documento aqui..."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-              </Card>
-            </div>
+                  <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+                    {/* Editor TipTap */}
+                    <FormField
+                      control={form.control}
+                      name="conteudo"
+                      render={({ field }) => (
+                        <FormItem className="min-w-0">
+                          <FormControl>
+                            <TemplateEditor
+                              value={field.value}
+                              onChange={field.onChange}
+                              placeholder="Digite o conteúdo do documento aqui..."
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-            {/* Coluna Lateral - Variáveis */}
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Variáveis Disponíveis</CardTitle>
-                  <CardDescription>
-                    Clique para inserir no documento
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <VariaveisSelector onSelect={handleInserirVariavel} />
+                    {/* Variáveis - sidebar dentro do card */}
+                    <div className="border rounded-lg p-3 bg-muted/30">
+                      <h4 className="text-sm font-semibold mb-1">Variáveis Disponíveis</h4>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Arraste ou clique para inserir
+                      </p>
+                      <VariaveisSelector onSelect={handleInserirVariavel} />
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
-            </div>
           </div>
 
           <Separator />

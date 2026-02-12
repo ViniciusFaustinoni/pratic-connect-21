@@ -107,10 +107,8 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
         if (!clipboardData) return false;
         const html = clipboardData.getData('text/html');
         if (html) {
-          // Clean Word junk, TipTap will handle the rest
           const cleaned = cleanWordPaste(html);
           if (cleaned !== html) {
-            // Replace clipboard with cleaned version
             event.preventDefault();
             editor?.commands.insertContent(cleaned, {
               parseOptions: { preserveWhitespace: false },
@@ -118,7 +116,19 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
             return true;
           }
         }
-        return false; // let TipTap handle normally
+        return false;
+      },
+      handleDrop: (view, event) => {
+        const text = event.dataTransfer?.getData('text/plain');
+        if (text && /^\{\{[^}]+\}\}$/.test(text)) {
+          event.preventDefault();
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (pos && editor) {
+            editor.chain().focus().insertContentAt(pos.pos, text).run();
+          }
+          return true;
+        }
+        return false;
       },
     },
     onUpdate: ({ editor: ed }) => {
@@ -136,6 +146,15 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
     return () => {
       if (_globalEditorRef === editor) _globalEditorRef = null;
     };
+  }, [editor]);
+
+  // Allow drag-over on editor element
+  useEffect(() => {
+    const el = editor?.view?.dom;
+    if (!el) return;
+    const handler = (e: Event) => e.preventDefault();
+    el.addEventListener('dragover', handler);
+    return () => el.removeEventListener('dragover', handler);
   }, [editor]);
 
   // Sync external value changes into editor (e.g. form reset)

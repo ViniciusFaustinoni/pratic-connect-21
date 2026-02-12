@@ -208,7 +208,16 @@ export function VariaveisSelector({ onSelect }: VariaveisSelectorProps) {
                   {variaveisFiltradas.map(({ codigo, descricao }) => (
                     <div 
                       key={codigo}
-                      className="flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-muted/50 group"
+                      draggable="true"
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/plain', `{{${codigo}}}`);
+                        e.dataTransfer.effectAllowed = 'copy';
+                        (e.currentTarget as HTMLElement).classList.add('opacity-50');
+                      }}
+                      onDragEnd={(e) => {
+                        (e.currentTarget as HTMLElement).classList.remove('opacity-50');
+                      }}
+                      className="flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-muted/50 group cursor-grab active:cursor-grabbing"
                     >
                       <div className="flex-1 min-w-0">
                         <code className="text-sm font-mono text-primary">
