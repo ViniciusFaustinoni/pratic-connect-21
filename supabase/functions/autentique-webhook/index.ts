@@ -378,12 +378,107 @@ serve(async (req) => {
       }
     }
 
+    // ========== FALLBACK: Buscar em sinistros ==========
     if (!contrato) {
-      console.log("[autentique-webhook] ❌ Contrato NÃO ENCONTRADO após todos os fallbacks");
-      console.log("[autentique-webhook] Documento ID:", documentId);
-      console.log("[autentique-webhook] Email tentado:", payload.event?.data?.user?.email);
-      console.log("[autentique-webhook] Telefone tentado:", payload.event?.data?.user?.phone);
-      return new Response(JSON.stringify({ received: true, message: "Contract not found" }), {
+      console.log("[autentique-webhook] Contrato não encontrado, tentando buscar em sinistros...");
+      
+      const { data: sinistroDoc, error: sinistroError } = await supabase
+        .from("sinistros")
+        .select(`
+          *,
+          associado:associados(id, nome, cpf, telefone, whatsapp, email)
+        `)
+        .eq("autentique_documento_id", documentId)
+        .maybeSingle();
+
+      if (!sinistroError && sinistroDoc) {
+        console.log(`[autentique-webhook] ✓ Sinistro encontrado: ${sinistroDoc.protocolo}`);
+        
+        const signerData = payload.event?.data?.user;
+        const signerName = signerData?.name || sinistroDoc.associado?.nome || "Associado";
+
+        if (eventType === "signature.accepted" || (eventType === "signature.updated" && payload.event?.data?.signed)) {
+          console.log(`[autentique-webhook] 🎉 Termo de evento ${sinistroDoc.protocolo} ASSINADO por ${signerName}`);
+
+          // Atualizar sinistro
+          await supabase
+            .from("sinistros")
+            .update({
+              termo_anuencia_assinado: true,
+              termo_anuencia_assinado_em: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", sinistroDoc.id);
+
+          // Registrar histórico
+          await supabase.from("sinistro_historico").insert({
+            sinistro_id: sinistroDoc.id,
+            status_anterior: sinistroDoc.status,
+            status_novo: sinistroDoc.status,
+            observacao: `Termo de Entrada de Evento assinado eletronicamente por ${signerName} via Autentique`,
+          });
+
+          // Tentar baixar PDF assinado e salvar
+          try {
+            const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
+            if (autentiqueApiKey) {
+              const pdfQuery = `query { document(id: "${documentId}") { files { signed } } }`;
+              const pdfResp = await fetch(AUTENTIQUE_API_URL, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${autentiqueApiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ query: pdfQuery }),
+              });
+              const pdfData = await pdfResp.json();
+              const signedUrl = pdfData.data?.document?.files?.signed;
+              
+              if (signedUrl) {
+                const pdfResponse = await fetch(signedUrl);
+                if (pdfResponse.ok) {
+                  const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer());
+                  const fileName = `sinistros/${sinistroDoc.id}/termo-evento-assinado-${Date.now()}.pdf`;
+                  
+                  await supabase.storage.from("contratos-assinados").upload(fileName, pdfBytes, {
+                    contentType: "application/pdf",
+                    upsert: false,
+                  });
+
+                  const { data: urlData } = supabase.storage.from("contratos-assinados").getPublicUrl(fileName);
+
+                  await supabase
+                    .from("sinistros")
+                    .update({ termo_anuencia_url: urlData.publicUrl })
+                    .eq("id", sinistroDoc.id);
+
+                  console.log("[autentique-webhook] ✓ PDF assinado do termo de evento salvo");
+                }
+              }
+            }
+          } catch (pdfErr: any) {
+            console.error("[autentique-webhook] Erro ao baixar PDF do termo:", pdfErr.message);
+          }
+
+          // Notificar responsável
+          if (sinistroDoc.analista_id) {
+            await supabase.from("notificacoes").insert({
+              user_id: sinistroDoc.analista_id,
+              titulo: "Termo de Evento Assinado! ✅",
+              mensagem: `O termo do evento ${sinistroDoc.protocolo} foi assinado por ${signerName}.`,
+              tipo: "success",
+              link: `/eventos/sinistros/${sinistroDoc.id}`,
+            });
+          }
+        } else if (eventType === "signature.viewed") {
+          console.log(`[autentique-webhook] Termo de evento ${sinistroDoc.protocolo} visualizado`);
+        }
+
+        return new Response(
+          JSON.stringify({ received: true, processed: eventType, type: "sinistro", documentId }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log("[autentique-webhook] ❌ Documento NÃO ENCONTRADO em contratos nem sinistros");
+      return new Response(JSON.stringify({ received: true, message: "Document not found" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
