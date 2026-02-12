@@ -367,6 +367,7 @@ const menuConfig: {
         { title: 'Gerar Documento', url: '/documentos/gerar', icon: FilePlus },
         { title: 'Histórico', url: '/documentos/historico', icon: History },
         { title: 'Templates', url: '/documentos/templates', icon: FileCode },
+        { title: 'Aditivos', url: '/documentos/aditivos', icon: FileText },
       ],
     },
     {
