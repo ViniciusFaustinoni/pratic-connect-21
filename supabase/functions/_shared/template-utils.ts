@@ -42,6 +42,7 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'associado.data_nascimento': formatDate(dados.cliente.data_nascimento),
     'associado.email': dados.cliente.email || '—',
     'associado.telefone': formatPhone(dados.cliente.telefone),
+    'associado.whatsapp': formatPhone(dados.cliente.telefone_secundario || dados.cliente.telefone),
     'associado.telefone_secundario': dados.cliente.telefone_secundario ? formatPhone(dados.cliente.telefone_secundario) : '—',
     'associado.logradouro': dados.cliente.logradouro || '—',
     'associado.numero': dados.cliente.numero || '—',
@@ -65,6 +66,7 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'veiculo.cor': dados.veiculo.cor || '—',
     'veiculo.combustivel': dados.veiculo.combustivel || '—',
     'veiculo.categoria': dados.veiculo.categoria || 'Automóvel',
+    'veiculo.tipo': dados.veiculo.categoria || 'Automóvel',
     'veiculo.tipo_uso': dados.veiculo.tipo_uso || 'Particular',
     'veiculo.codigo_fipe': dados.veiculo.codigo_fipe || '—',
     'veiculo.valor_fipe': formatCurrency(dados.veiculo.valor_fipe),
@@ -77,6 +79,9 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'plano.tipo': dados.plano.tipo || dados.plano.linha || 'Normal',
     'plano.linha': dados.plano.linha || '—',
     'plano.coberturas': (dados.plano.coberturas || []).join(', ') || 'Roubo e Furto, Assistência 24 horas',
+    'plano.descricao': (dados.plano.coberturas || []).join(', ') || 'Proteção veicular completa',
+    'plano.valor_base': formatCurrency(dados.contrato.valor_mensal),
+    'plano.cobertura_fipe': '100%',
     'plano.cota_participacao': `${dados.plano.cota_participacao || 10}%`,
     'plano.cota_participacao_valor': formatCurrency(cotaParticipacao),
     'plano.cota_minima': formatCurrency(dados.plano.cota_minima || 3000),
@@ -406,7 +411,9 @@ export const generateStyles = (): string => `
 export function generateHeader(dados: TermoAfiliacaoData): string {
   return `
 <div class="header">
-  <div class="header-logo">ABP PRATICCAR</div>
+  <div style="text-align: center; margin-bottom: 8pt;">
+    <img src="https://pratic-connect-21.lovable.app/images/logo-praticcar.jpg" alt="Logo PraticCar" style="max-height: 60px; max-width: 200px;" onerror="this.style.display='none'" />
+  </div>
   <div class="header-empresa">
     ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR<br>
     CNPJ: ${dados.empresa.cnpj}<br>
@@ -469,8 +476,13 @@ export function generateSecaoAssinatura(dados: TermoAfiliacaoData): string {
 /**
  * Converte markdown básico para HTML
  */
-export function markdownParaHTML(markdown: string): string {
-  let html = markdown;
+export function markdownParaHTML(conteudo: string): string {
+  // Se o conteúdo já é HTML rico (vindo do TipTap), não aplicar conversão markdown
+  if (conteudo.includes('<table') || conteudo.includes('<p>') || conteudo.includes('<p ') || conteudo.includes('<div')) {
+    return `<div class="section">${conteudo}</div>`;
+  }
+
+  let html = conteudo;
   
   // Headers
   html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
