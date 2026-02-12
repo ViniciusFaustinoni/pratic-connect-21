@@ -200,8 +200,8 @@ serve(async (req) => {
           local_vistoria,
           instalacao_origem_id,
           vistoria_origem_id,
-          associado:associados(nome),
-          veiculo:veiculos(placa)
+          associado:associados!servicos_associado_id_fkey(nome),
+          veiculo:veiculos!servicos_veiculo_id_fkey(placa)
         `)
         .is('profissional_id', null)
         .in('status', ['pendente', 'agendada'])
@@ -235,8 +235,8 @@ serve(async (req) => {
           local_vistoria,
           instalacao_origem_id,
           vistoria_origem_id,
-          associado:associados(nome),
-          veiculo:veiculos(placa)
+          associado:associados!servicos_associado_id_fkey(nome),
+          veiculo:veiculos!servicos_veiculo_id_fkey(placa)
         `)
         .is('profissional_id', null)
         .in('status', ['pendente', 'agendada'])
