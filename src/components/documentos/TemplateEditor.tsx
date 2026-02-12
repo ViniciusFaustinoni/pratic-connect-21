@@ -1,9 +1,20 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import UnderlineExt from '@tiptap/extension-underline';
+import TextAlign from '@tiptap/extension-text-align';
+import { Table as TableExt } from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import Placeholder from '@tiptap/extension-placeholder';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Code, Eye, FileText } from 'lucide-react';
+import { EditorToolbar } from './tiptap/EditorToolbar';
+import { VariableChipExtension, convertPlainTextToHTML, convertHTMLToStorage } from './tiptap/VariableChip';
+import type { Editor } from '@tiptap/react';
 
 interface TemplateEditorProps {
   value: string;
@@ -11,121 +22,145 @@ interface TemplateEditorProps {
   placeholder?: string;
 }
 
-// Renderizar preview com destaque nas variáveis
-function renderizarPreview(conteudo: string): React.ReactNode {
-  if (!conteudo.trim()) {
-    return (
-      <p className="text-muted-foreground italic">
-        Nenhum conteúdo ainda. Comece a escrever na aba "Editor".
-      </p>
-    );
-  }
-
-  const partes = conteudo.split(/(\{\{[^}]+\}\})/g);
-  
-  return partes.map((parte, index) => {
-    if (parte.match(/^\{\{[^}]+\}\}$/)) {
-      return (
-        <span
-          key={index}
-          className="inline-flex items-center bg-primary/10 text-primary px-1.5 py-0.5 rounded text-sm font-mono border border-primary/20"
-        >
-          {parte}
-        </span>
-      );
-    }
-    
-    // Processar markdown básico
-    return processarMarkdown(parte, index);
-  });
+// Clean Word / GDocs paste junk
+function cleanWordPaste(html: string): string {
+  let clean = html;
+  // Remove Word-specific tags
+  clean = clean.replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '');
+  clean = clean.replace(/<\/?o:[^>]*>/gi, '');
+  clean = clean.replace(/<\/?v:[^>]*>/gi, '');
+  clean = clean.replace(/<\/?w:[^>]*>/gi, '');
+  // Remove MsoNormal and mso-* styles
+  clean = clean.replace(/class="Mso[^"]*"/gi, '');
+  clean = clean.replace(/style="[^"]*mso-[^"]*"/gi, '');
+  // Remove empty spans
+  clean = clean.replace(/<span[^>]*>\s*<\/span>/gi, '');
+  // Remove xml namespace declarations
+  clean = clean.replace(/<\?xml[^>]*>/gi, '');
+  clean = clean.replace(/xmlns[:a-zA-Z]*="[^"]*"/gi, '');
+  return clean;
 }
 
-// Processador simples de markdown para preview
-function processarMarkdown(texto: string, baseIndex: number): React.ReactNode {
-  const linhas = texto.split('\n');
-  
-  return linhas.map((linha, i, arr) => {
-    let conteudo: React.ReactNode = linha;
-    
-    // Headers
-    if (linha.startsWith('# ')) {
-      conteudo = <h1 key={i} className="text-2xl font-bold mt-4 mb-2">{linha.slice(2)}</h1>;
-    } else if (linha.startsWith('## ')) {
-      conteudo = <h2 key={i} className="text-xl font-semibold mt-3 mb-2">{linha.slice(3)}</h2>;
-    } else if (linha.startsWith('### ')) {
-      conteudo = <h3 key={i} className="text-lg font-medium mt-2 mb-1">{linha.slice(4)}</h3>;
-    } else if (linha.startsWith('---')) {
-      conteudo = <hr key={i} className="my-4 border-border" />;
-    } else if (linha.startsWith('- [ ] ')) {
-      conteudo = (
-        <div key={i} className="flex items-center gap-2 my-1">
-          <span className="w-4 h-4 border rounded border-border" />
-          <span>{linha.slice(6)}</span>
-        </div>
-      );
-    } else if (linha.startsWith('- ')) {
-      conteudo = (
-        <div key={i} className="flex items-center gap-2 my-0.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-foreground" />
-          <span>{linha.slice(2)}</span>
-        </div>
-      );
-    } else if (linha.match(/^\*\*(.+)\*\*$/)) {
-      conteudo = <strong key={i}>{linha.replace(/\*\*/g, '')}</strong>;
-    } else if (linha.trim() === '') {
-      conteudo = <br key={i} />;
-    } else {
-      conteudo = <span key={i}>{linha}</span>;
-    }
-    
-    return (
-      <span key={`${baseIndex}-${i}`}>
-        {conteudo}
-        {typeof conteudo === 'string' && i < arr.length - 1 && <br />}
-      </span>
-    );
-  });
-}
-
-// Extrair variáveis para contador
+// Count unique variables in content
 function contarVariaveis(conteudo: string): number {
   const regex = /\{\{([^}]+)\}\}/g;
   const variaveis = new Set<string>();
   let match;
-  
   while ((match = regex.exec(conteudo)) !== null) {
     variaveis.add(match[1].trim());
   }
-  
   return variaveis.size;
+}
+
+// Strip HTML for character/line counting
+function stripHtml(html: string): string {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
+}
+
+// Render preview HTML with variable chips highlighted (static, non-editable)
+function renderPreviewHTML(html: string): string {
+  // Replace variable chip spans with styled versions
+  return html.replace(
+    /<span[^>]*data-variable="([^"]*)"[^>]*>[^<]*<\/span>/g,
+    '<span class="inline-flex items-center bg-primary/10 text-primary px-1.5 py-0.5 rounded text-sm font-mono border border-primary/20 mx-0.5">$1</span>'
+  );
+}
+
+// Ref holder for external access to the editor instance
+let _globalEditorRef: Editor | null = null;
+
+export function getTemplateEditor(): Editor | null {
+  return _globalEditorRef;
 }
 
 export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorProps) {
   const [tab, setTab] = useState<string>('editor');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
-  const qtdVariaveis = contarVariaveis(value);
-  const qtdLinhas = value.split('\n').length;
-  const qtdCaracteres = value.length;
+  const isExternalUpdate = useRef(false);
 
-  // Inserir texto na posição atual do cursor
-  const inserirNaPosicao = (texto: string) => {
-    if (textareaRef.current) {
-      const start = textareaRef.current.selectionStart;
-      const end = textareaRef.current.selectionEnd;
-      const novoValor = value.slice(0, start) + texto + value.slice(end);
-      onChange(novoValor);
-      
-      // Reposicionar cursor após o texto inserido
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.selectionStart = start + texto.length;
-          textareaRef.current.selectionEnd = start + texto.length;
-          textareaRef.current.focus();
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+      UnderlineExt,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      TableExt.configure({ resizable: true }),
+      TableRow,
+      TableCell,
+      TableHeader,
+      Placeholder.configure({
+        placeholder: placeholder || 'Digite o conteúdo do documento aqui...\n\nUse {{variavel}} para inserir variáveis dinâmicas.',
+      }),
+      VariableChipExtension,
+    ],
+    content: convertPlainTextToHTML(value),
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm dark:prose-invert max-w-none min-h-[400px] p-4 focus:outline-none',
+      },
+      handlePaste: (_view, event) => {
+        const clipboardData = event.clipboardData;
+        if (!clipboardData) return false;
+        const html = clipboardData.getData('text/html');
+        if (html) {
+          // Clean Word junk, TipTap will handle the rest
+          const cleaned = cleanWordPaste(html);
+          if (cleaned !== html) {
+            // Replace clipboard with cleaned version
+            event.preventDefault();
+            editor?.commands.insertContent(cleaned, {
+              parseOptions: { preserveWhitespace: false },
+            });
+            return true;
+          }
         }
-      }, 0);
+        return false; // let TipTap handle normally
+      },
+    },
+    onUpdate: ({ editor: ed }) => {
+      isExternalUpdate.current = true;
+      const html = ed.getHTML();
+      // Convert chip nodes back to {{var}} for storage
+      const storageHtml = convertHTMLToStorage(html);
+      onChange(storageHtml);
+    },
+  });
+
+  // Store global ref
+  useEffect(() => {
+    _globalEditorRef = editor;
+    return () => {
+      if (_globalEditorRef === editor) _globalEditorRef = null;
+    };
+  }, [editor]);
+
+  // Sync external value changes into editor (e.g. form reset)
+  useEffect(() => {
+    if (!editor) return;
+    if (isExternalUpdate.current) {
+      isExternalUpdate.current = false;
+      return;
     }
-  };
+    const currentStorage = convertHTMLToStorage(editor.getHTML());
+    if (currentStorage !== value) {
+      editor.commands.setContent(convertPlainTextToHTML(value), { emitUpdate: false });
+    }
+  }, [value, editor]);
+
+  // Stats
+  const plainText = stripHtml(value);
+  const qtdLinhas = plainText.split('\n').filter(l => l.trim()).length || 1;
+  const qtdCaracteres = plainText.length;
+  const qtdVariaveis = contarVariaveis(value);
+
+  // Preview HTML
+  const previewHtml = editor
+    ? renderPreviewHTML(editor.getHTML())
+    : '';
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -141,8 +176,7 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
               Preview
             </TabsTrigger>
           </TabsList>
-          
-          {/* Estatísticas */}
+
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="outline" className="font-normal">
               {qtdLinhas} linhas
@@ -160,20 +194,18 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
         </div>
 
         <TabsContent value="editor" className="m-0">
-          <Textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder || 'Digite o conteúdo do template aqui...\n\nUse {{variavel}} para inserir variáveis dinâmicas.\nExemplo: Olá, {{associado.nome}}!'}
-            className="min-h-[400px] border-0 rounded-none resize-none font-mono text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
+          <EditorToolbar editor={editor} />
+          <div className="tiptap-editor-wrapper">
+            <EditorContent editor={editor} />
+          </div>
         </TabsContent>
 
         <TabsContent value="preview" className="m-0">
           <ScrollArea className="h-[400px]">
-            <div className="p-4 prose prose-sm max-w-none dark:prose-invert leading-relaxed">
-              {renderizarPreview(value)}
-            </div>
+            <div
+              className="p-4 prose prose-sm max-w-none dark:prose-invert leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
           </ScrollArea>
         </TabsContent>
       </Tabs>
@@ -181,16 +213,13 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
   );
 }
 
-// Expor função para inserção externa
-export function useTemplateEditorInsert(editorRef: React.RefObject<HTMLTextAreaElement>, value: string, onChange: (v: string) => void) {
+// Export for external variable insertion (used by TemplateForm)
+export function useTemplateEditorInsert(_editorRef: any, _value: string, _onChange: (v: string) => void) {
+  // Legacy compatibility - now uses the global editor ref
   return (texto: string) => {
-    if (editorRef.current) {
-      const start = editorRef.current.selectionStart;
-      const end = editorRef.current.selectionEnd;
-      const novoValor = value.slice(0, start) + texto + value.slice(end);
-      onChange(novoValor);
-    } else {
-      onChange(value + texto);
+    const ed = getTemplateEditor();
+    if (ed) {
+      ed.chain().focus().insertContent(texto).run();
     }
   };
 }
