@@ -7,7 +7,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao } from "../_shared/termo-afiliacao-template.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
-import { buscarEGerarAditivos, substituirVariaveis, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, markdownParaHTML } from "../_shared/template-utils.ts";
+import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, markdownParaHTML } from "../_shared/template-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -200,6 +200,9 @@ serve(async (req) => {
       }
       templateUsado = "Termo de Afiliação (hardcoded fallback + aditivos dinâmicos)";
     }
+
+    // Limpeza final: garantir que nenhuma variável bruta apareça no HTML
+    contratoHTML = limparVariaveisNaoSubstituidas(contratoHTML);
 
     console.log(`[autentique-create-by-token] Template usado: ${templateUsado}`);
     console.log('[autentique-create-by-token] HTML gerado, tamanho:', contratoHTML.length, 'bytes');

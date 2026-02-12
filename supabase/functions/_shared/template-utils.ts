@@ -107,6 +107,17 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
 /**
  * Substitui todas as variáveis {{...}} no conteúdo
  */
+/**
+ * Remove qualquer {{variavel}} que não foi substituída
+ */
+export function limparVariaveisNaoSubstituidas(html: string): string {
+  const restantes = html.match(/\{\{[^}]+\}\}/g);
+  if (restantes) {
+    console.warn('[template-utils] Variáveis não substituídas encontradas:', restantes);
+  }
+  return html.replace(/\{\{[^}]+\}\}/g, '—');
+}
+
 export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData): string {
   const mapeamento = criarMapeamentoVariaveis(dados);
   let resultado = conteudo;
@@ -118,6 +129,9 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
       valor || '—'
     );
   }
+  
+  // Limpar variáveis residuais que não foram mapeadas
+  resultado = limparVariaveisNaoSubstituidas(resultado);
   
   return resultado;
 }
@@ -148,6 +162,7 @@ export const generateStyles = (): string => `
   .page {
     max-width: 210mm;
     margin: 0 auto;
+    overflow: hidden;
   }
   
   /* ===== CABEÇALHO ===== */
