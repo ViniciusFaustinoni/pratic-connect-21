@@ -10,6 +10,7 @@ import { generateTermoAfiliacao } from "../_shared/termo-afiliacao-template.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
 import { 
   substituirVariaveis, 
+  limparVariaveisNaoSubstituidas,
   generateStyles, 
   generateHeader, 
   generateFooter, 
@@ -170,6 +171,9 @@ serve(async (req) => {
       templateUsado = "Termo de Afiliação (hardcoded fallback)";
     }
     
+    // Limpeza final: garantir que nenhuma variável bruta apareça no HTML
+    contratoHTML = limparVariaveisNaoSubstituidas(contratoHTML);
+
     console.log(`[autentique-create] Template usado: ${templateUsado}`);
     console.log(`[autentique-create] HTML gerado: ${contratoHTML.length} bytes`);
 
