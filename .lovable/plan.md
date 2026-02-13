@@ -1,22 +1,19 @@
 
 
-# Fix: Redirecionamento 404 apos criar OS
+# Fix: Clique na OS redireciona para 404
 
 ## Problema
-Apos criar a OS com sucesso pelo dialog "Enviar para Oficina", o sistema redireciona para `/operacoes/ordens-servico`, mas essa rota nao existe. A rota correta e `/ordens-servico` (conforme registrada no `App.tsx`).
+A pagina de listagem (`/ordens-servico`) navega para `/ordens-servico/:id` ao clicar num card, mas a rota de detalhe esta registrada como `/oficinas/ordens/:id` no App.tsx.
 
-## Alteracao
-
-**Arquivo: `src/pages/eventos/SinistroAnalise.tsx`** (linha 714)
-
-Corrigir a rota no `onSuccess` do `EnviarParaOficinaDialog`:
+## Solucao
+Corrigir o `navigate` no arquivo `src/pages/oficinas/OrdensServico.tsx` (linha 85) para usar a rota correta:
 
 ```
 // De:
-onSuccess={() => navigate('/operacoes/ordens-servico')}
+onClick={() => navigate(`/ordens-servico/${os.id}`)}
 
 // Para:
-onSuccess={() => navigate('/ordens-servico')}
+onClick={() => navigate(`/oficinas/ordens/${os.id}`)}
 ```
 
 Uma unica linha a ser alterada.
