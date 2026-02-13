@@ -286,6 +286,7 @@ import CotacaoContratacao from "./pages/public/CotacaoContratacao";
 import AcompanhamentoProposta from "./pages/public/AcompanhamentoProposta";
 import TrackingAssistencia from "./pages/public/TrackingAssistencia";
 import AvaliarAssistencia from "./pages/avaliar/AvaliarAssistencia";
+import UploadDocumentosSinistro from "./pages/public/UploadDocumentosSinistro";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -344,6 +345,9 @@ const App = () => (
             
             {/* Public Avaliação Assistência Page */}
             <Route path="/avaliar/assistencia/:chamado_id" element={<AvaliarAssistencia />} />
+            
+            {/* Public Upload Documentos Sinistro */}
+            <Route path="/sinistro/documentos/:token" element={<UploadDocumentosSinistro />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

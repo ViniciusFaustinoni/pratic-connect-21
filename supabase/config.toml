@@ -389,3 +389,6 @@ verify_jwt = false
 
 [functions.autentique-cancelamento-create]
 verify_jwt = false
+
+[functions.upload-documento-sinistro]
+verify_jwt = false
