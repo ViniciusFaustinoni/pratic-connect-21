@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
   Loader2, Phone, Mail, MessageCircle, Copy, Send,
-  CheckCircle, FileSignature, ExternalLink, Car, User, Building2
+  CheckCircle, FileSignature, ExternalLink, Car, User, Building2, RefreshCw
 } from 'lucide-react';
 import { useUpdateOSStatus } from '@/hooks/useOrdensServico';
 import { useLancamentosContabeis } from '@/hooks/useLancamentosContabeis';
@@ -31,22 +31,17 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
   const queryClient = useQueryClient();
   const updateStatus = useUpdateOSStatus();
   const { criarLancamentoAutomatico } = useLancamentosContabeis();
-  const [step, setStep] = useState<'confirm' | 'signature'>('confirm');
   const [concluding, setConcluding] = useState(false);
   const [sendingTermo, setSendingTermo] = useState(false);
+  const [reenviarNotif, setReenviarNotif] = useState(false);
   const [signatureLink, setSignatureLink] = useState<string | null>(os?.autentique_url || null);
   const [assinado, setAssinado] = useState(os?.termo_saida_assinado || false);
   const [liberando, setLiberando] = useState(false);
 
   // Sync with os data
   useEffect(() => {
-    if (os?.autentique_url) {
-      setSignatureLink(os.autentique_url);
-      setStep('signature');
-    }
-    if (os?.termo_saida_assinado) {
-      setAssinado(true);
-    }
+    if (os?.autentique_url) setSignatureLink(os.autentique_url);
+    if (os?.termo_saida_assinado) setAssinado(true);
   }, [os]);
 
   // Polling for signature status
@@ -63,7 +58,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
       if ((data as any)?.termo_saida_assinado) {
         setAssinado(true);
         queryClient.invalidateQueries({ queryKey: ['ordem_servico', os.id] });
-        toast.success('Termo assinado! Veículo liberado.');
+        toast.success('Termo assinado! Agora você pode liberar o veículo.');
         clearInterval(interval);
       }
     }, 10000);
@@ -75,70 +70,80 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
   const veiculo = os?.veiculo;
   const oficina = os?.oficina;
 
+  // Derived state for button visibility
+  const statusAntesConcluido = os?.status !== 'concluido' && os?.status !== 'pendente_assinatura' && os?.status !== 'finalizado';
+  const termoEnviado = !!signatureLink;
+
   const handleConcluir = async () => {
     setConcluding(true);
     try {
-      // 1. Atualizar status para concluído
       await updateStatus.mutateAsync({
         id: os.id,
         status: 'concluido',
         observacao: 'OS concluída - Veículo pronto para retirada',
       });
 
-      // 2. Enviar WhatsApp ao associado
-      if (associado?.whatsapp || associado?.telefone) {
-        const phone = associado.whatsapp || associado.telefone;
-        const oficinaNome = oficina?.nome_fantasia || oficina?.razao_social || 'oficina';
-        const veiculoDesc = veiculo ? `*${veiculo.marca} ${veiculo.modelo}* placa *${veiculo.placa}*` : 'seu veículo';
-
-        // Montar endereço da oficina
-        const enderecoPartes = [
-          oficina?.logradouro || oficina?.endereco,
-          oficina?.numero,
-          oficina?.bairro,
-          oficina?.cidade,
-          oficina?.uf || oficina?.estado,
-        ].filter(Boolean);
-        const enderecoTexto = enderecoPartes.length > 0 ? enderecoPartes.join(', ') : '';
-
-        let mensagem = `Olá *${associado.nome}*! 🚗\n\n` +
-          `Informamos que o reparo do seu veículo ${veiculoDesc} foi *concluído com sucesso*!\n\n` +
-          `📍 *Por favor, compareça na oficina para retirar seu veículo:*\n` +
-          `🏪 *${oficinaNome}*\n`;
-
-        if (enderecoTexto) {
-          mensagem += `📌 Endereço: ${enderecoTexto}\n`;
-        }
-
-        mensagem += `\n📝 Você receberá um *Termo de Saída* para assinatura digital antes da liberação do veículo.\n\n` +
-          `Em caso de dúvidas, entre em contato conosco.\n\n` +
-          `*ABP PraticCar*`;
-
-        console.log('[OSConclusao] Enviando WhatsApp:', { telefone: phone, associado: associado.nome, oficina: oficinaNome, endereco: enderecoTexto });
-
-        try {
-          const { data, error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
-            body: { telefone: phone.replace(/\D/g, ''), mensagem },
-          });
-          console.log('[OSConclusao] Resposta WhatsApp:', { data, error: whatsError });
-          if (whatsError) {
-            toast.warning('Não foi possível enviar WhatsApp ao associado');
-          } else {
-            toast.success('Mensagem enviada ao associado via WhatsApp');
-          }
-        } catch (whatsErr) {
-          console.error('[OSConclusao] Erro ao enviar WhatsApp:', whatsErr);
-          toast.warning('Não foi possível enviar WhatsApp ao associado');
-        }
-      } else {
-        console.warn('[OSConclusao] Associado sem telefone/whatsapp:', associado);
-      }
-
-      setStep('signature');
+      // Enviar WhatsApp ao associado
+      await enviarWhatsAppConclusao();
     } catch (error) {
       console.error('[OSConclusao] Erro ao concluir:', error);
     } finally {
       setConcluding(false);
+    }
+  };
+
+  const enviarWhatsAppConclusao = async () => {
+    if (!(associado?.whatsapp || associado?.telefone)) {
+      console.warn('[OSConclusao] Associado sem telefone/whatsapp');
+      return;
+    }
+    const phone = associado.whatsapp || associado.telefone;
+    const oficinaNome = oficina?.nome_fantasia || oficina?.razao_social || 'oficina';
+    const veiculoDesc = veiculo ? `*${veiculo.marca} ${veiculo.modelo}* placa *${veiculo.placa}*` : 'seu veículo';
+
+    const enderecoPartes = [
+      oficina?.logradouro || oficina?.endereco,
+      oficina?.numero,
+      oficina?.bairro,
+      oficina?.cidade,
+      oficina?.uf || oficina?.estado,
+    ].filter(Boolean);
+    const enderecoTexto = enderecoPartes.length > 0 ? enderecoPartes.join(', ') : '';
+
+    let mensagem = `Olá *${associado.nome}*! 🚗\n\n` +
+      `Informamos que o reparo do seu veículo ${veiculoDesc} foi *concluído com sucesso*!\n\n` +
+      `📍 *Por favor, compareça na oficina para retirar seu veículo:*\n` +
+      `🏪 *${oficinaNome}*\n`;
+
+    if (enderecoTexto) {
+      mensagem += `📌 Endereço: ${enderecoTexto}\n`;
+    }
+
+    mensagem += `\n📝 Você receberá um *Termo de Saída* para assinatura digital antes da liberação do veículo.\n\n` +
+      `Em caso de dúvidas, entre em contato conosco.\n\n` +
+      `*ABP PraticCar*`;
+
+    try {
+      const { error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
+        body: { telefone: phone.replace(/\D/g, ''), mensagem },
+      });
+      if (whatsError) {
+        toast.warning('Não foi possível enviar WhatsApp ao associado');
+      } else {
+        toast.success('Mensagem enviada ao associado via WhatsApp');
+      }
+    } catch (whatsErr) {
+      console.error('[OSConclusao] Erro ao enviar WhatsApp:', whatsErr);
+      toast.warning('Não foi possível enviar WhatsApp ao associado');
+    }
+  };
+
+  const handleReenviarNotificacao = async () => {
+    setReenviarNotif(true);
+    try {
+      await enviarWhatsAppConclusao();
+    } finally {
+      setReenviarNotif(false);
     }
   };
 
@@ -154,7 +159,6 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
 
       setSignatureLink(data.signatureLink);
 
-      // Atualizar status para pendente_assinatura
       await updateStatus.mutateAsync({
         id: os.id,
         status: 'pendente_assinatura' as any,
@@ -164,11 +168,10 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
       queryClient.invalidateQueries({ queryKey: ['ordem_servico', os.id] });
       toast.success('Termo enviado para assinatura!');
 
-      // Enviar WhatsApp ao associado com link de assinatura
-      const associado = os?.sinistro?.veiculo?.associado || os?.veiculo?.associado;
+      // Enviar WhatsApp com link de assinatura
       const phone = associado?.whatsapp || associado?.telefone;
       if (associado && phone && data.signatureLink) {
-        const veiculoDesc = [os?.veiculo?.marca, os?.veiculo?.modelo].filter(Boolean).join(' ') || 'veículo';
+        const veiculoDesc = [veiculo?.marca, veiculo?.modelo].filter(Boolean).join(' ') || 'veículo';
         const mensagem = `Olá *${associado.nome}*! 📝\n\n` +
           `O *Termo de Saída* do seu veículo *${veiculoDesc}* está pronto para assinatura digital.\n\n` +
           `🔗 *Clique no link abaixo para assinar:*\n${data.signatureLink}\n\n` +
@@ -186,9 +189,6 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
           toast.warning('Termo enviado, mas não foi possível notificar via WhatsApp');
         }
       }
-
-      // Fechar modal após envio com sucesso
-      onOpenChange(false);
     } catch (err: any) {
       console.error('[OSConclusao] Erro ao enviar termo:', err);
       toast.error('Erro ao enviar termo: ' + (err.message || 'Erro desconhecido'));
@@ -202,13 +202,6 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
       navigator.clipboard.writeText(signatureLink);
       toast.success('Link copiado!');
     }
-  };
-
-  const handleSendWhatsApp = () => {
-    if (!signatureLink || !associado) return;
-    const phone = (associado.whatsapp || associado.telefone || '').replace(/\D/g, '');
-    const msg = encodeURIComponent(`Olá ${associado.nome}! Segue o link para assinar o Termo de Saída do seu veículo: ${signatureLink}`);
-    window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
   };
 
   const handleLiberarVeiculo = async () => {
@@ -264,6 +257,20 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
         observacao: 'Veículo liberado - Termo de Saída assinado',
       } as any);
 
+      // 5. WhatsApp de liberação
+      try {
+        const phone = associado?.whatsapp || associado?.telefone;
+        if (phone) {
+          const veiculoDesc = veiculo ? `${veiculo.marca} ${veiculo.modelo}` : 'seu veículo';
+          const mensagem = `Olá *${associado.nome}*! 🚗✅\n\nSeu veículo *${veiculoDesc}* foi *liberado*!\n\nO Termo de Saída foi assinado com sucesso. Você já pode retirar o veículo na oficina.\n\nObrigado pela confiança! 🙏\n\n*ABP PraticCar*`;
+          await supabase.functions.invoke('whatsapp-send-text', {
+            body: { telefone: phone.replace(/\D/g, ''), mensagem },
+          });
+        }
+      } catch (whatsErr) {
+        console.error('[OSConclusao] Erro WhatsApp liberação:', whatsErr);
+      }
+
       queryClient.invalidateQueries({ queryKey: ['ordem_servico'] });
       queryClient.invalidateQueries({ queryKey: ['sinistros'] });
       queryClient.invalidateQueries({ queryKey: ['lancamentos-contabeis'] });
@@ -289,7 +296,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSignature className="h-5 w-5" />
-            {assinado ? 'Veículo Liberado' : 'Concluir Ordem de Serviço'}
+            {assinado ? 'Liberar Veículo' : 'Concluir Ordem de Serviço'}
           </DialogTitle>
           <DialogDescription>OS {os.numero}</DialogDescription>
         </DialogHeader>
@@ -299,7 +306,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
           <div className="flex justify-center">
             <Badge className="bg-green-600 text-white text-sm px-4 py-1.5 gap-1.5">
               <CheckCircle className="h-4 w-4" />
-              Veículo Liberado - Termo Assinado
+              Termo Assinado - Pronto para Liberação
             </Badge>
           </div>
         )}
@@ -375,8 +382,8 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
 
         <Separator />
 
-        {/* Step 1: Concluir */}
-        {step === 'confirm' && os.status !== 'concluido' && (
+        {/* Phase 1: Concluir e Notificar (antes de concluído) */}
+        {statusAntesConcluido && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Ao concluir, o associado será notificado via WhatsApp que o veículo está pronto.
@@ -395,10 +402,25 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
           </div>
         )}
 
-        {/* Step 2: Assinatura */}
-        {(step === 'signature' || os.status === 'concluido' || os.status === 'pendente_assinatura') && (
-          <div className="space-y-4">
-            {!signatureLink && !assinado && (
+        {/* Phase 2+3: Após concluído - Reenviar Notificação + Enviar/Reenviar Termo */}
+        {!statusAntesConcluido && !assinado && (
+          <div className="space-y-3">
+            {/* Reenviar Notificação */}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleReenviarNotificacao}
+              disabled={reenviarNotif}
+            >
+              {reenviarNotif ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Reenviando...</>
+              ) : (
+                <><RefreshCw className="mr-2 h-4 w-4" />Reenviar Notificação de Conclusão</>
+              )}
+            </Button>
+
+            {/* Enviar ou Reenviar Termo */}
+            {!termoEnviado ? (
               <Button
                 className="w-full"
                 onClick={handleEnviarTermo}
@@ -410,10 +432,21 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
                   <><Send className="mr-2 h-4 w-4" />Enviar Termo para Assinatura</>
                 )}
               </Button>
-            )}
+            ) : (
+              <>
+                <Button
+                  className="w-full"
+                  onClick={handleEnviarTermo}
+                  disabled={sendingTermo}
+                >
+                  {sendingTermo ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Reenviando termo...</>
+                  ) : (
+                    <><RefreshCw className="mr-2 h-4 w-4" />Reenviar Termo de Saída</>
+                  )}
+                </Button>
 
-            {signatureLink && !assinado && (
-              <div className="space-y-3">
+                {/* Link de assinatura */}
                 <div className="rounded-lg border bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground mb-2">Link de assinatura:</p>
                   <div className="flex gap-2">
@@ -427,23 +460,25 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
                     <Copy className="h-3.5 w-3.5 mr-1" />
                     Copiar Link
                   </Button>
-                  <Button variant="outline" size="sm" className="flex-1" onClick={handleSendWhatsApp}>
-                    <MessageCircle className="h-3.5 w-3.5 mr-1" />
-                    Enviar WhatsApp
-                  </Button>
                   <Button variant="outline" size="sm" asChild>
-                    <a href={signatureLink} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-3.5 w-3.5" />
+                    <a href={signatureLink!} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                      Abrir
                     </a>
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
                   Aguardando assinatura... (verificação automática a cada 10s)
                 </p>
-              </div>
+              </>
             )}
+          </div>
+        )}
 
-            {assinado && os.termo_saida_url && (
+        {/* Phase 4: Assinado - Liberar Veículo */}
+        {assinado && (
+          <div className="space-y-3">
+            {os.termo_saida_url && (
               <Button variant="outline" className="w-full" asChild>
                 <a href={os.termo_saida_url} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="mr-2 h-4 w-4" />
@@ -452,20 +487,18 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
               </Button>
             )}
 
-            {assinado && (
-              <Button
-                className="w-full"
-                variant="default"
-                onClick={handleLiberarVeiculo}
-                disabled={liberando}
-              >
-                {liberando ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Liberando...</>
-                ) : (
-                  <><Car className="mr-2 h-4 w-4" />Liberar Veículo</>
-                )}
-              </Button>
-            )}
+            <Button
+              className="w-full"
+              variant="default"
+              onClick={handleLiberarVeiculo}
+              disabled={liberando}
+            >
+              {liberando ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Liberando...</>
+              ) : (
+                <><Car className="mr-2 h-4 w-4" />Liberar Veículo</>
+              )}
+            </Button>
           </div>
         )}
       </DialogContent>
