@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -136,6 +137,7 @@ export default function SinistroAnalise() {
   const [showAprovar, setShowAprovar] = useState(false);
   const [showReprovar, setShowReprovar] = useState(false);
   const [showSolicitarDocs, setShowSolicitarDocs] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<any>(null);
 
   const {
     sinistro,
@@ -405,44 +407,44 @@ export default function SinistroAnalise() {
                   {documentos.map((doc) => {
                     const isEnviado = doc.status === 'enviado' && doc.arquivo_url;
                     const isImage = doc.arquivo_url && /\.(jpg|jpeg|png|webp|gif)$/i.test(doc.arquivo_url);
+                    const isPdf = doc.arquivo_url && /\.pdf$/i.test(doc.arquivo_url);
                     return (
                       <div
                         key={doc.id}
-                        className="flex flex-col gap-2 p-3 rounded-md bg-muted"
+                        className="flex items-center gap-3 p-3 rounded-md bg-muted"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {isImage ? (
-                              <Image className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <FileText className="h-4 w-4 text-muted-foreground" />
-                            )}
-                            <span className="text-sm">{doc.nome_arquivo || doc.tipo}</span>
+                        {/* Thumbnail */}
+                        {isEnviado && isImage ? (
+                          <img
+                            src={doc.arquivo_url}
+                            alt={doc.nome_arquivo || doc.tipo}
+                            className="h-14 w-14 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity border"
+                            onClick={() => setPreviewDoc(doc)}
+                          />
+                        ) : (
+                          <div className="h-14 w-14 rounded-md bg-background border flex items-center justify-center flex-shrink-0">
+                            <FileText className="h-6 w-6 text-muted-foreground" />
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={doc.status === 'enviado' ? 'default' : 'outline'}>
-                              {doc.status}
-                            </Badge>
-                            {isEnviado && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                onClick={() => window.open(doc.arquivo_url, '_blank')}
-                              >
-                                Visualizar
-                              </Button>
-                            )}
-                          </div>
+                        )}
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium truncate block">{doc.nome_arquivo || doc.tipo}</span>
+                          <Badge variant={doc.status === 'enviado' ? 'default' : 'outline'} className="mt-1 text-xs">
+                            {doc.status}
+                          </Badge>
                         </div>
-                        {isEnviado && isImage && (
-                          <a href={doc.arquivo_url} target="_blank" rel="noopener noreferrer">
-                            <img
-                              src={doc.arquivo_url}
-                              alt={doc.nome_arquivo || doc.tipo}
-                              className="rounded-md max-h-48 object-cover w-full cursor-pointer hover:opacity-90 transition-opacity"
-                            />
-                          </a>
+
+                        {/* Action */}
+                        {isEnviado && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-3 text-xs flex-shrink-0"
+                            onClick={() => setPreviewDoc(doc)}
+                          >
+                            Ampliar
+                          </Button>
                         )}
                       </div>
                     );
@@ -641,6 +643,37 @@ export default function SinistroAnalise() {
         statusAtual={sinistro.status}
         associadoId={sinistro.associado_id}
       />
+
+      {/* Preview Dialog */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          {previewDoc?.arquivo_url && (
+            <>
+              {/\.(jpg|jpeg|png|webp|gif)$/i.test(previewDoc.arquivo_url) ? (
+                <img
+                  src={previewDoc.arquivo_url}
+                  alt={previewDoc.nome_arquivo || previewDoc.tipo}
+                  className="w-full h-auto max-h-[85vh] object-contain"
+                />
+              ) : /\.pdf$/i.test(previewDoc.arquivo_url) ? (
+                <iframe
+                  src={previewDoc.arquivo_url}
+                  title={previewDoc.nome_arquivo || previewDoc.tipo}
+                  className="w-full h-[85vh]"
+                />
+              ) : (
+                <div className="p-8 text-center">
+                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="mb-4">{previewDoc.nome_arquivo || previewDoc.tipo}</p>
+                  <Button onClick={() => window.open(previewDoc.arquivo_url, '_blank')}>
+                    Abrir em nova aba
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
