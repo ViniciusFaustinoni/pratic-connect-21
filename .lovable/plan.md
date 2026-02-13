@@ -1,76 +1,36 @@
 
-# Corrigir atribuicao automatica de tarefas - Multiplos problemas
+# Corrigir erro de versao do PDF.js Worker
 
-## Problemas identificados
+## Problema
 
-### Problema 1: Edge Function `atribuir-proxima-tarefa` retorna 500 (PGRST201)
-A versao **deployada** ainda contem o erro de relacionamento ambiguo com `veiculos`. Os logs mostram claramente:
+O erro ocorre porque a versao do pacote `pdfjs-dist` instalado foi atualizada automaticamente para **4.10.38** (devido ao `^4.4.168` no package.json), mas o Worker do PDF.js esta com a URL do CDN fixada na versao **4.4.168**:
+
 ```
-Could not embed because more than one relationship was found for 'servicos' and 'veiculos'
-```
-A correcao anterior (FK hint `!servicos_veiculo_id_fkey`) foi aplicada em duas queries, mas a funcao precisa ser re-deployada.
-
-### Problema 2: `cron-atribuir-tarefas` tem o MESMO bug
-Nas linhas 204 e 239, usa `veiculo:veiculos(placa)` sem o hint de FK. Tambem precisa de `!servicos_veiculo_id_fkey` e `!servicos_associado_id_fkey`.
-
-### Problema 3: Nenhum registro em `servicos` para a cotacao do MARCOS VINICIUS
-A cotacao `dc131311...` tem:
-- `status = 'aceita'`, `status_contratacao = 'pagamento_ok'`
-- `tipo_vistoria = 'autovistoria'`
-- `vistoria_permite_encaixe = true`
-- `vistoria_data_agendada = NULL` (autovistoria nao preenche este campo)
-- `vistoria_completa_data_agendada = NULL`
-
-O fluxo `criar-instalacao-pos-pagamento` tenta usar `vistoria_completa_data_agendada` para autovistoria, mas esta NULL, entao retorna erro "Dados de agendamento nao encontrados" e nao cria nenhuma instalacao. Sem instalacao, o trigger `sync_instalacao_to_servicos` nao dispara e nenhum registro e criado na tabela `servicos`.
-
-### Problema 4: Enum `status_instalacao` nao tem valor `pendente`
-Os logs do Postgres mostram:
-```
-invalid input value for enum status_instalacao: "pendente"
-```
-O enum `status_instalacao` so aceita: `agendada`, `em_rota`, `em_andamento`, `concluida`, `reagendada`, `cancelada`. O debug da edge function tenta buscar instalacoes com `status IN ('agendada', 'pendente')`, mas `pendente` nao existe nesse enum.
-
-## Plano de correcao
-
-### 1. Corrigir `atribuir-proxima-tarefa` - query de debug com enum invalido
-Na secao de debug (linhas 528-542), a query usa `.in('status', ['agendada', 'pendente'])` na tabela `instalacoes`. Remover `'pendente'` e usar apenas `'agendada'`.
-
-### 2. Corrigir `cron-atribuir-tarefas` - FK hints faltantes
-Nas linhas 203-204 e 238-239, adicionar hints de FK:
-```
-associado:associados!servicos_associado_id_fkey(nome)
-veiculo:veiculos!servicos_veiculo_id_fkey(placa)
+Error: The API version "4.10.38" does not match the Worker version "4.4.168"
 ```
 
-### 3. Corrigir `criar-instalacao-pos-pagamento` - autovistoria sem data
-Para cotacoes com `tipo_vistoria = 'autovistoria'` onde `vistoria_completa_data_agendada` e NULL, usar os campos `vistoria_*` como fallback (a cotacao tem `vistoria_endereco_latitude/longitude` preenchidos e `vistoria_permite_encaixe = true`).
+## Solucao
 
-Logica corrigida:
-```
-if (tipoVistoria === 'autovistoria') {
-  // Tentar vistoria_completa_* primeiro
-  dataAgendada = cotacao.vistoria_completa_data_agendada;
-  // FALLBACK: Se nao tiver data completa, usar vistoria_* simples
-  if (!dataAgendada) {
-    dataAgendada = cotacao.vistoria_data_agendada;
-    // usar campos vistoria_* para endereco tambem
-  }
-}
+Atualizar o arquivo `src/lib/pdfToImage.ts` para usar a versao do worker de forma dinamica, extraindo a versao diretamente do pacote instalado.
+
+## Detalhe tecnico
+
+### Arquivo: `src/lib/pdfToImage.ts`
+
+Alterar a linha 4 de:
+```typescript
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
 ```
 
-### 4. Re-deployar ambas edge functions
+Para:
+```typescript
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+```
 
-## Arquivos a modificar
+Isso garante que a versao do Worker sempre corresponda a versao da API, independente de atualizacoes futuras do pacote.
+
+## Arquivo modificado
 
 | Arquivo | Acao |
 |---|---|
-| `supabase/functions/atribuir-proxima-tarefa/index.ts` | Corrigir query de debug (remover 'pendente' do enum) |
-| `supabase/functions/cron-atribuir-tarefas/index.ts` | Adicionar FK hints nas 2 queries (associados e veiculos) |
-| `supabase/functions/criar-instalacao-pos-pagamento/index.ts` | Adicionar fallback para autovistoria sem dados completos |
-
-## Validacao pos-correcao
-
-1. Re-deployar as 3 edge functions
-2. Chamar `criar-instalacao-pos-pagamento` com `cotacaoId = 'dc131311-234a-4f8a-b433-233a116e38d3'` para criar a instalacao pendente
-3. Verificar que o trigger cria o registro em `servicos`
-4. Logar como vistoriador e confirmar que a atribuicao funciona sem erro 500
+| `src/lib/pdfToImage.ts` | Usar `pdfjsLib.version` na URL do CDN worker |
