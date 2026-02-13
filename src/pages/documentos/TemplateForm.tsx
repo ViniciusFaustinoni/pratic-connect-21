@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
-import { ArrowLeft, Save, FileText, PenTool, Loader2, Shield } from 'lucide-react';
+import { ArrowLeft, Save, FileText, PenTool, Loader2, Shield, Car } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Schema de validação
@@ -36,6 +36,7 @@ const templateSchema = z.object({
   requer_assinatura: z.boolean().default(false),
   is_default_autentique: z.boolean().default(false),
   is_default_evento: z.boolean().default(false),
+  is_default_saida: z.boolean().default(false),
 });
 
 type TemplateFormData = z.infer<typeof templateSchema>;
@@ -63,6 +64,7 @@ export default function TemplateForm() {
       requer_assinatura: false,
       is_default_autentique: false,
       is_default_evento: false,
+      is_default_saida: false,
     },
   });
 
@@ -78,6 +80,7 @@ export default function TemplateForm() {
         requer_assinatura: template.requer_assinatura,
         is_default_autentique: template.is_default_autentique || false,
         is_default_evento: template.is_default_evento || false,
+        is_default_saida: (template as any).is_default_saida || false,
       });
     }
   }, [template, isEditing, form]);
@@ -131,6 +134,7 @@ export default function TemplateForm() {
           requer_assinatura: data.requer_assinatura,
           is_default_autentique: data.is_default_autentique,
           is_default_evento: data.is_default_evento,
+          is_default_saida: data.is_default_saida,
         });
       }
       navigate('/documentos/templates');

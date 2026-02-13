@@ -96,7 +96,19 @@ serve(async (req) => {
     let templateConteudo: string | null = null;
     let templateNome = "fallback";
 
-    if (docType) {
+    // Priorizar template marcado como default para saída
+    const { data: templateSaida } = await supabase
+      .from("documento_templates")
+      .select("id, codigo, nome, conteudo")
+      .eq("is_default_saida", true)
+      .eq("ativo", true)
+      .maybeSingle();
+
+    if (templateSaida?.conteudo) {
+      templateConteudo = templateSaida.conteudo;
+      templateNome = templateSaida.nome;
+      console.log(`[autentique-os-saida-create] Usando template is_default_saida: ${templateNome}`);
+    } else if (docType) {
       const { data: templateDB } = await supabase
         .from("documento_templates")
         .select("id, codigo, nome, conteudo")
@@ -108,7 +120,7 @@ serve(async (req) => {
       if (templateDB?.conteudo) {
         templateConteudo = templateDB.conteudo;
         templateNome = templateDB.nome;
-        console.log(`[autentique-os-saida-create] Usando template: ${templateNome}`);
+        console.log(`[autentique-os-saida-create] Usando template por document_type: ${templateNome}`);
       }
     }
 
