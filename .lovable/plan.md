@@ -1,42 +1,82 @@
 
-# Corrigir enum `status_ordem_servico` no banco de dados
+# Completar fluxo do webhook Autentique para Ordens de Servico
 
 ## Problema
-O enum `status_ordem_servico` no banco nao possui os valores `pendente_assinatura` e `finalizado`. Quando o sistema tenta gravar esses status, o banco rejeita com o erro:
+Quando o associado assina o Termo de Saida, o webhook do Autentique recebe o evento e atualiza apenas `termo_saida_assinado = true`. Porem, ele **nao executa** as acoes que deveriam ocorrer automaticamente:
 
-> "invalid input value for enum status_ordem_servico: pendente_assinatura"
+1. Nao muda o status da OS para `finalizado`
+2. Nao encerra o sinistro vinculado
+3. Nao registra o custo (`valor_indenizacao`)
+4. Nao envia WhatsApp confirmando a liberacao
 
-### Valores atuais do enum:
-`rascunho`, `aguardando_orcamento`, `orcamento_enviado`, `aguardando_aprovacao`, `aprovado`, `em_execucao`, `aguardando_peca`, `concluido`, `aguardando_pagamento`, `pago`, `cancelado`
-
-### Valores que faltam:
-- `pendente_assinatura` -- usado quando o Termo de Saida e enviado para assinatura
-- `finalizado` -- usado quando o veiculo e liberado apos assinatura
+O polling na pagina funciona (a cada 10s), mas como o status nunca muda de `pendente_assinatura`, a pagina parece "travada".
 
 ## Solucao
 
-### 1. Migration SQL -- adicionar valores ao enum
+### Arquivo: `supabase/functions/autentique-webhook/index.ts` (bloco OS, linhas ~498-557)
 
-```sql
-ALTER TYPE status_ordem_servico ADD VALUE IF NOT EXISTS 'pendente_assinatura';
-ALTER TYPE status_ordem_servico ADD VALUE IF NOT EXISTS 'finalizado';
+Apos `termo_saida_assinado = true`, adicionar:
+
+1. **Atualizar status da OS para `finalizado`**:
+```
+status: 'finalizado'
 ```
 
-### 2. Atualizar tipos TypeScript
+2. **Encerrar sinistro vinculado** (se houver `sinistro_id`):
+   - Atualizar `sinistros.status = 'encerrado'` e `sinistros.valor_indenizacao = os.valor_orcamento`
+   - Inserir registro em `sinistros_historico`
 
-**Arquivo: `src/integrations/supabase/types.ts`**
-- Adicionar `pendente_assinatura` e `finalizado` ao tipo `status_ordem_servico` (enum e array)
+3. **Registrar historico da OS** com status `finalizado` (atualmente registra com o status antigo)
 
-### 3. Atualizar labels e cores
+4. **Enviar WhatsApp ao associado** confirmando que o veiculo foi liberado, usando `whatsapp-send-text`
 
-**Arquivo: `src/types/database.ts`**
-- Adicionar entradas em `STATUS_ORDEM_SERVICO_LABELS` e `STATUS_ORDEM_SERVICO_COLORS` para os novos status:
-  - `pendente_assinatura`: "Pendente Assinatura" (cor amber)
-  - `finalizado`: "Finalizado" (cor green)
+### Mudancas tecnicas no webhook (pseudocodigo)
 
-Nenhuma outra mudanca e necessaria -- o codigo em `OSConclusaoModal.tsx` ja usa esses valores, so faltava o banco aceita-los.
+```text
+// Apos "signature.accepted" para OS:
 
-## Arquivos alterados
-- SQL migration (enum)
-- `src/integrations/supabase/types.ts` (tipos)
-- `src/types/database.ts` (labels/cores)
+1. UPDATE ordens_servico SET
+     termo_saida_assinado = true,
+     termo_saida_assinado_em = now(),
+     status = 'finalizado',          // <-- NOVO
+     updated_at = now()
+   WHERE id = osDoc.id
+
+2. IF osDoc.sinistro_id THEN
+     UPDATE sinistros SET
+       status = 'encerrado',
+       valor_indenizacao = osDoc.valor_orcamento,
+       updated_at = now()
+     WHERE id = osDoc.sinistro_id
+
+     INSERT sinistros_historico (
+       sinistro_id, status_novo, observacao
+     )
+
+3. INSERT ordens_servico_historico (
+     status_novo = 'finalizado',     // <-- CORRIGIDO (era osDoc.status antigo)
+     observacao = 'Veiculo liberado automaticamente...'
+   )
+
+4. WhatsApp: invocar whatsapp-send-text com mensagem de liberacao
+```
+
+### Resultado esperado
+
+Quando o associado assinar o Termo de Saida:
+
+```text
+Webhook Autentique dispara
+  |
+  +-> OS status = finalizado
+  +-> OS termo_saida_assinado = true
+  +-> Sinistro status = encerrado
+  +-> Sinistro valor_indenizacao = valor OS
+  +-> Historico registrado
+  +-> WhatsApp enviado ao associado
+  +-> Polling na pagina detecta mudanca em 10s
+  +-> Pagina atualiza automaticamente (badge verde "Finalizado")
+```
+
+### Arquivos alterados
+- `supabase/functions/autentique-webhook/index.ts` - expandir bloco de OS assinada
