@@ -498,77 +498,26 @@ serve(async (req) => {
         if (eventType === "signature.accepted" || (eventType === "signature.updated" && payload.event?.data?.signed)) {
           console.log(`[autentique-webhook] 🎉 Termo de Saída de Veículo OS ${osDoc.numero} ASSINADO por ${signerName}`);
 
-          // 1. Atualizar OS: termo assinado + status finalizado
+          // 1. Atualizar OS: apenas marcar termo assinado (NÃO finalizar - será feito manualmente pelo botão "Liberar Veículo")
           await supabase
             .from("ordens_servico")
             .update({
               termo_saida_assinado: true,
               termo_saida_assinado_em: new Date().toISOString(),
-              status: "finalizado",
               updated_at: new Date().toISOString(),
             })
             .eq("id", osDoc.id);
 
-          console.log(`[autentique-webhook] ✓ OS ${osDoc.numero} atualizada para finalizado`);
+          console.log(`[autentique-webhook] ✓ OS ${osDoc.numero} - termo marcado como assinado (aguardando liberação manual)`);
 
-          // 2. Encerrar sinistro vinculado (se houver)
-          if (osDoc.sinistro_id) {
-            console.log(`[autentique-webhook] Encerrando sinistro ${osDoc.sinistro_id}...`);
-            await supabase
-              .from("sinistros")
-              .update({
-                status: "encerrado",
-                valor_indenizacao: osDoc.valor_orcamento || 0,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", osDoc.sinistro_id);
-
-            await supabase.from("sinistro_historico").insert({
-              sinistro_id: osDoc.sinistro_id,
-              status_anterior: "em_reparo",
-              status_novo: "encerrado",
-              observacao: `Sinistro encerrado automaticamente após assinatura do Termo de Saída da OS ${osDoc.numero}.`,
-            });
-
-            console.log(`[autentique-webhook] ✓ Sinistro ${osDoc.sinistro_id} encerrado`);
-          }
-
-          // 3. Registrar histórico da OS com status correto
+          // 2. Registrar histórico da OS
           await supabase.from("ordens_servico_historico").insert({
             ordem_servico_id: osDoc.id,
-            status_novo: "finalizado",
-            observacao: `Veículo liberado automaticamente após assinatura do Termo de Saída por ${signerName} via Autentique`,
+            status_novo: osDoc.status,
+            observacao: `Termo de Saída assinado por ${signerName} via Autentique. Aguardando liberação do veículo.`,
           });
 
-          // 4. Enviar WhatsApp ao associado confirmando liberação
-          try {
-            const telefoneAssociado = osDoc.associado?.whatsapp || osDoc.associado?.telefone;
-            if (telefoneAssociado) {
-              const veiculoInfo = osDoc.veiculo_marca && osDoc.veiculo_modelo
-                ? `${osDoc.veiculo_marca} ${osDoc.veiculo_modelo}`
-                : "seu veículo";
-              const mensagemLiberacao = `Olá *${osDoc.associado.nome}*! 🚗✅\n\nSeu veículo *${veiculoInfo}* foi *liberado*!\n\nO Termo de Saída foi assinado com sucesso. Você já pode retirar o veículo na oficina.\n\nObrigado pela confiança! 🙏`;
-              
-              await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-send-text`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                },
-                body: JSON.stringify({
-                  telefone: telefoneAssociado.replace(/\D/g, ""),
-                  mensagem: mensagemLiberacao,
-                }),
-              });
-              console.log(`[autentique-webhook] ✓ WhatsApp de liberação enviado para ${telefoneAssociado}`);
-            } else {
-              console.log("[autentique-webhook] ⚠ Associado sem telefone, WhatsApp não enviado");
-            }
-          } catch (whatsErr: any) {
-            console.error("[autentique-webhook] Erro ao enviar WhatsApp:", whatsErr.message);
-          }
-
-          // 5. Tentar baixar PDF assinado
+          // 3. Tentar baixar PDF assinado
           try {
             const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
             if (autentiqueApiKey) {
