@@ -1,50 +1,74 @@
 
-# Criar colunas ausentes na tabela `ordens_servico`
+# Registrar custo da OS ao liberar veiculo
 
-## Problema raiz
-A tabela `ordens_servico` **nao possui** as colunas que o sistema inteiro depende para o fluxo de Termo de Saida:
-- `autentique_documento_id` (text) - ID do documento no Autentique
-- `autentique_url` (text) - Link de assinatura
-- `termo_saida_assinado` (boolean) - Flag de assinatura
-- `termo_saida_assinado_em` (timestamptz) - Data/hora da assinatura
-- `termo_saida_url` (text) - URL do PDF assinado
+## Problema
+Quando o veiculo e liberado (handleLiberarVeiculo), o sistema atualiza status da OS e do sinistro, mas **nao registra o custo financeiro**. Isso faz com que o valor da OS nao apareca em nenhum dashboard, relatorio ou contabilidade.
 
-Sem essas colunas:
-1. A edge function `autentique-os-saida-create` tenta gravar `autentique_documento_id` e `autentique_url` mas o update falha silenciosamente
-2. O webhook `autentique-webhook` tenta gravar `termo_saida_assinado` mas tambem falha
-3. O polling no modal busca `termo_saida_assinado` que nunca existe, entao nunca detecta a assinatura
-4. O botao "Liberar Veiculo" nunca aparece
+## Areas impactadas identificadas
 
-## Solucao
+| Area | Como busca custos | Status atual |
+|------|-------------------|--------------|
+| **Custos de Reparos** (useCustosReparos.ts) | Itens de OS com status `concluido/pago/aprovado` | Falta `finalizado` no filtro |
+| **Dashboard Diretor** (DiretoriaDashboard.tsx) | `sinistros.valor_indenizacao` com status `aprovado/indenizado` | Falta `encerrado` e valor nao e atualizado |
+| **Indicadores Atuariais** (IndicadoresAtuariais.tsx) | `sinistros.valor_indenizacao` com status `aprovado/indenizado/pago` | Falta `encerrado` |
+| **Rateio Sinistros** (RateioSinistros.tsx) | `sinistros.valor_indenizacao` com status `aprovado/pago` | Falta `encerrado` |
+| **Produto Detalhe** (ProdutoDetalhe.tsx) | `sinistros.valor_indenizacao` com status `aprovado/indenizado` | Falta `encerrado` |
+| **Contabilidade** (lancamentos_contabeis) | Lancamento automatico via `criarLancamentoAutomatico` | Nenhum lancamento e criado |
+| **Relatorios Gerenciais** (RelatoriosGerenciais.tsx) | Busca itens de OS com status filtrado | Falta `finalizado` |
 
-### 1. Adicionar colunas via SQL (migration)
+## Solucao em 2 partes
 
-Executar o seguinte SQL no banco:
+### Parte 1: Registrar custos ao liberar veiculo
 
-```sql
-ALTER TABLE ordens_servico
-  ADD COLUMN IF NOT EXISTS autentique_documento_id text,
-  ADD COLUMN IF NOT EXISTS autentique_url text,
-  ADD COLUMN IF NOT EXISTS termo_saida_assinado boolean DEFAULT false,
-  ADD COLUMN IF NOT EXISTS termo_saida_assinado_em timestamptz,
-  ADD COLUMN IF NOT EXISTS termo_saida_url text;
+**Arquivo: `src/components/oficinas/OSConclusaoModal.tsx`**
+
+No `handleLiberarVeiculo`, apos finalizar OS e encerrar sinistro, adicionar:
+
+1. **Atualizar `sinistros.valor_indenizacao`** com o valor do orcamento da OS (`os.valor_orcamento`), para que dashboards e rateio capturem o custo
+2. **Criar lancamento contabil automatico** usando `criarLancamentoAutomatico` do hook `useLancamentosContabeis`:
+   - Debito: conta `REPAROS_OFICINAS` (5.1.01.002)
+   - Credito: conta `BANCO_CONTA_MOVIMENTO` (1.1.01.002)
+   - Valor: `os.valor_orcamento`
+   - Origem: `ordem_servico`
+   - Historico: `Reparo sinistro - OS {numero} - Oficina {nome}`
+
+Imports adicionais: `useLancamentosContabeis` e `CONTAS_PADRAO` de `contabilidade-config`
+
+### Parte 2: Incluir status `finalizado` e `encerrado` nos filtros de consulta
+
+**Arquivo: `src/hooks/useCustosReparos.ts`** (linha 77)
+- Adicionar `'finalizado'` ao array de status: `['concluido', 'pago', 'aprovado', 'finalizado']`
+
+**Arquivo: `src/pages/diretoria/DiretoriaDashboard.tsx`** (linha 110)
+- Adicionar `'encerrado'` ao filtro: `.in('status', ['aprovado', 'indenizado', 'encerrado'])`
+
+**Arquivo: `src/pages/diretoria/IndicadoresAtuariais.tsx`** (linha 94)
+- Adicionar `'encerrado'`: `.in('status', ['aprovado', 'indenizado', 'pago', 'encerrado'])`
+
+**Arquivo: `src/hooks/useDiretoria.ts`** (linhas 23 e 91)
+- Adicionar `'encerrado'` nos dois filtros de sinistros: `.in('status', ['aprovado', 'pago', 'encerrado'])`
+
+**Arquivo: `src/pages/diretoria/RateioSinistros.tsx`**
+- Verificar filtro de sinistros e adicionar `'encerrado'` se necessario
+
+## Resumo de arquivos alterados
+
+1. `src/components/oficinas/OSConclusaoModal.tsx` - registrar custo + lancamento contabil
+2. `src/hooks/useCustosReparos.ts` - adicionar `finalizado` ao filtro
+3. `src/pages/diretoria/DiretoriaDashboard.tsx` - adicionar `encerrado` ao filtro
+4. `src/pages/diretoria/IndicadoresAtuariais.tsx` - adicionar `encerrado` ao filtro
+5. `src/hooks/useDiretoria.ts` - adicionar `encerrado` aos filtros
+6. `src/pages/diretoria/RateioSinistros.tsx` - adicionar `encerrado` ao filtro (se aplicavel)
+
+## Fluxo resultante
+
+```text
+Liberar Veiculo (click)
+  |
+  +-> OS status = finalizado
+  +-> Sinistro status = encerrado
+  +-> Sinistro valor_indenizacao = OS valor_orcamento
+  +-> Lancamento contabil criado (D: Reparos Oficinas / C: Banco)
+  +-> Invalidar queries (dashboards se atualizam)
+  +-> Toast de sucesso + fechar modal
 ```
-
-### 2. Atualizar tipos TypeScript
-
-Arquivo `src/integrations/supabase/types.ts` - adicionar os campos ao tipo `ordens_servico` (Row, Insert, Update) para que o TypeScript reconheca essas colunas e elimine os `as any` espalhados pelo codigo.
-
-### 3. Atualizar o select do hook `useOrdemServico`
-
-Arquivo `src/hooks/useOrdensServico.ts` - garantir que o select do detalhe da OS inclua os novos campos (`autentique_documento_id`, `autentique_url`, `termo_saida_assinado`, `termo_saida_assinado_em`, `termo_saida_url`) para que o modal tenha acesso a esses dados.
-
-## Resultado esperado
-- Edge function grava `autentique_documento_id` e `autentique_url` com sucesso
-- Webhook grava `termo_saida_assinado = true` quando assinatura ocorre
-- Polling no modal detecta `termo_saida_assinado = true` e mostra botao "Liberar Veiculo"
-- Fluxo completo funciona de ponta a ponta
-
-## Arquivos alterados
-- SQL migration (novas colunas)
-- `src/integrations/supabase/types.ts` (tipos)
-- `src/hooks/useOrdensServico.ts` (select)
