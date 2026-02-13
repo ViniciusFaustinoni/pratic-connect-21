@@ -13086,6 +13086,8 @@ export type Database = {
         Row: {
           aprovado_por: string | null
           associado_id: string
+          autentique_documento_id: string | null
+          autentique_url: string | null
           created_at: string | null
           criado_por: string | null
           data_conclusao: string | null
@@ -13098,6 +13100,9 @@ export type Database = {
           oficina_id: string
           sinistro_id: string | null
           status: Database["public"]["Enums"]["status_ordem_servico"] | null
+          termo_saida_assinado: boolean | null
+          termo_saida_assinado_em: string | null
+          termo_saida_url: string | null
           updated_at: string | null
           valor_aprovado: number | null
           valor_orcamento: number | null
@@ -13107,6 +13112,8 @@ export type Database = {
         Insert: {
           aprovado_por?: string | null
           associado_id: string
+          autentique_documento_id?: string | null
+          autentique_url?: string | null
           created_at?: string | null
           criado_por?: string | null
           data_conclusao?: string | null
@@ -13119,6 +13126,9 @@ export type Database = {
           oficina_id: string
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_ordem_servico"] | null
+          termo_saida_assinado?: boolean | null
+          termo_saida_assinado_em?: string | null
+          termo_saida_url?: string | null
           updated_at?: string | null
           valor_aprovado?: number | null
           valor_orcamento?: number | null
@@ -13128,6 +13138,8 @@ export type Database = {
         Update: {
           aprovado_por?: string | null
           associado_id?: string
+          autentique_documento_id?: string | null
+          autentique_url?: string | null
           created_at?: string | null
           criado_por?: string | null
           data_conclusao?: string | null
@@ -13140,6 +13152,9 @@ export type Database = {
           oficina_id?: string
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_ordem_servico"] | null
+          termo_saida_assinado?: boolean | null
+          termo_saida_assinado_em?: string | null
+          termo_saida_url?: string | null
           updated_at?: string | null
           valor_aprovado?: number | null
           valor_orcamento?: number | null
