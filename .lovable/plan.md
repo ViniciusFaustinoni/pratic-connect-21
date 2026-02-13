@@ -1,46 +1,31 @@
 
-# Corrigir sinistro aprovado que não sai do dashboard de eventos
+
+# Corrigir erro "Sinistro nao encontrado" ao analisar sinistro
 
 ## Problema
 
-O sinistro foi criado com sucesso (SIN-20260213-0003 existe no banco com status "comunicado"), mas a solicitacao na tabela `chat_solicitacoes_ia` continua com status `pendente`. Por isso o banner "1 sinistro(s) aguardando aprovacao via IA" continua aparecendo.
+A query do hook `useSinistroAnalise` solicita as colunas `tipo_veiculo` e `combustivel` da tabela `veiculos`, mas essas colunas nao existem no banco. Isso causa um erro 400 do Supabase, retornando `null` para o sinistro, e a tela exibe "Sinistro nao encontrado".
 
 ## Causa raiz
 
-Na edge function `aprovar-solicitacao-ia`, linha 414, o campo `aprovador_id` recebe o `userId` (que e o `auth.users.id`). Porem, a coluna `aprovador_id` tem uma foreign key para `profiles(id)`, que e um UUID diferente do `auth.users.id`.
+No arquivo `src/hooks/useSinistroAnalise.ts`, linha 49-50, o select inclui:
+```
+tipo_veiculo, combustivel
+```
 
-Isso faz o UPDATE falhar silenciosamente (constraint violation), e a solicitacao nunca sai do status `pendente`.
+Essas colunas nao existem na tabela `veiculos`.
 
 ## Solucao
 
-### 1. Corrigir a edge function para buscar o `profiles.id` correto
+Remover `tipo_veiculo` e `combustivel` do select da query principal em `src/hooks/useSinistroAnalise.ts`.
 
-**Arquivo**: `supabase/functions/aprovar-solicitacao-ia/index.ts`
-
-Antes de usar `aprovador_id`, buscar o profile do usuario:
-
-```
-const { data: perfil } = await supabaseAdmin
-  .from('profiles')
-  .select('id')
-  .eq('user_id', userId)
-  .single();
-
-const perfilId = perfil?.id || null;
-```
-
-Usar `perfilId` em vez de `userId` em todas as ocorrencias de `aprovador_id` (linhas 107 e 414).
-
-### 2. Corrigir dado inconsistente existente
-
-A solicitacao `285d937b-9487-4d86-bee6-406ec34a1817` precisa ser atualizada para `aprovado` manualmente, ja que o sinistro ja foi criado. Isso sera feito diretamente na edge function com a correcao.
-
-## Arquivos modificados
+## Arquivo modificado
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/aprovar-solicitacao-ia/index.ts` | Buscar `profiles.id` via `user_id` e usar como `aprovador_id` |
+| `src/hooks/useSinistroAnalise.ts` | Remover `tipo_veiculo` e `combustivel` do select do veiculo (linhas 49-50) |
 
-## Dado inconsistente
+## Resultado esperado
 
-Apos o deploy, sera necessario corrigir a solicitacao existente. Posso atualizar o status para "aprovado" diretamente no banco apos a correcao.
+A pagina de analise do sinistro carregara corretamente, exibindo todos os dados do sinistro, associado e veiculo.
+
