@@ -29,6 +29,8 @@ type StatusOrdemServico =
   | 'em_execucao'
   | 'aguardando_peca'
   | 'concluido'
+  | 'pendente_assinatura'
+  | 'finalizado'
   | 'aguardando_pagamento'
   | 'pago'
   | 'cancelado';
@@ -53,7 +55,9 @@ const FLUXO_STATUS: Record<StatusOrdemServico, StatusOrdemServico[]> = {
   aprovado: ['em_execucao', 'cancelado'],
   em_execucao: ['aguardando_peca', 'concluido', 'cancelado'],
   aguardando_peca: ['em_execucao'],
-  concluido: ['aguardando_pagamento'],
+  concluido: ['pendente_assinatura', 'aguardando_pagamento'],
+  pendente_assinatura: ['finalizado'],
+  finalizado: ['aguardando_pagamento'],
   aguardando_pagamento: ['pago'],
   pago: [],
   cancelado: [],
@@ -68,6 +72,8 @@ const STATUS_LABELS: Record<StatusOrdemServico, string> = {
   em_execucao: 'Em Execução',
   aguardando_peca: 'Aguardando Peça',
   concluido: 'Concluído',
+  pendente_assinatura: 'Pendente de Assinatura',
+  finalizado: 'Finalizado',
   aguardando_pagamento: 'Aguardando Pagamento',
   pago: 'Pago',
   cancelado: 'Cancelado',
@@ -83,6 +89,8 @@ const getStatusColor = (status: StatusOrdemServico): string => {
     em_execucao: 'bg-indigo-100 text-indigo-800',
     aguardando_peca: 'bg-purple-100 text-purple-800',
     concluido: 'bg-emerald-100 text-emerald-800',
+    pendente_assinatura: 'bg-amber-100 text-amber-800',
+    finalizado: 'bg-emerald-200 text-emerald-900',
     aguardando_pagamento: 'bg-amber-100 text-amber-800',
     pago: 'bg-green-200 text-green-900',
     cancelado: 'bg-red-100 text-red-800',
