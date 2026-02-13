@@ -21991,6 +21991,8 @@ export type Database = {
         | "aguardando_pagamento"
         | "pago"
         | "cancelado"
+        | "pendente_assinatura"
+        | "finalizado"
       status_pagamento_oficina:
         | "pendente"
         | "processando"
@@ -22371,6 +22373,8 @@ export const Constants = {
         "aguardando_pagamento",
         "pago",
         "cancelado",
+        "pendente_assinatura",
+        "finalizado",
       ],
       status_pagamento_oficina: [
         "pendente",
