@@ -550,7 +550,6 @@ export function usePropostasPendentes() {
       return propostasComRelacoes.filter((p): p is PropostaPendente => p !== null);
     },
     staleTime: 30000,
-    refetchInterval: 30000, // Atualização automática a cada 30 segundos
   });
 }
 

@@ -113,7 +113,7 @@ export function useAgendamentosBaseDia(data?: string) {
       if (error) throw error;
       return agendamentos || [];
     },
-    refetchInterval: 30000, // Atualizar a cada 30s
+    refetchInterval: 60000, // Atualizar a cada 60s
   });
 }
 

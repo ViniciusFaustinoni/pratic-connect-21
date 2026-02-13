@@ -91,7 +91,7 @@ export function useVistoriadoresRealtime() {
         };
       });
     },
-    refetchInterval: 30000,
+    
   });
 
   // Supabase Realtime para atualizações instantâneas

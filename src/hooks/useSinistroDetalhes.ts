@@ -110,7 +110,7 @@ export function useSinistroMensagens(sinistroId: string | undefined) {
       return data;
     },
     enabled: !!sinistroId,
-    refetchInterval: 30000, // Polling a cada 30s
+    refetchInterval: 60000, // Polling a cada 60s
   });
 }
 
@@ -339,6 +339,6 @@ export function useMensagensNaoLidas(sinistroId: string | undefined) {
       return count || 0;
     },
     enabled: !!sinistroId,
-    refetchInterval: 30000, // Verificar a cada 30s
+    refetchInterval: 60000, // Verificar a cada 60s
   });
 }

@@ -8,17 +8,21 @@ export function useFilasRealtime() {
 
   useEffect(() => {
     const invalidateInstalacoesQueries = () => {
-      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['instalacao'] });
-      queryClient.invalidateQueries({ queryKey: ['instalacoes-metricas'] });
-      queryClient.invalidateQueries({ queryKey: ['instalacoes-contagem'] });
-      queryClient.invalidateQueries({ queryKey: ['instalacoes-dia'] });
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0] as string;
+          return key?.startsWith('instalac');
+        }
+      });
     };
 
     const invalidateVistoriasQueries = () => {
-      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
-      queryClient.invalidateQueries({ queryKey: ['vistoria'] });
-      queryClient.invalidateQueries({ queryKey: ['vistorias-metricas'] });
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0] as string;
+          return key?.startsWith('vistoria');
+        }
+      });
     };
 
     const handleInstalacoesChange = (payload: any) => {

@@ -141,7 +141,7 @@ export function useCotacaoContratacao(token: string | undefined) {
       return data;
     },
     enabled: !!token,
-    refetchInterval: 10000, // Reduzido para 10 segundos para detectar mudanças de status mais rápido
+    refetchInterval: 30000, // Polling reduzido (Realtime cuida das atualizações)
     refetchOnWindowFocus: true, // Revalidar ao voltar para a aba
     staleTime: 0, // Sempre considerar stale para garantir dados frescos
   });
