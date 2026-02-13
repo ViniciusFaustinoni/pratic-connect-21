@@ -37,6 +37,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
   const [signatureLink, setSignatureLink] = useState<string | null>(os?.autentique_url || null);
   const [assinado, setAssinado] = useState(os?.termo_saida_assinado || false);
   const [liberando, setLiberando] = useState(false);
+  const [showPdfViewer, setShowPdfViewer] = useState(false);
 
   // Sync with os data
   useEffect(() => {
@@ -304,7 +305,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
         {/* Badge de status */}
         {assinado && (
           <div className="flex justify-center">
-            <Badge className="bg-green-600 text-white text-sm px-4 py-1.5 gap-1.5">
+            <Badge className="bg-success text-success-foreground text-sm px-4 py-1.5 gap-1.5">
               <CheckCircle className="h-4 w-4" />
               Termo Assinado - Pronto para Liberação
             </Badge>
@@ -479,11 +480,9 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
         {assinado && (
           <div className="space-y-3">
             {os.termo_saida_url && (
-              <Button variant="outline" className="w-full" asChild>
-                <a href={os.termo_saida_url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Visualizar PDF Assinado
-                </a>
+              <Button variant="outline" className="w-full" onClick={() => setShowPdfViewer(true)}>
+                <FileSignature className="mr-2 h-4 w-4" />
+                Visualizar PDF Assinado
               </Button>
             )}
 
@@ -502,6 +501,48 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
           </div>
         )}
       </DialogContent>
+
+      {/* PDF Viewer Modal */}
+      <Dialog open={showPdfViewer} onOpenChange={setShowPdfViewer}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="border-b px-6 py-4">
+            <DialogTitle className="flex items-center gap-2">
+              <FileSignature className="h-5 w-5" />
+              Termo de Saída Assinado
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto bg-muted/50">
+            {os.termo_saida_url?.toLowerCase().endsWith('.pdf') ? (
+              <iframe
+                src={os.termo_saida_url}
+                className="w-full h-full min-h-[500px]"
+                title="Termo de Saída Assinado"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full p-8">
+                <img 
+                  src={os.termo_saida_url}
+                  alt="Termo de Saída Assinado"
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="border-t px-6 py-4 flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setShowPdfViewer(false)}>
+              Fechar
+            </Button>
+            <Button variant="outline" asChild>
+              <a href={os.termo_saida_url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Abrir em Nova Aba
+              </a>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
