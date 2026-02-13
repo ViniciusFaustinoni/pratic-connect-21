@@ -1,32 +1,23 @@
 
-# Fix: Erro FK ao criar OS - criado_por deve referenciar profiles
+
+# Fix: Redirecionamento 404 apos criar OS
 
 ## Problema
-O campo `criado_por` na tabela `ordens_servico` tem uma foreign key para `profiles.id`, mas o codigo esta passando `auth.users.id` (via `user?.id`). Como `profiles.id` e `auth.users.id` sao valores diferentes, a constraint falha.
-
-## Solucao
-No `EnviarParaOficinaDialog.tsx`, buscar o `profiles.id` do usuario logado antes de inserir a OS.
+Apos criar a OS com sucesso pelo dialog "Enviar para Oficina", o sistema redireciona para `/operacoes/ordens-servico`, mas essa rota nao existe. A rota correta e `/ordens-servico` (conforme registrada no `App.tsx`).
 
 ## Alteracao
 
-**Arquivo: `src/components/sinistros/EnviarParaOficinaDialog.tsx`**
+**Arquivo: `src/pages/eventos/SinistroAnalise.tsx`** (linha 714)
 
-Apos obter o `user` via `supabase.auth.getUser()`, buscar o perfil correspondente:
+Corrigir a rota no `onSuccess` do `EnviarParaOficinaDialog`:
 
-```typescript
-const { data: { user } } = await supabase.auth.getUser();
+```
+// De:
+onSuccess={() => navigate('/operacoes/ordens-servico')}
 
-// Buscar profile.id (FK exige referencia a profiles, nao auth.users)
-const { data: profile } = await supabase
-  .from('profiles')
-  .select('id')
-  .eq('user_id', user?.id)
-  .maybeSingle();
+// Para:
+onSuccess={() => navigate('/ordens-servico')}
 ```
 
-E usar `profile?.id` no lugar de `user?.id` nos inserts:
-- `criado_por: profile?.id` (insert da OS)
-- `usuario_id: profile?.id` (insert do historico do sinistro)
-- `usuario_id: profile?.id` (insert do historico da OS)
+Uma unica linha a ser alterada.
 
-Mesma correcao nos 3 pontos onde `user?.id` e usado no arquivo.
