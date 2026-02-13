@@ -1,35 +1,62 @@
 
-# Corrigir erro "net.http_post does not exist" ao solicitar documentos
+
+# Corrigir crash no "Agendar Vistoria" do menu de Acoes do Sinistro
 
 ## Problema
 
-Ao clicar em "Solicitar Documentos", o sistema atualiza o status do sinistro para `documentacao_pendente`. Isso dispara um trigger no banco de dados (`on_sinistro_status_change`) que tenta chamar `net.http_post()` para invocar a edge function `notificar-sinistro`. Porem, a extensao `pg_net` nao esta habilitada no banco, causando o erro:
-
+Ao clicar em "Agendar Vistoria" no menu de acoes, a pagina crasha com o erro:
 ```
-function net.http_post(url => unknown, headers => jsonb, body => text) does not exist
+Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.
 ```
 
-O trigger foi criado na migracao `20260103190153` e tenta notificar via HTTP toda vez que o status do sinistro muda.
+Este e um conflito conhecido entre os componentes Radix UI `DropdownMenu` e `Dialog`. Quando o DropdownMenu fecha e tenta remover seus nodes do DOM ao mesmo tempo que o Dialog tenta montar, ocorre uma colisao no DOM.
+
+## Causa raiz
+
+O `AgendarVistoriaModal` usa `Dialog` (Radix) internamente. Embora o codigo ja use `setTimeout(() => setModalVistoriaOpen(true), 0)` para atrasar a abertura, isso nao e suficiente porque o DropdownMenu ainda esta no processo de desmontagem.
+
+Os modais "Atualizar Status" e "Emitir Parecer" usam o mesmo padrao e funcionam -- a diferenca e que o `AgendarVistoriaModal` possui `SelectContent` (outro portal Radix) dentro do Dialog, criando multiplos portais aninhados que agravam o conflito.
 
 ## Solucao
 
-Remover o trigger `on_sinistro_status_change` e a funcao `fn_sinistro_status_change`, pois a notificacao via WhatsApp ja e feita diretamente pelo frontend (o `SolicitarDocumentosSinistroDialog` ja chama a edge function `whatsapp-send-text`). O trigger e redundante e causa o erro.
+Adicionar `modal={false}` ao DropdownMenu para evitar que ele crie um portal separado, ou usar a prop `forceMount` no Dialog. A abordagem mais confiavel e garantir que o DropdownMenu esteja completamente fechado antes de abrir o Dialog.
 
 ## Alteracao
 
-| Tipo | Descricao |
+| Arquivo | Descricao |
 |---|---|
-| Migracao SQL | `DROP TRIGGER IF EXISTS on_sinistro_status_change ON public.sinistros;` e `DROP FUNCTION IF EXISTS fn_sinistro_status_change();` |
+| `src/pages/eventos/SinistroDetalhe.tsx` | Fechar o dropdown explicitamente via estado controlado antes de abrir qualquer modal. Usar `onCloseAutoFocus` com `e.preventDefault()` para evitar conflito de foco. |
 
-Nenhuma alteracao de codigo e necessaria - o dialog ja envia a notificacao WhatsApp corretamente. Apenas o trigger do banco precisa ser removido.
+### Detalhes tecnicos
 
-## Detalhes tecnicos
+1. Tornar o `DropdownMenu` controlado com estado `dropdownOpen`
+2. Nos handlers dos `DropdownMenuItem`, fechar o dropdown primeiro e usar `setTimeout` com delay maior (100ms) para abrir o modal
+3. Adicionar `onCloseAutoFocus={(e) => e.preventDefault()}` no `DropdownMenuContent` para evitar que o Radix tente focar um elemento que ja foi removido
 
-A migracao SQL tera apenas:
+```typescript
+// Estado controlado do dropdown
+const [dropdownOpen, setDropdownOpen] = useState(false);
 
-```sql
-DROP TRIGGER IF EXISTS on_sinistro_status_change ON public.sinistros;
-DROP FUNCTION IF EXISTS fn_sinistro_status_change();
+// Handler para abrir modais com seguranca
+const openModalSafely = (setter: (v: boolean) => void) => {
+  setDropdownOpen(false);
+  setTimeout(() => setter(true), 150);
+};
+
+// No DropdownMenu
+<DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+  ...
+  <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
+    <DropdownMenuItem onSelect={(e) => {
+      e.preventDefault();
+      openModalSafely(setModalVistoriaOpen);
+    }}>
+      Agendar Vistoria
+    </DropdownMenuItem>
+    ...
+  </DropdownMenuContent>
+</DropdownMenu>
 ```
 
-Isso remove a dependencia de `pg_net` sem perder funcionalidade, ja que todas as notificacoes sao enviadas pelo codigo do frontend via edge functions.
+Essa abordagem sera aplicada a todos os itens do menu que abrem modais (Atualizar Status, Agendar Vistoria, Emitir Parecer, Vincular Processo, Excluir Sinistro) para consistencia e prevencao de problemas futuros.
+
