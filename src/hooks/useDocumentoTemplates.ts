@@ -32,6 +32,7 @@ interface TemplateFromDB {
   // Campos para integração com Autentique
   is_default_autentique?: boolean;
   template_html?: string;
+  is_default_evento?: boolean;
 }
 
 // Tipo transformado para uso no frontend
@@ -61,6 +62,7 @@ export interface DocumentoTemplateView {
   // Campos para integração com Autentique
   is_default_autentique?: boolean;
   template_html?: string;
+  is_default_evento?: boolean;
 }
 
 // Função para transformar dados do banco para o tipo do frontend
@@ -83,6 +85,7 @@ function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategori
     // Campos Autentique
     is_default_autentique: data.is_default_autentique || false,
     template_html: data.template_html || undefined,
+    is_default_evento: data.is_default_evento || false,
   };
 }
 
@@ -163,6 +166,7 @@ interface CreateTemplateInput {
   is_default?: boolean;
   status?: TemplateStatus;
   is_default_autentique?: boolean;
+  is_default_evento?: boolean;
 }
 
 export function useCreateTemplate() {
@@ -189,6 +193,7 @@ export function useCreateTemplate() {
           is_default: input.is_default || false,
           status: input.status || 'draft',
           is_default_autentique: input.is_default_autentique || false,
+          is_default_evento: input.is_default_evento || false,
         })
         .select()
         .single();
@@ -223,6 +228,7 @@ interface UpdateTemplateInput {
   is_default?: boolean;
   status?: TemplateStatus;
   is_default_autentique?: boolean;
+  is_default_evento?: boolean;
 }
 
 export function useUpdateTemplate() {
@@ -248,6 +254,7 @@ export function useUpdateTemplate() {
       if (input.is_default !== undefined) updateData.is_default = input.is_default;
       if (input.status !== undefined) updateData.status = input.status;
       if (input.is_default_autentique !== undefined) updateData.is_default_autentique = input.is_default_autentique;
+      if (input.is_default_evento !== undefined) updateData.is_default_evento = input.is_default_evento;
 
       const { data, error } = await supabase
         .from('documento_templates')
