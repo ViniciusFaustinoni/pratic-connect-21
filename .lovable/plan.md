@@ -1,44 +1,42 @@
 
-# Auto-atualizar pagina ao detectar assinatura
+# Corrigir enum `status_ordem_servico` no banco de dados
 
 ## Problema
-O polling que verifica a assinatura so roda dentro do modal (`OSConclusaoModal`). Porem, apos enviar o termo, o modal fecha (`onOpenChange(false)`). A pagina de detalhe usa `useOrdemServico` que e um `useQuery` sem `refetchInterval`, entao **nunca re-busca os dados** e a pagina fica parada mostrando "Concluido" em vez de "Pendente de Assinatura" -> "Finalizado".
+O enum `status_ordem_servico` no banco nao possui os valores `pendente_assinatura` e `finalizado`. Quando o sistema tenta gravar esses status, o banco rejeita com o erro:
+
+> "invalid input value for enum status_ordem_servico: pendente_assinatura"
+
+### Valores atuais do enum:
+`rascunho`, `aguardando_orcamento`, `orcamento_enviado`, `aguardando_aprovacao`, `aprovado`, `em_execucao`, `aguardando_peca`, `concluido`, `aguardando_pagamento`, `pago`, `cancelado`
+
+### Valores que faltam:
+- `pendente_assinatura` -- usado quando o Termo de Saida e enviado para assinatura
+- `finalizado` -- usado quando o veiculo e liberado apos assinatura
 
 ## Solucao
 
-### 1. Adicionar polling na pagina de detalhe (`OrdemServicoDetalhe.tsx`)
+### 1. Migration SQL -- adicionar valores ao enum
 
-Quando o status da OS for `pendente_assinatura`, ativar um `refetchInterval` no `useOrdemServico` para verificar a cada 10 segundos se `termo_saida_assinado` mudou para `true`. Quando detectar a assinatura, a pagina atualiza automaticamente (badge, botoes, historico).
-
-### 2. Modificar `useOrdemServico` no hook (`useOrdensServico.ts`)
-
-Adicionar um parametro opcional `refetchInterval` ao hook para que a pagina possa controlar quando ativar o polling:
-
-```
-useOrdemServico(id, { refetchInterval: os?.status === 'pendente_assinatura' ? 10000 : false })
+```sql
+ALTER TYPE status_ordem_servico ADD VALUE IF NOT EXISTS 'pendente_assinatura';
+ALTER TYPE status_ordem_servico ADD VALUE IF NOT EXISTS 'finalizado';
 ```
 
-Como o hook precisa do resultado para decidir o intervalo, a abordagem mais simples e usar `refetchInterval` como funcao no proprio hook: se o dado retornado tiver `status === 'pendente_assinatura'` e `termo_saida_assinado === false`, refetch a cada 10s. Caso contrario, sem polling.
+### 2. Atualizar tipos TypeScript
 
-### Mudanca tecnica
+**Arquivo: `src/integrations/supabase/types.ts`**
+- Adicionar `pendente_assinatura` e `finalizado` ao tipo `status_ordem_servico` (enum e array)
 
-**Arquivo: `src/hooks/useOrdensServico.ts`** (funcao `useOrdemServico`)
-- Adicionar `refetchInterval` como funcao que verifica o status do dado retornado:
+### 3. Atualizar labels e cores
 
-```typescript
-refetchInterval: (query) => {
-  const data = query.state.data;
-  if (data && data.status === 'pendente_assinatura' && !data.termo_saida_assinado) {
-    return 10000; // 10s
-  }
-  return false;
-},
-```
+**Arquivo: `src/types/database.ts`**
+- Adicionar entradas em `STATUS_ORDEM_SERVICO_LABELS` e `STATUS_ORDEM_SERVICO_COLORS` para os novos status:
+  - `pendente_assinatura`: "Pendente Assinatura" (cor amber)
+  - `finalizado`: "Finalizado" (cor green)
 
-Isso garante:
-- Polling automatico SOMENTE quando OS esta pendente de assinatura
-- Para de fazer polling assim que detectar a assinatura ou status mudar
-- Nenhuma mudanca necessaria na pagina de detalhe - o hook se auto-gerencia
+Nenhuma outra mudanca e necessaria -- o codigo em `OSConclusaoModal.tsx` ja usa esses valores, so faltava o banco aceita-los.
 
-### Arquivo alterado
-- `src/hooks/useOrdensServico.ts` - adicionar `refetchInterval` dinamico ao `useOrdemServico`
+## Arquivos alterados
+- SQL migration (enum)
+- `src/integrations/supabase/types.ts` (tipos)
+- `src/types/database.ts` (labels/cores)
