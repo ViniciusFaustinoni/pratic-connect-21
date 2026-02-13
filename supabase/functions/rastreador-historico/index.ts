@@ -128,9 +128,7 @@ async function buscarTrajetoSoftruckComRetry(
       const token = await getSoftruckToken(supabaseUrl, supabaseKey, tokenRenovado);
       
       const queryParams = [
-        `filters[from]=${encodeURIComponent(inicio)}`,
-        `filters[to]=${encodeURIComponent(fim)}`,
-        `filters[acc]=all`,
+        `filters[acc][btw]=${encodeURIComponent(inicio)},${encodeURIComponent(fim)}`,
         `limit=100`,
       ].join('&');
 
