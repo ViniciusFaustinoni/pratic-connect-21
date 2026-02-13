@@ -53,6 +53,13 @@ export function EnviarParaOficinaDialog({
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
+      // Buscar profile.id (FK exige referencia a profiles, nao auth.users)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .maybeSingle();
+
       const obs = [
         tipoReparo ? `Tipo de reparo: ${tipoReparo}` : '',
         observacoes || '',
@@ -70,7 +77,7 @@ export function EnviarParaOficinaDialog({
           data_entrada: format(new Date(), 'yyyy-MM-dd'),
           observacoes: obs || null,
           status: 'aguardando_orcamento' as any,
-          criado_por: user?.id,
+          criado_por: profile?.id,
         })
         .select()
         .single();
@@ -89,7 +96,7 @@ export function EnviarParaOficinaDialog({
         status_anterior: sinistro.status,
         status_novo: 'em_reparo',
         observacao: `Encaminhado para oficina. OS criada: ${os.numero || os.id}`,
-        usuario_id: user?.id,
+        usuario_id: profile?.id,
       });
 
       // 4. Registrar histórico da OS
@@ -97,7 +104,7 @@ export function EnviarParaOficinaDialog({
         ordem_servico_id: os.id,
         status_novo: 'aguardando_orcamento',
         observacao: `OS criada a partir do sinistro ${sinistro.protocolo}`,
-        usuario_id: user?.id,
+        usuario_id: profile?.id,
       });
 
       toast.success('Ordem de serviço criada com sucesso!');
