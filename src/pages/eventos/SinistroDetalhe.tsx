@@ -231,7 +231,13 @@ export default function SinistroDetalhe() {
   const [modalSolicitarDocsOpen, setModalSolicitarDocsOpen] = useState(false);
   const [modalAcionamentoOpen, setModalAcionamentoOpen] = useState(false);
   const [mapaLocalizacaoOpen, setMapaLocalizacaoOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const { isDiretor } = usePermissions();
+
+  const openModalSafely = (setter: (v: boolean) => void) => {
+    setDropdownOpen(false);
+    setTimeout(() => setter(true), 150);
+  };
   const deleteSinistro = useDeleteSinistro();
 
   const { data: sinistro, isLoading } = useQuery({
@@ -469,31 +475,31 @@ export default function SinistroDetalhe() {
           )}
         </div>
 
-        <DropdownMenu modal={false}>
+        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen} modal={false}>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">
               <MoreHorizontal className="h-4 w-4 mr-2" />
               Ações
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
             <DropdownMenuItem onSelect={(e) => {
               e.preventDefault();
-              setTimeout(() => setModalStatusOpen(true), 0);
+              openModalSafely(setModalStatusOpen);
             }}>
               <FileCheck className="h-4 w-4 mr-2" />
               Atualizar Status
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={(e) => {
               e.preventDefault();
-              setTimeout(() => setModalVistoriaOpen(true), 0);
+              openModalSafely(setModalVistoriaOpen);
             }}>
               <Calendar className="h-4 w-4 mr-2" />
               Agendar Vistoria
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={(e) => {
               e.preventDefault();
-              setTimeout(() => setModalParecerOpen(true), 0);
+              openModalSafely(setModalParecerOpen);
             }}>
               <FileText className="h-4 w-4 mr-2" />
               Emitir Parecer
@@ -509,7 +515,7 @@ export default function SinistroDetalhe() {
                 className="text-destructive focus:text-destructive"
                 onSelect={(e) => {
                   e.preventDefault();
-                  setTimeout(() => setModalAcionamentoOpen(true), 0);
+                  openModalSafely(setModalAcionamentoOpen);
                 }}
               >
                 <Radio className="h-4 w-4 mr-2" />
@@ -528,7 +534,7 @@ export default function SinistroDetalhe() {
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={(e) => {
               e.preventDefault();
-              setTimeout(() => setModalVincularOpen(true), 0);
+              openModalSafely(setModalVincularOpen);
             }}>
               <LinkIcon className="h-4 w-4 mr-2" />
               Vincular Processo Existente
@@ -540,7 +546,7 @@ export default function SinistroDetalhe() {
                   className="text-destructive focus:text-destructive"
                   onSelect={(e) => {
                     e.preventDefault();
-                    setTimeout(() => setModalExcluirOpen(true), 0);
+                    openModalSafely(setModalExcluirOpen);
                   }}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
