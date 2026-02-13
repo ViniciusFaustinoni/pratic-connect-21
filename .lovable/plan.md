@@ -1,56 +1,32 @@
 
-# Adicionar checkbox "Termo de Saida de Evento" no formulario de Template
+# Fluxo pos-envio do Termo de Saida
 
-## Problema
-O campo `is_default_saida` ja existe no banco de dados, no hook de templates e na edge function `autentique-os-saida-create`, mas o checkbox para marca-lo **nao aparece no formulario** de criacao/edicao de template. Ou seja, o backend esta pronto mas falta a UI.
+## Mudancas
 
-## Solucao
+### 1. `src/components/oficinas/OSConclusaoModal.tsx`
+- Apos envio com sucesso do termo (`handleEnviarTermo`), **fechar o modal** com `onOpenChange(false)`
+- Atualizar o status da OS para `pendente_assinatura` no banco (novo status intermediario entre `concluido` e `finalizado`)
+- Quando o modal for reaberto (com `autentique_url` ja existente e nao assinado), mostrar opcoes de reenvio e o polling automatico
+- Reduzir polling de 15s para 10s para detectar assinatura mais rapido
 
-### Arquivo: `src/pages/documentos/TemplateForm.tsx`
+### 2. `src/pages/oficinas/OrdemServicoDetalhe.tsx`
+- Alterar o texto do botao: se a OS ja tem `autentique_url` e nao esta assinado, mostrar **"Reenviar Termo de Saida"** em vez de "Termo de Saida"
+- Manter visibilidade do botao para status `concluido` (e o novo `pendente_assinatura` se adicionado)
 
-Adicionar um terceiro checkbox apos o de "Termo de Entrada de Evento" (linha 351), com estilo visual distinto (verde, similar ao padrao dos outros checkboxes coloridos):
+### 3. Status `pendente_assinatura`
+- Verificar se o status ja existe em `src/types/database.ts` no mapeamento `STATUS_ORDEM_SERVICO_LABELS`/`COLORS`
+- Se nao existir, adicionar como novo status com label "Pendente de Assinatura" e cor amarela/amber
 
-- Icone: `Truck` ou `LogOut` do lucide-react (representando saida de veiculo)
-- Cor: verde (`green-500`)
-- Label: **Usar como padrao para Termo de Saida de Evento (OS)**
-- Descricao: "Este template sera usado para gerar o Termo de Saida de Veiculo enviado ao associado quando uma Ordem de Servico for concluida. Apenas um template pode ser marcado."
+## Fluxo resultante
 
-O campo `is_default_saida` ja esta no schema zod (linha 39), nos defaults (linha 67), no carregamento de edicao (linha 83), e no submit de criacao (linha 137). Apenas o componente visual do checkbox esta ausente.
+1. Usuario clica "Enviar Termo para Assinatura" no modal
+2. Termo e enviado com sucesso -> modal fecha, toast de sucesso
+3. Botao na pagina muda para "Reenviar Termo de Saida"
+4. Se usuario clica no botao novamente, modal abre mostrando: link de assinatura, botoes copiar/whatsapp, e botao "Reenviar Termo"
+5. Polling automatico (a cada 10s) detecta assinatura -> modal mostra "Assinado" + botao "Liberar Veiculo"
+6. Ao liberar: OS -> finalizado, Sinistro -> encerrado
 
-## Detalhe tecnico
-
-Inserir entre a linha 351 (fim do FormField `is_default_evento`) e a linha 353 (inicio do FormField `descricao`):
-
-```tsx
-<FormField
-  control={form.control}
-  name="is_default_saida"
-  render={({ field }) => (
-    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
-      <FormControl>
-        <Checkbox
-          checked={field.value}
-          onCheckedChange={field.onChange}
-        />
-      </FormControl>
-      <div className="space-y-1 leading-none">
-        <FormLabel className="flex items-center gap-2 text-green-700 dark:text-green-400">
-          <Truck className="h-4 w-4" />
-          Usar como padrao para Termo de Saida de Evento (OS)
-        </FormLabel>
-        <FormDescription>
-          Este template sera usado para gerar o Termo de Saida de Veiculo enviado ao associado quando
-          uma Ordem de Servico for concluida. Apenas um template pode ser marcado.
-        </FormDescription>
-      </div>
-    </FormItem>
-  )}
-/>
-```
-
-Tambem adicionar `Truck` ao import do `lucide-react` no topo do arquivo.
-
-## Resumo
-- **1 arquivo alterado**: `src/pages/documentos/TemplateForm.tsx`
-- Adicionar import `Truck` do lucide-react
-- Adicionar checkbox para `is_default_saida` entre os checkboxes existentes e o campo descricao
+## Arquivos alterados
+- `src/components/oficinas/OSConclusaoModal.tsx` - fechar modal apos envio, logica de reenvio
+- `src/pages/oficinas/OrdemServicoDetalhe.tsx` - texto do botao dinamico
+- `src/types/database.ts` - verificar/adicionar status `pendente_assinatura` (se necessario)
