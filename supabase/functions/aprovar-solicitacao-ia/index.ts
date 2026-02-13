@@ -143,15 +143,6 @@ serve(async (req) => {
         veiculoId = veiculos?.[0]?.id;
       }
 
-      // Buscar contrato ativo
-      const { data: contrato } = await supabaseAdmin
-        .from("contratos")
-        .select("id")
-        .eq("associado_id", solicitacao.associado_id)
-        .eq("status", "ativo")
-        .limit(1)
-        .maybeSingle();
-
       // Criar sinistro
       const { data: sinistro, error: sinError } = await supabaseAdmin
         .from("sinistros")
@@ -159,7 +150,6 @@ serve(async (req) => {
           protocolo,
           associado_id: solicitacao.associado_id,
           veiculo_id: veiculoId,
-          contrato_id: contrato?.id || null,
           tipo: dados.tipo || "outro",
           data_ocorrencia: dados.data_ocorrencia || new Date().toISOString(),
           local_ocorrencia: dados.local as string || null,
