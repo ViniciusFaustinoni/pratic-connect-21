@@ -260,6 +260,26 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
           </div>
         </div>
 
+        {/* Custo da OS */}
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">Total Orçamento</span>
+              <span className="text-xl font-bold text-primary">
+                {Number(os.valor_orcamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </span>
+            </div>
+            {os.valor_aprovado && os.valor_aprovado !== os.valor_orcamento && (
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-muted-foreground">Valor Aprovado</span>
+                <span className="text-sm font-semibold">
+                  {Number(os.valor_aprovado).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Separator />
 
         {/* Step 1: Concluir */}
