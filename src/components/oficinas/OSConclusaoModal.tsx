@@ -92,7 +92,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
 
         try {
           await supabase.functions.invoke('whatsapp-send-text', {
-            body: { phone, message: mensagem },
+            body: { telefone: phone.replace(/\D/g, ''), mensagem },
           });
           toast.success('Mensagem enviada ao associado via WhatsApp');
         } catch (whatsErr) {
