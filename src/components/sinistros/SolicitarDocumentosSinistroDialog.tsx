@@ -78,20 +78,31 @@ export function SolicitarDocumentosSinistroDialog({
         throw new Error('Selecione pelo menos um documento');
       }
 
-      // 1. Inserir documentos pendentes
-      const docsToInsert = documentosSelecionados.map(tipo => ({
-        sinistro_id: sinistroId,
-        tipo,
-        nome_arquivo: TIPOS_DOCUMENTOS_SINISTRO.find(d => d.id === tipo)?.label || tipo,
-        arquivo_url: '', // Vazio até o associado enviar
-        status: 'pendente',
-      }));
-
-      const { error: docsError } = await supabase
+      // 1. Buscar documentos já existentes para evitar duplicação
+      const { data: existentes } = await supabase
         .from('sinistro_documentos')
-        .insert(docsToInsert);
+        .select('tipo')
+        .eq('sinistro_id', sinistroId);
 
-      if (docsError) throw docsError;
+      const tiposExistentes = new Set((existentes || []).map(d => d.tipo));
+      const tiposNovos = documentosSelecionados.filter(tipo => !tiposExistentes.has(tipo));
+
+      // Inserir apenas tipos que ainda não existem
+      if (tiposNovos.length > 0) {
+        const docsToInsert = tiposNovos.map(tipo => ({
+          sinistro_id: sinistroId,
+          tipo,
+          nome_arquivo: TIPOS_DOCUMENTOS_SINISTRO.find(d => d.id === tipo)?.label || tipo,
+          arquivo_url: '',
+          status: 'pendente',
+        }));
+
+        const { error: docsError } = await supabase
+          .from('sinistro_documentos')
+          .insert(docsToInsert);
+
+        if (docsError) throw docsError;
+      }
 
       // 2. Gerar token único para upload e atualizar status
       const uploadToken = crypto.randomUUID().substring(0, 12);
