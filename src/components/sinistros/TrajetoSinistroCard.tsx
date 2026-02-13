@@ -104,21 +104,28 @@ export function TrajetoSinistroCard({
   });
 
   // Buscar histórico de trajeto
-  const { data: historico, isLoading, error } = useQuery({
+  const { data: historico, isLoading, error, refetch } = useQuery({
     queryKey: ['trajeto-sinistro', rastreador?.id, dataInicio.toISOString()],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('rastreador-historico', {
-        body: {
-          rastreador_id: rastreador!.id,
-          data_inicio: dataInicio.toISOString(),
-          data_fim: dataFim.toISOString(),
-        },
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-      return data;
+      try {
+        const { data, error } = await supabase.functions.invoke('rastreador-historico', {
+          body: {
+            rastreador_id: rastreador!.id,
+            data_inicio: dataInicio.toISOString(),
+            data_fim: dataFim.toISOString(),
+          },
+        });
+        if (error) throw new Error(error.message || 'Erro na comunicação com o servidor');
+        if (!data?.success) throw new Error(data?.error || 'Resposta inválida do servidor');
+        return data;
+      } catch (err) {
+        console.error('[TrajetoSinistroCard] Erro ao carregar trajeto:', err);
+        throw err;
+      }
     },
     enabled: !!rastreador?.id,
+    retry: 2,
+    retryDelay: 2000,
   });
 
   const trajeto = historico?.trajeto || [];
@@ -251,10 +258,15 @@ export function TrajetoSinistroCard({
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : error ? (
-            <div className="p-4">
+          <div className="p-4">
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>Erro ao carregar trajeto</AlertDescription>
+                <AlertDescription className="flex items-center justify-between">
+                  <span>{(error as Error)?.message || 'Erro ao carregar trajeto'}</span>
+                  <Button variant="outline" size="sm" onClick={() => refetch()}>
+                    Tentar novamente
+                  </Button>
+                </AlertDescription>
               </Alert>
             </div>
           ) : trajeto.length === 0 ? (
