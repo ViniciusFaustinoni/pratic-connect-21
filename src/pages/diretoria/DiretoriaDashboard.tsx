@@ -107,7 +107,7 @@ export default function DiretoriaDashboard() {
           supabase.from('leads').select('*', { count: 'exact', head: true }).gte('created_at', inicioMes.toISOString()),
           supabase.from('leads').select('*', { count: 'exact', head: true }).eq('etapa', 'ganho').gte('updated_at', inicioMes.toISOString()),
           supabase.from('cobrancas').select('valor_pago').eq('status', 'pago').gte('data_pagamento', inicioMes.toISOString().split('T')[0]),
-          supabase.from('sinistros').select('valor_indenizacao').in('status', ['aprovado', 'indenizado']).gte('data_ocorrencia', inicioMes.toISOString().split('T')[0]),
+          supabase.from('sinistros').select('valor_indenizacao').in('status', ['aprovado', 'indenizado', 'encerrado']).gte('data_ocorrencia', inicioMes.toISOString().split('T')[0]),
         ]);
 
       const receitaTotal = receita.data?.reduce((sum, p) => sum + (p.valor_pago || 0), 0) || 0;
