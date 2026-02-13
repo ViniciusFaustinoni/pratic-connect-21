@@ -40,6 +40,8 @@ const statusConfig: Record<StatusOrdemServico, { label: string; class: string }>
   em_execucao: { label: 'Em Execução', class: 'bg-indigo-100 text-indigo-800' },
   aguardando_peca: { label: 'Aguard. Peça', class: 'bg-orange-100 text-orange-800' },
   concluido: { label: 'Concluído', class: 'bg-green-100 text-green-800' },
+  pendente_assinatura: { label: 'Pend. Assinatura', class: 'bg-amber-100 text-amber-800' },
+  finalizado: { label: 'Finalizado', class: 'bg-emerald-100 text-emerald-800' },
   aguardando_pagamento: { label: 'Aguard. Pagamento', class: 'bg-amber-100 text-amber-800' },
   pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
   cancelado: { label: 'Cancelado', class: 'bg-red-100 text-red-800' },
@@ -96,7 +98,7 @@ export default function OrdensServicoList() {
         .order('created_at', { ascending: false });
 
       if (filters.status && filters.status !== 'todos') {
-        query = query.eq('status', filters.status);
+        query = query.eq('status', filters.status as any);
       }
       if (filters.oficina_id) {
         query = query.eq('oficina_id', filters.oficina_id);
