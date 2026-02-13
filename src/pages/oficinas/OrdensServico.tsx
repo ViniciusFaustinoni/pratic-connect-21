@@ -84,7 +84,7 @@ export default function OrdensServico() {
             <Card
               key={os.id}
               className="cursor-pointer transition-shadow hover:shadow-md"
-              onClick={() => navigate(`/ordens-servico/${os.id}`)}
+              onClick={() => navigate(`/oficinas/ordens/${os.id}`)}
             >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
