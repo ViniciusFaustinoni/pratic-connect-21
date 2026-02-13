@@ -73,7 +73,9 @@ export default function OrdemServicoDetalhe() {
               : 'Concluir OS'}
           </Button>
         )}
-        <Button variant="outline" onClick={() => setStatusOpen(true)}>Atualizar Status</Button>
+        {os.status !== 'cancelado' && os.status !== 'finalizado' && (
+          <Button variant="outline" onClick={() => setStatusOpen(true)}>Atualizar Status</Button>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -119,10 +121,12 @@ export default function OrdemServicoDetalhe() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Itens do Orçamento</CardTitle>
-              <Button size="sm" onClick={() => setItemOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Adicionar Item
-              </Button>
+              {os.status !== 'finalizado' && os.status !== 'cancelado' && (
+                <Button size="sm" onClick={() => setItemOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Adicionar Item
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {itens?.length === 0 ? (
@@ -151,15 +155,17 @@ export default function OrdemServicoDetalhe() {
                         <TableCell className="text-right">{item.quantidade}</TableCell>
                         <TableCell className="text-right">{formatCurrency(item.valor_unitario)}</TableCell>
                         <TableCell className="text-right font-medium">{formatCurrency(item.valor_total)}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteItem.mutate({ id: item.id, ordem_servico_id: os.id })}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
+                        {os.status !== 'finalizado' && os.status !== 'cancelado' && (
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteItem.mutate({ id: item.id, ordem_servico_id: os.id })}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

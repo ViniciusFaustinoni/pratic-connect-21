@@ -316,10 +316,12 @@ export default function OrdemServicoDetalhePage() {
                     Enviar Orçamento
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => setItemOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Adicionar Item
-                </Button>
+                {os.status !== 'finalizado' && os.status !== 'cancelado' && (
+                  <Button size="sm" variant="outline" onClick={() => setItemOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Adicionar Item
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -360,16 +362,18 @@ export default function OrdemServicoDetalhePage() {
                                 <TableCell className="text-right">{item.quantidade}</TableCell>
                                 <TableCell className="text-right">{formatCurrency(item.valor_unitario)}</TableCell>
                                 <TableCell className="text-right font-medium">{formatCurrency(item.valor_total)}</TableCell>
-                                <TableCell>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-destructive"
-                                    onClick={() => deleteItem.mutate({ id: item.id, ordem_servico_id: os.id })}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </TableCell>
+                                {os.status !== 'finalizado' && os.status !== 'cancelado' && (
+                                  <TableCell>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive"
+                                      onClick={() => deleteItem.mutate({ id: item.id, ordem_servico_id: os.id })}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                )}
                               </TableRow>
                             ))}
                           </TableBody>
