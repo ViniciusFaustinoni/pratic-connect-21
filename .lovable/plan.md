@@ -1,39 +1,61 @@
 
-# Corrigir erro de versao do PDF.js Worker
+# Exibir todos os dados extraidos dos documentos (CNH e CRLV)
 
 ## Problema
 
-O CDN do cdnjs nao possui o arquivo worker para a versao `4.10.38` do pdfjs-dist. Mesmo usando `pdfjsLib.version` na URL, o arquivo simplesmente nao existe no CDN, gerando o mesmo erro.
+A secao "Documentos Necessarios" mostra apenas um resumo minimo dos dados extraidos:
+- **CNH**: apenas nome e CPF
+- **CRLV**: apenas placa e renavam
+- **Comprovante**: apenas endereco resumido
+
+Os demais campos extraidos pelo OCR (RG, validade da CNH, categoria, chassi, cor, combustivel, motor, ano) nao sao exibidos.
 
 ## Solucao
 
-Usar o import com sufixo `?url` do Vite, que resolve o caminho do worker localmente a partir do `node_modules`. Isso elimina completamente a dependencia do CDN.
+Expandir a exibicao de cada documento para mostrar **todos os dados extraidos** pelo OCR, organizados de forma clara.
+
+### Dados a exibir na CNH/RG:
+- Nome completo
+- CPF
+- RG + Orgao emissor
+- Data de nascimento
+- Numero de registro da CNH
+- Validade da CNH
+- Categoria (A, B, AB, etc.)
+
+### Dados a exibir no CRLV:
+- Placa
+- Renavam
+- Chassi
+- Cor
+- Combustivel
+- Motor
+- Ano fabricacao / Ano modelo
+
+### Layout
+
+Cada card de documento tera, apos o check de sucesso, uma grade compacta (grid 2 colunas) com todos os campos extraidos formatados como `Label: Valor`, usando texto xs/muted para manter a interface limpa.
 
 ## Detalhe tecnico
 
-### Arquivo: `src/lib/pdfToImage.ts`
+### Arquivo: `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`
 
-Alterar as linhas 1-4 de:
-```typescript
-import * as pdfjsLib from 'pdfjs-dist';
+**Linhas 386-420**: Substituir a exibicao resumida de CNH e CRLV por grids com todos os dados extraidos.
 
-// Configure worker from CDN (avoids need to copy worker file)
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+**CNH** (linhas 388-392): Trocar de:
 ```
-
-Para:
-```typescript
-import * as pdfjsLib from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
-// Configure worker using Vite's ?url import (local, no CDN dependency)
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+{dadosExtraidos.nome} . CPF: {dadosExtraidos.cpf}
 ```
+Para grid com: Nome, CPF, RG, Orgao, Data Nasc., N Registro CNH, Validade, Categoria.
 
-Isso faz o Vite copiar o arquivo worker para o build output com o caminho correto, eliminando problemas de versao e CORS.
+**CRLV** (linhas 413-418): Trocar de:
+```
+Placa: {dadosExtraidos.veiculo_placa} . Renavam: {dadosExtraidos.veiculo_renavam}
+```
+Para grid com: Placa, Renavam, Chassi, Cor, Combustivel, Motor, Ano Fab/Mod.
 
-## Arquivo modificado
+### Arquivo modificado
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/lib/pdfToImage.ts` | Substituir URL do CDN por import local com `?url` |
+| `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` | Expandir exibicao de dados extraidos para CNH e CRLV |
