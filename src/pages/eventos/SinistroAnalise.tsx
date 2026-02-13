@@ -402,20 +402,51 @@ export default function SinistroAnalise() {
                 </p>
               ) : (
                 <div className="grid gap-2">
-                  {documentos.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-3 rounded-md bg-muted"
-                    >
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{doc.nome_arquivo || doc.tipo}</span>
+                  {documentos.map((doc) => {
+                    const isEnviado = doc.status === 'enviado' && doc.arquivo_url;
+                    const isImage = doc.arquivo_url && /\.(jpg|jpeg|png|webp|gif)$/i.test(doc.arquivo_url);
+                    return (
+                      <div
+                        key={doc.id}
+                        className="flex flex-col gap-2 p-3 rounded-md bg-muted"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {isImage ? (
+                              <Image className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <span className="text-sm">{doc.nome_arquivo || doc.tipo}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={doc.status === 'enviado' ? 'default' : 'outline'}>
+                              {doc.status}
+                            </Badge>
+                            {isEnviado && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => window.open(doc.arquivo_url, '_blank')}
+                              >
+                                Visualizar
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        {isEnviado && isImage && (
+                          <a href={doc.arquivo_url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={doc.arquivo_url}
+                              alt={doc.nome_arquivo || doc.tipo}
+                              className="rounded-md max-h-48 object-cover w-full cursor-pointer hover:opacity-90 transition-opacity"
+                            />
+                          </a>
+                        )}
                       </div>
-                      <Badge variant={doc.status === 'enviado' ? 'default' : 'outline'}>
-                        {doc.status}
-                      </Badge>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
