@@ -73,6 +73,57 @@ Deno.serve(async (req) => {
     }
 
     if (associado.user_id) {
+      // Verificar se é primeiro acesso (senha padrão criada pelo ativar-associado)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('primeiro_acesso')
+        .eq('user_id', associado.user_id)
+        .maybeSingle();
+
+      if (profile?.primeiro_acesso === true) {
+        // Atualizar senha do usuário existente
+        console.log('Primeiro acesso: atualizando senha para user_id:', associado.user_id);
+        
+        const { error: updateAuthError } = await supabase.auth.admin.updateUserById(
+          associado.user_id,
+          { password: senha }
+        );
+
+        if (updateAuthError) {
+          console.error('Erro ao atualizar senha:', updateAuthError);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Erro ao definir senha. Tente novamente.' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+          );
+        }
+
+        // Marcar primeiro_acesso como false
+        await supabase
+          .from('profiles')
+          .update({ primeiro_acesso: false, email: emailNormalizado })
+          .eq('user_id', associado.user_id);
+
+        // Registrar histórico
+        await supabase
+          .from('associados_historico')
+          .insert({
+            associado_id: associadoId,
+            tipo: 'senha_definida',
+            descricao: `Senha definida pelo associado via área do cliente (email: ${emailNormalizado})`
+          });
+
+        console.log('Senha atualizada com sucesso para:', emailNormalizado);
+
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: 'Senha definida com sucesso!'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Se não é primeiro acesso, já tem conta completa
       return new Response(
         JSON.stringify({ success: false, error: 'Você já possui uma conta. Use "Esqueci minha senha" se necessário.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }

@@ -84,16 +84,26 @@ serve(async (req) => {
       );
     }
 
-    // 4. Se já tem user_id, redirecionar para recuperar senha
+    // 4. Se já tem user_id, verificar se é primeiro acesso
     if (associado.user_id) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Você já possui uma conta. Use "Esqueci minha senha" para recuperar o acesso.',
-          hasAccount: true
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // Verificar se ainda é primeiro acesso (pode definir senha)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('primeiro_acesso')
+        .eq('user_id', associado.user_id)
+        .maybeSingle();
+
+      if (profile?.primeiro_acesso !== true) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Você já possui uma conta. Use "Esqueci minha senha" para recuperar o acesso.',
+            hasAccount: true
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      // Se é primeiro acesso, continua o fluxo normalmente (gerar token)
     }
 
     // 5. Gerar token único para criação de senha

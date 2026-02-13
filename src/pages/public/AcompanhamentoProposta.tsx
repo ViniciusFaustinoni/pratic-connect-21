@@ -35,6 +35,7 @@ interface AssociadoData {
   email: string;
   status: string;
   user_id: string | null;
+  primeiro_acesso?: boolean;
   plano: { nome: string } | null;
   veiculos: {
     id: string;
@@ -98,6 +99,17 @@ function useAcompanhamentoProposta(token: string | undefined) {
 
       if (assocError || !associado) return null;
 
+      // Buscar primeiro_acesso do profile se user_id existir
+      let primeiroAcesso: boolean | undefined;
+      if (associado.user_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('primeiro_acesso')
+          .eq('user_id', associado.user_id)
+          .maybeSingle();
+        primeiroAcesso = profile?.primeiro_acesso ?? undefined;
+      }
+
       // Buscar veículos
       const { data: veiculos } = await supabase
         .from('veiculos')
@@ -133,6 +145,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
 
       return {
         ...associado,
+        primeiro_acesso: primeiroAcesso,
         plano: associado.plano as any,
         veiculos: veiculos || [],
         contrato: {
@@ -221,9 +234,9 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // ATIVO MAS SEM CONTA CRIADA → Mostrar formulário de criação
+  // ATIVO MAS SEM CONTA CRIADA OU PRIMEIRO ACESSO → Mostrar formulário de criação
   // Permite criar conta independente da ativação do rastreador (cobertura_total)
-  if (associado.status === 'ativo' && !associado.user_id) {
+  if (associado.status === 'ativo' && (!associado.user_id || associado.primeiro_acesso === true)) {
     return {
       status: 'criar_conta',
       icon: KeyRound,
