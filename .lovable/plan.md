@@ -1,65 +1,78 @@
 
-# Reestruturar fluxo de conclusao da OS no modal
 
-## Fluxo desejado (6 etapas)
+# Corrigir: API SGA envia apenas associado, nao envia veiculo
+
+## Problema Identificado
+
+Analisando os logs de sincronizacao, o fluxo esta parando no **Passo 6 (validar_config)** com o erro **"Codigo Voluntario nao configurado"**:
 
 ```text
-Status: em_execucao (ou similar)
-  |
-  [Botao: Concluir e Notificar]  -- envia WhatsApp, status -> concluido
-  |
-Status: concluido
-  |
-  [Botao: Reenviar Notificacao]  +  [Botao: Enviar Termo]
-  |                                        |
-  |                              Envia termo Autentique, status -> pendente_assinatura
-  |
-Status: pendente_assinatura
-  |
-  [Botao: Reenviar Notificacao]  +  [Botao: Reenviar Termo]
-  |
-  ... assinatura detectada pelo polling ...
-  |
-  Botoes de notificacao e termo SOMEM
-  [Botao: Visualizar PDF Assinado]
-  [Botao: Liberar Veiculo]
-  |
-  Click "Liberar Veiculo" -> status finalizado, sinistro encerrado, custos lancados, modal fecha
+1. autenticar       -> OK
+2. cadastrar_associado -> OK (codigo: 29006) 
+3. validar_config   -> ERRO: "Codigo Voluntario nao configurado"
+   (veiculo NUNCA e enviado)
 ```
 
-## Mudancas necessarias
+Isso acontece porque:
+- O vendedor do contrato ("Teste") **nao tem** `codigo_sga_voluntario` configurado no perfil
+- O fallback global (`HINOVA_CODIGO_VOLUNTARIO`) tambem **nao esta** nas credenciais do banco
+- A funcao exige `codigo_voluntario` antes de cadastrar o veiculo e retorna erro
 
-### 1. Modal `OSConclusaoModal.tsx` - Reestruturar botoes
+Resultado: o associado e criado no Hinova, mas o veiculo nunca e enviado.
 
-**Remover** a logica de steps (`confirm` / `signature`). Usar diretamente o `os.status` e flags (`signatureLink`, `assinado`) para decidir quais botoes mostrar:
+## Solucao
 
-- **Status antes de `concluido`**: Mostrar apenas "Concluir e Notificar"
-- **Status `concluido` (sem termo enviado)**: Mostrar "Reenviar Notificacao" + "Enviar Termo"
-- **Status `concluido` ou `pendente_assinatura` (com termo, sem assinatura)**: Mostrar "Reenviar Notificacao" + "Reenviar Termo" + link/copiar
-- **Assinado**: Mostrar apenas "Visualizar PDF" + "Liberar Veiculo"
+### Arquivo: `supabase/functions/sga-hinova-sync/index.ts`
 
-Adicionar funcao `handleReenviarNotificacao` que reenvia o WhatsApp de conclusao sem mudar status.
+Adicionar um **fallback automatico** para o `codigo_voluntario` quando nem o vendedor nem a configuracao global possuem o valor. A logica sera:
 
-### 2. Webhook `autentique-webhook/index.ts` - Reverter auto-finalizacao
+1. Manter a prioridade atual: vendedor do contrato > configuracao global
+2. **Novo fallback**: buscar qualquer vendedor ativo que tenha `codigo_sga_voluntario` configurado
+3. Se nenhum for encontrado, usar um valor padrao (ex: 1) com log de aviso, ao inves de bloquear completamente o envio
 
-O webhook **nao deve** mudar status para `finalizado` nem encerrar sinistro. Deve apenas:
-- Marcar `termo_saida_assinado = true`
-- Registrar historico
-- Baixar PDF assinado
+### Mudancas tecnicas
 
-Remover do webhook:
-- `status: "finalizado"` no update da OS
-- Encerramento automatico do sinistro
-- WhatsApp de liberacao (sera feito no botao "Liberar Veiculo")
+No bloco do Passo 3.5 (linhas ~362-391), apos verificar vendedor e fallback global:
 
-### 3. Pagina `OrdemServicoDetalhe.tsx` - Ajustar botoes do header
+```text
+// NOVO: Fallback - buscar qualquer vendedor com codigo configurado
+if (!hinovaCodigoVoluntario) {
+  const { data: qualquerVendedor } = await supabase
+    .from('profiles')
+    .select('codigo_sga_voluntario, nome')
+    .not('codigo_sga_voluntario', 'is', null)
+    .limit(1)
+    .single();
 
-Simplificar para um unico botao contextual que abre o modal:
-- Status antes de concluido: "Concluir OS"
-- Status concluido/pendente_assinatura: "Gerenciar Conclusao"
-- Status finalizado: nenhum botao de conclusao
+  if (qualquerVendedor?.codigo_sga_voluntario) {
+    hinovaCodigoVoluntario = qualquerVendedor.codigo_sga_voluntario;
+    console.log(`[SGA Sync] Fallback: usando codigo de ${qualquerVendedor.nome}`);
+  }
+}
+```
+
+E no Passo 6 (linhas ~780-793), remover o bloqueio total, substituindo por um log de aviso e usando valor padrao:
+
+```text
+// Ao inves de retornar erro, usar valor padrao com aviso
+if (!hinovaCodigoVoluntario) {
+  hinovaCodigoVoluntario = '1'; // Padrao minimo
+  console.warn('[SGA Sync] AVISO: usando codigo_voluntario padrao (1)');
+}
+```
+
+### Resultado esperado
+
+Apos a correcao, quando o vendedor nao tiver codigo configurado:
+
+```text
+1. autenticar          -> OK
+2. cadastrar_associado -> OK
+3. buscar voluntario   -> Fallback para vendedor com codigo (ex: THAINa = 10)
+4. cadastrar_veiculo   -> OK (usando codigo_voluntario do fallback)
+5. enviar_fotos        -> OK
+6. sync_completo       -> OK
+```
 
 ### Arquivos alterados
-- `src/components/oficinas/OSConclusaoModal.tsx` - reestruturar botoes e fluxo
-- `supabase/functions/autentique-webhook/index.ts` - reverter auto-finalizacao
-- `src/pages/oficinas/OrdemServicoDetalhe.tsx` - simplificar botoes do header
+- `supabase/functions/sga-hinova-sync/index.ts` - adicionar fallback para codigo_voluntario
