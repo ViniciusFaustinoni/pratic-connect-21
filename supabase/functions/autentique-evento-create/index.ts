@@ -94,7 +94,20 @@ serve(async (req) => {
     let templateConteudo: string | null = null;
     let templateNome = "fallback";
 
-    if (docType) {
+    // Priorizar template marcado com is_default_evento
+    const { data: templateEvento } = await supabase
+      .from("documento_templates")
+      .select("id, codigo, nome, conteudo")
+      .eq("is_default_evento", true)
+      .eq("ativo", true)
+      .maybeSingle();
+
+    if (templateEvento?.conteudo) {
+      templateConteudo = templateEvento.conteudo;
+      templateNome = templateEvento.nome;
+      console.log(`[autentique-evento-create] Usando template evento: ${templateNome}`);
+    } else if (docType) {
+      // Fallback: buscar por document_type_id + is_default
       const { data: templateDB } = await supabase
         .from("documento_templates")
         .select("id, codigo, nome, conteudo")
@@ -106,7 +119,7 @@ serve(async (req) => {
       if (templateDB?.conteudo) {
         templateConteudo = templateDB.conteudo;
         templateNome = templateDB.nome;
-        console.log(`[autentique-evento-create] Usando template: ${templateNome}`);
+        console.log(`[autentique-evento-create] Usando template fallback: ${templateNome}`);
       }
     }
 
