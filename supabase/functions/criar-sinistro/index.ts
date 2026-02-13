@@ -509,15 +509,16 @@ Deno.serve(async (req) => {
     // ============================================
     const documentosPendentes = DOCUMENTOS_OBRIGATORIOS[payload.tipo_sinistro] || DOCUMENTOS_OBRIGATORIOS.outro;
 
-    for (const doc of documentosPendentes) {
-      await supabaseAdmin.from('sinistro_documentos').insert({
-        sinistro_id: sinistro.id,
-        tipo: doc.tipo,
-        nome: doc.nome,
-        obrigatorio: doc.obrigatorio,
-        status: 'pendente',
-      });
-    }
+    const docsToUpsert = documentosPendentes.map(doc => ({
+      sinistro_id: sinistro.id,
+      tipo: doc.tipo,
+      nome: doc.nome,
+      obrigatorio: doc.obrigatorio,
+      status: 'pendente',
+    }));
+
+    await supabaseAdmin.from('sinistro_documentos')
+      .upsert(docsToUpsert, { onConflict: 'sinistro_id,tipo', ignoreDuplicates: true });
 
     console.log('[criar-sinistro] Documentos pendentes criados:', documentosPendentes.length);
 
