@@ -33,6 +33,7 @@ interface TemplateFromDB {
   is_default_autentique?: boolean;
   template_html?: string;
   is_default_evento?: boolean;
+  is_default_saida?: boolean;
 }
 
 // Tipo transformado para uso no frontend
@@ -63,6 +64,7 @@ export interface DocumentoTemplateView {
   is_default_autentique?: boolean;
   template_html?: string;
   is_default_evento?: boolean;
+  is_default_saida?: boolean;
 }
 
 // Função para transformar dados do banco para o tipo do frontend
@@ -86,6 +88,7 @@ function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategori
     is_default_autentique: data.is_default_autentique || false,
     template_html: data.template_html || undefined,
     is_default_evento: data.is_default_evento || false,
+    is_default_saida: (data as any).is_default_saida || false,
   };
 }
 
@@ -167,6 +170,7 @@ interface CreateTemplateInput {
   status?: TemplateStatus;
   is_default_autentique?: boolean;
   is_default_evento?: boolean;
+  is_default_saida?: boolean;
 }
 
 export function useCreateTemplate() {
@@ -194,6 +198,7 @@ export function useCreateTemplate() {
           status: input.status || 'draft',
           is_default_autentique: input.is_default_autentique || false,
           is_default_evento: input.is_default_evento || false,
+          is_default_saida: input.is_default_saida || false,
         })
         .select()
         .single();
@@ -229,6 +234,7 @@ interface UpdateTemplateInput {
   status?: TemplateStatus;
   is_default_autentique?: boolean;
   is_default_evento?: boolean;
+  is_default_saida?: boolean;
 }
 
 export function useUpdateTemplate() {
@@ -255,6 +261,7 @@ export function useUpdateTemplate() {
       if (input.status !== undefined) updateData.status = input.status;
       if (input.is_default_autentique !== undefined) updateData.is_default_autentique = input.is_default_autentique;
       if (input.is_default_evento !== undefined) updateData.is_default_evento = input.is_default_evento;
+      if (input.is_default_saida !== undefined) updateData.is_default_saida = input.is_default_saida;
 
       const { data, error } = await supabase
         .from('documento_templates')

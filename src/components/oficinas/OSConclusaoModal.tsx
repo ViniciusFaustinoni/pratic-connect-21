@@ -33,6 +33,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
   const [sendingTermo, setSendingTermo] = useState(false);
   const [signatureLink, setSignatureLink] = useState<string | null>(os?.autentique_url || null);
   const [assinado, setAssinado] = useState(os?.termo_saida_assinado || false);
+  const [liberando, setLiberando] = useState(false);
 
   // Sync with os data
   useEffect(() => {
@@ -141,6 +142,50 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
     const phone = (associado.whatsapp || associado.telefone || '').replace(/\D/g, '');
     const msg = encodeURIComponent(`Olá ${associado.nome}! Segue o link para assinar o Termo de Saída do seu veículo: ${signatureLink}`);
     window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
+  };
+
+  const handleLiberarVeiculo = async () => {
+    if (!window.confirm('Confirma a liberação do veículo? O sinistro e a OS serão encerrados.')) return;
+
+    setLiberando(true);
+    try {
+      // 1. Finalizar OS
+      await supabase.from('ordens_servico').update({
+        status: 'finalizado',
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', os.id);
+
+      // 2. Encerrar sinistro vinculado
+      if (os.sinistro_id) {
+        await supabase.from('sinistros').update({
+          status: 'encerrado',
+          updated_at: new Date().toISOString(),
+        }).eq('id', os.sinistro_id);
+
+        await (supabase.from('sinistros_historico' as any) as any).insert({
+          sinistro_id: os.sinistro_id,
+          status_novo: 'encerrado',
+          observacao: 'Veículo liberado após assinatura do Termo de Saída',
+        });
+      }
+
+      // 3. Histórico OS
+      await supabase.from('ordens_servico_historico').insert({
+        ordem_servico_id: os.id,
+        status_novo: 'finalizado',
+        observacao: 'Veículo liberado - Termo de Saída assinado',
+      } as any);
+
+      queryClient.invalidateQueries({ queryKey: ['ordem_servico'] });
+      queryClient.invalidateQueries({ queryKey: ['sinistros'] });
+      toast.success('Veículo liberado! Sinistro e OS encerrados.');
+      onOpenChange(false);
+    } catch (err) {
+      console.error('[OSConclusao] Erro ao liberar veículo:', err);
+      toast.error('Erro ao liberar veículo');
+    } finally {
+      setLiberando(false);
+    }
   };
 
   if (!os) return null;
@@ -291,6 +336,21 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Visualizar PDF Assinado
                 </a>
+              </Button>
+            )}
+
+            {assinado && (
+              <Button
+                className="w-full"
+                variant="default"
+                onClick={handleLiberarVeiculo}
+                disabled={liberando}
+              >
+                {liberando ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Liberando...</>
+                ) : (
+                  <><Car className="mr-2 h-4 w-4" />Liberar Veículo</>
+                )}
               </Button>
             )}
           </div>
