@@ -13,6 +13,7 @@ export default function DefinirSenha() {
   
   const [carregando, setCarregando] = useState(true);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [profileTipo, setProfileTipo] = useState<string | null>(null);
   const [nomeUsuario, setNomeUsuario] = useState<string>('');
   
   const [senha, setSenha] = useState('');
@@ -54,7 +55,7 @@ export default function DefinirSenha() {
         // Buscar profile
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('id, nome, primeiro_acesso')
+          .select('id, nome, primeiro_acesso, tipo')
           .eq('email', email)
           .maybeSingle();
 
@@ -65,11 +66,13 @@ export default function DefinirSenha() {
 
         // Se não é primeiro acesso, redirecionar para dashboard
         if (!profile.primeiro_acesso) {
-          navigate('/dashboard', { replace: true });
+          const dest = profile.tipo === 'associado' ? '/app/home' : '/dashboard';
+          navigate(dest, { replace: true });
           return;
         }
 
         setProfileId(profile.id);
+        setProfileTipo(profile.tipo);
         setNomeUsuario(profile.nome?.split(' ')[0] || 'Usuário');
         setCarregando(false);
       } catch (error) {
@@ -113,7 +116,8 @@ export default function DefinirSenha() {
       });
 
       toast.success('Senha definida com sucesso!');
-      navigate('/dashboard', { replace: true });
+      const destino = profileTipo === 'associado' ? '/app/home' : '/dashboard';
+      navigate(destino, { replace: true });
 
     } catch (error: any) {
       console.error('Erro ao definir senha:', error);
