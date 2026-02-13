@@ -96,6 +96,14 @@ serve(async (req) => {
     // Cliente com service role para criar registros
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // Buscar profiles.id correto (aprovador_id tem FK para profiles.id, não auth.users.id)
+    const { data: perfil } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    const perfilId = perfil?.id || null;
+
     // Processar ação
     if (acao === "rejeitar") {
       // Atualizar status para rejeitado
@@ -104,7 +112,7 @@ serve(async (req) => {
         .update({
           status: "rejeitado",
           aprovado_em: new Date().toISOString(),
-          aprovador_id: userId,
+          aprovador_id: perfilId,
           motivo_rejeicao: motivo || "Rejeitado pelo diretor",
         })
         .eq("id", solicitacao_id);
@@ -411,7 +419,7 @@ serve(async (req) => {
       .update({
         status: "aprovado",
         aprovado_em: new Date().toISOString(),
-        aprovador_id: userId,
+        aprovador_id: perfilId,
         resultado_id,
       })
       .eq("id", solicitacao_id);

@@ -1,0 +1,1 @@
+UPDATE chat_solicitacoes_ia SET status = 'aprovado', aprovado_em = now(), aprovador_id = '37beadcf-284b-4a2c-88a0-6efa8cae60d9' WHERE id = '285d937b-9487-4d86-bee6-406ec34a1817';
