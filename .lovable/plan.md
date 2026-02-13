@@ -1,74 +1,44 @@
 
-# Registrar custo da OS ao liberar veiculo
+# Auto-atualizar pagina ao detectar assinatura
 
 ## Problema
-Quando o veiculo e liberado (handleLiberarVeiculo), o sistema atualiza status da OS e do sinistro, mas **nao registra o custo financeiro**. Isso faz com que o valor da OS nao apareca em nenhum dashboard, relatorio ou contabilidade.
+O polling que verifica a assinatura so roda dentro do modal (`OSConclusaoModal`). Porem, apos enviar o termo, o modal fecha (`onOpenChange(false)`). A pagina de detalhe usa `useOrdemServico` que e um `useQuery` sem `refetchInterval`, entao **nunca re-busca os dados** e a pagina fica parada mostrando "Concluido" em vez de "Pendente de Assinatura" -> "Finalizado".
 
-## Areas impactadas identificadas
+## Solucao
 
-| Area | Como busca custos | Status atual |
-|------|-------------------|--------------|
-| **Custos de Reparos** (useCustosReparos.ts) | Itens de OS com status `concluido/pago/aprovado` | Falta `finalizado` no filtro |
-| **Dashboard Diretor** (DiretoriaDashboard.tsx) | `sinistros.valor_indenizacao` com status `aprovado/indenizado` | Falta `encerrado` e valor nao e atualizado |
-| **Indicadores Atuariais** (IndicadoresAtuariais.tsx) | `sinistros.valor_indenizacao` com status `aprovado/indenizado/pago` | Falta `encerrado` |
-| **Rateio Sinistros** (RateioSinistros.tsx) | `sinistros.valor_indenizacao` com status `aprovado/pago` | Falta `encerrado` |
-| **Produto Detalhe** (ProdutoDetalhe.tsx) | `sinistros.valor_indenizacao` com status `aprovado/indenizado` | Falta `encerrado` |
-| **Contabilidade** (lancamentos_contabeis) | Lancamento automatico via `criarLancamentoAutomatico` | Nenhum lancamento e criado |
-| **Relatorios Gerenciais** (RelatoriosGerenciais.tsx) | Busca itens de OS com status filtrado | Falta `finalizado` |
+### 1. Adicionar polling na pagina de detalhe (`OrdemServicoDetalhe.tsx`)
 
-## Solucao em 2 partes
+Quando o status da OS for `pendente_assinatura`, ativar um `refetchInterval` no `useOrdemServico` para verificar a cada 10 segundos se `termo_saida_assinado` mudou para `true`. Quando detectar a assinatura, a pagina atualiza automaticamente (badge, botoes, historico).
 
-### Parte 1: Registrar custos ao liberar veiculo
+### 2. Modificar `useOrdemServico` no hook (`useOrdensServico.ts`)
 
-**Arquivo: `src/components/oficinas/OSConclusaoModal.tsx`**
+Adicionar um parametro opcional `refetchInterval` ao hook para que a pagina possa controlar quando ativar o polling:
 
-No `handleLiberarVeiculo`, apos finalizar OS e encerrar sinistro, adicionar:
-
-1. **Atualizar `sinistros.valor_indenizacao`** com o valor do orcamento da OS (`os.valor_orcamento`), para que dashboards e rateio capturem o custo
-2. **Criar lancamento contabil automatico** usando `criarLancamentoAutomatico` do hook `useLancamentosContabeis`:
-   - Debito: conta `REPAROS_OFICINAS` (5.1.01.002)
-   - Credito: conta `BANCO_CONTA_MOVIMENTO` (1.1.01.002)
-   - Valor: `os.valor_orcamento`
-   - Origem: `ordem_servico`
-   - Historico: `Reparo sinistro - OS {numero} - Oficina {nome}`
-
-Imports adicionais: `useLancamentosContabeis` e `CONTAS_PADRAO` de `contabilidade-config`
-
-### Parte 2: Incluir status `finalizado` e `encerrado` nos filtros de consulta
-
-**Arquivo: `src/hooks/useCustosReparos.ts`** (linha 77)
-- Adicionar `'finalizado'` ao array de status: `['concluido', 'pago', 'aprovado', 'finalizado']`
-
-**Arquivo: `src/pages/diretoria/DiretoriaDashboard.tsx`** (linha 110)
-- Adicionar `'encerrado'` ao filtro: `.in('status', ['aprovado', 'indenizado', 'encerrado'])`
-
-**Arquivo: `src/pages/diretoria/IndicadoresAtuariais.tsx`** (linha 94)
-- Adicionar `'encerrado'`: `.in('status', ['aprovado', 'indenizado', 'pago', 'encerrado'])`
-
-**Arquivo: `src/hooks/useDiretoria.ts`** (linhas 23 e 91)
-- Adicionar `'encerrado'` nos dois filtros de sinistros: `.in('status', ['aprovado', 'pago', 'encerrado'])`
-
-**Arquivo: `src/pages/diretoria/RateioSinistros.tsx`**
-- Verificar filtro de sinistros e adicionar `'encerrado'` se necessario
-
-## Resumo de arquivos alterados
-
-1. `src/components/oficinas/OSConclusaoModal.tsx` - registrar custo + lancamento contabil
-2. `src/hooks/useCustosReparos.ts` - adicionar `finalizado` ao filtro
-3. `src/pages/diretoria/DiretoriaDashboard.tsx` - adicionar `encerrado` ao filtro
-4. `src/pages/diretoria/IndicadoresAtuariais.tsx` - adicionar `encerrado` ao filtro
-5. `src/hooks/useDiretoria.ts` - adicionar `encerrado` aos filtros
-6. `src/pages/diretoria/RateioSinistros.tsx` - adicionar `encerrado` ao filtro (se aplicavel)
-
-## Fluxo resultante
-
-```text
-Liberar Veiculo (click)
-  |
-  +-> OS status = finalizado
-  +-> Sinistro status = encerrado
-  +-> Sinistro valor_indenizacao = OS valor_orcamento
-  +-> Lancamento contabil criado (D: Reparos Oficinas / C: Banco)
-  +-> Invalidar queries (dashboards se atualizam)
-  +-> Toast de sucesso + fechar modal
 ```
+useOrdemServico(id, { refetchInterval: os?.status === 'pendente_assinatura' ? 10000 : false })
+```
+
+Como o hook precisa do resultado para decidir o intervalo, a abordagem mais simples e usar `refetchInterval` como funcao no proprio hook: se o dado retornado tiver `status === 'pendente_assinatura'` e `termo_saida_assinado === false`, refetch a cada 10s. Caso contrario, sem polling.
+
+### Mudanca tecnica
+
+**Arquivo: `src/hooks/useOrdensServico.ts`** (funcao `useOrdemServico`)
+- Adicionar `refetchInterval` como funcao que verifica o status do dado retornado:
+
+```typescript
+refetchInterval: (query) => {
+  const data = query.state.data;
+  if (data && data.status === 'pendente_assinatura' && !data.termo_saida_assinado) {
+    return 10000; // 10s
+  }
+  return false;
+},
+```
+
+Isso garante:
+- Polling automatico SOMENTE quando OS esta pendente de assinatura
+- Para de fazer polling assim que detectar a assinatura ou status mudar
+- Nenhuma mudanca necessaria na pagina de detalhe - o hook se auto-gerencia
+
+### Arquivo alterado
+- `src/hooks/useOrdensServico.ts` - adicionar `refetchInterval` dinamico ao `useOrdemServico`
