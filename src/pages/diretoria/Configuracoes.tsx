@@ -79,12 +79,24 @@ export default function ConfiguracoesSistema() {
   const updateConfig = useMutation({
     mutationFn: async ({ chave, valor }: { chave: string; valor: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
+      
+      // Buscar profile.id (FK exige referência a profiles, não auth.users)
+      let profileId: string | null = null;
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        profileId = profile?.id || null;
+      }
+      
       const { error } = await supabase
         .from('configuracoes')
         .update({ 
           valor, 
           updated_at: new Date().toISOString(),
-          updated_by: user?.id
+          updated_by: profileId
         })
         .eq('chave', chave);
       if (error) throw error;
