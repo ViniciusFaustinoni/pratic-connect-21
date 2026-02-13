@@ -109,6 +109,27 @@ Qualquer dúvida, responda esta mensagem!`,
 
 Após a instalação, sua *Cobertura Total* será ativada automaticamente!
 
+Para qualquer dúvida sobre sua cobertura, você pode falar com nossa IA diretamente pelo app ou por aqui no WhatsApp! 🤖
+
+Bem-vindo à família PRATIC! 💙`,
+    emailTemplate: 'generico',
+  },
+  proposta_aprovada_cobertura_total: {
+    titulo: '🎉 Bem-vindo à PRATIC!',
+    mensagem: `Parabéns {nome}! Seu cadastro foi aprovado! 🚗
+
+📋 *Veículo Protegido:*
+{placa} - {marca} {modelo}
+
+🛡️ *Cobertura Ativa:* Cobertura Total (Roubo, Furto, Colisão, Incêndio e mais)
+
+✅ *Próximo Passo:* Crie sua senha e acesse o App PRATIC
+
+📱 Acesse o link abaixo para criar sua conta:
+🔗 {link_acompanhamento}
+
+Para qualquer dúvida sobre sua cobertura, assistência 24h ou sinistros, você pode falar com nossa IA diretamente pelo app ou por aqui no WhatsApp! 🤖
+
 Bem-vindo à família PRATIC! 💙`,
     emailTemplate: 'generico',
   },
