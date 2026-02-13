@@ -88,17 +88,47 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
         const oficinaNome = oficina?.nome_fantasia || oficina?.razao_social || 'oficina';
         const veiculoDesc = veiculo ? `*${veiculo.marca} ${veiculo.modelo}* placa *${veiculo.placa}*` : 'seu veículo';
 
-        const mensagem = `Olá ${associado.nome}!\n\nSeu veículo ${veiculoDesc} está pronto!\n\nO reparo na oficina *${oficinaNome}* foi concluído com sucesso.\n\nVocê receberá um Termo de Saída de Veículo no seu email para assinatura digital.\n\nEm caso de dúvidas, entre em contato conosco.\n\nABP PraticCar`;
+        // Montar endereço da oficina
+        const enderecoPartes = [
+          oficina?.logradouro || oficina?.endereco,
+          oficina?.numero,
+          oficina?.bairro,
+          oficina?.cidade,
+          oficina?.uf || oficina?.estado,
+        ].filter(Boolean);
+        const enderecoTexto = enderecoPartes.length > 0 ? enderecoPartes.join(', ') : '';
+
+        let mensagem = `Olá *${associado.nome}*! 🚗\n\n` +
+          `Informamos que o reparo do seu veículo ${veiculoDesc} foi *concluído com sucesso*!\n\n` +
+          `📍 *Por favor, compareça na oficina para retirar seu veículo:*\n` +
+          `🏪 *${oficinaNome}*\n`;
+
+        if (enderecoTexto) {
+          mensagem += `📌 Endereço: ${enderecoTexto}\n`;
+        }
+
+        mensagem += `\n📝 Você receberá um *Termo de Saída* para assinatura digital antes da liberação do veículo.\n\n` +
+          `Em caso de dúvidas, entre em contato conosco.\n\n` +
+          `*ABP PraticCar*`;
+
+        console.log('[OSConclusao] Enviando WhatsApp:', { telefone: phone, associado: associado.nome, oficina: oficinaNome, endereco: enderecoTexto });
 
         try {
-          await supabase.functions.invoke('whatsapp-send-text', {
+          const { data, error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
             body: { telefone: phone.replace(/\D/g, ''), mensagem },
           });
-          toast.success('Mensagem enviada ao associado via WhatsApp');
+          console.log('[OSConclusao] Resposta WhatsApp:', { data, error: whatsError });
+          if (whatsError) {
+            toast.warning('Não foi possível enviar WhatsApp ao associado');
+          } else {
+            toast.success('Mensagem enviada ao associado via WhatsApp');
+          }
         } catch (whatsErr) {
           console.error('[OSConclusao] Erro ao enviar WhatsApp:', whatsErr);
           toast.warning('Não foi possível enviar WhatsApp ao associado');
         }
+      } else {
+        console.warn('[OSConclusao] Associado sem telefone/whatsapp:', associado);
       }
 
       setStep('signature');
