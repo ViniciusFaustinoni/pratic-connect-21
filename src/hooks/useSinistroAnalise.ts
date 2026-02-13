@@ -48,8 +48,7 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
           ),
           veiculo:veiculos(
             id, placa, marca, modelo, ano_modelo, cor, 
-            chassi, renavam, valor_fipe, codigo_fipe,
-            tipo_veiculo, combustivel
+            chassi, renavam, valor_fipe, codigo_fipe
           ),
           analista:profiles!sinistros_analista_id_fkey(id, nome)
         `)
