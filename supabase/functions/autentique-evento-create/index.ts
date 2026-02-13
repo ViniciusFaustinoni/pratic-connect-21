@@ -56,7 +56,7 @@ serve(async (req) => {
         ),
         veiculo:veiculos(
           id, placa, marca, modelo, ano_modelo, cor, chassi, renavam,
-          valor_fipe, codigo_fipe, combustivel, categoria
+          valor_fipe, codigo_fipe, combustivel
         )
       `)
       .eq("id", sinistroId)

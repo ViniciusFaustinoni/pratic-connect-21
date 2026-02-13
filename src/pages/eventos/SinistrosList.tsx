@@ -39,6 +39,7 @@ import {
   Search,
   ClipboardCheck,
   Bot,
+  Wrench,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -427,7 +428,7 @@ export default function SinistrosList() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {isDiretor && (sinistro.status === 'comunicado' || sinistro.status === 'em_analise') && (
+                          {isDiretor && sinistro.status === 'comunicado' && (
                             <Button
                               variant="default"
                               size="icon"
@@ -436,6 +437,17 @@ export default function SinistrosList() {
                               title="Analisar"
                             >
                               <ClipboardCheck className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {isDiretor && sinistro.status === 'em_analise' && (
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => navigate(`/eventos/sinistros/${sinistro.id}`, { state: { openEnviarOficina: true } })}
+                              title="Enviar para Oficina"
+                            >
+                              <Wrench className="h-4 w-4" />
                             </Button>
                           )}
                           <Button

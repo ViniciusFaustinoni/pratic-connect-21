@@ -23,6 +23,7 @@ import {
   Image,
   History,
   Navigation,
+  Wrench,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { AprovarSinistroDialog } from '@/components/sinistros/AprovarSinistroDialog';
 import { ReprovarSinistroDialog } from '@/components/sinistros/ReprovarSinistroDialog';
 import { SolicitarDocumentosSinistroDialog } from '@/components/sinistros/SolicitarDocumentosSinistroDialog';
+import { EnviarParaOficinaDialog } from '@/components/sinistros/EnviarParaOficinaDialog';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { cn } from '@/lib/utils';
@@ -145,6 +147,7 @@ export default function SinistroAnalise() {
   const [showAprovar, setShowAprovar] = useState(false);
   const [showReprovar, setShowReprovar] = useState(false);
   const [showSolicitarDocs, setShowSolicitarDocs] = useState(false);
+  const [showEnviarOficina, setShowEnviarOficina] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<any>(null);
 
   const {
@@ -518,6 +521,33 @@ export default function SinistroAnalise() {
             </CardHeader>
             <CardContent className="space-y-3">
               {(() => {
+                // Sinistro já aprovado - mostrar status e botão Enviar para Oficina
+                if (sinistro.status === 'em_analise' || sinistro.status === 'aprovado' || sinistro.status === 'em_reparo') {
+                  return (
+                    <>
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
+                        <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Sinistro aprovado</strong> — aguardando encaminhamento para oficina.</span>
+                      </div>
+                      {sinistro.status !== 'em_reparo' && (
+                        <Button
+                          className="w-full"
+                          onClick={() => setShowEnviarOficina(true)}
+                        >
+                          <Wrench className="h-4 w-4 mr-2" />
+                          Enviar para Oficina
+                        </Button>
+                      )}
+                      {sinistro.status === 'em_reparo' && (
+                        <div className="flex items-center gap-2 p-3 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-sm">
+                          <Wrench className="h-4 w-4 flex-shrink-0" />
+                          <span>Veículo já encaminhado para oficina.</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                }
+
                 const aguardandoAssinatura = sinistro.autentique_documento_id && !sinistro.termo_anuencia_assinado;
                 const docsPendentes = documentos.filter(doc => doc.status === 'pendente');
                 const temDocsPendentes = docsPendentes.length > 0;
@@ -675,6 +705,13 @@ export default function SinistroAnalise() {
         protocolo={sinistro.protocolo}
         statusAtual={sinistro.status}
         associadoId={sinistro.associado_id}
+      />
+
+      <EnviarParaOficinaDialog
+        open={showEnviarOficina}
+        onOpenChange={setShowEnviarOficina}
+        sinistro={sinistro}
+        onSuccess={() => navigate('/operacoes/ordens-servico')}
       />
 
       {/* Preview Dialog */}
