@@ -164,6 +164,29 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
       queryClient.invalidateQueries({ queryKey: ['ordem_servico', os.id] });
       toast.success('Termo enviado para assinatura!');
 
+      // Enviar WhatsApp ao associado com link de assinatura
+      const associado = os?.sinistro?.veiculo?.associado || os?.veiculo?.associado;
+      const phone = associado?.whatsapp || associado?.telefone;
+      if (associado && phone && data.signatureLink) {
+        const veiculoDesc = [os?.veiculo?.marca, os?.veiculo?.modelo].filter(Boolean).join(' ') || 'veículo';
+        const mensagem = `Olá *${associado.nome}*! 📝\n\n` +
+          `O *Termo de Saída* do seu veículo *${veiculoDesc}* está pronto para assinatura digital.\n\n` +
+          `🔗 *Clique no link abaixo para assinar:*\n${data.signatureLink}\n\n` +
+          `Após a assinatura, seu veículo será liberado.\n\n` +
+          `Em caso de dúvidas, entre em contato conosco.\n\n` +
+          `*ABP PraticCar*`;
+
+        try {
+          await supabase.functions.invoke('whatsapp-send-text', {
+            body: { telefone: phone.replace(/\D/g, ''), mensagem },
+          });
+          toast.success('Link de assinatura enviado via WhatsApp');
+        } catch (whatsErr) {
+          console.error('[OSConclusao] Erro ao enviar WhatsApp do termo:', whatsErr);
+          toast.warning('Termo enviado, mas não foi possível notificar via WhatsApp');
+        }
+      }
+
       // Fechar modal após envio com sucesso
       onOpenChange(false);
     } catch (err: any) {
