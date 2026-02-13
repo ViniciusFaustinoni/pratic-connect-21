@@ -1,7 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Configure worker from CDN (avoids need to copy worker file)
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+// Configure worker using Vite's ?url import (local, no CDN dependency)
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 /**
  * Converts a PDF file to a JPEG image (first page only)
