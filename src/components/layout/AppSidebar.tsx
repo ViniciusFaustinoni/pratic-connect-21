@@ -57,6 +57,7 @@ import {
   Puzzle,
   Ban,
   RefreshCw,
+  Store,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -228,6 +229,7 @@ const menuConfig: {
       color: MENU_COLORS.oficinas,
       items: [
         { title: 'Oficinas', url: '/oficinas', icon: Building2 },
+        { title: 'Auto Centers', url: '/oficinas/auto-centers', icon: Store },
         { title: 'Ordens de Serviço', url: '/ordens-servico', icon: ClipboardList },
       ],
     },

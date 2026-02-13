@@ -1,0 +1,132 @@
+import { useState } from 'react';
+import { Plus, Search, Store, MapPin, Phone } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAutoCenters, type AutoCenter } from '@/hooks/useAutoCenters';
+import { AutoCenterFormDialog } from '@/components/oficinas/AutoCenterFormDialog';
+import { AutoCenterDetailDrawer } from '@/components/oficinas/AutoCenterDetailDrawer';
+
+const TIPO_LABELS: Record<string, string> = {
+  auto_center: 'Auto Center',
+  ferro_velho: 'Ferro Velho',
+};
+
+const TIPO_COLORS: Record<string, string> = {
+  auto_center: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+  ferro_velho: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+};
+
+export default function AutoCenters() {
+  const [search, setSearch] = useState('');
+  const [tipoFilter, setTipoFilter] = useState<string>('todos');
+  const [formOpen, setFormOpen] = useState(false);
+  const [selected, setSelected] = useState<AutoCenter | null>(null);
+
+  const { data: autoCenters, isLoading } = useAutoCenters({
+    search: search || undefined,
+    tipo: tipoFilter === 'todos' ? undefined : tipoFilter,
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Auto Centers</h1>
+          <p className="text-muted-foreground">Gerencie auto centers e ferros velhos</p>
+        </div>
+        <Button onClick={() => setFormOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Novo Auto Center
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={tipoFilter} onValueChange={setTipoFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os tipos</SelectItem>
+            <SelectItem value="auto_center">Auto Center</SelectItem>
+            <SelectItem value="ferro_velho">Ferro Velho</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="h-40 p-6" />
+            </Card>
+          ))}
+        </div>
+      ) : autoCenters?.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Store className="h-12 w-12 text-muted-foreground/50" />
+            <p className="mt-4 text-lg font-medium">Nenhum auto center encontrado</p>
+            <p className="text-muted-foreground">Cadastre um auto center para começar</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {autoCenters?.map((ac) => (
+            <Card
+              key={ac.id}
+              className="cursor-pointer transition-shadow hover:shadow-md"
+              onClick={() => setSelected(ac)}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <h3 className="font-semibold">{ac.nome}</h3>
+                    {ac.contato_nome && (
+                      <p className="text-sm text-muted-foreground">{ac.contato_nome}</p>
+                    )}
+                  </div>
+                  <Badge className={TIPO_COLORS[ac.tipo] || ''}>
+                    {TIPO_LABELS[ac.tipo] || ac.tipo}
+                  </Badge>
+                </div>
+                <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                  {ac.cidade && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      <span>{ac.cidade}{ac.estado ? ` - ${ac.estado}` : ''}</span>
+                    </div>
+                  )}
+                  {ac.contato_telefone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      <span>{ac.contato_telefone}</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <AutoCenterFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <AutoCenterDetailDrawer
+        autoCenter={selected}
+        open={!!selected}
+        onOpenChange={(open) => !open && setSelected(null)}
+      />
+    </div>
+  );
+}
