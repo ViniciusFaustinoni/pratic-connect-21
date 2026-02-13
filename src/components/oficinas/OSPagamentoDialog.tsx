@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useLancamentosContabeis } from '@/hooks/useLancamentosContabeis';
+import { CONTAS_PADRAO } from '@/lib/contabilidade-config';
 import {
   Dialog,
   DialogContent,
@@ -54,6 +56,7 @@ interface Props {
 
 export function OSPagamentoDialog({ os, open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
+  const { criarLancamentoAutomatico } = useLancamentosContabeis();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -106,6 +109,27 @@ export function OSPagamentoDialog({ os, open, onOpenChange }: Props) {
         usuario_id: userId,
         observacao: `Pagamento registrado: R$ ${data.valor.toFixed(2)} via ${FORMA_PAGAMENTO_LABELS[data.forma_pagamento]}`,
       });
+
+      // Lançamento contábil automático
+      const contaCredito = ['pix', 'transferencia'].includes(data.forma_pagamento)
+        ? CONTAS_PADRAO.BANCO_CONTA_MOVIMENTO
+        : CONTAS_PADRAO.CAIXA_GERAL;
+
+      const oficinaNome = (os as any).oficina?.nome_fantasia || (os as any).oficina?.razao_social || 'Oficina';
+
+      try {
+        await criarLancamentoAutomatico({
+          origem: 'pagamento_oficina',
+          origem_id: os.id,
+          data_competencia: data.data_pagamento,
+          historico: `Pgto OS ${(os as any).numero || os.id} - ${oficinaNome} - ${FORMA_PAGAMENTO_LABELS[data.forma_pagamento]}`,
+          conta_debito_id: CONTAS_PADRAO.REPAROS_OFICINAS,
+          conta_credito_id: contaCredito,
+          valor: data.valor,
+        });
+      } catch (err) {
+        console.error('Erro ao criar lançamento contábil para OS:', err);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordem_servico', os.id] });
