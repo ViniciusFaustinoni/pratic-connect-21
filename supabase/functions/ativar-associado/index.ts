@@ -144,7 +144,7 @@ serve(async (req) => {
 
     if (authError) {
       // Se o email já existe no Auth, buscar o user existente e vincular
-      if (authError.message?.includes('already been registered')) {
+      if ((authError as any).code === 'email_exists' || authError.message?.includes('already been registered')) {
         console.log('Email já registrado no Auth, buscando user existente...');
         const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
         const existingUser = users?.find(u => u.email?.toLowerCase() === associado.email.toLowerCase());
