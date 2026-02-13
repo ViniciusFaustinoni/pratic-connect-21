@@ -103,7 +103,6 @@ Deno.serve(async (req) => {
       .update({
         arquivo_url: urlData.publicUrl,
         status: 'enviado',
-        updated_at: new Date().toISOString(),
       })
       .eq('id', documentoId)
 
