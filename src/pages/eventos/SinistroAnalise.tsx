@@ -493,29 +493,47 @@ export default function SinistroAnalise() {
               <CardDescription>Decisão sobre o sinistro</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => setShowAprovar(true)}
-              >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Aprovar Sinistro
-              </Button>
-              <Button
-                variant="destructive"
-                className="w-full"
-                onClick={() => setShowReprovar(true)}
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Reprovar Sinistro
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowSolicitarDocs(true)}
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Solicitar Documentos
-              </Button>
+              {(() => {
+                const docsPendentes = documentos.filter(doc => doc.status === 'pendente');
+                const temDocsPendentes = docsPendentes.length > 0;
+                return (
+                  <>
+                    {temDocsPendentes && (
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                        <Clock className="h-4 w-4 flex-shrink-0" />
+                        <span>Aguardando envio de {docsPendentes.length} documento(s) solicitado(s)</span>
+                      </div>
+                    )}
+                    {!temDocsPendentes && (
+                      <Button
+                        className="w-full bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => setShowAprovar(true)}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Aprovar Sinistro
+                      </Button>
+                    )}
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={() => setShowReprovar(true)}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Reprovar Sinistro
+                    </Button>
+                    {!temDocsPendentes && (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setShowSolicitarDocs(true)}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Solicitar Documentos
+                      </Button>
+                    )}
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
 
