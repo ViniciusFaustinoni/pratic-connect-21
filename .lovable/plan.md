@@ -1,65 +1,46 @@
 
 
-# Corrigir duplicacao de documentos ao solicitar documentos de sinistro
+# Corrigir erro "Could not find the 'updated_at' column" no upload de documentos
 
 ## Problema
 
-Ao clicar em "Solicitar Documentos", o sistema insere registros na tabela `sinistro_documentos` sem verificar se ja existem documentos pendentes do mesmo tipo para aquele sinistro. Isso causa duplicacao na pagina publica de upload.
+Ao enviar documentos pelo link publico, a edge function `upload-documento-sinistro` falha com o erro:
+```
+Could not find the 'updated_at' column of 'sinistro_documentos' in the schema cache
+```
 
 ## Causa raiz
 
-No arquivo `SolicitarDocumentosSinistroDialog.tsx`, linhas 82-93, o codigo faz um INSERT direto sem filtrar tipos ja existentes:
+A edge function tenta atualizar uma coluna `updated_at` na tabela `sinistro_documentos`, mas essa coluna nao existe na tabela.
 
+Linha 91 do arquivo `supabase/functions/upload-documento-sinistro/index.ts`:
 ```typescript
-const docsToInsert = documentosSelecionados.map(tipo => ({
-  sinistro_id: sinistroId,
-  tipo,
-  ...
-}));
-await supabase.from('sinistro_documentos').insert(docsToInsert);
+.update({
+  arquivo_url: urlData.publicUrl,
+  status: 'enviado',
+  updated_at: new Date().toISOString(), // <-- coluna inexistente
+})
 ```
-
-Alem disso, a edge function `criar-sinistro` tambem pode ter inserido documentos iniciais.
 
 ## Solucao
 
-Antes de inserir, buscar os documentos ja existentes para o sinistro e filtrar os tipos que ja possuem registro, inserindo apenas os novos.
+Remover a referencia a `updated_at` do update na tabela `sinistro_documentos`.
 
 ## Alteracao
 
 | Arquivo | Descricao |
 |---|---|
-| `src/components/sinistros/SolicitarDocumentosSinistroDialog.tsx` | Adicionar consulta de documentos existentes antes do INSERT e filtrar duplicatas |
+| `supabase/functions/upload-documento-sinistro/index.ts` | Remover `updated_at` do `.update()` na linha 91 |
 
 ### Detalhes tecnicos
 
-Dentro do `mutationFn`, antes do INSERT (linha 82), adicionar:
-
+O update passara a ser apenas:
 ```typescript
-// Buscar documentos ja existentes para este sinistro
-const { data: existentes } = await supabase
-  .from('sinistro_documentos')
-  .select('tipo')
-  .eq('sinistro_id', sinistroId);
-
-const tiposExistentes = new Set((existentes || []).map(d => d.tipo));
-
-// Filtrar apenas tipos que ainda nao existem
-const tiposNovos = documentosSelecionados.filter(tipo => !tiposExistentes.has(tipo));
-
-if (tiposNovos.length === 0) {
-  // Todos ja existem, apenas atualizar status se necessario
-  return;
-}
-
-const docsToInsert = tiposNovos.map(tipo => ({
-  sinistro_id: sinistroId,
-  tipo,
-  nome_arquivo: TIPOS_DOCUMENTOS_SINISTRO.find(d => d.id === tipo)?.label || tipo,
-  arquivo_url: '',
-  status: 'pendente',
-}));
+.update({
+  arquivo_url: urlData.publicUrl,
+  status: 'enviado',
+})
 ```
 
-Isso garante que cada tipo de documento apareca apenas uma vez por sinistro, mesmo que o analista clique em "Solicitar Documentos" varias vezes.
+A edge function sera reimplantada automaticamente apos a alteracao.
 
