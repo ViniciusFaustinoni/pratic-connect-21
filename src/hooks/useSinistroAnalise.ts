@@ -130,7 +130,7 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('contratos')
-        .select('*, plano:planos(id, nome, valor_mensal)')
+        .select('*, plano:planos(id, nome)')
         .eq('associado_id', sinistro!.associado_id)
         .eq('status', 'ativo')
         .maybeSingle();

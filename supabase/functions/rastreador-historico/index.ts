@@ -195,21 +195,24 @@ serve(async (req) => {
       throw new Error('rastreador_id é obrigatório');
     }
 
-    // Buscar rastreador com config da plataforma
+    // Buscar rastreador
     const { data: rastreador, error: rastError } = await supabase
       .from('rastreadores')
-      .select(`
-        *,
-        config_plataforma:rastreadores_config_plataformas(*)
-      `)
+      .select('*')
       .eq('id', rastreador_id)
       .single();
 
     if (rastError || !rastreador) {
+      console.error('Erro ao buscar rastreador:', rastError);
       throw new Error('Rastreador não encontrado');
     }
 
-    const plataforma = rastreador.config_plataforma;
+    // Buscar config da plataforma separadamente
+    const { data: plataforma } = await supabase
+      .from('rastreadores_config_plataformas')
+      .select('*')
+      .eq('plataforma', rastreador.plataforma)
+      .maybeSingle();
 
     // Verificar suporte a histórico
     if (!plataforma?.suporta_historico_trajeto) {
