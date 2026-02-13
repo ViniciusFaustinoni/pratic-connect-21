@@ -1,55 +1,68 @@
 
 
-# Corrigir conflito entre ativacao e criacao de senha do associado
+# Corrigir mensagem de boas-vindas baseada no status real da instalacao
 
 ## Problema
 
-Existem dois fluxos conflitantes:
+Quando o analista aprova a proposta, o sistema **sempre** envia o template `proposta_aprovada_roubo_furto`, independentemente de a instalacao ja ter sido concluida. Isso causa:
 
-1. O analista ativa o associado via `ativar-associado`, que **ja cria o usuario no Auth** com senha padrao `Pratic@XXXX` e define o `user_id` no registro do associado
-2. O associado recebe um link/token para criar sua propria senha via `app-criar-senha`, mas essa funcao verifica se `associado.user_id` ja existe e retorna erro: "Voce ja possui uma conta"
-
-Resultado: a senha que o associado digita (ex: `12345678`) nunca e salva. A unica senha valida e a padrao gerada automaticamente.
+- Diz "Cobertura Ativa: Roubo e Furto" quando na verdade a cobertura total ja esta ativa
+- Diz "Proximo Passo: Instalacao do rastreador" quando a instalacao ja foi feita
+- Inclui texto "Apos a instalacao, sua Cobertura Total sera ativada automaticamente!" desnecessariamente
+- Nao orienta o associado a usar a IA para duvidas sobre cobertura
 
 ## Solucao
 
-Alterar a edge function `app-criar-senha` para que, quando o associado ja tenha `user_id` (criado pelo `ativar-associado`), em vez de retornar erro, **atualize a senha** do usuario existente e marque `primeiro_acesso: false`.
+### 1. Criar template `proposta_aprovada_cobertura_total` no `notificar-cliente`
 
-## Detalhe tecnico
+**Arquivo**: `supabase/functions/notificar-cliente/index.ts`
 
-### Arquivo: `supabase/functions/app-criar-senha/index.ts`
+Adicionar novo template para quando a instalacao ja foi concluida:
 
-**Linhas 73-82**: Substituir o bloco que retorna erro quando `associado.user_id` existe.
+```
+Parabens {nome}! Seu cadastro foi aprovado! 
 
-De:
-```typescript
-if (associado.user_id) {
-  return new Response(
-    JSON.stringify({ 
-      success: false, 
-      error: 'Voce ja possui uma conta. Use "Esqueci minha senha".' 
-    }),
-    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
+Veiculo Protegido:
+{placa} - {marca} {modelo}
+
+Cobertura Ativa: Cobertura Total (Roubo, Furto, Colisao, Incendio e mais)
+
+Proximo Passo: Crie sua senha e acesse o App PRATIC
+
+Acesse o link abaixo para criar sua conta:
+{link_acompanhamento}
+
+Para qualquer duvida sobre sua cobertura, assistencia 24h ou sinistros, 
+voce pode falar com nossa IA diretamente pelo app ou por aqui no WhatsApp!
+
+Bem-vindo a familia PRATIC!
 ```
 
-Para logica que:
-1. Usa `admin.updateUserById(associado.user_id, { password: senha })` para atualizar a senha
-2. Atualiza `primeiro_acesso: false` no profile
-3. Marca o token como usado
-4. Retorna sucesso
+### 2. Escolher template correto ao notificar
 
-Se o associado **nao** tem `user_id`, mantemos o fluxo atual que cria o usuario do zero.
+**Arquivo**: `src/hooks/usePropostasPendentes.ts` (linha 1644)
 
-### Tambem corrigir: `src/pages/auth/DefinirSenha.tsx`
+Usar `jaTemInstalacaoConcluida` para selecionar o template:
 
-Buscar o campo `tipo` no profile e redirecionar para `/app/home` quando o tipo for `associado` (em vez de sempre redirecionar para `/dashboard`).
+```
+tipo: jaTemInstalacaoConcluida 
+  ? 'proposta_aprovada_cobertura_total' 
+  : 'proposta_aprovada_roubo_furto'
+```
+
+### 3. Ajustar template existente `proposta_aprovada_roubo_furto`
+
+Adicionar orientacao sobre a IA ao final da mensagem existente:
+
+```
+Para qualquer duvida sobre sua cobertura, voce pode falar 
+com nossa IA diretamente pelo app ou por aqui no WhatsApp!
+```
 
 ## Arquivos modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/app-criar-senha/index.ts` | Quando `user_id` ja existe, atualizar senha em vez de retornar erro |
-| `src/pages/auth/DefinirSenha.tsx` | Redirecionar associados para `/app/home` apos definir senha |
+| `supabase/functions/notificar-cliente/index.ts` | Novo template `proposta_aprovada_cobertura_total` + ajuste no template roubo/furto |
+| `src/hooks/usePropostasPendentes.ts` | Selecionar template correto baseado em `jaTemInstalacaoConcluida` |
 
