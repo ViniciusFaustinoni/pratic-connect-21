@@ -3,34 +3,37 @@
 
 ## Problema
 
-O erro ocorre porque a versao do pacote `pdfjs-dist` instalado foi atualizada automaticamente para **4.10.38** (devido ao `^4.4.168` no package.json), mas o Worker do PDF.js esta com a URL do CDN fixada na versao **4.4.168**:
-
-```
-Error: The API version "4.10.38" does not match the Worker version "4.4.168"
-```
+O CDN do cdnjs nao possui o arquivo worker para a versao `4.10.38` do pdfjs-dist. Mesmo usando `pdfjsLib.version` na URL, o arquivo simplesmente nao existe no CDN, gerando o mesmo erro.
 
 ## Solucao
 
-Atualizar o arquivo `src/lib/pdfToImage.ts` para usar a versao do worker de forma dinamica, extraindo a versao diretamente do pacote instalado.
+Usar o import com sufixo `?url` do Vite, que resolve o caminho do worker localmente a partir do `node_modules`. Isso elimina completamente a dependencia do CDN.
 
 ## Detalhe tecnico
 
 ### Arquivo: `src/lib/pdfToImage.ts`
 
-Alterar a linha 4 de:
+Alterar as linhas 1-4 de:
 ```typescript
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure worker from CDN (avoids need to copy worker file)
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 ```
 
 Para:
 ```typescript
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+import * as pdfjsLib from 'pdfjs-dist';
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+// Configure worker using Vite's ?url import (local, no CDN dependency)
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 ```
 
-Isso garante que a versao do Worker sempre corresponda a versao da API, independente de atualizacoes futuras do pacote.
+Isso faz o Vite copiar o arquivo worker para o build output com o caminho correto, eliminando problemas de versao e CORS.
 
 ## Arquivo modificado
 
-| Arquivo | Acao |
+| Arquivo | Alteracao |
 |---|---|
-| `src/lib/pdfToImage.ts` | Usar `pdfjsLib.version` na URL do CDN worker |
+| `src/lib/pdfToImage.ts` | Substituir URL do CDN por import local com `?url` |
