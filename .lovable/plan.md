@@ -1,97 +1,105 @@
 
-# Adicionar polling automático em SinistroAnalise para detectar assinatura de termo
+# Correcoes de Sinistro Aprovado + Botao "Enviar para Oficina"
 
-## Problema Identificado
-A tela de análise de sinistro (`SinistroAnalise.tsx`) exibe um aviso "Aguardando assinatura do Termo de Entrada de Evento" quando `sinistro.autentique_documento_id` está preenchido mas `sinistro.termo_anuencia_assinado` é falso. Porém, não há polling automático para detectar quando o documento é assinado, então o diretor precisa recarregar manualmente a página para ver as ações desbloqueadas.
+## Problemas Identificados
 
-## Solução Proposta
-Implementar polling automático similar ao encontrado em:
-1. **`SinistroDetalhe.tsx`** (linhas 124-131): usa `queryClient.invalidateQueries` a cada 15s
-2. **`PagamentoAdesao.tsx`** (linhas 50-78): usa query direta ao Supabase a cada 10s
+1. **ERRO 1 e 2 - Botoes de analise aparecem em sinistro ja aprovado**: A tela de analise e a lista de sinistros nao verificam se o status ja e `aprovado` ou `em_analise` apos aprovacao
+2. **ERRO 3 - Termo nao enviado (Autentique)**: A edge function `autentique-evento-create` falha com erro `column veiculos_1.categoria does not exist` - o campo `categoria` nao existe na tabela `veiculos`
+3. **Novo botao "Enviar para Oficina"**: Sinistros aprovados devem mostrar botao para criar OS vinculada
 
-Para `SinistroAnalise.tsx`, vou usar a abordagem mais simples e eficiente que já existe no projeto:
+## Alteracoes
 
-### Mudanças necessárias:
+| Arquivo | Descricao |
+|---|---|
+| `supabase/functions/autentique-evento-create/index.ts` | Remover `categoria` da query de veiculos (campo nao existe na tabela) |
+| `src/pages/eventos/SinistrosList.tsx` | Substituir botao "Analisar" por "Enviar para Oficina" quando status = `em_analise` (aprovado pela diretoria); manter "Analisar" apenas para `comunicado` |
+| `src/pages/eventos/SinistroAnalise.tsx` | Quando status ja e `em_analise` ou `aprovado`, ocultar botoes de aprovar/reprovar e mostrar mensagem de status ou botao "Enviar para Oficina" |
+| `src/components/sinistros/EnviarParaOficinaDialog.tsx` (NOVO) | Dialog para selecionar oficina e tipo de reparo, criando OS automaticamente |
 
-**1. Adicionar useEffect com polling em SinistroAnalise.tsx (logo após o componente ser carregado)**
+## Detalhes tecnicos
 
-O polling será ativado quando:
-- `sinistro` está carregado
-- `sinistro.autentique_documento_id` existe (documento foi enviado para assinatura)
-- `sinistro.termo_anuencia_assinado === false` (ainda não foi assinado)
+### 1. Fix autentique-evento-create (Erro 3)
 
-O polling será desativado quando:
-- `sinistro.termo_anuencia_assinado === true` (assinatura detectada)
-- Componente é desmontado
+Na linha 59, remover `categoria` da query:
 
-**2. Implementação do polling (em SinistroAnalise.tsx)**
+```
+// De:
+veiculo:veiculos(id, placa, marca, modelo, ano_modelo, cor, chassi, renavam, valor_fipe, codigo_fipe, combustivel, categoria)
+
+// Para:
+veiculo:veiculos(id, placa, marca, modelo, ano_modelo, cor, chassi, renavam, valor_fipe, codigo_fipe, combustivel)
+```
+
+Tambem remover qualquer referencia a `categoria` no mapeamento de variaveis do template (se houver).
+
+### 2. SinistrosList.tsx - Botao condicional na coluna Acoes
+
+Linha 430: Alterar a logica para:
+- Status `comunicado`: Botao "Analisar" (como hoje)
+- Status `em_analise`: Botao "Enviar para Oficina" (icone `Wrench`)
+- Outros status: Sem botao de acao especial
 
 ```typescript
-// Polling automático para detectar assinatura do termo
-useEffect(() => {
-  const aguardandoAssinatura = sinistro?.autentique_documento_id && !sinistro?.termo_anuencia_assinado;
-  
-  if (!aguardandoAssinatura) return;
-  
-  const interval = setInterval(() => {
-    // Invalida a query principal que carrega o sinistro
-    queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
-  }, 10000); // 10 segundos
-  
-  return () => clearInterval(interval);
-}, [sinistro?.autentique_documento_id, sinistro?.termo_anuencia_assinado, id, queryClient]);
+{isDiretor && sinistro.status === 'comunicado' && (
+  <Button size="icon" onClick={() => navigate(`/eventos/sinistros/${sinistro.id}/analisar`)}>
+    <ClipboardCheck className="h-4 w-4" />
+  </Button>
+)}
+{isDiretor && sinistro.status === 'em_analise' && (
+  <Button size="icon" variant="outline" onClick={() => abrirEnviarOficina(sinistro)}>
+    <Wrench className="h-4 w-4" />
+  </Button>
+)}
 ```
 
-**3. Imports necessários**
-- Já existe `useQueryClient` importado em `useSinistroAnalise.ts`
-- Precisa ser retornado pelo hook ou capturado através do `useQuery` do React Query
+### 3. SinistroAnalise.tsx - Bloquear acoes apos aprovacao
 
-### Detalhes técnicos:
+Na secao de Acoes (linha 520), adicionar verificacao de status:
 
-**Timing do polling**: 10 segundos
-- Suficientemente rápido para UX aceitável
-- Não causa throttling do Supabase (muito menos agressivo que conexões de chat real-time)
-- Segue o padrão usado em `PagamentoAdesao.tsx`
-
-**Critério de parada automática**: 
-- O polling continua apenas enquanto `aguardandoAssinatura === true`
-- Uma vez que `termo_anuencia_assinado` muda para `true`, o polling para automaticamente
-- A interface atualiza com as ações desbloqueadas
-
-**Realtime alternativo não usado**:
-- Poderia usar Supabase Realtime (já subscrito em `useSinistroAnalise.ts` para documentos)
-- Mas polling é mais simples e não adiciona complexidade
-- Polling é padrão no projeto (PagamentoAdesao, SinistroDetalhe)
-
-### Arquivos a modificar:
-
-| Arquivo | Descrição |
-|---|---|
-| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar useEffect com polling automático (aprox. 8 linhas) |
-
-### Fluxo visual após implementação:
-
-```
-1. Diretor abre tela de análise
-   ↓
-2. Sinistro aguarda assinatura do termo
-   ↓
-3. Polling iniciado (10s de intervalo)
-   ↓
-4. Associado assina pelo link público
-   ↓
-5. Polling detecta mudança em termo_anuencia_assinado (próximo ciclo)
-   ↓
-6. Interface atualiza automaticamente
-   ↓
-7. Botões "Aprovar" e "Reprovar" desbloqueiam
-   ↓
-8. Polling para (ou continua inerte já que condição está falsa)
+```typescript
+if (sinistro.status === 'em_analise' || sinistro.status === 'aprovado' || sinistro.status === 'em_reparo') {
+  return (
+    <div className="space-y-3">
+      <div className="p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
+        <CheckCircle /> Sinistro aprovado
+      </div>
+      <Button onClick={() => setShowEnviarOficina(true)}>
+        <Wrench /> Enviar para Oficina
+      </Button>
+    </div>
+  );
+}
 ```
 
-### Benefícios:
-- ✅ Sem necessidade de recarregar página
-- ✅ Detecção automática em até 10 segundos
-- ✅ Padrão já usado no projeto (consistente)
-- ✅ Simples e sem overhead
-- ✅ Limpo e sem polling desnecessário após assinatura
+### 4. EnviarParaOficinaDialog.tsx (novo componente)
+
+Dialog com:
+- Select de oficinas (busca da tabela `oficinas`)
+- Campo de tipo de reparo (texto ou select)
+- Campo de observacoes
+- Ao confirmar:
+  1. Insere na tabela `ordens_servico` com `sinistro_id`, `oficina_id`, `veiculo_id`, `associado_id`, status `aguardando_orcamento`
+  2. Atualiza sinistro para status `em_reparo`
+  3. Registra historico em `sinistro_historico`
+  4. Registra historico em `ordens_servico_historico`
+  5. Toast de sucesso e redireciona para a OS criada
+
+Segue o mesmo padrao de `NovaOSModal.tsx` para a insercao:
+
+```typescript
+const { data, error } = await supabase
+  .from('ordens_servico')
+  .insert({
+    numero: '', // trigger gera automaticamente
+    sinistro_id: sinistro.id,
+    oficina_id: selectedOficinaId,
+    veiculo_id: sinistro.veiculo_id,
+    associado_id: sinistro.associado_id,
+    data_entrada: format(new Date(), 'yyyy-MM-dd'),
+    observacoes: observacoes,
+    status: 'aguardando_orcamento',
+    criado_por: user?.id,
+  })
+  .select()
+  .single();
+```
