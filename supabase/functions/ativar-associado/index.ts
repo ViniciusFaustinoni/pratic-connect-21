@@ -129,6 +129,7 @@ serve(async (req) => {
     const senhaPadrao = gerarSenhaPadrao(associado.cpf);
 
     // Criar usuário no Auth com senha
+    let userId: string;
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: associado.email.toLowerCase(),
       password: senhaPadrao,
@@ -142,16 +143,31 @@ serve(async (req) => {
     });
 
     if (authError) {
-      console.error('Erro ao criar usuário:', authError);
-      throw new Error(`Erro ao criar acesso: ${authError.message}`);
+      // Se o email já existe no Auth, buscar o user existente e vincular
+      if (authError.message?.includes('already been registered')) {
+        console.log('Email já registrado no Auth, buscando user existente...');
+        const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+        const existingUser = users?.find(u => u.email?.toLowerCase() === associado.email.toLowerCase());
+        
+        if (!existingUser || listError) {
+          throw new Error('Email já registrado mas não foi possível localizar o usuário existente.');
+        }
+        
+        userId = existingUser.id;
+        console.log('User existente encontrado:', userId);
+      } else {
+        console.error('Erro ao criar usuário:', authError);
+        throw new Error(`Erro ao criar acesso: ${authError.message}`);
+      }
+    } else {
+      userId = authUser.user.id;
+      console.log('Usuário Auth criado:', userId);
     }
-
-    console.log('Usuário Auth criado:', authUser.user.id);
 
     // Atualizar associado com user_id
     const { error: updateAssociadoError } = await supabaseAdmin
       .from('associados')
-      .update({ user_id: authUser.user.id })
+      .update({ user_id: userId })
       .eq('id', associado.id);
 
     if (updateAssociadoError) {
@@ -167,7 +183,7 @@ serve(async (req) => {
         cpf: associado.cpf,
         telefone: associado.telefone,
       })
-      .eq('user_id', authUser.user.id);
+      .eq('user_id', userId);
 
     if (updateProfileError) {
       console.error('Erro ao atualizar profile:', updateProfileError);
@@ -177,7 +193,7 @@ serve(async (req) => {
     const { error: roleError } = await supabaseAdmin
       .from('user_roles')
       .insert({
-        user_id: authUser.user.id,
+        user_id: userId,
         role: 'associado',
       });
 
@@ -236,7 +252,7 @@ serve(async (req) => {
     await supabaseAdmin
       .from('auth_logs')
       .insert({
-        profile_id: authUser.user.id,
+        profile_id: userId,
         email: associado.email.toLowerCase(),
         acao: 'associado_ativado',
         metadata: {
@@ -249,7 +265,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        userId: authUser.user.id,
+        userId: userId,
         message: 'Acesso do associado criado. Email e WhatsApp enviados.'
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
