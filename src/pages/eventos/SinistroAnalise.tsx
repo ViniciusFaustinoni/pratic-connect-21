@@ -711,7 +711,7 @@ export default function SinistroAnalise() {
         open={showEnviarOficina}
         onOpenChange={setShowEnviarOficina}
         sinistro={sinistro}
-        onSuccess={() => navigate('/operacoes/ordens-servico')}
+        onSuccess={() => navigate('/ordens-servico')}
       />
 
       {/* Preview Dialog */}
