@@ -1,48 +1,66 @@
 
-# Corrigir exibicao de documentos de sinistro (imagens nao carregam)
+# Fluxo pos-aprovacao: Termo Autentique + bloqueio de acoes + notificacao WhatsApp via IA
 
-## Diagnostico
+## Resumo
 
-O bucket `sinistros` no Supabase Storage esta configurado como **privado** (`public: false`), mas a edge function `upload-documento-sinistro` salva URLs usando `getPublicUrl()` (linha 96-98). URLs publicas so funcionam para buckets publicos, por isso as imagens aparecem quebradas.
-
-## Solucao
-
-A abordagem mais simples e segura: **tornar o bucket publico** via SQL, ja que os arquivos de sinistro precisam ser visualizados por usuarios autenticados no painel e tambem pelo link publico de upload. Alternativamente, poderiamos usar signed URLs, mas isso adicionaria complexidade desnecessaria.
-
-Alem disso, vou ajustar o frontend para gerar URLs corretas caso o `arquivo_url` armazenado seja um caminho relativo (sem `https://`).
+Apos o diretor aprovar um sinistro, o sistema deve:
+1. Criar e enviar o Termo de Entrada de Evento via Autentique (email para o associado)
+2. Notificar o associado via WhatsApp (pela IA) informando que o reparo foi aprovado e que um email com o termo para assinatura foi enviado
+3. Bloquear todas as acoes administrativas no sinistro enquanto o termo nao for assinado (exceto exclusao pelo diretor)
 
 ## Alteracoes
 
 | Arquivo / Recurso | Descricao |
 |---|---|
-| SQL (Supabase) | Tornar o bucket `sinistros` publico com `UPDATE storage.buckets SET public = true WHERE id = 'sinistros'` |
-| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar fallback: se `arquivo_url` nao comeca com `http`, gerar URL publica via `supabase.storage.from('sinistros').getPublicUrl(path)` |
+| `supabase/functions/aprovar-sinistro/index.ts` | Apos aprovar, chamar `autentique-evento-create` para enviar o termo. Alterar a mensagem WhatsApp para informar sobre o email com o termo. |
+| `src/pages/eventos/SinistroAnalise.tsx` | Bloquear acoes (Aprovar, Reprovar, Solicitar Docs) quando sinistro tem `autentique_documento_id` mas `termo_anuencia_assinado !== true`. Mostrar aviso "Aguardando assinatura do termo". |
 
 ## Detalhes tecnicos
 
-### 1. Tornar bucket publico (SQL)
+### 1. Edge Function `aprovar-sinistro/index.ts`
 
-```sql
-UPDATE storage.buckets SET public = true WHERE id = 'sinistros';
+Apos atualizar o status para `em_analise` e registrar historico, adicionar duas etapas:
+
+**a) Chamar `autentique-evento-create`:**
+```typescript
+// Apos registrar historico (linha ~82)
+try {
+  const { data: termoData, error: termoError } = await supabase.functions.invoke('autentique-evento-create', {
+    body: { sinistro_id }
+  });
+  if (termoError) {
+    console.error('[aprovar-sinistro] Erro ao criar termo Autentique:', termoError);
+  } else {
+    console.log('[aprovar-sinistro] Termo Autentique criado:', termoData);
+  }
+} catch (termoErr) {
+  console.error('[aprovar-sinistro] Erro ao invocar autentique-evento-create:', termoErr);
+}
 ```
 
-Isso faz as URLs `/object/public/sinistros/...` funcionarem imediatamente, corrigindo todas as imagens ja armazenadas.
+**b) Alterar a mensagem WhatsApp** para informar sobre a aprovacao e o email com o termo:
+```
+Otimas noticias! O reparo do seu evento (protocolo XXX) foi APROVADO!
 
-### 2. Fallback no frontend (SinistroAnalise.tsx)
+Enviamos um email para [email] com o Termo de Entrada de Evento.
+Por favor, abra o email e assine o documento para dar continuidade ao processo.
 
-Adicionar helper no componente para resolver URLs:
+Apos a assinatura, nossa equipe dara andamento aos proximos passos.
+```
+
+### 2. Frontend `SinistroAnalise.tsx`
+
+Na secao de acoes (linhas ~506-546), adicionar verificacao:
 
 ```typescript
-const resolverUrl = (url: string) => {
-  if (!url) return '';
-  if (url.startsWith('http')) return url;
-  // Se for caminho relativo, gerar URL publica
-  return supabase.storage.from('sinistros').getPublicUrl(url).data.publicUrl;
-};
+const aguardandoAssinatura = sinistro.autentique_documento_id && !sinistro.termo_anuencia_assinado;
 ```
 
-Usar `resolverUrl(doc.arquivo_url)` em todos os pontos onde `doc.arquivo_url` e referenciado (thumbnail, preview modal).
+Quando `aguardandoAssinatura === true`:
+- Exibir aviso em azul: "Aguardando assinatura do Termo de Entrada de Evento pelo associado"
+- Ocultar botoes Aprovar, Reprovar e Solicitar Documentos
+- Manter visivel apenas o botao de Excluir (se existir e for diretor)
 
-### 3. Preview modal
+O botao de excluir ja e controlado pelo `PermissionGate` com permissao de diretor na pagina `SinistroDetalhe.tsx`, entao ele continuara disponivel.
 
-O modal de preview ja existe no codigo. Apenas garantir que usa `resolverUrl()` para a URL da imagem/PDF.
+Quando o webhook Autentique processar a assinatura (ja implementado em `autentique-webhook/index.ts`), o campo `termo_anuencia_assinado` sera marcado como `true`, desbloqueando as acoes automaticamente.
