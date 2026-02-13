@@ -427,7 +427,7 @@ export default function SinistrosList() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {isDiretor && sinistro.status === 'comunicado' && (
+                          {isDiretor && (sinistro.status === 'comunicado' || sinistro.status === 'em_analise') && (
                             <Button
                               variant="default"
                               size="icon"
