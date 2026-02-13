@@ -74,7 +74,7 @@ export function useCustosReparos(ano: number) {
       const itensValidos = (itens || []).filter(item => {
         const os = item.ordem_servico as any;
         return os && 
-               ['concluido', 'pago', 'aprovado'].includes(os.status) && 
+               ['concluido', 'pago', 'aprovado', 'finalizado'].includes(os.status) && 
                os.sinistro_id;
       });
 

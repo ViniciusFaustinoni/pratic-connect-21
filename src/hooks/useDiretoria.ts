@@ -20,7 +20,7 @@ export function useDiretoria() {
         supabase.from('cobrancas').select('valor_pago').eq('status', 'pago')
           .gte('data_pagamento', inicioMesStr),
         supabase.from('sinistros').select('valor_indenizacao')
-          .in('status', ['aprovado', 'pago'])
+          .in('status', ['aprovado', 'pago', 'encerrado'])
           .gte('data_ocorrencia', inicioMesStr)
       ]);
       
@@ -88,7 +88,7 @@ export function useDiretoria() {
       const [sinistrosData, associadosData, configData] = await Promise.all([
         supabase.from('sinistros')
           .select('valor_indenizacao')
-          .in('status', ['aprovado', 'pago'])
+          .in('status', ['aprovado', 'pago', 'encerrado'])
           .gte('data_ocorrencia', inicioMes)
           .lte('data_ocorrencia', fimMes),
         supabase.from('associados')

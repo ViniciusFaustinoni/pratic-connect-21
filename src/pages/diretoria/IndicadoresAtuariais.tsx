@@ -91,7 +91,7 @@ export default function IndicadoresAtuariais() {
           .gte('data_pagamento', inicioMes),
         supabase.from('sinistros')
           .select('valor_indenizacao')
-          .in('status', ['aprovado', 'indenizado', 'pago'])
+          .in('status', ['aprovado', 'indenizado', 'pago', 'encerrado'])
           .gte('data_ocorrencia', inicioMes),
         supabase.from('associados')
           .select('*', { count: 'exact', head: true })

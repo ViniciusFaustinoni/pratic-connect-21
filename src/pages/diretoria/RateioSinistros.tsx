@@ -125,7 +125,7 @@ export default function RateioSinistros() {
       const [sinistrosRes, associadosRes, cotasRes] = await Promise.all([
         supabase.from('sinistros')
           .select('valor_indenizacao')
-          .in('status', ['aprovado', 'indenizado'])
+          .in('status', ['aprovado', 'indenizado', 'encerrado'])
           .gte('data_ocorrencia', inicioMes)
           .lt('data_ocorrencia', fimMes),
         supabase.from('associados')

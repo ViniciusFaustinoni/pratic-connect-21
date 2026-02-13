@@ -18,6 +18,8 @@ import {
   CheckCircle, FileSignature, ExternalLink, Car, User, Building2
 } from 'lucide-react';
 import { useUpdateOSStatus } from '@/hooks/useOrdensServico';
+import { useLancamentosContabeis } from '@/hooks/useLancamentosContabeis';
+import { CONTAS_PADRAO } from '@/lib/contabilidade-config';
 
 interface OSConclusaoModalProps {
   open: boolean;
@@ -28,6 +30,7 @@ interface OSConclusaoModalProps {
 export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalProps) {
   const queryClient = useQueryClient();
   const updateStatus = useUpdateOSStatus();
+  const { criarLancamentoAutomatico } = useLancamentosContabeis();
   const [step, setStep] = useState<'confirm' | 'signature'>('confirm');
   const [concluding, setConcluding] = useState(false);
   const [sendingTermo, setSendingTermo] = useState(false);
@@ -196,10 +199,13 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
         updated_at: new Date().toISOString(),
       } as any).eq('id', os.id);
 
-      // 2. Encerrar sinistro vinculado
+      // 2. Encerrar sinistro vinculado e registrar custo
       if (os.sinistro_id) {
+        const valorOS = Number(os.valor_orcamento || 0);
+        
         await supabase.from('sinistros').update({
           status: 'encerrado',
+          valor_indenizacao: valorOS,
           updated_at: new Date().toISOString(),
         }).eq('id', os.sinistro_id);
 
@@ -208,9 +214,27 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
           status_novo: 'encerrado',
           observacao: 'Veículo liberado após assinatura do Termo de Saída',
         });
+
+        // 3. Criar lançamento contábil automático
+        if (valorOS > 0) {
+          const oficinaNome = oficina?.nome_fantasia || oficina?.razao_social || 'N/I';
+          try {
+            await criarLancamentoAutomatico({
+              origem: 'ordem_servico',
+              origem_id: os.id,
+              data_competencia: new Date().toISOString().split('T')[0],
+              historico: `Reparo sinistro - OS ${os.numero} - Oficina ${oficinaNome}`,
+              conta_debito_id: CONTAS_PADRAO.REPAROS_OFICINAS,
+              conta_credito_id: CONTAS_PADRAO.BANCO_CONTA_MOVIMENTO,
+              valor: valorOS,
+            });
+          } catch (contErr) {
+            console.error('[OSConclusao] Erro ao criar lançamento contábil:', contErr);
+          }
+        }
       }
 
-      // 3. Histórico OS
+      // 4. Histórico OS
       await supabase.from('ordens_servico_historico').insert({
         ordem_servico_id: os.id,
         status_novo: 'finalizado',
@@ -219,6 +243,11 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
 
       queryClient.invalidateQueries({ queryKey: ['ordem_servico'] });
       queryClient.invalidateQueries({ queryKey: ['sinistros'] });
+      queryClient.invalidateQueries({ queryKey: ['lancamentos-contabeis'] });
+      queryClient.invalidateQueries({ queryKey: ['diretoria-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['indicadores-atuariais'] });
+      queryClient.invalidateQueries({ queryKey: ['rateios'] });
+      queryClient.invalidateQueries({ queryKey: ['custos-reparos'] });
       toast.success('Veículo liberado! Sinistro e OS encerrados.');
       onOpenChange(false);
     } catch (err) {
