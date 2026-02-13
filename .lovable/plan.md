@@ -1,46 +1,46 @@
 
 
-# Corrigir erro "Could not find the 'updated_at' column" no upload de documentos
+# Corrigir duplicacao persistente de documentos de sinistro
 
 ## Problema
 
-Ao enviar documentos pelo link publico, a edge function `upload-documento-sinistro` falha com o erro:
+A correcao anterior (filtro no frontend) esta correta, mas:
+1. Ja existem duplicatas no banco de dados de tentativas anteriores
+2. Nao ha uma restricao a nivel de banco de dados para impedir duplicatas, entao qualquer falha no frontend permite novas duplicatas
+
+## Solucao em duas etapas
+
+### Etapa 1: Limpar duplicatas existentes no banco
+
+Executar SQL para remover registros duplicados, mantendo apenas o mais antigo de cada tipo por sinistro.
+
+```sql
+DELETE FROM sinistro_documentos 
+WHERE id NOT IN (
+  SELECT DISTINCT ON (sinistro_id, tipo) id 
+  FROM sinistro_documentos 
+  ORDER BY sinistro_id, tipo, created_at ASC
+);
 ```
-Could not find the 'updated_at' column of 'sinistro_documentos' in the schema cache
+
+### Etapa 2: Adicionar restricao UNIQUE no banco
+
+Criar um indice unico na combinacao `(sinistro_id, tipo)` para que o banco rejeite duplicatas automaticamente, independente do frontend.
+
+```sql
+CREATE UNIQUE INDEX idx_sinistro_documentos_unique_tipo 
+ON sinistro_documentos (sinistro_id, tipo);
 ```
 
-## Causa raiz
+### Etapa 3: Ajustar o INSERT no dialog para usar upsert
 
-A edge function tenta atualizar uma coluna `updated_at` na tabela `sinistro_documentos`, mas essa coluna nao existe na tabela.
+Alterar o `SolicitarDocumentosSinistroDialog.tsx` para usar `.upsert()` com `onConflict` ao inves de `.insert()`, garantindo que mesmo em caso de conflito o registro nao seja duplicado.
 
-Linha 91 do arquivo `supabase/functions/upload-documento-sinistro/index.ts`:
-```typescript
-.update({
-  arquivo_url: urlData.publicUrl,
-  status: 'enviado',
-  updated_at: new Date().toISOString(), // <-- coluna inexistente
-})
-```
+## Alteracoes
 
-## Solucao
-
-Remover a referencia a `updated_at` do update na tabela `sinistro_documentos`.
-
-## Alteracao
-
-| Arquivo | Descricao |
+| Arquivo / Recurso | Descricao |
 |---|---|
-| `supabase/functions/upload-documento-sinistro/index.ts` | Remover `updated_at` do `.update()` na linha 91 |
-
-### Detalhes tecnicos
-
-O update passara a ser apenas:
-```typescript
-.update({
-  arquivo_url: urlData.publicUrl,
-  status: 'enviado',
-})
-```
-
-A edge function sera reimplantada automaticamente apos a alteracao.
+| Migracao SQL | Remover duplicatas existentes e criar indice UNIQUE |
+| `src/components/sinistros/SolicitarDocumentosSinistroDialog.tsx` | Usar upsert com onConflict para prevenir duplicatas |
+| `supabase/functions/criar-sinistro/index.ts` | Usar upsert para nao falhar se documentos ja existirem |
 
