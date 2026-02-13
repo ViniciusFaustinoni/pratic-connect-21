@@ -1,42 +1,34 @@
 
+# Ocultar botoes de Aprovar e Solicitar Documentos enquanto documentos solicitados estiverem pendentes
 
-# IA perguntar sobre assistencia 24h apos comunicacao de sinistro
+## Contexto
 
-## Problema
+Quando documentos sao solicitados para um sinistro, os registros ficam na tabela `sinistro_documentos` com `status = 'pendente'`. Enquanto houver documentos pendentes de envio, os botoes "Aprovar Sinistro" e "Solicitar Documentos" nao devem aparecer, pois nao faz sentido aprovar sem os documentos nem solicitar novos enquanto os anteriores nao foram enviados.
 
-Quando o associado comunica um sinistro via WhatsApp, a IA registra a solicitacao mas nao pergunta proativamente se o usuario precisa de reboque ou outro servico de assistencia 24h. O associado pode estar parado na rua precisando de guincho, por exemplo.
-
-## Solucao
-
-Atualizar o **system prompt do WhatsApp** (`WHATSAPP_SYSTEM_PROMPT`) para instruir a IA a:
-
-1. Apos criar com sucesso uma solicitacao de sinistro (tool `criar_solicitacao_sinistro`), perguntar ao associado se ele precisa de algum servico de assistencia 24h (guincho, chaveiro, troca de pneu, etc.)
-2. Se o associado responder que sim, coletar os dados necessarios (localizacao, tipo de servico) e chamar a tool `criar_solicitacao_assistencia` normalmente
-
-Nenhuma nova tool ou tabela precisa ser criada -- a IA ja possui ambas as tools. Basta orientar o comportamento no prompt.
+Os botoes voltam a ser exibidos quando todos os documentos tiverem sido enviados (status `enviado` ou `aprovado`).
 
 ## Alteracao
 
 | Arquivo | Descricao |
 |---|---|
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar instrucao no WHATSAPP_SYSTEM_PROMPT para oferecer assistencia 24h apos sinistro |
+| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar logica condicional para ocultar botoes "Aprovar Sinistro" e "Solicitar Documentos" quando existirem documentos com status `pendente` |
 
-### Detalhes tecnicos
+## Detalhes tecnicos
 
-No `WHATSAPP_SYSTEM_PROMPT` (linha 258), adicionar uma nova secao entre "Coleta de Dados para SINISTRO" e "Coleta de Dados para ASSISTENCIA 24H":
+No arquivo `SinistroAnalise.tsx`, na secao de acoes (linha ~495):
 
-```
-## POS-SINISTRO: OFERECER ASSISTENCIA 24H (OBRIGATORIO!)
-Apos registrar um sinistro com sucesso (tool criar_solicitacao_sinistro retornou sucesso):
-1. Confirme o registro do sinistro
-2. SEMPRE pergunte: "Voce precisa de alguma assistencia agora? Guincho, reboque, chaveiro?"
-3. Se o associado responder SIM:
-   - Colete localizacao e tipo de servico
-   - Use a tool criar_solicitacao_assistencia para abrir o chamado
-4. Se responder NAO, encerre normalmente
+1. Calcular se ha documentos pendentes a partir do array `documentos` ja disponivel no hook `useSinistroAnalise`:
 
-IMPORTANTE: So ofereca assistencia se o veiculo tiver cobertura_total = true.
-Se nao tiver, nao mencione assistencia 24h.
+```typescript
+const temDocsPendentes = documentos.some(doc => doc.status === 'pendente');
 ```
 
-A IA ja sabe interpretar respostas do usuario e chamar tools automaticamente, entao nenhuma logica adicional de codigo e necessaria alem da instrucao no prompt.
+2. Envolver os botoes "Aprovar Sinistro" e "Solicitar Documentos" com a condicao `!temDocsPendentes`, mantendo apenas o botao "Reprovar Sinistro" sempre visivel.
+
+3. Quando houver documentos pendentes, exibir um aviso informativo no lugar dos botoes ocultos, como:
+
+```
+"Aguardando envio de X documento(s) solicitado(s)"
+```
+
+Isso usa dados ja carregados pelo hook existente, sem necessidade de queries adicionais.
