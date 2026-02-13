@@ -81,23 +81,37 @@ Deno.serve(async (req) => {
       console.error('[aprovar-sinistro] Erro ao registrar histórico:', histError);
     }
 
-    // Enviar notificação WhatsApp
+    // Criar Termo de Entrada de Evento via Autentique
+    try {
+      const { data: termoData, error: termoError } = await supabase.functions.invoke('autentique-evento-create', {
+        body: { sinistro_id }
+      });
+      if (termoError) {
+        console.error('[aprovar-sinistro] Erro ao criar termo Autentique:', termoError);
+      } else {
+        console.log('[aprovar-sinistro] Termo Autentique criado:', termoData);
+      }
+    } catch (termoErr) {
+      console.error('[aprovar-sinistro] Erro ao invocar autentique-evento-create:', termoErr);
+    }
+
+    // Enviar notificação WhatsApp informando aprovação + termo por email
     const telefone = (sinistro.associado as any)?.whatsapp || (sinistro.associado as any)?.telefone;
+    const emailAssociado = (sinistro.associado as any)?.email;
     if (telefone) {
       const veiculo = sinistro.veiculo as any;
-      const mensagem = `✅ *Sinistro Aprovado para Análise*
+      const mensagem = `🎉 *Ótimas notícias!*
 
-📋 *Protocolo:* ${sinistro.protocolo}
+O reparo do seu evento (protocolo *${sinistro.protocolo}*) foi *APROVADO*! ✅
+
 🚗 *Veículo:* ${veiculo?.placa || ''} - ${veiculo?.marca || ''} ${veiculo?.modelo || ''}
 
-Seu sinistro foi aprovado e está em análise. Nossa equipe entrará em contato para os próximos passos.
+📧 Enviamos um e-mail${emailAssociado ? ` para *${emailAssociado}*` : ''} com o *Termo de Entrada de Evento*.
+Por favor, abra o e-mail e *assine o documento* para dar continuidade ao processo.
 
-⏰ *Próximas etapas:*
-1. Análise técnica do caso
-2. Possível agendamento de vistoria
-3. Parecer final
+⏳ Após a assinatura, nossa equipe dará andamento aos próximos passos.
 
-Fique tranquilo! Estamos cuidando de tudo. 💙`;
+Qualquer dúvida, estamos à disposição! 💙`;
 
       try {
         await supabase.functions.invoke('whatsapp-send-text', {

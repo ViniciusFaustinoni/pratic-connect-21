@@ -504,8 +504,19 @@ export default function SinistroAnalise() {
             </CardHeader>
             <CardContent className="space-y-3">
               {(() => {
+                const aguardandoAssinatura = sinistro.autentique_documento_id && !sinistro.termo_anuencia_assinado;
                 const docsPendentes = documentos.filter(doc => doc.status === 'pendente');
                 const temDocsPendentes = docsPendentes.length > 0;
+
+                if (aguardandoAssinatura) {
+                  return (
+                    <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                      <FileCheck className="h-4 w-4 flex-shrink-0" />
+                      <span>Aguardando assinatura do <strong>Termo de Entrada de Evento</strong> pelo associado. Nenhuma ação disponível até a assinatura.</span>
+                    </div>
+                  );
+                }
+
                 return (
                   <>
                     {temDocsPendentes && (
