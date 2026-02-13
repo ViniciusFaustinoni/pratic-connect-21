@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -93,6 +94,12 @@ function maskCPF(cpf: string | null): string {
   const clean = cpf.replace(/\D/g, '');
   if (clean.length !== 11) return cpf;
   return `***.${clean.slice(3, 6)}.***-${clean.slice(9)}`;
+}
+
+function resolverUrl(url: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return supabase.storage.from('sinistros').getPublicUrl(url).data.publicUrl;
 }
 
 // ============================================
@@ -405,9 +412,10 @@ export default function SinistroAnalise() {
               ) : (
                 <div className="grid gap-2">
                   {documentos.map((doc) => {
-                    const isEnviado = doc.status === 'enviado' && doc.arquivo_url;
-                    const isImage = doc.arquivo_url && /\.(jpg|jpeg|png|webp|gif)$/i.test(doc.arquivo_url);
-                    const isPdf = doc.arquivo_url && /\.pdf$/i.test(doc.arquivo_url);
+                    const docUrl = resolverUrl(doc.arquivo_url);
+                    const isEnviado = doc.status === 'enviado' && docUrl;
+                    const isImage = docUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(docUrl);
+                    const isPdf = docUrl && /\.pdf$/i.test(docUrl);
                     return (
                       <div
                         key={doc.id}
@@ -416,7 +424,7 @@ export default function SinistroAnalise() {
                         {/* Thumbnail */}
                         {isEnviado && isImage ? (
                           <img
-                            src={doc.arquivo_url}
+                            src={docUrl}
                             alt={doc.nome_arquivo || doc.tipo}
                             className="h-14 w-14 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity border"
                             onClick={() => setPreviewDoc(doc)}
@@ -647,17 +655,19 @@ export default function SinistroAnalise() {
       {/* Preview Dialog */}
       <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
-          {previewDoc?.arquivo_url && (
+          {previewDoc?.arquivo_url && (() => {
+            const previewUrl = resolverUrl(previewDoc.arquivo_url);
+            return (
             <>
-              {/\.(jpg|jpeg|png|webp|gif)$/i.test(previewDoc.arquivo_url) ? (
+              {/\.(jpg|jpeg|png|webp|gif)$/i.test(previewUrl) ? (
                 <img
-                  src={previewDoc.arquivo_url}
+                  src={previewUrl}
                   alt={previewDoc.nome_arquivo || previewDoc.tipo}
                   className="w-full h-auto max-h-[85vh] object-contain"
                 />
-              ) : /\.pdf$/i.test(previewDoc.arquivo_url) ? (
+              ) : /\.pdf$/i.test(previewUrl) ? (
                 <iframe
-                  src={previewDoc.arquivo_url}
+                  src={previewUrl}
                   title={previewDoc.nome_arquivo || previewDoc.tipo}
                   className="w-full h-[85vh]"
                 />
@@ -665,13 +675,14 @@ export default function SinistroAnalise() {
                 <div className="p-8 text-center">
                   <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="mb-4">{previewDoc.nome_arquivo || previewDoc.tipo}</p>
-                  <Button onClick={() => window.open(previewDoc.arquivo_url, '_blank')}>
+                  <Button onClick={() => window.open(previewUrl, '_blank')}>
                     Abrir em nova aba
                   </Button>
                 </div>
               )}
             </>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
