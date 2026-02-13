@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -39,6 +39,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSinistroAnalise, useSinistrosPendentes } from '@/hooks/useSinistroAnalise';
 import { usePermissions } from '@/hooks/usePermissions';
 import { AprovarSinistroDialog } from '@/components/sinistros/AprovarSinistroDialog';
@@ -158,7 +159,20 @@ export default function SinistroAnalise() {
     isLoading,
   } = useSinistroAnalise(id);
 
+  const queryClient = useQueryClient();
   const { data: pendentes } = useSinistrosPendentes();
+
+  // Polling automático para detectar assinatura do termo
+  useEffect(() => {
+    const aguardandoAssinatura = sinistro?.autentique_documento_id && !sinistro?.termo_anuencia_assinado;
+    if (!aguardandoAssinatura) return;
+
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [sinistro?.autentique_documento_id, sinistro?.termo_anuencia_assinado, id, queryClient]);
 
   // Navegação entre sinistros
   const currentIndex = pendentes?.findIndex((p) => p.id === id) ?? -1;
