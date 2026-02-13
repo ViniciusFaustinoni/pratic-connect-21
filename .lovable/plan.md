@@ -1,68 +1,57 @@
 
 
-# Corrigir mensagem de boas-vindas baseada no status real da instalacao
+# Corrigir criacao de senha em ambos os caminhos (link WhatsApp e pagina de acompanhamento)
 
 ## Problema
 
-Quando o analista aprova a proposta, o sistema **sempre** envia o template `proposta_aprovada_roubo_furto`, independentemente de a instalacao ja ter sido concluida. Isso causa:
+Existem dois caminhos para o associado criar sua senha, e ambos precisam funcionar mesmo quando o `ativar-associado` ja criou o `user_id`:
 
-- Diz "Cobertura Ativa: Roubo e Furto" quando na verdade a cobertura total ja esta ativa
-- Diz "Proximo Passo: Instalacao do rastreador" quando a instalacao ja foi feita
-- Inclui texto "Apos a instalacao, sua Cobertura Total sera ativada automaticamente!" desnecessariamente
-- Nao orienta o associado a usar a IA para duvidas sobre cobertura
+1. **Link do WhatsApp** (via `app-criar-senha` com token) -- JA CORRIGIDO na mudanca anterior
+2. **Pagina de acompanhamento** (via `app-criar-conta-cliente`) -- AINDA BLOQUEADO
+
+Na pagina de acompanhamento, dois bloqueios impedem o associado de criar a senha:
+- Linha 226: condicao `!associado.user_id` esconde o formulario quando `user_id` ja existe
+- Linha 75 da edge function: retorna erro "Voce ja possui uma conta" quando `user_id` existe
 
 ## Solucao
 
-### 1. Criar template `proposta_aprovada_cobertura_total` no `notificar-cliente`
+### 1. Mostrar formulario mesmo quando `user_id` ja existe (se `primeiro_acesso` for true)
 
-**Arquivo**: `supabase/functions/notificar-cliente/index.ts`
+**Arquivo**: `src/pages/public/AcompanhamentoProposta.tsx`
 
-Adicionar novo template para quando a instalacao ja foi concluida:
+- Adicionar `primeiro_acesso` na interface `AssociadoData` (campo booleano)
+- Na query (linhas 86-97), fazer join com `profiles` para buscar `primeiro_acesso`
+- Na funcao `getStatusInfo` (linha 226), mudar condicao de:
+  ```
+  associado.status === 'ativo' && !associado.user_id
+  ```
+  Para:
+  ```
+  associado.status === 'ativo' && (!associado.user_id || associado.primeiro_acesso === true)
+  ```
 
-```
-Parabens {nome}! Seu cadastro foi aprovado! 
+### 2. Atualizar senha em vez de rejeitar na edge function
 
-Veiculo Protegido:
-{placa} - {marca} {modelo}
+**Arquivo**: `supabase/functions/app-criar-conta-cliente/index.ts`
 
-Cobertura Ativa: Cobertura Total (Roubo, Furto, Colisao, Incendio e mais)
+Linhas 75-80: quando `associado.user_id` ja existe, em vez de retornar erro:
+1. Usar `admin.updateUserById(associado.user_id, { password: senha })` para definir a senha
+2. Atualizar `primeiro_acesso: false` no profile
+3. Registrar historico
+4. Retornar sucesso (sem flag `existingAccount`, para que o login automatico aconteca normalmente)
 
-Proximo Passo: Crie sua senha e acesse o App PRATIC
+### 3. Garantir login automatico apos definir senha
 
-Acesse o link abaixo para criar sua conta:
-{link_acompanhamento}
+O `CriarContaAssociadoForm.tsx` ja faz login automatico com `signInWithPassword` apos sucesso (linha 85-88). Basta garantir que a edge function retorne `success: true` sem `existingAccount: true`, e o fluxo existente fara o login + redirect para `/app/home`.
 
-Para qualquer duvida sobre sua cobertura, assistencia 24h ou sinistros, 
-voce pode falar com nossa IA diretamente pelo app ou por aqui no WhatsApp!
+## Resultado esperado
 
-Bem-vindo a familia PRATIC!
-```
-
-### 2. Escolher template correto ao notificar
-
-**Arquivo**: `src/hooks/usePropostasPendentes.ts` (linha 1644)
-
-Usar `jaTemInstalacaoConcluida` para selecionar o template:
-
-```
-tipo: jaTemInstalacaoConcluida 
-  ? 'proposta_aprovada_cobertura_total' 
-  : 'proposta_aprovada_roubo_furto'
-```
-
-### 3. Ajustar template existente `proposta_aprovada_roubo_furto`
-
-Adicionar orientacao sobre a IA ao final da mensagem existente:
-
-```
-Para qualquer duvida sobre sua cobertura, voce pode falar 
-com nossa IA diretamente pelo app ou por aqui no WhatsApp!
-```
+Ambos os caminhos (link WhatsApp e pagina de acompanhamento) permitem que o associado defina sua propria senha, mesmo que o `ativar-associado` ja tenha criado o usuario Auth com senha padrao. Apos definir a senha, o associado e automaticamente logado e redirecionado para `/app/home`, sem nenhum clique adicional de "primeiro acesso".
 
 ## Arquivos modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/notificar-cliente/index.ts` | Novo template `proposta_aprovada_cobertura_total` + ajuste no template roubo/furto |
-| `src/hooks/usePropostasPendentes.ts` | Selecionar template correto baseado em `jaTemInstalacaoConcluida` |
+| `src/pages/public/AcompanhamentoProposta.tsx` | Buscar `primeiro_acesso` via join com profiles; mostrar formulario quando `primeiro_acesso === true` |
+| `supabase/functions/app-criar-conta-cliente/index.ts` | Quando `user_id` ja existe, atualizar senha e marcar `primeiro_acesso: false` em vez de rejeitar |
 
