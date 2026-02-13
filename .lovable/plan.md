@@ -1,56 +1,35 @@
 
-
-# Corrigir chamada a API Softruck - Trajeto Historico
+# Corrigir erro "net.http_post does not exist" ao solicitar documentos
 
 ## Problema
 
-A API Softruck rejeita os parametros porque `URLSearchParams` codifica os colchetes nos nomes dos parametros:
+Ao clicar em "Solicitar Documentos", o sistema atualiza o status do sinistro para `documentacao_pendente`. Isso dispara um trigger no banco de dados (`on_sinistro_status_change`) que tenta chamar `net.http_post()` para invocar a edge function `notificar-sinistro`. Porem, a extensao `pg_net` nao esta habilitada no banco, causando o erro:
 
-- `filters[from]` vira `filters%5Bfrom%5D` -- API nao reconhece
-- `filters[to]` vira `filters%5Bto%5D` -- API nao reconhece
-- `filters[acc]` vira `filters%5Bacc%5D` -- API nao reconhece
+```
+function net.http_post(url => unknown, headers => jsonb, body => text) does not exist
+```
 
-Erro retornado pela API:
-```
-"query.filters.from" is not allowed
-"query.filters.to" is not allowed
-"query.filters.acc" must be of type object
-```
+O trigger foi criado na migracao `20260103190153` e tenta notificar via HTTP toda vez que o status do sinistro muda.
 
 ## Solucao
 
-Construir a query string manualmente em vez de usar `URLSearchParams`, preservando os colchetes sem encoding.
+Remover o trigger `on_sinistro_status_change` e a funcao `fn_sinistro_status_change`, pois a notificacao via WhatsApp ja e feita diretamente pelo frontend (o `SolicitarDocumentosSinistroDialog` ja chama a edge function `whatsapp-send-text`). O trigger e redundante e causa o erro.
 
 ## Alteracao
 
-| Arquivo | Alteracao |
+| Tipo | Descricao |
 |---|---|
-| `supabase/functions/rastreador-historico/index.ts` | Substituir `url.searchParams.set(...)` por construcao manual da URL (linhas 130-134) |
+| Migracao SQL | `DROP TRIGGER IF EXISTS on_sinistro_status_change ON public.sinistros;` e `DROP FUNCTION IF EXISTS fn_sinistro_status_change();` |
 
-### Codigo atual (quebrado):
-```typescript
-const url = new URL(`${baseUrl}/vehicles/${vehicleId}/trajectories/`);
-url.searchParams.set('filters[from]', inicio);
-url.searchParams.set('filters[to]', fim);
-url.searchParams.set('filters[acc]', 'all');
-url.searchParams.set('limit', '100');
+Nenhuma alteracao de codigo e necessaria - o dialog ja envia a notificacao WhatsApp corretamente. Apenas o trigger do banco precisa ser removido.
+
+## Detalhes tecnicos
+
+A migracao SQL tera apenas:
+
+```sql
+DROP TRIGGER IF EXISTS on_sinistro_status_change ON public.sinistros;
+DROP FUNCTION IF EXISTS fn_sinistro_status_change();
 ```
 
-### Codigo corrigido:
-```typescript
-const queryParams = [
-  `filters[from]=${encodeURIComponent(inicio)}`,
-  `filters[to]=${encodeURIComponent(fim)}`,
-  `filters[acc]=all`,
-  `limit=100`,
-].join('&');
-
-const url = `${baseUrl}/vehicles/${vehicleId}/trajectories/?${queryParams}`;
-```
-
-Isso garante que os colchetes nos nomes dos parametros (`filters[from]`) fiquem intactos, enquanto apenas os valores sao codificados.
-
-## Resultado esperado
-
-A chamada a API Softruck retornara os dados do trajeto corretamente, e o card "Trajeto - 24h Antes do Sinistro" exibira o mapa com o percurso.
-
+Isso remove a dependencia de `pg_net` sem perder funcionalidade, ja que todas as notificacoes sao enviadas pelo codigo do frontend via edge functions.
