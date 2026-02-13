@@ -128,10 +128,10 @@ async function buscarTrajetoSoftruckComRetry(
       const token = await getSoftruckToken(supabaseUrl, supabaseKey, tokenRenovado);
       
       const url = new URL(`${baseUrl}/vehicles/${vehicleId}/trajectories/`);
-      url.searchParams.set('filters[start_date]', inicio);
-      url.searchParams.set('filters[end_date]', fim);
-      url.searchParams.set('includes[stops]', 'true'); // Solicitar paradas
-      url.searchParams.set('limit', '1000');
+      url.searchParams.set('filters[from]', inicio);
+      url.searchParams.set('filters[to]', fim);
+      url.searchParams.set('filters[acc]', 'all');
+      url.searchParams.set('limit', '100');
 
       console.log(`[Softruck] Buscando trajeto (tentativa ${tentativa}/${maxRetries}):`, url.toString());
 
