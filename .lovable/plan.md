@@ -1,138 +1,97 @@
 
-# Adicionar "Usar como padrao para Termo de Saida de Evento" + Fluxo completo de liberacao de veiculo
+# Adicionar polling automático em SinistroAnalise para detectar assinatura de termo
 
-## Resumo
+## Problema Identificado
+A tela de análise de sinistro (`SinistroAnalise.tsx`) exibe um aviso "Aguardando assinatura do Termo de Entrada de Evento" quando `sinistro.autentique_documento_id` está preenchido mas `sinistro.termo_anuencia_assinado` é falso. Porém, não há polling automático para detectar quando o documento é assinado, então o diretor precisa recarregar manualmente a página para ver as ações desbloqueadas.
 
-Tres alteracoes integradas:
+## Solução Proposta
+Implementar polling automático similar ao encontrado em:
+1. **`SinistroDetalhe.tsx`** (linhas 124-131): usa `queryClient.invalidateQueries` a cada 15s
+2. **`PagamentoAdesao.tsx`** (linhas 50-78): usa query direta ao Supabase a cada 10s
 
-1. **Novo checkbox no formulario de templates**: "Usar como padrao para Termo de Saida de Evento" (campo `is_default_saida`)
-2. **Edge function `autentique-os-saida-create`**: priorizar template com `is_default_saida = true`
-3. **Modal `OSConclusaoModal`**: apos assinatura, exibir botao "Liberar Veiculo" que marca sinistro como `encerrado` e OS como finalizada
+Para `SinistroAnalise.tsx`, vou usar a abordagem mais simples e eficiente que já existe no projeto:
 
-## Alteracoes
+### Mudanças necessárias:
 
-| Arquivo / Recurso | Descricao |
-|---|---|
-| **SQL (Migration)** | Adicionar coluna `is_default_saida` (boolean, default false) com unique index parcial |
-| **`src/pages/documentos/TemplateForm.tsx`** | Novo checkbox com icone Car e cor verde: "Usar como padrao para Termo de Saida de Evento" |
-| **`src/hooks/useDocumentoTemplates.ts`** | Adicionar `is_default_saida` nos tipos, interfaces e mutations |
-| **`supabase/functions/autentique-os-saida-create/index.ts`** | Priorizar template com `is_default_saida = true` antes do fallback por `document_type_id` |
-| **`src/components/oficinas/OSConclusaoModal.tsx`** | Adicionar botao "Liberar Veiculo" que aparece apos assinatura; ao confirmar, atualiza sinistro para `encerrado` e OS para finalizado |
+**1. Adicionar useEffect com polling em SinistroAnalise.tsx (logo após o componente ser carregado)**
 
-## Detalhes tecnicos
+O polling será ativado quando:
+- `sinistro` está carregado
+- `sinistro.autentique_documento_id` existe (documento foi enviado para assinatura)
+- `sinistro.termo_anuencia_assinado === false` (ainda não foi assinado)
 
-### 1. Migration SQL
+O polling será desativado quando:
+- `sinistro.termo_anuencia_assinado === true` (assinatura detectada)
+- Componente é desmontado
 
-```sql
-ALTER TABLE public.documento_templates
-  ADD COLUMN IF NOT EXISTS is_default_saida BOOLEAN DEFAULT false;
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_template_default_saida
-  ON public.documento_templates (is_default_saida)
-  WHERE is_default_saida = true AND ativo = true;
-```
-
-### 2. TemplateForm.tsx
-
-Adicionar novo checkbox abaixo do `is_default_evento`, com borda verde e icone `Car`:
-- Titulo: "Usar como padrao para Termo de Saida de Evento"
-- Descricao: "Este template sera usado para gerar o Termo de Saida de Veiculo quando uma Ordem de Servico de reparo de sinistro for concluida. Apenas um template pode ser marcado."
-- Campo: `is_default_saida: z.boolean().default(false)` no schema Zod
-
-### 3. useDocumentoTemplates.ts
-
-Adicionar `is_default_saida?: boolean` em:
-- `TemplateFromDB` (linha 35)
-- `DocumentoTemplateView` (linha 65)
-- `transformTemplate` (linha 88)
-- `CreateTemplateInput` (linha 169)
-- `UpdateTemplateInput` (linha 231)
-- `useCreateTemplate` insert (linha 196)
-- `useUpdateTemplate` update (linha 257)
-
-### 4. Edge function autentique-os-saida-create
-
-Antes da busca por `document_type_id` (linhas 99-113), adicionar:
+**2. Implementação do polling (em SinistroAnalise.tsx)**
 
 ```typescript
-// Priorizar template marcado como default para saida
-const { data: templateSaida } = await supabase
-  .from("documento_templates")
-  .select("id, codigo, nome, conteudo")
-  .eq("is_default_saida", true)
-  .eq("ativo", true)
-  .maybeSingle();
-
-if (templateSaida?.conteudo) {
-  templateConteudo = templateSaida.conteudo;
-  templateNome = templateSaida.nome;
-} else if (docType) {
-  // fallback existente...
-}
-```
-
-### 5. OSConclusaoModal - Botao "Liberar Veiculo"
-
-Quando `assinado === true`, alem do botao de visualizar PDF, exibir:
-
-```typescript
-// Botao "Liberar Veiculo" com confirmacao
-<Button className="w-full" variant="default" onClick={handleLiberarVeiculo}>
-  <Car className="mr-2 h-4 w-4" />
-  Liberar Veiculo
-</Button>
-```
-
-A funcao `handleLiberarVeiculo`:
-1. Confirma via `window.confirm`
-2. Atualiza OS para status `finalizado` (ou o equivalente no sistema)
-3. Se a OS possui sinistro vinculado (`os.sinistro_id`), atualiza o sinistro para status `encerrado`
-4. Registra historico em ambas as tabelas
-5. Invalida queries e fecha o modal
-6. Exibe toast de sucesso
-
-```typescript
-const handleLiberarVeiculo = async () => {
-  if (!window.confirm('Confirma a liberacao do veiculo? O sinistro e a OS serao encerrados.')) return;
+// Polling automático para detectar assinatura do termo
+useEffect(() => {
+  const aguardandoAssinatura = sinistro?.autentique_documento_id && !sinistro?.termo_anuencia_assinado;
   
-  setLiberando(true);
-  try {
-    // 1. Finalizar OS
-    await supabase.from('ordens_servico').update({
-      status: 'finalizado',
-      updated_at: new Date().toISOString(),
-    }).eq('id', os.id);
-
-    // 2. Encerrar sinistro vinculado
-    if (os.sinistro_id) {
-      await supabase.from('sinistros').update({
-        status: 'encerrado',
-        updated_at: new Date().toISOString(),
-      }).eq('id', os.sinistro_id);
-      
-      // Historico sinistro
-      await supabase.from('sinistros_historico').insert({
-        sinistro_id: os.sinistro_id,
-        status_novo: 'encerrado',
-        observacao: 'Veiculo liberado apos assinatura do Termo de Saida',
-      });
-    }
-
-    // 3. Historico OS
-    await supabase.from('ordens_servico_historico').insert({
-      ordem_servico_id: os.id,
-      status_novo: 'finalizado',
-      observacao: 'Veiculo liberado - Termo de Saida assinado',
-    });
-
-    queryClient.invalidateQueries({ queryKey: ['ordem_servico'] });
-    queryClient.invalidateQueries({ queryKey: ['sinistros'] });
-    toast.success('Veiculo liberado! Sinistro e OS encerrados.');
-    onOpenChange(false);
-  } catch (err) {
-    toast.error('Erro ao liberar veiculo');
-  } finally {
-    setLiberando(false);
-  }
-};
+  if (!aguardandoAssinatura) return;
+  
+  const interval = setInterval(() => {
+    // Invalida a query principal que carrega o sinistro
+    queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+  }, 10000); // 10 segundos
+  
+  return () => clearInterval(interval);
+}, [sinistro?.autentique_documento_id, sinistro?.termo_anuencia_assinado, id, queryClient]);
 ```
+
+**3. Imports necessários**
+- Já existe `useQueryClient` importado em `useSinistroAnalise.ts`
+- Precisa ser retornado pelo hook ou capturado através do `useQuery` do React Query
+
+### Detalhes técnicos:
+
+**Timing do polling**: 10 segundos
+- Suficientemente rápido para UX aceitável
+- Não causa throttling do Supabase (muito menos agressivo que conexões de chat real-time)
+- Segue o padrão usado em `PagamentoAdesao.tsx`
+
+**Critério de parada automática**: 
+- O polling continua apenas enquanto `aguardandoAssinatura === true`
+- Uma vez que `termo_anuencia_assinado` muda para `true`, o polling para automaticamente
+- A interface atualiza com as ações desbloqueadas
+
+**Realtime alternativo não usado**:
+- Poderia usar Supabase Realtime (já subscrito em `useSinistroAnalise.ts` para documentos)
+- Mas polling é mais simples e não adiciona complexidade
+- Polling é padrão no projeto (PagamentoAdesao, SinistroDetalhe)
+
+### Arquivos a modificar:
+
+| Arquivo | Descrição |
+|---|---|
+| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar useEffect com polling automático (aprox. 8 linhas) |
+
+### Fluxo visual após implementação:
+
+```
+1. Diretor abre tela de análise
+   ↓
+2. Sinistro aguarda assinatura do termo
+   ↓
+3. Polling iniciado (10s de intervalo)
+   ↓
+4. Associado assina pelo link público
+   ↓
+5. Polling detecta mudança em termo_anuencia_assinado (próximo ciclo)
+   ↓
+6. Interface atualiza automaticamente
+   ↓
+7. Botões "Aprovar" e "Reprovar" desbloqueiam
+   ↓
+8. Polling para (ou continua inerte já que condição está falsa)
+```
+
+### Benefícios:
+- ✅ Sem necessidade de recarregar página
+- ✅ Detecção automática em até 10 segundos
+- ✅ Padrão já usado no projeto (consistente)
+- ✅ Simples e sem overhead
+- ✅ Limpo e sem polling desnecessário após assinatura
