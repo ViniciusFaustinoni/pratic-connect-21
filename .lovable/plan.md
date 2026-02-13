@@ -1,46 +1,42 @@
 
 
-# Corrigir duplicacao persistente de documentos de sinistro
+# IA perguntar sobre assistencia 24h apos comunicacao de sinistro
 
 ## Problema
 
-A correcao anterior (filtro no frontend) esta correta, mas:
-1. Ja existem duplicatas no banco de dados de tentativas anteriores
-2. Nao ha uma restricao a nivel de banco de dados para impedir duplicatas, entao qualquer falha no frontend permite novas duplicatas
+Quando o associado comunica um sinistro via WhatsApp, a IA registra a solicitacao mas nao pergunta proativamente se o usuario precisa de reboque ou outro servico de assistencia 24h. O associado pode estar parado na rua precisando de guincho, por exemplo.
 
-## Solucao em duas etapas
+## Solucao
 
-### Etapa 1: Limpar duplicatas existentes no banco
+Atualizar o **system prompt do WhatsApp** (`WHATSAPP_SYSTEM_PROMPT`) para instruir a IA a:
 
-Executar SQL para remover registros duplicados, mantendo apenas o mais antigo de cada tipo por sinistro.
+1. Apos criar com sucesso uma solicitacao de sinistro (tool `criar_solicitacao_sinistro`), perguntar ao associado se ele precisa de algum servico de assistencia 24h (guincho, chaveiro, troca de pneu, etc.)
+2. Se o associado responder que sim, coletar os dados necessarios (localizacao, tipo de servico) e chamar a tool `criar_solicitacao_assistencia` normalmente
 
-```sql
-DELETE FROM sinistro_documentos 
-WHERE id NOT IN (
-  SELECT DISTINCT ON (sinistro_id, tipo) id 
-  FROM sinistro_documentos 
-  ORDER BY sinistro_id, tipo, created_at ASC
-);
-```
+Nenhuma nova tool ou tabela precisa ser criada -- a IA ja possui ambas as tools. Basta orientar o comportamento no prompt.
 
-### Etapa 2: Adicionar restricao UNIQUE no banco
+## Alteracao
 
-Criar um indice unico na combinacao `(sinistro_id, tipo)` para que o banco rejeite duplicatas automaticamente, independente do frontend.
-
-```sql
-CREATE UNIQUE INDEX idx_sinistro_documentos_unique_tipo 
-ON sinistro_documentos (sinistro_id, tipo);
-```
-
-### Etapa 3: Ajustar o INSERT no dialog para usar upsert
-
-Alterar o `SolicitarDocumentosSinistroDialog.tsx` para usar `.upsert()` com `onConflict` ao inves de `.insert()`, garantindo que mesmo em caso de conflito o registro nao seja duplicado.
-
-## Alteracoes
-
-| Arquivo / Recurso | Descricao |
+| Arquivo | Descricao |
 |---|---|
-| Migracao SQL | Remover duplicatas existentes e criar indice UNIQUE |
-| `src/components/sinistros/SolicitarDocumentosSinistroDialog.tsx` | Usar upsert com onConflict para prevenir duplicatas |
-| `supabase/functions/criar-sinistro/index.ts` | Usar upsert para nao falhar se documentos ja existirem |
+| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar instrucao no WHATSAPP_SYSTEM_PROMPT para oferecer assistencia 24h apos sinistro |
 
+### Detalhes tecnicos
+
+No `WHATSAPP_SYSTEM_PROMPT` (linha 258), adicionar uma nova secao entre "Coleta de Dados para SINISTRO" e "Coleta de Dados para ASSISTENCIA 24H":
+
+```
+## POS-SINISTRO: OFERECER ASSISTENCIA 24H (OBRIGATORIO!)
+Apos registrar um sinistro com sucesso (tool criar_solicitacao_sinistro retornou sucesso):
+1. Confirme o registro do sinistro
+2. SEMPRE pergunte: "Voce precisa de alguma assistencia agora? Guincho, reboque, chaveiro?"
+3. Se o associado responder SIM:
+   - Colete localizacao e tipo de servico
+   - Use a tool criar_solicitacao_assistencia para abrir o chamado
+4. Se responder NAO, encerre normalmente
+
+IMPORTANTE: So ofereca assistencia se o veiculo tiver cobertura_total = true.
+Se nao tiver, nao mencione assistencia 24h.
+```
+
+A IA ja sabe interpretar respostas do usuario e chamar tools automaticamente, entao nenhuma logica adicional de codigo e necessaria alem da instrucao no prompt.
