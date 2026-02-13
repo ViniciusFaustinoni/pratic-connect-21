@@ -57,7 +57,7 @@ serve(async (req) => {
         ),
         oficina:oficinas(
           id, nome_fantasia, razao_social, cnpj, telefone, whatsapp,
-          logradouro, numero, bairro, cidade, uf, cep
+          logradouro, numero, bairro, cidade, estado, cep
         ),
         sinistro:sinistros(id, protocolo, tipo, status)
       `)
@@ -135,7 +135,7 @@ serve(async (req) => {
     const sinistro = os.sinistro;
 
     const oficinaNome = oficina?.nome_fantasia || oficina?.razao_social || '—';
-    const oficinaEndereco = oficina ? `${oficina.logradouro || ''}, ${oficina.numero || ''} - ${oficina.bairro || ''} - ${oficina.cidade || ''}/${oficina.uf || ''}` : '—';
+    const oficinaEndereco = oficina ? `${oficina.logradouro || ''}, ${oficina.numero || ''} - ${oficina.bairro || ''} - ${oficina.cidade || ''}/${oficina.estado || ''}` : '—';
 
     const variaveis: Record<string, string> = {
       // OS
