@@ -53,11 +53,11 @@ Deno.serve(async (req) => {
 
     const statusAnterior = sinistro.status;
 
-    // Atualizar status para 'em_analise'
+    // Atualizar status para 'aprovado'
     const { error: updateError } = await supabase
       .from('sinistros')
       .update({
-        status: 'em_analise',
+        status: 'aprovado',
         updated_at: new Date().toISOString(),
       })
       .eq('id', sinistro_id);
@@ -73,8 +73,8 @@ Deno.serve(async (req) => {
       .insert({
         sinistro_id,
         status_anterior: statusAnterior,
-        status_novo: 'em_analise',
-        observacao: observacao || 'Sinistro aprovado para análise pelo diretor',
+        status_novo: 'aprovado',
+        observacao: observacao || 'Sinistro aprovado pelo diretor',
       });
 
     if (histError) {

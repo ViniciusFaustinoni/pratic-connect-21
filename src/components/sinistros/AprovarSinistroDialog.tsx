@@ -77,7 +77,7 @@ export function AprovarSinistroDialog({
           </AlertDialogTitle>
           <AlertDialogDescription>
             Confirma a aprovação do sinistro <strong>{protocolo}</strong>?
-            O status será alterado para "Em Análise" e o associado será notificado.
+            O status será alterado para "Aprovado" e o associado será notificado.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
