@@ -1,82 +1,46 @@
 
+# Corrigir sinistro aprovado que não sai do dashboard de eventos
 
-# Resolver rate limiting do Supabase (ThrottlerException: Too Many Requests)
+## Problema
+
+O sinistro foi criado com sucesso (SIN-20260213-0003 existe no banco com status "comunicado"), mas a solicitacao na tabela `chat_solicitacoes_ia` continua com status `pendente`. Por isso o banner "1 sinistro(s) aguardando aprovacao via IA" continua aparecendo.
 
 ## Causa raiz
 
-O sistema tem requisicoes demais ao Supabase rodando simultaneamente:
+Na edge function `aprovar-solicitacao-ia`, linha 414, o campo `aprovador_id` recebe o `userId` (que e o `auth.users.id`). Porem, a coluna `aprovador_id` tem uma foreign key para `profiles(id)`, que e um UUID diferente do `auth.users.id`.
 
-- 15+ canais Realtime (cada um abre conexao WebSocket e dispara queries)
-- 41+ queries com polling automatico (refetchInterval entre 10s e 60s)
-- Invalidacoes em cascata: uma unica acao pode invalidar 5-10 queries de uma vez
-- No reload (deploy), TUDO dispara ao mesmo tempo
+Isso faz o UPDATE falhar silenciosamente (constraint violation), e a solicitacao nunca sai do status `pendente`.
 
-O Supabase tem limite de ~100 requisicoes/segundo por cliente. O sistema ultrapassa isso no momento do carregamento.
+## Solucao
 
-## Solucao em 3 frentes
+### 1. Corrigir a edge function para buscar o `profiles.id` correto
 
-### Frente 1: Reduzir polling agressivo
+**Arquivo**: `supabase/functions/aprovar-solicitacao-ia/index.ts`
 
-Muitas queries usam `refetchInterval` desnecessariamente, porque ja tem Realtime escutando a mesma tabela.
+Antes de usar `aprovador_id`, buscar o profile do usuario:
 
-| Hook | Intervalo atual | Acao |
-|---|---|---|
-| `useEncaixesUrgentes` | 10s | Remover (ja tem Realtime em `servicos`) |
-| `useCotacaoContratacao` | 10s | Aumentar para 30s |
-| `usePropostasPendentes` | 30s | Remover (ja tem Realtime em `cotacoes`) |
-| `useVistoriadoresRealtime` | 30s | Remover (ja tem Realtime no mesmo hook) |
-| `useDashboardCoordenador` | 30s | Aumentar para 60s |
-| `useAgendamentoBase` | 30s | Aumentar para 60s |
-| `useSinistroDetalhes` (2 queries) | 30s | Aumentar para 60s |
-| `useServicos` | 30s | Remover (ja tem Realtime) |
-| `DetalhesRastreadorDialog` (4 queries) | 30s cada | Remover todas (so precisa quando dialog aberto, e ja busca no open) |
-
-### Frente 2: Consolidar invalidacoes em cascata
-
-Em vez de invalidar 5-10 queries individualmente, agrupar com prefixo comum e usar `queryKey` parcial.
-
-Exemplo atual (dispara 5 requests):
 ```
-queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
-queryClient.invalidateQueries({ queryKey: ['instalacao'] });
-queryClient.invalidateQueries({ queryKey: ['instalacoes-metricas'] });
-queryClient.invalidateQueries({ queryKey: ['instalacoes-contagem'] });
-queryClient.invalidateQueries({ queryKey: ['instalacoes-dia'] });
+const { data: perfil } = await supabaseAdmin
+  .from('profiles')
+  .select('id')
+  .eq('user_id', userId)
+  .single();
+
+const perfilId = perfil?.id || null;
 ```
 
-Exemplo otimizado (dispara 1 invalidacao agrupada):
-```
-queryClient.invalidateQueries({ 
-  predicate: (query) => {
-    const key = query.queryKey[0] as string;
-    return key?.startsWith('instalac');
-  }
-});
-```
+Usar `perfilId` em vez de `userId` em todas as ocorrencias de `aprovador_id` (linhas 107 e 414).
 
-### Frente 3: Adicionar staleTime global para evitar refetch duplicado
+### 2. Corrigir dado inconsistente existente
 
-No `QueryClient` global, definir `staleTime: 5000` (5 segundos) para que queries recentes nao sejam re-buscadas imediatamente ao serem invalidadas.
-
-**Arquivo**: `src/App.tsx` ou onde o `QueryClient` e configurado.
+A solicitacao `285d937b-9487-4d86-bee6-406ec34a1817` precisa ser atualizada para `aprovado` manualmente, ja que o sinistro ja foi criado. Isso sera feito diretamente na edge function com a correcao.
 
 ## Arquivos modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/hooks/useEncaixesUrgentes.ts` | Remover refetchInterval |
-| `src/hooks/usePropostasPendentes.ts` | Remover refetchInterval |
-| `src/hooks/useVistoriadoresRealtime.ts` | Remover refetchInterval |
-| `src/hooks/useServicos.ts` | Remover refetchInterval |
-| `src/hooks/useCotacaoContratacao.ts` | Aumentar refetchInterval para 30s |
-| `src/hooks/useDashboardCoordenador.ts` | Aumentar refetchInterval para 60s |
-| `src/hooks/useAgendamentoBase.ts` | Aumentar refetchInterval para 60s |
-| `src/hooks/useSinistroDetalhes.ts` | Aumentar refetchInterval para 60s |
-| `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx` | Remover refetchInterval (4 queries) |
-| `src/hooks/useFilasRealtime.ts` | Consolidar invalidacoes com predicate |
-| Arquivo do QueryClient (App.tsx ou similar) | Adicionar staleTime global de 5s |
+| `supabase/functions/aprovar-solicitacao-ia/index.ts` | Buscar `profiles.id` via `user_id` e usar como `aprovador_id` |
 
-## Resultado esperado
+## Dado inconsistente
 
-Reducao estimada de 40-60% no volume de requisicoes, eliminando o rate limiting durante navegacao e reloads.
-
+Apos o deploy, sera necessario corrigir a solicitacao existente. Posso atualizar o status para "aprovado" diretamente no banco apos a correcao.
