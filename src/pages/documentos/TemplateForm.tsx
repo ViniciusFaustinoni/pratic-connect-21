@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
-import { ArrowLeft, Save, FileText, PenTool, Loader2, Shield, Car } from 'lucide-react';
+import { ArrowLeft, Save, FileText, PenTool, Loader2, Shield, Car, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Schema de validação
@@ -344,6 +344,31 @@ export default function TemplateForm() {
                           <FormDescription>
                             Este template será usado para gerar o Termo de Entrada de Evento enviado ao associado quando um sinistro for aprovado.
                             Apenas um template pode ser marcado.
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="is_default_saida"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                            <Truck className="h-4 w-4" />
+                            Usar como padrão para Termo de Saída de Evento (OS)
+                          </FormLabel>
+                          <FormDescription>
+                            Este template será usado para gerar o Termo de Saída de Veículo enviado ao associado quando
+                            uma Ordem de Serviço for concluída. Apenas um template pode ser marcado.
                           </FormDescription>
                         </div>
                       </FormItem>
