@@ -2566,6 +2566,89 @@ export type Database = {
           },
         ]
       }
+      auto_center_pecas: {
+        Row: {
+          auto_center_id: string
+          condicao: string
+          created_at: string
+          id: string
+          nome: string
+          valor: number | null
+        }
+        Insert: {
+          auto_center_id: string
+          condicao?: string
+          created_at?: string
+          id?: string
+          nome: string
+          valor?: number | null
+        }
+        Update: {
+          auto_center_id?: string
+          condicao?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auto_center_pecas_auto_center_id_fkey"
+            columns: ["auto_center_id"]
+            isOneToOne: false
+            referencedRelation: "auto_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      auto_centers: {
+        Row: {
+          cep: string | null
+          cidade: string | null
+          contato_email: string | null
+          contato_nome: string | null
+          contato_telefone: string | null
+          created_at: string
+          endereco: string | null
+          estado: string | null
+          id: string
+          nome: string
+          observacoes: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          cep?: string | null
+          cidade?: string | null
+          contato_email?: string | null
+          contato_nome?: string | null
+          contato_telefone?: string | null
+          created_at?: string
+          endereco?: string | null
+          estado?: string | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          cep?: string | null
+          cidade?: string | null
+          contato_email?: string | null
+          contato_nome?: string | null
+          contato_telefone?: string | null
+          created_at?: string
+          endereco?: string | null
+          estado?: string | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       avaliacoes: {
         Row: {
           avaliador_id: string

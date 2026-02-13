@@ -83,6 +83,7 @@ import RetiradasPage from "./pages/monitoramento/RetiradasPage";
 import VistoriasManutencao from "./pages/monitoramento/VistoriasManutencao";
 import GestaoRotas from "./pages/monitoramento/GestaoRotas";
 import Oficinas from "./pages/oficinas/Oficinas";
+import AutoCenters from "./pages/oficinas/AutoCenters";
 import OrdensServico from "./pages/oficinas/OrdensServico";
 import OrdemServicoDetalhe from "./pages/oficinas/OrdemServicoDetalhe";
 import OficinasList from "./pages/oficina/OficinasList";
@@ -547,6 +548,7 @@ const App = () => (
               
               {/* Oficinas */}
               <Route path="/oficinas" element={<Oficinas />} />
+              <Route path="/oficinas/auto-centers" element={<AutoCenters />} />
               <Route path="/oficina/credenciadas" element={<OficinasList />} />
               <Route path="/oficina/credenciadas/:id" element={<OficinaDetalhe />} />
               <Route path="/oficina/ordens-servico" element={<OrdensServicoList />} />
