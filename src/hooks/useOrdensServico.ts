@@ -68,7 +68,7 @@ export function useOrdemServico(id: string | undefined) {
           *,
           oficina:oficinas(*),
           veiculo:veiculos(*),
-          associado:associados(id, nome, telefone, email),
+          associado:associados(id, nome, telefone, whatsapp, email),
           sinistro:sinistros(id, protocolo, tipo, status),
           criado_por_profile:profiles!ordens_servico_criado_por_fkey(nome),
           aprovado_por_profile:profiles!ordens_servico_aprovado_por_fkey(nome)
