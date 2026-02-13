@@ -159,7 +159,6 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
       return data;
     },
     enabled: !!rastreadorId && open,
-    refetchInterval: 30000,
   });
 
   // Query unificada: movimentações de estoque
@@ -178,7 +177,6 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
       return data;
     },
     enabled: !!rastreadorId && open,
-    refetchInterval: 30000,
   });
 
   // Query unificada: TODOS os serviços vinculados ao rastreador
@@ -198,7 +196,6 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
       return data;
     },
     enabled: !!rastreadorId && open,
-    refetchInterval: 30000,
   });
 
   // Query unificada: TODAS as manutenções internas
@@ -219,7 +216,6 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
       return data;
     },
     enabled: !!rastreadorId && open,
-    refetchInterval: 30000,
   });
 
   // Query para manutenção de campo ativa

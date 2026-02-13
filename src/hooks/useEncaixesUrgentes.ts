@@ -53,7 +53,6 @@ export function useEncaixesUrgentes() {
       })) as EncaixeUrgente[];
     },
     enabled: !!profile,
-    refetchInterval: 10000, // Polling a cada 10s como backup
   });
 
   // Subscription Realtime para atualizações instantâneas
