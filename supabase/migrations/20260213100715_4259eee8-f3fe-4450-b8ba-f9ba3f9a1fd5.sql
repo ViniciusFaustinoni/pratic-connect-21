@@ -1,0 +1,1 @@
+UPDATE sinistros SET status = 'aprovado' WHERE id = '261b933e-2ab7-4496-a9eb-5daf990f750f' AND status = 'em_analise';
