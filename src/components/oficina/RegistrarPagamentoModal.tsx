@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useLancamentosContabeis } from '@/hooks/useLancamentosContabeis';
+import { CONTAS_PADRAO } from '@/lib/contabilidade-config';
 import { X, Upload, Building2, CreditCard } from 'lucide-react';
 import {
   Dialog,
@@ -60,6 +62,7 @@ export function RegistrarPagamentoModal({
   ordemServico,
 }: RegistrarPagamentoModalProps) {
   const queryClient = useQueryClient();
+  const { criarLancamentoAutomatico } = useLancamentosContabeis();
   const [comprovante, setComprovante] = useState<File | null>(null);
 
   // Cálculos de valores
@@ -159,6 +162,27 @@ export function RegistrarPagamentoModal({
           usuario_id: userId,
           observacao: `Pagamento finalizado: R$ ${data.valor.toFixed(2)} via ${FORMA_PAGAMENTO_LABELS[data.forma_pagamento]}`,
         });
+      }
+
+      // 6. Lançamento contábil automático
+      const contaCredito = ['pix', 'transferencia'].includes(data.forma_pagamento)
+        ? CONTAS_PADRAO.BANCO_CONTA_MOVIMENTO
+        : CONTAS_PADRAO.CAIXA_GERAL;
+
+      const oficinaNome = (ordemServico.oficina as any)?.nome_fantasia || (ordemServico.oficina as any)?.razao_social || 'Oficina';
+
+      try {
+        await criarLancamentoAutomatico({
+          origem: 'pagamento_oficina',
+          origem_id: ordemServico.id,
+          data_competencia: data.data_pagamento,
+          historico: `Pgto OS ${ordemServico.numero} - ${oficinaNome} - ${FORMA_PAGAMENTO_LABELS[data.forma_pagamento]}`,
+          conta_debito_id: CONTAS_PADRAO.REPAROS_OFICINAS,
+          conta_credito_id: contaCredito,
+          valor: data.valor,
+        });
+      } catch (err) {
+        console.error('Erro ao criar lançamento contábil para OS:', err);
       }
     },
     onSuccess: () => {
