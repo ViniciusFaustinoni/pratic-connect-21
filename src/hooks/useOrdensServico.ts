@@ -83,6 +83,13 @@ export function useOrdemServico(id: string | undefined) {
       };
     },
     enabled: !!id,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && data.status === 'pendente_assinatura' && !(data as any).termo_saida_assinado) {
+        return 10000;
+      }
+      return false;
+    },
   });
 }
 
