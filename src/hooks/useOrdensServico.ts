@@ -29,7 +29,7 @@ export function useOrdensServico(filters?: OSFilters) {
         .order('created_at', { ascending: false });
 
       if (filters?.status) {
-        query = query.eq('status', filters.status);
+        query = query.eq('status', filters.status as any);
       }
       if (filters?.oficina_id) {
         query = query.eq('oficina_id', filters.oficina_id);
@@ -147,7 +147,7 @@ export function useUpdateOSStatus() {
     mutationFn: async ({ id, status, observacao }: { id: string; status: StatusOrdemServico; observacao?: string }) => {
       const { error } = await supabase
         .from('ordens_servico')
-        .update({ status, updated_at: new Date().toISOString() })
+        .update({ status: status as any, updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
 

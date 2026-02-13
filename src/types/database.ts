@@ -784,6 +784,8 @@ export type StatusOrdemServico =
   | 'em_execucao'
   | 'aguardando_peca'
   | 'concluido'
+  | 'pendente_assinatura'
+  | 'finalizado'
   | 'aguardando_pagamento'
   | 'pago'
   | 'cancelado';
@@ -918,6 +920,8 @@ export const STATUS_ORDEM_SERVICO_LABELS: Record<StatusOrdemServico, string> = {
   em_execucao: 'Em Execução',
   aguardando_peca: 'Aguardando Peça',
   concluido: 'Concluído',
+  pendente_assinatura: 'Pendente de Assinatura',
+  finalizado: 'Finalizado',
   aguardando_pagamento: 'Aguardando Pagamento',
   pago: 'Pago',
   cancelado: 'Cancelado',
@@ -981,6 +985,8 @@ export const STATUS_ORDEM_SERVICO_COLORS: Record<StatusOrdemServico, string> = {
   em_execucao: 'bg-purple-100 text-purple-800',
   aguardando_peca: 'bg-amber-100 text-amber-800',
   concluido: 'bg-teal-100 text-teal-800',
+  pendente_assinatura: 'bg-amber-100 text-amber-800',
+  finalizado: 'bg-emerald-100 text-emerald-800',
   aguardando_pagamento: 'bg-indigo-100 text-indigo-800',
   pago: 'bg-emerald-100 text-emerald-800',
   cancelado: 'bg-red-100 text-red-800',

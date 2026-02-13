@@ -66,14 +66,16 @@ export default function OrdemServicoDetalhe() {
             Criado em {format(new Date(os.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
           </p>
         </div>
-        {os.status !== 'concluido' && os.status !== 'cancelado' && (
+        {os.status !== 'concluido' && os.status !== 'pendente_assinatura' && os.status !== 'cancelado' && os.status !== 'finalizado' && (
           <Button variant="default" onClick={() => setConclusaoOpen(true)}>
             Concluir OS
           </Button>
         )}
-        {(os.status === 'concluido' && ((os as any).autentique_url || !(os as any).termo_saida_assinado)) && (
+        {(os.status === 'concluido' || os.status === 'pendente_assinatura') && (
           <Button variant="default" onClick={() => setConclusaoOpen(true)}>
-            Termo de Saída
+            {(os as any).autentique_url && !(os as any).termo_saida_assinado
+              ? 'Reenviar Termo de Saída'
+              : 'Termo de Saída'}
           </Button>
         )}
         <Button variant="outline" onClick={() => setStatusOpen(true)}>Atualizar Status</Button>

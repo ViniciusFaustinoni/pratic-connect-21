@@ -63,7 +63,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
         toast.success('Termo assinado! Veículo liberado.');
         clearInterval(interval);
       }
-    }, 15000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [signatureLink, assinado, open, os?.id, queryClient]);
@@ -150,8 +150,19 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
       if (!data?.success) throw new Error(data?.error || 'Erro ao criar termo');
 
       setSignatureLink(data.signatureLink);
+
+      // Atualizar status para pendente_assinatura
+      await updateStatus.mutateAsync({
+        id: os.id,
+        status: 'pendente_assinatura' as any,
+        observacao: 'Termo de Saída enviado para assinatura',
+      });
+
       queryClient.invalidateQueries({ queryKey: ['ordem_servico', os.id] });
       toast.success('Termo enviado para assinatura!');
+
+      // Fechar modal após envio com sucesso
+      onOpenChange(false);
     } catch (err: any) {
       console.error('[OSConclusao] Erro ao enviar termo:', err);
       toast.error('Erro ao enviar termo: ' + (err.message || 'Erro desconhecido'));
@@ -333,7 +344,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
         )}
 
         {/* Step 2: Assinatura */}
-        {(step === 'signature' || os.status === 'concluido') && (
+        {(step === 'signature' || os.status === 'concluido' || os.status === 'pendente_assinatura') && (
           <div className="space-y-4">
             {!signatureLink && !assinado && (
               <Button
@@ -375,7 +386,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
-                  Aguardando assinatura... (verificação automática a cada 15s)
+                  Aguardando assinatura... (verificação automática a cada 10s)
                 </p>
               </div>
             )}
