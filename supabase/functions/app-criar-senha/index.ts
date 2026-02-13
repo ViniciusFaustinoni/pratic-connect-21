@@ -70,12 +70,49 @@ serve(async (req) => {
       );
     }
 
-    // 3. Verificar se associado já tem user_id
+    // 3. Se associado já tem user_id (criado pelo ativar-associado), atualizar a senha
     if (associado.user_id) {
+      console.log('Associado já tem user_id, atualizando senha...');
+
+      const { error: updateAuthError } = await supabase.auth.admin.updateUserById(
+        associado.user_id,
+        { password: senha }
+      );
+
+      if (updateAuthError) {
+        console.error('Erro ao atualizar senha:', updateAuthError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Erro ao atualizar senha' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Marcar primeiro_acesso como false no profile
+      await supabase
+        .from('profiles')
+        .update({ primeiro_acesso: false })
+        .eq('user_id', associado.user_id);
+
+      // Marcar token como usado
+      await supabase
+        .from('auth_tokens_primeiro_acesso')
+        .update({ usado: true, usado_em: new Date().toISOString() })
+        .eq('id', tokenData.id);
+
+      // Registrar histórico
+      await supabase
+        .from('associados_historico')
+        .insert({
+          associado_id: associado.id,
+          tipo: 'senha_definida',
+          descricao: 'Senha definida pelo associado no primeiro acesso'
+        });
+
       return new Response(
         JSON.stringify({ 
-          success: false, 
-          error: 'Você já possui uma conta. Use "Esqueci minha senha".' 
+          success: true,
+          message: 'Senha definida com sucesso! Você já pode fazer login.',
+          cpf: associado.cpf
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
