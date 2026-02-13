@@ -1641,7 +1641,7 @@ export function useAprovarProposta() {
           
           await supabase.functions.invoke('notificar-cliente', {
             body: {
-              tipo: 'proposta_aprovada_roubo_furto',
+              tipo: jaTemInstalacaoConcluida ? 'proposta_aprovada_cobertura_total' : 'proposta_aprovada_roubo_furto',
               associado_id: associadoId,
               dados: {
                 link_acompanhamento: linkAcompanhamento,
