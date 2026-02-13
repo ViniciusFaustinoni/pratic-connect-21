@@ -18122,6 +18122,8 @@ export type Database = {
           tipo_dano: string | null
           tipo_local_evento: string | null
           updated_at: string
+          upload_token: string | null
+          upload_token_expires_at: string | null
           valor_cota_participacao: number | null
           valor_fipe: number | null
           valor_indenizacao: number | null
@@ -18202,6 +18204,8 @@ export type Database = {
           tipo_dano?: string | null
           tipo_local_evento?: string | null
           updated_at?: string
+          upload_token?: string | null
+          upload_token_expires_at?: string | null
           valor_cota_participacao?: number | null
           valor_fipe?: number | null
           valor_indenizacao?: number | null
@@ -18282,6 +18286,8 @@ export type Database = {
           tipo_dano?: string | null
           tipo_local_evento?: string | null
           updated_at?: string
+          upload_token?: string | null
+          upload_token_expires_at?: string | null
           valor_cota_participacao?: number | null
           valor_fipe?: number | null
           valor_indenizacao?: number | null

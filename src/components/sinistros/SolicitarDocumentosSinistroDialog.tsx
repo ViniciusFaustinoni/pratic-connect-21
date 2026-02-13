@@ -93,13 +93,19 @@ export function SolicitarDocumentosSinistroDialog({
 
       if (docsError) throw docsError;
 
-      // 2. Atualizar status do sinistro para documentacao_pendente
+      // 2. Gerar token único para upload e atualizar status
+      const uploadToken = crypto.randomUUID().substring(0, 12);
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Expira em 7 dias
+
       const { error: statusError } = await supabase
         .from('sinistros')
         .update({ 
           status: 'documentacao_pendente',
+          upload_token: uploadToken,
+          upload_token_expires_at: expiresAt.toISOString(),
           updated_at: new Date().toISOString()
-        })
+        } as any)
         .eq('id', sinistroId);
 
       if (statusError) throw statusError;
@@ -128,7 +134,9 @@ export function SolicitarDocumentosSinistroDialog({
           .map(id => TIPOS_DOCUMENTOS_SINISTRO.find(d => d.id === id)?.label || id)
           .join('\n• ');
 
-        const mensagem = `📄 *Documentos Solicitados*\n\nPara dar continuidade ao seu sinistro *${protocolo}*, precisamos dos seguintes documentos:\n\n• ${documentosFormatados}${observacoes ? `\n\n📝 *Observação:* ${observacoes}` : ''}\n\n⏰ *Prazo:* 48 horas\n\nEnvie pelo app ou responda esta mensagem com as fotos.`;
+        const linkUpload = `${window.location.origin}/sinistro/documentos/${uploadToken}`;
+
+        const mensagem = `📄 *Documentos Solicitados*\n\nPara dar continuidade ao seu sinistro *${protocolo}*, precisamos dos seguintes documentos:\n\n• ${documentosFormatados}${observacoes ? `\n\n📝 *Observação:* ${observacoes}` : ''}\n\n📎 *Envie seus documentos pelo link abaixo:*\n${linkUpload}\n\n⏰ *Prazo:* 7 dias`;
 
         try {
           await supabase.functions.invoke('whatsapp-send-text', {

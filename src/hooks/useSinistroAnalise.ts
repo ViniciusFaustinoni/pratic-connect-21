@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 // ============================================
@@ -30,6 +31,34 @@ export interface SinistroAnaliseData {
 // ============================================
 
 export function useSinistroAnalise(sinistroId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  // Realtime: atualizar documentos automaticamente quando associado enviar pelo link público
+  useEffect(() => {
+    if (!sinistroId) return;
+
+    const channel = supabase
+      .channel(`sinistro-docs-${sinistroId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sinistro_documentos',
+          filter: `sinistro_id=eq.${sinistroId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['sinistro-analise-documentos', sinistroId] });
+          queryClient.invalidateQueries({ queryKey: ['sinistro-analise', sinistroId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sinistroId, queryClient]);
+
   // Query principal do sinistro com todas as relações
   const { data: sinistro, isLoading: loadingSinistro } = useQuery({
     queryKey: ['sinistro-analise', sinistroId],
