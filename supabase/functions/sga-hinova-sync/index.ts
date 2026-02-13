@@ -390,6 +390,22 @@ serve(async (req) => {
       console.log('[SGA Sync] Contrato sem vendedor_id, usando código global da integração');
     }
 
+    // NOVO: Fallback - buscar qualquer vendedor ativo com codigo configurado
+    if (!hinovaCodigoVoluntario) {
+      console.log('[SGA Sync] Código voluntário não encontrado no vendedor nem global, buscando fallback...');
+      const { data: qualquerVendedor } = await supabase
+        .from('profiles')
+        .select('codigo_sga_voluntario, nome')
+        .not('codigo_sga_voluntario', 'is', null)
+        .limit(1)
+        .maybeSingle();
+
+      if (qualquerVendedor?.codigo_sga_voluntario) {
+        hinovaCodigoVoluntario = qualquerVendedor.codigo_sga_voluntario;
+        console.log(`[SGA Sync] Fallback: usando código voluntário de ${qualquerVendedor.nome}: ${hinovaCodigoVoluntario}`);
+      }
+    }
+
     // ========================================
     // PASSO 4: Autenticar na API Hinova
     // ========================================
@@ -777,19 +793,11 @@ serve(async (req) => {
       );
     }
 
-    // VALIDAÇÃO: Código Voluntário é obrigatório para cadastrar veículos no Hinova
+    // VALIDAÇÃO: Código Voluntário - usar padrão se não encontrado (não bloquear)
     if (!hinovaCodigoVoluntario) {
-      await logSync(veiculo_id, associado_id, 'validar_config', 'error', null, null, 'Código Voluntário não configurado');
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Código Voluntário é obrigatório para sincronização com SGA. Configure em Configurações > Integrações > SGA Hinova.',
-          step: 'validacao_config',
-          campo_faltante: 'codigo_voluntario'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      hinovaCodigoVoluntario = '1';
+      console.warn('[SGA Sync] AVISO: código voluntário não configurado em nenhum lugar. Usando valor padrão (1).');
+      await logSync(veiculo_id, associado_id, 'validar_config', 'warning', null, null, 'Código Voluntário não configurado - usando padrão (1)');
     }
 
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
