@@ -1,66 +1,75 @@
 
-# Fluxo pos-aprovacao: Termo Autentique + bloqueio de acoes + notificacao WhatsApp via IA
+
+# Adicionar opcao "Usar como padrao para Termo de Entrada de Evento" no formulario de templates
 
 ## Resumo
 
-Apos o diretor aprovar um sinistro, o sistema deve:
-1. Criar e enviar o Termo de Entrada de Evento via Autentique (email para o associado)
-2. Notificar o associado via WhatsApp (pela IA) informando que o reparo foi aprovado e que um email com o termo para assinatura foi enviado
-3. Bloquear todas as acoes administrativas no sinistro enquanto o termo nao for assinado (exceto exclusao pelo diretor)
+Adicionar uma nova opcao (checkbox) no formulario de criacao/edicao de templates, similar ao existente "Usar como template padrao para Autentique" (afiliacao), mas para marcar o template como padrao do **Termo de Entrada de Evento** enviado quando um sinistro e aprovado.
 
 ## Alteracoes
 
 | Arquivo / Recurso | Descricao |
 |---|---|
-| `supabase/functions/aprovar-sinistro/index.ts` | Apos aprovar, chamar `autentique-evento-create` para enviar o termo. Alterar a mensagem WhatsApp para informar sobre o email com o termo. |
-| `src/pages/eventos/SinistroAnalise.tsx` | Bloquear acoes (Aprovar, Reprovar, Solicitar Docs) quando sinistro tem `autentique_documento_id` mas `termo_anuencia_assinado !== true`. Mostrar aviso "Aguardando assinatura do termo". |
+| **SQL (Migration)** | Adicionar coluna `is_default_evento` (boolean, default false) na tabela `documento_templates` com unique index parcial |
+| **`src/pages/documentos/TemplateForm.tsx`** | Adicionar campo `is_default_evento` no schema Zod e novo checkbox no formulario |
+| **`src/hooks/useDocumentoTemplates.ts`** | Adicionar `is_default_evento` nos tipos e nas mutations de create/update |
+| **`supabase/functions/autentique-evento-create/index.ts`** | Priorizar template marcado com `is_default_evento = true` ao buscar template para o termo |
 
 ## Detalhes tecnicos
 
-### 1. Edge Function `aprovar-sinistro/index.ts`
+### 1. Migration SQL
 
-Apos atualizar o status para `em_analise` e registrar historico, adicionar duas etapas:
+```sql
+ALTER TABLE public.documento_templates
+  ADD COLUMN IF NOT EXISTS is_default_evento BOOLEAN DEFAULT false;
 
-**a) Chamar `autentique-evento-create`:**
+-- Garantir que apenas um template pode ser padrao para evento
+CREATE UNIQUE INDEX IF NOT EXISTS idx_template_default_evento
+  ON public.documento_templates (is_default_evento)
+  WHERE is_default_evento = true AND ativo = true;
+```
+
+### 2. TemplateForm.tsx
+
+- Adicionar `is_default_evento: z.boolean().default(false)` ao schema Zod
+- Adicionar nos defaultValues e no carregamento do template existente
+- Incluir no `onSubmit` (tanto create quanto update)
+- Adicionar novo checkbox abaixo do existente, com icone `Shield` e texto:
+  - Titulo: "Usar como padrao para Termo de Entrada de Evento"
+  - Descricao: "Este template sera usado para gerar o Termo de Entrada de Evento enviado ao associado quando um sinistro for aprovado. Apenas um template pode ser marcado."
+
+### 3. useDocumentoTemplates.ts
+
+- Adicionar `is_default_evento?: boolean` nas interfaces `DocumentoTemplate`, `CreateTemplateInput` e `UpdateTemplateInput`
+- Incluir no mapeamento de dados e nas mutations
+
+### 4. Edge function autentique-evento-create
+
+Alterar a busca do template (linhas 97-104) para priorizar `is_default_evento = true`:
+
 ```typescript
-// Apos registrar historico (linha ~82)
-try {
-  const { data: termoData, error: termoError } = await supabase.functions.invoke('autentique-evento-create', {
-    body: { sinistro_id }
-  });
-  if (termoError) {
-    console.error('[aprovar-sinistro] Erro ao criar termo Autentique:', termoError);
-  } else {
-    console.log('[aprovar-sinistro] Termo Autentique criado:', termoData);
-  }
-} catch (termoErr) {
-  console.error('[aprovar-sinistro] Erro ao invocar autentique-evento-create:', termoErr);
+// Primeiro tenta pelo novo campo is_default_evento
+const { data: templateEvento } = await supabase
+  .from("documento_templates")
+  .select("id, codigo, nome, conteudo")
+  .eq("is_default_evento", true)
+  .eq("ativo", true)
+  .maybeSingle();
+
+if (templateEvento?.conteudo) {
+  templateConteudo = templateEvento.conteudo;
+  templateNome = templateEvento.nome;
+} else if (docType) {
+  // Fallback: buscar por document_type_id + is_default (comportamento atual)
+  const { data: templateDB } = await supabase
+    .from("documento_templates")
+    .select("id, codigo, nome, conteudo")
+    .eq("document_type_id", docType.id)
+    .eq("is_default", true)
+    .eq("ativo", true)
+    .maybeSingle();
+  // ...
 }
 ```
 
-**b) Alterar a mensagem WhatsApp** para informar sobre a aprovacao e o email com o termo:
-```
-Otimas noticias! O reparo do seu evento (protocolo XXX) foi APROVADO!
-
-Enviamos um email para [email] com o Termo de Entrada de Evento.
-Por favor, abra o email e assine o documento para dar continuidade ao processo.
-
-Apos a assinatura, nossa equipe dara andamento aos proximos passos.
-```
-
-### 2. Frontend `SinistroAnalise.tsx`
-
-Na secao de acoes (linhas ~506-546), adicionar verificacao:
-
-```typescript
-const aguardandoAssinatura = sinistro.autentique_documento_id && !sinistro.termo_anuencia_assinado;
-```
-
-Quando `aguardandoAssinatura === true`:
-- Exibir aviso em azul: "Aguardando assinatura do Termo de Entrada de Evento pelo associado"
-- Ocultar botoes Aprovar, Reprovar e Solicitar Documentos
-- Manter visivel apenas o botao de Excluir (se existir e for diretor)
-
-O botao de excluir ja e controlado pelo `PermissionGate` com permissao de diretor na pagina `SinistroDetalhe.tsx`, entao ele continuara disponivel.
-
-Quando o webhook Autentique processar a assinatura (ja implementado em `autentique-webhook/index.ts`), o campo `termo_anuencia_assinado` sera marcado como `true`, desbloqueando as acoes automaticamente.
+Isso garante retrocompatibilidade: se nenhum template tiver `is_default_evento`, o sistema usa o fallback atual.
