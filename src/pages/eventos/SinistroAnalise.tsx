@@ -574,7 +574,7 @@ export default function SinistroAnalise() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "h-4 w-4 rounded-full",
-                  sinistro.bo_numero ? "bg-green-500" : "bg-muted"
+                  (sinistro.bo_numero || documentos.some((d: any) => d.tipo === 'bo' && d.status !== 'pendente')) ? "bg-green-500" : "bg-muted"
                 )} />
                 <span className="text-sm">B.O. informado</span>
               </div>
