@@ -386,9 +386,15 @@ export function EtapaDadosPessoaisDocumentos({
             <div className="flex-1">
               <p className="text-sm font-medium">CNH ou RG</p>
               {temDadosPessoais && (
-                <p className="text-xs text-muted-foreground">
-                  {dadosExtraidos.nome} • CPF: {dadosExtraidos.cpf}
-                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground mt-1">
+                  {dadosExtraidos.nome && <div><span className="font-medium">Nome:</span> {dadosExtraidos.nome}</div>}
+                  {dadosExtraidos.cpf && <div><span className="font-medium">CPF:</span> {dadosExtraidos.cpf}</div>}
+                  {dadosExtraidos.rg && <div><span className="font-medium">RG:</span> {dadosExtraidos.rg}{dadosExtraidos.rg_orgao ? ` (${dadosExtraidos.rg_orgao})` : ''}</div>}
+                  {dadosExtraidos.data_nascimento && <div><span className="font-medium">Nascimento:</span> {dadosExtraidos.data_nascimento.includes('-') ? dadosExtraidos.data_nascimento.split('-').reverse().join('/') : dadosExtraidos.data_nascimento}</div>}
+                  {dadosExtraidos.cnh && <div><span className="font-medium">Nº Registro:</span> {dadosExtraidos.cnh}</div>}
+                  {dadosExtraidos.cnh_validade && <div><span className="font-medium">Validade:</span> {dadosExtraidos.cnh_validade}</div>}
+                  {dadosExtraidos.cnh_categoria && <div><span className="font-medium">Categoria:</span> {dadosExtraidos.cnh_categoria}</div>}
+                </div>
               )}
             </div>
           </div>
@@ -411,10 +417,15 @@ export function EtapaDadosPessoaisDocumentos({
             <div className="flex-1">
               <p className="text-sm font-medium">CRLV do Veículo</p>
               {temDadosVeiculo && (
-                <p className="text-xs text-muted-foreground">
-                  Placa: {dadosExtraidos.veiculo_placa}
-                  {dadosExtraidos.veiculo_renavam && ` • Renavam: ${dadosExtraidos.veiculo_renavam}`}
-                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground mt-1">
+                  {dadosExtraidos.veiculo_placa && <div><span className="font-medium">Placa:</span> {dadosExtraidos.veiculo_placa}</div>}
+                  {dadosExtraidos.veiculo_renavam && <div><span className="font-medium">Renavam:</span> {dadosExtraidos.veiculo_renavam}</div>}
+                  {dadosExtraidos.veiculo_chassi && <div><span className="font-medium">Chassi:</span> {dadosExtraidos.veiculo_chassi}</div>}
+                  {dadosExtraidos.veiculo_cor && <div><span className="font-medium">Cor:</span> {dadosExtraidos.veiculo_cor}</div>}
+                  {dadosExtraidos.veiculo_combustivel && <div><span className="font-medium">Combustível:</span> {dadosExtraidos.veiculo_combustivel}</div>}
+                  {dadosExtraidos.veiculo_motor && <div><span className="font-medium">Motor:</span> {dadosExtraidos.veiculo_motor}</div>}
+                  {dadosExtraidos.veiculo_ano_fabricacao && <div><span className="font-medium">Ano:</span> {dadosExtraidos.veiculo_ano_fabricacao}</div>}
+                </div>
               )}
             </div>
           </div>
