@@ -1,44 +1,49 @@
 
-# Fix: Mensagem WhatsApp ao Concluir OS
 
-## Problema
-Ao concluir a OS, a mensagem WhatsApp enviada ao associado nao informa claramente que ele deve comparecer na oficina para buscar o veiculo. A mensagem atual apenas diz que o veiculo esta pronto e menciona o email para assinatura, sem informar endereco da oficina nem orientacao de comparecimento.
+# Diagnostico: Contabilizacao do Custo de OS no Sistema
 
-Alem disso, o envio pode estar falhando silenciosamente caso o objeto `associado` nao tenha o campo `telefone` preenchido corretamente, mas a base mostra que o telefone existe (`21992593830`).
+## Resultado da Analise
 
-## Solucao
+Apos investigar todo o fluxo de custos de Ordens de Servico, identifiquei que **o pagamento de OS para oficinas NAO gera lancamento contabil automatico**. Isso significa que esses custos ficam **invisíveis na contabilidade** (balancete, razao, DRE contabil).
 
-### Arquivo: `src/components/oficinas/OSConclusaoModal.tsx` (linhas 89-91)
+## Onde o custo da OS JA aparece corretamente
 
-Reescrever a mensagem WhatsApp para incluir:
-- Informacao clara de que o veiculo esta pronto para retirada
-- Nome e endereco da oficina para comparecimento
-- Horario de funcionamento (se disponivel)
-- Instrucao para comparecer na oficina
+1. **Fechamento Mensal** (`supabase/functions/fechamento-mensal`): Busca `valor_pago` das OS vinculadas a sinistros para calcular despesas por beneficio. Funciona corretamente.
+2. **Custos de Reparos** (`useCustosReparos`): Busca itens de OS (`ordens_servico_itens`) para montar graficos de custos por categoria e tipo de sinistro. Funciona corretamente.
+3. **Detalhe da OS** (`OrdemServicoDetalhe`): Exibe valor orcamento, aprovado e pago. Funciona.
+4. **Detalhe da Oficina** (`OficinaDetalhe`): Lista pagamentos feitos a oficina via tabela `oficinas_pagamentos`. Funciona.
+5. **Relatorios Gerenciais** (`RelatoriosGerenciais`): Busca OS por status e itens para relatorios. Funciona.
 
-Mensagem proposta:
-```
-Ola [nome]!
+## Onde o custo da OS NAO aparece (problema)
 
-Informamos que o reparo do seu veiculo [marca modelo] placa [placa] foi concluido com sucesso!
+1. **Contabilidade (Balancete, Razao, DRE)**: O `RegistrarPagamentoModal` da oficina (`src/components/oficina/RegistrarPagamentoModal.tsx`) registra o pagamento na tabela `oficinas_pagamentos` e atualiza `valor_pago` na OS, mas **nao cria lancamento contabil**. Comparando com o fluxo financeiro:
+   - Pagamento de cobranca (`src/components/financeiro/RegistrarPagamentoModal.tsx`) -> chama `criarLancamentoAutomatico` (credito receita, debito caixa)
+   - Pagamento de conta (`src/components/financeiro/PagarContaModal.tsx`) -> chama `criarLancamentoAutomatico` (debito despesa, credito caixa)
+   - **Pagamento de OS a oficina** -> NAO chama `criarLancamentoAutomatico` (lacuna)
 
-Por favor, compareça na oficina [nome oficina] para retirar seu veiculo.
-Endereco: [endereco oficina]
+## Correcao Proposta
 
-Voce recebera um Termo de Saida para assinatura digital antes da liberacao.
+### Arquivo: `src/components/oficina/RegistrarPagamentoModal.tsx`
 
-Em caso de duvidas, entre em contato conosco.
+Adicionar integracao contabil ao registrar pagamento de OS:
 
-ABP PraticCar
-```
+1. Importar `useLancamentosContabeis` e `CONTAS_PADRAO`
+2. Apos registrar o pagamento com sucesso na `oficinas_pagamentos`, chamar `criarLancamentoAutomatico` com:
+   - **Debito**: `CONTAS_PADRAO.REPAROS_OFICINAS` (conta 5.1.01.002 - Reparos em Oficinas)
+   - **Credito**: `CONTAS_PADRAO.BANCO_CONTA_MOVIMENTO` (conta 1.1.01.002 - Banco) ou `CONTAS_PADRAO.CAIXA_GERAL` dependendo da forma de pagamento
+   - **Origem**: `'pagamento_oficina'`
+   - **Origem ID**: ID do pagamento registrado
+   - **Historico**: descritivo com numero da OS e nome da oficina
+   - **Valor**: valor efetivamente pago
 
-Tambem adicionar log de debug antes do envio para facilitar depuracao futura, e garantir que o endereco da oficina seja incluido na mensagem (buscando campos como `endereco`, `cidade`, `bairro` da oficina).
+### Arquivo: `src/lib/contabilidade-config.ts`
 
-### Verificar query da oficina
+Nenhuma alteracao necessaria - as contas `REPAROS_OFICINAS`, `BANCO_CONTA_MOVIMENTO` e `CAIXA_GERAL` ja estao mapeadas.
 
-Confirmar que a query em `useOrdemServico` busca `oficina:oficinas(*)` (todos os campos), o que ja inclui endereco. Nenhuma alteracao necessaria na query.
+## Resumo Tecnico
 
-## Resumo
-- 1 arquivo alterado: `src/components/oficinas/OSConclusaoModal.tsx`
-- Reescrita da mensagem WhatsApp (linhas 89-91) para incluir orientacao de comparecimento e endereco da oficina
-- Adicionar log de debug com telefone e dados do associado antes do envio
+- **1 arquivo alterado**: `src/components/oficina/RegistrarPagamentoModal.tsx`
+- Adicionar import de `useLancamentosContabeis` e `CONTAS_PADRAO`
+- Chamar `criarLancamentoAutomatico` dentro do `mutationFn`, apos o insert em `oficinas_pagamentos` e update da OS
+- Mapear forma de pagamento para conta contabil correta (PIX/transferencia = Banco, outros = Caixa)
+
