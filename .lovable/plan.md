@@ -1,35 +1,44 @@
 
-# Melhorias no Modal de Conclusao de OS
+# Fix: Mensagem WhatsApp ao Concluir OS
 
 ## Problema
-O modal de conclusao nao exibe o custo da OS. Alem disso, o campo `whatsapp` do associado nao esta sendo buscado na query, o que pode impedir o envio do WhatsApp.
+Ao concluir a OS, a mensagem WhatsApp enviada ao associado nao informa claramente que ele deve comparecer na oficina para buscar o veiculo. A mensagem atual apenas diz que o veiculo esta pronto e menciona o email para assinatura, sem informar endereco da oficina nem orientacao de comparecimento.
 
-## Alteracoes
+Alem disso, o envio pode estar falhando silenciosamente caso o objeto `associado` nao tenha o campo `telefone` preenchido corretamente, mas a base mostra que o telefone existe (`21992593830`).
 
-### 1. Adicionar `whatsapp` na query do hook (`src/hooks/useOrdensServico.ts`)
-A query de `useOrdemServico` seleciona apenas `id, nome, telefone, email` do associado. Precisa incluir `whatsapp` para o envio funcionar.
+## Solucao
 
+### Arquivo: `src/components/oficinas/OSConclusaoModal.tsx` (linhas 89-91)
+
+Reescrever a mensagem WhatsApp para incluir:
+- Informacao clara de que o veiculo esta pronto para retirada
+- Nome e endereco da oficina para comparecimento
+- Horario de funcionamento (se disponivel)
+- Instrucao para comparecer na oficina
+
+Mensagem proposta:
 ```
-// De:
-associado:associados(id, nome, telefone, email)
+Ola [nome]!
 
-// Para:
-associado:associados(id, nome, telefone, whatsapp, email)
+Informamos que o reparo do seu veiculo [marca modelo] placa [placa] foi concluido com sucesso!
+
+Por favor, compareça na oficina [nome oficina] para retirar seu veiculo.
+Endereco: [endereco oficina]
+
+Voce recebera um Termo de Saida para assinatura digital antes da liberacao.
+
+Em caso de duvidas, entre em contato conosco.
+
+ABP PraticCar
 ```
 
-### 2. Exibir custo da OS no modal (`src/components/oficinas/OSConclusaoModal.tsx`)
-Adicionar uma secao entre o resumo da OS e o separador mostrando o valor do orcamento:
+Tambem adicionar log de debug antes do envio para facilitar depuracao futura, e garantir que o endereco da oficina seja incluido na mensagem (buscando campos como `endereco`, `cidade`, `bairro` da oficina).
 
-```
-Total Orcamento
-R$ 450,00
-```
+### Verificar query da oficina
 
-Sera exibido com destaque visual (texto grande, negrito) usando `os.valor_orcamento`. Se houver `valor_aprovado`, exibir tambem.
+Confirmar que a query em `useOrdemServico` busca `oficina:oficinas(*)` (todos os campos), o que ja inclui endereco. Nenhuma alteracao necessaria na query.
 
-### 3. Fluxo ja implementado
-Os botoes "Enviar Termo para Assinatura" e "Liberar Veiculo" ja existem no modal. O fluxo sequencial (Concluir -> Termo -> Liberar) ja esta correto. Apenas o custo estava faltando.
-
-## Resumo tecnico
-- **`src/hooks/useOrdensServico.ts`**: Adicionar campo `whatsapp` na select do associado (linha 71)
-- **`src/components/oficinas/OSConclusaoModal.tsx`**: Adicionar bloco de custo antes do Separator (entre linhas 261-263), exibindo `os.valor_orcamento` e opcionalmente `os.valor_aprovado`/`os.valor_pago`
+## Resumo
+- 1 arquivo alterado: `src/components/oficinas/OSConclusaoModal.tsx`
+- Reescrita da mensagem WhatsApp (linhas 89-91) para incluir orientacao de comparecimento e endereco da oficina
+- Adicionar log de debug com telefone e dados do associado antes do envio
