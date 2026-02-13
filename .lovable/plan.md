@@ -1,57 +1,82 @@
 
 
-# Corrigir criacao de senha em ambos os caminhos (link WhatsApp e pagina de acompanhamento)
+# Resolver rate limiting do Supabase (ThrottlerException: Too Many Requests)
 
-## Problema
+## Causa raiz
 
-Existem dois caminhos para o associado criar sua senha, e ambos precisam funcionar mesmo quando o `ativar-associado` ja criou o `user_id`:
+O sistema tem requisicoes demais ao Supabase rodando simultaneamente:
 
-1. **Link do WhatsApp** (via `app-criar-senha` com token) -- JA CORRIGIDO na mudanca anterior
-2. **Pagina de acompanhamento** (via `app-criar-conta-cliente`) -- AINDA BLOQUEADO
+- 15+ canais Realtime (cada um abre conexao WebSocket e dispara queries)
+- 41+ queries com polling automatico (refetchInterval entre 10s e 60s)
+- Invalidacoes em cascata: uma unica acao pode invalidar 5-10 queries de uma vez
+- No reload (deploy), TUDO dispara ao mesmo tempo
 
-Na pagina de acompanhamento, dois bloqueios impedem o associado de criar a senha:
-- Linha 226: condicao `!associado.user_id` esconde o formulario quando `user_id` ja existe
-- Linha 75 da edge function: retorna erro "Voce ja possui uma conta" quando `user_id` existe
+O Supabase tem limite de ~100 requisicoes/segundo por cliente. O sistema ultrapassa isso no momento do carregamento.
 
-## Solucao
+## Solucao em 3 frentes
 
-### 1. Mostrar formulario mesmo quando `user_id` ja existe (se `primeiro_acesso` for true)
+### Frente 1: Reduzir polling agressivo
 
-**Arquivo**: `src/pages/public/AcompanhamentoProposta.tsx`
+Muitas queries usam `refetchInterval` desnecessariamente, porque ja tem Realtime escutando a mesma tabela.
 
-- Adicionar `primeiro_acesso` na interface `AssociadoData` (campo booleano)
-- Na query (linhas 86-97), fazer join com `profiles` para buscar `primeiro_acesso`
-- Na funcao `getStatusInfo` (linha 226), mudar condicao de:
-  ```
-  associado.status === 'ativo' && !associado.user_id
-  ```
-  Para:
-  ```
-  associado.status === 'ativo' && (!associado.user_id || associado.primeiro_acesso === true)
-  ```
+| Hook | Intervalo atual | Acao |
+|---|---|---|
+| `useEncaixesUrgentes` | 10s | Remover (ja tem Realtime em `servicos`) |
+| `useCotacaoContratacao` | 10s | Aumentar para 30s |
+| `usePropostasPendentes` | 30s | Remover (ja tem Realtime em `cotacoes`) |
+| `useVistoriadoresRealtime` | 30s | Remover (ja tem Realtime no mesmo hook) |
+| `useDashboardCoordenador` | 30s | Aumentar para 60s |
+| `useAgendamentoBase` | 30s | Aumentar para 60s |
+| `useSinistroDetalhes` (2 queries) | 30s | Aumentar para 60s |
+| `useServicos` | 30s | Remover (ja tem Realtime) |
+| `DetalhesRastreadorDialog` (4 queries) | 30s cada | Remover todas (so precisa quando dialog aberto, e ja busca no open) |
 
-### 2. Atualizar senha em vez de rejeitar na edge function
+### Frente 2: Consolidar invalidacoes em cascata
 
-**Arquivo**: `supabase/functions/app-criar-conta-cliente/index.ts`
+Em vez de invalidar 5-10 queries individualmente, agrupar com prefixo comum e usar `queryKey` parcial.
 
-Linhas 75-80: quando `associado.user_id` ja existe, em vez de retornar erro:
-1. Usar `admin.updateUserById(associado.user_id, { password: senha })` para definir a senha
-2. Atualizar `primeiro_acesso: false` no profile
-3. Registrar historico
-4. Retornar sucesso (sem flag `existingAccount`, para que o login automatico aconteca normalmente)
+Exemplo atual (dispara 5 requests):
+```
+queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+queryClient.invalidateQueries({ queryKey: ['instalacao'] });
+queryClient.invalidateQueries({ queryKey: ['instalacoes-metricas'] });
+queryClient.invalidateQueries({ queryKey: ['instalacoes-contagem'] });
+queryClient.invalidateQueries({ queryKey: ['instalacoes-dia'] });
+```
 
-### 3. Garantir login automatico apos definir senha
+Exemplo otimizado (dispara 1 invalidacao agrupada):
+```
+queryClient.invalidateQueries({ 
+  predicate: (query) => {
+    const key = query.queryKey[0] as string;
+    return key?.startsWith('instalac');
+  }
+});
+```
 
-O `CriarContaAssociadoForm.tsx` ja faz login automatico com `signInWithPassword` apos sucesso (linha 85-88). Basta garantir que a edge function retorne `success: true` sem `existingAccount: true`, e o fluxo existente fara o login + redirect para `/app/home`.
+### Frente 3: Adicionar staleTime global para evitar refetch duplicado
 
-## Resultado esperado
+No `QueryClient` global, definir `staleTime: 5000` (5 segundos) para que queries recentes nao sejam re-buscadas imediatamente ao serem invalidadas.
 
-Ambos os caminhos (link WhatsApp e pagina de acompanhamento) permitem que o associado defina sua propria senha, mesmo que o `ativar-associado` ja tenha criado o usuario Auth com senha padrao. Apos definir a senha, o associado e automaticamente logado e redirecionado para `/app/home`, sem nenhum clique adicional de "primeiro acesso".
+**Arquivo**: `src/App.tsx` ou onde o `QueryClient` e configurado.
 
 ## Arquivos modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/public/AcompanhamentoProposta.tsx` | Buscar `primeiro_acesso` via join com profiles; mostrar formulario quando `primeiro_acesso === true` |
-| `supabase/functions/app-criar-conta-cliente/index.ts` | Quando `user_id` ja existe, atualizar senha e marcar `primeiro_acesso: false` em vez de rejeitar |
+| `src/hooks/useEncaixesUrgentes.ts` | Remover refetchInterval |
+| `src/hooks/usePropostasPendentes.ts` | Remover refetchInterval |
+| `src/hooks/useVistoriadoresRealtime.ts` | Remover refetchInterval |
+| `src/hooks/useServicos.ts` | Remover refetchInterval |
+| `src/hooks/useCotacaoContratacao.ts` | Aumentar refetchInterval para 30s |
+| `src/hooks/useDashboardCoordenador.ts` | Aumentar refetchInterval para 60s |
+| `src/hooks/useAgendamentoBase.ts` | Aumentar refetchInterval para 60s |
+| `src/hooks/useSinistroDetalhes.ts` | Aumentar refetchInterval para 60s |
+| `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx` | Remover refetchInterval (4 queries) |
+| `src/hooks/useFilasRealtime.ts` | Consolidar invalidacoes com predicate |
+| Arquivo do QueryClient (App.tsx ou similar) | Adicionar staleTime global de 5s |
+
+## Resultado esperado
+
+Reducao estimada de 40-60% no volume de requisicoes, eliminando o rate limiting durante navegacao e reloads.
 
