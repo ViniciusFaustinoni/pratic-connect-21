@@ -1,62 +1,65 @@
 
 
-# Corrigir crash no "Agendar Vistoria" do menu de Acoes do Sinistro
+# Corrigir duplicacao de documentos ao solicitar documentos de sinistro
 
 ## Problema
 
-Ao clicar em "Agendar Vistoria" no menu de acoes, a pagina crasha com o erro:
-```
-Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.
-```
-
-Este e um conflito conhecido entre os componentes Radix UI `DropdownMenu` e `Dialog`. Quando o DropdownMenu fecha e tenta remover seus nodes do DOM ao mesmo tempo que o Dialog tenta montar, ocorre uma colisao no DOM.
+Ao clicar em "Solicitar Documentos", o sistema insere registros na tabela `sinistro_documentos` sem verificar se ja existem documentos pendentes do mesmo tipo para aquele sinistro. Isso causa duplicacao na pagina publica de upload.
 
 ## Causa raiz
 
-O `AgendarVistoriaModal` usa `Dialog` (Radix) internamente. Embora o codigo ja use `setTimeout(() => setModalVistoriaOpen(true), 0)` para atrasar a abertura, isso nao e suficiente porque o DropdownMenu ainda esta no processo de desmontagem.
+No arquivo `SolicitarDocumentosSinistroDialog.tsx`, linhas 82-93, o codigo faz um INSERT direto sem filtrar tipos ja existentes:
 
-Os modais "Atualizar Status" e "Emitir Parecer" usam o mesmo padrao e funcionam -- a diferenca e que o `AgendarVistoriaModal` possui `SelectContent` (outro portal Radix) dentro do Dialog, criando multiplos portais aninhados que agravam o conflito.
+```typescript
+const docsToInsert = documentosSelecionados.map(tipo => ({
+  sinistro_id: sinistroId,
+  tipo,
+  ...
+}));
+await supabase.from('sinistro_documentos').insert(docsToInsert);
+```
+
+Alem disso, a edge function `criar-sinistro` tambem pode ter inserido documentos iniciais.
 
 ## Solucao
 
-Adicionar `modal={false}` ao DropdownMenu para evitar que ele crie um portal separado, ou usar a prop `forceMount` no Dialog. A abordagem mais confiavel e garantir que o DropdownMenu esteja completamente fechado antes de abrir o Dialog.
+Antes de inserir, buscar os documentos ja existentes para o sinistro e filtrar os tipos que ja possuem registro, inserindo apenas os novos.
 
 ## Alteracao
 
 | Arquivo | Descricao |
 |---|---|
-| `src/pages/eventos/SinistroDetalhe.tsx` | Fechar o dropdown explicitamente via estado controlado antes de abrir qualquer modal. Usar `onCloseAutoFocus` com `e.preventDefault()` para evitar conflito de foco. |
+| `src/components/sinistros/SolicitarDocumentosSinistroDialog.tsx` | Adicionar consulta de documentos existentes antes do INSERT e filtrar duplicatas |
 
 ### Detalhes tecnicos
 
-1. Tornar o `DropdownMenu` controlado com estado `dropdownOpen`
-2. Nos handlers dos `DropdownMenuItem`, fechar o dropdown primeiro e usar `setTimeout` com delay maior (100ms) para abrir o modal
-3. Adicionar `onCloseAutoFocus={(e) => e.preventDefault()}` no `DropdownMenuContent` para evitar que o Radix tente focar um elemento que ja foi removido
+Dentro do `mutationFn`, antes do INSERT (linha 82), adicionar:
 
 ```typescript
-// Estado controlado do dropdown
-const [dropdownOpen, setDropdownOpen] = useState(false);
+// Buscar documentos ja existentes para este sinistro
+const { data: existentes } = await supabase
+  .from('sinistro_documentos')
+  .select('tipo')
+  .eq('sinistro_id', sinistroId);
 
-// Handler para abrir modais com seguranca
-const openModalSafely = (setter: (v: boolean) => void) => {
-  setDropdownOpen(false);
-  setTimeout(() => setter(true), 150);
-};
+const tiposExistentes = new Set((existentes || []).map(d => d.tipo));
 
-// No DropdownMenu
-<DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-  ...
-  <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
-    <DropdownMenuItem onSelect={(e) => {
-      e.preventDefault();
-      openModalSafely(setModalVistoriaOpen);
-    }}>
-      Agendar Vistoria
-    </DropdownMenuItem>
-    ...
-  </DropdownMenuContent>
-</DropdownMenu>
+// Filtrar apenas tipos que ainda nao existem
+const tiposNovos = documentosSelecionados.filter(tipo => !tiposExistentes.has(tipo));
+
+if (tiposNovos.length === 0) {
+  // Todos ja existem, apenas atualizar status se necessario
+  return;
+}
+
+const docsToInsert = tiposNovos.map(tipo => ({
+  sinistro_id: sinistroId,
+  tipo,
+  nome_arquivo: TIPOS_DOCUMENTOS_SINISTRO.find(d => d.id === tipo)?.label || tipo,
+  arquivo_url: '',
+  status: 'pendente',
+}));
 ```
 
-Essa abordagem sera aplicada a todos os itens do menu que abrem modais (Atualizar Status, Agendar Vistoria, Emitir Parecer, Vincular Processo, Excluir Sinistro) para consistencia e prevencao de problemas futuros.
+Isso garante que cada tipo de documento apareca apenas uma vez por sinistro, mesmo que o analista clique em "Solicitar Documentos" varias vezes.
 
