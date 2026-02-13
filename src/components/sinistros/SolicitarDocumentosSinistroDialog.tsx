@@ -200,8 +200,8 @@ export function SolicitarDocumentosSinistroDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4 -mr-4">
-          <div className="space-y-6 py-4">
+        <ScrollArea className="flex-1 pr-4 -mr-4 overflow-hidden">
+          <div className="space-y-6 py-4 px-4">
             {/* Documentos */}
             <div>
               <h4 className="font-medium mb-3 flex items-center gap-2 text-sm">
