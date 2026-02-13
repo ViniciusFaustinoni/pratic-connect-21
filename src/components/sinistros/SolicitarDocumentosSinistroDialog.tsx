@@ -78,31 +78,22 @@ export function SolicitarDocumentosSinistroDialog({
         throw new Error('Selecione pelo menos um documento');
       }
 
-      // 1. Buscar documentos já existentes para evitar duplicação
-      const { data: existentes } = await supabase
+      // Upsert garante que não haverá duplicatas (índice único sinistro_id + tipo)
+
+      // Usar upsert para evitar duplicatas (índice único sinistro_id + tipo)
+      const docsToUpsert = documentosSelecionados.map(tipo => ({
+        sinistro_id: sinistroId,
+        tipo,
+        nome_arquivo: TIPOS_DOCUMENTOS_SINISTRO.find(d => d.id === tipo)?.label || tipo,
+        arquivo_url: '',
+        status: 'pendente',
+      }));
+
+      const { error: docsError } = await supabase
         .from('sinistro_documentos')
-        .select('tipo')
-        .eq('sinistro_id', sinistroId);
+        .upsert(docsToUpsert, { onConflict: 'sinistro_id,tipo', ignoreDuplicates: true });
 
-      const tiposExistentes = new Set((existentes || []).map(d => d.tipo));
-      const tiposNovos = documentosSelecionados.filter(tipo => !tiposExistentes.has(tipo));
-
-      // Inserir apenas tipos que ainda não existem
-      if (tiposNovos.length > 0) {
-        const docsToInsert = tiposNovos.map(tipo => ({
-          sinistro_id: sinistroId,
-          tipo,
-          nome_arquivo: TIPOS_DOCUMENTOS_SINISTRO.find(d => d.id === tipo)?.label || tipo,
-          arquivo_url: '',
-          status: 'pendente',
-        }));
-
-        const { error: docsError } = await supabase
-          .from('sinistro_documentos')
-          .insert(docsToInsert);
-
-        if (docsError) throw docsError;
-      }
+      if (docsError) throw docsError;
 
       // 2. Gerar token único para upload e atualizar status
       const uploadToken = crypto.randomUUID().substring(0, 12);
