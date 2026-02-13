@@ -1,78 +1,59 @@
 
+# Nova Area: Auto Centers (submenu Oficinas)
 
-# Corrigir: API SGA envia apenas associado, nao envia veiculo
+## Resumo
+Criar um CRUD completo de Auto Centers como subitem do menu Oficinas, com gerenciamento de pecas vinculadas a cada auto center.
 
-## Problema Identificado
+## Estrutura do Banco de Dados
 
-Analisando os logs de sincronizacao, o fluxo esta parando no **Passo 6 (validar_config)** com o erro **"Codigo Voluntario nao configurado"**:
+Duas novas tabelas:
 
-```text
-1. autenticar       -> OK
-2. cadastrar_associado -> OK (codigo: 29006) 
-3. validar_config   -> ERRO: "Codigo Voluntario nao configurado"
-   (veiculo NUNCA e enviado)
-```
+**`auto_centers`**
+- `id` (uuid, PK)
+- `nome` (text, obrigatorio)
+- `endereco` (text)
+- `cidade` (text)
+- `estado` (text, 2 chars)
+- `cep` (text)
+- `tipo` (text: 'auto_center' | 'ferro_velho')
+- `contato_nome` (text)
+- `contato_telefone` (text)
+- `contato_email` (text)
+- `observacoes` (text)
+- `created_at`, `updated_at` (timestamptz)
 
-Isso acontece porque:
-- O vendedor do contrato ("Teste") **nao tem** `codigo_sga_voluntario` configurado no perfil
-- O fallback global (`HINOVA_CODIGO_VOLUNTARIO`) tambem **nao esta** nas credenciais do banco
-- A funcao exige `codigo_voluntario` antes de cadastrar o veiculo e retorna erro
+**`auto_center_pecas`**
+- `id` (uuid, PK)
+- `auto_center_id` (uuid, FK -> auto_centers)
+- `nome` (text, obrigatorio)
+- `valor` (numeric)
+- `condicao` (text: 'novo' | 'usado')
+- `created_at` (timestamptz)
 
-Resultado: o associado e criado no Hinova, mas o veiculo nunca e enviado.
+RLS habilitado com politica de acesso para usuarios autenticados.
 
-## Solucao
+## Arquivos a Criar
 
-### Arquivo: `supabase/functions/sga-hinova-sync/index.ts`
+1. **`src/pages/oficinas/AutoCenters.tsx`** - Pagina de listagem com busca, filtro por tipo, cards dos auto centers. Ao clicar em um card, abre o drawer de detalhes.
 
-Adicionar um **fallback automatico** para o `codigo_voluntario` quando nem o vendedor nem a configuracao global possuem o valor. A logica sera:
+2. **`src/hooks/useAutoCenters.ts`** - Hooks para CRUD: `useAutoCenters` (listagem com filtros), `useCreateAutoCenter`, `useUpdateAutoCenter`, `useDeleteAutoCenter`, `useAutoCenterPecas`, `useCreatePeca`, `useDeletePeca`.
 
-1. Manter a prioridade atual: vendedor do contrato > configuracao global
-2. **Novo fallback**: buscar qualquer vendedor ativo que tenha `codigo_sga_voluntario` configurado
-3. Se nenhum for encontrado, usar um valor padrao (ex: 1) com log de aviso, ao inves de bloquear completamente o envio
+3. **`src/components/oficinas/AutoCenterFormDialog.tsx`** - Dialog com formulario para criar/editar auto center (nome, endereco, tipo, contato).
 
-### Mudancas tecnicas
+4. **`src/components/oficinas/AutoCenterDetailDrawer.tsx`** - Sheet lateral mostrando detalhes do auto center + listagem de pecas com botao de adicionar/remover pecas.
 
-No bloco do Passo 3.5 (linhas ~362-391), apos verificar vendedor e fallback global:
+5. **`src/components/oficinas/AutoCenterPecaFormDialog.tsx`** - Dialog para adicionar peca (nome, valor, condicao novo/usado).
 
-```text
-// NOVO: Fallback - buscar qualquer vendedor com codigo configurado
-if (!hinovaCodigoVoluntario) {
-  const { data: qualquerVendedor } = await supabase
-    .from('profiles')
-    .select('codigo_sga_voluntario, nome')
-    .not('codigo_sga_voluntario', 'is', null)
-    .limit(1)
-    .single();
+## Arquivos a Modificar
 
-  if (qualquerVendedor?.codigo_sga_voluntario) {
-    hinovaCodigoVoluntario = qualquerVendedor.codigo_sga_voluntario;
-    console.log(`[SGA Sync] Fallback: usando codigo de ${qualquerVendedor.nome}`);
-  }
-}
-```
+1. **`src/components/layout/AppSidebar.tsx`** - Adicionar item "Auto Centers" no grupo Oficinas com icone `Store`.
 
-E no Passo 6 (linhas ~780-793), remover o bloqueio total, substituindo por um log de aviso e usando valor padrao:
+2. **`src/App.tsx`** - Adicionar rota `/oficinas/auto-centers`.
 
-```text
-// Ao inves de retornar erro, usar valor padrao com aviso
-if (!hinovaCodigoVoluntario) {
-  hinovaCodigoVoluntario = '1'; // Padrao minimo
-  console.warn('[SGA Sync] AVISO: usando codigo_voluntario padrao (1)');
-}
-```
+## Detalhes Tecnicos
 
-### Resultado esperado
-
-Apos a correcao, quando o vendedor nao tiver codigo configurado:
-
-```text
-1. autenticar          -> OK
-2. cadastrar_associado -> OK
-3. buscar voluntario   -> Fallback para vendedor com codigo (ex: THAINa = 10)
-4. cadastrar_veiculo   -> OK (usando codigo_voluntario do fallback)
-5. enviar_fotos        -> OK
-6. sync_completo       -> OK
-```
-
-### Arquivos alterados
-- `supabase/functions/sga-hinova-sync/index.ts` - adicionar fallback para codigo_voluntario
+- Segue os mesmos padroes de `Oficinas.tsx` + `OficinaFormDialog` + `OficinaDetailDrawer`
+- Usa react-hook-form + zod para validacao
+- Usa tanstack-query para cache e mutations
+- Toast de sucesso/erro via sonner
+- Componentes shadcn/ui existentes (Dialog, Sheet, Card, Badge, etc.)
