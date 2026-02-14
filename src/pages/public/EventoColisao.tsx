@@ -12,6 +12,7 @@ import EventoEtapa1Vistoria from '@/components/evento/EventoEtapa1Vistoria';
 import EventoEtapa2BO from '@/components/evento/EventoEtapa2BO';
 import EventoEtapa3Relato from '@/components/evento/EventoEtapa3Relato';
 import EventoSucesso from '@/components/evento/EventoSucesso';
+import EventoAgendamento from '@/components/evento/EventoAgendamento';
 
 interface EventoData {
   valid: boolean;
@@ -23,6 +24,7 @@ interface EventoData {
     dados_etapa1: any;
     dados_etapa2: any;
     dados_etapa3: any;
+    etapa4_completada_em: string | null;
   };
   sinistro?: {
     id: string;
@@ -98,6 +100,7 @@ export default function EventoColisao() {
 
   const { link, sinistro } = data;
   const isCompleted = etapaAtual >= 3;
+  const isAgendado = !!link?.etapa4_completada_em;
 
   const handleStepComplete = () => {
     setEtapaAtual((prev) => prev + 1);
@@ -150,11 +153,15 @@ export default function EventoColisao() {
         <Card>
           <CardContent className="pt-4">
             {isCompleted ? (
-              <EventoSucesso
-                dadosEtapa1={link?.dados_etapa1}
-                dadosEtapa2={link?.dados_etapa2}
-                dadosEtapa3={link?.dados_etapa3}
-              />
+              isAgendado ? (
+                <EventoSucesso
+                  dadosEtapa1={link?.dados_etapa1}
+                  dadosEtapa2={link?.dados_etapa2}
+                  dadosEtapa3={link?.dados_etapa3}
+                />
+              ) : (
+                <EventoAgendamento token={token!} onAgendado={validar} />
+              )
             ) : etapaAtual === 0 ? (
               <EventoEtapa1Vistoria token={token!} onComplete={handleStepComplete} />
             ) : etapaAtual === 1 ? (

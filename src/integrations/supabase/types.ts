@@ -18044,6 +18044,7 @@ export type Database = {
           etapa1_completada_em: string | null
           etapa2_completada_em: string | null
           etapa3_completada_em: string | null
+          etapa4_completada_em: string | null
           expira_em: string
           id: string
           sinistro_id: string
@@ -18061,6 +18062,7 @@ export type Database = {
           etapa1_completada_em?: string | null
           etapa2_completada_em?: string | null
           etapa3_completada_em?: string | null
+          etapa4_completada_em?: string | null
           expira_em: string
           id?: string
           sinistro_id: string
@@ -18078,6 +18080,7 @@ export type Database = {
           etapa1_completada_em?: string | null
           etapa2_completada_em?: string | null
           etapa3_completada_em?: string | null
+          etapa4_completada_em?: string | null
           expira_em?: string
           id?: string
           sinistro_id?: string
@@ -20701,6 +20704,105 @@ export type Database = {
           },
         ]
       }
+      vistorias_evento: {
+        Row: {
+          concluida_em: string | null
+          created_at: string
+          dados_vistoria: Json | null
+          data_agendada: string
+          endereco_bairro: string | null
+          endereco_cidade: string | null
+          endereco_complemento: string | null
+          endereco_numero: string | null
+          endereco_rua: string | null
+          horario_agendado: string
+          id: string
+          iniciada_em: string | null
+          link_id: string | null
+          observacoes: string | null
+          regulador_id: string | null
+          sinistro_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          concluida_em?: string | null
+          created_at?: string
+          dados_vistoria?: Json | null
+          data_agendada: string
+          endereco_bairro?: string | null
+          endereco_cidade?: string | null
+          endereco_complemento?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
+          horario_agendado: string
+          id?: string
+          iniciada_em?: string | null
+          link_id?: string | null
+          observacoes?: string | null
+          regulador_id?: string | null
+          sinistro_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          concluida_em?: string | null
+          created_at?: string
+          dados_vistoria?: Json | null
+          data_agendada?: string
+          endereco_bairro?: string | null
+          endereco_cidade?: string | null
+          endereco_complemento?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
+          horario_agendado?: string
+          id?: string
+          iniciada_em?: string | null
+          link_id?: string | null
+          observacoes?: string | null
+          regulador_id?: string | null
+          sinistro_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vistorias_evento_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "sinistro_evento_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_evento_regulador_id_fkey"
+            columns: ["regulador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_evento_regulador_id_fkey"
+            columns: ["regulador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistorias_evento_regulador_id_fkey"
+            columns: ["regulador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistorias_evento_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_instancias: {
         Row: {
           api_url: string
@@ -22109,6 +22211,7 @@ export type Database = {
         | "agencia"
         | "admin"
         | "vistoriador_base"
+        | "regulador"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -22487,6 +22590,7 @@ export const Constants = {
         "agencia",
         "admin",
         "vistoriador_base",
+        "regulador",
       ],
       etapa_lead: [
         "novo",

@@ -11,6 +11,7 @@ import { AssociadoProvider } from "@/contexts/AssociadoContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AppLayout as AssociadoAppLayout } from "@/components/app/AppLayout";
 import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
+import { ReguladorLayout } from "@/components/regulador/ReguladorLayout";
 import InstaladorTarefas from "./pages/instalador/InstaladorTarefas";
 import InstaladorMapa from "./pages/instalador/InstaladorMapa";
 import InstaladorPerfil from "./pages/instalador/InstaladorPerfil";
@@ -280,6 +281,8 @@ import InstaladorAjuda from "./pages/instalador/InstaladorAjuda";
 import ExecutarVistoriaCompleta from "./pages/instalador/ExecutarVistoriaCompleta";
 import ExecutarManutencao from "./pages/instalador/ExecutarManutencao";
 import ExecutarRetirada from "./pages/instalador/ExecutarRetirada";
+import ReguladorHome from "./pages/regulador/ReguladorHome";
+import ReguladorVistorias from "./pages/regulador/ReguladorVistorias";
 // Public Pages
 import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
 import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
@@ -640,6 +643,14 @@ const App = () => (
               <Route path="/instalador/ajuda" element={<InstaladorAjuda />} />
             </Route>
             
+            
+            {/* Regulador App Routes */}
+            <Route element={<ReguladorLayout />}>
+              <Route path="/regulador" element={<ReguladorHome />} />
+              <Route path="/regulador/vistorias" element={<ReguladorVistorias />} />
+              <Route path="/regulador/perfil" element={<InstaladorPerfil />} />
+            </Route>
+
             {/* Vistoriador redirects to Instalador (unified app) */}
             <Route path="/vistoriador/*" element={<Navigate to="/instalador" replace />} />
             

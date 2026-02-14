@@ -9,13 +9,21 @@ import { usePermissions } from './usePermissions';
 export function useRouteGuard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly } = usePermissions();
+  const { isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly } = usePermissions();
 
   useEffect(() => {
+    // Regulador só pode acessar /regulador/*
+    if (isReguladorOnly) {
+      const isInReguladorArea = location.pathname.startsWith('/regulador');
+      if (!isInReguladorArea) {
+        navigate('/regulador', { replace: true });
+        return;
+      }
+    }
+
     // Instalador/Vistoriador só pode acessar /instalador/*
     if (isInstaladorVistoriadorOnly) {
       const isInInstaladorArea = location.pathname.startsWith('/instalador');
-      
       if (!isInInstaladorArea) {
         navigate('/instalador', { replace: true });
         return;
@@ -26,7 +34,6 @@ export function useRouteGuard() {
     if (isVistoriadorBaseOnly) {
       const isInInstaladorArea = location.pathname.startsWith('/instalador');
       const isMapaRoute = location.pathname === '/instalador/mapa';
-      
       if (!isInInstaladorArea || isMapaRoute) {
         navigate('/instalador', { replace: true });
         return;
@@ -43,14 +50,12 @@ export function useRouteGuard() {
         '/perfil',
         '/notificacoes',
       ];
-
       const isAllowed = allowedPaths.some(path => 
         location.pathname === path || location.pathname.startsWith(path + '/')
       );
-
       if (!isAllowed) {
         navigate('/dashboard', { replace: true });
       }
     }
-  }, [location.pathname, isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, navigate]);
+  }, [location.pathname, isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, navigate]);
 }

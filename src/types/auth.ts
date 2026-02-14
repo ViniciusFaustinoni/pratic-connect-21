@@ -65,7 +65,8 @@ export type PerfilAcesso =
   | 'vistoriador_base'
   | 'associado'
   | 'analista_marketing'
-  | 'analista_juridico';
+  | 'analista_juridico'
+  | 'regulador';
 
 /**
  * Alias para PerfilAcesso
@@ -294,6 +295,7 @@ export const PERFIL_ACESSO_LABELS: Record<PerfilAcesso, string> = {
   associado: 'Associado',
   analista_marketing: 'Analista de Marketing',
   analista_juridico: 'Analista Jurídico',
+  regulador: 'Regulador',
 };
 
 // ============================================================
@@ -453,6 +455,12 @@ export interface AuthFlags {
   isInstalador: boolean;
   
   /**
+   * Se é regulador
+   * @derived perfis.includes('regulador')
+   */
+  isRegulador: boolean;
+  
+  /**
    * Se é analista de marketing
    * @derived perfis.includes('analista_marketing')
    */
@@ -502,6 +510,7 @@ export const initialAuthFlags: AuthFlags = {
   isCoordenadorMonitoramento: false,
   isAnalistaPlataforma: false,
   isInstalador: false,
+  isRegulador: false,
   isAnalistaMarketing: false,
   isAnalistaJuridico: false,
 };
@@ -537,6 +546,7 @@ export function computeAuthFlags(state: AuthState): AuthFlags {
     isCoordenadorMonitoramento: perfis.includes('coordenador_monitoramento'),
     isAnalistaPlataforma: perfis.includes('analista_plataforma'),
     isInstalador: perfis.includes('instalador_vistoriador'),
+    isRegulador: perfis.includes('regulador'),
     isAnalistaMarketing: perfis.includes('analista_marketing'),
     isAnalistaJuridico: perfis.includes('analista_juridico'),
   };
