@@ -133,7 +133,16 @@ export function VistoriaEventoOrcamento({
         parecer_tecnico: parecerTecnico,
         recomendacao: recomendacao,
         observacoes_perda_total: tipoDano === 'total' ? observacoesTotal : null,
-        etapas_reparo: tipoDano === 'parcial' ? etapasReparo : [],
+        etapas_reparo: tipoDano === 'parcial'
+          ? ETAPAS_REPARO
+              .filter(e => etapasReparo.includes(e.id))
+              .map(e => ({
+                id: e.id,
+                nome: e.nome,
+                selecionada: true,
+                status: 'pendente' as const,
+              }))
+          : [],
       };
 
       const formData = new FormData();
