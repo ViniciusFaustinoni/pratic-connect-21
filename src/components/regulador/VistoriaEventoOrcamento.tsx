@@ -1,0 +1,332 @@
+import { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+
+interface ItemOrcamento {
+  descricao: string;
+  tipo: 'peca' | 'mao_de_obra' | 'servico';
+  valor_unitario: number;
+  quantidade: number;
+  valor_total: number;
+}
+
+interface VistoriaEventoOrcamentoProps {
+  open: boolean;
+  onClose: () => void;
+  vistoriaId: string;
+  sinistroId: string;
+  valorFipe: number | null;
+}
+
+export function VistoriaEventoOrcamento({
+  open,
+  onClose,
+  vistoriaId,
+  sinistroId,
+  valorFipe,
+}: VistoriaEventoOrcamentoProps) {
+  const navigate = useNavigate();
+  const [saving, setSaving] = useState(false);
+
+  // Diagnóstico
+  const [tipoDano, setTipoDano] = useState<'parcial' | 'total' | ''>('');
+  const [descricaoTecnica, setDescricaoTecnica] = useState('');
+  const [observacoesTotal, setObservacoesTotal] = useState('');
+
+  // Orçamento
+  const [itens, setItens] = useState<ItemOrcamento[]>([
+    { descricao: '', tipo: 'peca', valor_unitario: 0, quantidade: 1, valor_total: 0 },
+  ]);
+
+  // Parecer
+  const [parecerTecnico, setParecerTecnico] = useState('');
+  const [recomendacao, setRecomendacao] = useState<'aprovar' | 'analise_detalhada' | ''>('');
+
+  const valorTotal = itens.reduce((sum, item) => sum + item.valor_total, 0);
+
+  const handleItemChange = (index: number, field: keyof ItemOrcamento, value: any) => {
+    setItens((prev) => {
+      const novos = [...prev];
+      (novos[index] as any)[field] = value;
+      if (field === 'valor_unitario' || field === 'quantidade') {
+        novos[index].valor_total = novos[index].valor_unitario * novos[index].quantidade;
+      }
+      return novos;
+    });
+  };
+
+  const adicionarItem = () => {
+    setItens((prev) => [...prev, { descricao: '', tipo: 'peca', valor_unitario: 0, quantidade: 1, valor_total: 0 }]);
+  };
+
+  const removerItem = (index: number) => {
+    setItens((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFinalizar = async () => {
+    if (!tipoDano) {
+      toast.error('Selecione o tipo de dano');
+      return;
+    }
+    if (!descricaoTecnica.trim()) {
+      toast.error('Preencha a descrição técnica');
+      return;
+    }
+    if (!parecerTecnico.trim()) {
+      toast.error('Preencha o parecer técnico');
+      return;
+    }
+    if (!recomendacao) {
+      toast.error('Selecione a recomendação');
+      return;
+    }
+    if (tipoDano === 'parcial' && itens.length === 0) {
+      toast.error('Adicione pelo menos um item ao orçamento');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada');
+
+      const dados = {
+        tipo_dano: tipoDano,
+        descricao_tecnica: descricaoTecnica,
+        itens_orcamento: tipoDano === 'parcial' ? itens : [],
+        valor_total_orcamento: tipoDano === 'parcial' ? valorTotal : 0,
+        parecer_tecnico: parecerTecnico,
+        recomendacao: recomendacao,
+        observacoes_perda_total: tipoDano === 'total' ? observacoesTotal : null,
+      };
+
+      const formData = new FormData();
+      formData.append('acao', 'finalizar');
+      formData.append('vistoria_id', vistoriaId);
+      formData.append('dados', JSON.stringify(dados));
+
+      const res = await fetch(
+        `https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/salvar-vistoria-regulador`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: formData,
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro ao finalizar');
+      }
+
+      toast.success('Vistoria finalizada com sucesso!');
+      navigate('/regulador/vistorias');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao finalizar vistoria');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tipoLabels: Record<string, string> = {
+    peca: 'Peça',
+    mao_de_obra: 'Mão de Obra',
+    servico: 'Serviço',
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-full h-full max-h-full sm:max-w-2xl sm:max-h-[90vh] sm:h-auto p-0 gap-0 rounded-none sm:rounded-lg">
+        <DialogHeader className="px-4 pt-4 pb-2 border-b sticky top-0 bg-background z-10">
+          <DialogTitle>Orçamento da Vistoria</DialogTitle>
+        </DialogHeader>
+
+        <div className="overflow-y-auto p-4 space-y-6 flex-1">
+          {/* Diagnóstico */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Diagnóstico</h3>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Tipo de dano</Label>
+              <Select value={tipoDano} onValueChange={(v) => setTipoDano(v as any)}>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="parcial">Parcial</SelectItem>
+                  <SelectItem value="total">Total (≥ 75% FIPE)</SelectItem>
+                </SelectContent>
+              </Select>
+              {valorFipe && tipoDano === 'total' && (
+                <p className="text-xs text-muted-foreground">
+                  Valor FIPE: R$ {Number(valorFipe).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Descrição técnica dos danos</Label>
+              <Textarea
+                value={descricaoTecnica}
+                onChange={(e) => setDescricaoTecnica(e.target.value)}
+                placeholder="Descreva tecnicamente os danos observados..."
+                rows={3}
+              />
+            </div>
+
+            {tipoDano === 'total' && (
+              <div className="space-y-1">
+                <Label className="text-xs">Observações de perda total</Label>
+                <Textarea
+                  value={observacoesTotal}
+                  onChange={(e) => setObservacoesTotal(e.target.value)}
+                  placeholder="Observações adicionais sobre a perda total..."
+                  rows={3}
+                />
+              </div>
+            )}
+          </section>
+
+          {/* Itens do Orçamento - apenas para parcial */}
+          {tipoDano === 'parcial' && (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold">Itens do Orçamento</h3>
+
+              {itens.map((item, i) => (
+                <div key={i} className="rounded-lg border p-3 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-muted-foreground">Item {i + 1}</span>
+                    {itens.length > 1 && (
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removerItem(i)}>
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+
+                  <Input
+                    placeholder="Descrição do serviço ou peça"
+                    value={item.descricao}
+                    onChange={(e) => handleItemChange(i, 'descricao', e.target.value)}
+                  />
+
+                  <Select value={item.tipo} onValueChange={(v) => handleItemChange(i, 'tipo', v)}>
+                    <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="peca">Peça</SelectItem>
+                      <SelectItem value="mao_de_obra">Mão de Obra</SelectItem>
+                      <SelectItem value="servico">Serviço</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px]">Vlr. Unit.</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={item.valor_unitario || ''}
+                        onChange={(e) => handleItemChange(i, 'valor_unitario', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Qtd.</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={item.quantidade || ''}
+                        onChange={(e) => handleItemChange(i, 'quantidade', parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Total</Label>
+                      <Input
+                        value={`R$ ${item.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                        readOnly
+                        className="bg-muted"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <Button variant="outline" size="sm" onClick={adicionarItem} className="w-full gap-2">
+                <Plus className="h-4 w-4" />
+                Adicionar Item
+              </Button>
+
+              <div className="flex justify-between items-center rounded-lg bg-muted px-3 py-2">
+                <span className="text-sm font-semibold">Total do Orçamento</span>
+                <span className="text-lg font-bold">
+                  R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </section>
+          )}
+
+          {/* Parecer */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Parecer do Regulador</h3>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Parecer técnico</Label>
+              <Textarea
+                value={parecerTecnico}
+                onChange={(e) => setParecerTecnico(e.target.value)}
+                placeholder="Conclusão técnica da vistoria..."
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Recomendação</Label>
+              <Select value={recomendacao} onValueChange={(v) => setRecomendacao(v as any)}>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="aprovar">Recomendar Aprovação</SelectItem>
+                  <SelectItem value="analise_detalhada">Recomendar Análise Detalhada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </section>
+        </div>
+
+        {/* Footer fixo */}
+        <div className="border-t p-4 sticky bottom-0 bg-background">
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={handleFinalizar}
+            disabled={saving}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Finalizando...
+              </>
+            ) : (
+              'Finalizar Vistoria e Enviar Orçamento'
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

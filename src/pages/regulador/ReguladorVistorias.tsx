@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ type PeriodoFiltro = 'hoje' | 'amanha' | 'semana' | 'todas';
 type StatusFiltro = 'agendada' | 'em_andamento' | 'concluida' | 'todas';
 
 export default function ReguladorVistorias() {
+  const navigate = useNavigate();
   const [periodo, setPeriodo] = useState<PeriodoFiltro>('todas');
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todas');
 
@@ -127,10 +129,15 @@ export default function ReguladorVistorias() {
                 </div>
 
                 {/* Ações */}
-                {v.status === 'agendada' && (
-                  <Button size="sm" className="w-full mt-2" variant="default" disabled>
+                {(v.status === 'agendada' || v.status === 'em_andamento') && (
+                  <Button
+                    size="sm"
+                    className="w-full mt-2"
+                    variant="default"
+                    onClick={() => navigate(`/regulador/vistoria/${v.id}`)}
+                  >
                     <Play className="h-4 w-4 mr-2" />
-                    Iniciar Vistoria (em breve)
+                    {v.status === 'em_andamento' ? 'Continuar Vistoria' : 'Iniciar Vistoria'}
                   </Button>
                 )}
               </CardContent>

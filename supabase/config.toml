@@ -410,3 +410,6 @@ verify_jwt = false
 
 [functions.agendar-vistoria-evento]
 verify_jwt = false
+
+[functions.salvar-vistoria-regulador]
+verify_jwt = false
