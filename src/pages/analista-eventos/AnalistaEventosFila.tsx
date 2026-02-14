@@ -43,7 +43,7 @@ export default function AnalistaEventosFila() {
                   <Badge className="bg-amber-100 text-amber-700" variant="secondary">Aguardando</Badge>
                 </div>
                 <div className="text-xs space-y-1">
-                  <p><span className="text-muted-foreground">Tipo: </span><span className="font-medium capitalize">{ev.tipo || 'Colisão'}</span></p>
+                  <p><span className="text-muted-foreground">Tipo: </span><span className="font-medium capitalize">{ev.tipo?.replace(/_/g, ' ') || 'Evento'}</span></p>
                   <p><span className="text-muted-foreground">Data: </span>{ev.data_ocorrencia ? format(new Date(ev.data_ocorrencia), "dd/MM/yyyy HH:mm", { locale: ptBR }) : 'N/A'}</p>
                   <p><span className="text-muted-foreground">Regulador: </span>{ev.regulador_nome}</p>
                 </div>
