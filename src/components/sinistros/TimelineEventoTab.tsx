@@ -1,13 +1,16 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   AlertTriangle, Calendar, Car, CheckCircle2, Clock, FileText,
   Image, MapPin, MessageSquare, Shield, Upload, Video, Wrench,
-  Send, DollarSign, ClipboardCheck, Camera
+  Send, DollarSign, ClipboardCheck, Camera, ChevronDown, ChevronRight,
+  CreditCard, PenTool, Users, Building2, Store
 } from 'lucide-react';
 
 interface TimelineItem {
@@ -19,20 +22,27 @@ interface TimelineItem {
   color: string;
   badge?: string;
   badgeColor?: string;
+  fotos?: string[];
+  videoUrl?: string;
+  expandable?: boolean;
 }
 
 export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['timeline-evento', sinistroId],
     queryFn: async () => {
       const timeline: TimelineItem[] = [];
 
       // 1. Sinistro data
-      const { data: sinistro } = await supabase
+      const { data: sinistroRaw } = await supabase
         .from('sinistros')
-        .select('id, created_at, data_ocorrencia, protocolo, status, tipo')
+        .select('*')
         .eq('id', sinistroId)
         .single();
+
+      const sinistro = sinistroRaw as any;
 
       if (sinistro) {
         if (sinistro.data_ocorrencia) {
@@ -42,14 +52,53 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
             icon: AlertTriangle, color: 'text-red-500',
           });
         }
+
+        // Correção 4: Calcular tempo entre evento e comunicação
+        let descComunicacao = `Protocolo: ${sinistro.protocolo}`;
+        if (sinistro.data_ocorrencia && sinistro.created_at) {
+          const diffMin = differenceInMinutes(new Date(sinistro.created_at), new Date(sinistro.data_ocorrencia));
+          const diffH = Math.floor(diffMin / 60);
+          const restMin = diffMin % 60;
+          descComunicacao += ` • Tempo até comunicação: ${diffH > 0 ? `${diffH}h ` : ''}${restMin}min`;
+        }
+
         timeline.push({
           id: 'comunicado', date: sinistro.created_at,
-          title: 'Comunicação registrada', description: `Protocolo: ${sinistro.protocolo}`,
+          title: 'Comunicação registrada', description: descComunicacao,
           icon: FileText, color: 'text-blue-500', badge: 'Comunicado', badgeColor: 'bg-blue-100 text-blue-800',
         });
+
+        // Correção 4: Pagamento confirmado
+        if (sinistro.cota_paga_em) {
+          timeline.push({
+            id: 'pagamento', date: sinistro.cota_paga_em,
+            title: 'Pagamento da cota confirmado',
+            icon: CreditCard, color: 'text-green-600',
+            badge: 'Pago', badgeColor: 'bg-green-100 text-green-800',
+          });
+        }
+
+        // Correção 4: Termo enviado
+        if (sinistro.termo_anuencia_criado_em) {
+          timeline.push({
+            id: 'termo-enviado', date: sinistro.termo_anuencia_criado_em,
+            title: 'Termo de anuência enviado (Autentique)',
+            icon: PenTool, color: 'text-indigo-500',
+          });
+        }
+
+        // Correção 4: Termo assinado
+        if (sinistro.termo_anuencia_assinado_em) {
+          timeline.push({
+            id: 'termo-assinado', date: sinistro.termo_anuencia_assinado_em,
+            title: 'Termo de anuência assinado',
+            icon: PenTool, color: 'text-green-600',
+            badge: 'Assinado', badgeColor: 'bg-green-100 text-green-800',
+          });
+        }
       }
 
-      // 2. Histórico do sinistro
+      // 2. Histórico do sinistro (inclui atribuição de fornecedores)
       const { data: historico } = await supabase
         .from('sinistro_historico')
         .select('id, created_at, status_anterior, status_novo, observacao')
@@ -57,15 +106,21 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
         .order('created_at');
 
       historico?.forEach((h) => {
+        const isAtribuicao = h.observacao && (
+          h.observacao.toLowerCase().includes('oficina') ||
+          h.observacao.toLowerCase().includes('fornecedor') ||
+          h.observacao.toLowerCase().includes('prestador')
+        );
         timeline.push({
           id: `hist-${h.id}`, date: h.created_at!,
-          title: `Status: ${h.status_novo}`,
+          title: isAtribuicao ? 'Atribuição de fornecedores' : `Status: ${h.status_novo}`,
           description: h.observacao || `${h.status_anterior || '—'} → ${h.status_novo}`,
-          icon: Clock, color: 'text-gray-500',
+          icon: isAtribuicao ? Building2 : Clock,
+          color: isAtribuicao ? 'text-teal-600' : 'text-gray-500',
         });
       });
 
-      // 3. Links do evento
+      // 3. Links do evento (diferenciando Link 1, Link 2, Link 3)
       const { data: links } = await supabase
         .from('sinistro_evento_links')
         .select('id, created_at, tipo, status')
@@ -73,9 +128,12 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
         .order('created_at');
 
       links?.forEach((l) => {
+        const tipoLabel = l.tipo === 'pagamento' ? 'Link 2 (Pagamento)'
+          : l.tipo === 'retirada' ? 'Link 3 (Retirada)'
+          : 'Link 1 (Documentação)';
         timeline.push({
           id: `link-${l.id}`, date: l.created_at!,
-          title: `Link ${l.tipo} enviado`, description: `Status: ${l.status}`,
+          title: `${tipoLabel} enviado`, description: `Status: ${l.status}`,
           icon: Send, color: 'text-purple-500',
         });
       });
@@ -88,6 +146,14 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
         .order('created_at');
 
       vistorias?.forEach((v) => {
+        if (v.data_agendada) {
+          timeline.push({
+            id: `vistoria-ag-${v.id}`, date: v.created_at!,
+            title: 'Vistoria agendada',
+            description: `Para: ${format(new Date(v.data_agendada), 'dd/MM/yyyy', { locale: ptBR })}`,
+            icon: Calendar, color: 'text-orange-500',
+          });
+        }
         timeline.push({
           id: `vistoria-${v.id}`, date: v.created_at!,
           title: 'Vistoria do evento', description: `Status: ${v.status}`,
@@ -110,6 +176,14 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
           icon: DollarSign, color: 'text-orange-500',
           badge: c.status, badgeColor: c.status === 'aprovada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800',
         });
+        if (c.status === 'aprovada' && c.updated_at) {
+          timeline.push({
+            id: `cotacao-aprov-${c.id}`, date: c.updated_at,
+            title: 'Cotação aprovada',
+            icon: CheckCircle2, color: 'text-green-600',
+            badge: 'Aprovada', badgeColor: 'bg-green-100 text-green-800',
+          });
+        }
       });
 
       // 6. Ordens de serviço
@@ -152,29 +226,20 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
             icon: Shield, color: 'text-amber-500',
           });
         }
-
-        // Atualizações diárias da OS
-        supabase
-          .from('os_atualizacoes_diarias')
-          .select('id, created_at, descricao, etapa_concluida, tem_problema, tipo_problema')
-          .eq('ordem_servico_id', os.id)
-          .order('created_at')
-          .then(({ data: atualizacoes }) => {
-            // Note: this won't affect the already rendered timeline since it's async
-            // In a real scenario we'd want to fetch all in parallel
-          });
       });
 
-      // 6b. Atualizações diárias
+      // 6b. Atualizações diárias (com fotos e vídeo para expandir)
       const osIds = ordens?.map((o) => o.id) || [];
       if (osIds.length > 0) {
         const { data: atualizacoes } = await supabase
           .from('os_atualizacoes_diarias')
-          .select('id, created_at, descricao, etapa_concluida, tem_problema, tipo_problema')
+          .select('id, created_at, descricao, etapa_concluida, tem_problema, tipo_problema, fotos_urls, video_url')
           .in('ordem_servico_id', osIds)
           .order('created_at');
 
-        atualizacoes?.forEach((a) => {
+        atualizacoes?.forEach((a: any) => {
+          const hasFotos = a.fotos_urls && a.fotos_urls.length > 0;
+          const hasVideo = !!a.video_url;
           timeline.push({
             id: `atualizacao-${a.id}`, date: a.created_at!,
             title: a.etapa_concluida ? `Etapa "${a.etapa_concluida}" concluída` : 'Atualização diária',
@@ -183,22 +248,28 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
             color: a.tem_problema ? 'text-red-500' : 'text-gray-500',
             badge: a.tem_problema ? a.tipo_problema || 'Problema' : undefined,
             badgeColor: a.tem_problema ? 'bg-red-100 text-red-800' : undefined,
+            fotos: hasFotos ? a.fotos_urls : undefined,
+            videoUrl: hasVideo ? a.video_url : undefined,
+            expandable: hasFotos || hasVideo,
           });
         });
 
-        // Vistorias presenciais
+        // Vistorias presenciais (com vídeo para expandir)
         const { data: vistoriasP } = await supabase
           .from('os_vistorias_presenciais')
-          .select('id, created_at, observacoes')
+          .select('id, created_at, observacoes, video_url')
           .in('ordem_servico_id', osIds)
           .order('created_at');
 
-        vistoriasP?.forEach((vp) => {
+        vistoriasP?.forEach((vp: any) => {
+          const hasVideo = !!vp.video_url;
           timeline.push({
             id: `vp-${vp.id}`, date: vp.created_at!,
             title: 'Vistoria presencial do regulador',
             description: vp.observacoes || undefined,
             icon: Video, color: 'text-violet-500',
+            videoUrl: hasVideo ? vp.video_url : undefined,
+            expandable: hasVideo,
           });
         });
       }
@@ -217,22 +288,65 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
         <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border" />
         {items.map((item) => {
           const Icon = item.icon;
+          const isExpanded = expandedId === item.id;
+
           return (
             <div key={item.id} className="relative flex gap-3 pb-4">
               <div className={`absolute left-[-13px] mt-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border-2 ${item.color.replace('text-', 'border-')}`}>
                 <Icon className={`h-3 w-3 ${item.color}`} />
               </div>
               <div className="flex-1 min-w-0 ml-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium">{item.title}</span>
-                  {item.badge && (
-                    <Badge variant="outline" className={`text-[10px] ${item.badgeColor || ''}`}>
-                      {item.badge}
-                    </Badge>
-                  )}
-                </div>
-                {item.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>
+                {item.expandable ? (
+                  <Collapsible open={isExpanded} onOpenChange={() => setExpandedId(isExpanded ? null : item.id)}>
+                    <CollapsibleTrigger className="w-full text-left">
+                      <div className="flex items-center gap-2 flex-wrap cursor-pointer hover:opacity-80">
+                        {isExpanded ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                        <span className="text-sm font-medium">{item.title}</span>
+                        {item.badge && (
+                          <Badge variant="outline" className={`text-[10px] ${item.badgeColor || ''}`}>
+                            {item.badge}
+                          </Badge>
+                        )}
+                        {item.fotos && <Badge variant="outline" className="text-[9px]"><Image className="h-2.5 w-2.5 mr-0.5" />{item.fotos.length}</Badge>}
+                        {item.videoUrl && <Badge variant="outline" className="text-[9px]"><Video className="h-2.5 w-2.5 mr-0.5" />Vídeo</Badge>}
+                      </div>
+                    </CollapsibleTrigger>
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>
+                    )}
+                    <CollapsibleContent>
+                      <div className="mt-2 space-y-2">
+                        {item.fotos && item.fotos.length > 0 && (
+                          <div className="grid grid-cols-3 gap-1">
+                            {item.fotos.map((url, i) => (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                <img src={url} className="w-full h-20 object-cover rounded border" alt={`Foto ${i + 1}`} />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                        {item.videoUrl && (
+                          <a href={item.videoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+                            <Video className="h-3 w-3" /> Assistir vídeo
+                          </a>
+                        )}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{item.title}</span>
+                      {item.badge && (
+                        <Badge variant="outline" className={`text-[10px] ${item.badgeColor || ''}`}>
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </div>
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>
+                    )}
+                  </>
                 )}
                 <p className="text-[10px] text-muted-foreground mt-0.5">
                   {format(new Date(item.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}

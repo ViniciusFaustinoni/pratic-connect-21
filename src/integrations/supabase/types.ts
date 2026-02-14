@@ -13348,6 +13348,7 @@ export type Database = {
           observacoes: string | null
           observacoes_internas: string | null
           oficina_id: string
+          retorno_garantia_os_id: string | null
           sinistro_id: string | null
           status: Database["public"]["Enums"]["status_ordem_servico"] | null
           tempo_total_dias: number | null
@@ -13384,6 +13385,7 @@ export type Database = {
           observacoes?: string | null
           observacoes_internas?: string | null
           oficina_id: string
+          retorno_garantia_os_id?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_ordem_servico"] | null
           tempo_total_dias?: number | null
@@ -13420,6 +13422,7 @@ export type Database = {
           observacoes?: string | null
           observacoes_internas?: string | null
           oficina_id?: string
+          retorno_garantia_os_id?: string | null
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_ordem_servico"] | null
           tempo_total_dias?: number | null
@@ -13538,6 +13541,13 @@ export type Database = {
             columns: ["oficina_id"]
             isOneToOne: false
             referencedRelation: "oficinas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_retorno_garantia_os_id_fkey"
+            columns: ["retorno_garantia_os_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
             referencedColumns: ["id"]
           },
           {

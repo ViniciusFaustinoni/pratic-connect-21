@@ -6,14 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Car, Search, Clock, AlertTriangle, AlertCircle, Phone,
   CheckCircle2, CircleDot, Circle, Wrench, Building2, Store,
-  ClipboardEdit, Video, Shield, Users, RefreshCw
+  ClipboardEdit, Video, Shield, Users, RefreshCw, RotateCcw, XCircle
 } from 'lucide-react';
 import { differenceInDays, differenceInHours, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -81,6 +85,7 @@ function EtapasProgress({ etapas }: { etapas: any[] }) {
 }
 
 export default function ReguladorOficina() {
+  const { profile } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
   const [oficinaFilter, setOficinaFilter] = useState('todas');
@@ -89,6 +94,10 @@ export default function ReguladorOficina() {
   const [vistoriaDialog, setVistoriaDialog] = useState<VeiculoOficina | null>(null);
   const [alterarOficinaOS, setAlterarOficinaOS] = useState<VeiculoOficina | null>(null);
   const [novaOficinaId, setNovaOficinaId] = useState('');
+  const [retornoGarantiaOS, setRetornoGarantiaOS] = useState<any | null>(null);
+  const [retornoTipo, setRetornoTipo] = useState<'pertinente' | 'nao_pertinente'>('pertinente');
+  const [retornoObservacao, setRetornoObservacao] = useState('');
+  const [retornoSalvando, setRetornoSalvando] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -102,10 +111,8 @@ export default function ReguladorOficina() {
   const { data: veiculos = [], isLoading } = useVeiculosOficina(filters);
   const { data: oficinas = [] } = useOficinasDisponiveis();
 
-  // Contadores (sem filtro para mostrar totais reais)
   const { data: todosVeiculos = [] } = useVeiculosOficina();
 
-  // Buscar atualizações de hoje para badges
   const hoje = format(new Date(), 'yyyy-MM-dd');
   const { data: atualizacoesHoje = [] } = useQuery({
     queryKey: ['atualizacoes-hoje', hoje],
@@ -119,16 +126,16 @@ export default function ReguladorOficina() {
     },
   });
 
-  // Garantias ativas
   const { data: garantias = [] } = useQuery({
     queryKey: ['garantias-ativas'],
     queryFn: async () => {
       const { data } = await supabase
         .from('ordens_servico')
         .select(`
-          id, numero, garantia_ate, data_retirada,
+          id, numero, garantia_ate, data_retirada, oficina_id, sinistro_id,
           veiculo:veiculos(placa, marca, modelo),
-          associado:associados(nome)
+          associado:associados(id, nome, telefone, whatsapp),
+          oficina:oficinas(id, nome_fantasia, razao_social)
         `)
         .eq('status', 'entregue' as any)
         .gte('garantia_ate', format(new Date(), 'yyyy-MM-dd'))
@@ -145,7 +152,6 @@ export default function ReguladorOficina() {
     concluido: todosVeiculos.filter((v) => v.status === 'concluido').length,
   }), [todosVeiculos]);
 
-  // Métricas de oficinas
   const metricasOficinas = useMemo(() => {
     const map = new Map<string, { nome: string; qtd: number; totalDias: number }>();
     todosVeiculos.forEach((v) => {
@@ -181,7 +187,6 @@ export default function ReguladorOficina() {
         observacao: 'Veículo deu entrada na oficina',
       });
 
-      // Enviar WhatsApp ao associado
       if (os.associado && (os.associado.whatsapp || os.associado.telefone) && os.veiculo) {
         const telefone = os.associado.whatsapp || os.associado.telefone;
         const nome = os.associado.nome?.split(' ')[0] || 'Associado';
@@ -226,6 +231,61 @@ export default function ReguladorOficina() {
       queryClient.invalidateQueries({ queryKey: ['veiculos-oficina'] });
     } catch (e: any) {
       toast.error('Erro: ' + e.message);
+    }
+  };
+
+  const handleRetornoGarantia = async () => {
+    if (!retornoGarantiaOS || !profile?.id) return;
+    setRetornoSalvando(true);
+
+    try {
+      if (retornoTipo === 'pertinente') {
+        // Criar nova OS vinculada à original
+        const { data: novaOS, error: createErr } = await supabase
+          .from('ordens_servico')
+          .insert({
+            numero: '',
+            oficina_id: retornoGarantiaOS.oficina_id || retornoGarantiaOS.oficina?.id,
+            veiculo_id: (retornoGarantiaOS.veiculo as any)?.id || null,
+            associado_id: (retornoGarantiaOS.associado as any)?.id || null,
+            sinistro_id: retornoGarantiaOS.sinistro_id || null,
+            status: 'aguardando_entrada',
+            retorno_garantia_os_id: retornoGarantiaOS.id,
+            observacoes: `Retorno de garantia da OS ${retornoGarantiaOS.numero}. ${retornoObservacao}`,
+            criado_por: profile.id,
+          } as any)
+          .select()
+          .single();
+
+        if (createErr) throw createErr;
+
+        await supabase.from('ordens_servico_historico').insert({
+          ordem_servico_id: retornoGarantiaOS.id,
+          status_novo: 'entregue',
+          observacao: `Retorno de garantia aberto (dano pertinente). Nova OS: ${novaOS?.numero || novaOS?.id}. ${retornoObservacao}`,
+        });
+
+        toast.success('Retorno de garantia criado com sucesso! Nova OS gerada.');
+      } else {
+        // Registrar negativa no histórico
+        await supabase.from('ordens_servico_historico').insert({
+          ordem_servico_id: retornoGarantiaOS.id,
+          status_novo: 'entregue',
+          observacao: `Retorno de garantia NEGADO (dano não pertinente). ${retornoObservacao}`,
+        });
+
+        toast.success('Retorno de garantia registrado como negado.');
+      }
+
+      setRetornoGarantiaOS(null);
+      setRetornoTipo('pertinente');
+      setRetornoObservacao('');
+      queryClient.invalidateQueries({ queryKey: ['garantias-ativas'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos-oficina'] });
+    } catch (e: any) {
+      toast.error('Erro: ' + e.message);
+    } finally {
+      setRetornoSalvando(false);
     }
   };
 
@@ -305,7 +365,6 @@ export default function ReguladorOficina() {
             return (
               <Card key={v.id} className={`overflow-hidden ${alerta === 'urgent' ? 'border-red-400' : alerta === 'warning' ? 'border-yellow-400' : ''}`}>
                 <CardContent className="p-3 space-y-2">
-                  {/* Header: placa + status + badge atualização */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Car className="h-4 w-4 text-muted-foreground" />
@@ -319,12 +378,10 @@ export default function ReguladorOficina() {
                     <Badge className={`${statusInfo.color} text-[10px] px-1.5`}>{statusInfo.label}</Badge>
                   </div>
 
-                  {/* Veículo info */}
                   <p className="text-xs text-muted-foreground">
                     {[v.veiculo?.marca, v.veiculo?.modelo, v.veiculo?.ano, v.veiculo?.cor].filter(Boolean).join(' • ')}
                   </p>
 
-                  {/* Associado */}
                   <div className="flex items-center justify-between text-xs">
                     <span>{v.associado?.nome || '---'}</span>
                     {(v.associado?.whatsapp || v.associado?.telefone) && (
@@ -334,7 +391,6 @@ export default function ReguladorOficina() {
                     )}
                   </div>
 
-                  {/* OS + Oficina + Auto Center */}
                   <div className="grid grid-cols-1 gap-1 text-[11px] text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <span className="font-medium">OS:</span> {v.numero || '---'}
@@ -357,7 +413,6 @@ export default function ReguladorOficina() {
                     )}
                   </div>
 
-                  {/* Tempo + Alerta */}
                   <div className="flex items-center justify-between text-[11px]">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Clock className="h-3 w-3" />
@@ -375,10 +430,8 @@ export default function ReguladorOficina() {
                     )}
                   </div>
 
-                  {/* Etapas */}
                   <EtapasProgress etapas={v.etapas_reparo || []} />
 
-                  {/* Ações */}
                   <div className="flex flex-wrap gap-2 pt-1">
                     {v.status === 'aguardando_entrada' && (
                       <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => handleRegistrarEntrada(v)}>
@@ -447,9 +500,23 @@ export default function ReguladorOficina() {
                       <span className="font-medium">{(g.veiculo as any)?.placa}</span>
                       <span className="text-muted-foreground ml-2">{(g.associado as any)?.nome}</span>
                     </div>
-                    <Badge className={diasRestantes <= 7 ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'} variant="outline">
-                      {diasRestantes}d restantes
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge className={diasRestantes <= 7 ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'} variant="outline">
+                        {diasRestantes}d restantes
+                      </Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() => {
+                          setRetornoGarantiaOS(g);
+                          setRetornoTipo('pertinente');
+                          setRetornoObservacao('');
+                        }}
+                      >
+                        <RotateCcw className="h-3 w-3 mr-1" /> Retorno
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
@@ -501,6 +568,59 @@ export default function ReguladorOficina() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAlterarOficinaOS(null)}>Cancelar</Button>
             <Button onClick={handleAlterarOficina} disabled={!novaOficinaId}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Retorno de Garantia */}
+      <Dialog open={!!retornoGarantiaOS} onOpenChange={(open) => !open && setRetornoGarantiaOS(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Retorno de Garantia — OS {retornoGarantiaOS?.numero}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Veículo: <strong>{(retornoGarantiaOS?.veiculo as any)?.placa}</strong> — {(retornoGarantiaOS?.veiculo as any)?.marca} {(retornoGarantiaOS?.veiculo as any)?.modelo}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Associado: <strong>{(retornoGarantiaOS?.associado as any)?.nome}</strong>
+            </p>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Tipo de retorno</Label>
+              <RadioGroup value={retornoTipo} onValueChange={(v) => setRetornoTipo(v as any)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="pertinente" id="pertinente" />
+                  <Label htmlFor="pertinente" className="text-sm flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    Dano pertinente — volta à oficina sem custo
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="nao_pertinente" id="nao_pertinente" />
+                  <Label htmlFor="nao_pertinente" className="text-sm flex items-center gap-1">
+                    <XCircle className="h-4 w-4 text-red-600" />
+                    Dano não pertinente — negado
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Observações</Label>
+              <Textarea
+                value={retornoObservacao}
+                onChange={(e) => setRetornoObservacao(e.target.value)}
+                placeholder="Descreva o motivo do retorno..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRetornoGarantiaOS(null)}>Cancelar</Button>
+            <Button onClick={handleRetornoGarantia} disabled={retornoSalvando}>
+              {retornoSalvando ? 'Salvando...' : retornoTipo === 'pertinente' ? 'Criar Nova OS' : 'Registrar Negativa'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
