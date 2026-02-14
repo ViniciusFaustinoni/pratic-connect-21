@@ -13,12 +13,15 @@ import { useNavigate } from 'react-router-dom';
 import {
   Car, Search, Clock, AlertTriangle, AlertCircle, Phone,
   CheckCircle2, CircleDot, Circle, Wrench, Building2, Store,
-  ClipboardEdit, Video, Shield
+  ClipboardEdit, Video, Shield, Users, RefreshCw
 } from 'lucide-react';
 import { differenceInDays, differenceInHours, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { RegistrarAtualizacaoDialog } from '@/components/sinistros/RegistrarAtualizacaoDialog';
 import { VistoriaPresencialDialog } from '@/components/sinistros/VistoriaPresencialDialog';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   aguardando_entrada: { label: 'Aguardando Entrada', color: 'bg-yellow-100 text-yellow-800' },
@@ -84,6 +87,8 @@ export default function ReguladorOficina() {
   const [tempoFilter, setTempoFilter] = useState('todos');
   const [atualizacaoDialog, setAtualizacaoDialog] = useState<VeiculoOficina | null>(null);
   const [vistoriaDialog, setVistoriaDialog] = useState<VeiculoOficina | null>(null);
+  const [alterarOficinaOS, setAlterarOficinaOS] = useState<VeiculoOficina | null>(null);
+  const [novaOficinaId, setNovaOficinaId] = useState('');
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -176,7 +181,48 @@ export default function ReguladorOficina() {
         observacao: 'Veículo deu entrada na oficina',
       });
 
+      // Enviar WhatsApp ao associado
+      if (os.associado && (os.associado.whatsapp || os.associado.telefone) && os.veiculo) {
+        const telefone = os.associado.whatsapp || os.associado.telefone;
+        const nome = os.associado.nome?.split(' ')[0] || 'Associado';
+        const oficinaNome = os.oficina?.nome_fantasia || os.oficina?.razao_social || 'a oficina';
+        const mensagem = `Olá ${nome}! Seu veículo ${os.veiculo.placa} deu entrada em ${oficinaNome} e o reparo já vai começar. Vamos te manter atualizado sobre cada etapa! 🔧`;
+
+        try {
+          await supabase.functions.invoke('whatsapp-send-text', {
+            body: { telefone, mensagem },
+          });
+        } catch (e) {
+          console.error('Erro ao enviar WhatsApp:', e);
+        }
+      }
+
       toast.success('Entrada registrada com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['veiculos-oficina'] });
+    } catch (e: any) {
+      toast.error('Erro: ' + e.message);
+    }
+  };
+
+  const handleAlterarOficina = async () => {
+    if (!alterarOficinaOS || !novaOficinaId) return;
+    try {
+      const { error } = await supabase
+        .from('ordens_servico')
+        .update({ oficina_id: novaOficinaId, updated_at: new Date().toISOString() } as any)
+        .eq('id', alterarOficinaOS.id);
+      if (error) throw error;
+
+      const novaOficina = oficinas.find(o => o.id === novaOficinaId);
+      await supabase.from('ordens_servico_historico').insert({
+        ordem_servico_id: alterarOficinaOS.id,
+        status_novo: alterarOficinaOS.status,
+        observacao: `Oficina alterada para: ${novaOficina?.nome_fantasia || novaOficina?.razao_social || novaOficinaId}`,
+      });
+
+      toast.success('Oficina alterada com sucesso!');
+      setAlterarOficinaOS(null);
+      setNovaOficinaId('');
       queryClient.invalidateQueries({ queryKey: ['veiculos-oficina'] });
     } catch (e: any) {
       toast.error('Erro: ' + e.message);
@@ -303,6 +349,12 @@ export default function ReguladorOficina() {
                         {v.auto_center.nome_fantasia || v.auto_center.nome}
                       </div>
                     )}
+                    {v.prestadores && v.prestadores.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Users className="h-3 w-3" />
+                        {v.prestadores.map((p: any) => p.nome).join(', ')}
+                      </div>
+                    )}
                   </div>
 
                   {/* Tempo + Alerta */}
@@ -343,6 +395,9 @@ export default function ReguladorOficina() {
                         </Button>
                       </>
                     )}
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setAlterarOficinaOS(v); setNovaOficinaId(v.oficina?.id || ''); }}>
+                      <RefreshCw className="h-3 w-3 mr-1" /> Oficina
+                    </Button>
                     <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => navigate(`/oficinas/ordens/${v.id}`)}>
                       Ver Detalhes
                     </Button>
@@ -423,6 +478,32 @@ export default function ReguladorOficina() {
           ordemServico={{ id: vistoriaDialog.id, numero: vistoriaDialog.numero }}
         />
       )}
+
+      {/* Dialog Alterar Oficina */}
+      <Dialog open={!!alterarOficinaOS} onOpenChange={(open) => !open && setAlterarOficinaOS(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Oficina — OS {alterarOficinaOS?.numero}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Veículo: <strong>{alterarOficinaOS?.veiculo?.placa}</strong> — {alterarOficinaOS?.veiculo?.marca} {alterarOficinaOS?.veiculo?.modelo}
+            </p>
+            <Select value={novaOficinaId} onValueChange={setNovaOficinaId}>
+              <SelectTrigger><SelectValue placeholder="Selecione a oficina" /></SelectTrigger>
+              <SelectContent>
+                {oficinas.map((o) => (
+                  <SelectItem key={o.id} value={o.id}>{o.nome_fantasia || o.razao_social}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAlterarOficinaOS(null)}>Cancelar</Button>
+            <Button onClick={handleAlterarOficina} disabled={!novaOficinaId}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

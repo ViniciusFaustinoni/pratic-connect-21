@@ -777,6 +777,7 @@ export type StatusOficina = 'ativo' | 'inativo' | 'suspenso' | 'bloqueado';
 
 export type StatusOrdemServico =
   | 'rascunho'
+  | 'aguardando_entrada'
   | 'aguardando_orcamento'
   | 'orcamento_enviado'
   | 'aguardando_aprovacao'
@@ -788,6 +789,7 @@ export type StatusOrdemServico =
   | 'finalizado'
   | 'aguardando_pagamento'
   | 'pago'
+  | 'entregue'
   | 'cancelado';
 
 export type TipoItemOS = 'peca' | 'mao_de_obra' | 'servico_terceiro';
@@ -913,6 +915,7 @@ export const STATUS_OFICINA_LABELS: Record<StatusOficina, string> = {
 
 export const STATUS_ORDEM_SERVICO_LABELS: Record<StatusOrdemServico, string> = {
   rascunho: 'Rascunho',
+  aguardando_entrada: 'Aguardando Entrada',
   aguardando_orcamento: 'Aguardando Orçamento',
   orcamento_enviado: 'Orçamento Enviado',
   aguardando_aprovacao: 'Aguardando Aprovação',
@@ -924,6 +927,7 @@ export const STATUS_ORDEM_SERVICO_LABELS: Record<StatusOrdemServico, string> = {
   finalizado: 'Finalizado',
   aguardando_pagamento: 'Aguardando Pagamento',
   pago: 'Pago',
+  entregue: 'Entregue',
   cancelado: 'Cancelado',
 };
 
@@ -978,6 +982,7 @@ export const STATUS_OFICINA_COLORS: Record<StatusOficina, string> = {
 
 export const STATUS_ORDEM_SERVICO_COLORS: Record<StatusOrdemServico, string> = {
   rascunho: 'bg-gray-100 text-gray-800',
+  aguardando_entrada: 'bg-yellow-100 text-yellow-800',
   aguardando_orcamento: 'bg-yellow-100 text-yellow-800',
   orcamento_enviado: 'bg-blue-100 text-blue-800',
   aguardando_aprovacao: 'bg-orange-100 text-orange-800',
@@ -989,6 +994,7 @@ export const STATUS_ORDEM_SERVICO_COLORS: Record<StatusOrdemServico, string> = {
   finalizado: 'bg-emerald-100 text-emerald-800',
   aguardando_pagamento: 'bg-indigo-100 text-indigo-800',
   pago: 'bg-emerald-100 text-emerald-800',
+  entregue: 'bg-blue-100 text-blue-800',
   cancelado: 'bg-red-100 text-red-800',
 };
 

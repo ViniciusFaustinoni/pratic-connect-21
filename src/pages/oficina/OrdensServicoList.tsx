@@ -33,6 +33,7 @@ import {
 
 const statusConfig: Record<StatusOrdemServico, { label: string; class: string }> = {
   rascunho: { label: 'Rascunho', class: 'bg-gray-100 text-gray-800' },
+  aguardando_entrada: { label: 'Aguard. Entrada', class: 'bg-yellow-100 text-yellow-800' },
   aguardando_orcamento: { label: 'Aguard. Orçamento', class: 'bg-yellow-100 text-yellow-800' },
   orcamento_enviado: { label: 'Orçamento Enviado', class: 'bg-blue-100 text-blue-800' },
   aguardando_aprovacao: { label: 'Aguard. Aprovação', class: 'bg-purple-100 text-purple-800' },
@@ -44,6 +45,7 @@ const statusConfig: Record<StatusOrdemServico, { label: string; class: string }>
   finalizado: { label: 'Finalizado', class: 'bg-emerald-100 text-emerald-800' },
   aguardando_pagamento: { label: 'Aguard. Pagamento', class: 'bg-amber-100 text-amber-800' },
   pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
+  entregue: { label: 'Entregue', class: 'bg-blue-100 text-blue-800' },
   cancelado: { label: 'Cancelado', class: 'bg-red-100 text-red-800' },
 };
 

@@ -11,11 +11,13 @@ export interface VeiculoOficina {
   valor_orcamento: number | null;
   etapas_reparo: any[];
   observacoes: string | null;
+  sinistro_id: string | null;
   oficina: { id: string; nome_fantasia: string; razao_social: string; cidade: string; estado: string } | null;
   veiculo: { id: string; placa: string; marca: string; modelo: string; ano: number; cor: string } | null;
   associado: { id: string; nome: string; telefone: string; whatsapp: string | null } | null;
   sinistro: { id: string; protocolo: string } | null;
   auto_center: { id: string; nome_fantasia: string | null; nome: string } | null;
+  prestadores?: { nome: string; especialidades: string[] }[];
 }
 
 export interface OficinaFilters {
@@ -41,7 +43,7 @@ export function useVeiculosOficina(filters?: OficinaFilters) {
       const query = supabase
         .from('ordens_servico')
         .select(`
-          id, numero, status, data_entrada, created_at, updated_at, valor_orcamento, etapas_reparo, observacoes,
+          id, numero, status, data_entrada, created_at, updated_at, valor_orcamento, etapas_reparo, observacoes, sinistro_id,
           oficina:oficinas(id, nome_fantasia, razao_social, cidade, estado),
           veiculo:veiculos(id, placa, marca, modelo, ano, cor),
           associado:associados(id, nome, telefone, whatsapp),
@@ -53,7 +55,30 @@ export function useVeiculosOficina(filters?: OficinaFilters) {
       const { data, error } = await query as { data: any; error: any };
       if (error) throw error;
 
-      let result = (data || []) as unknown as VeiculoOficina[];
+      // Buscar prestadores para cada OS que tem sinistro_id
+      const resultBase = (data || []) as any[];
+      const sinistroIds = [...new Set(resultBase.map((r: any) => r.sinistro_id).filter(Boolean))];
+      
+      let prestadoresMap: Record<string, { nome: string; especialidades: string[] }[]> = {};
+      if (sinistroIds.length > 0) {
+        const { data: prestData } = await supabase
+          .from('sinistro_prestadores')
+          .select('sinistro_id, prestador:prestadores(nome, especialidades)')
+          .in('sinistro_id', sinistroIds);
+        
+        (prestData || []).forEach((p: any) => {
+          const sid = p.sinistro_id;
+          if (!prestadoresMap[sid]) prestadoresMap[sid] = [];
+          if (p.prestador) {
+            prestadoresMap[sid].push({ nome: p.prestador.nome, especialidades: p.prestador.especialidades || [] });
+          }
+        });
+      }
+
+      let result = resultBase.map((r: any) => ({
+        ...r,
+        prestadores: prestadoresMap[r.sinistro_id] || [],
+      })) as unknown as VeiculoOficina[];
 
       // Client-side filtering
       if (filters?.search) {

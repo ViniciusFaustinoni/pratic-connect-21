@@ -61,6 +61,38 @@ serve(async (req) => {
 
     for (const ag of agendamentos) {
       try {
+        // Se mensagem_enviada já estiver preenchida, enviar direto (skip template)
+        if (ag.mensagem_enviada && ag.telefone) {
+          const telefone = ag.telefone;
+          const mensagem = ag.mensagem_enviada;
+
+          const sendResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({ telefone, mensagem }),
+          });
+
+          const sendResult = await sendResponse.json();
+          if (!sendResponse.ok || !sendResult.success) {
+            throw new Error(sendResult.error || "Erro ao enviar WhatsApp");
+          }
+
+          await supabase
+            .from("sinistro_contatos_agendados")
+            .update({
+              status: "enviado",
+              enviado_em: new Date().toISOString(),
+            })
+            .eq("id", ag.id);
+
+          enviados++;
+          console.log(`[cron-contato-sinistro] ✓ Mensagem pré-definida enviada (${ag.tipo || 'contato'})`);
+          continue;
+        }
+
         // Buscar sinistro com associado, veículo e plano
         const { data: sinistro, error: sinError } = await supabase
           .from("sinistros")
