@@ -5,14 +5,32 @@ import { toast } from 'sonner';
 export interface AutoCenter {
   id: string;
   nome: string;
+  razao_social: string | null;
+  nome_fantasia: string | null;
+  cnpj: string | null;
+  inscricao_estadual: string | null;
+  tipo: string;
+  status: string | null;
   endereco: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
   cidade: string | null;
   estado: string | null;
   cep: string | null;
-  tipo: string;
+  whatsapp: string | null;
+  telefone2: string | null;
   contato_nome: string | null;
   contato_telefone: string | null;
   contato_email: string | null;
+  banco: string | null;
+  agencia: string | null;
+  conta: string | null;
+  pix_chave: string | null;
+  pix_tipo: string | null;
+  especialidades: string[] | null;
+  marcas_atendidas: string[] | null;
   observacoes: string | null;
   created_at: string;
   updated_at: string;
@@ -66,7 +84,7 @@ export function useAutoCenters(params: UseAutoCentersParams = {}) {
 export function useCreateAutoCenter() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: Omit<AutoCenter, 'id' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (data: Partial<Omit<AutoCenter, 'id' | 'created_at' | 'updated_at'>> & { nome: string; tipo: string }) => {
       const { error } = await supabase.from('auto_centers').insert(data);
       if (error) throw error;
     },
