@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle, Flame } from 'lucide-react';
+import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle, Flame, CloudRain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -173,8 +173,9 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
   });
   const [necessitaReboque, setNecessitaReboque] = useState(false);
 
-  // === Incêndio state ===
+  // === Incêndio / Fenômeno Natural state ===
   const [bombeirosAcionados, setBombeirosAcionados] = useState<boolean | null>(null);
+  const [tipoAgua, setTipoAgua] = useState<'doce' | 'salgada' | ''>('');
 
   // === Vidros state ===
   const [pecaDanificada, setPecaDanificada] = useState('');
@@ -190,6 +191,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
 
   const isVidros = formData.tipo === 'vidros';
   const isIncendio = formData.tipo === 'incendio';
+  const isFenomenoNatural = formData.tipo === 'fenomeno_natural';
 
   // Buscar associados
   const { data: associados = [] } = useQuery({
@@ -416,6 +418,21 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         insertData.bombeiros_acionados = bombeirosAcionados;
       }
 
+      // Campos específicos de fenômeno natural
+      if (isFenomenoNatural) {
+        if (bombeirosAcionados !== null) {
+          insertData.bombeiros_acionados = bombeirosAcionados;
+        }
+        if (tipoAgua) {
+          insertData.tipo_agua = tipoAgua;
+        }
+        // Água salgada → auto-marcar análise interna jurídica
+        if (tipoAgua === 'salgada') {
+          insertData.analise_interna = true;
+          insertData.analise_interna_motivos = ['agua_salgada'];
+        }
+      }
+
       const { data: sinistro, error } = await supabase
         .from('sinistros')
         .insert([insertData])
@@ -509,6 +526,20 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
             ? { tipo: 'certidao_bombeiros', nome: 'Certidão de Ocorrência do Corpo de Bombeiros', obrigatorio: true }
             : { tipo: 'carta_cartorio', nome: 'Carta reconhecida em cartório explicando circunstâncias', obrigatorio: true };
           documentosPendentes = [...documentosPendentes, docBombeiros];
+        }
+
+        // Para fenômeno natural, adicionar documentos dinâmicos
+        if (isFenomenoNatural) {
+          // Fotos in loco sempre obrigatório
+          documentosPendentes = [...documentosPendentes, 
+            { tipo: 'fotos_in_loco', nome: 'Fotos in loco (local alagado, nível da água, veículo no local)', obrigatorio: true }
+          ];
+          if (bombeirosAcionados !== null) {
+            const docBombeiros = bombeirosAcionados
+              ? { tipo: 'certidao_bombeiros', nome: 'Certidão de Ocorrência do Corpo de Bombeiros', obrigatorio: true }
+              : { tipo: 'carta_cartorio', nome: 'Carta reconhecida em cartório explicando circunstâncias', obrigatorio: true };
+            documentosPendentes = [...documentosPendentes, docBombeiros];
+          }
         }
 
         const docsToInsert = documentosPendentes.map(doc => ({
@@ -688,6 +719,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
     setPecaDanificada('');
     setOpcaoReparo('via_pratic');
     setBombeirosAcionados(null);
+    setTipoAgua('');
     onClose();
   };
 
@@ -939,6 +971,74 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                         ? 'Será exigida a Certidão de Ocorrência do Corpo de Bombeiros'
                         : bombeirosAcionados === false
                         ? 'Será exigida Carta reconhecida em cartório explicando as circunstâncias'
+                        : 'Define qual documento adicional será obrigatório'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{bombeirosAcionados === null ? '' : bombeirosAcionados ? 'Sim' : 'Não'}</span>
+                  <Switch 
+                    checked={bombeirosAcionados === true} 
+                    onCheckedChange={(checked) => setBombeirosAcionados(checked)} 
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* === SEÇÃO FENÔMENO NATURAL === */}
+          {isFenomenoNatural && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">Fenômeno Natural - Detalhes</h3>
+              
+              {/* Tipo de Água */}
+              <div className="space-y-2">
+                <Label>Tipo de Água *</Label>
+                <RadioGroup
+                  value={tipoAgua}
+                  onValueChange={(v) => setTipoAgua(v as 'doce' | 'salgada')}
+                  className="grid grid-cols-2 gap-3"
+                >
+                  <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
+                    <RadioGroupItem value="doce" id="agua_doce" />
+                    <Label htmlFor="agua_doce" className="cursor-pointer">
+                      <span className="font-medium">Água Doce</span>
+                      <p className="text-xs text-muted-foreground">Chuva, enchente, granizo</p>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
+                    <RadioGroupItem value="salgada" id="agua_salgada" />
+                    <Label htmlFor="agua_salgada" className="cursor-pointer">
+                      <span className="font-medium">Água Salgada</span>
+                      <p className="text-xs text-muted-foreground">Maré, ressaca</p>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {tipoAgua === 'salgada' && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-amber-800 dark:text-amber-300">Análise Jurídica</p>
+                    <p className="text-amber-700 dark:text-amber-400">
+                      Água salgada será encaminhado automaticamente para análise jurídica.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Bombeiros acionados? */}
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <CloudRain className="h-5 w-5 text-blue-500" />
+                  <div>
+                    <p className="font-medium text-sm">Os bombeiros foram acionados?</p>
+                    <p className="text-xs text-muted-foreground">
+                      {bombeirosAcionados === true
+                        ? 'Será exigida a Certidão de Ocorrência do Corpo de Bombeiros'
+                        : bombeirosAcionados === false
+                        ? 'Será exigida Carta reconhecida em cartório'
                         : 'Define qual documento adicional será obrigatório'}
                     </p>
                   </div>

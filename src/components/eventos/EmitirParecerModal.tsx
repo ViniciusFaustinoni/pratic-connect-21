@@ -122,10 +122,10 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
         tipoDano = valorIndenizacao >= limite75 ? 'perda_total' : 'parcial';
       }
 
-      // Para incêndio com perda total, encaminhar para indenização integral
-      if (sinistro.tipo === 'incendio' && tipoDano === 'perda_total' && resultado === 'aprovado') {
+      // Para incêndio/fenômeno natural com perda total, encaminhar para indenização integral
+      if (['incendio', 'fenomeno_natural'].includes(sinistro.tipo) && tipoDano === 'perda_total' && resultado === 'aprovado') {
         novoStatus = 'aguardando_pagamento';
-        console.log('[EmitirParecer] Incêndio perda total → encaminhando para indenização integral');
+        console.log(`[EmitirParecer] ${sinistro.tipo} perda total → encaminhando para indenização integral`);
       }
 
       // 1. Atualizar sinistro com parecer
@@ -295,15 +295,23 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
             </div>
           </div>
 
-          {/* Alerta análise interna (incêndio) */}
-          {sinistro.tipo === 'incendio' && sinistro.analise_interna && (
+          {/* Alerta análise interna (incêndio / fenômeno natural) */}
+          {['incendio', 'fenomeno_natural'].includes(sinistro.tipo) && sinistro.analise_interna && (
             <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/30">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertTitle className="text-amber-800 dark:text-amber-300">Sinistro em Análise Interna</AlertTitle>
+              <AlertTitle className="text-amber-800 dark:text-amber-300">
+                {sinistro.tipo === 'fenomeno_natural' ? 'Sinistro em Análise Jurídica' : 'Sinistro em Análise Interna'}
+              </AlertTitle>
               <AlertDescription className="text-amber-700 dark:text-amber-400">
-                Motivos: {(sinistro.analise_interna_motivos as string[] || []).map(m => 
-                  m === 'gnv_irregular' ? 'GNV irregular' : m === 'sobrecarga_eletrica' ? 'Sobrecarga elétrica' : m
-                ).join(', ')}
+                Motivos: {(sinistro.analise_interna_motivos as string[] || []).map(m => {
+                  const labels: Record<string, string> = {
+                    gnv_irregular: 'GNV irregular',
+                    sobrecarga_eletrica: 'Sobrecarga elétrica',
+                    agua_salgada: 'Água salgada (maré/ressaca)',
+                    local_inadequado: 'Local inadequado (área notoriamente alagável)',
+                  };
+                  return labels[m] || m;
+                }).join(', ')}
               </AlertDescription>
             </Alert>
           )}
