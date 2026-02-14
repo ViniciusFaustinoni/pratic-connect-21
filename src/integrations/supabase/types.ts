@@ -18035,6 +18035,9 @@ export type Database = {
       }
       sinistro_evento_links: {
         Row: {
+          assinatura_em: string | null
+          assinatura_ip: string | null
+          assinatura_url: string | null
           created_at: string
           created_by: string | null
           dados_etapa1: Json | null
@@ -18047,12 +18050,16 @@ export type Database = {
           etapa4_completada_em: string | null
           expira_em: string
           id: string
+          pagamento_confirmado_em: string | null
           sinistro_id: string
           status: string
           tipo: string
           token: string
         }
         Insert: {
+          assinatura_em?: string | null
+          assinatura_ip?: string | null
+          assinatura_url?: string | null
           created_at?: string
           created_by?: string | null
           dados_etapa1?: Json | null
@@ -18065,12 +18072,16 @@ export type Database = {
           etapa4_completada_em?: string | null
           expira_em: string
           id?: string
+          pagamento_confirmado_em?: string | null
           sinistro_id: string
           status?: string
           tipo?: string
           token?: string
         }
         Update: {
+          assinatura_em?: string | null
+          assinatura_ip?: string | null
+          assinatura_url?: string | null
           created_at?: string
           created_by?: string | null
           dados_etapa1?: Json | null
@@ -18083,6 +18094,7 @@ export type Database = {
           etapa4_completada_em?: string | null
           expira_em?: string
           id?: string
+          pagamento_confirmado_em?: string | null
           sinistro_id?: string
           status?: string
           tipo?: string
@@ -22374,6 +22386,7 @@ export type Database = {
         | "em_garantia"
         | "em_recuperacao"
         | "aguardando_analise"
+        | "pagamento_confirmado"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -22763,6 +22776,7 @@ export const Constants = {
         "em_garantia",
         "em_recuperacao",
         "aguardando_analise",
+        "pagamento_confirmado",
       ],
       status_veiculo: [
         "em_analise",

@@ -660,6 +660,61 @@ serve(async (req) => {
                 }
               }
             }
+
+            // === TRATAR COBRANÇA DE COTA DE PARTICIPAÇÃO (EVENTO/SINISTRO) ===
+            if (cobranca?.tipo === 'cota_participacao') {
+              console.log(`[asaas-webhook] Cota de participação paga para associado ${cobranca.associado_id}`);
+              
+              // Atualizar sinistro
+              const { data: sinistroAtualizado } = await supabase
+                .from('sinistros')
+                .update({
+                  cota_paga: true,
+                  cota_paga_em: new Date().toISOString(),
+                  status: 'pagamento_confirmado',
+                })
+                .eq('cobranca_cota_id', cobranca.id)
+                .select('id, protocolo, associado_id')
+                .maybeSingle();
+
+              // Atualizar link do evento
+              if (sinistroAtualizado) {
+                await supabase
+                  .from('sinistro_evento_links')
+                  .update({ pagamento_confirmado_em: new Date().toISOString() })
+                  .eq('sinistro_id', sinistroAtualizado.id)
+                  .eq('status', 'ativo');
+
+                // Registrar histórico
+                await supabase.from('sinistro_historico').insert({
+                  sinistro_id: sinistroAtualizado.id,
+                  status_anterior: 'aguardando_cota',
+                  status_novo: 'pagamento_confirmado',
+                  observacao: `Pagamento da cota de coparticipação confirmado - R$ ${payment.value.toFixed(2)} via ${payment.billingType}`,
+                });
+              }
+
+              // WhatsApp notification
+              try {
+                const { data: assocData } = await supabase
+                  .from('associados')
+                  .select('nome, whatsapp, telefone')
+                  .eq('id', cobranca.associado_id)
+                  .single();
+
+                const tel = assocData?.whatsapp || assocData?.telefone;
+                if (tel) {
+                  await supabase.functions.invoke('whatsapp-send-text', {
+                    body: {
+                      phone: tel,
+                      message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${assocData?.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${payment.value.toFixed(2)} foi confirmado!\n\nO reparo do seu veículo será agendado em breve. Você receberá atualizações pelo WhatsApp.`,
+                    },
+                  });
+                }
+              } catch (e) {
+                console.error('[asaas-webhook] Erro WhatsApp cota_participacao:', e);
+              }
+            }
           }
           break;
 

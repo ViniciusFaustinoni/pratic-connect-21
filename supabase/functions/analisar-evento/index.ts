@@ -176,7 +176,7 @@ serve(async (req) => {
 
         const telefone = (sinistro as any)?.associado?.whatsapp || (sinistro as any)?.associado?.telefone;
         if (telefone && novoLink) {
-          const linkUrl = `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/evento/${novoLink.token}`;
+          const linkUrl = `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/evento-aprovado/${novoLink.token}`;
           await supabase.functions.invoke("whatsapp-send-text", {
             body: {
               phone: telefone,
