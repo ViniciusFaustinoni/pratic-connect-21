@@ -53,7 +53,7 @@ export function AtribuirFornecedoresDialog({
   const [loading, setLoading] = useState(false);
 
   const veiculo = sinistro?.veiculo as any;
-  const marcaVeiculo = veiculo?.marca?.toUpperCase() || '';
+  const marcaVeiculo = veiculo?.marca || '';
 
   // Buscar vistoria para obter itens do orçamento
   const { data: vistoria } = useVistoriaEvento(sinistro?.id);
