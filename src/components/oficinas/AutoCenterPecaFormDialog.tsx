@@ -11,9 +11,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useCreatePeca } from '@/hooks/useAutoCenters';
 import { CATALOGO_PECAS } from '@/lib/fornecedores-constants';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const SUPABASE_URL = 'https://iyxdgmukrrdkffraptsx.supabase.co';
 
@@ -57,6 +60,11 @@ export function AutoCenterPecaFormDialog({ open, onOpenChange, autoCenterId }: P
   const [loadingMarcas, setLoadingMarcas] = useState(false);
   const [loadingModelos, setLoadingModelos] = useState(false);
   const [loadingAnos, setLoadingAnos] = useState(false);
+
+  const [openPeca, setOpenPeca] = useState(false);
+  const [openMarca, setOpenMarca] = useState(false);
+  const [openModelo, setOpenModelo] = useState(false);
+  const [openAno, setOpenAno] = useState(false);
 
   // Labels selecionadas (para salvar nome legível)
   const [marcaNome, setMarcaNome] = useState('');
@@ -136,100 +144,136 @@ export function AutoCenterPecaFormDialog({ open, onOpenChange, autoCenterId }: P
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Tipo de Peça */}
             <FormField control={form.control} name="tipo_peca" render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel>Tipo de Peça *</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Selecione a peça" /></SelectTrigger></FormControl>
-                  <SelectContent>
-                    {CATALOGO_PECAS.map(p => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={openPeca} onOpenChange={setOpenPeca}>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button variant="outline" role="combobox" aria-expanded={openPeca} className="w-full justify-between font-normal">
+                        {field.value || <span className="text-muted-foreground">Selecione a peça</span>}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar peça..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhuma peça encontrada.</CommandEmpty>
+                        <CommandGroup>
+                          {CATALOGO_PECAS.map(p => (
+                            <CommandItem key={p} value={p} onSelect={() => { field.onChange(p); setOpenPeca(false); }}>
+                              <Check className={cn('mr-2 h-4 w-4', field.value === p ? 'opacity-100' : 'opacity-0')} />
+                              {p}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <FormMessage />
               </FormItem>
             )} />
 
             {/* Marca */}
             <FormField control={form.control} name="marca_codigo" render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel>Marca do Veículo *</FormLabel>
-                <Select
-                  onValueChange={(v) => {
-                    field.onChange(v);
-                    const m = marcas.find(x => x.codigo === v);
-                    setMarcaNome(m?.nome || '');
-                  }}
-                  value={field.value}
-                  disabled={loadingMarcas}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      {loadingMarcas ? <Loader2 className="h-4 w-4 animate-spin" /> : <SelectValue placeholder="Selecione a marca" />}
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {marcas.map(m => (
-                      <SelectItem key={m.codigo} value={m.codigo}>{m.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={openMarca} onOpenChange={setOpenMarca}>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button variant="outline" role="combobox" aria-expanded={openMarca} className="w-full justify-between font-normal" disabled={loadingMarcas}>
+                        {loadingMarcas ? <Loader2 className="h-4 w-4 animate-spin" /> : (marcaNome || <span className="text-muted-foreground">Selecione a marca</span>)}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar marca..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhuma marca encontrada.</CommandEmpty>
+                        <CommandGroup>
+                          {marcas.map(m => (
+                            <CommandItem key={m.codigo} value={m.nome} onSelect={() => { field.onChange(m.codigo); setMarcaNome(m.nome); setOpenMarca(false); }}>
+                              <Check className={cn('mr-2 h-4 w-4', field.value === m.codigo ? 'opacity-100' : 'opacity-0')} />
+                              {m.nome}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <FormMessage />
               </FormItem>
             )} />
 
             {/* Modelo */}
             <FormField control={form.control} name="modelo_codigo" render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel>Modelo *</FormLabel>
-                <Select
-                  onValueChange={(v) => {
-                    field.onChange(v);
-                    const m = modelos.find(x => x.codigo === v);
-                    setModeloNome(m?.nome || '');
-                  }}
-                  value={field.value}
-                  disabled={loadingModelos || !marcaCodigo}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      {loadingModelos ? <Loader2 className="h-4 w-4 animate-spin" /> : <SelectValue placeholder="Selecione o modelo" />}
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {modelos.map(m => (
-                      <SelectItem key={m.codigo} value={m.codigo}>{m.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={openModelo} onOpenChange={setOpenModelo}>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button variant="outline" role="combobox" aria-expanded={openModelo} className="w-full justify-between font-normal" disabled={loadingModelos || !marcaCodigo}>
+                        {loadingModelos ? <Loader2 className="h-4 w-4 animate-spin" /> : (modeloNome || <span className="text-muted-foreground">Selecione o modelo</span>)}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar modelo..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhum modelo encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {modelos.map(m => (
+                            <CommandItem key={m.codigo} value={m.nome} onSelect={() => { field.onChange(m.codigo); setModeloNome(m.nome); setOpenModelo(false); }}>
+                              <Check className={cn('mr-2 h-4 w-4', field.value === m.codigo ? 'opacity-100' : 'opacity-0')} />
+                              {m.nome}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <FormMessage />
               </FormItem>
             )} />
 
             {/* Ano */}
             <FormField control={form.control} name="ano_codigo" render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel>Ano *</FormLabel>
-                <Select
-                  onValueChange={(v) => {
-                    field.onChange(v);
-                    const a = anos.find(x => x.codigo === v);
-                    setAnoNome(a?.nome || '');
-                  }}
-                  value={field.value}
-                  disabled={loadingAnos || !modeloCodigo}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      {loadingAnos ? <Loader2 className="h-4 w-4 animate-spin" /> : <SelectValue placeholder="Selecione o ano" />}
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {anos.map(a => (
-                      <SelectItem key={a.codigo} value={a.codigo}>{a.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={openAno} onOpenChange={setOpenAno}>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button variant="outline" role="combobox" aria-expanded={openAno} className="w-full justify-between font-normal" disabled={loadingAnos || !modeloCodigo}>
+                        {loadingAnos ? <Loader2 className="h-4 w-4 animate-spin" /> : (anoNome || <span className="text-muted-foreground">Selecione o ano</span>)}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar ano..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhum ano encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {anos.map(a => (
+                            <CommandItem key={a.codigo} value={a.nome} onSelect={() => { field.onChange(a.codigo); setAnoNome(a.nome); setOpenAno(false); }}>
+                              <Check className={cn('mr-2 h-4 w-4', field.value === a.codigo ? 'opacity-100' : 'opacity-0')} />
+                              {a.nome}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <FormMessage />
               </FormItem>
             )} />
