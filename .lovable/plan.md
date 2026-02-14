@@ -1,43 +1,106 @@
 
-# Correções: Agendamento de Vistoria e Area do Regulador
+# Correcoes: Vistoria do Regulador
 
-## Problema 1 — Notificacao ao regulador apos agendamento
+## Verificacao Completa
 
-A edge function `agendar-vistoria-evento` cria a vistoria com sucesso mas nao notifica nenhum regulador. Apos o associado confirmar o agendamento, o regulador deveria receber uma notificacao (sistema interno + opcionalmente WhatsApp) informando sobre a nova vistoria.
+### 1. Dados do Regulador — VistoriaEventoDados.tsx
 
-### Solucao
+| Item | Status |
+|---|---|
+| Nome, CPF, telefone, email | OK |
+| Plano e categoria | OK |
+| Adimplencia | OK |
+| Veiculo: placa, marca, modelo, ano, cor, FIPE, chassi | OK |
+| Tipo do evento | BUG — hardcoded "Colisao" (linha 117) |
+| Data/hora evento e comunicacao | OK |
+| Tempo entre evento e comunicacao | OK |
+| Relato escrito | OK |
+| Audio (player) | OK |
+| Local + dados terceiro | OK |
+| Fotos auto vistoria (galeria com zoom) | OK |
+| B.O. visualizador | OK |
+| Numero do B.O. | BUG — busca `bo_numero` mas etapa2 salva como `numero_bo` |
+| Resumo do B.O. | FALTANDO — nao exibe o campo `resumo_bo` |
 
-Adicionar chamada ao `disparar-notificacao` (edge function centralizada existente) na edge function `agendar-vistoria-evento`, apos criar a vistoria com sucesso. A notificacao sera enviada a todos os usuarios com role `regulador`.
+### 2. Execucao da Vistoria — VistoriaEventoMidias.tsx
 
-Modificar: `supabase/functions/agendar-vistoria-evento/index.ts`
+| Item | Status |
+|---|---|
+| 10 slots numerados | OK |
+| Abre camera do celular | OK |
+| Miniatura apos tirar foto | OK |
+| Nao avanca sem 10 fotos | OK |
+| Gravacao de video | OK |
+| Player para revisar + regravar | OK |
+| Limite 2 minutos | OK |
+| Upload para Storage pasta vistoria-regulador | OK |
+| Retry automatico (3 tentativas) | OK |
+| Feedback visual (spinner) | OK |
+| Botao Prosseguir so com 10 fotos + 1 video | OK |
 
-Apos a linha que faz update do `sinistro_evento_links` (etapa4_completada_em), adicionar:
+### 3. Modal de Orcamento — VistoriaEventoOrcamento.tsx
 
-1. Buscar dados do sinistro (associado nome, veiculo placa) para compor a mensagem
-2. Buscar usuarios com role `regulador` da tabela `user_roles`
-3. Para cada regulador, inserir notificacao na tabela de notificacoes do sistema (se existir) ou chamar `disparar-notificacao`
-4. A mensagem sera: "Nova vistoria de evento agendada para [data] as [horario] - [Associado] - [Placa] - [Endereco]"
+| Item | Status |
+|---|---|
+| Tipo de dano: Parcial ou Total | OK |
+| Perda total: apenas observacoes, sem orcamento | OK |
+| Descricao tecnica dos danos | OK |
+| Etapas de reparo: 6 checkboxes na ordem fixa | OK |
+| Cada checkbox com nome + descricao | OK |
+| Obrigatorio pelo menos 1 etapa | OK |
+| Resumo visual com setas | OK |
+| Ordem fixa 1-6 respeitada | OK |
+| Itens orcamento (descricao, tipo, valor, qtd, total) | OK |
+| Botao adicionar item | OK |
+| Rodape com total | OK |
+| Parecer tecnico | OK |
+| Recomendacao (aprovar / analise detalhada) | OK |
+| Finalizar salva no banco | OK |
+| Vistoria -> concluida | OK |
+| Evento -> aguardando_analise | OK |
+| **Formato etapas_reparo** | **BUG CRITICO** |
 
 ---
 
-## Problema 2 — Fallback de tipo hardcoded "Colisao"
+## 3 Problemas Encontrados
 
-No arquivo `src/pages/regulador/ReguladorVistorias.tsx`, linha 112, o fallback do tipo do evento e `'Colisao'` quando deveria ser generico.
+### Problema 1 — Tipo hardcoded "Colisao" (VistoriaEventoDados.tsx)
 
-### Solucao
+Linha 117 usa fallback `'Colisao'` em vez de generico.
 
-Modificar: `src/pages/regulador/ReguladorVistorias.tsx`
+**Correcao:** Trocar por `sinistro?.tipo?.replace(/_/g, ' ') || 'Evento'`
 
-Trocar:
+### Problema 2 — Campo B.O. com nome errado + resumo faltando (VistoriaEventoDados.tsx)
+
+A etapa 2 do associado salva os campos como `numero_bo` e `resumo_bo`, mas o componente do regulador busca `bo_numero` e nao exibe o resumo.
+
+**Correcao:**
+- Linha 172: trocar `dadosEtapa2?.bo_numero` por `dadosEtapa2?.numero_bo`
+- Adicionar exibicao do campo `dadosEtapa2?.resumo_bo` abaixo do numero
+
+### Problema 3 — Formato das etapas_reparo incompativel (CRITICO)
+
+O `VistoriaEventoOrcamento.tsx` salva etapas como array de strings: `['lanternagem', 'pintura', 'polimento']`
+
+Porem, os componentes downstream esperam objetos:
+- `AtribuirFornecedoresDialog` espera `{ nome: string, selecionada: boolean }`
+- `RegistrarAtualizacaoDialog` espera `{ nome: string, status: 'pendente' | 'em_andamento' | 'concluida' }`
+- `EtapasProgress` espera objetos com `status`
+
+**Correcao:** Alterar o `VistoriaEventoOrcamento.tsx` para salvar etapas no formato que os componentes downstream esperam:
+
 ```text
-{v.sinistro?.tipo || 'Colisão'}
-```
-Por:
-```text
-{v.sinistro?.tipo?.replace(/_/g, ' ') || 'Evento'}
+etapas_reparo: ETAPAS_REPARO
+  .filter(e => etapasReparo.includes(e.id))
+  .map((e, i, arr) => ({
+    id: e.id,
+    nome: e.nome,
+    selecionada: true,
+    status: i === 0 ? 'pendente' : 'pendente',
+  }))
 ```
 
-Isso alinha com a correcao ja feita no `EventoColisao.tsx` e garante que tipos como `fenomeno_natural` aparecem como "fenomeno natural".
+Isso garante que quando a OS for gerada a partir da vistoria, as etapas ja estarao no formato correto para o acompanhamento diario (status pendente -> em_andamento -> concluida).
 
 ---
 
@@ -45,38 +108,5 @@ Isso alinha com a correcao ja feita no `EventoColisao.tsx` e garante que tipos c
 
 | Acao | Arquivo |
 |---|---|
-| Modificar | `supabase/functions/agendar-vistoria-evento/index.ts` — adicionar notificacao ao regulador |
-| Modificar | `src/pages/regulador/ReguladorVistorias.tsx` — corrigir fallback do tipo |
-
-## Detalhes Tecnicos
-
-Na edge function, apos o bloco de update do link (linha ~158), sera adicionado:
-
-```text
-// Buscar dados do sinistro para a notificacao
-const { data: sinistroData } = await supabase
-  .from("sinistros")
-  .select("protocolo, associado:associados(nome), veiculo:veiculos(placa)")
-  .eq("id", link.sinistro_id)
-  .single();
-
-// Buscar reguladores
-const { data: reguladores } = await supabase
-  .from("user_roles")
-  .select("user_id")
-  .eq("role", "regulador");
-
-// Inserir notificacao para cada regulador
-if (reguladores?.length) {
-  const notificacoes = reguladores.map(r => ({
-    user_id: r.user_id,
-    titulo: "Nova Vistoria de Evento Agendada",
-    mensagem: `${sinistroData?.associado?.nome} - ${sinistroData?.veiculo?.placa} - ${data_agendada} as ${horario_agendado} - ${endereco?.rua}, ${endereco?.bairro}`,
-    tipo: "vistoria_evento",
-    lida: false,
-  }));
-  await supabase.from("notificacoes").insert(notificacoes);
-}
-```
-
-Se a tabela `notificacoes` nao existir, sera usada a edge function `disparar-notificacao` existente como alternativa.
+| Modificar | `src/components/regulador/VistoriaEventoDados.tsx` — corrigir tipo hardcoded, campo B.O., adicionar resumo |
+| Modificar | `src/components/regulador/VistoriaEventoOrcamento.tsx` — converter formato etapas_reparo para objetos |
