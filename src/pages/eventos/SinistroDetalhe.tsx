@@ -27,6 +27,7 @@ import { CardAcionamentoRoubo } from '@/components/sinistros/CardAcionamentoRoub
 import { AlertasFraudeRoubo } from '@/components/sinistros/AlertasFraudeRoubo';
 import { CardRecuperacaoStatus } from '@/components/sinistros/CardRecuperacaoStatus';
 import { CardVidrosDetalhe } from '@/components/sinistros/CardVidrosDetalhe';
+import { CardAnaliseIncendio } from '@/components/sinistros/CardAnaliseIncendio';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { TrajetoColisaoCard } from '@/components/sinistros/TrajetoColisaoCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
@@ -477,6 +478,12 @@ export default function SinistroDetalhe() {
             <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-sm px-3 py-1">
               <AlertTriangle className="h-4 w-4 mr-1" />
               Recém-ativado
+            </Badge>
+          )}
+          {sinistro.analise_interna === true && (
+            <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300 text-sm px-3 py-1">
+              <Flame className="h-4 w-4 mr-1" />
+              Análise Interna
             </Badge>
           )}
         </div>
@@ -940,6 +947,11 @@ export default function SinistroDetalhe() {
           {/* Card Vidros e Faróis */}
           {sinistro.tipo === 'vidros' && sinistro.peca_danificada && (
             <CardVidrosDetalhe sinistro={sinistro} />
+          )}
+
+          {/* Card Análise de Incêndio */}
+          {sinistro.tipo === 'incendio' && (
+            <CardAnaliseIncendio sinistro={sinistro} />
           )}
 
           {/* Processos Jurídicos */}

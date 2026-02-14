@@ -3,13 +3,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle, XCircle, Car } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Car, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,8 @@ interface Sinistro {
   tipo: string;
   valor_fipe: number | null;
   veiculo_id?: string | null;
+  analise_interna?: boolean | null;
+  analise_interna_motivos?: string[] | null;
   veiculo?: {
     placa: string;
     marca: string;
@@ -109,7 +112,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
     mutationFn: async () => {
       if (!sinistro) throw new Error('Sinistro não encontrado');
 
-      const novoStatus = resultado === 'aprovado' ? 'aprovado' : 'negado';
+      let novoStatus: string = resultado === 'aprovado' ? 'aprovado' : 'negado';
       const valorIndenizacao = resultado === 'aprovado' ? getValorNumerico() : null;
       
       // Calcular tipo_dano automaticamente baseado na regra 75% FIPE
@@ -117,6 +120,12 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
       if (resultado === 'aprovado' && valorIndenizacao && sinistro.valor_fipe) {
         const limite75 = sinistro.valor_fipe * 0.75;
         tipoDano = valorIndenizacao >= limite75 ? 'perda_total' : 'parcial';
+      }
+
+      // Para incêndio com perda total, encaminhar para indenização integral
+      if (sinistro.tipo === 'incendio' && tipoDano === 'perda_total' && resultado === 'aprovado') {
+        novoStatus = 'aguardando_pagamento';
+        console.log('[EmitirParecer] Incêndio perda total → encaminhando para indenização integral');
       }
 
       // 1. Atualizar sinistro com parecer
@@ -285,6 +294,19 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
               </span>
             </div>
           </div>
+
+          {/* Alerta análise interna (incêndio) */}
+          {sinistro.tipo === 'incendio' && sinistro.analise_interna && (
+            <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/30">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-800 dark:text-amber-300">Sinistro em Análise Interna</AlertTitle>
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                Motivos: {(sinistro.analise_interna_motivos as string[] || []).map(m => 
+                  m === 'gnv_irregular' ? 'GNV irregular' : m === 'sobrecarga_eletrica' ? 'Sobrecarga elétrica' : m
+                ).join(', ')}
+              </AlertDescription>
+            </Alert>
+          )}
 
           <Separator />
 
