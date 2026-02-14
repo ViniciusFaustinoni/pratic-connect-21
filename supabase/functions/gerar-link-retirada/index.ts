@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     const { data: os } = await supabase
       .from('ordens_servico')
       .select(`
-        id, numero,
+        id, numero, sinistro_id,
         veiculo:veiculos(placa),
         associado:associados(nome, telefone, whatsapp),
         oficina:oficinas(nome_fantasia, razao_social, logradouro, numero, bairro, cidade, estado)
@@ -56,11 +56,34 @@ Deno.serve(async (req) => {
       const siteUrl = Deno.env.get('SITE_URL') || 'https://pratic-connect-21.lovable.app';
       const link = `${siteUrl}/retirada/${token}`;
 
-      if (telefone) {
+      // Correção 3: Agendar envio com 30min de delay via sinistro_contatos_agendados
+      if (telefone && os.sinistro_id) {
         const mensagem = `Olá ${nome}, seu veículo ${placa} está pronto na oficina ${oficinaInfo}. Acesse o link para confirmar a retirada: ${link}`;
-        await supabase.functions.invoke('whatsapp-send-text', {
-          body: { telefone, mensagem },
-        });
+        const agendadoPara30min = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+        await supabase.from('sinistro_contatos_agendados').insert({
+          sinistro_id: os.sinistro_id,
+          tipo: 'link_retirada',
+          telefone,
+          mensagem_enviada: mensagem,
+          agendado_para: agendadoPara30min,
+          status: 'agendado',
+        } as any);
+
+        // Correção 5: Agendar lembretes diários (dias 1-7) caso não retire
+        for (let dia = 1; dia <= 7; dia++) {
+          const agendadoParaDia = new Date(Date.now() + dia * 24 * 60 * 60 * 1000).toISOString();
+          const mensagemLembrete = `Olá ${nome}! Lembrete: seu veículo ${placa} está pronto para retirada na oficina ${oficina?.nome_fantasia || oficina?.razao_social || ''}. Acesse o link: ${link}`;
+
+          await supabase.from('sinistro_contatos_agendados').insert({
+            sinistro_id: os.sinistro_id,
+            tipo: 'lembrete_retirada',
+            telefone,
+            mensagem_enviada: mensagemLembrete,
+            agendado_para: agendadoParaDia,
+            status: 'agendado',
+          } as any);
+        }
       }
     }
 

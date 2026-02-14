@@ -105,6 +105,18 @@ export function RegistrarAtualizacaoDialog({ open, onOpenChange, ordemServico }:
 
       if (insertErr) throw insertErr;
 
+      // Correção 1: Se "Aguardando peça", mudar status da OS
+      if (temProblema && tipoProblema === 'Aguardando peça') {
+        await supabase.from('ordens_servico')
+          .update({ status: 'aguardando_peca' as any, updated_at: new Date().toISOString() })
+          .eq('id', ordemServico.id);
+        await supabase.from('ordens_servico_historico').insert({
+          ordem_servico_id: ordemServico.id,
+          status_novo: 'aguardando_peca',
+          observacao: descricaoProblema || 'Aguardando peça',
+        });
+      }
+
       // Atualizar etapas se concluiu
       if (concluirEtapa && etapaAtual) {
         const novasEtapas = etapas.map((e: any, i: number) => {
@@ -118,7 +130,7 @@ export function RegistrarAtualizacaoDialog({ open, onOpenChange, ordemServico }:
           updated_at: new Date().toISOString(),
         };
 
-        // Se última etapa → concluído
+        // Se última etapa → concluído + calcular tempo total
         if (isUltimaEtapa) {
           updates.status = 'concluido';
           updates.data_conclusao_real = new Date().toISOString();
@@ -136,7 +148,7 @@ export function RegistrarAtualizacaoDialog({ open, onOpenChange, ordemServico }:
           },
         });
 
-        // Se concluído, gerar link de retirada
+        // Se concluído, gerar link de retirada (envio será agendado com 30min delay)
         if (isUltimaEtapa) {
           await supabase.functions.invoke('gerar-link-retirada', {
             body: { ordem_servico_id: ordemServico.id },
@@ -267,6 +279,13 @@ export function RegistrarAtualizacaoDialog({ open, onOpenChange, ordemServico }:
                 <Switch checked={concluirEtapa} onCheckedChange={setConcluirEtapa} />
                 <span className="text-sm">A etapa "{etapaAtual.nome}" foi concluída?</span>
               </div>
+              {/* Correção 2: Mensagem explícita se tentar avançar etapa sem fotos */}
+              {concluirEtapa && fotos.length < 2 && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Registre a atualização com pelo menos 2 fotos antes de avançar a etapa
+                </p>
+              )}
             </div>
           )}
 
