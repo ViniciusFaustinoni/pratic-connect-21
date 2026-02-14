@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { AutoCenterFormDialog } from './AutoCenterFormDialog';
 import { AutoCenterPecaFormDialog } from './AutoCenterPecaFormDialog';
+import { AutoCenterHistorico } from './AutoCenterHistorico';
 import {
   useAutoCenterPecas, useDeleteAutoCenter, useDeletePeca, type AutoCenter,
 } from '@/hooks/useAutoCenters';
@@ -115,15 +116,15 @@ export function AutoCenterDetailDrawer({ autoCenter, open, onOpenChange }: Props
             )}
 
             {/* Marcas Atendidas */}
-            {(autoCenter as any).marcas_atendidas?.length > 0 && (
+            {autoCenter.marcas_atendidas && autoCenter.marcas_atendidas.length > 0 && (
               <>
                 <div className="space-y-3">
                   <h3 className="font-medium">Marcas Atendidas</h3>
                   <div className="flex flex-wrap gap-1">
-                    {(autoCenter as any).marcas_atendidas.includes('GLOBAL') ? (
+                    {autoCenter.marcas_atendidas.includes('GLOBAL') ? (
                       <Badge className="bg-primary text-primary-foreground">GLOBAL</Badge>
                     ) : (
-                      (autoCenter as any).marcas_atendidas.map((m: string) => (
+                      autoCenter.marcas_atendidas.map((m) => (
                         <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>
                       ))
                     )}
@@ -133,13 +134,13 @@ export function AutoCenterDetailDrawer({ autoCenter, open, onOpenChange }: Props
               </>
             )}
 
-            {/* Especialidades */}
-            {(autoCenter as any).especialidades?.length > 0 && (
+            {/* Tipos de Peças */}
+            {autoCenter.especialidades && autoCenter.especialidades.length > 0 && (
               <>
                 <div className="space-y-3">
-                  <h3 className="font-medium">Especialidades</h3>
+                  <h3 className="font-medium">Tipos de Peças</h3>
                   <div className="flex flex-wrap gap-2">
-                    {(autoCenter as any).especialidades.map((e: string) => (
+                    {autoCenter.especialidades.map((e) => (
                       <Badge key={e} variant="outline">{e}</Badge>
                     ))}
                   </div>
@@ -193,6 +194,11 @@ export function AutoCenterDetailDrawer({ autoCenter, open, onOpenChange }: Props
                 </div>
               )}
             </div>
+
+            <Separator />
+
+            {/* Histórico de Orçamentos */}
+            <AutoCenterHistorico autoCenterId={autoCenter.id} />
 
             <Separator />
 
