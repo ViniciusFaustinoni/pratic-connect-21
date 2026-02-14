@@ -13328,11 +13328,14 @@ export type Database = {
           associado_id: string
           autentique_documento_id: string | null
           autentique_url: string | null
+          auto_center_id: string | null
+          cotacao_aprovada_id: string | null
           created_at: string | null
           criado_por: string | null
           data_conclusao: string | null
           data_entrada: string | null
           data_previsao: string | null
+          etapas_reparo: Json | null
           id: string
           numero: string
           observacoes: string | null
@@ -13354,11 +13357,14 @@ export type Database = {
           associado_id: string
           autentique_documento_id?: string | null
           autentique_url?: string | null
+          auto_center_id?: string | null
+          cotacao_aprovada_id?: string | null
           created_at?: string | null
           criado_por?: string | null
           data_conclusao?: string | null
           data_entrada?: string | null
           data_previsao?: string | null
+          etapas_reparo?: Json | null
           id?: string
           numero: string
           observacoes?: string | null
@@ -13380,11 +13386,14 @@ export type Database = {
           associado_id?: string
           autentique_documento_id?: string | null
           autentique_url?: string | null
+          auto_center_id?: string | null
+          cotacao_aprovada_id?: string | null
           created_at?: string | null
           criado_por?: string | null
           data_conclusao?: string | null
           data_entrada?: string | null
           data_previsao?: string | null
+          etapas_reparo?: Json | null
           id?: string
           numero?: string
           observacoes?: string | null
@@ -13464,6 +13473,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_auto_center_id_fkey"
+            columns: ["auto_center_id"]
+            isOneToOne: false
+            referencedRelation: "auto_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_cotacao_aprovada_id_fkey"
+            columns: ["cotacao_aprovada_id"]
+            isOneToOne: false
+            referencedRelation: "evento_cotacoes_pecas"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "ordens_servico_criado_por_fkey"
@@ -22599,6 +22622,7 @@ export type Database = {
       status_oficina: "ativo" | "inativo" | "suspenso" | "bloqueado"
       status_ordem_servico:
         | "rascunho"
+        | "aguardando_entrada"
         | "aguardando_orcamento"
         | "orcamento_enviado"
         | "aguardando_aprovacao"
@@ -22986,6 +23010,7 @@ export const Constants = {
       status_oficina: ["ativo", "inativo", "suspenso", "bloqueado"],
       status_ordem_servico: [
         "rascunho",
+        "aguardando_entrada",
         "aguardando_orcamento",
         "orcamento_enviado",
         "aguardando_aprovacao",
