@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, DollarSign, AlertTriangle } from 'lucide-react';
+import { Loader2, DollarSign, AlertTriangle, Info } from 'lucide-react';
 
 interface IniciarIndenizacaoModalProps {
   open: boolean;
@@ -21,17 +21,22 @@ interface IniciarIndenizacaoModalProps {
 
 const DEPRECIACOES = [
   { key: 'chassi_remarcado', label: 'Chassi remarcado', percentual: 30 },
-  { key: 'aplicativo', label: 'Uso em aplicativo (Uber, 99, etc)', percentual: 25 },
-  { key: 'leilao', label: 'Veículo de leilão', percentual: 30 },
-  { key: 'avarias', label: 'Avarias pré-existentes', percentual: 20 },
+  { key: 'aplicativo', label: 'Táxi / placa vermelha / aplicativo (Uber, 99, etc)', percentual: 25 },
+  { key: 'leilao', label: 'Veículo de leilão / já indenizado antes', percentual: 30 },
+  { key: 'avarias', label: 'Avarias pré-existentes (da vistoria de adesão)', percentual: 20 },
 ];
 
 const DOCUMENTOS_INDENIZACAO = [
-  { tipo: 'crv_transferencia', nome: 'CRV preenchido a favor da Pratic', obrigatorio: true },
-  { tipo: 'procuracao_publica', nome: 'Procuração Pública', obrigatorio: true },
-  { tipo: 'quitacao_financiamento', nome: 'Comprovante Quitação Financiamento', obrigatorio: false },
-  { tipo: 'certidao_negativa_furto', nome: 'Certidão Negativa de Furto', obrigatorio: true },
-  { tipo: 'extrato_detran', nome: 'Extrato DETRAN com queixa', obrigatorio: true },
+  { tipo: 'bo_original', nome: 'B.O. original', obrigatorio: true },
+  { tipo: 'crv_transferencia', nome: 'CRV preenchido a favor da Pratic Car', obrigatorio: true },
+  { tipo: 'crlv_original', nome: 'CRLV original', obrigatorio: true },
+  { tipo: 'quitacao_ipva', nome: 'Quitação de IPVA e seguro obrigatório (2 últimos anos)', obrigatorio: true },
+  { tipo: 'chaves_veiculo', nome: 'Chaves do veículo', obrigatorio: true },
+  { tipo: 'certidao_negativa_furto', nome: 'Certidão negativa de furto e multa', obrigatorio: true },
+  { tipo: 'procuracao_publica', nome: 'Procuração pública para a associação', obrigatorio: true },
+  { tipo: 'quitacao_financiamento', nome: 'Quitação de financiamento (se financiado)', obrigatorio: false },
+  { tipo: 'contrato_social', nome: 'Contrato social ou estatuto (se PJ)', obrigatorio: false },
+  { tipo: 'nota_fiscal_venda', nome: 'Nota fiscal de venda (se leilão)', obrigatorio: false },
 ];
 
 const formatCurrency = (value: number) =>
@@ -44,12 +49,14 @@ export function IniciarIndenizacaoModal({
   const [depreciacoes, setDepreciacoes] = useState<Record<string, boolean>>({});
   const [observacoes, setObservacoes] = useState('');
 
-  const totalDepreciacao = DEPRECIACOES.reduce((acc, dep) => {
-    return acc + (depreciacoes[dep.key] ? dep.percentual : 0);
-  }, 0);
+  // Regra: aplica-se apenas a MAIOR depreciação
+  const depreciacoesSelecionadas = DEPRECIACOES.filter(d => depreciacoes[d.key]);
+  const maiorDepreciacao = depreciacoesSelecionadas.length > 0
+    ? Math.max(...depreciacoesSelecionadas.map(d => d.percentual))
+    : 0;
 
   const valorBase = valorFipe || 0;
-  const valorFinal = valorBase * (1 - totalDepreciacao / 100);
+  const valorFinal = valorBase * (1 - maiorDepreciacao / 100);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -75,7 +82,7 @@ export function IniciarIndenizacaoModal({
         status_anterior: 'em_recuperacao',
         status_novo: 'aguardando_pagamento',
         usuario_id: user.id,
-        observacao: `Indenização integral iniciada. Valor FIPE: ${formatCurrency(valorBase)}, Depreciações: ${totalDepreciacao}%, Valor final: ${formatCurrency(valorFinal)}. ${observacoes}`,
+        observacao: `Indenização integral iniciada. Valor FIPE: ${formatCurrency(valorBase)}, Maior depreciação: ${maiorDepreciacao}%, Valor final: ${formatCurrency(valorFinal)}. ${observacoes}`,
       });
 
       // 3. Criar documentos pendentes de indenização
@@ -104,7 +111,7 @@ export function IniciarIndenizacaoModal({
           dados_novos: {
             valor_fipe: valorBase,
             depreciacoes,
-            total_depreciacao: totalDepreciacao,
+            maior_depreciacao: maiorDepreciacao,
             valor_final: valorFinal,
             sinistroId,
           },
@@ -130,7 +137,7 @@ export function IniciarIndenizacaoModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
@@ -142,7 +149,7 @@ export function IniciarIndenizacaoModal({
           <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
             <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
             <p className="text-xs text-amber-700 dark:text-amber-300">
-              Ao iniciar a indenização, o sinistro {protocolo} será movido para "Aguardando Pagamento" e documentos de indenização serão solicitados ao associado. Prazo de 60 dias úteis.
+              Ao iniciar a indenização, o sinistro {protocolo} será movido para "Aguardando Pagamento" e documentos de indenização serão solicitados ao associado.
             </p>
           </div>
 
@@ -156,7 +163,12 @@ export function IniciarIndenizacaoModal({
 
           {/* Depreciações */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium">Depreciações aplicáveis</Label>
+            <div>
+              <Label className="text-sm font-medium">Depreciações aplicáveis</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Regra: aplica-se apenas a <strong>maior</strong> depreciação selecionada
+              </p>
+            </div>
             {DEPRECIACOES.map(dep => (
               <div key={dep.key} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -166,16 +178,18 @@ export function IniciarIndenizacaoModal({
                   />
                   <span className="text-sm">{dep.label}</span>
                 </div>
-                <span className="text-sm text-muted-foreground">-{dep.percentual}%</span>
+                <span className={`text-sm ${depreciacoes[dep.key] && dep.percentual === maiorDepreciacao ? 'font-bold text-red-600' : 'text-muted-foreground'}`}>
+                  -{dep.percentual}%
+                </span>
               </div>
             ))}
           </div>
 
-          {totalDepreciacao > 0 && (
+          {maiorDepreciacao > 0 && (
             <div className="p-3 bg-muted rounded-lg">
               <div className="flex justify-between text-sm">
-                <span>Total depreciação:</span>
-                <span className="font-medium text-red-600">-{totalDepreciacao}%</span>
+                <span>Maior depreciação aplicada:</span>
+                <span className="font-medium text-red-600">-{maiorDepreciacao}%</span>
               </div>
             </div>
           )}
@@ -187,6 +201,18 @@ export function IniciarIndenizacaoModal({
             <div className="flex justify-between items-center">
               <span className="font-medium">Valor da indenização:</span>
               <span className="text-2xl font-bold text-primary">{formatCurrency(valorFinal)}</span>
+            </div>
+          </div>
+
+          {/* Informações do fluxo */}
+          <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>• <strong>Prazo:</strong> 60 dias úteis a partir da documentação completa</p>
+                <p>• <strong>Kit GNV:</strong> Se o veículo tem kit gás, o associado pode retirar antes da entrega</p>
+                <p>• <strong>Financiamento:</strong> Se financiado, o credor é pago primeiro, saldo restante ao associado</p>
+              </div>
             </div>
           </div>
 
