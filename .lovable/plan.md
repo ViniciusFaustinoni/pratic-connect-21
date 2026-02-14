@@ -1,203 +1,136 @@
 
+# Logica Completa de Sindicancias
 
-# Dashboard de Eventos — Redesign Completo
+## Resumo do Estado Atual
 
-## Escopo
+### O que ja existe:
+- `EncaminharSindicanciaDialog`: modal basico que atribui sindicante + motivo (texto livre) + prazo de 30 dias. Atualiza status para `em_sindicancia`, grava historico.
+- Colunas no banco: `sindicante_id`, `sindicancia_prazo_fim`, `resultado_sindicancia` (text), `perito_id`, `resultado_pericia` (text)
+- Tipo `ResultadoSindicancia` em `types/sinistros.ts`: apenas `regular | irregular | inconclusivo`
+- Status `em_sindicancia` no workflow com transicoes definidas
+- Dashboard conta sindicancias no grafico de taxa de aprovacao
 
-Substituir o `SinistrosDashboard.tsx` atual (562 linhas, 6 KPIs basicos + 2 graficos + 1 tabela) por um dashboard completo com 6 areas, conforme especificacao. O arquivo atual sera reescrito e a logica dividida em hooks e componentes dedicados.
+### O que falta:
+1. O `EncaminharSindicanciaDialog` **nao esta conectado** ao `SinistroDetalhe` (nao existe botao nem import)
+2. Nao existe modal de **concluir sindicancia** (registrar resultado)
+3. Nao existe **card visual** no detalhe do sinistro mostrando status da sindicancia ativa
+4. O tipo `ResultadoSindicancia` esta incompleto (faltam `carta_cancelamento` e `juridico`)
+5. Nao existe logica de **suspensao do prazo de 60 dias** visivel no sistema
+6. Falta dropdown de motivos predefinidos no encaminhamento
+7. Alertas do dashboard nao verificam sindicancias vencendo
 
-## Arquitetura
+---
 
-O dashboard sera dividido em:
-- 1 pagina principal (`SinistrosDashboard.tsx`) com layout e filtros globais
-- 1 hook de dados (`useEventosDashboard.ts`) com todas as queries otimizadas
-- 6 componentes de area, um para cada secao do dashboard
+## Alteracoes Planejadas
 
-## Estrutura de Arquivos
+### 1. Atualizar tipo ResultadoSindicancia
 
-```text
-src/pages/eventos/SinistrosDashboard.tsx          -- pagina principal (reescrita)
-src/hooks/useEventosDashboard.ts                  -- hook com todas as queries
-src/components/eventos/dashboard/
-  EventosKPICards.tsx                              -- Area 1: 6 cards KPI
-  EventosFunilOperacional.tsx                      -- Area 2: funil horizontal
-  EventosGraficosTipo.tsx                          -- Area 3: donut + barras mensais
-  EventosGraficosAnalise.tsx                       -- Area 4: taxa aprovacao + tempo medio + custos
-  EventosAlertasUrgentes.tsx                       -- Area 5: alertas vermelhos/amarelos/azuis
-  EventosTabelaRecentes.tsx                        -- Area 6: tabela com filtros
+**Arquivo:** `src/types/sinistros.ts`
+
+Expandir de 3 para 5 resultados possiveis:
+- `regular` — sem fraude, evento volta para aprovado
+- `irregular` — fraude comprovada, evento negado + cria caso juridico
+- `carta_cancelamento` — associado desiste, notifica juridico
+- `juridico` — caso complexo, encaminha para juridico
+- `inconclusivo` — vai para diretoria decidir
+
+### 2. Melhorar EncaminharSindicanciaDialog
+
+**Arquivo:** `src/components/sinistros/EncaminharSindicanciaDialog.tsx`
+
+Adicionar:
+- Dropdown de motivos predefinidos por tipo de evento:
+  - Colisao: "Relato inconsistente", "Fotos nao conferem com B.O.", "Historico de multiplos sinistros", "Tempo suspeito", "Condutor embriagado", "CNH vencida"
+  - Roubo/Furto: "Dados do rastreador suspeitos", "Locais suspeitos", "Mudanca de rotina", "Rastreador nao instalado"
+  - Incendio: "Suspeita de incendio provocado", "GNV irregular", "Sobrecarga eletrica"
+  - Alagamento: "Entrada deliberada em area alagada", "Agua salgada", "Local inadequado"
+- Campo de observacao complementar (textarea)
+- Opcao de marcar como pericia tecnica (checkbox) — mesmo fluxo, motivo diferente
+
+### 3. Criar ConcluirSindicanciaModal
+
+**Novo arquivo:** `src/components/sinistros/ConcluirSindicanciaModal.tsx`
+
+Modal com:
+- RadioGroup com 5 opcoes de resultado (regular, irregular, carta_cancelamento, juridico, inconclusivo)
+- Textarea obrigatoria para relatorio final (min 200 caracteres)
+- Secao de anexar evidencias (upload de arquivos para storage)
+- Para cada resultado, acoes automaticas:
+  - **Regular**: atualiza status para `aprovado`, retoma prazo de 60 dias
+  - **Irregular**: atualiza status para `negado`, cria registro em `processos` com tipo "sindicancia_fraude", motivo_negacao = "fraude_suspeita"
+  - **Carta cancelamento**: atualiza status para `cancelado`, notifica juridico
+  - **Juridico**: atualiza status para `suspenso`, cria registro em `processos`
+  - **Inconclusivo**: atualiza status para `suspenso`, marca para diretoria
+- Grava resultado em `resultado_sindicancia`
+- Registra no historico com observacao detalhada
+
+### 4. Criar CardSindicanciaStatus
+
+**Novo arquivo:** `src/components/sinistros/CardSindicanciaStatus.tsx`
+
+Card para a sidebar do SinistroDetalhe, visivel quando `status === 'em_sindicancia'`:
+- Badge "Em Sindicancia" com cor rose
+- Nome do sindicante responsavel (query pelo sindicante_id -> profiles)
+- Contagem regressiva: "X dias restantes de 30" com barra de progresso
+- Alerta vermelho se prazo < 7 dias
+- Alerta critico se prazo vencido
+- Informacao: "Prazo de ressarcimento SUSPENSO durante a sindicancia"
+- Botao "Concluir Sindicancia" que abre o ConcluirSindicanciaModal (visivel para analista/diretor)
+- Se ja concluida (`resultado_sindicancia` preenchido): mostra resultado + data
+
+### 5. Integrar no SinistroDetalhe
+
+**Arquivo:** `src/pages/eventos/SinistroDetalhe.tsx`
+
+- Importar `EncaminharSindicanciaDialog` e `CardSindicanciaStatus`
+- Adicionar state `modalSindicanciaOpen`
+- No dropdown de acoes: adicionar item "Encaminhar para Sindicancia" (visivel quando status permite: `em_analise`, `aguardando_parecer`, `em_vistoria`)
+- Na sidebar: renderizar `CardSindicanciaStatus` quando `status === 'em_sindicancia'`
+- Passar `sindicante_id` na query do sinistro (ja esta: `sindicante:profiles!sinistros_sindicante_id_fkey`)
+
+Obs: a query principal do sinistro ja faz select de `*` mas nao inclui o join do sindicante. Adicionar:
+```
+sindicante:profiles!sinistros_sindicante_id_fkey(id, nome)
 ```
 
----
+### 6. Suspensao do Prazo de Ressarcimento
 
-## Area 1 — Cards KPI (6 cards)
+Logica visual no SinistroDetalhe:
+- Quando `status === 'em_sindicancia'`, exibir alerta na secao de valores/prazos: "Prazo de 60 dias uteis SUSPENSO — sindicancia ativa desde DD/MM"
+- Quando sindicancia concluida com resultado `regular`, o historico mostrara "Prazo retomado"
 
-| Card | Query | Cor |
-|---|---|---|
-| Eventos Abertos | `count WHERE status NOT IN (finalizado, encerrado, cancelado)` | Azul |
-| Novos este Mes | `count WHERE created_at >= inicio_mes` + variacao vs mes anterior | Verde/Vermelho |
-| Aguardando Acao | `count WHERE status IN (documentacao_pendente, aguardando_analise, aguardando_vistoria, pronto_para_oficina, aguardando_confirmacoes, aguardando_parecer)` | Laranja |
-| Em Oficina | `count WHERE status IN (em_regulacao, em_reparo, aguardando_peca)` | Indigo |
-| Em Recuperacao | `count WHERE status = em_recuperacao` | Roxo |
-| Indenizacoes Pendentes | `count + SUM(valor_fipe) WHERE status = aguardando_pagamento` | Ambar |
+### 7. Alertas no Dashboard
 
-Cada card mostra numero grande + icone + variacao percentual (quando aplicavel). Skeleton loading individual.
+**Arquivo:** `src/hooks/useEventosDashboard.ts`
 
----
-
-## Area 2 — Funil Operacional
-
-Barra horizontal com 9 fases. Cada fase mostra contagem. Clique filtra a tabela abaixo.
-
-Mapeamento de status para fases:
-1. Comunicado: `comunicado`
-2. Documentacao: `documentacao_pendente`
-3. Vistoria: `aguardando_vistoria, em_vistoria`
-4. Analise: `em_analise, aguardando_parecer`
-5. Pagamento/Cota: `aprovado` (aguardando cota/termo)
-6. Atribuicao: `pronto_para_oficina`
-7. Em Oficina: `em_regulacao, em_reparo, aguardando_peca`
-8. Concluido: `concluido` (se existir) ou eventos com reparo finalizado
-9. Finalizado: `encerrado, pago` (total do mes)
-
-Abaixo do funil: tempo medio total do comunicado ao finalizado, separado por tipo.
+Na funcao `useAlertasUrgentes`, adicionar:
+- Alerta amarelo: "X sindicancias com prazo vencendo nos proximos 7 dias"
+  - Query: `status = 'em_sindicancia' AND sindicancia_prazo_fim BETWEEN NOW() AND NOW() + 7d`
+- Alerta vermelho: "X sindicancias com prazo vencido"
+  - Query: `status = 'em_sindicancia' AND sindicancia_prazo_fim < NOW()`
 
 ---
 
-## Area 3 — Graficos (2 colunas)
+## Resumo de Arquivos
 
-**Esquerdo — Donut "Eventos por Tipo"**
-- PieChart com innerRadius (donut)
-- Total no centro
-- Cores: colisao=azul, roubo=vermelho, furto=roxo, incendio=laranja, alagamento=ciano, vidros=verde
+| Acao | Arquivo |
+|---|---|
+| Modificar | `src/types/sinistros.ts` (expandir ResultadoSindicancia) |
+| Modificar | `src/components/sinistros/EncaminharSindicanciaDialog.tsx` (dropdown motivos) |
+| Criar | `src/components/sinistros/ConcluirSindicanciaModal.tsx` (5 resultados) |
+| Criar | `src/components/sinistros/CardSindicanciaStatus.tsx` (card sidebar) |
+| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` (integrar sindicancia) |
+| Modificar | `src/hooks/useEventosDashboard.ts` (alertas sindicancia) |
 
-**Direito — Barras "Eventos por Mes" (ultimos 6 meses)**
-- BarChart com barras empilhadas por tipo
-- Tooltips com quantidade e tipo
+## Migracao de Banco
 
----
-
-## Area 4 — Segunda Linha de Graficos (3 colunas)
-
-**Grafico 1 — Taxa de Aprovacao (gauge simulado)**
-- Representado como um card com numero grande + barra de progresso circular ou semi-circular
-- Verde >80%, Amarelo 60-80%, Vermelho <60%
-- Subtexto: X aprovados, Y reprovados, Z em sindicancia
-
-**Grafico 2 — Tempo Medio por Fase (barras horizontais)**
-- BarChart horizontal com tempo medio em dias por transicao de fase
-- Barras em vermelho quando acima da meta (documentacao <3d, vistoria <5d, analise <7d, oficina <30d)
-- Nota: calculo baseado em `created_at` e `updated_at` dos sinistros, ja que nao temos timestamps por fase. Usaremos estimativas baseadas em `data_parecer` e datas disponiveis.
-
-**Grafico 3 — Custos Acumulados (area empilhada, 6 meses)**
-- AreaChart com series: valor_orcamento (pecas+mao obra), valor_pago (indenizacoes), valor_cota_participacao (cotas recebidas)
-- Visivel apenas para diretor/gerente
-
----
-
-## Area 5 — Alertas e Acoes Urgentes
-
-Queries independentes para cada alerta:
-
-**Vermelhos (criticos):**
-- Eventos sem atualizacao ha mais de 48h: `WHERE updated_at < NOW() - 48h AND status NOT IN (encerrado, cancelado)`
-- Documentacao pendente ha mais de 15 dias: `WHERE status = documentacao_pendente AND updated_at < NOW() - 15d`
-- Veiculos em oficina ha mais de 60 dias: `WHERE status IN (em_reparo, em_regulacao) AND updated_at < NOW() - 60d`
-- Indenizacoes com prazo vencendo: `WHERE status = aguardando_pagamento AND created_at < NOW() - 50d` (proximo do limite de 60 dias uteis)
-
-**Amarelos (atencao):**
-- Analise ha mais de 7 dias: `WHERE status IN (em_analise, aguardando_parecer) AND updated_at < NOW() - 7d`
-- Recuperacao ha mais de 20 dias: `WHERE status = em_recuperacao AND updated_at < NOW() - 20d`
-- Garantias vencendo: `WHERE data_garantia_fim BETWEEN NOW() AND NOW() + 7d`
-
-**Azuis (informativo):**
-- Finalizados este mes: `count WHERE status IN (encerrado, pago) AND updated_at >= inicio_mes`
-- Cotas pendentes: `count WHERE cota_paga = false AND status NOT IN (cancelado, negado)`
-
-Cada alerta tem icone, mensagem, contagem e botao de acao que navega para a lista filtrada.
-
----
-
-## Area 6 — Tabela de Eventos Recentes
-
-- 20 ultimos eventos (criados ou atualizados)
-- Colunas: Protocolo (link), Tipo (badge), Associado, Veiculo (placa - marca/modelo), Status (badge colorido), Fase atual (texto descritivo), Dias aberto, Ultima atualizacao (relativa)
-- Filtros: tipo (multi-select), status (multi-select), periodo (date range), busca texto
-- Ordenacao por qualquer coluna
-- Botao "+ Novo Evento" no canto superior direito
-
----
-
-## Filtros Globais (topo)
-
-Barra no topo antes dos KPIs:
-- Periodo: Hoje, Esta Semana, Este Mes (padrao), Ultimo Trimestre, Este Ano, Personalizado
-- Tipo de evento: Todos (padrao), selecionar especifico
-- Status: Todos, Apenas Abertos (padrao), Apenas Finalizados
-
-Esses filtros afetam TODOS os componentes via state passado como props.
-
----
-
-## Cores de Status (constantes compartilhadas)
-
-```text
-comunicado         -> cinza (bg-gray-100 text-gray-800)
-documentacao_pend  -> amarelo (bg-yellow-100 text-yellow-800)
-aguardando_vistoria -> azul claro (bg-sky-100 text-sky-800)
-aguardando_analise -> roxo (bg-purple-100 text-purple-800)
-aprovado           -> verde (bg-green-100 text-green-800)
-negado             -> vermelho (bg-red-100 text-red-800)
-em_recuperacao     -> roxo escuro (bg-violet-100 text-violet-800)
-pronto_para_oficina -> ciano (bg-cyan-100 text-cyan-800)
-em_reparo          -> indigo (bg-indigo-100 text-indigo-800)
-aguardando_peca    -> laranja (bg-orange-100 text-orange-800)
-concluido          -> verde claro (bg-lime-100 text-lime-800)
-encerrado          -> verde escuro (bg-emerald-100 text-emerald-800)
-cancelado          -> cinza escuro (bg-slate-100 text-slate-800)
-em_sindicancia     -> amarelo escuro (bg-amber-100 text-amber-800)
-aguardando_pagamento -> ambar (bg-amber-100 text-amber-800)
-```
-
----
-
-## Permissoes
-
-- Diretor/Gerente: tudo visivel, incluindo valores financeiros
-- Analista de Eventos: tudo exceto valores em custos acumulados e indenizacoes (ve contadores mas nao valores)
-- Regulador: apenas seus proprios dados (filtro por analista_id = user.id)
-- Vendedor/Consultor: sem acesso (ja bloqueado pela rota)
-
-O hook `usePermissions()` ja existe e sera usado para controle condicional.
-
----
-
-## Responsividade
-
-- Cards KPI: 6 colunas em desktop, 2 em mobile
-- Graficos Area 3: 2 colunas desktop, 1 mobile
-- Graficos Area 4: 3 colunas desktop, 1 mobile
-- Funil: scroll horizontal em mobile
-- Tabela: scroll horizontal em mobile
-
----
-
-## Performance
-
-- Queries separadas por area (carregamento paralelo)
-- Cada secao com skeleton loading independente
-- RefetchInterval de 120s para dados em tempo real
-- Contadores agregados via `count: 'exact'` + `head: true` quando possivel
-
----
+Nenhuma migracao necessaria. As colunas `resultado_sindicancia` (text), `sindicancia_prazo_fim`, `sindicante_id` e `perito_id` ja existem na tabela `sinistros`. O campo `resultado_sindicancia` e text livre, nao enum, entao aceita os novos valores sem alteracao de schema.
 
 ## Ordem de Implementacao
 
-1. Hook `useEventosDashboard.ts` com todas as queries
-2. `EventosKPICards.tsx` (Area 1)
-3. `EventosFunilOperacional.tsx` (Area 2)
-4. `EventosGraficosTipo.tsx` (Area 3)
-5. `EventosGraficosAnalise.tsx` (Area 4)
-6. `EventosAlertasUrgentes.tsx` (Area 5)
-7. `EventosTabelaRecentes.tsx` (Area 6)
-8. `SinistrosDashboard.tsx` reescrito integrando tudo + filtros globais
-
+1. `types/sinistros.ts` — expandir tipo
+2. `EncaminharSindicanciaDialog.tsx` — melhorar com motivos predefinidos
+3. `ConcluirSindicanciaModal.tsx` — criar modal de conclusao
+4. `CardSindicanciaStatus.tsx` — criar card de status
+5. `SinistroDetalhe.tsx` — integrar tudo
+6. `useEventosDashboard.ts` — alertas de prazo
