@@ -1,106 +1,109 @@
 
 
-# Perda Total — Fluxo Universal de Indenizacao
+# Alinhamento da Tabela Comparativa — Correções Pendentes
 
-## Analise do Estado Atual
+## Auditoria do Estado Atual
 
-### O que ja funciona:
-- **VistoriaEventoOrcamento**: regulador pode marcar "Total (>= 75% FIPE)", mas o formulario ainda exibe campos de orcamento/pecas quando Total e selecionado (deveria ocultar)
-- **EmitirParecerModal**: calcula tipo_dano automaticamente baseado em 75% FIPE e rota para `aguardando_pagamento` — mas APENAS para `incendio` e `fenomeno_natural`. Colisao fica em `aprovado`
-- **IniciarIndenizacaoModal**: calcula depreciacoes e cria documentos pendentes — mas a lista de documentos esta incompleta e depreciacoes sao cumulativas (deveria aplicar apenas a MAIOR)
-- **CardRecuperacaoStatus**: botao "Iniciar Indenizacao" existe mas so aparece para roubo/furto (contexto de recuperacao)
-- **NovaOSModal**: ja bloqueia criacao de OS para perda_total
+Comparando a tabela de especificação com o código atual, a maioria dos fluxos já está implementada corretamente. Abaixo, o resultado da auditoria e as correções necessárias.
 
-### O que falta:
-1. EmitirParecerModal deve encaminhar para `aguardando_pagamento` para TODOS os tipos com perda total (colisao incluso)
-2. VistoriaEventoOrcamento deve ocultar orcamento de pecas quando tipo_dano = total
-3. IniciarIndenizacaoModal precisa da lista completa de documentos de indenizacao
-4. Depreciacoes devem aplicar apenas a MAIOR (nao somar)
-5. Card/botao de indenizacao no SinistroDetalhe para qualquer tipo com perda total (nao so roubo/furto)
-6. Informacoes do fluxo de indenizacao no detalhe do sinistro
+### Já correto:
+- Colisão: fluxo completo com 13 passos, B.O., vistoria presencial, oficina, pode ser PT
+- Roubo/Furto: acionamento automático do rastreador, sem vistoria, sem oficina (exceto recuperado)
+- Vidros: carência 120 dias, limite 12 meses por peça, B.O. opcional, sem vistoria presencial
+- Incêndio: laudo bombeiros dinâmico, análise interna GNV/sobrecarga, diverge PT/parcial
+- Alagamento: comprovante evento, fotos in loco, tipo de água, análise jurídica, diverge PT/parcial
+- Perda total universal: qualquer tipo com PT aprovada vai para indenização integral
+- Bloqueio de OS para perda total
+- Depreciação aplica apenas a maior
+
+### Gaps encontrados (3 correções):
 
 ---
 
-## Alteracoes em Codigo
+## Correção 1 — Roubo NÃO exige chaves (apenas Furto)
 
-### 1. EmitirParecerModal.tsx — Perda total universal
+A tabela diz claramente:
+- **Roubo**: "Não exige chaves. Aciona rastreador."
+- **Furto**: "Exige chaves. Aciona rastreador."
 
-A condicao atual na linha 126:
+O código atual em `DOCUMENTOS_OBRIGATORIOS` tem `chaves` como obrigatório para **ambos** roubo e furto:
+
 ```
-if (['incendio', 'fenomeno_natural'].includes(sinistro.tipo) && tipoDano === 'perda_total' ...)
-```
-Deve ser alterada para aplicar a TODOS os tipos:
-```
-if (tipoDano === 'perda_total' && resultado === 'aprovado')
-```
-Isso garante que colisao, incendio, fenomeno_natural e qualquer outro tipo com perda total va direto para indenizacao.
-
-### 2. VistoriaEventoOrcamento.tsx — Ocultar orcamento quando total
-
-Quando `tipoDano === 'total'`:
-- Ocultar secao "Itens do Orcamento" (pecas e servicos)
-- Ocultar secao "Etapas Necessarias para o Reparo"
-- Manter apenas: descricao tecnica + observacoes de perda total + parecer do regulador
-- Alterar label do botao de "Finalizar Vistoria e Enviar Orcamento" para "Finalizar Vistoria — Perda Total"
-- Adicionar alerta visual explicando que o veiculo nao sera reparado
-
-### 3. IniciarIndenizacaoModal.tsx — Documentos completos + regra de depreciacao
-
-**Lista de documentos atualizada:**
-- B.O. original (obrigatorio)
-- CRV preenchido a favor da Pratic Car (obrigatorio)
-- CRLV original (obrigatorio)
-- Quitacao de IPVA e seguro obrigatorio — 2 ultimos anos (obrigatorio)
-- Chaves do veiculo (obrigatorio)
-- Certidao negativa de furto e multa (obrigatorio)
-- Procuracao publica para a associacao (obrigatorio)
-- Quitacao de financiamento (condicional — se financiado)
-- Contrato social ou estatuto (condicional — se PJ)
-- Nota fiscal de venda (condicional — se leilao)
-
-**Regra de depreciacao:**
-Atualmente soma todas as depreciacoes selecionadas. A regra correta e aplicar APENAS a maior. Alterar o calculo:
-```
-const maiorDepreciacao = Math.max(
-  ...DEPRECIACOES.filter(d => depreciacoes[d.key]).map(d => d.percentual), 
-  0
-);
-const valorFinal = valorBase * (1 - maiorDepreciacao / 100);
+roubo: [
+  ...
+  { tipo: 'chaves', nome: 'Declaração das Chaves', obrigatorio: true },  // ← ERRADO
+],
+furto: [
+  ...
+  { tipo: 'chaves', nome: 'Declaração das Chaves', obrigatorio: true },  // ← CORRETO
+],
 ```
 
-Adicionar informacao visual: "Regra: aplica-se apenas a maior depreciacao"
+**Ação**: Remover o documento `chaves` da lista de documentos obrigatórios do tipo `roubo`.
 
-### 4. SinistroDetalhe.tsx — Botao de indenizacao para perda total
+## Correção 2 — Fenômeno Natural: comprovante do evento deve ser obrigatório
 
-Adicionar na coluna lateral (right column), apos os cards existentes, um card condicional para sinistros com `tipo_dano === 'perda_total'` e status `aprovado` ou `aguardando_analise`:
-- Exibir badge "Perda Total" com icone
-- Botao "Iniciar Processo de Indenizacao" que abre o IniciarIndenizacaoModal
-- Importar e usar IniciarIndenizacaoModal diretamente (ja existe, so falta expor no contexto correto)
+A tabela diz: "Comprovante evento obrigatório antes de avançar"
 
-Isso atende todos os tipos: colisao, incendio, fenomeno_natural e roubo/furto com recuperacao.
+O código atual tem `comprovante_evento` com `obrigatorio: false`:
 
-### 5. IniciarIndenizacaoModal.tsx — Informacoes adicionais
+```
+fenomeno_natural: [
+  ...
+  { tipo: 'comprovante_evento', nome: '...', obrigatorio: false },  // ← ERRADO
+],
+```
 
-Adicionar secao informativa:
-- Prazo: "60 dias uteis a partir da documentacao completa"
-- Nota sobre GNV: "Se o veiculo tem kit gas, o associado pode retirar antes da entrega"
-- Nota sobre financiamento: "Se financiado, o credor e pago primeiro, saldo restante ao associado"
+**Ação**: Alterar para `obrigatorio: true`.
+
+## Correção 3 — Vidros: B.O. condicional (tentativa de furto)
+
+A tabela diz: "B.O. exigido apenas se vidro quebrou por tentativa de furto"
+
+O código atual tem B.O. como opcional (`obrigatorio: false`), o que está parcialmente correto, mas o sistema não tem um campo para indicar se foi tentativa de furto, nem torna o B.O. obrigatório nesse caso.
+
+**Ação**: Adicionar um toggle "O dano foi causado por tentativa de furto?" no formulário de vidros. Se "Sim", tornar B.O. obrigatório dinamicamente nos documentos criados.
+
+---
+
+## Alterações em Código
+
+### Arquivo: `src/components/eventos/NovoSinistroModal.tsx`
+
+**1. Remover chaves de roubo (linha ~92-96)**:
+```typescript
+roubo: [
+  { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+  { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+  { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+  // chaves REMOVIDO — roubo não exige chaves
+],
+```
+
+**2. Comprovante fenômeno natural obrigatório (linha ~113)**:
+```typescript
+fenomeno_natural: [
+  ...
+  { tipo: 'comprovante_evento', nome: 'Comprovante do Evento (notícia/defesa civil)', obrigatorio: true },
+],
+```
+
+**3. Toggle tentativa de furto para vidros**:
+- Novo state: `tentativaFurto` (boolean)
+- Quando tipo = vidros, exibir toggle "O dano foi causado por tentativa de furto/roubo?"
+- Se sim, ao criar documentos pendentes, marcar o B.O. como obrigatório
 
 ---
 
 ## Resumo dos Arquivos
 
-| Acao | Arquivo |
+| Ação | Arquivo |
 |---|---|
-| Modificar | `src/components/eventos/EmitirParecerModal.tsx` (perda total para TODOS os tipos) |
-| Modificar | `src/components/regulador/VistoriaEventoOrcamento.tsx` (ocultar orcamento quando total) |
-| Modificar | `src/components/sinistros/IniciarIndenizacaoModal.tsx` (documentos completos + maior depreciacao) |
-| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` (card indenizacao para qualquer perda total) |
+| Modificar | `src/components/eventos/NovoSinistroModal.tsx` (3 correções: chaves roubo, comprovante obrigatório, toggle tentativa furto) |
 
-## Ordem de Implementacao
+## Ordem de Implementação
 
-1. EmitirParecerModal — tornar perda total universal
-2. VistoriaEventoOrcamento — ocultar orcamento quando total
-3. IniciarIndenizacaoModal — documentos completos + regra de maior depreciacao
-4. SinistroDetalhe — card/botao de indenizacao para perda total
+1. Remover `chaves` dos documentos de roubo
+2. Alterar `comprovante_evento` para obrigatório em fenômeno natural
+3. Adicionar toggle "tentativa de furto" para vidros com B.O. condicional
 
