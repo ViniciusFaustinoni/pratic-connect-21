@@ -6,7 +6,21 @@ export const MARCAS_VEICULOS = [
   'Mini', 'Yamaha', 'Shineray', 'Haojue',
 ] as const;
 
-export const ESPECIALIDADES = [
+export const ESPECIALIDADES_OFICINAS = [
+  'Funilaria / Lanternagem',
+  'Pintura Automotiva',
+  'Mecânica Geral',
+  'Mecânica Especializada (câmbio, motor)',
+  'Elétrica Automotiva',
+  'Vidros e Faróis',
+  'Ar Condicionado',
+  'Suspensão e Freios',
+  'Polimento e Estética',
+  'Tapeçaria / Estofamento',
+  'Martelinho de Ouro',
+] as const;
+
+export const ESPECIALIDADES_PRESTADORES = [
   'Funilaria / Lanternagem',
   'Pintura Automotiva',
   'Mecânica Geral',
@@ -24,6 +38,8 @@ export const ESPECIALIDADES = [
   'Reboque / Guincho',
   'Vistoria Cautelar',
 ] as const;
+
+export const ESPECIALIDADES = ESPECIALIDADES_PRESTADORES;
 
 export const TIPOS_PECAS = [
   'Peças Novas',

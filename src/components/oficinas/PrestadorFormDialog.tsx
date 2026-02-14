@@ -255,7 +255,7 @@ export function PrestadorFormDialog({ open, onOpenChange, prestador }: Props) {
 
             {/* Marcas e Especialidades */}
             <MarcasAtendidasSelect value={marcas} onChange={setMarcas} />
-            <EspecialidadesSelect value={especialidades} onChange={setEspecialidades} />
+            <EspecialidadesSelect value={especialidades} onChange={setEspecialidades} contexto="prestador" />
 
             {/* Observações */}
             <FormField control={form.control} name="observacoes" render={({ field }) => (

@@ -10,7 +10,7 @@ import { OficinaFormDialog } from '@/components/oficinas/OficinaFormDialog';
 import { OficinaDetailDrawer } from '@/components/oficinas/OficinaDetailDrawer';
 import { ImportarOficinasDialog } from '@/components/oficinas/ImportarOficinasDialog';
 import { STATUS_OFICINA_LABELS, STATUS_OFICINA_COLORS, type Oficina, type StatusOficina } from '@/types/database';
-import { MARCAS_VEICULOS, ESPECIALIDADES } from '@/lib/fornecedores-constants';
+import { MARCAS_VEICULOS, ESPECIALIDADES_OFICINAS } from '@/lib/fornecedores-constants';
 
 export default function Oficinas() {
   const [search, setSearch] = useState('');
@@ -83,7 +83,7 @@ export default function Oficinas() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todas especialidades</SelectItem>
-            {ESPECIALIDADES.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+            {ESPECIALIDADES_OFICINAS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
