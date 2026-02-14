@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAdvogados } from '@/hooks/useAdvogados';
 import { toast } from 'sonner';
 import { Loader2, Scale, Info } from 'lucide-react';
+import { notificarCasoJuridicoCriado } from '@/components/sinistros/NotificacaoHelper';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -75,19 +76,34 @@ export function EncaminharJuridicoEventoModal({
 
       // Atualizar sinistro
       const { error: updateError } = await supabase.from('sinistros').update({
-        status: 'suspenso' as any,
+        status: 'aguardando_juridico' as any,
         motivo_suspensao: `Encaminhado ao jurídico: ${tipoLabel}`,
+        prazo_suspenso: true,
+        prazo_suspenso_em: new Date().toISOString(),
+        prazo_motivo_suspensao: 'juridico',
         updated_at: new Date().toISOString(),
       }).eq('id', sinistroId);
       if (updateError) throw updateError;
 
+      // Registrar suspensão de prazo
+      await supabase.from('sinistro_suspensoes_prazo').insert({
+        sinistro_id: sinistroId,
+        motivo: 'juridico',
+        inicio: new Date().toISOString(),
+      });
+
       // Histórico
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistroId,
-        status_novo: 'suspenso',
+        status_novo: 'aguardando_juridico',
         usuario_id: user?.id,
         observacao: `Encaminhado para Jurídico. Tipo: ${tipoLabel}. Prioridade: ${prioridade}. ${descricao}`,
       });
+
+      // Notificar advogado se selecionado
+      if (advogadoId) {
+        notificarCasoJuridicoCriado(protocolo, tipoLabel, advogadoId);
+      }
     },
     onSuccess: () => {
       toast.success('Evento encaminhado para o Jurídico');

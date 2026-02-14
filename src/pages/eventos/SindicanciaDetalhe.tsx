@@ -24,6 +24,7 @@ import {
 import { STATUS_SINISTRO_LABELS, STATUS_SINISTRO_COLORS, RESULTADO_SINDICANCIA_LABELS } from '@/types/sinistros';
 import type { ResultadoSindicancia, StatusSinistro } from '@/types/sinistros';
 import { NovaEvidenciaModal } from '@/components/sinistros/NovaEvidenciaModal';
+import { notificarAguardandoDiretoria, notificarSindicanciaConcluida } from '@/components/sinistros/NotificacaoHelper';
 
 const RESULTADO_DESCRICAO: Record<ResultadoSindicancia, string> = {
   regular: 'A investigação não encontrou evidências de fraude ou irregularidade. O evento volta para análise e pode ser aprovado normalmente.',
@@ -128,8 +129,8 @@ export default function SindicanciaDetalhe() {
         regular: 'em_analise',
         irregular: 'negado',
         carta_cancelamento: 'cancelado',
-        juridico: 'suspenso',
-        inconclusivo: 'suspenso',
+        juridico: 'aguardando_juridico',
+        inconclusivo: 'aguardando_diretoria',
       };
       const novoStatus = statusMap[resultado];
 
@@ -144,9 +145,15 @@ export default function SindicanciaDetalhe() {
       }
       if (resultado === 'inconclusivo') {
         updateData.motivo_suspensao = 'Sindicância inconclusiva — aguardando decisão da diretoria';
+        updateData.prazo_suspenso = true;
+        updateData.prazo_suspenso_em = new Date().toISOString();
+        updateData.prazo_motivo_suspensao = 'diretoria';
       }
       if (resultado === 'juridico') {
         updateData.motivo_suspensao = 'Encaminhado ao jurídico pela sindicância';
+        updateData.prazo_suspenso = true;
+        updateData.prazo_suspenso_em = new Date().toISOString();
+        updateData.prazo_motivo_suspensao = 'juridico';
       }
 
       const { error: updateError } = await supabase
@@ -189,11 +196,20 @@ export default function SindicanciaDetalhe() {
         });
       }
 
+      // Notificações
       try {
         await supabase.functions.invoke('notificar-sinistro', {
           body: { sinistro_id: id, status: novoStatus },
         });
       } catch {}
+
+      // Notificações internas
+      if (resultado === 'inconclusivo') {
+        notificarAguardandoDiretoria(id!, sinistro?.protocolo || '');
+      }
+      if (sinistro?.analista_id) {
+        notificarSindicanciaConcluida(id!, sinistro?.protocolo || '', RESULTADO_SINDICANCIA_LABELS[resultado], sinistro.analista_id);
+      }
     },
     onSuccess: () => {
       toast.success('Sindicância concluída com sucesso!');

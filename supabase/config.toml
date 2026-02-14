@@ -431,3 +431,6 @@ verify_jwt = false
 
 [functions.confirmar-retirada]
 verify_jwt = false
+
+[functions.cron-verificar-sindicancias]
+verify_jwt = false
