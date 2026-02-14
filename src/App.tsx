@@ -300,6 +300,7 @@ import AvaliarAssistencia from "./pages/avaliar/AvaliarAssistencia";
 import UploadDocumentosSinistro from "./pages/public/UploadDocumentosSinistro";
 import EventoColisao from "./pages/public/EventoColisao";
 import EventoPosAprovacao from "./pages/public/EventoPosAprovacao";
+import RetiradaVeiculo from "./pages/public/RetiradaVeiculo";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -367,6 +368,9 @@ const App = () => (
             
             {/* Public Evento Pós-Aprovação (Termo + Pagamento) */}
             <Route path="/evento-aprovado/:token" element={<EventoPosAprovacao />} />
+            
+            {/* Public Retirada Veículo */}
+            <Route path="/retirada/:token" element={<RetiradaVeiculo />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

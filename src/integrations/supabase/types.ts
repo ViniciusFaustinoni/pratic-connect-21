@@ -13325,6 +13325,7 @@ export type Database = {
       ordens_servico: {
         Row: {
           aprovado_por: string | null
+          assinatura_retirada_url: string | null
           associado_id: string
           autentique_documento_id: string | null
           autentique_url: string | null
@@ -13333,9 +13334,12 @@ export type Database = {
           created_at: string | null
           criado_por: string | null
           data_conclusao: string | null
+          data_conclusao_real: string | null
           data_entrada: string | null
           data_previsao: string | null
+          data_retirada: string | null
           etapas_reparo: Json | null
+          garantia_ate: string | null
           id: string
           numero: string
           observacoes: string | null
@@ -13343,9 +13347,12 @@ export type Database = {
           oficina_id: string
           sinistro_id: string | null
           status: Database["public"]["Enums"]["status_ordem_servico"] | null
+          tempo_total_dias: number | null
           termo_saida_assinado: boolean | null
           termo_saida_assinado_em: string | null
           termo_saida_url: string | null
+          token_retirada: string | null
+          token_retirada_expira: string | null
           updated_at: string | null
           valor_aprovado: number | null
           valor_orcamento: number | null
@@ -13354,6 +13361,7 @@ export type Database = {
         }
         Insert: {
           aprovado_por?: string | null
+          assinatura_retirada_url?: string | null
           associado_id: string
           autentique_documento_id?: string | null
           autentique_url?: string | null
@@ -13362,9 +13370,12 @@ export type Database = {
           created_at?: string | null
           criado_por?: string | null
           data_conclusao?: string | null
+          data_conclusao_real?: string | null
           data_entrada?: string | null
           data_previsao?: string | null
+          data_retirada?: string | null
           etapas_reparo?: Json | null
+          garantia_ate?: string | null
           id?: string
           numero: string
           observacoes?: string | null
@@ -13372,9 +13383,12 @@ export type Database = {
           oficina_id: string
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_ordem_servico"] | null
+          tempo_total_dias?: number | null
           termo_saida_assinado?: boolean | null
           termo_saida_assinado_em?: string | null
           termo_saida_url?: string | null
+          token_retirada?: string | null
+          token_retirada_expira?: string | null
           updated_at?: string | null
           valor_aprovado?: number | null
           valor_orcamento?: number | null
@@ -13383,6 +13397,7 @@ export type Database = {
         }
         Update: {
           aprovado_por?: string | null
+          assinatura_retirada_url?: string | null
           associado_id?: string
           autentique_documento_id?: string | null
           autentique_url?: string | null
@@ -13391,9 +13406,12 @@ export type Database = {
           created_at?: string | null
           criado_por?: string | null
           data_conclusao?: string | null
+          data_conclusao_real?: string | null
           data_entrada?: string | null
           data_previsao?: string | null
+          data_retirada?: string | null
           etapas_reparo?: Json | null
+          garantia_ate?: string | null
           id?: string
           numero?: string
           observacoes?: string | null
@@ -13401,9 +13419,12 @@ export type Database = {
           oficina_id?: string
           sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_ordem_servico"] | null
+          tempo_total_dias?: number | null
           termo_saida_assinado?: boolean | null
           termo_saida_assinado_em?: string | null
           termo_saida_url?: string | null
+          token_retirada?: string | null
+          token_retirada_expira?: string | null
           updated_at?: string | null
           valor_aprovado?: number | null
           valor_orcamento?: number | null
@@ -13701,6 +13722,142 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "ordens_servico"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      os_atualizacoes_diarias: {
+        Row: {
+          created_at: string | null
+          descricao: string
+          descricao_problema: string | null
+          etapa_concluida: string | null
+          etapa_iniciada: string | null
+          fotos_urls: Json
+          id: string
+          ordem_servico_id: string
+          regulador_id: string
+          tem_problema: boolean | null
+          tipo_problema: string | null
+          video_url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          descricao: string
+          descricao_problema?: string | null
+          etapa_concluida?: string | null
+          etapa_iniciada?: string | null
+          fotos_urls?: Json
+          id?: string
+          ordem_servico_id: string
+          regulador_id: string
+          tem_problema?: boolean | null
+          tipo_problema?: string | null
+          video_url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          descricao?: string
+          descricao_problema?: string | null
+          etapa_concluida?: string | null
+          etapa_iniciada?: string | null
+          fotos_urls?: Json
+          id?: string
+          ordem_servico_id?: string
+          regulador_id?: string
+          tem_problema?: boolean | null
+          tipo_problema?: string | null
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "os_atualizacoes_diarias_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_atualizacoes_diarias_regulador_id_fkey"
+            columns: ["regulador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_atualizacoes_diarias_regulador_id_fkey"
+            columns: ["regulador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "os_atualizacoes_diarias_regulador_id_fkey"
+            columns: ["regulador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      os_vistorias_presenciais: {
+        Row: {
+          created_at: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          observacoes: string | null
+          ordem_servico_id: string
+          regulador_id: string
+          video_url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          observacoes?: string | null
+          ordem_servico_id: string
+          regulador_id: string
+          video_url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          observacoes?: string | null
+          ordem_servico_id?: string
+          regulador_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "os_vistorias_presenciais_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_vistorias_presenciais_regulador_id_fkey"
+            columns: ["regulador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_vistorias_presenciais_regulador_id_fkey"
+            columns: ["regulador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "os_vistorias_presenciais_regulador_id_fkey"
+            columns: ["regulador_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
           },
         ]
       }
@@ -22635,6 +22792,7 @@ export type Database = {
         | "cancelado"
         | "pendente_assinatura"
         | "finalizado"
+        | "entregue"
       status_pagamento_oficina:
         | "pendente"
         | "processando"
@@ -23023,6 +23181,7 @@ export const Constants = {
         "cancelado",
         "pendente_assinatura",
         "finalizado",
+        "entregue",
       ],
       status_pagamento_oficina: [
         "pendente",
