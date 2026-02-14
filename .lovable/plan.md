@@ -1,53 +1,44 @@
 
-# Exibir Historico de Orcamentos no Card Lateral do Auto Center
+# Corrigir Persistencia de Marcas e Tipos de Pecas no Auto Center
 
-## Objetivo
+## Problema
 
-Adicionar uma secao "Historico de Orcamentos" no drawer de detalhes do Auto Center (`AutoCenterDetailDrawer`), mostrando todas as cotacoes de pecas (`evento_cotacoes_pecas`) e ordens de servico (`ordens_servico`) vinculadas aquele Auto Center.
+A interface TypeScript `AutoCenter` em `src/hooks/useAutoCenters.ts` esta incompleta -- ela declara apenas 13 campos, mas a tabela `auto_centers` no banco possui 31 colunas. Os campos `marcas_atendidas`, `especialidades`, `status`, `razao_social`, `cnpj`, `whatsapp`, `bairro`, dados bancarios e outros estao **ausentes da interface**.
 
-## Dados Disponiveis
+As mutations `useCreateAutoCenter` e `useUpdateAutoCenter` usam essa interface como tipo do payload. Como resultado, campos fora da interface podem ser silenciosamente ignorados ou causar erros de tipo, impedindo a persistencia dos dados.
 
-Duas tabelas possuem `auto_center_id`:
+## Correcao
 
-1. **evento_cotacoes_pecas** -- cotacoes de pecas enviadas ao auto center (com status, valor_total, created_at, sinistro_id)
-2. **ordens_servico** -- ordens de servico vinculadas (com numero, status, valor_orcamento, created_at, sinistro_id)
+### 1. Atualizar a interface AutoCenter
 
-## Implementacao
+**Arquivo:** `src/hooks/useAutoCenters.ts`
 
-### 1. Criar hook `useAutoCenterHistorico`
+Adicionar todos os campos que existem na tabela do banco:
 
-**Arquivo:** `src/hooks/useAutoCenterHistorico.ts` (novo)
+```
+razao_social, nome_fantasia, cnpj, inscricao_estadual,
+whatsapp, telefone2, logradouro, numero, complemento, bairro,
+banco, agencia, conta, pix_chave, pix_tipo,
+especialidades (string[]), marcas_atendidas (string[]),
+status
+```
 
-- Query em `evento_cotacoes_pecas` filtrando por `auto_center_id`, trazendo `id, status, valor_total, created_at, sinistro_id` e join com `sinistros(protocolo)`
-- Query em `ordens_servico` filtrando por `auto_center_id`, trazendo `id, numero, status, valor_orcamento, created_at, sinistro_id` e join com `sinistros(protocolo)`
-- Retorna ambos os arrays ordenados por data decrescente
+### 2. Corrigir tipagem das mutations
 
-### 2. Criar componente `AutoCenterHistorico`
+**Arquivo:** `src/hooks/useAutoCenters.ts`
 
-**Arquivo:** `src/components/oficinas/AutoCenterHistorico.tsx` (novo)
+Com a interface completa, as mutations `useCreateAutoCenter` e `useUpdateAutoCenter` passarao a aceitar todos os campos do payload corretamente, sem necessidade de `as any`.
 
-- Recebe `autoCenterId` como prop
-- Usa o hook acima para buscar dados
-- Exibe uma timeline/lista com:
-  - Icone diferenciado para cotacao vs ordem de servico
-  - Status com badge colorido
-  - Valor total (quando disponivel)
-  - Protocolo do sinistro vinculado
-  - Data formatada
-- Estado vazio: "Nenhum orcamento registrado"
-- Estado de loading com skeleton
+### 3. Remover casts `as any` do formulario
 
-### 3. Integrar no drawer de detalhes
+**Arquivo:** `src/components/oficinas/AutoCenterFormDialog.tsx`
 
-**Arquivo:** `src/components/oficinas/AutoCenterDetailDrawer.tsx`
-
-- Adicionar a secao "Historico de Orcamentos" (com icone `History`) entre a secao de Pecas e os botoes de acao
-- Renderizar o componente `AutoCenterHistorico` passando o `autoCenter.id`
+Com a interface correta, os acessos como `(autoCenter as any).marcas_atendidas` poderao ser simplificados para `autoCenter.marcas_atendidas`.
 
 ## Arquivos Afetados
 
 | Acao | Arquivo |
 |---|---|
-| Criar | `src/hooks/useAutoCenterHistorico.ts` -- hook para buscar cotacoes e OS do auto center |
-| Criar | `src/components/oficinas/AutoCenterHistorico.tsx` -- componente de timeline do historico |
-| Modificar | `src/components/oficinas/AutoCenterDetailDrawer.tsx` -- adicionar secao de historico |
+| Modificar | `src/hooks/useAutoCenters.ts` -- completar interface AutoCenter com todos os campos do banco |
+| Modificar | `src/components/oficinas/AutoCenterFormDialog.tsx` -- remover casts `as any` desnecessarios |
+| Modificar | `src/pages/oficinas/AutoCenters.tsx` -- remover casts `as any` na listagem |
