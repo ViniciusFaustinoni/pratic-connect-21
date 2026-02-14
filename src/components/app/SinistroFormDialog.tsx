@@ -113,6 +113,7 @@ export default function SinistroFormDialog({ open, onOpenChange }: SinistroFormD
           data_ocorrencia: formData.data_ocorrencia,
           local: formData.local,
           descricao: formData.descricao,
+          necessita_reboque: precisaGuincho,
         },
       });
 
@@ -122,31 +123,15 @@ export default function SinistroFormDialog({ open, onOpenChange }: SinistroFormD
       return data;
     },
     onSuccess: async (sinistroData) => {
-      // Se precisa de guincho, criar assistência também
-      if (precisaGuincho && localizacao) {
-        try {
-          await supabase.functions.invoke('criar-chamado-assistencia', {
-            body: {
-              veiculo_id: formData.veiculo_id,
-              tipo_assistencia: 'guincho',
-              descricao: `Guincho solicitado junto com sinistro ${sinistroData.protocolo}`,
-              latitude: localizacao.lat,
-              longitude: localizacao.lng,
-              endereco: formData.local,
-            },
-          });
-          toast.success('Sinistro e guincho solicitados com sucesso!');
-        } catch (error) {
-          console.error('Erro ao criar assistência:', error);
-          toast.success('Sinistro criado! Erro ao solicitar guincho - tente novamente em Assistência 24h');
-        }
+      if (sinistroData.chamado_reboque_protocolo) {
+        toast.success(`Sinistro e reboque solicitados com sucesso!`);
       } else {
-        toast.success(`Sinistro ${sinistroData.protocolo} criado com sucesso!`);
+        toast.success(`Sinistro ${sinistroData.protocolo || sinistroData.numero_sinistro} criado com sucesso!`);
       }
 
       queryClient.invalidateQueries({ queryKey: ['my-sinistros-historico'] });
       onOpenChange(false);
-      navigate(`/app/sinistros/${sinistroData.sinistro?.id || ''}`);
+      navigate(`/app/sinistros/${sinistroData.sinistro?.id || sinistroData.sinistro_id || ''}`);
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Erro ao criar sinistro');

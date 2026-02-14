@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, Check, ChevronsUpDown, Car } from 'lucide-react';
+import { Loader2, Check, ChevronsUpDown, Car, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -37,6 +37,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 
 interface NovoSinistroModalProps {
   open: boolean;
@@ -100,6 +101,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
     bo_numero: '',
     descricao: ''
   });
+  const [necessitaReboque, setNecessitaReboque] = useState(false);
 
   // Buscar associados
   const { data: associados = [] } = useQuery({
@@ -155,7 +157,8 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
           bo_numero: formData.bo_numero || null,
           valor_fipe: veiculoSelecionado?.valor_fipe || null,
           canal: 'presencial',
-          status: 'comunicado' as any
+          status: 'comunicado' as any,
+          necessita_reboque: necessitaReboque,
         }])
         .select()
         .single();
@@ -169,6 +172,42 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         usuario_id: user?.id,
         observacao: 'Sinistro registrado via sistema'
       });
+
+      // Criar chamado de reboque se necessário
+      if (necessitaReboque) {
+        try {
+          const nowAss = new Date();
+          const dateStrAss = `${nowAss.getFullYear()}${String(nowAss.getMonth() + 1).padStart(2, '0')}${String(nowAss.getDate()).padStart(2, '0')}`;
+          const rndAss = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+          const protocoloAss = `ASS-${dateStrAss}-${rndAss}`;
+
+          const { data: chamadoReboque, error: chamadoError } = await supabase
+            .from('chamados_assistencia')
+            .insert({
+              protocolo: protocoloAss,
+              associado_id: selectedAssociado!,
+              veiculo_id: selectedVeiculo!,
+              tipo_servico: 'guincho',
+              descricao: `Reboque solicitado junto ao sinistro ${protocolo}`,
+              origem_endereco: formData.local_ocorrencia || null,
+              canal: 'presencial',
+              status: 'aberto',
+              data_abertura: new Date().toISOString(),
+            })
+            .select('id, protocolo')
+            .single();
+
+          if (!chamadoError && chamadoReboque) {
+            await supabase
+              .from('sinistros')
+              .update({ chamado_assistencia_id: chamadoReboque.id })
+              .eq('id', sinistro.id);
+            console.log('[NovoSinistroModal] Chamado de reboque criado:', chamadoReboque.protocolo);
+          }
+        } catch (rebError) {
+          console.error('[NovoSinistroModal] Erro ao criar reboque:', rebError);
+        }
+      }
       
       // Notificar associado via WhatsApp/Email/Sistema
       try {
@@ -181,7 +220,6 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         console.log('[NovoSinistroModal] Notificação enviada');
       } catch (notifError) {
         console.warn('[NovoSinistroModal] Erro ao notificar (não bloqueante):', notifError);
-        // Não bloqueia - sinistro foi criado com sucesso
       }
       
       return sinistro;
@@ -212,6 +250,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
       bo_numero: '',
       descricao: ''
     });
+    setNecessitaReboque(false);
     onClose();
   };
 
@@ -452,6 +491,18 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                 Mínimo 50 caracteres ({formData.descricao.length}/50)
               </p>
             </div>
+          </div>
+
+          {/* Precisa de reboque? */}
+          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+            <div className="flex items-center gap-3">
+              <Truck className="h-5 w-5 text-primary" />
+              <div>
+                <p className="font-medium text-sm">Precisa de reboque?</p>
+                <p className="text-xs text-muted-foreground">Criar chamado de assistência 24h automaticamente</p>
+              </div>
+            </div>
+            <Switch checked={necessitaReboque} onCheckedChange={setNecessitaReboque} />
           </div>
 
           <DialogFooter>
