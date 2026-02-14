@@ -385,11 +385,13 @@ export function useAlertasUrgentes() {
       const d20 = subDays(agora, 20).toISOString();
       const inicioMes = startOfMonth(agora).toISOString();
       const d7Futuro = new Date(agora.getTime() + 7 * 86400000).toISOString();
+      const agoraISO = agora.toISOString();
 
       const [
         semAtualizacao, docPendente, oficina60, indenizPrazo,
         analise7, recuperacao20, garantias,
-        finalizadosMes, cotasPendentes
+        finalizadosMes, cotasPendentes,
+        sindicanciaVencendo, sindicanciaVencida
       ] = await Promise.all([
         // Vermelhos
         supabase.from('sinistros').select('id', { count: 'exact', head: true })
@@ -406,12 +408,17 @@ export function useAlertasUrgentes() {
         supabase.from('sinistros').select('id', { count: 'exact', head: true })
           .eq('status', 'em_recuperacao').lt('updated_at', d20),
         supabase.from('sinistros').select('id', { count: 'exact', head: true })
-          .not('data_garantia_fim', 'is', null).gte('data_garantia_fim', agora.toISOString()).lte('data_garantia_fim', d7Futuro),
+          .not('data_garantia_fim', 'is', null).gte('data_garantia_fim', agoraISO).lte('data_garantia_fim', d7Futuro),
         // Azuis
         supabase.from('sinistros').select('id', { count: 'exact', head: true })
           .in('status', ['encerrado', 'pago', 'indenizado'] as any[]).gte('updated_at', inicioMes),
         supabase.from('sinistros').select('id', { count: 'exact', head: true })
           .eq('cota_paga', false).not('status', 'in', '(cancelado,negado)'),
+        // Sindicância
+        supabase.from('sinistros').select('id', { count: 'exact', head: true })
+          .eq('status', 'em_sindicancia').gte('sindicancia_prazo_fim', agoraISO).lte('sindicancia_prazo_fim', d7Futuro),
+        supabase.from('sinistros').select('id', { count: 'exact', head: true })
+          .eq('status', 'em_sindicancia').lt('sindicancia_prazo_fim', agoraISO),
       ]);
 
       return {
@@ -420,11 +427,13 @@ export function useAlertasUrgentes() {
           { key: 'doc_pendente', count: docPendente.count || 0, msg: 'eventos com documentação pendente há mais de 15 dias', acao: '/eventos/sinistros' },
           { key: 'oficina_60', count: oficina60.count || 0, msg: 'veículos em oficina há mais de 60 dias', acao: '/eventos/sinistros' },
           { key: 'indeniz_prazo', count: indenizPrazo.count || 0, msg: 'indenizações com prazo vencendo', acao: '/eventos/sinistros' },
+          { key: 'sindicancia_vencida', count: sindicanciaVencida.count || 0, msg: 'sindicâncias com prazo vencido', acao: '/eventos/sinistros' },
         ].filter(a => a.count > 0),
         amarelos: [
           { key: 'analise_7', count: analise7.count || 0, msg: 'eventos aguardando análise há mais de 7 dias', acao: '/eventos/sinistros' },
           { key: 'recuperacao_20', count: recuperacao20.count || 0, msg: 'veículos em recuperação há mais de 20 dias', acao: '/eventos/sinistros' },
           { key: 'garantias', count: garantias.count || 0, msg: 'garantias vencendo nos próximos 7 dias', acao: '/eventos/sinistros' },
+          { key: 'sindicancia_vencendo', count: sindicanciaVencendo.count || 0, msg: 'sindicâncias com prazo vencendo nos próximos 7 dias', acao: '/eventos/sinistros' },
         ].filter(a => a.count > 0),
         azuis: [
           { key: 'finalizados_mes', count: finalizadosMes.count || 0, msg: 'eventos finalizados este mês' },

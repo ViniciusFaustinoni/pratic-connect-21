@@ -53,7 +53,48 @@ export type TipoLocalEvento = 'rodovia_federal' | 'rodovia_estadual' | 'urbana' 
 
 export type TipoDano = 'parcial' | 'perda_total';
 
-export type ResultadoSindicancia = 'regular' | 'irregular' | 'inconclusivo';
+export type ResultadoSindicancia = 'regular' | 'irregular' | 'carta_cancelamento' | 'juridico' | 'inconclusivo';
+
+export const RESULTADO_SINDICANCIA_LABELS: Record<ResultadoSindicancia, string> = {
+  regular: 'Regular (Sem Fraude)',
+  irregular: 'Irregular (Fraude Comprovada)',
+  carta_cancelamento: 'Carta de Cancelamento',
+  juridico: 'Encaminhar ao Jurídico',
+  inconclusivo: 'Inconclusivo (Diretoria)',
+};
+
+export const MOTIVOS_SINDICANCIA: Record<string, string[]> = {
+  colisao: [
+    'Relato inconsistente com os danos',
+    'Fotos não conferem com B.O.',
+    'Histórico de múltiplos sinistros',
+    'Tempo suspeito entre evento e comunicado',
+    'Condutor embriagado',
+    'CNH vencida',
+  ],
+  roubo: [
+    'Dados do rastreador suspeitos',
+    'Locais suspeitos nos dias anteriores',
+    'Mudança de rotina do veículo',
+    'Rastreador obrigatório não instalado',
+  ],
+  furto: [
+    'Dados do rastreador suspeitos',
+    'Locais suspeitos nos dias anteriores',
+    'Mudança de rotina do veículo',
+    'Rastreador obrigatório não instalado',
+  ],
+  incendio: [
+    'Suspeita de incêndio provocado',
+    'GNV irregular',
+    'Sobrecarga elétrica por modificações',
+  ],
+  fenomeno_natural: [
+    'Entrada deliberada em área alagada',
+    'Água salgada detectada',
+    'Local notoriamente inadequado',
+  ],
+};
 
 export type CondutorRelacao = 'associado' | 'terceiro_autorizado' | 'terceiro';
 
