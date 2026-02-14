@@ -18384,6 +18384,71 @@ export type Database = {
           },
         ]
       }
+      sindicancia_evidencias: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          registrado_por: string | null
+          sinistro_id: string
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          registrado_por?: string | null
+          sinistro_id: string
+          tipo?: string
+          titulo: string
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          registrado_por?: string | null
+          sinistro_id?: string
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sindicancia_evidencias_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sindicancia_evidencias_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancia_evidencias_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancia_evidencias_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistro_contatos_agendados: {
         Row: {
           agendado_para: string

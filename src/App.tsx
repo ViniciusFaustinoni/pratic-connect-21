@@ -66,6 +66,8 @@ import SinistroAnalise from "./pages/eventos/SinistroAnalise";
 import PlanosAdmin from "./pages/admin/PlanosAdmin";
 import SinistroDetalhe from "./pages/eventos/SinistroDetalhe";
 import SinistrosDashboard from "./pages/eventos/SinistrosDashboard";
+import SindicanciasList from "./pages/eventos/SindicanciasList";
+import SindicanciaDetalhe from "./pages/eventos/SindicanciaDetalhe";
 import InstalacoesList from "./pages/monitoramento/InstalacoesList";
 import InstalacaoDetalhe from "./pages/monitoramento/InstalacaoDetalhe";
 import Rotas from "./pages/monitoramento/Rotas";
@@ -426,6 +428,8 @@ const App = () => (
               <Route path="/eventos/sinistros" element={<SinistrosList />} />
               <Route path="/eventos/sinistros/:id" element={<SinistroDetalhe />} />
               <Route path="/eventos/sinistros/:id/analisar" element={<SinistroAnalise />} />
+              <Route path="/eventos/sindicancias" element={<SindicanciasList />} />
+              <Route path="/eventos/sindicancias/:id" element={<SindicanciaDetalhe />} />
               
               {/* Assistência 24h */}
               <Route path="/assistencia" element={<AssistenciaDashboard />} />
