@@ -2573,7 +2573,11 @@ export type Database = {
           created_at: string
           id: string
           nome: string
+          tipo_peca: string | null
           valor: number | null
+          veiculo_ano: string | null
+          veiculo_marca: string | null
+          veiculo_modelo: string | null
         }
         Insert: {
           auto_center_id: string
@@ -2581,7 +2585,11 @@ export type Database = {
           created_at?: string
           id?: string
           nome: string
+          tipo_peca?: string | null
           valor?: number | null
+          veiculo_ano?: string | null
+          veiculo_marca?: string | null
+          veiculo_modelo?: string | null
         }
         Update: {
           auto_center_id?: string
@@ -2589,7 +2597,11 @@ export type Database = {
           created_at?: string
           id?: string
           nome?: string
+          tipo_peca?: string | null
           valor?: number | null
+          veiculo_ano?: string | null
+          veiculo_marca?: string | null
+          veiculo_modelo?: string | null
         }
         Relationships: [
           {
