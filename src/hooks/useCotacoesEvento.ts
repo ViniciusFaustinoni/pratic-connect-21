@@ -112,9 +112,24 @@ export function useCotacoesEvento(sinistroId: string | undefined) {
 
       if (err2) throw err2;
     },
-    onSuccess: () => {
+    onSuccess: async (_: unknown, cotacaoId: string) => {
       toast.success('Cotação aprovada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['cotacoes-evento', sinistroId] });
+
+      // Gerar OS automaticamente via edge function
+      try {
+        const { data, error } = await supabase.functions.invoke('gerar-os-cotacao-aprovada', {
+          body: { sinistro_id: sinistroId, cotacao_id: cotacaoId },
+        });
+        if (error) throw error;
+        if (data?.os_numero) {
+          toast.success(`OS ${data.os_numero} gerada automaticamente!`);
+        }
+        queryClient.invalidateQueries({ queryKey: ['ordens_servico'] });
+      } catch (e: any) {
+        console.error('Erro ao gerar OS:', e);
+        toast.error('Cotação aprovada, mas houve erro ao gerar a OS: ' + (e.message || 'erro desconhecido'));
+      }
     },
     onError: () => toast.error('Erro ao aprovar cotação'),
   });

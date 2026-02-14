@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, ClipboardList, User, LogOut } from 'lucide-react';
+import { Home, ClipboardList, User, LogOut, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import logoFullDark from '@/assets/logos/logo-full-dark.png';
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/regulador' },
   { icon: ClipboardList, label: 'Vistorias', path: '/regulador/vistorias' },
+  { icon: Wrench, label: 'Oficina', path: '/regulador/oficina' },
   { icon: User, label: 'Perfil', path: '/regulador/perfil' },
 ];
 

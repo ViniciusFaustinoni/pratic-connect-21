@@ -419,3 +419,6 @@ verify_jwt = false
 
 [functions.enviar-cotacao-pecas]
 verify_jwt = false
+
+[functions.gerar-os-cotacao-aprovada]
+verify_jwt = false
