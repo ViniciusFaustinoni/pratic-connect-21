@@ -321,16 +321,28 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
               canal: 'presencial',
               status: 'aberto',
               data_abertura: new Date().toISOString(),
+              atendente_id: user?.id || null,
             })
             .select('id, protocolo')
             .single();
 
           if (!chamadoError && chamadoReboque) {
+            // Vincular chamado ao sinistro
             await supabase
               .from('sinistros')
               .update({ chamado_assistencia_id: chamadoReboque.id })
               .eq('id', sinistro.id);
-            console.log('[NovoSinistroModal] Chamado de reboque criado:', chamadoReboque.protocolo);
+
+            // Registrar histórico do chamado de assistência
+            await supabase.from('chamados_assistencia_historico').insert({
+              chamado_id: chamadoReboque.id,
+              status_anterior: null,
+              status_novo: 'aberto',
+              usuario_id: user?.id || null,
+              observacao: `Chamado de guincho criado automaticamente a partir do sinistro ${protocolo}`,
+            });
+
+            console.log('[NovoSinistroModal] Chamado de reboque criado com histórico:', chamadoReboque.protocolo);
           }
         } catch (rebError) {
           console.error('[NovoSinistroModal] Erro ao criar reboque:', rebError);
