@@ -30,6 +30,8 @@ export interface AutoCenterPeca {
 interface UseAutoCentersParams {
   search?: string;
   tipo?: string;
+  especialidade?: string;
+  marca?: string;
 }
 
 export function useAutoCenters(params: UseAutoCentersParams = {}) {
@@ -46,6 +48,12 @@ export function useAutoCenters(params: UseAutoCentersParams = {}) {
       }
       if (params.tipo) {
         query = query.eq('tipo', params.tipo);
+      }
+      if (params.especialidade) {
+        query = query.contains('especialidades', [params.especialidade]);
+      }
+      if (params.marca) {
+        query = query.or(`marcas_atendidas.cs.{${params.marca}},marcas_atendidas.cs.{GLOBAL}`);
       }
 
       const { data, error } = await query;

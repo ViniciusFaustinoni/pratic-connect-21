@@ -9,6 +9,7 @@ export interface OficinaFilters {
   estado?: string;
   search?: string;
   especialidade?: string;
+  marca?: string;
 }
 
 export function useOficinas(filters?: OficinaFilters) {
@@ -34,6 +35,9 @@ export function useOficinas(filters?: OficinaFilters) {
       }
       if (filters?.especialidade) {
         query = query.contains('especialidades', [filters.especialidade]);
+      }
+      if (filters?.marca) {
+        query = query.or(`marcas_atendidas.cs.{${filters.marca}},marcas_atendidas.cs.{GLOBAL}`);
       }
 
       const { data, error } = await query;

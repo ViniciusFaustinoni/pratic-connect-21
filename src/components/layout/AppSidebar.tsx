@@ -230,6 +230,7 @@ const menuConfig: {
       items: [
         { title: 'Oficinas', url: '/oficinas', icon: Building2 },
         { title: 'Auto Centers', url: '/oficinas/auto-centers', icon: Store },
+        { title: 'Prestadores', url: '/oficinas/prestadores', icon: Puzzle },
         { title: 'Ordens de Serviço', url: '/ordens-servico', icon: ClipboardList },
       ],
     },

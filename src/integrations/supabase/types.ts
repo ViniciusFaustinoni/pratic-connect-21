@@ -2603,49 +2603,100 @@ export type Database = {
       }
       auto_centers: {
         Row: {
+          agencia: string | null
+          bairro: string | null
+          banco: string | null
           cep: string | null
           cidade: string | null
+          cnpj: string | null
+          complemento: string | null
+          conta: string | null
           contato_email: string | null
           contato_nome: string | null
           contato_telefone: string | null
           created_at: string
           endereco: string | null
+          especialidades: string[] | null
           estado: string | null
           id: string
+          logradouro: string | null
+          marcas_atendidas: string[] | null
           nome: string
+          nome_fantasia: string | null
+          numero: string | null
           observacoes: string | null
+          pix_chave: string | null
+          pix_tipo: string | null
+          razao_social: string | null
+          status: string | null
+          telefone2: string | null
           tipo: string
           updated_at: string
+          whatsapp: string | null
         }
         Insert: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
           cep?: string | null
           cidade?: string | null
+          cnpj?: string | null
+          complemento?: string | null
+          conta?: string | null
           contato_email?: string | null
           contato_nome?: string | null
           contato_telefone?: string | null
           created_at?: string
           endereco?: string | null
+          especialidades?: string[] | null
           estado?: string | null
           id?: string
+          logradouro?: string | null
+          marcas_atendidas?: string[] | null
           nome: string
+          nome_fantasia?: string | null
+          numero?: string | null
           observacoes?: string | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          razao_social?: string | null
+          status?: string | null
+          telefone2?: string | null
           tipo?: string
           updated_at?: string
+          whatsapp?: string | null
         }
         Update: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
           cep?: string | null
           cidade?: string | null
+          cnpj?: string | null
+          complemento?: string | null
+          conta?: string | null
           contato_email?: string | null
           contato_nome?: string | null
           contato_telefone?: string | null
           created_at?: string
           endereco?: string | null
+          especialidades?: string[] | null
           estado?: string | null
           id?: string
+          logradouro?: string | null
+          marcas_atendidas?: string[] | null
           nome?: string
+          nome_fantasia?: string | null
+          numero?: string | null
           observacoes?: string | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          razao_social?: string | null
+          status?: string | null
+          telefone2?: string | null
           tipo?: string
           updated_at?: string
+          whatsapp?: string | null
         }
         Relationships: []
       }
@@ -13007,6 +13058,7 @@ export type Database = {
           id: string
           inscricao_estadual: string | null
           logradouro: string | null
+          marcas_atendidas: string[] | null
           nome_fantasia: string | null
           nota_media: number | null
           numero: string | null
@@ -13035,6 +13087,7 @@ export type Database = {
           id?: string
           inscricao_estadual?: string | null
           logradouro?: string | null
+          marcas_atendidas?: string[] | null
           nome_fantasia?: string | null
           nota_media?: number | null
           numero?: string | null
@@ -13063,6 +13116,7 @@ export type Database = {
           id?: string
           inscricao_estadual?: string | null
           logradouro?: string | null
+          marcas_atendidas?: string[] | null
           nome_fantasia?: string | null
           nota_media?: number | null
           numero?: string | null
@@ -14665,6 +14719,90 @@ export type Database = {
           total_atendimentos?: number | null
           total_avaliacoes?: number | null
           updated_at?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      prestadores_evento: {
+        Row: {
+          agencia: string | null
+          bairro: string | null
+          banco: string | null
+          cep: string | null
+          cidade: string | null
+          cnpj: string | null
+          complemento: string | null
+          conta: string | null
+          created_at: string
+          email: string | null
+          especialidades: string[] | null
+          estado: string | null
+          id: string
+          logradouro: string | null
+          marcas_atendidas: string[] | null
+          nome_fantasia: string | null
+          numero: string | null
+          observacoes: string | null
+          pix_chave: string | null
+          pix_tipo: string | null
+          razao_social: string
+          status: string | null
+          telefone: string | null
+          updated_at: string
+          whatsapp: string | null
+        }
+        Insert: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnpj?: string | null
+          complemento?: string | null
+          conta?: string | null
+          created_at?: string
+          email?: string | null
+          especialidades?: string[] | null
+          estado?: string | null
+          id?: string
+          logradouro?: string | null
+          marcas_atendidas?: string[] | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          razao_social: string
+          status?: string | null
+          telefone?: string | null
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Update: {
+          agencia?: string | null
+          bairro?: string | null
+          banco?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnpj?: string | null
+          complemento?: string | null
+          conta?: string | null
+          created_at?: string
+          email?: string | null
+          especialidades?: string[] | null
+          estado?: string | null
+          id?: string
+          logradouro?: string | null
+          marcas_atendidas?: string[] | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
+          razao_social?: string
+          status?: string | null
+          telefone?: string | null
+          updated_at?: string
           whatsapp?: string | null
         }
         Relationships: []
