@@ -46,6 +46,8 @@ const PERFIS_FUNCIONARIO: PerfilAcesso[] = [
   'vistoriador_base',
   'analista_marketing',
   'analista_juridico',
+  'regulador',
+  'analista_eventos',
 ];
 
 const formSchema = z.object({
