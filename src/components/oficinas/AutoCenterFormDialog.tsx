@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { MarcasAtendidasSelect } from './MarcasAtendidasSelect';
-import { EspecialidadesSelect } from './EspecialidadesSelect';
+import { TiposPecasSelect } from './TiposPecasSelect';
 import { useCreateAutoCenter, useUpdateAutoCenter, type AutoCenter } from '@/hooks/useAutoCenters';
 import { buscarCep } from '@/lib/cep';
 
@@ -54,7 +54,7 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
   const create = useCreateAutoCenter();
   const update = useUpdateAutoCenter();
   const [marcas, setMarcas] = useState<string[]>([]);
-  const [especialidades, setEspecialidades] = useState<string[]>([]);
+  const [tiposPecas, setTiposPecas] = useState<string[]>([]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -93,11 +93,11 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
           observacoes: autoCenter.observacoes || '',
         });
         setMarcas((autoCenter as any).marcas_atendidas || []);
-        setEspecialidades((autoCenter as any).especialidades || []);
+        setTiposPecas((autoCenter as any).especialidades || []);
       } else {
         form.reset({ nome: '', tipo: 'auto_center', whatsapp: '', status: 'ativo', inscricao_estadual: '' });
         setMarcas([]);
-        setEspecialidades([]);
+        setTiposPecas([]);
       }
     }
   }, [open, autoCenter]);
@@ -139,7 +139,7 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
       pix_chave: data.pix_chave || null,
       pix_tipo: data.pix_tipo || null,
       observacoes: data.observacoes || null,
-      especialidades,
+      especialidades: tiposPecas,
       marcas_atendidas: marcas,
     };
 
@@ -284,7 +284,7 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
 
             {/* Marcas e Especialidades */}
             <MarcasAtendidasSelect value={marcas} onChange={setMarcas} />
-            <EspecialidadesSelect value={especialidades} onChange={setEspecialidades} />
+            <TiposPecasSelect value={tiposPecas} onChange={setTiposPecas} />
 
             {/* Observações */}
             <FormField control={form.control} name="observacoes" render={({ field }) => (

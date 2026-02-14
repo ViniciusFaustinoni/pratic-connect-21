@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAutoCenters, type AutoCenter } from '@/hooks/useAutoCenters';
 import { AutoCenterFormDialog } from '@/components/oficinas/AutoCenterFormDialog';
 import { AutoCenterDetailDrawer } from '@/components/oficinas/AutoCenterDetailDrawer';
-import { MARCAS_VEICULOS, ESPECIALIDADES } from '@/lib/fornecedores-constants';
+import { MARCAS_VEICULOS, TIPOS_PECAS } from '@/lib/fornecedores-constants';
 
 const TIPO_LABELS: Record<string, string> = {
   auto_center: 'Auto Center',
@@ -82,11 +82,11 @@ export default function AutoCenters() {
         </Select>
         <Select value={espFilter} onValueChange={setEspFilter}>
           <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Especialidade" />
+            <SelectValue placeholder="Tipo de Peça" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todas especialidades</SelectItem>
-            {ESPECIALIDADES.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+            <SelectItem value="todos">Todos os tipos de peça</SelectItem>
+            {TIPOS_PECAS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
