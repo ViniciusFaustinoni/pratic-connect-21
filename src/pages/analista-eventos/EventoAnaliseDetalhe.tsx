@@ -234,12 +234,6 @@ export default function EventoAnaliseDetalhe() {
                   )}
                 </div>
               )}
-              {dadosEtapa3?.completada_em && (
-                <div>
-                  <p className="text-muted-foreground text-xs">Envio da Documentação</p>
-                  <p className="font-medium">{format(new Date(dadosEtapa3.completada_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
-                </div>
-              )}
               {link?.etapa3_completada_em && (
                 <div>
                   <p className="text-muted-foreground text-xs">Documentação Completa</p>
@@ -267,24 +261,29 @@ export default function EventoAnaliseDetalhe() {
                   <p className="bg-muted p-3 rounded-lg whitespace-pre-wrap">{dadosEtapa3.relato_texto}</p>
                 </div>
               )}
-              {dadosEtapa3?.audio_url && (
-                <div>
-                  <p className="text-muted-foreground text-xs mb-1">Áudio Gravado</p>
-                  <audio controls className="w-full" src={dadosEtapa3.audio_url} />
-                </div>
-              )}
+              {(() => {
+                const audioUrl = dadosEtapa3?.arquivos_urls?.find((u: string) => 
+                  u?.match(/\.(mp3|wav|ogg|webm|m4a)/i) || u?.includes('audio')
+                );
+                return audioUrl ? (
+                  <div>
+                    <p className="text-muted-foreground text-xs mb-1">Áudio Gravado</p>
+                    <audio controls className="w-full" src={audioUrl} />
+                  </div>
+                ) : null;
+              })()}
               {(dadosEtapa3?.local_rua || dadosEtapa3?.local_numero) && (
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Local do Evento</p>
                   <p>{dadosEtapa3?.local_rua}{dadosEtapa3?.local_numero ? `, ${dadosEtapa3.local_numero}` : ''}</p>
                 </div>
               )}
-              {dadosEtapa3?.terceiro_envolvido && (
+              {dadosEtapa3?.houve_terceiro && (
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Dados do Terceiro</p>
-                  <p>Nome: {dadosEtapa3?.terceiro_nome || 'N/I'}</p>
-                  <p>Placa: {dadosEtapa3?.terceiro_placa || 'N/I'}</p>
-                  <p>Telefone: {dadosEtapa3?.terceiro_telefone || 'N/I'}</p>
+                  <p>Nome: {dadosEtapa3?.terceiro?.nome || 'N/I'}</p>
+                  <p>Placa: {dadosEtapa3?.terceiro?.placa || 'N/I'}</p>
+                  <p>Telefone: {dadosEtapa3?.terceiro?.telefone || 'N/I'}</p>
                 </div>
               )}
             </AccordionContent>
@@ -296,20 +295,20 @@ export default function EventoAnaliseDetalhe() {
               <span className="flex items-center gap-2"><FileText className="h-4 w-4" /> Boletim de Ocorrência</span>
             </AccordionTrigger>
             <AccordionContent className="space-y-3 text-sm">
-              {dadosEtapa2?.bo_numero && <p><span className="text-muted-foreground">Nº B.O.:</span> <span className="font-medium">{dadosEtapa2.bo_numero}</span></p>}
-              {dadosEtapa2?.bo_resumo && (
+              {dadosEtapa2?.numero_bo && <p><span className="text-muted-foreground">Nº B.O.:</span> <span className="font-medium">{dadosEtapa2.numero_bo}</span></p>}
+              {dadosEtapa2?.resumo_bo && (
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Resumo</p>
-                  <p className="bg-muted p-3 rounded-lg">{dadosEtapa2.bo_resumo}</p>
+                  <p className="bg-muted p-3 rounded-lg">{dadosEtapa2.resumo_bo}</p>
                 </div>
               )}
-              {dadosEtapa2?.bo_url && (
+              {dadosEtapa2?.arquivos_urls?.[0] && (
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Documento</p>
-                  {dadosEtapa2.bo_url.endsWith('.pdf') ? (
-                    <a href={dadosEtapa2.bo_url} target="_blank" rel="noopener noreferrer" className="text-primary underline">Visualizar PDF</a>
+                  {dadosEtapa2.arquivos_urls[0].endsWith('.pdf') ? (
+                    <a href={dadosEtapa2.arquivos_urls[0]} target="_blank" rel="noopener noreferrer" className="text-primary underline">Visualizar PDF</a>
                   ) : (
-                    <img src={dadosEtapa2.bo_url} alt="B.O." className="max-w-full rounded-lg cursor-pointer" onClick={() => setFotoZoom(dadosEtapa2.bo_url)} />
+                    <img src={dadosEtapa2.arquivos_urls[0]} alt="B.O." className="max-w-full rounded-lg cursor-pointer" onClick={() => setFotoZoom(dadosEtapa2.arquivos_urls[0])} />
                   )}
                 </div>
               )}
@@ -322,7 +321,7 @@ export default function EventoAnaliseDetalhe() {
               <span className="flex items-center gap-2"><Camera className="h-4 w-4" /> Fotos da Auto Vistoria (Etapa 1)</span>
             </AccordionTrigger>
             <AccordionContent>
-              {renderFotoGrid(dadosEtapa1?.fotos_urls, 'Auto Vistoria')}
+              {renderFotoGrid(dadosEtapa1?.arquivos_urls, 'Auto Vistoria')}
             </AccordionContent>
           </AccordionItem>
 

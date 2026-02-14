@@ -305,12 +305,14 @@ export default function EventoPagamentoCota({ token, sinistro, associado, cota, 
                     const total = (Number(valorParcela) * n).toFixed(2);
                     return (
                       <option key={n} value={n}>
-                        {n}x de R$ {valorParcela} (total R$ {total})
+                        {n}x de R$ {valorParcela} (total R$ {total})*
                       </option>
                     );
                   })}
                 </select>
               </div>
+
+              <p className="text-[10px] text-muted-foreground">* Valores aproximados. O valor final pode variar conforme a operadora do cartão.</p>
 
               {cardError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">

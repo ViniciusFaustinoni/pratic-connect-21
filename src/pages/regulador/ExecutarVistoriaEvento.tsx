@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, ArrowLeft } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useVistoriaEventoDetalhe } from '@/hooks/useVistoriaEventoDetalhe';
 import { VistoriaEventoDados } from '@/components/regulador/VistoriaEventoDados';
 import { VistoriaEventoMidias } from '@/components/regulador/VistoriaEventoMidias';
@@ -19,6 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default function ExecutarVistoriaEvento() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useVistoriaEventoDetalhe(id);
 
   const [fotosUrls, setFotosUrls] = useState<string[]>(Array(10).fill(''));
@@ -63,8 +65,7 @@ export default function ExecutarVistoriaEvento() {
 
       if (!res.ok) throw new Error('Erro ao iniciar');
       toast.success('Vistoria iniciada!');
-      // Refetch will update status
-      window.location.reload();
+      queryClient.invalidateQueries({ queryKey: ['vistoria-evento-detalhe', id] });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
