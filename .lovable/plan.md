@@ -1,80 +1,87 @@
 
-# Fluxo Especifico de Incendio
+
+# Fluxo de Alagamento / Fenomeno Natural
 
 ## O que ja existe
 
-- Tipo `incendio` registrado normalmente no NovoSinistroModal
-- Documentos obrigatorios incluem `laudo_bombeiros` (fixo como obrigatorio)
-- EmitirParecerModal calcula automaticamente `perda_total` vs `parcial` baseado na regra 75% FIPE
-- Quando perda total, veiculo e inativado automaticamente
-- Campo `motivo_analise_interna` ja existe na tabela `sinistros`
-- Fluxo de indenizacao integral ja foi implementado no roubo/furto (reutilizavel)
+- Tipo `fenomeno_natural` registrado no NovoSinistroModal com documentos basicos
+- Colunas `bombeiros_acionados`, `analise_interna`, `analise_interna_motivos` ja existem (criadas no fluxo de incendio)
+- CardAnaliseIncendio como referencia de padrao para card de analise
+- EmitirParecerModal ja trata perda total encaminhando para `aguardando_pagamento` (incendio) -- reutilizavel
+- EventoLinkCard ja suporta etapas customizadas por tipo
+- Fluxo de indenizacao integral ja implementado (roubo/furto)
 
 ## O que falta
 
-1. **Campo "bombeiros acionados?" no registro** -- Dinamizar documentacao obrigatoria
-2. **Verificacoes especiais na analise** -- GNV irregular e sobrecarga eletrica com encaminhamento para analise interna
-3. **Perda total encaminha para indenizacao** -- Ja funciona via EmitirParecerModal, mas precisa redirecionar para o fluxo de indenizacao ao inves de simplesmente inativar o veiculo
+1. Campo para classificar tipo de agua (doce/salgada) no registro
+2. Documentacao obrigatoria dinamica (bombeiros acionados + fotos in loco obrigatorias)
+3. Card de analise juridica especifico para alagamento
+4. Etapas do Link 1 adaptadas para fenomeno natural
+5. EmitirParecerModal tratar perda total de fenomeno_natural igual incendio
 
 ---
 
 ## Alteracoes no Banco de Dados
 
-### Migracoes SQL
+### Migracao SQL
 
 ```sql
 ALTER TABLE sinistros 
-  ADD COLUMN bombeiros_acionados BOOLEAN,
-  ADD COLUMN analise_interna BOOLEAN DEFAULT false,
-  ADD COLUMN analise_interna_motivos TEXT[];
+  ADD COLUMN tipo_agua TEXT CHECK (tipo_agua IN ('doce', 'salgada'));
 ```
 
-- `bombeiros_acionados`: Se os bombeiros foram acionados (define qual documento exigir)
-- `analise_interna`: Se o sinistro foi encaminhado para analise interna
-- `analise_interna_motivos`: Array com motivos (ex: `['gnv_irregular', 'sobrecarga_eletrica']`)
+- `tipo_agua`: Se a agua era doce (coberto) ou salgada (analise juridica)
+- As colunas `bombeiros_acionados`, `analise_interna` e `analise_interna_motivos` ja existem
 
 ---
 
 ## Alteracoes em Codigo
 
-### 1. NovoSinistroModal.tsx -- Campo "Bombeiros acionados?" e documentos dinamicos
+### 1. NovoSinistroModal.tsx -- Campos especificos para fenomeno natural
 
-Quando tipo = `incendio`, exibir:
-- Toggle "Os bombeiros foram acionados?" (Sim/Nao)
-- Se Sim: documento obrigatorio = "Certidao de Ocorrencia do Corpo de Bombeiros"
-- Se Nao: documento obrigatorio = "Carta reconhecida em cartorio explicando circunstancias"
+Quando tipo = `fenomeno_natural`:
 
-Atualizar `DOCUMENTOS_OBRIGATORIOS.incendio` para ser dinamico baseado na resposta. Salvar `bombeiros_acionados` no insert do sinistro.
+- Novo state `tipoAgua` (doce/salgada)
+- Toggle "Os bombeiros foram acionados?" (reutilizar o mesmo padrao do incendio -- ja existe o state `bombeirosAcionados`)
+- Seletor "Tipo de agua": Agua doce / Agua salgada (mare, ressaca)
+- Se agua salgada: exibir aviso "Sera encaminhado para analise juridica"
+- Salvar `tipo_agua` e `bombeiros_acionados` no insert
 
-### 2. EventoLinkCard.tsx -- Etapas para incendio
+Documentos dinamicos no passo 7:
+- Fotos in loco (obrigatorio sempre)
+- Se bombeiros acionados: Certidao de Ocorrencia do Corpo de Bombeiros
+- Se bombeiros NAO acionados: Carta reconhecida em cartorio
+- Se agua salgada: marcar automaticamente `analise_interna = true` com motivo `agua_salgada`
 
-Incendio segue o mesmo fluxo base de colisao (3 etapas: Auto Vistoria, B.O., Relato), sem alteracao necessaria. As etapas genericas ja funcionam.
+### 2. EventoLinkCard.tsx -- Etapas para fenomeno natural
 
-### 3. Novo componente: CardAnaliseIncendio.tsx
+Adicionar condicao para `fenomeno_natural`:
+- Etapa 1: B.O. + Fotos do Dano
+- Etapa 2: Comprovante Evento (certidao bombeiros ou carta cartorio) + Fotos In Loco
+- Etapa 3: Relato Completo
 
-Card que aparece na coluna lateral do SinistroDetalhe para sinistros tipo `incendio` (visivel apenas na fase de analise ou posterior):
+### 3. Novo componente: CardAnaliseAlagamento.tsx
 
-- Exibe se bombeiros foram acionados e qual documento foi enviado
-- Checkboxes de verificacao especial:
-  - "GNV irregular (sem documentacao)" -- nao nega, marca analise interna
-  - "Sobrecarga eletrica (modificacoes/som)" -- nao nega, marca analise interna
-- Botao "Encaminhar para Analise Interna" com selecao de motivos
-- Quando ativado, atualiza `analise_interna = true` e `analise_interna_motivos` no sinistro
-- Badge visual no detalhe indicando "Em Analise Interna"
+Card lateral no SinistroDetalhe para sinistros tipo `fenomeno_natural`, seguindo o padrao do CardAnaliseIncendio:
 
-### 4. EmitirParecerModal.tsx -- Verificacao antes de emitir parecer
+- Exibe tipo de agua (doce/salgada) com badge colorido
+- Exibe se bombeiros foram acionados e qual documento foi exigido
+- Checkboxes de verificacao:
+  - "Agua salgada (mare/ressaca)" -- marca analise juridica
+  - "Local inadequado (area notoriamente alagavel)" -- marca analise juridica
+- Botao "Encaminhar para Analise Juridica" (diferente do incendio que e "analise interna")
+- Badge visual "Em Analise Juridica" quando ativado
+- Observacao: usa as mesmas colunas `analise_interna` e `analise_interna_motivos`
 
-Quando tipo = `incendio` e `analise_interna = true`:
-- Exibir alerta: "Este sinistro esta em analise interna. Motivos: [lista]"
-- Permitir emitir parecer normalmente (a analise interna ja foi concluida)
+### 4. EmitirParecerModal.tsx -- Tratar fenomeno natural
 
-Quando tipo = `incendio` e resultado = `aprovado` e `tipo_dano = perda_total`:
-- Alem de inativar veiculo (ja existente), mudar status para `aguardando_pagamento` em vez de `aprovado`
-- Reutilizar o fluxo de indenizacao integral implementado no roubo/furto
+- Adicionar `fenomeno_natural` ao lado de `incendio` na logica de perda total encaminhando para `aguardando_pagamento`
+- Exibir alerta de analise interna/juridica tambem para `fenomeno_natural`
 
-### 5. SinistroDetalhe.tsx -- Integrar CardAnaliseIncendio
+### 5. SinistroDetalhe.tsx -- Integrar CardAnaliseAlagamento
 
-Adicionar o CardAnaliseIncendio na coluna lateral quando `sinistro.tipo === 'incendio'`.
+- Adicionar o CardAnaliseAlagamento na coluna lateral quando `sinistro.tipo === 'fenomeno_natural'`
+- Badge "Analise Juridica" no header (reutiliza a mesma logica do "Analise Interna")
 
 ---
 
@@ -82,16 +89,19 @@ Adicionar o CardAnaliseIncendio na coluna lateral quando `sinistro.tipo === 'inc
 
 | Acao | Arquivo |
 |---|---|
-| Migracao | Adicionar colunas `bombeiros_acionados`, `analise_interna`, `analise_interna_motivos` |
-| Modificar | `src/components/eventos/NovoSinistroModal.tsx` (toggle bombeiros + documentos dinamicos) |
-| Modificar | `src/components/eventos/EmitirParecerModal.tsx` (alerta analise interna + perda total para indenizacao) |
-| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` (integrar CardAnaliseIncendio) |
-| Criar | `src/components/sinistros/CardAnaliseIncendio.tsx` (verificacoes especiais + encaminhar analise interna) |
+| Migracao | Adicionar coluna `tipo_agua` em `sinistros` |
+| Modificar | `src/components/eventos/NovoSinistroModal.tsx` (toggle bombeiros + tipo agua + docs dinamicos) |
+| Modificar | `src/components/eventos/EventoLinkCard.tsx` (etapas para fenomeno natural) |
+| Modificar | `src/components/eventos/EmitirParecerModal.tsx` (perda total + alerta juridico) |
+| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` (integrar CardAnaliseAlagamento) |
+| Criar | `src/components/sinistros/CardAnaliseAlagamento.tsx` (analise juridica + tipo agua) |
 
 ## Ordem de Implementacao
 
-1. Migracao SQL (3 colunas)
-2. NovoSinistroModal -- toggle bombeiros + documentos dinamicos
-3. CardAnaliseIncendio -- verificacoes GNV/sobrecarga + analise interna
-4. EmitirParecerModal -- alerta analise interna + perda total para indenizacao
-5. SinistroDetalhe -- integrar CardAnaliseIncendio
+1. Migracao SQL (coluna `tipo_agua`)
+2. NovoSinistroModal -- toggle bombeiros (reutilizar) + seletor tipo agua + docs dinamicos + auto-marcar analise juridica para agua salgada
+3. EventoLinkCard -- etapas adaptadas para fenomeno natural
+4. CardAnaliseAlagamento -- verificacoes agua salgada/local inadequado + encaminhar analise juridica
+5. EmitirParecerModal -- perda total para indenizacao + alerta analise juridica
+6. SinistroDetalhe -- integrar CardAnaliseAlagamento na coluna lateral
+
