@@ -8,6 +8,10 @@ export interface ItemOrcamento {
   valor_unitario?: number;
   valor_total?: number;
   categoria?: string;
+  tipo_peca?: string;
+  veiculo_marca?: string;
+  veiculo_modelo?: string;
+  veiculo_ano?: string;
 }
 
 export interface EtapaReparo {

@@ -1,0 +1,209 @@
+import { useState, useEffect } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { CATALOGO_PECAS } from '@/lib/fornecedores-constants';
+import { Loader2, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+const SUPABASE_URL = 'https://iyxdgmukrrdkffraptsx.supabase.co';
+
+interface FipeItem {
+  codigo: string;
+  nome: string;
+}
+
+async function fipeFetch(action: string, params: Record<string, string> = {}): Promise<FipeItem[]> {
+  const searchParams = new URLSearchParams({ action, tipo: 'carros', ...params });
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/fipe-lookup?${searchParams}`);
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error);
+  if (action === 'modelos') return json.data.modelos;
+  return json.data;
+}
+
+export interface PecaSelectValues {
+  tipoPeca: string;
+  marcaCodigo: string;
+  marcaNome: string;
+  modeloCodigo: string;
+  modeloNome: string;
+  anoCodigo: string;
+  anoNome: string;
+}
+
+interface PecaSelectFieldsProps {
+  values: PecaSelectValues;
+  onChange: (values: PecaSelectValues) => void;
+  disabled?: boolean;
+  active?: boolean; // whether to load FIPE data (defaults to true)
+}
+
+export function PecaSelectFields({ values, onChange, disabled, active = true }: PecaSelectFieldsProps) {
+  const [marcas, setMarcas] = useState<FipeItem[]>([]);
+  const [modelos, setModelos] = useState<FipeItem[]>([]);
+  const [anos, setAnos] = useState<FipeItem[]>([]);
+  const [loadingMarcas, setLoadingMarcas] = useState(false);
+  const [loadingModelos, setLoadingModelos] = useState(false);
+  const [loadingAnos, setLoadingAnos] = useState(false);
+
+  const [openPeca, setOpenPeca] = useState(false);
+  const [openMarca, setOpenMarca] = useState(false);
+  const [openModelo, setOpenModelo] = useState(false);
+  const [openAno, setOpenAno] = useState(false);
+
+  // Load marcas
+  useEffect(() => {
+    if (!active) return;
+    setLoadingMarcas(true);
+    fipeFetch('marcas').then(setMarcas).catch(() => setMarcas([])).finally(() => setLoadingMarcas(false));
+  }, [active]);
+
+  // Load modelos when marca changes
+  useEffect(() => {
+    if (!values.marcaCodigo) { setModelos([]); return; }
+    setLoadingModelos(true);
+    fipeFetch('modelos', { marcaCodigo: values.marcaCodigo }).then(setModelos).catch(() => setModelos([])).finally(() => setLoadingModelos(false));
+  }, [values.marcaCodigo]);
+
+  // Load anos when modelo changes
+  useEffect(() => {
+    if (!values.marcaCodigo || !values.modeloCodigo) { setAnos([]); return; }
+    setLoadingAnos(true);
+    fipeFetch('anos', { marcaCodigo: values.marcaCodigo, modeloCodigo: values.modeloCodigo }).then(setAnos).catch(() => setAnos([])).finally(() => setLoadingAnos(false));
+  }, [values.modeloCodigo]);
+
+  const update = (partial: Partial<PecaSelectValues>) => {
+    onChange({ ...values, ...partial });
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Tipo de Peça */}
+      <div className="space-y-1">
+        <Label className="text-xs">Tipo de Peça *</Label>
+        <Popover open={openPeca} onOpenChange={setOpenPeca}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" role="combobox" aria-expanded={openPeca} className="w-full justify-between font-normal" disabled={disabled}>
+              {values.tipoPeca || <span className="text-muted-foreground">Selecione a peça</span>}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Buscar peça..." />
+              <CommandList>
+                <CommandEmpty>Nenhuma peça encontrada.</CommandEmpty>
+                <CommandGroup>
+                  {CATALOGO_PECAS.map(p => (
+                    <CommandItem key={p} value={p} onSelect={() => { update({ tipoPeca: p }); setOpenPeca(false); }}>
+                      <Check className={cn('mr-2 h-4 w-4', values.tipoPeca === p ? 'opacity-100' : 'opacity-0')} />
+                      {p}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Marca */}
+      <div className="space-y-1">
+        <Label className="text-xs">Marca do Veículo *</Label>
+        <Popover open={openMarca} onOpenChange={setOpenMarca}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" role="combobox" aria-expanded={openMarca} className="w-full justify-between font-normal" disabled={disabled || loadingMarcas}>
+              {loadingMarcas ? <Loader2 className="h-4 w-4 animate-spin" /> : (values.marcaNome || <span className="text-muted-foreground">Selecione a marca</span>)}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Buscar marca..." />
+              <CommandList>
+                <CommandEmpty>Nenhuma marca encontrada.</CommandEmpty>
+                <CommandGroup>
+                  {marcas.map(m => (
+                    <CommandItem key={m.codigo} value={m.nome} onSelect={() => {
+                      update({ marcaCodigo: m.codigo, marcaNome: m.nome, modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '' });
+                      setOpenMarca(false);
+                    }}>
+                      <Check className={cn('mr-2 h-4 w-4', values.marcaCodigo === m.codigo ? 'opacity-100' : 'opacity-0')} />
+                      {m.nome}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Modelo */}
+      <div className="space-y-1">
+        <Label className="text-xs">Modelo *</Label>
+        <Popover open={openModelo} onOpenChange={setOpenModelo}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" role="combobox" aria-expanded={openModelo} className="w-full justify-between font-normal" disabled={disabled || loadingModelos || !values.marcaCodigo}>
+              {loadingModelos ? <Loader2 className="h-4 w-4 animate-spin" /> : (values.modeloNome || <span className="text-muted-foreground">Selecione o modelo</span>)}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Buscar modelo..." />
+              <CommandList>
+                <CommandEmpty>Nenhum modelo encontrado.</CommandEmpty>
+                <CommandGroup>
+                  {modelos.map(m => (
+                    <CommandItem key={m.codigo} value={m.nome} onSelect={() => {
+                      update({ modeloCodigo: m.codigo, modeloNome: m.nome, anoCodigo: '', anoNome: '' });
+                      setOpenModelo(false);
+                    }}>
+                      <Check className={cn('mr-2 h-4 w-4', values.modeloCodigo === m.codigo ? 'opacity-100' : 'opacity-0')} />
+                      {m.nome}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Ano */}
+      <div className="space-y-1">
+        <Label className="text-xs">Ano *</Label>
+        <Popover open={openAno} onOpenChange={setOpenAno}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" role="combobox" aria-expanded={openAno} className="w-full justify-between font-normal" disabled={disabled || loadingAnos || !values.modeloCodigo}>
+              {loadingAnos ? <Loader2 className="h-4 w-4 animate-spin" /> : (values.anoNome || <span className="text-muted-foreground">Selecione o ano</span>)}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Buscar ano..." />
+              <CommandList>
+                <CommandEmpty>Nenhum ano encontrado.</CommandEmpty>
+                <CommandGroup>
+                  {anos.map(a => (
+                    <CommandItem key={a.codigo} value={a.nome} onSelect={() => {
+                      update({ anoCodigo: a.codigo, anoNome: a.nome });
+                      setOpenAno(false);
+                    }}>
+                      <Check className={cn('mr-2 h-4 w-4', values.anoCodigo === a.codigo ? 'opacity-100' : 'opacity-0')} />
+                      {a.nome}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  );
+}
