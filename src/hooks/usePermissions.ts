@@ -154,8 +154,16 @@ export function usePermissions() {
     !isDesenvolvedor &&
     !isAdminMaster;
 
+  // Analista de Eventos
+  const isAnalistaEventos = hasRoleByName('analista_eventos');
+  const isAnalistaEventosOnly = isAnalistaEventos &&
+    !isDiretor &&
+    !isGerencia() &&
+    !isDesenvolvedor &&
+    !isAdminMaster;
+
   // Perfis que devem ver "Perfil" ao invés de "Configurações"
-  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly || isVistoriadorBaseOnly || isReguladorOnly;
+  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly || isVistoriadorBaseOnly || isReguladorOnly || isAnalistaEventosOnly;
 
   // Verificações de grupo para cotações
   const isVendedorCotacao = hasRole('vendedor_clt') || hasRole('vendedor_externo');
@@ -229,6 +237,8 @@ export function usePermissions() {
     isVistoriadorBaseOnly,
     isRegulador,
     isReguladorOnly,
+    isAnalistaEventos,
+    isAnalistaEventosOnly,
     isAnalistaPlataforma: hasRole('analista_plataforma'),
     isInstaladorVistoriador,
     isAnalistaMarketing: hasRole('analista_marketing'),

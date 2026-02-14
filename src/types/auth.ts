@@ -66,7 +66,8 @@ export type PerfilAcesso =
   | 'associado'
   | 'analista_marketing'
   | 'analista_juridico'
-  | 'regulador';
+  | 'regulador'
+  | 'analista_eventos';
 
 /**
  * Alias para PerfilAcesso
@@ -296,6 +297,7 @@ export const PERFIL_ACESSO_LABELS: Record<PerfilAcesso, string> = {
   analista_marketing: 'Analista de Marketing',
   analista_juridico: 'Analista Jurídico',
   regulador: 'Regulador',
+  analista_eventos: 'Analista de Eventos',
 };
 
 // ============================================================
@@ -461,6 +463,12 @@ export interface AuthFlags {
   isRegulador: boolean;
   
   /**
+   * Se é analista de eventos
+   * @derived perfis.includes('analista_eventos')
+   */
+  isAnalistaEventos: boolean;
+  
+  /**
    * Se é analista de marketing
    * @derived perfis.includes('analista_marketing')
    */
@@ -511,6 +519,7 @@ export const initialAuthFlags: AuthFlags = {
   isAnalistaPlataforma: false,
   isInstalador: false,
   isRegulador: false,
+  isAnalistaEventos: false,
   isAnalistaMarketing: false,
   isAnalistaJuridico: false,
 };
@@ -547,6 +556,7 @@ export function computeAuthFlags(state: AuthState): AuthFlags {
     isAnalistaPlataforma: perfis.includes('analista_plataforma'),
     isInstalador: perfis.includes('instalador_vistoriador'),
     isRegulador: perfis.includes('regulador'),
+    isAnalistaEventos: perfis.includes('analista_eventos'),
     isAnalistaMarketing: perfis.includes('analista_marketing'),
     isAnalistaJuridico: perfis.includes('analista_juridico'),
   };
