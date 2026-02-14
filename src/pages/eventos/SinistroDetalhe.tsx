@@ -10,7 +10,7 @@ import {
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle, AlertTriangle,
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
-  Bot, Wrench, Radio, Lock, Navigation, Copy, Send, FileSignature, RefreshCw, DollarSign
+  Bot, Wrench, Radio, Lock, Navigation, Copy, Send, FileSignature, RefreshCw, DollarSign, Search
 } from 'lucide-react';
 import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -30,6 +30,8 @@ import { IniciarIndenizacaoModal } from '@/components/sinistros/IniciarIndenizac
 import { CardVidrosDetalhe } from '@/components/sinistros/CardVidrosDetalhe';
 import { CardAnaliseIncendio } from '@/components/sinistros/CardAnaliseIncendio';
 import { CardAnaliseAlagamento } from '@/components/sinistros/CardAnaliseAlagamento';
+import { EncaminharSindicanciaDialog } from '@/components/sinistros/EncaminharSindicanciaDialog';
+import { CardSindicanciaStatus } from '@/components/sinistros/CardSindicanciaStatus';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { TrajetoColisaoCard } from '@/components/sinistros/TrajetoColisaoCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
@@ -241,6 +243,7 @@ export default function SinistroDetalhe() {
   const [modalAcionamentoOpen, setModalAcionamentoOpen] = useState(false);
   const [mapaLocalizacaoOpen, setMapaLocalizacaoOpen] = useState(false);
   const [modalIndenizacaoOpen, setModalIndenizacaoOpen] = useState(false);
+  const [modalSindicanciaOpen, setModalSindicanciaOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { isDiretor } = usePermissions();
 
@@ -265,7 +268,8 @@ export default function SinistroDetalhe() {
             id, placa, marca, modelo, ano_modelo, cor, 
             chassi, valor_fipe, codigo_fipe, renavam
           ),
-          analista:profiles!sinistros_analista_id_fkey(id, nome)
+          analista:profiles!sinistros_analista_id_fkey(id, nome),
+          sindicante:profiles!sinistros_sindicante_id_fkey(id, nome)
         `)
         .eq('id', id)
         .maybeSingle();
@@ -520,6 +524,15 @@ export default function SinistroDetalhe() {
               <FileText className="h-4 w-4 mr-2" />
               Emitir Parecer
             </DropdownMenuItem>
+            {['em_analise', 'aguardando_parecer', 'em_vistoria'].includes(sinistro.status) && (
+              <DropdownMenuItem onSelect={(e) => {
+                e.preventDefault();
+                openModalSafely(setModalSindicanciaOpen);
+              }}>
+                <Search className="h-4 w-4 mr-2" />
+                Encaminhar para Sindicância
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => handleWhatsApp(sinistro.associado?.whatsapp || sinistro.associado?.telefone)}>
               <MessageCircle className="h-4 w-4 mr-2" />
@@ -782,6 +795,15 @@ export default function SinistroDetalhe() {
               </CardContent>
             </Card>
           )}
+          {/* Card Sindicância */}
+          <CardSindicanciaStatus
+            sinistroId={sinistro.id}
+            protocolo={sinistro.protocolo}
+            sindicanteId={sinistro.sindicante_id}
+            prazoFim={sinistro.sindicancia_prazo_fim}
+            resultadoSindicancia={sinistro.resultado_sindicancia}
+            status={sinistro.status}
+          />
         </div>
 
         {/* Right Column - Sidebar */}
@@ -1315,6 +1337,17 @@ export default function SinistroDetalhe() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal Encaminhar Sindicância */}
+      {sinistro && (
+        <EncaminharSindicanciaDialog
+          open={modalSindicanciaOpen}
+          onClose={() => setModalSindicanciaOpen(false)}
+          sinistroId={sinistro.id}
+          protocolo={sinistro.protocolo}
+          tipoEvento={sinistro.tipo}
+        />
+      )}
     </div>
   );
 }

@@ -9,47 +9,39 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { PRAZOS_SINISTRO } from '@/types/sinistros';
+import { PRAZOS_SINISTRO, MOTIVOS_SINDICANCIA } from '@/types/sinistros';
 
 interface EncaminharSindicanciaDialogProps {
   open: boolean;
   onClose: () => void;
   sinistroId: string;
   protocolo: string;
+  tipoEvento?: string;
   onSuccess?: () => void;
 }
 
 export function EncaminharSindicanciaDialog({
-  open,
-  onClose,
-  sinistroId,
-  protocolo,
-  onSuccess,
+  open, onClose, sinistroId, protocolo, tipoEvento, onSuccess,
 }: EncaminharSindicanciaDialogProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [sindicanteId, setSindicanteId] = useState('');
-  const [motivo, setMotivo] = useState('');
+  const [motivoPredefinido, setMotivoPredefinido] = useState('');
+  const [observacao, setObservacao] = useState('');
+  const [isPericia, setIsPericia] = useState(false);
   const [prazoFim, setPrazoFim] = useState(
     format(addDays(new Date(), PRAZOS_SINISTRO.sindicancia), 'yyyy-MM-dd')
   );
 
-  // Buscar sindicantes disponíveis (profissionais com role apropriada)
+  const motivosDisponiveis = MOTIVOS_SINDICANCIA[tipoEvento || ''] || [];
+
   const { data: sindicantes = [] } = useQuery({
     queryKey: ['sindicantes-disponiveis'],
     queryFn: async () => {
@@ -67,73 +59,67 @@ export function EncaminharSindicanciaDialog({
 
   const encaminharMutation = useMutation({
     mutationFn: async () => {
-      // 1. Atualizar sinistro
+      const motivoCompleto = [
+        isPericia ? '[PERÍCIA TÉCNICA]' : '[SINDICÂNCIA]',
+        motivoPredefinido && `Motivo: ${motivoPredefinido}`,
+        observacao && `Obs: ${observacao}`,
+      ].filter(Boolean).join(' — ');
+
       const { error: updateError } = await supabase
         .from('sinistros')
         .update({
-          status: 'em_sindicancia' as any,
+          status: (isPericia ? 'em_pericia' : 'em_sindicancia') as any,
           sindicante_id: sindicanteId,
           sindicancia_prazo_fim: prazoFim,
           updated_at: new Date().toISOString(),
         })
         .eq('id', sinistroId);
-
       if (updateError) throw updateError;
 
-      // 2. Registrar histórico
       const { error: histError } = await supabase
         .from('sinistro_historico')
         .insert({
           sinistro_id: sinistroId,
-          status_novo: 'em_sindicancia',
+          status_novo: isPericia ? 'em_pericia' : 'em_sindicancia',
           usuario_id: user?.id,
-          observacao: `Encaminhado para sindicância. Motivo: ${motivo}. Prazo: ${format(new Date(prazoFim), 'dd/MM/yyyy')}`,
+          observacao: `Encaminhado para ${isPericia ? 'perícia técnica' : 'sindicância'}. ${motivoCompleto}. Prazo: ${format(new Date(prazoFim), 'dd/MM/yyyy')}`,
         });
-
       if (histError) throw histError;
 
-      // 3. Notificar via WhatsApp
       try {
         await supabase.functions.invoke('notificar-sinistro', {
-          body: {
-            sinistro_id: sinistroId,
-            status: 'em_sindicancia',
-          },
+          body: { sinistro_id: sinistroId, status: 'em_sindicancia' },
         });
       } catch (err) {
         console.error('Erro ao notificar:', err);
       }
     },
     onSuccess: () => {
-      toast.success('Sinistro encaminhado para sindicância!');
+      toast.success(`Evento encaminhado para ${isPericia ? 'perícia técnica' : 'sindicância'}!`);
       queryClient.invalidateQueries({ queryKey: ['sinistro', sinistroId] });
-      queryClient.invalidateQueries({ queryKey: ['sinistro-analise', sinistroId] });
+      queryClient.invalidateQueries({ queryKey: ['sinistro-historico', sinistroId] });
       queryClient.invalidateQueries({ queryKey: ['sinistros'] });
       handleClose();
       onSuccess?.();
     },
     onError: (error) => {
       console.error('Erro ao encaminhar:', error);
-      toast.error('Erro ao encaminhar para sindicância');
+      toast.error('Erro ao encaminhar');
     },
   });
 
   const handleClose = () => {
     setSindicanteId('');
-    setMotivo('');
+    setMotivoPredefinido('');
+    setObservacao('');
+    setIsPericia(false);
     setPrazoFim(format(addDays(new Date(), PRAZOS_SINISTRO.sindicancia), 'yyyy-MM-dd'));
     onClose();
   };
 
   const handleSubmit = () => {
-    if (!sindicanteId) {
-      toast.error('Selecione um sindicante');
-      return;
-    }
-    if (!motivo.trim()) {
-      toast.error('Informe o motivo da sindicância');
-      return;
-    }
+    if (!sindicanteId) { toast.error('Selecione um responsável'); return; }
+    if (!motivoPredefinido && !observacao.trim()) { toast.error('Informe o motivo'); return; }
     encaminharMutation.mutate();
   };
 
@@ -143,71 +129,70 @@ export function EncaminharSindicanciaDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Search className="h-5 w-5 text-rose-600" />
-            Encaminhar para Sindicância
+            Encaminhar para {isPericia ? 'Perícia Técnica' : 'Sindicância'}
           </DialogTitle>
-          <DialogDescription>
-            Sinistro {protocolo}
-          </DialogDescription>
+          <DialogDescription>Evento {protocolo}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Sindicante */}
+          {/* Perícia toggle */}
+          <div className="flex items-center space-x-2">
+            <Checkbox id="pericia" checked={isPericia} onCheckedChange={(v) => setIsPericia(!!v)} />
+            <Label htmlFor="pericia" className="text-sm">Perícia técnica (causa técnica, não fraude)</Label>
+          </div>
+
+          {/* Responsável */}
           <div className="space-y-2">
-            <Label htmlFor="sindicante">Sindicante Responsável *</Label>
+            <Label>Responsável *</Label>
             <Select value={sindicanteId} onValueChange={setSindicanteId}>
-              <SelectTrigger id="sindicante">
-                <SelectValue placeholder="Selecione o sindicante" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 {sindicantes.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
-                    <div className="flex items-center gap-2">
-                      <UserCheck className="h-4 w-4" />
-                      {s.nome}
-                    </div>
+                    <span className="flex items-center gap-2"><UserCheck className="h-4 w-4" />{s.nome}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
+          {/* Motivo predefinido */}
+          {motivosDisponiveis.length > 0 && (
+            <div className="space-y-2">
+              <Label>Motivo</Label>
+              <Select value={motivoPredefinido} onValueChange={setMotivoPredefinido}>
+                <SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                <SelectContent>
+                  {motivosDisponiveis.map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Prazo */}
           <div className="space-y-2">
-            <Label htmlFor="prazo">Prazo Final</Label>
-            <Input
-              id="prazo"
-              type="date"
-              value={prazoFim}
-              onChange={(e) => setPrazoFim(e.target.value)}
-              min={format(new Date(), 'yyyy-MM-dd')}
-            />
-            <p className="text-xs text-muted-foreground">
-              Padrão: {PRAZOS_SINISTRO.sindicancia} dias
-            </p>
+            <Label>Prazo Final</Label>
+            <Input type="date" value={prazoFim} onChange={(e) => setPrazoFim(e.target.value)} min={format(new Date(), 'yyyy-MM-dd')} />
+            <p className="text-xs text-muted-foreground">Padrão: {PRAZOS_SINISTRO.sindicancia} dias</p>
           </div>
 
-          {/* Motivo */}
+          {/* Observação */}
           <div className="space-y-2">
-            <Label htmlFor="motivo">Motivo da Sindicância *</Label>
+            <Label>Observação complementar</Label>
             <Textarea
-              id="motivo"
-              placeholder="Descreva o motivo do encaminhamento para sindicância..."
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              rows={4}
+              placeholder="Descreva detalhes adicionais..."
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              rows={3}
             />
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={encaminharMutation.isPending}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={encaminharMutation.isPending}
-            className="bg-rose-600 hover:bg-rose-700"
-          >
+          <Button variant="outline" onClick={handleClose} disabled={encaminharMutation.isPending}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={encaminharMutation.isPending} className="bg-rose-600 hover:bg-rose-700">
             {encaminharMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Encaminhar
           </Button>
