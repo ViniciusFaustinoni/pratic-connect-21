@@ -1,211 +1,257 @@
 
-# Tela de Execucao da Vistoria do Regulador
+
+# Painel do Analista de Eventos
 
 ## Resumo
 
-Criar a pagina de execucao da vistoria de evento (`/regulador/vistoria/:id`) que o regulador acessa ao clicar "Iniciar Vistoria". A pagina e mobile-first e inclui: painel de dados completos do evento, captura de 10 fotos + 1 video, e modal fullscreen de orcamento com diagnostico e parecer.
+Criar o perfil "analista_eventos" no enum `app_role`, sua area logada com dashboard e fila de eventos, e a tela de analise completa com todas as informacoes do evento para tomada de decisao (aprovar ou reprovar). A aprovacao gera um novo link para o associado e invalida o anterior.
 
 ---
 
 ## 1. Banco de Dados
 
-Nenhuma nova tabela necessaria. A tabela `vistorias_evento` ja possui:
-- `status` (text) para controlar o fluxo
-- `dados_vistoria` (jsonb) para armazenar fotos, video, orcamento, diagnostico e parecer
-- `iniciada_em` / `concluida_em` (timestamptz)
-- `observacoes` (text)
-
-O campo `dados_vistoria` armazenara a seguinte estrutura JSONB:
+### Adicionar valor ao enum `app_role`
 
 ```text
-{
-  "fotos_urls": ["url1", ..., "url10"],
-  "video_url": "url_video",
-  "tipo_dano": "parcial" | "total",
-  "descricao_tecnica": "texto",
-  "itens_orcamento": [
-    { "descricao": "...", "tipo": "peca|mao_de_obra|servico", "valor_unitario": 150, "quantidade": 2, "valor_total": 300 }
-  ],
-  "valor_total_orcamento": 2500,
-  "parecer_tecnico": "texto",
-  "recomendacao": "aprovar" | "analise_detalhada",
-  "observacoes_perda_total": "texto" (se tipo_dano = total)
-}
+ALTER TYPE public.app_role ADD VALUE 'analista_eventos';
 ```
 
-### Adicao de status no sinistro
+### Adicionar status ao sinistro (se necessario)
 
-O sinistro precisa suportar o status `aguardando_analise`. Verificar se o enum ja inclui esse valor; caso contrario, adicionar via migracao.
-
----
-
-## 2. Edge Function: `salvar-vistoria-regulador`
-
-Nova edge function autenticada (regulador deve estar logado) que recebe FormData com:
-- `vistoria_id` -- ID da vistoria
-- `acao` -- "iniciar", "salvar_midias", "finalizar"
-- Arquivos (fotos e video)
-- `dados` -- JSON com orcamento, diagnostico, parecer
-
-### Acao "iniciar"
-- Atualiza `vistorias_evento.status` para `em_andamento`
-- Registra `iniciada_em = now()`
-
-### Acao "salvar_midias"
-- Faz upload de fotos/video para `sinistro-eventos/{vistoria_id}/vistoria-regulador/`
-- Retorna URLs dos arquivos salvos
-- Atualiza `dados_vistoria` parcialmente (fotos_urls, video_url)
-
-### Acao "finalizar"
-- Valida que existem 10 fotos e 1 video
-- Salva orcamento completo em `dados_vistoria`
-- Atualiza `vistorias_evento.status` para `concluida` e `concluida_em = now()`
-- Atualiza `sinistros.status` para `aguardando_analise`
-- Atualiza `sinistros.valor_orcamento` com o valor total do orcamento
-- Atualiza `sinistros.tipo_dano` com o tipo de dano identificado
+Verificar se `reprovado` existe no enum de status. Caso contrario, adicionar. O status `aprovado` ja existe (usado pela edge function `aprovar-sinistro`).
 
 ---
 
-## 3. Pagina: `ExecutarVistoriaEvento.tsx`
+## 2. Perfil "analista_eventos" no Frontend
 
-Nova pagina em `src/pages/regulador/ExecutarVistoriaEvento.tsx`.
+### `src/types/auth.ts`
+- Adicionar `'analista_eventos'` ao type `PerfilAcesso`
+- Adicionar `analista_eventos: 'Analista de Eventos'` no `PERFIL_ACESSO_LABELS`
+- Adicionar flag `isAnalistaEventos` no `AuthFlags`
 
-### Header
-- Botao voltar
-- Titulo "Vistoria de Evento"
-- Badge com status
+### `src/hooks/usePermissions.ts`
+- Adicionar `isAnalistaEventos` e `isAnalistaEventosOnly`
+- `isAnalistaEventosOnly` redireciona para `/analista-eventos`
+- Incluir em `isPerfilLimitado`
 
-### Secao 1: Dados do Evento (Collapsible, aberto por padrao)
+### `src/hooks/useRouteGuard.ts`
+- Adicionar regra: analista_eventos so pode acessar `/analista-eventos/*`
 
-Paineis expansiveis organizados em:
+---
 
-**Associado:**
+## 3. Area Logada do Analista de Eventos
+
+### Layout: `AnalistaEventosLayout.tsx`
+Baseado no `ReguladorLayout.tsx`, com header e navegacao inferior:
+- Inicio (`/analista-eventos`)
+- Eventos (`/analista-eventos/fila`)
+- Perfil (`/analista-eventos/perfil`)
+
+### Guard: `AnalistaEventosGuard.tsx`
+Similar ao `ReguladorGuard.tsx`, verifica `hasRole('analista_eventos')`.
+
+### Dashboard: `AnalistaEventosHome.tsx`
+- 4 cards de metricas:
+  - Aguardando analise (sinistros com status `aguardando_analise`)
+  - Analisados hoje (aprovados + reprovados hoje)
+  - Aprovados este mes
+  - Reprovados este mes
+
+### Fila de Eventos: `AnalistaEventosFila.tsx`
+- Lista de cards de sinistros com status `aguardando_analise`
+- Cada card: nome associado, placa, tipo evento, data evento, nome do regulador
+- Ordenacao: mais antigo primeiro (FIFO)
+- Click abre a tela de analise detalhada
+
+---
+
+## 4. Tela de Analise do Evento (`/analista-eventos/evento/:sinistroId`)
+
+### Hook: `useEventoAnaliseDetalhe.ts`
+Busca completa de dados para a analise:
+- Sinistro com associado, veiculo, plano
+- Link do evento (dados das 3 etapas: fotos, B.O., relato, audio)
+- Vistoria do regulador (dados_vistoria com fotos, video, orcamento, parecer)
+- Fotos da vistoria de adesao (via `vistoria_fotos` -> `vistorias` -> `contratos` -> `veiculos`)
+- Contadores: tempo como associado, eventos anteriores
+- Status de adimplencia
+
+### Componente principal: `EventoAnaliseDetalhe.tsx`
+Pagina com secoes colapsaveis (Accordion):
+
+**Secao 1 -- Dados do Associado:**
 - Nome, CPF, telefone, email
-- Plano e categoria do veiculo
-- Status de adimplencia (buscar ultima cobranca)
+- Plano, categoria
+- Adimplencia
+- Tempo como associado (calculado desde `created_at` do associado)
+- Quantidade de eventos anteriores (count de sinistros do mesmo associado)
 
-**Veiculo:**
+**Secao 2 -- Dados do Veiculo:**
 - Placa, Marca, Modelo, Ano, Cor
 - Valor FIPE, Chassi
+- Rastreador (buscar em `instalacoes` se tem rastreador ativo)
 
-**Evento:**
-- Tipo, data/hora informada, data/hora da comunicacao
-- Tempo entre evento e comunicacao (calculado: "X dias e Y horas")
-- Relato escrito do associado
-- Audio do associado (player)
-- Local do evento
-- Dados do terceiro (se houver)
+**Secao 3 -- Cronologia do Evento:**
+- Data/hora do evento
+- Data/hora da comunicacao
+- Tempo entre evento e comunicacao (calculo detalhado com dias, horas, minutos)
+- Alerta vermelho se > 30 dias
+- Data/hora do envio da documentacao (etapa3_completada_em do link)
+- Data/hora da vistoria do regulador (concluida_em da vistoria_evento)
 
-**Documentos:**
-- Galeria de fotos da auto vistoria (etapa 1) com zoom (usando VisualizadorFoto existente)
-- B.O. (imagem/PDF) com visualizador
-- Numero e resumo do B.O.
+**Secao 4 -- Relato do Associado:**
+- Relato escrito (dados_etapa3.relato_texto)
+- Audio gravado (dados_etapa3.audio_url) com player
+- Local informado (dados_etapa3)
+- Dados do terceiro (dados_etapa3)
 
-### Secao 2: Captura de Evidencias
+**Secao 5 -- Boletim de Ocorrencia:**
+- Documento (dados_etapa2.bo_url) com visualizador
+- Numero do B.O.
+- Resumo do B.O.
 
-**Grade de 10 fotos:**
-- Grid 2x5 ou 3+3+3+1 no mobile
-- Cada slot numerado (1-10)
-- Clique abre camera (reutiliza FotoCapture existente)
-- Upload individual com feedback (spinner/check)
-- Retry automatico em caso de falha
+**Secao 6 -- Fotos da Auto Vistoria (Etapa 1):**
+- Grid de fotos (dados_etapa1.fotos_urls)
+- Clicavel com zoom (VisualizadorFoto)
 
-**Video (1 obrigatorio):**
-- Componente VideoCapture existente (maxDuration=120)
-- Upload com progresso
+**Secao 7 -- Vistoria do Regulador:**
+- 10 fotos em grid (dados_vistoria.fotos_urls)
+- Video (dados_vistoria.video_url)
+- Diagnostico: tipo de dano
+- Descricao tecnica
+- Tabela de orcamento com itens
+- Valor total
+- Parecer tecnico
+- Recomendacao
 
-**Botao "Prosseguir para Orcamento":**
-- Habilitado apenas quando 10 fotos + 1 video preenchidos
-- Abre o modal de orcamento
+**Secao 8 -- Fotos da Vistoria de Adesao:**
+- Fotos originais da vistoria de quando o associado entrou (via `vistoria_fotos` -> `vistorias` -> `contratos`)
+- Reutiliza logica de `useFotosVistoriaPorVeiculo` existente
+- Grid com zoom para comparacao
 
-### Secao 3: Modal de Orcamento (fullscreen mobile)
-
-Dialog fullscreen com scroll interno:
-
-**Diagnostico:**
-- Seletor "Tipo de dano": Parcial / Total
-- Se TOTAL: campo "Observacoes" e botao finalizar direto (sem itens de orcamento)
-- "Descricao tecnica dos danos" (textarea)
-
-**Itens do Orcamento (apenas parcial):**
-- Lista dinamica de itens
-- Cada item: descricao (texto), tipo (select: Peca/Mao de Obra/Servico), valor unitario, quantidade, valor total (auto)
-- Botao "Adicionar Item"
-- Rodape com soma total
-
-**Parecer:**
-- "Parecer tecnico" (textarea)
-- "Recomendacao" (select: Recomendar Aprovacao / Recomendar Analise Detalhada)
-
-**Botao "Finalizar Vistoria e Enviar Orcamento":**
-- Salva tudo via edge function (acao "finalizar")
-- Muda status vistoria para "concluida"
-- Muda status sinistro para "aguardando_analise"
-- Redireciona para lista de vistorias com toast de sucesso
+### Barra de Acoes (fixa no rodape)
+- Botao "Reprovar Evento" (vermelho)
+- Botao "Aprovar Evento" (verde)
 
 ---
 
-## 4. Hook: `useVistoriaEventoDetalhe.ts`
+## 5. Modal de Reprovacao
 
-Busca dados completos da vistoria com joins:
-- `vistorias_evento` -> `sinistros` -> `associados` (com CPF, email, plano_id)
-- `sinistros` -> `veiculos` (com chassi, valor_fipe)
-- `sinistros` -> `sinistro_evento_links` (para dados das etapas: fotos, B.O., relato, audio)
-- `associados` -> `planos` (nome do plano, categoria)
+Ao clicar "Reprovar Evento":
+- Modal com:
+  - Seletor de motivo padrao: "Documentacao insuficiente", "Prazo expirado", "Irregularidade detectada", "Fraude suspeita", "Outro"
+  - Textarea obrigatorio para motivo detalhado
+- Ao confirmar:
+  - Atualiza `sinistros.status` para `reprovado`
+  - Registra historico em `sinistro_historico`
+  - Invalida o link do evento
+  - Envia WhatsApp ao associado com motivo
 
 ---
 
-## 5. Arquivos a Criar
+## 6. Modal de Aprovacao
+
+Ao clicar "Aprovar Evento":
+- Modal com:
+  - Resumo: associado, veiculo, valor FIPE, valor orcamento
+  - Campo "Observacoes do analista" (opcional)
+  - Checkbox obrigatorio: "Confirmo que analisei toda a documentacao..."
+- Ao confirmar:
+  - Atualiza `sinistros.status` para `aprovado`
+  - Registra historico
+  - Invalida link anterior
+  - Gera novo link (reutiliza edge function `gerar-link-evento`)
+  - Envia WhatsApp com aprovacao e novo link
+  - Cria Termo de Entrada via Autentique (reutiliza `aprovar-sinistro` ou invoca `autentique-evento-create`)
+
+---
+
+## 7. Edge Function: `analisar-evento`
+
+Nova edge function autenticada que centraliza as acoes do analista:
+
+**Recebe:**
+- `sinistro_id`
+- `acao`: "aprovar" | "reprovar"
+- `observacao` (para aprovacao)
+- `motivo` e `motivo_padrao` (para reprovacao)
+
+**Logica de aprovacao:**
+1. Atualiza status para `aprovado`
+2. Registra historico
+3. Invalida links ativos existentes
+4. Gera novo link (72h) em `sinistro_evento_links`
+5. Invoca `autentique-evento-create` para gerar termo
+6. Envia WhatsApp ao associado
+
+**Logica de reprovacao:**
+1. Atualiza status para `reprovado`
+2. Registra historico com motivo
+3. Invalida links ativos
+4. Envia WhatsApp ao associado com motivo
+
+---
+
+## 8. Rotas no App.tsx
+
+```text
+/analista-eventos          -> AnalistaEventosHome
+/analista-eventos/fila     -> AnalistaEventosFila
+/analista-eventos/evento/:id -> EventoAnaliseDetalhe
+/analista-eventos/perfil   -> InstaladorPerfil (reutiliza)
+```
+
+---
+
+## 9. Arquivos a Criar
 
 | Arquivo | Descricao |
 |---|---|
-| Migration SQL | Adicionar `aguardando_analise` ao enum de status do sinistro (se necessario) |
-| `supabase/functions/salvar-vistoria-regulador/index.ts` | Upload de midias + finalizacao da vistoria |
-| `src/pages/regulador/ExecutarVistoriaEvento.tsx` | Pagina principal de execucao |
-| `src/components/regulador/VistoriaEventoDados.tsx` | Painel de dados do evento (associado, veiculo, documentos) |
-| `src/components/regulador/VistoriaEventoMidias.tsx` | Grid de 10 fotos + video |
-| `src/components/regulador/VistoriaEventoOrcamento.tsx` | Modal fullscreen de orcamento |
-| `src/hooks/useVistoriaEventoDetalhe.ts` | Hook para buscar dados completos |
+| Migration SQL | Enum `analista_eventos`, status `reprovado` |
+| `supabase/functions/analisar-evento/index.ts` | Aprovar/reprovar com historico, link e WhatsApp |
+| `src/components/analista-eventos/AnalistaEventosLayout.tsx` | Layout com nav inferior |
+| `src/components/analista-eventos/AnalistaEventosGuard.tsx` | Guard de acesso |
+| `src/pages/analista-eventos/AnalistaEventosHome.tsx` | Dashboard com contadores |
+| `src/pages/analista-eventos/AnalistaEventosFila.tsx` | Lista/fila de eventos |
+| `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx` | Tela completa de analise |
+| `src/hooks/useEventoAnaliseDetalhe.ts` | Hook para dados completos do evento |
+| `src/hooks/useEventosAnalise.ts` | Hook para lista e contadores |
 
-## 6. Arquivos a Modificar
+## 10. Arquivos a Modificar
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/App.tsx` | Rota `/regulador/vistoria/:id` |
-| `src/pages/regulador/ReguladorVistorias.tsx` | Botao "Iniciar Vistoria" com navigate para a nova rota |
-| `supabase/config.toml` | Adicionar `verify_jwt = false` para `salvar-vistoria-regulador` |
+| `src/types/auth.ts` | Adicionar `analista_eventos` ao PerfilAcesso, labels e flags |
+| `src/hooks/usePermissions.ts` | Adicionar `isAnalistaEventos`, `isAnalistaEventosOnly` |
+| `src/hooks/useRouteGuard.ts` | Regra de redirect para analista_eventos |
+| `src/App.tsx` | Rotas `/analista-eventos/*` |
+| `supabase/config.toml` | Nao precisa (edge function autenticada) |
 
 ---
 
-## 7. Upload Strategy
+## 11. Cronologia -- Calculo Detalhado
 
-O regulador esta autenticado, mas para simplificar e manter consistencia com o padrao existente, os uploads vao pela edge function `salvar-vistoria-regulador` que usa `SUPABASE_SERVICE_ROLE_KEY`.
-
-Fotos sao comprimidas no client (imageCompressor.ts) antes do envio. Cada foto e enviada individualmente para dar feedback de progresso. Em caso de falha, retry automatico (ate 3 tentativas).
-
-Organizacao no bucket `sinistro-eventos`:
 ```text
-sinistro-eventos/
-  {vistoria_id}/
-    vistoria-regulador/
-      foto-01.jpg
-      foto-02.jpg
-      ...
-      foto-10.jpg
-      video.webm
+Para o campo "Tempo entre evento e comunicacao":
+
+diffMs = created_at(sinistro) - data_ocorrencia(sinistro)
+
+dias = floor(diffMs / 86400000)
+horas = floor((diffMs % 86400000) / 3600000)
+minutos = floor((diffMs % 3600000) / 60000)
+
+Exibir: "X dias, Y horas e Z minutos"
+
+Se dias >= 30: badge vermelho "PRAZO EXPIRADO - Comunicado apos 30 dias"
+Se dias >= 7: badge amarelo "Atenao - Comunicado apos 7 dias"
 ```
 
 ---
 
-## 8. Calculo do Tempo entre Evento e Comunicacao
+## 12. Fotos da Vistoria de Adesao
 
-```text
-data_ocorrencia = sinistro.data_ocorrencia
-data_comunicacao = sinistro.created_at
+Reutilizar a logica do hook `useFotosVistoriaPorVeiculo` existente que percorre:
+`veiculos -> contratos -> vistorias -> vistoria_fotos`
 
-diferenca = data_comunicacao - data_ocorrencia
+Isso retorna todas as fotos da vistoria de adesao original, permitindo ao analista comparar com as fotos do evento atual.
 
-Se diferenca < 1 hora: "X minutos apos"
-Se diferenca < 24 horas: "X horas apos"
-Se diferenca >= 24 horas: "X dias e Y horas apos"
-```
