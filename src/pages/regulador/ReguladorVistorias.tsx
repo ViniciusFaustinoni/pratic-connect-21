@@ -109,7 +109,7 @@ export default function ReguladorVistorias() {
                 {/* Tipo evento */}
                 <div className="text-xs">
                   <span className="text-muted-foreground">Tipo: </span>
-                  <span className="font-medium capitalize">{v.sinistro?.tipo || 'Colisão'}</span>
+                  <span className="font-medium capitalize">{v.sinistro?.tipo?.replace(/_/g, ' ') || 'Evento'}</span>
                 </div>
 
                 {/* Data/Hora */}

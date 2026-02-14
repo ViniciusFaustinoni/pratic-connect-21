@@ -158,6 +158,39 @@ serve(async (req) => {
       .update({ etapa4_completada_em: new Date().toISOString() })
       .eq("id", link.id);
 
+    // Notificar reguladores sobre nova vistoria agendada
+    try {
+      const { data: sinistroData } = await supabase
+        .from("sinistros")
+        .select("protocolo, associado:associados(nome), veiculo:veiculos(placa)")
+        .eq("id", link.sinistro_id)
+        .single();
+
+      const { data: reguladores } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "regulador");
+
+      if (reguladores?.length) {
+        const assocNome = (sinistroData as any)?.associado?.nome || "Associado";
+        const veicPlaca = (sinistroData as any)?.veiculo?.placa || "—";
+        const enderecoStr = [endereco?.rua, endereco?.numero, endereco?.bairro, endereco?.cidade]
+          .filter(Boolean)
+          .join(", ");
+
+        const notificacoes = reguladores.map((r: any) => ({
+          user_id: r.user_id,
+          titulo: "Nova Vistoria de Evento Agendada",
+          mensagem: `${assocNome} - ${veicPlaca} - ${data_agendada} às ${horario_agendado} - ${enderecoStr}`,
+          tipo: "vistoria_evento",
+          lida: false,
+        }));
+        await supabase.from("notificacoes").insert(notificacoes);
+      }
+    } catch (notifErr) {
+      console.error("[agendar-vistoria-evento] Erro ao notificar reguladores:", notifErr);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
