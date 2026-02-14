@@ -92,7 +92,6 @@ const DOCUMENTOS_OBRIGATORIOS: Record<string, Array<{tipo: string; nome: string;
     { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
     { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
     { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
-    { tipo: 'chaves', nome: 'Declaração das Chaves', obrigatorio: true },
   ],
   furto: [
     { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
@@ -110,7 +109,7 @@ const DOCUMENTOS_OBRIGATORIOS: Record<string, Array<{tipo: string; nome: string;
     { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
     { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
     { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
-    { tipo: 'comprovante_evento', nome: 'Comprovante do Evento (notícia/defesa civil)', obrigatorio: false },
+    { tipo: 'comprovante_evento', nome: 'Comprovante do Evento (notícia/defesa civil)', obrigatorio: true },
   ],
   vidros: [
     { tipo: 'foto_dano', nome: 'Fotos do Dano (2-5)', obrigatorio: true },
@@ -180,6 +179,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
   // === Vidros state ===
   const [pecaDanificada, setPecaDanificada] = useState('');
   const [opcaoReparo, setOpcaoReparo] = useState<'via_pratic' | 'reembolso'>('via_pratic');
+  const [tentativaFurto, setTentativaFurto] = useState(false);
   const [vidrosValidacao, setVidrosValidacao] = useState<{
     carenciaOk: boolean;
     carenciaData?: string;
@@ -518,8 +518,13 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
 
       // ===== 7. CRIAR DOCUMENTOS PENDENTES =====
       try {
-        let documentosPendentes = DOCUMENTOS_OBRIGATORIOS[formData.tipo] || DOCUMENTOS_OBRIGATORIOS.outro;
-        
+        let documentosPendentes = (DOCUMENTOS_OBRIGATORIOS[formData.tipo] || DOCUMENTOS_OBRIGATORIOS.outro).map(doc => {
+          // Para vidros com tentativa de furto, tornar B.O. obrigatório
+          if (isVidros && tentativaFurto && doc.tipo === 'bo') {
+            return { ...doc, obrigatorio: true };
+          }
+          return doc;
+        });
         // Para incêndio, adicionar documento dinâmico baseado em bombeiros_acionados
         if (isIncendio && bombeirosAcionados !== null) {
           const docBombeiros = bombeirosAcionados
@@ -1141,6 +1146,25 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                     </Label>
                   </div>
                 </RadioGroup>
+              </div>
+
+              {/* Toggle tentativa de furto */}
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  <div>
+                    <p className="font-medium text-sm">O dano foi causado por tentativa de furto/roubo?</p>
+                    <p className="text-xs text-muted-foreground">
+                      {tentativaFurto
+                        ? 'O Boletim de Ocorrência será obrigatório'
+                        : 'Se sim, será exigido B.O.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{tentativaFurto ? 'Sim' : 'Não'}</span>
+                  <Switch checked={tentativaFurto} onCheckedChange={setTentativaFurto} />
+                </div>
               </div>
             </div>
           )}
