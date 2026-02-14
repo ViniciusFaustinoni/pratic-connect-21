@@ -24,6 +24,7 @@ import {
   History,
   Navigation,
   Wrench,
+  Search,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,10 @@ import { ReprovarSinistroDialog } from '@/components/sinistros/ReprovarSinistroD
 import { SolicitarDocumentosSinistroDialog } from '@/components/sinistros/SolicitarDocumentosSinistroDialog';
 import { EnviarParaOficinaDialog } from '@/components/sinistros/EnviarParaOficinaDialog';
 import { AtribuirFornecedoresDialog } from '@/components/sinistros/AtribuirFornecedoresDialog';
+import { EncaminharSindicanciaDialog } from '@/components/sinistros/EncaminharSindicanciaDialog';
+import { AnaliseInternaModal } from '@/components/sinistros/AnaliseInternaModal';
+import { EncaminharJuridicoEventoModal } from '@/components/sinistros/EncaminharJuridicoEventoModal';
+import { SuspenderEventoModal } from '@/components/sinistros/SuspenderEventoModal';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { CotacoesRecebidasTab } from '@/components/sinistros/CotacoesRecebidasTab';
@@ -158,6 +163,10 @@ export default function SinistroAnalise() {
   const [showEnviarOficina, setShowEnviarOficina] = useState(false);
   const [showAtribuirFornecedores, setShowAtribuirFornecedores] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<any>(null);
+  const [showSindicancia, setShowSindicancia] = useState(false);
+  const [showAnaliseInterna, setShowAnaliseInterna] = useState(false);
+  const [showJuridico, setShowJuridico] = useState(false);
+  const [showSuspender, setShowSuspender] = useState(false);
 
   const {
     sinistro,
@@ -676,6 +685,54 @@ export default function SinistroAnalise() {
                   </>
                 );
               })()}
+              {(() => {
+                // Mostrar botões adicionais apenas quando status permite
+                const statusPermiteAcoes = !['suspenso', 'negado', 'encerrado', 'reprovado', 'em_reparo', 'pronto_para_oficina', 'pagamento_confirmado'].includes(sinistro.status as string);
+                if (!statusPermiteAcoes) return null;
+                return (
+                  <>
+                    <Separator className="my-2" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                        onClick={() => setShowSindicancia(true)}
+                      >
+                        <Search className="h-3.5 w-3.5 mr-1.5" />
+                        Sindicância
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                        onClick={() => setShowAnaliseInterna(true)}
+                      >
+                        <FileCheck className="h-3.5 w-3.5 mr-1.5" />
+                        Análise Interna
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                        onClick={() => setShowJuridico(true)}
+                      >
+                        <Shield className="h-3.5 w-3.5 mr-1.5" />
+                        Jurídico
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-muted-foreground/30 text-muted-foreground hover:bg-muted"
+                        onClick={() => setShowSuspender(true)}
+                      >
+                        <Clock className="h-3.5 w-3.5 mr-1.5" />
+                        Suspender
+                      </Button>
+                    </div>
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -798,7 +855,39 @@ export default function SinistroAnalise() {
         onSuccess={() => navigate('/ordens-servico')}
       />
 
-      {/* Preview Dialog */}
+      <EncaminharSindicanciaDialog
+        open={showSindicancia}
+        onClose={() => setShowSindicancia(false)}
+        sinistroId={sinistro.id}
+        protocolo={sinistro.protocolo}
+        tipoEvento={sinistro.tipo}
+      />
+
+      <AnaliseInternaModal
+        open={showAnaliseInterna}
+        onClose={() => setShowAnaliseInterna(false)}
+        sinistroId={sinistro.id}
+        protocolo={sinistro.protocolo}
+        onOpenSindicancia={() => setShowSindicancia(true)}
+        onOpenJuridico={() => setShowJuridico(true)}
+      />
+
+      <EncaminharJuridicoEventoModal
+        open={showJuridico}
+        onClose={() => setShowJuridico(false)}
+        sinistroId={sinistro.id}
+        protocolo={sinistro.protocolo}
+        associadoId={sinistro.associado_id}
+        associadoNome={associado?.nome}
+      />
+
+      <SuspenderEventoModal
+        open={showSuspender}
+        onClose={() => setShowSuspender(false)}
+        sinistroId={sinistro.id}
+        protocolo={sinistro.protocolo}
+      />
+
       <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
           {previewDoc?.arquivo_url && (() => {
