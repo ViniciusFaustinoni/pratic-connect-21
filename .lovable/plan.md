@@ -1,221 +1,188 @@
 
-
-# Contato Automatico Pos-Sinistro + Link Unico Expiravel
+# Wizard de 3 Etapas - Pagina Publica do Evento de Colisao
 
 ## Resumo
 
-Criar o fluxo automatizado que, apos a criacao de um sinistro de colisao, agenda o envio de uma mensagem WhatsApp para o associado no dia seguinte as 8h da manha. A mensagem contem explicacoes sobre a cota de coparticipacao (calculada dinamicamente a partir do plano e FIPE do veiculo) e um link unico expiravel de 72h para o associado completar etapas obrigatorias. O painel administrativo mostra o status do link e permite gerar novos.
+Transformar a pagina placeholder `EventoColisao.tsx` em um wizard funcional de 3 etapas mobile-first. O associado acessa pelo link unico, completa as etapas uma a uma (auto vistoria, B.O., relato) e o progresso e salvo individualmente. Fotos e arquivos sao enviados ao Supabase Storage via edge function (pois o usuario nao esta autenticado).
 
 ---
 
 ## 1. Banco de Dados
 
-### Tabela `sinistro_evento_links`
+### Bucket de Storage: `sinistro-eventos`
 
-Armazena os links unicos expiraveis para cada sinistro:
+Criar um novo bucket dedicado para uploads da pagina publica, com politica RLS que permite upload anonimo organizado por `link_id`:
 
-- `id` (uuid, PK)
-- `sinistro_id` (uuid, FK -> sinistros, NOT NULL)
-- `token` (uuid, UNIQUE, NOT NULL, default gen_random_uuid())
-- `tipo` (text, NOT NULL, default 'colisao_etapas') -- para diferenciar tipos futuros de link
-- `status` (text, NOT NULL, default 'ativo') -- 'ativo', 'expirado', 'completado', 'invalidado'
-- `etapa_atual` (integer, default 0) -- 0=nao iniciou, 1, 2, 3
-- `etapa1_completada_em` (timestamptz)
-- `etapa2_completada_em` (timestamptz)
-- `etapa3_completada_em` (timestamptz)
-- `dados_etapa1` (jsonb) -- fotos da auto vistoria
-- `dados_etapa2` (jsonb) -- B.O. numero, relato extraido
-- `dados_etapa3` (jsonb) -- relato completo, audio_url, endereco
-- `expira_em` (timestamptz, NOT NULL) -- created_at + 72h
-- `created_at` (timestamptz, default now())
-- `created_by` (uuid) -- quem gerou o link (sistema ou usuario admin)
+```text
+sinistro-eventos/
+  {link_id}/
+    etapa1/
+      foto-001.jpg
+      foto-002.jpg
+    etapa2/
+      bo-001.pdf
+    etapa3/
+      audio-relato.webm
+```
 
-RLS: acesso anon para SELECT/UPDATE filtrado por token valido + acesso autenticado para administradores.
-
-### Tabela `sinistro_contatos_agendados`
-
-Registra o agendamento do contato automatico:
-
-- `id` (uuid, PK)
-- `sinistro_id` (uuid, FK -> sinistros, NOT NULL)
-- `tipo_contato` (text, default 'whatsapp_pos_colisao')
-- `agendado_para` (timestamptz, NOT NULL) -- dia seguinte as 08:00
-- `status` (text, default 'agendado') -- 'agendado', 'enviado', 'erro', 'cancelado'
-- `link_id` (uuid, FK -> sinistro_evento_links)
-- `mensagem_enviada` (text)
-- `erro_detalhes` (text)
-- `enviado_em` (timestamptz)
-- `created_at` (timestamptz, default now())
-
-RLS: apenas usuarios autenticados.
-
-### Alteracao na tabela `sinistros`
-
-Adicionar coluna:
-- `link_evento_id` (uuid, FK -> sinistro_evento_links) -- link ativo atual
+Politica: anon pode INSERT no bucket `sinistro-eventos`. Authenticated pode ALL.
 
 ---
 
-## 2. Edge Function: `agendar-contato-sinistro`
+## 2. Edge Function: `salvar-etapa-evento`
 
-Chamada automaticamente ao final de `criar-sinistro` quando `tipo = 'colisao'`.
+Nova edge function publica (verify_jwt = false) que recebe:
+
+- `token` - para validar o link
+- `etapa` - 1, 2 ou 3
+- `dados` - objeto JSON com os dados da etapa
+- `arquivos` - FormData com fotos/PDFs/audio (multipart)
 
 Logica:
-1. Cria um registro em `sinistro_evento_links` com `expira_em = now() + 72h`
-2. Atualiza `sinistros.link_evento_id` com o link criado
-3. Cria um registro em `sinistro_contatos_agendados` com `agendado_para` = dia seguinte as 08:00 (horario de Brasilia)
-4. Retorna o link_id e token gerado
+1. Valida o token (link ativo + nao expirado)
+2. Verifica que a etapa anterior ja foi completada
+3. Faz upload dos arquivos para `sinistro-eventos/{link_id}/etapa{N}/`
+4. Salva os dados no campo `dados_etapa{N}` do link (URLs dos arquivos, textos, etc.)
+5. Atualiza `etapa_atual` e `etapa{N}_completada_em`
+6. Se etapa 3, muda status do link para `completado` e atualiza status do sinistro para `documentacao_enviada`
 
 ---
 
-## 3. Edge Function: `cron-contato-sinistro`
+## 3. Componentes Frontend
 
-Executada via pg_cron a cada minuto (ou a cada 5 min). Verifica `sinistro_contatos_agendados` com `status = 'agendado'` e `agendado_para <= now()`.
+### Reestruturacao do `EventoColisao.tsx`
 
-Para cada registro encontrado:
+A pagina atual sera refatorada para funcionar como container do wizard:
+- Valida token (logica existente)
+- Mostra header com info do sinistro + stepper visual (3 bolinhas)
+- Renderiza o componente da etapa atual
+- Se todas etapas completadas, mostra tela de sucesso (read-only)
 
-1. Busca o sinistro com dados do associado, veiculo e plano
-2. Calcula a cota de coparticipacao:
-   - Se veiculo `uso_aplicativo = true` e plano tem `cota_app_percent`: usa `cota_app_percent` e `cota_app_min`
-   - Senao: usa `cota_participacao` e `cota_minima` do plano
-   - Valor da cota = MAX(valor_fipe * percentual / 100, valor_minimo)
-3. Monta a mensagem WhatsApp com:
-   - Confirmacao de recebimento do sinistro
-   - Explicacao da cota (plano, percentual, valor calculado)
-   - Orientacao sobre auto vistoria, B.O., relato
-   - Prazo de 30 dias (e que ja esta correndo)
-   - Informacao de que ja pode dar entrada no conserto
-   - Link unico: `{SITE_URL}/evento/{token}`
-4. Envia via `whatsapp-send-text`
-5. Atualiza o status do agendamento para 'enviado' ou 'erro'
+### Novos Componentes
 
----
+| Componente | Descricao |
+|---|---|
+| `EventoEtapa1Vistoria.tsx` | Grid de fotos (3 colunas mobile), min 5 / max 15 fotos, upload com preview, compressao via imageCompressor existente |
+| `EventoEtapa2BO.tsx` | Upload de arquivo (foto/PDF), campos "Numero do B.O." e "Resumo do B.O.", validacao minima |
+| `EventoEtapa3Relato.tsx` | Textarea relato, gravador de audio (MediaRecorder API), data/hora do evento, local (rua + numero), checkbox terceiro com campos condicionais |
+| `EventoStepper.tsx` | Indicador visual de progresso (3 bolinhas coloridas + labels) |
+| `EventoSucesso.tsx` | Tela final de confirmacao com resumo read-only |
+| `AudioRecorder.tsx` | Componente reutilizavel de gravacao de audio com cronometro, play/pause, regravar |
 
-## 4. Edge Function: `gerar-link-evento`
+### Etapa 1 - Auto Vistoria
 
-Permite que administradores gerem um novo link para um sinistro (invalidando o anterior).
+- Grid 3 colunas com slots de camera
+- Clique abre camera do celular (accept="image/*" capture="environment")
+- Miniatura com X para remover
+- Contador "5 de 15 fotos"
+- Botao "Proxima Etapa" habilitado quando >= 5 fotos
+- Ao avancar: comprime fotos, envia via `salvar-etapa-evento`, salva URLs
 
-1. Invalida todos os links ativos do sinistro (`status = 'invalidado'`)
-2. Cria novo link com `expira_em = now() + 72h`
-3. Atualiza `sinistros.link_evento_id`
-4. Retorna o novo token
+### Etapa 2 - Boletim de Ocorrencia
 
----
+- Area de upload drag-and-drop (foto, imagem, PDF)
+- Preview do arquivo enviado
+- Campo texto "Numero do B.O." (obrigatorio)
+- Campo textarea "Resumo do B.O." (opcional)
+- Botao habilitado quando: >= 1 arquivo + numero preenchido
+- Flag `validacao_pendente: true` no dados_etapa2
 
-## 5. Edge Function: `validar-link-evento`
+### Etapa 3 - Relato Completo
 
-Chamada pela pagina publica ao acessar o link. Recebe o token e retorna:
-- Se valido: dados do sinistro, associado, veiculo, etapa atual
-- Se expirado/invalido: mensagem amigavel
+- Textarea grande para relato escrito
+- Botao de gravacao de audio (MediaRecorder API, formato webm)
+  - Cronometro durante gravacao
+  - Player para ouvir apos gravar
+  - Botao regravar
+- Campo data/hora do evento (input datetime-local)
+- Campos local: rua + numero/referencia
+- Checkbox "Houve terceiro envolvido?" com campos condicionais:
+  - Nome, placa, telefone do terceiro
+  - Seletor culpa: Sim / Nao / Nao sei
+- Botao "Finalizar Envio"
+- Ao finalizar: salva tudo, muda status para `documentacao_enviada`
 
----
+### Tela de Sucesso
 
-## 6. Pagina Publica: `/evento/:token`
-
-Rota publica (sem autenticacao) que renderiza as etapas do sinistro. Neste prompt, as etapas serao apenas estruturais (placeholder). O conteudo detalhado de cada etapa (auto vistoria, B.O., relato) sera implementado no proximo prompt.
-
-A pagina:
-- Valida o token via `validar-link-evento`
-- Mostra stepper com 3 etapas
-- Se token invalido/expirado: mensagem amigavel com orientacao de contato
-
----
-
-## 7. Modificacao na `criar-sinistro`
-
-Apos criar o sinistro com `tipo = 'colisao'`:
-- Invocar `agendar-contato-sinistro` passando o `sinistro_id`
-
----
-
-## 8. Painel Administrativo - Card do Evento
-
-Modificar a pagina de detalhe do sinistro (`SinistroDetalhe`) para exibir:
-- Status do link (ativo/expirado/completado/sem link)
-- Data de envio e expiracao
-- Etapa atual do associado (1, 2 ou 3)
-- Botao "Gerar Novo Link" que invalida o anterior e cria um novo
-- Badge visual indicando o progresso
+- Icone de check verde
+- Mensagem: "Tudo certo! Recebemos todas as informacoes..."
+- Prazo de 7 dias uteis
+- Resumo read-only do que foi enviado (fotos, B.O., relato)
+- Link continua acessivel mas sem edicao
 
 ---
 
-## 9. Cron Job (pg_cron)
+## 4. Upload Strategy
 
-Agendar a edge function `cron-contato-sinistro` para rodar a cada 5 minutos:
+Como o associado nao esta logado, os uploads nao podem ir direto ao Storage (RLS bloqueia anon). A estrategia:
 
-```text
-*/5 * * * *  ->  POST /functions/v1/cron-contato-sinistro
-```
+- Fotos sao comprimidas no client (usando `compressImage` existente)
+- Enviadas como FormData para a edge function `salvar-etapa-evento`
+- A edge function usa `SUPABASE_SERVICE_ROLE_KEY` para fazer upload ao bucket `sinistro-eventos`
+- Retorna as URLs publicas dos arquivos salvos
 
 ---
 
-## Arquivos a Criar
+## 5. Gravacao de Audio
+
+Componente `AudioRecorder`:
+- Usa `navigator.mediaDevices.getUserMedia({ audio: true })`
+- `MediaRecorder` para gravar em webm/opus
+- Cronometro visual durante gravacao
+- Apos parar: cria blob, mostra player `<audio>` para review
+- Botao regravar descarta anterior
+- Audio enviado como File no FormData da etapa 3
+
+---
+
+## 6. Salvamento de Progresso
+
+Cada etapa salva individualmente ao clicar "Proxima Etapa" ou "Finalizar":
+1. Upload dos arquivos via edge function
+2. Edge function atualiza `sinistro_evento_links` com `dados_etapa{N}` e `etapa_atual`
+3. Se o associado sair e voltar, a pagina carrega o estado atual do link
+4. Etapas ja completadas mostram resumo read-only
+5. Etapa atual mostra o formulario para preencher
+
+---
+
+## 7. Arquivos a Criar
 
 | Arquivo | Descricao |
-|---------|-----------|
-| Migracao SQL | Tabelas `sinistro_evento_links`, `sinistro_contatos_agendados` + coluna `link_evento_id` em sinistros |
-| `supabase/functions/agendar-contato-sinistro/index.ts` | Cria link + agenda contato para 8h do dia seguinte |
-| `supabase/functions/cron-contato-sinistro/index.ts` | Verifica agendamentos pendentes e envia WhatsApp |
-| `supabase/functions/gerar-link-evento/index.ts` | Gera novo link (invalida anterior) |
-| `supabase/functions/validar-link-evento/index.ts` | Valida token e retorna dados para pagina publica |
-| `src/pages/public/EventoColisao.tsx` | Pagina publica com stepper (placeholder das etapas) |
-| `src/hooks/useEventoLink.ts` | Hook para gerenciar links no painel admin |
-| `src/components/eventos/EventoLinkCard.tsx` | Card no detalhe do sinistro com status do link |
+|---|---|
+| Migration SQL | Bucket `sinistro-eventos` + politicas storage |
+| `supabase/functions/salvar-etapa-evento/index.ts` | Upload de arquivos + salvamento de dados por etapa |
+| `src/components/evento/EventoStepper.tsx` | Stepper visual 3 etapas |
+| `src/components/evento/EventoEtapa1Vistoria.tsx` | Upload de fotos dos danos |
+| `src/components/evento/EventoEtapa2BO.tsx` | Upload B.O. + campos |
+| `src/components/evento/EventoEtapa3Relato.tsx` | Relato + audio + local + terceiro |
+| `src/components/evento/EventoSucesso.tsx` | Tela de conclusao |
+| `src/components/evento/AudioRecorder.tsx` | Gravador de audio reutilizavel |
 
-## Arquivos a Modificar
+## 8. Arquivos a Modificar
 
 | Arquivo | Mudanca |
-|---------|---------|
-| `supabase/functions/criar-sinistro/index.ts` | Invocar `agendar-contato-sinistro` apos criar sinistro de colisao |
-| `src/App.tsx` | Adicionar rota `/evento/:token` |
-| Pagina `SinistroDetalhe` | Incluir `EventoLinkCard` |
-| `supabase/config.toml` | Adicionar `verify_jwt = false` para `validar-link-evento` |
+|---|---|
+| `src/pages/public/EventoColisao.tsx` | Refatorar para wizard com etapas reais em vez de placeholder |
+| `supabase/config.toml` | Adicionar `verify_jwt = false` para `salvar-etapa-evento` |
 
 ---
 
-## Calculo da Cota de Coparticipacao
+## 9. Detalhes Tecnicos
 
-```text
-plano = associado.plano_id -> planos
-veiculo_app = veiculo.uso_aplicativo
+### Compressao de fotos
+Reutilizar `src/lib/imageCompressor.ts` existente com config: maxWidth 1920, quality 0.75, maxSizeKB 800.
 
-Se veiculo_app E plano.cota_app_percent existe:
-  percentual = plano.cota_app_percent
-  minimo = plano.cota_app_min
-Senao:
-  percentual = plano.cota_participacao
-  minimo = plano.cota_minima
+### FormData para edge function
+As fotos sao enviadas como FormData (nao base64) para evitar problemas de memoria no celular. A edge function faz parse do multipart e faz upload ao storage.
 
-valor_cota = MAX(valor_fipe * percentual / 100, minimo)
-```
+### Validacao na edge function
+- Etapa 1: exige pelo menos 5 arquivos de imagem
+- Etapa 2: exige pelo menos 1 arquivo + numero_bo no body
+- Etapa 3: exige relato_texto OU audio no body
 
-Exemplo mensagem WhatsApp:
-```text
-Ola, [Nome]! Aqui e a Pratic Car.
-
-Recebemos a comunicacao do seu sinistro de colisao.
-Protocolo: SIN-20260215-1234
-
-Sobre a cota de coparticipacao:
-Seu plano e SELECT BASIC (Passeio), com cota de 6% da FIPE.
-Valor FIPE do veiculo: R$ 40.000,00
-Sua cota de coparticipacao: R$ 2.400,00
-
-Proximos passos obrigatorios:
-1. Realizar auto vistoria (fotos do veiculo)
-2. Enviar Boletim de Ocorrencia
-3. Relato completo do ocorrido
-
-Prazo: voce tem 30 dias a partir da data do evento para
-concluir o processo. O prazo ja esta correndo, mas fique
-tranquilo - vamos te auxiliar em tudo!
-
-Ja e possivel dar entrada no conserto do veiculo.
-
-Acesse o link abaixo para completar as etapas:
-https://pratic-connect-21.lovable.app/evento/abc123-token
-
-O link e valido por 72 horas.
-Em caso de duvidas, estamos a disposicao!
-```
-
+### Atualizacao de status do sinistro
+Ao completar etapa 3, a edge function:
+1. Muda `sinistro_evento_links.status` para `completado`
+2. Atualiza `sinistros.status` para `documentacao_enviada`
+3. Registra timestamp em `etapa3_completada_em`
