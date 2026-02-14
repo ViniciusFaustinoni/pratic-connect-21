@@ -29,6 +29,8 @@ const perfisDisponiveis = [
   { value: 'vistoriador_base', label: 'Vistoriador Base', desc: 'Vistorias agendadas na base' },
   { value: 'analista_marketing', label: 'Analista de Marketing', desc: 'Campanhas e leads' },
   { value: 'analista_juridico', label: 'Analista Jurídico', desc: 'Processos e contratos' },
+  { value: 'regulador', label: 'Regulador', desc: 'Vistorias e oficina' },
+  { value: 'analista_eventos', label: 'Analista de Eventos', desc: 'Análise de sinistros' },
 ];
 
 // Componente para métricas de vendedor
