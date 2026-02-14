@@ -1,148 +1,169 @@
 
+# Modal de Atribuicao de Fornecedores e Cotacao de Pecas
 
-# Correcao do Fluxo Pos-Aprovacao: Pagamento PRIMEIRO, Termo DEPOIS
+## Resumo
 
-## Diagnostico
-
-O sistema atual esta com a **ordem invertida**. Atualmente: Termo (assinatura manual no celular) -> Pagamento. O correto e: **Pagamento -> Termo (via Autentique)**.
-
-Alem disso, o Autentique ja e invocado no momento da aprovacao (`analisar-evento` linha 162), quando deveria ser invocado **somente apos confirmacao do pagamento**.
+Construir o modal completo de atribuicao de fornecedores que aparece quando um sinistro esta com status `pronto_para_oficina`. O modal permite selecionar oficina, prestadores e auto centers, e dispara cotacoes automaticas de pecas via WhatsApp para os auto centers selecionados.
 
 ---
 
-## Problemas Identificados
+## Etapa 1 — Criar tabela `evento_cotacoes_pecas`
 
-| # | Problema | Impacto |
-|---|---------|---------|
-| 1 | Ordem invertida: Termo antes do Pagamento | CRITICO - fluxo errado |
-| 2 | Termo usa SignaturePad manual em vez de Autentique | CRITICO - deveria ser assinatura digital via Autentique |
-| 3 | Autentique e chamado na aprovacao, deveria ser chamado apos pagamento | CRITICO - timing errado |
-| 4 | Cobranca ASAAS nao e criada automaticamente na aprovacao | MEDIO - usuario precisa clicar para gerar |
-| 5 | Nao existe status "pronto_para_oficina" | MEDIO - falta gatilho final |
-| 6 | Pagina nao mostra estado "aguardando assinatura do termo" | MEDIO - UX incompleta |
-| 7 | Nao ha lembrete diario automatico | MENOR - pode ser feito depois |
-
----
-
-## Plano de Correcao
-
-### Etapa 1 — Alterar `analisar-evento` (Edge Function)
-
-Quando o analista aprova:
-
-1. Calcular valor da cota de coparticipacao no backend (MAX(fipe * percentual, minima))
-2. Criar cobranca automatica no ASAAS (billingType: UNDEFINED para permitir PIX ou cartao)
-3. Gerar link unico expiravel (72h) — ja faz isso
-4. **REMOVER** a chamada ao `autentique-evento-create` — nao deve mais ser chamado aqui
-5. Enviar WhatsApp com link para pagamento (ja faz)
-6. Salvar `cobranca_cota_id` no sinistro
-
-### Etapa 2 — Alterar `processar-termo-evento` (Edge Function)
-
-Reestruturar as acoes:
-
-- **`validar`**: Retornar estado atual: `ja_pagou`, `ja_assinou_termo` (via Autentique), e os dados do sinistro/cota. Remover `ja_assinou` que se referia a assinatura manual.
-
-- **`gerar_cobranca_pix`**: Remover a validacao "assine o termo primeiro" (linhas 232-237). PIX e a primeira acao agora, nao precisa de assinatura previa.
-
-- **`gerar_cobranca_cartao`**: Idem — remover validacao de assinatura previa (linhas 379-384).
-
-- **`verificar_pagamento`**: Quando pagamento confirmado, alem do que ja faz, **invocar `autentique-evento-create`** para gerar o Termo de Entrada via Autentique. Status muda para `aguardando_termo`.
-
-- **Remover** a acao `assinar` (que usa SignaturePad) — a assinatura agora e 100% via Autentique.
-
-- **Nova acao `verificar_termo`**: Consulta o status do documento Autentique vinculado ao sinistro. Se assinado, atualiza status para `pronto_para_oficina`.
-
-### Etapa 3 — Alterar `EventoPosAprovacao.tsx` (Pagina Publica)
-
-Reorganizar as etapas visuais:
+Nova tabela para registrar pedidos de cotacao enviados a auto centers:
 
 ```text
-Etapa 1: Pagamento (PIX ou Cartao)
-Etapa 2: Assinatura do Termo (via Autentique - link externo)
-Sucesso: "Tudo certo!"
+CREATE TABLE evento_cotacoes_pecas (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sinistro_id uuid REFERENCES sinistros(id) NOT NULL,
+  auto_center_id uuid REFERENCES auto_centers(id) NOT NULL,
+  itens jsonb NOT NULL DEFAULT '[]',
+  mensagem_enviada text,
+  status varchar DEFAULT 'enviado',  -- enviado, respondido, expirado
+  whatsapp_mensagem_id uuid REFERENCES whatsapp_mensagens(id),
+  prazo_resposta timestamp with time zone,
+  resposta jsonb,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
 ```
 
-Estados da pagina:
-- `pagamento` — mostra detalhamento da cota + opcoes PIX/Cartao (componente `EventoPagamentoCota`)
-- `aguardando_termo` — mostra mensagem "Pagamento confirmado! Enviamos o Termo de Entrada para seu e-mail/WhatsApp via Autentique. Assine digitalmente para continuar." + polling para verificar assinatura
-- `sucesso` — mostra "Tudo certo! Pagamento confirmado e Termo assinado."
+Tambem adicionar coluna na tabela `sinistros` para prestadores vinculados (JSONB array de IDs) ou criar tabela de relacionamento `sinistro_prestadores`:
 
-Logica de estado inicial baseada na resposta do `validar`:
-- Se `ja_pagou` e `ja_assinou_termo` -> `sucesso`
-- Se `ja_pagou` e NAO `ja_assinou_termo` -> `aguardando_termo`
-- Se NAO `ja_pagou` -> `pagamento`
-
-### Etapa 4 — Remover `EventoTermoAssinatura.tsx`
-
-Este componente usa SignaturePad para assinatura manual. Sera substituido por uma tela informativa que indica que o Termo foi enviado via Autentique e mostra o status (pendente/assinado).
-
-Criar novo componente `EventoAguardandoTermo.tsx`:
-- Icone de documento
-- "Pagamento Confirmado!"
-- "Enviamos o Termo de Entrada para assinatura digital."
-- "Verifique seu e-mail e WhatsApp para assinar."
-- Link direto para o documento Autentique (se disponivel)
-- Polling a cada 10s para verificar se o termo ja foi assinado
-- Quando assinado, transiciona automaticamente para tela de sucesso
-
-### Etapa 5 — Atualizar logica de status do sinistro
-
-Sequencia correta de status apos aprovacao:
 ```text
-aprovado -> aguardando_cota -> pagamento_confirmado -> aguardando_termo -> pronto_para_oficina
+CREATE TABLE sinistro_prestadores (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sinistro_id uuid REFERENCES sinistros(id) NOT NULL,
+  prestador_id uuid REFERENCES prestadores_evento(id) NOT NULL,
+  observacoes text,
+  created_at timestamptz DEFAULT now()
+);
 ```
 
-O gatilho para `pronto_para_oficina` ocorre quando AMBOS:
-1. `cota_paga = true`
-2. Documento Autentique com status `signed`
+RLS policies para ambas tabelas com acesso autenticado.
 
 ---
 
-## Arquivos Afetados
+## Etapa 2 — Criar componente `AtribuirFornecedoresDialog.tsx`
+
+Arquivo: `src/components/sinistros/AtribuirFornecedoresDialog.tsx`
+
+Modal dividido em 3 secoes:
+
+**Cabecalho:** Dados do veiculo (marca, modelo, placa) + resumo do orcamento (itens de pecas extraidos de `dados_vistoria`).
+
+**Secao 1 — Oficina (radio, selecao unica):**
+- Busca oficinas filtradas automaticamente por `marcas_atendidas` (marca do veiculo OU "GLOBAL") e status ativo
+- Cards com: nome, endereco, especialidades (badges), marcas (badges), nota_media
+- Contagem de veiculos em oficina (query count de `ordens_servico` com status aberto para aquela oficina)
+- Radio button para selecao unica
+
+**Secao 2 — Prestadores (checkboxes, selecao multipla, opcional):**
+- Busca prestadores por marca compativel e status ativo
+- Sugere prestadores com especialidades complementares (especialidades do orcamento que a oficina selecionada nao cobre)
+- Checkboxes para selecao multipla
+
+**Secao 3 — Auto Centers (checkboxes, selecao multipla):**
+- Busca auto centers por marca compativel e status ativo
+- Filtra por especialidades compatíveis com os tipos de pecas do orcamento
+- Mostra WhatsApp obrigatorio
+- Preview da mensagem de cotacao
+- Recomendacao: minimo 3 para comparacao de precos
+
+**Botao "Confirmar Atribuicao":**
+1. Cria OS vinculada a oficina selecionada (reutiliza logica de `EnviarParaOficinaDialog`)
+2. Insere registros em `sinistro_prestadores`
+3. Para cada auto center: cria registro em `evento_cotacoes_pecas` e invoca edge function para enviar WhatsApp
+
+---
+
+## Etapa 3 — Criar Edge Function `enviar-cotacao-pecas`
+
+Arquivo: `supabase/functions/enviar-cotacao-pecas/index.ts`
+
+Recebe: `sinistro_id`, `auto_center_id`, `itens` (array de pecas), `cotacao_id`
+
+Acoes:
+1. Busca dados do auto center (nome, whatsapp)
+2. Busca dados do veiculo (marca, modelo, ano, placa)
+3. Busca protocolo do sinistro
+4. Monta mensagem formatada com a lista de pecas
+5. Envia via `whatsapp-send-text` (ja existente)
+6. Atualiza `evento_cotacoes_pecas` com `whatsapp_mensagem_id`
+
+Mensagem modelo:
+```text
+Ola [Nome]! Aqui e a Pratic Car.
+Precisamos de uma cotacao de pecas para:
+
+Veiculo: [Marca] [Modelo] [Ano] - Placa: [Placa]
+
+Itens para cotacao:
+1. [Descricao] - Qtd: [X]
+2. [Descricao] - Qtd: [X]
+
+Prazo para resposta: 24 horas
+Referencia: Evento #[Protocolo]
+
+Responda com valor de cada item e prazo de entrega. Obrigado!
+```
+
+---
+
+## Etapa 4 — Atualizar `SinistroAnalise.tsx`
+
+No bloco de acoes (linhas 523-548), adicionar condicao para status `pronto_para_oficina`:
+
+- Mostrar banner "Pagamento e termo confirmados — pronto para atribuir fornecedores"
+- Botao "Atribuir Fornecedores" que abre o novo modal
+- Substituir o atual `EnviarParaOficinaDialog` simples pelo novo `AtribuirFornecedoresDialog` para este status
+
+Manter o `EnviarParaOficinaDialog` existente para status `aprovado` (fluxo legado/simplificado).
+
+---
+
+## Etapa 5 — Hook `useVistoriaEvento`
+
+Criar hook para buscar dados da vistoria vinculada ao sinistro (para extrair `dados_vistoria.itens_orcamento` e `dados_vistoria.etapas_reparo`):
+
+```text
+useQuery(['vistoria-evento', sinistroId], ...)
+  -> vistorias_evento WHERE sinistro_id = X AND status = 'concluida'
+  -> retorna dados_vistoria parseado
+```
+
+---
+
+## Arquivos afetados
 
 | Acao | Arquivo |
 |---|---|
-| Modificar | `supabase/functions/analisar-evento/index.ts` — adicionar criacao automatica de cobranca ASAAS e remover chamada Autentique |
-| Modificar | `supabase/functions/processar-termo-evento/index.ts` — inverter ordem, remover acao "assinar", adicionar acao "verificar_termo", mover Autentique para pos-pagamento |
-| Modificar | `src/pages/public/EventoPosAprovacao.tsx` — reorganizar etapas (pagamento primeiro, termo depois) |
-| Modificar | `src/components/evento/EventoPagamentoCota.tsx` — remover dependencia de assinatura previa |
-| Criar | `src/components/evento/EventoAguardandoTermo.tsx` — nova tela de aguardando assinatura Autentique |
-| Remover logica de | `src/components/evento/EventoTermoAssinatura.tsx` — nao sera mais usado neste fluxo |
+| Migration SQL | Criar `evento_cotacoes_pecas` e `sinistro_prestadores` |
+| Criar | `src/components/sinistros/AtribuirFornecedoresDialog.tsx` |
+| Criar | `supabase/functions/enviar-cotacao-pecas/index.ts` |
+| Criar | `src/hooks/useVistoriaEvento.ts` |
+| Modificar | `src/pages/eventos/SinistroAnalise.tsx` — adicionar botao e condicao para `pronto_para_oficina` |
+| Modificar | `src/hooks/useSinistroAnalise.ts` — incluir query de vistoria no retorno |
 
 ---
 
-## Resumo Visual do Novo Fluxo
+## Fluxo resumido
 
 ```text
-Analista aprova evento
+Sinistro com status "pronto_para_oficina"
   |
   v
-Sistema automaticamente:
-  - Calcula cota
-  - Cria cobranca ASAAS
-  - Gera link 72h
-  - Envia WhatsApp
+Analista/Regulador clica "Atribuir Fornecedores"
   |
   v
-Associado acessa link
+Modal abre com 3 secoes (filtradas por marca do veiculo):
+  1. Seleciona 1 oficina (obrigatorio)
+  2. Seleciona prestadores (opcional)
+  3. Seleciona auto centers (recomendado min 3)
   |
   v
-[ETAPA 1] Pagamento (PIX ou Cartao)
-  |
-  v
-Pagamento confirmado (webhook ASAAS ou polling)
-  |
-  v
-Sistema cria Termo via Autentique
-  |
-  v
-[ETAPA 2] Aguardar assinatura digital
-  |
-  v
-Termo assinado (webhook Autentique ou polling)
-  |
-  v
-Status: pronto_para_oficina
+Confirmar Atribuicao:
+  - Cria OS vinculada a oficina
+  - Registra prestadores
+  - Para cada auto center: registra cotacao + envia WhatsApp
+  - Status sinistro -> "em_reparo"
 ```
-
