@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -186,15 +186,26 @@ serve(async (req) => {
         .from("sinistro-eventos")
         .getPublicUrl(filePath);
 
-      const assinaturaUrl = urlData?.publicUrl || filePath;
+      // Use signed URL for private bucket
+      const { data: signedData } = await supabase.storage
+        .from("sinistro-eventos")
+        .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year
+
+      const assinaturaUrl = signedData?.signedUrl || urlData?.publicUrl || filePath;
       const agora = new Date().toISOString();
+
+      // Extract real IP from request headers
+      const realIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() 
+        || req.headers.get("x-real-ip") 
+        || ip_cliente 
+        || "unknown";
 
       // Update link
       await supabase
         .from("sinistro_evento_links")
         .update({
           assinatura_url: assinaturaUrl,
-          assinatura_ip: ip_cliente || "unknown",
+          assinatura_ip: realIp,
           assinatura_em: agora,
           etapa_atual: 1,
         })
