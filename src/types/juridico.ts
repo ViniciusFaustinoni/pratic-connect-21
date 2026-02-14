@@ -3,7 +3,11 @@
 export type TipoAdvogado = 'interno' | 'externo' | 'escritorio';
 export type TipoContratoAdvogado = 'fixo' | 'por_processo' | 'hibrido';
 
-export type TipoProcesso = 'civel' | 'trabalhista' | 'criminal' | 'consumidor' | 'transito' | 'administrativo' | 'tributario' | 'outros';
+export type TipoProcesso = 
+  | 'civel' | 'trabalhista' | 'criminal' | 'consumidor' | 'transito' | 'administrativo' | 'tributario' | 'outros'
+  | 'sindicancia_fraude' | 'carta_cancelamento' | 'questao_legal_evento' | 'analise_juridica_interna' | 'indenizacao_documentacao'
+  | 'danos_terceiros' | 'cobranca_judicial' | 'acao_associado' | 'notificacao_extrajudicial' | 'defesa_regulatoria' | 'rescisao_contenciosa';
+
 export type NaturezaProcesso = 'autor' | 'reu' | 'terceiro_interessado' | 'assistente';
 export type RitoProcesso = 'ordinario' | 'sumario' | 'sumarissimo' | 'especial' | 'juizado';
 export type StatusProcesso = 'ativo' | 'suspenso' | 'arquivado' | 'encerrado_procedente' | 'encerrado_improcedente' | 'acordo' | 'desistencia' | 'extinto';
@@ -23,6 +27,11 @@ export type TipoCusta = 'custas_iniciais' | 'custas_finais' | 'honorarios_advoca
 export type StatusCusta = 'pendente' | 'pago' | 'vencido' | 'cancelado';
 
 export type StatusConsultaJuridica = 'pendente' | 'em_analise' | 'respondida' | 'arquivada';
+
+export type ParteContrariaTipo = 'pessoa_fisica' | 'pessoa_juridica' | 'orgao_publico';
+export type InstanciaProcesso = '1a_instancia' | '2a_instancia' | 'tribunal_superior' | 'extrajudicial';
+export type OrigemProcesso = 'sindicancia' | 'evento_direto' | 'manual';
+export type DecisaoProcessoExterno = 'procedente' | 'improcedente' | 'acordo_judicial' | 'acordo_extrajudicial' | 'sentenca_favoravel' | 'sentenca_desfavoravel' | 'recurso_interposto' | 'arquivado';
 
 // Tipos de Consulta Jurídica
 export type TipoConsulta = 
@@ -92,12 +101,15 @@ export interface Processo {
   parte_contraria_cpf_cnpj?: string;
   parte_contraria_advogado?: string;
   parte_contraria_oab?: string;
+  parte_contraria_tipo?: ParteContrariaTipo;
+  parte_contraria_telefone?: string;
   associado_id?: string;
   sinistro_id?: string;
   advogado_id?: string;
   tribunal?: string;
   comarca?: string;
   vara?: string;
+  instancia?: InstanciaProcesso;
   valor_causa?: number;
   valor_condenacao?: number;
   valor_acordo?: number;
@@ -111,6 +123,15 @@ export interface Processo {
   fase: FaseProcesso;
   objeto: string;
   observacoes?: string;
+  prioridade?: string;
+  origem?: OrigemProcesso;
+  decisao?: DecisaoProcessoExterno;
+  decisao_observacoes?: string;
+  decisao_valor?: number;
+  decisao_parcelas?: number;
+  decisao_prazo_recurso?: string;
+  decisao_registrada_em?: string;
+  decisao_registrada_por?: string;
   responsavel_id?: string;
   criado_por?: string;
   created_at: string;
@@ -246,7 +267,34 @@ export const TIPO_PROCESSO_LABELS: Record<TipoProcesso, string> = {
   administrativo: 'Administrativo',
   tributario: 'Tributário',
   outros: 'Outros',
+  sindicancia_fraude: 'Fraude Comprovada',
+  carta_cancelamento: 'Carta de Cancelamento',
+  questao_legal_evento: 'Questão Legal de Evento',
+  analise_juridica_interna: 'Análise Jurídica Interna',
+  indenizacao_documentacao: 'Indenização - Documentação',
+  danos_terceiros: 'Danos a Terceiros',
+  cobranca_judicial: 'Cobrança Judicial',
+  acao_associado: 'Ação do Associado contra Pratic',
+  notificacao_extrajudicial: 'Notificação Extrajudicial',
+  defesa_regulatoria: 'Defesa Regulatória',
+  rescisao_contenciosa: 'Rescisão Contenciosa',
 };
+
+// Agrupamentos de tipo
+export const TIPOS_EVENTO: TipoProcesso[] = [
+  'sindicancia_fraude', 'carta_cancelamento', 'questao_legal_evento',
+  'analise_juridica_interna', 'indenizacao_documentacao'
+];
+
+export const TIPOS_EXTERNO: TipoProcesso[] = [
+  'danos_terceiros', 'cobranca_judicial', 'acao_associado',
+  'notificacao_extrajudicial', 'defesa_regulatoria', 'rescisao_contenciosa'
+];
+
+export const TIPOS_GERAIS: TipoProcesso[] = [
+  'civel', 'trabalhista', 'criminal', 'consumidor', 'transito',
+  'administrativo', 'tributario', 'outros'
+];
 
 export const NATUREZA_PROCESSO_LABELS: Record<NaturezaProcesso, string> = {
   autor: 'Autor',
@@ -374,6 +422,36 @@ export const TIPO_DOCUMENTO_PROCESSO_LABELS: Record<TipoDocumentoProcesso, strin
   comprovante: 'Comprovante',
   notificacao: 'Notificação',
   outros: 'Outros',
+};
+
+export const PARTE_CONTRARIA_TIPO_LABELS: Record<ParteContrariaTipo, string> = {
+  pessoa_fisica: 'Pessoa Física',
+  pessoa_juridica: 'Pessoa Jurídica',
+  orgao_publico: 'Órgão Público',
+};
+
+export const INSTANCIA_LABELS: Record<InstanciaProcesso, string> = {
+  '1a_instancia': '1ª Instância',
+  '2a_instancia': '2ª Instância',
+  tribunal_superior: 'Tribunal Superior',
+  extrajudicial: 'Extrajudicial',
+};
+
+export const ORIGEM_LABELS: Record<OrigemProcesso, string> = {
+  sindicancia: 'Sindicância',
+  evento_direto: 'Evento Direto',
+  manual: 'Manual',
+};
+
+export const DECISAO_PROCESSO_EXTERNO_LABELS: Record<DecisaoProcessoExterno, string> = {
+  procedente: 'Procedente — Pratic deve pagar',
+  improcedente: 'Improcedente — Pratic não deve nada',
+  acordo_judicial: 'Acordo Judicial',
+  acordo_extrajudicial: 'Acordo Extrajudicial',
+  sentenca_favoravel: 'Sentença Favorável — Pratic ganhou',
+  sentenca_desfavoravel: 'Sentença Desfavorável — Pratic perdeu',
+  recurso_interposto: 'Recurso Interposto',
+  arquivado: 'Arquivado',
 };
 
 // Colors

@@ -8,6 +8,7 @@ interface ProcessoFilters {
   fase?: string;
   advogado_id?: string;
   associado_id?: string;
+  origem?: string;
 }
 
 export function useProcessos(filters?: ProcessoFilters) {
@@ -32,6 +33,7 @@ export function useProcessos(filters?: ProcessoFilters) {
       if (filters?.fase) query = query.eq('fase', filters.fase);
       if (filters?.advogado_id) query = query.eq('advogado_id', filters.advogado_id);
       if (filters?.associado_id) query = query.eq('associado_id', filters.associado_id);
+      if (filters?.origem) query = query.eq('origem', filters.origem);
 
       const { data, error } = await query;
       if (error) throw error;

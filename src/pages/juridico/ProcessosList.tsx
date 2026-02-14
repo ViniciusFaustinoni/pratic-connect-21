@@ -20,7 +20,11 @@ import {
   NATUREZA_PROCESSO_LABELS,
   STATUS_PROCESSO_LABELS,
   STATUS_PROCESSO_COLORS,
-  FASE_PROCESSO_LABELS
+  FASE_PROCESSO_LABELS,
+  PRIORIDADE_LABELS,
+  PRIORIDADE_COLORS,
+  ORIGEM_LABELS,
+  TIPOS_EVENTO, TIPOS_EXTERNO, TIPOS_GERAIS,
 } from '@/types/juridico';
 import type { DateRange } from 'react-day-picker';
 
@@ -30,6 +34,7 @@ interface ProcessoFilters {
   tipo: string;
   natureza: string;
   advogado_id: string;
+  origem: string;
   periodo: DateRange | undefined;
 }
 
@@ -48,7 +53,28 @@ const tipoConfig: Record<string, string> = {
   transito: 'bg-yellow-100 text-yellow-800',
   administrativo: 'bg-purple-100 text-purple-800',
   tributario: 'bg-indigo-100 text-indigo-800',
-  outros: 'bg-gray-100 text-gray-800'
+  outros: 'bg-gray-100 text-gray-800',
+  sindicancia_fraude: 'bg-red-100 text-red-800',
+  carta_cancelamento: 'bg-orange-100 text-orange-800',
+  questao_legal_evento: 'bg-yellow-100 text-yellow-800',
+  analise_juridica_interna: 'bg-blue-100 text-blue-800',
+  indenizacao_documentacao: 'bg-teal-100 text-teal-800',
+  danos_terceiros: 'bg-rose-100 text-rose-800',
+  cobranca_judicial: 'bg-amber-100 text-amber-800',
+  acao_associado: 'bg-pink-100 text-pink-800',
+  notificacao_extrajudicial: 'bg-cyan-100 text-cyan-800',
+  defesa_regulatoria: 'bg-violet-100 text-violet-800',
+  rescisao_contenciosa: 'bg-fuchsia-100 text-fuchsia-800',
+};
+
+const formatCurrency = (value: number | null | undefined) => {
+  if (!value) return '-';
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
 };
 
 export default function ProcessosList() {
@@ -60,6 +86,7 @@ export default function ProcessosList() {
     tipo: 'todos',
     natureza: 'todos',
     advogado_id: 'todos',
+    origem: 'todos',
     periodo: undefined
   });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -91,6 +118,9 @@ export default function ProcessosList() {
       }
       if (filters.advogado_id && filters.advogado_id !== 'todos') {
         query = query.eq('advogado_id', filters.advogado_id);
+      }
+      if (filters.origem && filters.origem !== 'todos') {
+        query = query.eq('origem', filters.origem);
       }
       if (filters.periodo?.from) {
         query = query.gte('data_distribuicao', filters.periodo.from.toISOString().split('T')[0]);
@@ -135,7 +165,6 @@ export default function ProcessosList() {
       ['encerrado_procedente', 'encerrado_improcedente', 'acordo', 'extinto', 'arquivado'].includes(p.status)
     ).length;
 
-    // Somar valores
     const valorAutor = processos
       .filter(p => p.natureza === 'autor' && p.status === 'ativo')
       .reduce((sum, p) => sum + (p.valor_causa || 0), 0);
@@ -145,15 +174,6 @@ export default function ProcessosList() {
     
     return { total, ativos, comoAutor, comoReu, encerrados, valorAutor, valorReu };
   }, [processos]);
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
 
   const handleFilterChange = (key: keyof ProcessoFilters, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -176,11 +196,9 @@ export default function ProcessosList() {
   };
 
   const handleExport = async (ids: string[], format: 'excel' | 'pdf') => {
-    // Implementação básica de exportação
     const selected = processos.filter(p => ids.includes(p.id));
     
     if (format === 'excel') {
-      // Criar CSV
       const headers = ['Número', 'CNJ', 'Tipo', 'Natureza', 'Parte Contrária', 'Status', 'Advogado'];
       const rows = selected.map(p => [
         p.numero,
@@ -295,7 +313,7 @@ export default function ProcessosList() {
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
             <Select value={filters.status} onValueChange={(v) => handleFilterChange('status', v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Status" />
@@ -340,6 +358,17 @@ export default function ProcessosList() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={filters.origem} onValueChange={(v) => handleFilterChange('origem', v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Origem" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas as Origens</SelectItem>
+                {Object.entries(ORIGEM_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <DatePickerWithRange
               date={filters.periodo}
               onDateChange={(date) => handleFilterChange('periodo', date)}
@@ -370,6 +399,8 @@ export default function ProcessosList() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Natureza</TableHead>
                 <TableHead>Parte Contrária</TableHead>
+                <TableHead>Valor</TableHead>
+                <TableHead>Prioridade</TableHead>
                 <TableHead>Fase</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Advogado</TableHead>
@@ -380,7 +411,7 @@ export default function ProcessosList() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 10 }).map((_, j) => (
+                    {Array.from({ length: 12 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -389,7 +420,7 @@ export default function ProcessosList() {
                 ))
               ) : processos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
                     Nenhum processo encontrado
                   </TableCell>
                 </TableRow>
@@ -416,6 +447,12 @@ export default function ProcessosList() {
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate">
                       {processo.parte_contraria_nome || '-'}
+                    </TableCell>
+                    <TableCell>{formatCurrency(processo.valor_causa)}</TableCell>
+                    <TableCell>
+                      <Badge className={PRIORIDADE_COLORS[processo.prioridade as keyof typeof PRIORIDADE_COLORS] || 'bg-blue-100 text-blue-800'}>
+                        {PRIORIDADE_LABELS[processo.prioridade as keyof typeof PRIORIDADE_LABELS] || 'Normal'}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
