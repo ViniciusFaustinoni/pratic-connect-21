@@ -18894,6 +18894,8 @@ export type Database = {
       sinistros: {
         Row: {
           alerta_recem_ativado: boolean | null
+          analise_interna: boolean | null
+          analise_interna_motivos: string[] | null
           analista_id: string | null
           associado_id: string
           autentique_documento_id: string | null
@@ -18903,6 +18905,7 @@ export type Database = {
           avaliacao_nota: number | null
           bo_arquivo_url: string | null
           bo_numero: string | null
+          bombeiros_acionados: boolean | null
           canal: string
           chamado_assistencia_id: string | null
           chamado_origem_id: string | null
@@ -18983,6 +18986,8 @@ export type Database = {
         }
         Insert: {
           alerta_recem_ativado?: boolean | null
+          analise_interna?: boolean | null
+          analise_interna_motivos?: string[] | null
           analista_id?: string | null
           associado_id: string
           autentique_documento_id?: string | null
@@ -18992,6 +18997,7 @@ export type Database = {
           avaliacao_nota?: number | null
           bo_arquivo_url?: string | null
           bo_numero?: string | null
+          bombeiros_acionados?: boolean | null
           canal?: string
           chamado_assistencia_id?: string | null
           chamado_origem_id?: string | null
@@ -19072,6 +19078,8 @@ export type Database = {
         }
         Update: {
           alerta_recem_ativado?: boolean | null
+          analise_interna?: boolean | null
+          analise_interna_motivos?: string[] | null
           analista_id?: string | null
           associado_id?: string
           autentique_documento_id?: string | null
@@ -19081,6 +19089,7 @@ export type Database = {
           avaliacao_nota?: number | null
           bo_arquivo_url?: string | null
           bo_numero?: string | null
+          bombeiros_acionados?: boolean | null
           canal?: string
           chamado_assistencia_id?: string | null
           chamado_origem_id?: string | null

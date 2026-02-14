@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle } from 'lucide-react';
+import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -104,7 +104,6 @@ const DOCUMENTOS_OBRIGATORIOS: Record<string, Array<{tipo: string; nome: string;
     { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
     { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
     { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
-    { tipo: 'laudo_bombeiros', nome: 'Laudo dos Bombeiros', obrigatorio: true },
     { tipo: 'foto_dano', nome: 'Fotos do Veículo', obrigatorio: true },
   ],
   fenomeno_natural: [
@@ -174,6 +173,9 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
   });
   const [necessitaReboque, setNecessitaReboque] = useState(false);
 
+  // === Incêndio state ===
+  const [bombeirosAcionados, setBombeirosAcionados] = useState<boolean | null>(null);
+
   // === Vidros state ===
   const [pecaDanificada, setPecaDanificada] = useState('');
   const [opcaoReparo, setOpcaoReparo] = useState<'via_pratic' | 'reembolso'>('via_pratic');
@@ -187,6 +189,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
   }>({ carenciaOk: true, beneficioOk: true, pecaLimiteOk: true, loading: false });
 
   const isVidros = formData.tipo === 'vidros';
+  const isIncendio = formData.tipo === 'incendio';
 
   // Buscar associados
   const { data: associados = [] } = useQuery({
@@ -408,6 +411,11 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         insertData.opcao_reparo = opcaoReparo;
       }
 
+      // Campos específicos de incêndio
+      if (isIncendio && bombeirosAcionados !== null) {
+        insertData.bombeiros_acionados = bombeirosAcionados;
+      }
+
       const { data: sinistro, error } = await supabase
         .from('sinistros')
         .insert([insertData])
@@ -493,7 +501,16 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
 
       // ===== 7. CRIAR DOCUMENTOS PENDENTES =====
       try {
-        const documentosPendentes = DOCUMENTOS_OBRIGATORIOS[formData.tipo] || DOCUMENTOS_OBRIGATORIOS.outro;
+        let documentosPendentes = DOCUMENTOS_OBRIGATORIOS[formData.tipo] || DOCUMENTOS_OBRIGATORIOS.outro;
+        
+        // Para incêndio, adicionar documento dinâmico baseado em bombeiros_acionados
+        if (isIncendio && bombeirosAcionados !== null) {
+          const docBombeiros = bombeirosAcionados
+            ? { tipo: 'certidao_bombeiros', nome: 'Certidão de Ocorrência do Corpo de Bombeiros', obrigatorio: true }
+            : { tipo: 'carta_cartorio', nome: 'Carta reconhecida em cartório explicando circunstâncias', obrigatorio: true };
+          documentosPendentes = [...documentosPendentes, docBombeiros];
+        }
+
         const docsToInsert = documentosPendentes.map(doc => ({
           sinistro_id: sinistro.id,
           tipo: doc.tipo,
@@ -670,6 +687,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
     setNecessitaReboque(false);
     setPecaDanificada('');
     setOpcaoReparo('via_pratic');
+    setBombeirosAcionados(null);
     onClose();
   };
 
@@ -906,6 +924,35 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
               )}
             </div>
           </div>
+
+          {/* === SEÇÃO INCÊNDIO - Bombeiros acionados? === */}
+          {isIncendio && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">Incêndio - Documentação</h3>
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Flame className="h-5 w-5 text-orange-500" />
+                  <div>
+                    <p className="font-medium text-sm">Os bombeiros foram acionados?</p>
+                    <p className="text-xs text-muted-foreground">
+                      {bombeirosAcionados === true
+                        ? 'Será exigida a Certidão de Ocorrência do Corpo de Bombeiros'
+                        : bombeirosAcionados === false
+                        ? 'Será exigida Carta reconhecida em cartório explicando as circunstâncias'
+                        : 'Define qual documento adicional será obrigatório'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{bombeirosAcionados === null ? '' : bombeirosAcionados ? 'Sim' : 'Não'}</span>
+                  <Switch 
+                    checked={bombeirosAcionados === true} 
+                    onCheckedChange={(checked) => setBombeirosAcionados(checked)} 
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* === SEÇÃO VIDROS === */}
           {isVidros && (
