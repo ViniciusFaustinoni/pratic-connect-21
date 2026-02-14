@@ -1,188 +1,187 @@
 
-# Wizard de 3 Etapas - Pagina Publica do Evento de Colisao
+
+# Agendamento de Vistoria de Evento + Perfil Regulador
 
 ## Resumo
 
-Transformar a pagina placeholder `EventoColisao.tsx` em um wizard funcional de 3 etapas mobile-first. O associado acessa pelo link unico, completa as etapas uma a uma (auto vistoria, B.O., relato) e o progresso e salvo individualmente. Fotos e arquivos sao enviados ao Supabase Storage via edge function (pois o usuario nao esta autenticado).
+Criar 3 funcionalidades: (1) seção de agendamento de vistoria na página pública do associado após conclusão das 3 etapas, (2) novo perfil de acesso "regulador" no enum `app_role`, (3) área logada do regulador com dashboard e fila de vistorias.
 
 ---
 
 ## 1. Banco de Dados
 
-### Bucket de Storage: `sinistro-eventos`
+### Nova tabela: `vistorias_evento`
 
-Criar um novo bucket dedicado para uploads da pagina publica, com politica RLS que permite upload anonimo organizado por `link_id`:
+Armazena os agendamentos de vistoria de evento (similar a `instalacoes` mas para sinistros):
 
+- `id` (uuid, PK)
+- `sinistro_id` (uuid, FK -> sinistros, NOT NULL)
+- `link_id` (uuid, FK -> sinistro_evento_links)
+- `regulador_id` (uuid, FK -> profiles) -- profissional atribuído
+- `data_agendada` (date, NOT NULL)
+- `horario_agendado` (time, NOT NULL)
+- `endereco_rua` (text)
+- `endereco_numero` (text)
+- `endereco_bairro` (text)
+- `endereco_cidade` (text)
+- `endereco_complemento` (text)
+- `status` (text, default 'agendada') -- 'agendada', 'em_andamento', 'concluida', 'cancelada'
+- `dados_vistoria` (jsonb) -- fotos, vídeo, orçamento (preenchido pelo regulador)
+- `iniciada_em` (timestamptz)
+- `concluida_em` (timestamptz)
+- `observacoes` (text)
+- `created_at` (timestamptz, default now())
+- `updated_at` (timestamptz, default now())
+
+RLS: anon pode INSERT (via edge function), authenticated com role regulador/diretor/gerencia pode SELECT/UPDATE.
+
+### Alteração no enum `app_role`
+
+Adicionar valor `regulador` ao enum existente.
+
+### Alteração na tabela `sinistro_evento_links`
+
+Adicionar campo `etapa4_completada_em` (timestamptz) para registrar quando o agendamento foi feito.
+
+---
+
+## 2. Edge Function: `agendar-vistoria-evento`
+
+Nova edge function pública (verify_jwt = false) que recebe:
+
+- `token` -- token do link do evento
+- `data_agendada` -- data selecionada
+- `horario_agendado` -- horário selecionado (ex: "09:30")
+- `endereco` -- objeto com rua, numero, bairro, cidade, complemento
+
+Lógica:
+1. Valida o token (link ativo + não expirado + etapa_atual >= 3)
+2. Verifica se o horário está disponível (não conflita com outro agendamento)
+3. Cria registro em `vistorias_evento` com status 'agendada'
+4. Atualiza `sinistro_evento_links.etapa4_completada_em`
+5. Retorna confirmação com dados do agendamento
+
+### Endpoint de horários disponíveis
+
+A mesma edge function (ou uma separada `horarios-vistoria-evento`) retorna os horários disponíveis para uma data:
+- Slots de 30 em 30 minutos, das 08:00 às 17:00
+- Exclui horários já ocupados (busca em `vistorias_evento` com status != 'cancelada')
+
+---
+
+## 3. Perfil Regulador
+
+### Atualização do enum no banco
 ```text
-sinistro-eventos/
-  {link_id}/
-    etapa1/
-      foto-001.jpg
-      foto-002.jpg
-    etapa2/
-      bo-001.pdf
-    etapa3/
-      audio-relato.webm
+ALTER TYPE public.app_role ADD VALUE 'regulador';
 ```
 
-Politica: anon pode INSERT no bucket `sinistro-eventos`. Authenticated pode ALL.
+### Atualização no frontend (`src/types/auth.ts`)
+- Adicionar `'regulador'` ao type `PerfilAcesso`
+- Adicionar `regulador: 'Regulador'` no `PERFIL_ACESSO_LABELS`
+- Adicionar flag `isRegulador` no `AuthFlags`
+
+### Atualização em `usePermissions.ts`
+- Adicionar `isRegulador` e `isReguladorOnly`
+- Regulador "only" redireciona para `/regulador` (similar ao instalador)
+
+### Atualização em `useRouteGuard.ts`
+- Adicionar regra: regulador só pode acessar `/regulador/*`
 
 ---
 
-## 2. Edge Function: `salvar-etapa-evento`
+## 4. Área Logada do Regulador
 
-Nova edge function publica (verify_jwt = false) que recebe:
+### Layout: `ReguladorLayout.tsx`
+Baseado no `InstaladorLayout.tsx`, com navegação inferior:
+- Início (`/regulador`)
+- Vistorias (`/regulador/vistorias`)
+- Perfil (`/regulador/perfil`)
 
-- `token` - para validar o link
-- `etapa` - 1, 2 ou 3
-- `dados` - objeto JSON com os dados da etapa
-- `arquivos` - FormData com fotos/PDFs/audio (multipart)
+### Guard: `ReguladorGuard.tsx`
+Similar ao `InstaladorGuard.tsx`, verifica `hasRole('regulador')`.
 
-Logica:
-1. Valida o token (link ativo + nao expirado)
-2. Verifica que a etapa anterior ja foi completada
-3. Faz upload dos arquivos para `sinistro-eventos/{link_id}/etapa{N}/`
-4. Salva os dados no campo `dados_etapa{N}` do link (URLs dos arquivos, textos, etc.)
-5. Atualiza `etapa_atual` e `etapa{N}_completada_em`
-6. Se etapa 3, muda status do link para `completado` e atualiza status do sinistro para `documentacao_enviada`
+### Dashboard: `ReguladorHome.tsx`
+- 3 cards de métricas: Vistorias Hoje, Esta Semana, Total Pendentes
+- Lista resumida das próximas vistorias do dia
+
+### Lista de Vistorias: `ReguladorVistorias.tsx`
+- Cards com dados: nome associado, placa, marca/modelo/ano/cor, tipo evento, data/hora, endereço, status
+- Filtros: data (hoje/amanhã/semana/todas) e status (agendadas/em_andamento/concluídas)
+- Ordenação por data/hora (mais próximas primeiro)
+- Botão "Iniciar Vistoria" em cada card (placeholder -- será implementado no próximo prompt)
+
+### Hook: `useVistoriasEvento.ts`
+- Busca vistorias do regulador logado
+- Filtros por data e status
+- Contadores para dashboard
+
+### Rotas no `App.tsx`
+```text
+/regulador/login -> InstaladorLogin (reutiliza)
+/regulador       -> ReguladorHome
+/regulador/vistorias -> ReguladorVistorias
+/regulador/perfil -> ReguladorPerfil (reutiliza InstaladorPerfil adaptado)
+```
 
 ---
 
-## 3. Componentes Frontend
+## 5. Página Pública: Seção de Agendamento (Etapa 4)
 
-### Reestruturacao do `EventoColisao.tsx`
+### Modificação em `EventoColisao.tsx`
+Após `isCompleted` (etapa_atual >= 3), ao invés de mostrar apenas `EventoSucesso`, verificar:
+- Se `etapa4_completada_em` existe: mostrar `EventoSucesso` com dados do agendamento
+- Se não: mostrar `EventoAgendamento` + `EventoSucesso` parcial
 
-A pagina atual sera refatorada para funcionar como container do wizard:
-- Valida token (logica existente)
-- Mostra header com info do sinistro + stepper visual (3 bolinhas)
-- Renderiza o componente da etapa atual
-- Se todas etapas completadas, mostra tela de sucesso (read-only)
+### Novo componente: `EventoAgendamento.tsx`
+- Título "Agende sua Vistoria de Evento"
+- Explicação sobre o regulador
+- Calendário (próximos 15 dias úteis) usando DayPicker
+- Grid de horários disponíveis (08:00-17:00, 30 em 30 min)
+- Campos de endereço: Rua, Número, Bairro, Cidade, Complemento/Referência
+- Botão "Confirmar Agendamento"
+- Ao confirmar: chama `agendar-vistoria-evento`, mostra mensagem de sucesso
 
-### Novos Componentes
+---
 
-| Componente | Descricao |
+## 6. Arquivos a Criar
+
+| Arquivo | Descrição |
 |---|---|
-| `EventoEtapa1Vistoria.tsx` | Grid de fotos (3 colunas mobile), min 5 / max 15 fotos, upload com preview, compressao via imageCompressor existente |
-| `EventoEtapa2BO.tsx` | Upload de arquivo (foto/PDF), campos "Numero do B.O." e "Resumo do B.O.", validacao minima |
-| `EventoEtapa3Relato.tsx` | Textarea relato, gravador de audio (MediaRecorder API), data/hora do evento, local (rua + numero), checkbox terceiro com campos condicionais |
-| `EventoStepper.tsx` | Indicador visual de progresso (3 bolinhas coloridas + labels) |
-| `EventoSucesso.tsx` | Tela final de confirmacao com resumo read-only |
-| `AudioRecorder.tsx` | Componente reutilizavel de gravacao de audio com cronometro, play/pause, regravar |
+| Migration SQL | Tabela `vistorias_evento`, enum `regulador`, campo `etapa4_completada_em` |
+| `supabase/functions/agendar-vistoria-evento/index.ts` | Cria agendamento + retorna horários disponíveis |
+| `src/pages/regulador/ReguladorHome.tsx` | Dashboard do regulador |
+| `src/pages/regulador/ReguladorVistorias.tsx` | Lista/fila de vistorias |
+| `src/components/regulador/ReguladorLayout.tsx` | Layout com nav inferior |
+| `src/components/regulador/ReguladorGuard.tsx` | Guard de acesso |
+| `src/components/evento/EventoAgendamento.tsx` | Seção de agendamento na página pública |
+| `src/hooks/useVistoriasEvento.ts` | Hook para buscar vistorias do regulador |
 
-### Etapa 1 - Auto Vistoria
+## 7. Arquivos a Modificar
 
-- Grid 3 colunas com slots de camera
-- Clique abre camera do celular (accept="image/*" capture="environment")
-- Miniatura com X para remover
-- Contador "5 de 15 fotos"
-- Botao "Proxima Etapa" habilitado quando >= 5 fotos
-- Ao avancar: comprime fotos, envia via `salvar-etapa-evento`, salva URLs
-
-### Etapa 2 - Boletim de Ocorrencia
-
-- Area de upload drag-and-drop (foto, imagem, PDF)
-- Preview do arquivo enviado
-- Campo texto "Numero do B.O." (obrigatorio)
-- Campo textarea "Resumo do B.O." (opcional)
-- Botao habilitado quando: >= 1 arquivo + numero preenchido
-- Flag `validacao_pendente: true` no dados_etapa2
-
-### Etapa 3 - Relato Completo
-
-- Textarea grande para relato escrito
-- Botao de gravacao de audio (MediaRecorder API, formato webm)
-  - Cronometro durante gravacao
-  - Player para ouvir apos gravar
-  - Botao regravar
-- Campo data/hora do evento (input datetime-local)
-- Campos local: rua + numero/referencia
-- Checkbox "Houve terceiro envolvido?" com campos condicionais:
-  - Nome, placa, telefone do terceiro
-  - Seletor culpa: Sim / Nao / Nao sei
-- Botao "Finalizar Envio"
-- Ao finalizar: salva tudo, muda status para `documentacao_enviada`
-
-### Tela de Sucesso
-
-- Icone de check verde
-- Mensagem: "Tudo certo! Recebemos todas as informacoes..."
-- Prazo de 7 dias uteis
-- Resumo read-only do que foi enviado (fotos, B.O., relato)
-- Link continua acessivel mas sem edicao
-
----
-
-## 4. Upload Strategy
-
-Como o associado nao esta logado, os uploads nao podem ir direto ao Storage (RLS bloqueia anon). A estrategia:
-
-- Fotos sao comprimidas no client (usando `compressImage` existente)
-- Enviadas como FormData para a edge function `salvar-etapa-evento`
-- A edge function usa `SUPABASE_SERVICE_ROLE_KEY` para fazer upload ao bucket `sinistro-eventos`
-- Retorna as URLs publicas dos arquivos salvos
-
----
-
-## 5. Gravacao de Audio
-
-Componente `AudioRecorder`:
-- Usa `navigator.mediaDevices.getUserMedia({ audio: true })`
-- `MediaRecorder` para gravar em webm/opus
-- Cronometro visual durante gravacao
-- Apos parar: cria blob, mostra player `<audio>` para review
-- Botao regravar descarta anterior
-- Audio enviado como File no FormData da etapa 3
-
----
-
-## 6. Salvamento de Progresso
-
-Cada etapa salva individualmente ao clicar "Proxima Etapa" ou "Finalizar":
-1. Upload dos arquivos via edge function
-2. Edge function atualiza `sinistro_evento_links` com `dados_etapa{N}` e `etapa_atual`
-3. Se o associado sair e voltar, a pagina carrega o estado atual do link
-4. Etapas ja completadas mostram resumo read-only
-5. Etapa atual mostra o formulario para preencher
-
----
-
-## 7. Arquivos a Criar
-
-| Arquivo | Descricao |
+| Arquivo | Mudança |
 |---|---|
-| Migration SQL | Bucket `sinistro-eventos` + politicas storage |
-| `supabase/functions/salvar-etapa-evento/index.ts` | Upload de arquivos + salvamento de dados por etapa |
-| `src/components/evento/EventoStepper.tsx` | Stepper visual 3 etapas |
-| `src/components/evento/EventoEtapa1Vistoria.tsx` | Upload de fotos dos danos |
-| `src/components/evento/EventoEtapa2BO.tsx` | Upload B.O. + campos |
-| `src/components/evento/EventoEtapa3Relato.tsx` | Relato + audio + local + terceiro |
-| `src/components/evento/EventoSucesso.tsx` | Tela de conclusao |
-| `src/components/evento/AudioRecorder.tsx` | Gravador de audio reutilizavel |
-
-## 8. Arquivos a Modificar
-
-| Arquivo | Mudanca |
-|---|---|
-| `src/pages/public/EventoColisao.tsx` | Refatorar para wizard com etapas reais em vez de placeholder |
-| `supabase/config.toml` | Adicionar `verify_jwt = false` para `salvar-etapa-evento` |
+| `src/types/auth.ts` | Adicionar 'regulador' ao PerfilAcesso + labels + flags |
+| `src/hooks/usePermissions.ts` | Adicionar isRegulador, isReguladorOnly |
+| `src/hooks/useRouteGuard.ts` | Regra de redirect para regulador |
+| `src/pages/public/EventoColisao.tsx` | Integrar seção de agendamento após etapa 3 |
+| `src/components/evento/EventoSucesso.tsx` | Mostrar dados do agendamento quando existirem |
+| `src/App.tsx` | Rotas `/regulador/*` |
+| `supabase/config.toml` | verify_jwt = false para `agendar-vistoria-evento` |
+| `supabase/functions/validar-link-evento/index.ts` | Retornar dados de agendamento se existir |
 
 ---
 
-## 9. Detalhes Tecnicos
+## 8. Lógica de Horários Disponíveis
 
-### Compressao de fotos
-Reutilizar `src/lib/imageCompressor.ts` existente com config: maxWidth 1920, quality 0.75, maxSizeKB 800.
+```text
+Slots fixos: 08:00, 08:30, 09:00, ..., 16:30, 17:00 (19 slots)
 
-### FormData para edge function
-As fotos sao enviadas como FormData (nao base64) para evitar problemas de memoria no celular. A edge function faz parse do multipart e faz upload ao storage.
+Para uma data selecionada:
+1. Buscar vistorias_evento WHERE data_agendada = data AND status != 'cancelada'
+2. Extrair horarios ocupados
+3. Retornar slots - ocupados = disponíveis
+```
 
-### Validacao na edge function
-- Etapa 1: exige pelo menos 5 arquivos de imagem
-- Etapa 2: exige pelo menos 1 arquivo + numero_bo no body
-- Etapa 3: exige relato_texto OU audio no body
+A capacidade por horário é 1 (um regulador por vez por slot). Se houver mais reguladores no futuro, pode-se expandir.
 
-### Atualizacao de status do sinistro
-Ao completar etapa 3, a edge function:
-1. Muda `sinistro_evento_links.status` para `completado`
-2. Atualiza `sinistros.status` para `documentacao_enviada`
-3. Registra timestamp em `etapa3_completada_em`
