@@ -1,55 +1,57 @@
 
 
-# Correcoes: Link 2, Pagamento, ASAAS, Autentique e Gatilho Duplo
+# Adicionar Regulador e Analista de Eventos aos Perfis de Acesso
 
-## 5 Correcoes a Implementar
+## Problema
 
-### Correcao 1 — Exibir data do evento e mensagem "aprovado" na pagina de pagamento
+Os tipos `regulador` e `analista_eventos` ja existem no sistema (enum `PerfilAcesso`, labels, cores, guards, layouts e paineis). Porem, ao criar ou editar um usuario, esses dois perfis **nao aparecem como opcao selecionavel** nas telas de formulario.
 
-**Arquivo:** `src/pages/public/EventoPosAprovacao.tsx`
+Tres listas estaticas de perfis precisam ser atualizadas:
 
-Adicionar entre o header e o card de informacoes:
-- Texto "Seu evento foi aprovado!" com icone CheckCircle2 verde
-- No card de informacoes, nova linha exibindo `sinistro.data_ocorrencia` formatada
+## Correcoes
 
-### Correcao 2 — Parcelas com valores reais do ASAAS
+### 1. Formulario de criacao/edicao de usuario
 
-**Nenhuma correcao necessaria.** O frontend ja exibe disclaimer "Valores aproximados". O ASAAS aplica os juros reais no momento do pagamento. Manter como esta.
+**Arquivo:** `src/pages/configuracoes/UsuarioForm.tsx` (linha 19-32)
 
-### Correcao 3 — Adicionar `pagamento_confirmado` e `reprovado` ao statusConfig
-
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
-
-Adicionar ao objeto `statusConfig` (linha 62):
+Adicionar ao array `perfisDisponiveis`:
 
 ```text
-pagamento_confirmado: { label: 'Pag. Confirmado', class: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
-reprovado: { label: 'Reprovado', class: 'bg-red-100 text-red-800 border-red-300' },
+{ value: 'regulador', label: 'Regulador', desc: 'Vistorias e oficina' },
+{ value: 'analista_eventos', label: 'Analista de Eventos', desc: 'Analise de sinistros' },
 ```
 
-### Correcao 4 — Card de status do pagamento e termo na area administrativa
+### 2. Modal "Gerenciar Perfis" (edicao rapida de roles)
 
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
+**Arquivo:** `src/components/usuarios/GerenciarPerfisModal.tsx` (linha 40-53)
 
-Na secao de acoes (coluna direita, apos o bloco `pronto_para_oficina` e antes do bloco `em_analise || aprovado`), adicionar tratamento para `pagamento_confirmado`:
+Adicionar ao array `PERFIS_FUNCIONARIO`:
 
-- Exibir card verde "Pagamento confirmado -- aguardando assinatura do termo"
-- Exibir data/hora do pagamento (`sinistro.cota_paga_em`)
-- Exibir valor pago (do campo `cota`)
+```text
+'regulador',
+'analista_eventos',
+```
 
-### Correcao 5 — Mensagem WhatsApp na aprovacao corrigida
+### 3. Modal "Novo Funcionario"
 
-**Arquivo:** `supabase/functions/analisar-evento/index.ts`
+**Arquivo:** `src/components/usuarios/NovoFuncionarioModal.tsx` (linha 36-49)
 
-Linha 177: alterar mensagem de "assinar o Termo de Entrada" para "efetuar o pagamento da cota de coparticipacao e assinar o Termo de Entrada".
+Adicionar ao array `PERFIS_FUNCIONARIO`:
 
----
+```text
+'regulador',
+'analista_eventos',
+```
+
+## Resultado
+
+Apos as correcoes, ao criar ou editar um usuario, os cards "Regulador" e "Analista de Eventos" aparecerao na grade de perfis de acesso (como na imagem de referencia). Ao selecionar um desses perfis, o usuario tera acesso ao respectivo painel (`/regulador` ou `/analista-eventos`), que ja estao implementados com seus guards e layouts.
 
 ## Arquivos Afetados
 
 | Acao | Arquivo |
 |---|---|
-| Modificar | `src/pages/public/EventoPosAprovacao.tsx` -- mensagem aprovado + data do evento |
-| Modificar | `src/pages/eventos/SinistroAnalise.tsx` -- statusConfig + card pagamento_confirmado |
-| Modificar | `supabase/functions/analisar-evento/index.ts` -- texto WhatsApp corrigido |
+| Modificar | `src/pages/configuracoes/UsuarioForm.tsx` -- adicionar 2 perfis ao array perfisDisponiveis |
+| Modificar | `src/components/usuarios/GerenciarPerfisModal.tsx` -- adicionar 2 perfis ao array PERFIS_FUNCIONARIO |
+| Modificar | `src/components/usuarios/NovoFuncionarioModal.tsx` -- adicionar 2 perfis ao array PERFIS_FUNCIONARIO |
 
