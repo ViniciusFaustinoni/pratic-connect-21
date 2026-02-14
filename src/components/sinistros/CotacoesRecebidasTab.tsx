@@ -59,7 +59,7 @@ export function CotacoesRecebidasTab({ sinistroId }: Props) {
 
   const cotacaoAprovada = cotacoesComStatus.find((c) => c.aprovada);
   const cotacoesRespondidas = cotacoesComStatus.filter((c) => c.status === 'respondido' || c.aprovada);
-  const temPendentes = cotacoesComStatus.some((c) => c.status === 'enviado');
+  const temRegistraveis = cotacoesComStatus.some((c) => (c.status === 'enviado' || c.status === 'expirado') && !c.aprovada);
 
   const handleReenviar = async (cotacao: CotacaoEvento) => {
     setReenviando(cotacao.id);
@@ -194,7 +194,7 @@ export function CotacoesRecebidasTab({ sinistroId }: Props) {
       </Card>
 
       {/* Seção 2 — Botão Registrar */}
-      {temPendentes && !cotacaoAprovada && (
+      {temRegistraveis && !cotacaoAprovada && (
         <Button onClick={() => setShowRegistrar(true)} className="w-full">
           Registrar Cotação Recebida
         </Button>

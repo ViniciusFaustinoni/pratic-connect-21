@@ -87,10 +87,43 @@ export function AtribuirFornecedoresDialog({
     marca: marcaVeiculo,
   });
 
-  // Filtrar auto centers ativos
+  // Filtrar oficinas por especialidades compatíveis com etapas de reparo
+  const oficinasCompativeis = useMemo(() => {
+    if (!oficinas || etapasReparo.length === 0) return oficinas || [];
+    return oficinas.filter((o: any) => {
+      if (!o.especialidades?.length) return false;
+      return etapasReparo.some((etapa: string) =>
+        o.especialidades.some((esp: string) =>
+          esp.toLowerCase().includes(etapa.toLowerCase()) ||
+          etapa.toLowerCase().includes(esp.toLowerCase())
+        )
+      );
+    });
+  }, [oficinas, etapasReparo]);
+
+  // Tipos de peça do orçamento para matching com auto centers
+  const tiposPecaOrcamento = useMemo(() => {
+    return itensPecas.map((p) => p.descricao.toLowerCase());
+  }, [itensPecas]);
+
+  // Filtrar auto centers ativos e ordenar por compatibilidade
   const autoCentersAtivos = useMemo(() => {
-    return (autoCenters || []).filter((ac: any) => ac.status === 'ativo' && ac.whatsapp);
-  }, [autoCenters]);
+    const ativos = (autoCenters || []).filter((ac: any) => ac.status === 'ativo' && ac.whatsapp);
+    // Ordenar: compatíveis primeiro
+    return ativos.sort((a: any, b: any) => {
+      const aMatch = a.especialidades?.some((esp: string) =>
+        tiposPecaOrcamento.some((tipo) =>
+          esp.toLowerCase().includes(tipo) || tipo.includes(esp.toLowerCase())
+        )
+      ) ? 1 : 0;
+      const bMatch = b.especialidades?.some((esp: string) =>
+        tiposPecaOrcamento.some((tipo) =>
+          esp.toLowerCase().includes(tipo) || tipo.includes(esp.toLowerCase())
+        )
+      ) ? 1 : 0;
+      return bMatch - aMatch;
+    });
+  }, [autoCenters, tiposPecaOrcamento]);
 
   // Oficina selecionada (para complementar prestadores)
   const oficinaSelecionada = useMemo(() => {
@@ -307,16 +340,16 @@ export function AtribuirFornecedoresDialog({
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span className="text-sm text-muted-foreground">Carregando oficinas...</span>
                 </div>
-              ) : !oficinas?.length ? (
+              ) : !oficinasCompativeis?.length ? (
                 <div className="flex items-center gap-2 p-4 rounded-lg bg-amber-50 border border-amber-200">
                   <AlertTriangle className="h-5 w-5 text-amber-600" />
                   <p className="text-sm text-amber-800">
-                    Nenhuma oficina encontrada para a marca {marcaVeiculo}. Cadastre novas oficinas ou verifique fornecedores com atendimento GLOBAL.
+                    Nenhuma oficina compatível encontrada para a marca {marcaVeiculo}. Cadastre novas oficinas ou verifique fornecedores com atendimento GLOBAL.
                   </p>
                 </div>
               ) : (
                 <RadioGroup value={oficinaId} onValueChange={setOficinaId} className="space-y-2">
-                  {oficinas.map((oficina) => (
+                  {oficinasCompativeis.map((oficina) => (
                     <label
                       key={oficina.id}
                       className={cn(
@@ -332,7 +365,9 @@ export function AtribuirFornecedoresDialog({
                           {oficina.nome_fantasia || oficina.razao_social}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {[oficina.cidade, oficina.estado].filter(Boolean).join(' - ')}
+                          {[oficina.logradouro, oficina.numero, oficina.bairro].filter(Boolean).join(', ')}
+                          {oficina.cidade && ` — ${oficina.cidade}`}
+                          {oficina.estado && `/${oficina.estado}`}
                         </p>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {oficina.especialidades?.map((e: string) => (
@@ -464,9 +499,18 @@ export function AtribuirFornecedoresDialog({
                         disabled={itensPecas.length === 0}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground">
-                          {ac.nome_fantasia || ac.razao_social || ac.nome}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground">
+                            {ac.nome_fantasia || ac.razao_social || ac.nome}
+                          </p>
+                          {ac.especialidades?.some((esp: string) =>
+                            tiposPecaOrcamento.some((tipo: string) =>
+                              esp.toLowerCase().includes(tipo) || tipo.includes(esp.toLowerCase())
+                            )
+                          ) && (
+                            <Badge className="bg-green-100 text-green-800 border-green-300 text-[10px]">Compatível</Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           {[ac.cidade, ac.estado].filter(Boolean).join(' - ')}
                         </p>
