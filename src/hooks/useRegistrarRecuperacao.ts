@@ -99,11 +99,48 @@ export function useRegistrarRecuperacao() {
         console.log('[RegistrarRecuperacao] Rastreador voltou para modo normal');
       }
 
-      // 4. Registrar no histórico do sinistro
+      // 4. Atualizar STATUS DO SINISTRO baseado na condição do veículo
+      let novoStatusSinistro: string;
+      let observacaoSinistro: string;
+
+      if (condicaoVeiculo === 'integro') {
+        novoStatusSinistro = 'encerrado';
+        observacaoSinistro = `Veículo recuperado íntegro em ${localRecuperacao}. Pratic desonerada. Veículo devolvido ao associado.`;
+      } else if (condicaoVeiculo === 'avariado') {
+        novoStatusSinistro = 'em_regulacao';
+        observacaoSinistro = `Veículo recuperado com avarias em ${localRecuperacao}. Seguirá para regulação e fluxo de oficina.`;
+      } else {
+        // destruido - >= 75% FIPE
+        novoStatusSinistro = 'aguardando_pagamento';
+        observacaoSinistro = `Veículo recuperado destruído (≥75% FIPE) em ${localRecuperacao}. Encaminhado para indenização integral.`;
+      }
+
+      const { error: updateSinistroError } = await supabase
+        .from('sinistros')
+        .update({
+          status: novoStatusSinistro as any,
+          ...(condicaoVeiculo === 'destruido' && { tipo_dano: 'perda_total' }),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', sinistroId);
+
+      if (updateSinistroError) {
+        console.error('[RegistrarRecuperacao] Erro ao atualizar sinistro:', updateSinistroError);
+      }
+
+      // 5. Registrar no histórico do sinistro
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistroId,
-        status_anterior: null,
-        status_novo: 'veiculo_recuperado',
+        status_anterior: 'em_recuperacao',
+        status_novo: novoStatusSinistro,
+        usuario_id: user.id,
+        observacao: observacaoSinistro,
+      });
+
+      // 5b. Registrar detalhes da recuperação no histórico
+      await supabase.from('sinistro_historico').insert({
+        sinistro_id: sinistroId,
+        status_novo: novoStatusSinistro,
         usuario_id: user.id,
         observacao: `Veículo recuperado em ${localRecuperacao} (${dataRecuperacao}). Condição: ${
           condicaoVeiculo === 'integro' ? 'Íntegro' : 

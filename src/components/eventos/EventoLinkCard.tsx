@@ -17,6 +17,7 @@ interface EventoLinkCardProps {
   sinistroProtocolo?: string;
   associadoWhatsapp?: string | null;
   associadoNome?: string | null;
+  sinistroTipo?: string;
 }
 
 const statusConfig: Record<string, { label: string; icon: any; className: string }> = {
@@ -26,7 +27,7 @@ const statusConfig: Record<string, { label: string; icon: any; className: string
   invalidado: { label: 'Invalidado', icon: XCircle, className: 'bg-gray-100 text-gray-800' },
 };
 
-export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsapp, associadoNome }: EventoLinkCardProps) {
+export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsapp, associadoNome, sinistroTipo }: EventoLinkCardProps) {
   const { linkAtivo, isLoading, contato, gerarNovoLink } = useEventoLink(sinistroId);
   const [copied, setCopied] = useState(false);
 
@@ -65,7 +66,10 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
     window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
   };
 
-  const etapaLabels = ['Não iniciou', 'Auto Vistoria', 'B.O.', 'Relato Completo'];
+  const isRouboFurto = sinistroTipo === 'roubo' || sinistroTipo === 'furto';
+  const etapaLabels = isRouboFurto 
+    ? ['Não iniciou', 'B.O.', 'Relato', sinistroTipo === 'furto' ? 'Chaves + Docs' : 'Documentação']
+    : ['Não iniciou', 'Auto Vistoria', 'B.O.', 'Relato Completo'];
 
   return (
     <Card className={statusFinal === 'ativo' ? 'border-green-500/50' : statusFinal === 'expirado' ? 'border-amber-500/50' : ''}>
