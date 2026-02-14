@@ -157,14 +157,7 @@ serve(async (req) => {
           .eq("id", sinistro_id);
       }
 
-      // 6. Try Autentique (non-blocking)
-      try {
-        await supabase.functions.invoke("autentique-evento-create", {
-          body: { sinistro_id },
-        });
-      } catch (e) {
-        console.error("[analisar-evento] Erro Autentique:", e);
-      }
+      // 6. Autentique será chamado somente APÓS confirmação do pagamento (em processar-termo-evento)
 
       // 7. Try WhatsApp notification (non-blocking)
       try {

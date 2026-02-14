@@ -5,16 +5,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import EventoTermoAssinatura from '@/components/evento/EventoTermoAssinatura';
 import EventoPagamentoCota from '@/components/evento/EventoPagamentoCota';
+import EventoAguardandoTermo from '@/components/evento/EventoAguardandoTermo';
 
 interface EventoAprovadoData {
   valid: boolean;
   reason?: string;
-  ja_assinou?: boolean;
   ja_pagou?: boolean;
+  ja_assinou_termo?: boolean;
+  autentique_documento_id?: string | null;
   sinistro?: {
     id: string;
     protocolo: string;
@@ -38,7 +37,7 @@ export default function EventoPosAprovacao() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<EventoAprovadoData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [etapa, setEtapa] = useState<'termo' | 'pagamento' | 'sucesso'>('termo');
+  const [etapa, setEtapa] = useState<'pagamento' | 'aguardando_termo' | 'sucesso'>('pagamento');
 
   const validar = useCallback(async () => {
     if (!token) return;
@@ -51,9 +50,9 @@ export default function EventoPosAprovacao() {
       const d = response.data;
       setData(d);
       if (d?.valid) {
-        if (d.ja_pagou) setEtapa('sucesso');
-        else if (d.ja_assinou) setEtapa('pagamento');
-        else setEtapa('termo');
+        if (d.ja_pagou && d.ja_assinou_termo) setEtapa('sucesso');
+        else if (d.ja_pagou) setEtapa('aguardando_termo');
+        else setEtapa('pagamento');
       }
     } catch (err: any) {
       setError(err.message || 'Erro ao validar link');
@@ -133,43 +132,41 @@ export default function EventoPosAprovacao() {
 
         {/* Steps indicator */}
         <div className="flex items-center justify-center gap-3">
-          <div className={`flex items-center gap-1.5 text-xs ${etapa === 'termo' ? 'text-primary font-semibold' : 'text-green-600'}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${etapa === 'termo' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
-              {etapa === 'termo' ? '1' : '✓'}
-            </div>
-            Termo
-          </div>
-          <div className="w-8 h-px bg-border" />
-          <div className={`flex items-center gap-1.5 text-xs ${etapa === 'pagamento' ? 'text-primary font-semibold' : etapa === 'sucesso' ? 'text-green-600' : 'text-muted-foreground'}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${etapa === 'pagamento' ? 'bg-primary text-primary-foreground' : etapa === 'sucesso' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}`}>
-              {etapa === 'sucesso' ? '✓' : '2'}
+          <div className={`flex items-center gap-1.5 text-xs ${etapa === 'pagamento' ? 'text-primary font-semibold' : 'text-green-600'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${etapa === 'pagamento' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
+              {etapa === 'pagamento' ? '1' : '✓'}
             </div>
             Pagamento
+          </div>
+          <div className="w-8 h-px bg-border" />
+          <div className={`flex items-center gap-1.5 text-xs ${etapa === 'aguardando_termo' ? 'text-primary font-semibold' : etapa === 'sucesso' ? 'text-green-600' : 'text-muted-foreground'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${etapa === 'aguardando_termo' ? 'bg-primary text-primary-foreground' : etapa === 'sucesso' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}`}>
+              {etapa === 'sucesso' ? '✓' : '2'}
+            </div>
+            Termo
           </div>
         </div>
 
         {/* Content */}
-        {etapa === 'termo' && (
-          <EventoTermoAssinatura
-            token={token!}
-            sinistro={sinistro!}
-            associado={associado!}
-            veiculo={veiculo!}
-            cota={cota!}
-            onAssinado={() => {
-              setEtapa('pagamento');
-              validar();
-            }}
-          />
-        )}
-
         {etapa === 'pagamento' && (
           <EventoPagamentoCota
             token={token!}
             sinistro={sinistro!}
             associado={associado!}
             cota={cota!}
-            onPago={() => setEtapa('sucesso')}
+            onPago={() => {
+              setEtapa('aguardando_termo');
+              validar();
+            }}
+          />
+        )}
+
+        {etapa === 'aguardando_termo' && (
+          <EventoAguardandoTermo
+            token={token!}
+            associado={associado!}
+            autentiqueDocumentoId={data.autentique_documento_id}
+            onAssinado={() => setEtapa('sucesso')}
           />
         )}
 
@@ -177,9 +174,9 @@ export default function EventoPosAprovacao() {
           <Card>
             <CardContent className="pt-6 text-center space-y-4">
               <CheckCircle2 className="h-16 w-16 mx-auto text-green-600" />
-              <h2 className="text-xl font-bold text-green-700">Pagamento Confirmado!</h2>
+              <h2 className="text-xl font-bold text-green-700">Tudo Certo!</h2>
               <p className="text-muted-foreground">
-                O reparo do seu veículo será agendado em breve. Você receberá todas as atualizações pelo WhatsApp.
+                Pagamento confirmado e Termo assinado. O reparo do seu veículo será agendado em breve. Você receberá todas as atualizações pelo WhatsApp.
               </p>
               <Separator />
               <div className="text-sm space-y-1">

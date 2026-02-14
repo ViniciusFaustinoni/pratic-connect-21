@@ -53,7 +53,7 @@ serve(async (req) => {
       .from("sinistros")
       .select(`
         id, protocolo, tipo, data_ocorrencia, descricao, status, cobranca_cota_id,
-        cota_paga, cota_paga_em, termo_anuencia_assinado,
+        cota_paga, cota_paga_em, termo_anuencia_assinado, autentique_documento_id,
         associado:associados!sinistros_associado_id_fkey(
           id, nome, cpf, email, telefone, whatsapp, plano_id
         ),
@@ -106,8 +106,8 @@ serve(async (req) => {
     valorCota = Math.max(valorCalculado, cotaMinima);
 
     // Determine state
-    const jaAssinou = !!link.assinatura_em;
     const jaPagou = !!link.pagamento_confirmado_em || sinistro.cota_paga;
+    const jaAssinouTermo = !!sinistro.autentique_documento_id && sinistro.termo_anuencia_assinado;
 
     // ============ ACAO: VALIDAR ============
     if (acao === "validar") {
@@ -116,8 +116,9 @@ serve(async (req) => {
 
       return new Response(JSON.stringify({
         valid: true,
-        ja_assinou: jaAssinou,
         ja_pagou: jaPagou,
+        ja_assinou_termo: jaAssinouTermo,
+        autentique_documento_id: sinistro.autentique_documento_id || null,
         sinistro: {
           id: sinistro.id,
           protocolo: sinistro.protocolo,
@@ -146,95 +147,8 @@ serve(async (req) => {
       });
     }
 
-    // ============ ACAO: ASSINAR ============
-    if (acao === "assinar") {
-      if (!assinatura_base64) {
-        return new Response(JSON.stringify({ error: "Assinatura é obrigatória" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Upload signature to storage
-      const base64Data = assinatura_base64.replace(/^data:image\/\w+;base64,/, "");
-      const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-      const filePath = `sinistro-eventos/${sinistro.id}/termo-assinatura.png`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("sinistro-eventos")
-        .upload(filePath, binaryData, {
-          contentType: "image/png",
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error("[processar-termo-evento] Upload error:", uploadError);
-        // Try creating bucket if it doesn't exist
-        await supabase.storage.createBucket("sinistro-eventos", { public: false });
-        const { error: retryError } = await supabase.storage
-          .from("sinistro-eventos")
-          .upload(filePath, binaryData, { contentType: "image/png", upsert: true });
-        if (retryError) {
-          return new Response(JSON.stringify({ error: "Erro ao salvar assinatura" }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-      }
-
-      const { data: urlData } = supabase.storage
-        .from("sinistro-eventos")
-        .getPublicUrl(filePath);
-
-      // Use signed URL for private bucket
-      const { data: signedData } = await supabase.storage
-        .from("sinistro-eventos")
-        .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year
-
-      const assinaturaUrl = signedData?.signedUrl || urlData?.publicUrl || filePath;
-      const agora = new Date().toISOString();
-
-      // Extract real IP from request headers
-      const realIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() 
-        || req.headers.get("x-real-ip") 
-        || ip_cliente 
-        || "unknown";
-
-      // Update link
-      await supabase
-        .from("sinistro_evento_links")
-        .update({
-          assinatura_url: assinaturaUrl,
-          assinatura_ip: realIp,
-          assinatura_em: agora,
-          etapa_atual: 1,
-        })
-        .eq("id", link.id);
-
-      // Update sinistro
-      await supabase
-        .from("sinistros")
-        .update({
-          termo_anuencia_assinado: true,
-          termo_anuencia_url: assinaturaUrl,
-          termo_anuencia_assinado_em: agora,
-          status: "aguardando_cota",
-        })
-        .eq("id", sinistro.id);
-
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     // ============ ACAO: GERAR COBRANCA PIX ============
     if (acao === "gerar_cobranca_pix") {
-      if (!jaAssinou && !link.assinatura_em) {
-        return new Response(JSON.stringify({ error: "Assine o termo primeiro" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
 
       // Check if already has a pending PIX charge
       if (sinistro.cobranca_cota_id) {
@@ -376,12 +290,6 @@ serve(async (req) => {
 
     // ============ ACAO: GERAR COBRANCA CARTAO ============
     if (acao === "gerar_cobranca_cartao") {
-      if (!jaAssinou && !link.assinatura_em) {
-        return new Response(JSON.stringify({ error: "Assine o termo primeiro" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
 
       if (!cartao || !cartao.numero || !cartao.nome || !cartao.validade || !cartao.cvv) {
         return new Response(JSON.stringify({ error: "Dados do cartão incompletos" }), {
@@ -530,12 +438,22 @@ serve(async (req) => {
             await supabase.functions.invoke("whatsapp-send-text", {
               body: {
                 phone: tel,
-                message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${associado.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${valorCota.toFixed(2)} foi confirmado!\n\nO reparo do seu veículo será agendado em breve. Você receberá atualizações pelo WhatsApp.`,
+                message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${associado.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${valorCota.toFixed(2)} foi confirmado!\n\nEnviaremos o Termo de Entrada para assinatura digital em instantes.`,
               },
             });
           }
         } catch (e) {
           console.error("[processar-termo-evento] WhatsApp error:", e);
+        }
+
+        // Trigger Autentique after payment
+        try {
+          await supabase.functions.invoke("autentique-evento-create", {
+            body: { sinistro_id: sinistro.id },
+          });
+          console.log("[processar-termo-evento] Autentique invoked after card payment");
+        } catch (e) {
+          console.error("[processar-termo-evento] Autentique error:", e);
         }
       }
 
@@ -614,18 +532,106 @@ serve(async (req) => {
             await supabase.functions.invoke("whatsapp-send-text", {
               body: {
                 phone: tel,
-                message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${associado.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${valorCota.toFixed(2)} foi confirmado!\n\nO reparo do seu veículo será agendado em breve.`,
+                message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${associado.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${valorCota.toFixed(2)} foi confirmado!\n\nEnviaremos o Termo de Entrada para assinatura digital em instantes.`,
               },
             });
           }
         } catch (e) {
           console.error("[processar-termo-evento] WhatsApp error:", e);
         }
+
+        // Trigger Autentique after payment
+        try {
+          await supabase.functions.invoke("autentique-evento-create", {
+            body: { sinistro_id: sinistro.id },
+          });
+          console.log("[processar-termo-evento] Autentique invoked after PIX payment");
+        } catch (e) {
+          console.error("[processar-termo-evento] Autentique error:", e);
+        }
       }
 
       return new Response(JSON.stringify({
         status: asaasStatus,
         confirmado,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ============ ACAO: VERIFICAR TERMO ============
+    if (acao === "verificar_termo") {
+      // Check if sinistro has Autentique document
+      const { data: sinistroAtual } = await supabase
+        .from("sinistros")
+        .select("autentique_documento_id, termo_anuencia_assinado, status")
+        .eq("id", sinistro.id)
+        .single();
+
+      if (!sinistroAtual?.autentique_documento_id) {
+        return new Response(JSON.stringify({
+          assinado: false,
+          status_termo: "aguardando_criacao",
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (sinistroAtual.termo_anuencia_assinado) {
+        // Already signed - ensure status is correct
+        if (sinistroAtual.status !== "pronto_para_oficina") {
+          await supabase
+            .from("sinistros")
+            .update({ status: "pronto_para_oficina" })
+            .eq("id", sinistro.id);
+        }
+        return new Response(JSON.stringify({
+          assinado: true,
+          status_termo: "assinado",
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Poll Autentique for document status
+      try {
+        const { data: autentiqueCheck } = await supabase.functions.invoke("autentique-verificar-assinatura", {
+          body: { documento_id: sinistroAtual.autentique_documento_id, sinistro_id: sinistro.id },
+        });
+
+        if (autentiqueCheck?.assinado) {
+          await supabase
+            .from("sinistros")
+            .update({
+              termo_anuencia_assinado: true,
+              termo_anuencia_assinado_em: new Date().toISOString(),
+              status: "pronto_para_oficina",
+            })
+            .eq("id", sinistro.id);
+
+          // Record history
+          await supabase.from("sinistro_historico").insert({
+            sinistro_id: sinistro.id,
+            status_anterior: "pagamento_confirmado",
+            status_novo: "pronto_para_oficina",
+            observacao: "Termo assinado via Autentique e pagamento confirmado",
+            usuario_nome: "Sistema",
+          });
+
+          return new Response(JSON.stringify({
+            assinado: true,
+            status_termo: "assinado",
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch (e) {
+        console.error("[processar-termo-evento] Autentique check error:", e);
+      }
+
+      return new Response(JSON.stringify({
+        assinado: false,
+        status_termo: "pendente",
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
