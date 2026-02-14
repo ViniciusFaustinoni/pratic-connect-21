@@ -1,163 +1,168 @@
 
+# Fluxo Simplificado de Vidros e Farois
 
-# Fluxo Completo de Roubo e Furto -- Implementacao
+## Contexto Atual
 
-## Visao Geral
+O tipo "vidros" ja existe como opcao no registro de sinistro, mas segue exatamente o mesmo fluxo generico de colisao. Nao existe nenhuma logica especifica: sem validacao de carencia, sem verificacao de beneficio contratado, sem selecao de peca, sem limite de utilizacao, sem opcao de reembolso.
 
-Implementar o fluxo diferenciado de roubo/furto conforme as regras de negocio, que diverge fundamentalmente do fluxo de colisao: nao existe veiculo para fotografar, nao existe vistoria presencial, e o destino final pode ser recuperacao do veiculo ou indenizacao integral.
+### O que ja existe no banco:
+- Cobertura `COB-VID` na tabela `coberturas` (carencia_dias = 15, precisa atualizar para 120)
+- Campo `data_adesao` na tabela `associados` (para calcular carencia)
+- Tabela `planos_coberturas` (estrutura existe, mas sem dados vinculando planos a coberturas)
+- Tabela `sinistros` -- SEM campos para peca danificada ou opcao de reparo
 
-## O que ja existe
+### O que falta:
+- Campos na tabela `sinistros` para dados especificos de vidros
+- Nova tabela para controlar historico de utilizacao por peca
+- Validacoes automaticas no registro (carencia, limite, beneficio)
+- Selecao de peca danificada com lista fixa
+- Fluxo simplificado de documentacao (2 etapas)
+- Logica de reparo com 2 opcoes (via Pratic 60/40 ou reembolso)
+- Analise simplificada sem vistoria presencial
 
-- Registro do sinistro com validacoes (NovoSinistroModal) -- OK
-- Acionamento do rastreador via edge function `acionar-roubo-furto` -- OK
-- Card de acionamento na tela de detalhe (CardAcionamentoRoubo) -- OK
-- Modal de registrar recuperacao (RegistrarRecuperacaoModal) com encerramento do acionamento -- OK
-- Status `em_recuperacao` no workflow com transicoes para `em_regulacao`, `aguardando_pagamento` e `encerrado` -- OK
-- Botao "Acionar Recuperacao" no dropdown de acoes do detalhe -- OK
+---
 
-## O que falta implementar
+## Alteracoes no Banco de Dados
 
-### 1. Acionamento automatico do rastreador ao registrar roubo/furto
+### Migracoes SQL
 
-Atualmente, ao registrar um sinistro de roubo/furto, o sistema NAO aciona o rastreador automaticamente. O operador precisa ir no detalhe e clicar "Acionar Recuperacao" manualmente. Pela regra, o acionamento deve ser IMEDIATO.
+**1. Adicionar campos especificos de vidros na tabela `sinistros`:**
 
-**Arquivo:** `src/components/eventos/NovoSinistroModal.tsx`
-- Apos o insert do sinistro (passo 6, junto com o reboque), invocar `supabase.functions.invoke('acionar-roubo-furto')` automaticamente quando o tipo for `roubo` ou `furto`.
-
-### 2. Link 1 simplificado para roubo/furto (sem fotos do veiculo, sem vistoria)
-
-Atualmente o EventoLinkCard so aparece para `colisao` (linha 927 do SinistroDetalhe). Para roubo/furto o Link 1 deve aparecer com etapas diferentes:
-- Etapa 1: B.O. (obrigatorio e imediato)
-- Etapa 2: Relato do ocorrido
-- Etapa 3: Chaves (apenas furto) + Documentacao complementar (CRV, CRLV, IPVA, certidao negativa, extrato DETRAN)
-
-**Arquivo:** `src/pages/eventos/SinistroDetalhe.tsx`
-- Remover a condicao `sinistro.tipo === 'colisao'` do EventoLinkCard
-- Exibir para todos os tipos, incluindo roubo/furto
-
-**Arquivo:** `src/components/eventos/EventoLinkCard.tsx`
-- Adaptar as labels das etapas conforme o tipo do sinistro (colisao vs roubo/furto)
-
-### 3. Verificacoes de fraude automaticas na analise
-
-Quando o analista abre um sinistro de roubo/furto, o sistema deve exibir automaticamente alertas baseados no historico do rastreador:
-- Velocidade zero + desconexao = possivel fraude
-- Locais suspeitos nos dias anteriores
-- Mudanca de rotina
-- Rastreador nao instalado quando obrigatorio
-
-**Novo componente:** `src/components/sinistros/AlertasFraudeRoubo.tsx`
-- Card que aparece no detalhe do sinistro para roubo/furto
-- Busca dados do rastreador (ultima comunicacao, historico de posicoes)
-- Exibe alertas visuais com icones de risco
-
-**Arquivo:** `src/pages/eventos/SinistroDetalhe.tsx`
-- Incluir o AlertasFraudeRoubo na coluna lateral para sinistros roubo/furto
-
-### 4. Status `em_recuperacao` com contagem de dias e cenarios
-
-Apos aprovacao, sinistros de roubo/furto devem ir para `em_recuperacao` (ja existe no workflow). Faltam:
-
-**4a. Card de acompanhamento de recuperacao:**
-
-**Novo componente:** `src/components/sinistros/CardRecuperacaoStatus.tsx`
-- Exibe contagem de dias desde o roubo/furto
-- Barra de progresso ate 30 dias
-- Indicador visual: "verde" (primeiros dias), "amarelo" (proximos do prazo), "vermelho" (prazo esgotado)
-- Botoes de acao: "Registrar Recuperacao" ou "Iniciar Indenizacao"
-
-**Arquivo:** `src/pages/eventos/SinistroDetalhe.tsx`
-- Exibir CardRecuperacaoStatus quando status === `em_recuperacao`
-
-**4b. Logica dos cenarios de recuperacao no RegistrarRecuperacaoModal:**
-
-**Arquivo:** `src/hooks/useRegistrarRecuperacao.ts`
-- Apos registrar recuperacao, atualizar o STATUS DO SINISTRO baseado na condicao:
-  - `integro` (sem dano) → status `encerrado` + historico "Veiculo recuperado integro, desonerado"
-  - `avariado` (< 75% FIPE) → status `em_regulacao` + segue fluxo de oficina como colisao
-  - `destruido` (>= 75% FIPE) → status `aguardando_pagamento` + marca como indenizacao integral
-
-### 5. Fluxo de indenizacao integral (nao recuperado apos 30 dias)
-
-**5a. Botao "Iniciar Indenizacao" no CardRecuperacaoStatus:**
-- Muda status para `aguardando_pagamento`
-- Cria documentos de indenizacao pendentes (CRV preenchido, procuracao publica, etc.)
-- Notifica o associado com link para enviar documentacao
-
-**Novo componente:** `src/components/sinistros/IniciarIndenizacaoModal.tsx`
-- Confirma inicio do processo de indenizacao
-- Calcula valor FIPE com depreciacoes (chassi remarcado -30%, app -25%, leilao -30%, avarias -20%)
-- Registra no historico
-- Define prazo de 60 dias uteis para pagamento
-
-**5b. Documentos de indenizacao:**
-
-Adicionar ao `DOCUMENTOS_OBRIGATORIOS` no NovoSinistroModal (ou extrair para constante compartilhada):
+```sql
+ALTER TABLE sinistros 
+  ADD COLUMN peca_danificada TEXT,
+  ADD COLUMN opcao_reparo TEXT CHECK (opcao_reparo IN ('via_pratic', 'reembolso')),
+  ADD COLUMN valor_reembolso NUMERIC,
+  ADD COLUMN nf_reembolso_url TEXT;
 ```
-indenizacao: [
-  { tipo: 'crv_transferencia', nome: 'CRV preenchido a favor da Pratic', obrigatorio: true },
-  { tipo: 'procuracao_publica', nome: 'Procuracao Publica', obrigatorio: true },
-  { tipo: 'quitacao_financiamento', nome: 'Comprovante Quitacao Financiamento', obrigatorio: false },
-  { tipo: 'certidao_negativa_furto', nome: 'Certidao Negativa de Furto', obrigatorio: true },
-  { tipo: 'extrato_detran', nome: 'Extrato DETRAN com queixa', obrigatorio: true },
+
+- `peca_danificada`: qual peca da lista fixa (para-brisa, farol_esquerdo, etc.)
+- `opcao_reparo`: se o reparo sera via auto center credenciado ou reembolso
+- `valor_reembolso`: valor solicitado de reembolso (60% do total)
+- `nf_reembolso_url`: URL da nota fiscal DANFE para reembolso
+
+**2. Criar tabela de historico de utilizacao de vidros:**
+
+```sql
+CREATE TABLE sinistro_vidros_historico (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  associado_id UUID NOT NULL REFERENCES associados(id),
+  veiculo_id UUID NOT NULL REFERENCES veiculos(id),
+  sinistro_id UUID NOT NULL REFERENCES sinistros(id),
+  peca TEXT NOT NULL,
+  data_utilizacao TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+Essa tabela permite verificar se uma peca especifica ja foi utilizada nos ultimos 12 meses.
+
+**3. Atualizar carencia da cobertura COB-VID para 120 dias:**
+
+```sql
+UPDATE coberturas SET carencia_dias = 120 WHERE codigo = 'COB-VID';
+```
+
+---
+
+## Alteracoes em Codigo
+
+### 1. NovoSinistroModal.tsx -- Validacoes e campos especificos
+
+Quando o tipo selecionado for `vidros`, o modal deve:
+
+**Antes de permitir o submit (validacoes automaticas):**
+
+- **Carencia 120 dias**: Buscar `data_adesao` do associado e calcular se tem 120+ dias. Se nao, exibir mensagem com a data de liberacao.
+- **Beneficio contratado**: Verificar se o plano do associado inclui a cobertura `COB-VID` na tabela `planos_coberturas`. Se nao tem, bloquear com mensagem.
+- **Limite 12 meses por peca**: Consultar `sinistro_vidros_historico` para a peca selecionada nos ultimos 12 meses. Se ja foi acionada, bloquear apenas aquela peca.
+
+**Campos adicionais no formulario (apenas para tipo vidros):**
+
+- Seletor de peca danificada (lista fixa com 14 opcoes)
+- Opcao de reparo: "Via Pratic" ou "Reembolso"
+- Ocultar toggle de reboque (nao se aplica)
+- Descricao minima reduzida (20 caracteres em vez de 50)
+
+**No insert do sinistro:**
+
+- Salvar `peca_danificada` e `opcao_reparo`
+- Apos sucesso, inserir registro em `sinistro_vidros_historico`
+
+**Lista fixa de pecas:**
+
+```
+- Para-brisa
+- Vidro vigia (traseiro)
+- Vidro lateral dianteiro esquerdo
+- Vidro lateral dianteiro direito
+- Vidro lateral traseiro esquerdo
+- Vidro lateral traseiro direito
+- Vidro fixo lateral esquerdo
+- Vidro fixo lateral direito
+- Farol esquerdo
+- Farol direito
+- Lanterna esquerda
+- Lanterna direita
+- Espelho retrovisor esquerdo
+- Espelho retrovisor direito
+```
+
+### 2. EventoLinkCard.tsx -- Etapas simplificadas para vidros
+
+Para tipo `vidros`, as etapas do link devem ser apenas 2:
+- Etapa 1: Fotos do dano (2-5 fotos)
+- Etapa 2: Relato simples
+
+Sem B.O. obrigatorio, sem agendamento de vistoria.
+
+### 3. SinistroDetalhe.tsx -- Card de detalhes de vidros
+
+Adicionar um card especifico para sinistros de vidros mostrando:
+- Peca danificada
+- Opcao de reparo escolhida (via Pratic ou reembolso)
+- Custo dividido: 60% Pratic / 40% associado
+- Se reembolso: campo para upload de NF e valor
+- Status da NF (pendente/aprovada)
+
+### 4. Novo componente: CardVidrosDetalhe.tsx
+
+Card lateral no detalhe do sinistro que exibe:
+- Peca danificada selecionada
+- Opcao de reparo
+- Calculo 60/40 (quando houver valor)
+- Para "via Pratic": botao para acionar auto center (filtrando por especialidade "Vidros")
+- Para "reembolso": upload de NF DANFE + campo valor + botao aprovar reembolso
+- Observacoes sobre pecas especificas (farois: so a peca, sem instalacao; retrovisores: so o espelho)
+
+### 5. DOCUMENTOS_OBRIGATORIOS -- Atualizar para vidros
+
+Reduzir documentos para vidros:
+```
+vidros: [
+  { tipo: 'foto_dano', nome: 'Fotos do Dano (2-5)', obrigatorio: true },
+  { tipo: 'relato', nome: 'Relato do Ocorrido', obrigatorio: true },
+  { tipo: 'bo', nome: 'Boletim de Ocorrencia', obrigatorio: false },  // so se tentativa de furto
+  { tipo: 'nf_danfe', nome: 'Nota Fiscal DANFE', obrigatorio: false },  // so para reembolso
 ]
 ```
 
-### 6. Painel "Veiculos Nao Recuperados"
+---
 
-**Novo componente:** `src/components/sinistros/PainelNaoRecuperados.tsx`
-- Lista todos os sinistros em `em_recuperacao` com contagem de dias
-- Destaque visual para os que ultrapassaram 30 dias
-- Acoes rapidas: "Iniciar Indenizacao", "Ver Detalhe"
-
-**Arquivo:** `src/pages/eventos/SinistroDetalhe.tsx` ou `src/pages/eventos/SinistrosList.tsx`
-- Adicionar aba ou filtro rapido "Nao Recuperados" na lista de sinistros
-
-## Resumo Visual do Fluxo Implementado
-
-```text
-REGISTRO ROUBO/FURTO
-    |
-    +-- Acionamento automatico do rastreador
-    +-- Documentos: B.O. + Relato + Chaves(furto) + Docs complementares
-    |
-    v
-EM ANALISE (alertas de fraude automaticos)
-    |
-    +-- Suspeita → EM SINDICANCIA (30 dias)
-    |
-    v
-APROVADO → EM RECUPERACAO (contagem 30 dias)
-    |
-    +-- Recuperado integro → ENCERRADO (desonerado)
-    +-- Recuperado avariado (<75%) → EM REGULACAO → fluxo oficina
-    +-- Recuperado destruido (>=75%) → AGUARDANDO PAGAMENTO → indenizacao
-    +-- NAO recuperado (30 dias) → AGUARDANDO PAGAMENTO → indenizacao
-    |
-    v
-INDENIZACAO: Docs → Analise → 60 dias uteis → Pagamento → ENCERRADO
-```
-
-## Arquivos Afetados
+## Resumo dos Arquivos
 
 | Acao | Arquivo |
 |---|---|
-| Modificar | `src/components/eventos/NovoSinistroModal.tsx` |
-| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` |
-| Modificar | `src/components/eventos/EventoLinkCard.tsx` |
-| Modificar | `src/hooks/useRegistrarRecuperacao.ts` |
-| Criar | `src/components/sinistros/AlertasFraudeRoubo.tsx` |
-| Criar | `src/components/sinistros/CardRecuperacaoStatus.tsx` |
-| Criar | `src/components/sinistros/IniciarIndenizacaoModal.tsx` |
-| Criar | `src/components/sinistros/PainelNaoRecuperados.tsx` |
+| Migracoes | Adicionar colunas em `sinistros` + criar `sinistro_vidros_historico` + atualizar `coberturas` |
+| Modificar | `src/components/eventos/NovoSinistroModal.tsx` (validacoes + campos vidros) |
+| Modificar | `src/components/eventos/EventoLinkCard.tsx` (etapas simplificadas) |
+| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` (incluir CardVidrosDetalhe) |
+| Criar | `src/components/sinistros/CardVidrosDetalhe.tsx` (card lateral com logica 60/40) |
 
 ## Ordem de Implementacao
 
-1. Acionamento automatico do rastreador (NovoSinistroModal)
-2. Link 1 para roubo/furto (SinistroDetalhe + EventoLinkCard)
-3. Alertas de fraude (AlertasFraudeRoubo + SinistroDetalhe)
-4. Card de recuperacao com contagem (CardRecuperacaoStatus + SinistroDetalhe)
-5. Logica de cenarios no RegistrarRecuperacao (useRegistrarRecuperacao)
-6. Fluxo de indenizacao (IniciarIndenizacaoModal + documentos)
-7. Painel de nao recuperados (PainelNaoRecuperados + SinistrosList)
-
+1. Migracoes SQL (colunas + tabela historico + atualizar carencia)
+2. NovoSinistroModal -- validacoes automaticas + seletor de peca + opcao de reparo
+3. EventoLinkCard -- etapas simplificadas para vidros
+4. CardVidrosDetalhe -- componente novo com logica 60/40 e acoes
+5. SinistroDetalhe -- integrar o CardVidrosDetalhe na coluna lateral
