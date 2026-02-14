@@ -1,69 +1,49 @@
 
+# Separar Especialidades por Contexto (Oficina vs Prestador)
 
-# Usar Modal Estruturado de Pecas no Orcamento do Regulador
+## Problema
 
-## Contexto
+A lista `ESPECIALIDADES` em `fornecedores-constants.ts` e compartilhada entre Oficinas e Prestadores de Evento, mas contem itens que nao pertencem a oficinas:
 
-Atualmente, no modal "Orcamento da Vistoria" do regulador (`VistoriaEventoOrcamento`), os itens do tipo "peca" sao adicionados com um campo de texto livre para descricao. O regulador digita manualmente o nome da peca, o que gera dados inconsistentes.
-
-O modal "Adicionar Peca" dos Auto Centers (`AutoCenterPecaFormDialog`) ja possui selecoes estruturadas com busca: Tipo de Peca, Marca, Modelo, Ano (via API FIPE).
+- **Pecas** (Pecas Novas, Pecas Recondicionadas, Pecas Importadas) -- pertencem aos Auto Centers
+- **Servicos de prestador** (Reboque / Guincho, Vistoria Cautelar) -- pertencem aos Prestadores de Evento
 
 ## Solucao
 
-Quando o regulador adicionar um item do tipo "peca" ao orcamento, ele devera usar o mesmo formulario estruturado (com os comboboxes buscaveis), porem **sem o campo de valor**. O valor sera preenchido posteriormente pelo analista de eventos apos receber as cotacoes.
+Criar listas separadas para cada contexto, mantendo a lista original para compatibilidade com prestadores.
 
-Para itens do tipo "mao_de_obra" e "servico", o formulario atual (texto livre + valor) continua funcionando normalmente.
+### Alteracoes
 
-## Alteracoes
+**Arquivo: `src/lib/fornecedores-constants.ts`**
 
-### 1. Criar componente reutilizavel `PecaSelectFields`
+Criar uma nova constante `ESPECIALIDADES_OFICINAS` contendo apenas as especialidades de servico de oficina (11 itens), removendo as 5 que nao se aplicam:
 
-**Novo arquivo:** `src/components/oficinas/PecaSelectFields.tsx`
-
-Extrair a logica dos 4 comboboxes (Tipo de Peca, Marca FIPE, Modelo FIPE, Ano FIPE) do `AutoCenterPecaFormDialog` para um componente reutilizavel. Props:
-
-- `tipoPeca` / `onTipoPecaChange` -- valor e setter do tipo de peca
-- `marcaNome` / `onMarcaChange` -- marca selecionada (nome + codigo)
-- `modeloNome` / `onModeloChange` -- modelo selecionado
-- `anoNome` / `onAnoChange` -- ano selecionado
-- `disabled?` -- desabilitar todos os campos
-
-Este componente encapsula os estados de loading, listas FIPE e logica de cascata.
-
-### 2. Refatorar `AutoCenterPecaFormDialog`
-
-Substituir os 4 blocos de combobox pelo novo `PecaSelectFields`, mantendo a mesma funcionalidade.
-
-### 3. Modificar `VistoriaEventoOrcamento`
-
-No formulario de itens do orcamento, quando o tipo do item for "peca":
-
-- Substituir o `Input` de descricao pelo componente `PecaSelectFields`
-- Remover os campos de valor unitario, quantidade e total (o valor sera informado pelo analista posteriormente)
-- A descricao sera gerada automaticamente concatenando os campos (ex: "Para-choque Dianteiro - Toyota Corolla 2013")
-
-Quando o tipo for "mao_de_obra" ou "servico":
-
-- Manter o formulario atual com texto livre e campos de valor
-
-### 4. Atualizar a interface `ItemOrcamento`
-
-Adicionar campos opcionais para os dados estruturados da peca:
-
-- `tipo_peca?: string`
-- `veiculo_marca?: string`
-- `veiculo_modelo?: string`
-- `veiculo_ano?: string`
-
-Estes campos serao salvos junto ao orcamento para uso posterior pelo analista.
-
-## Arquivos Afetados
-
-| Acao | Arquivo |
+| Manter (Oficinas) | Remover |
 |---|---|
-| Criar | `src/components/oficinas/PecaSelectFields.tsx` |
-| Modificar | `src/components/oficinas/AutoCenterPecaFormDialog.tsx` -- usar PecaSelectFields |
-| Modificar | `src/components/regulador/VistoriaEventoOrcamento.tsx` -- usar PecaSelectFields para itens tipo "peca", remover valor |
+| Funilaria / Lanternagem | Pecas Novas |
+| Pintura Automotiva | Pecas Recondicionadas |
+| Mecanica Geral | Pecas Importadas |
+| Mecanica Especializada (cambio, motor) | Reboque / Guincho |
+| Eletrica Automotiva | Vistoria Cautelar |
+| Vidros e Farois | |
+| Ar Condicionado | |
+| Suspensao e Freios | |
+| Polimento e Estetica | |
+| Tapecaria / Estofamento | |
+| Martelinho de Ouro | |
 
-Nenhuma alteracao de banco de dados necessaria -- os dados estruturados ja sao salvos como JSON dentro de `dados_vistoria`.
+Criar tambem `ESPECIALIDADES_PRESTADORES` com a lista completa (ou especifica para prestadores) para uso no formulario de prestadores.
 
+**Arquivo: `src/components/oficinas/EspecialidadesSelect.tsx`**
+
+Adicionar uma prop `contexto` (opcional, default "oficina") para determinar qual lista usar. Quando `contexto="oficina"`, usa `ESPECIALIDADES_OFICINAS`. Quando `contexto="prestador"`, usa `ESPECIALIDADES` (lista completa).
+
+**Arquivo: `src/pages/oficinas/Oficinas.tsx`**
+
+Trocar a importacao de `ESPECIALIDADES` por `ESPECIALIDADES_OFICINAS` no filtro de especialidades da listagem de oficinas.
+
+**Arquivo: `src/components/oficinas/PrestadorFormDialog.tsx`**
+
+Passar `contexto="prestador"` ao componente `EspecialidadesSelect` para manter a lista completa.
+
+Nenhum arquivo de oficina (OficinaFormDialog) precisa de alteracao alem do componente `EspecialidadesSelect`, pois ele ja o utiliza e herdara o comportamento default "oficina".
