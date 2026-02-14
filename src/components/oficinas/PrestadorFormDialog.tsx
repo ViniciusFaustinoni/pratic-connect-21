@@ -16,6 +16,7 @@ import { MarcasAtendidasSelect } from './MarcasAtendidasSelect';
 import { EspecialidadesSelect } from './EspecialidadesSelect';
 import { useCreatePrestadorEvento, useUpdatePrestadorEvento, type PrestadorEvento } from '@/hooks/usePrestadoresEvento';
 import { buscarCep } from '@/lib/cep';
+import { CepInput } from '@/components/inputs/MaskedInputs';
 
 const formSchema = z.object({
   razao_social: z.string().min(3, 'Razão social é obrigatória'),
@@ -53,6 +54,7 @@ export function PrestadorFormDialog({ open, onOpenChange, prestador }: Props) {
   const update = useUpdatePrestadorEvento();
   const [marcas, setMarcas] = useState<string[]>([]);
   const [especialidades, setEspecialidades] = useState<string[]>([]);
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -94,16 +96,18 @@ export function PrestadorFormDialog({ open, onOpenChange, prestador }: Props) {
     }
   }, [open, prestador]);
 
-  const handleCepBlur = async () => {
-    const cep = form.getValues('cep');
-    if (cep && cep.replace(/\D/g, '').length === 8) {
-      const endereco = await buscarCep(cep.replace(/\D/g, ''));
+  const handleCepComplete = async (cep: string) => {
+    setBuscandoCep(true);
+    try {
+      const endereco = await buscarCep(cep);
       if (endereco) {
         form.setValue('logradouro', endereco.logradouro || '');
         form.setValue('bairro', endereco.bairro || '');
         form.setValue('cidade', endereco.cidade || '');
         form.setValue('estado', endereco.uf || '');
       }
+    } finally {
+      setBuscandoCep(false);
     }
   };
 
@@ -194,7 +198,7 @@ export function PrestadorFormDialog({ open, onOpenChange, prestador }: Props) {
               <h3 className="font-medium">Endereço</h3>
               <div className="grid gap-4 sm:grid-cols-4">
                 <FormField control={form.control} name="cep" render={({ field }) => (
-                  <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} onBlur={handleCepBlur} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>CEP</FormLabel><FormControl><CepInput value={field.value || ''} onChange={field.onChange} onCepComplete={handleCepComplete} disabled={buscandoCep} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="logradouro" render={({ field }) => (
                   <FormItem className="sm:col-span-2"><FormLabel>Logradouro</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>

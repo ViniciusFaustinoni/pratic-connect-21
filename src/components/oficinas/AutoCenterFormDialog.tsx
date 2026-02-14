@@ -16,6 +16,7 @@ import { MarcasAtendidasSelect } from './MarcasAtendidasSelect';
 import { TiposPecasSelect } from './TiposPecasSelect';
 import { useCreateAutoCenter, useUpdateAutoCenter, type AutoCenter } from '@/hooks/useAutoCenters';
 import { buscarCep } from '@/lib/cep';
+import { CepInput } from '@/components/inputs/MaskedInputs';
 
 const formSchema = z.object({
   nome: z.string().min(2, 'Nome é obrigatório'),
@@ -55,6 +56,7 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
   const update = useUpdateAutoCenter();
   const [marcas, setMarcas] = useState<string[]>([]);
   const [tiposPecas, setTiposPecas] = useState<string[]>([]);
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -102,9 +104,9 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
     }
   }, [open, autoCenter]);
 
-  const handleCepBlur = async () => {
-    const cep = form.getValues('cep');
-    if (cep && cep.replace(/\D/g, '').length === 8) {
+  const handleCepComplete = async (cep: string) => {
+    setBuscandoCep(true);
+    try {
       const endereco = await buscarCep(cep);
       if (endereco) {
         form.setValue('endereco', endereco.logradouro || '');
@@ -112,6 +114,8 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
         form.setValue('estado', endereco.uf || '');
         form.setValue('bairro', endereco.bairro || '');
       }
+    } finally {
+      setBuscandoCep(false);
     }
   };
 
@@ -230,7 +234,7 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
               <h3 className="font-medium">Endereço</h3>
               <div className="grid gap-4 sm:grid-cols-3">
                 <FormField control={form.control} name="cep" render={({ field }) => (
-                  <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} onBlur={handleCepBlur} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>CEP</FormLabel><FormControl><CepInput value={field.value || ''} onChange={field.onChange} onCepComplete={handleCepComplete} disabled={buscandoCep} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="endereco" render={({ field }) => (
                   <FormItem className="sm:col-span-2"><FormLabel>Endereço</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
