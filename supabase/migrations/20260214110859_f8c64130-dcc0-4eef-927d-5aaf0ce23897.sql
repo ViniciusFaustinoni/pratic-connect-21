@@ -1,0 +1,1 @@
+ALTER TYPE status_sinistro ADD VALUE IF NOT EXISTS 'pronto_para_oficina';

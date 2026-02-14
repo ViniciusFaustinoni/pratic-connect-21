@@ -47,6 +47,7 @@ import { AprovarSinistroDialog } from '@/components/sinistros/AprovarSinistroDia
 import { ReprovarSinistroDialog } from '@/components/sinistros/ReprovarSinistroDialog';
 import { SolicitarDocumentosSinistroDialog } from '@/components/sinistros/SolicitarDocumentosSinistroDialog';
 import { EnviarParaOficinaDialog } from '@/components/sinistros/EnviarParaOficinaDialog';
+import { AtribuirFornecedoresDialog } from '@/components/sinistros/AtribuirFornecedoresDialog';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { cn } from '@/lib/utils';
@@ -60,6 +61,8 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   em_analise: { label: 'Em Análise', class: 'bg-info/20 text-info border-info' },
   documentacao_pendente: { label: 'Doc. Pendente', class: 'bg-orange-100 text-orange-800' },
   aprovado: { label: 'Aprovado', class: 'bg-success/20 text-success border-success' },
+  pronto_para_oficina: { label: 'Pronto p/ Oficina', class: 'bg-teal-100 text-teal-800 border-teal-300' },
+  em_reparo: { label: 'Em Reparo', class: 'bg-blue-100 text-blue-800 border-blue-300' },
   negado: { label: 'Negado', class: 'bg-destructive/20 text-destructive border-destructive' },
 };
 
@@ -148,6 +151,7 @@ export default function SinistroAnalise() {
   const [showReprovar, setShowReprovar] = useState(false);
   const [showSolicitarDocs, setShowSolicitarDocs] = useState(false);
   const [showEnviarOficina, setShowEnviarOficina] = useState(false);
+  const [showAtribuirFornecedores, setShowAtribuirFornecedores] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<any>(null);
 
   const {
@@ -521,30 +525,51 @@ export default function SinistroAnalise() {
             </CardHeader>
             <CardContent className="space-y-3">
               {(() => {
-                // Sinistro já aprovado - mostrar status e botão Enviar para Oficina
-                if (sinistro.status === 'em_analise' || sinistro.status === 'aprovado' || sinistro.status === 'em_reparo') {
+                // Pronto para oficina — atribuir fornecedores
+                if ((sinistro.status as string) === 'pronto_para_oficina') {
+                  return (
+                    <>
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-sm">
+                        <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Pagamento e termo confirmados</strong> — pronto para atribuir fornecedores.</span>
+                      </div>
+                      <Button
+                        className="w-full"
+                        onClick={() => setShowAtribuirFornecedores(true)}
+                      >
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Atribuir Fornecedores
+                      </Button>
+                    </>
+                  );
+                }
+
+                // Sinistro já aprovado - mostrar status e botão Enviar para Oficina (fluxo legado)
+                if (sinistro.status === 'em_analise' || sinistro.status === 'aprovado') {
                   return (
                     <>
                       <div className="flex items-center gap-2 p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
                         <CheckCircle className="h-4 w-4 flex-shrink-0" />
                         <span><strong>Sinistro aprovado</strong> — aguardando encaminhamento para oficina.</span>
                       </div>
-                      {sinistro.status !== 'em_reparo' && (
-                        <Button
-                          className="w-full"
-                          onClick={() => setShowEnviarOficina(true)}
-                        >
-                          <Wrench className="h-4 w-4 mr-2" />
-                          Enviar para Oficina
-                        </Button>
-                      )}
-                      {sinistro.status === 'em_reparo' && (
-                        <div className="flex items-center gap-2 p-3 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-sm">
-                          <Wrench className="h-4 w-4 flex-shrink-0" />
-                          <span>Veículo já encaminhado para oficina.</span>
-                        </div>
-                      )}
+                      <Button
+                        className="w-full"
+                        onClick={() => setShowEnviarOficina(true)}
+                      >
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Enviar para Oficina
+                      </Button>
                     </>
+                  );
+                }
+
+                // Em reparo
+                if (sinistro.status === 'em_reparo') {
+                  return (
+                    <div className="flex items-center gap-2 p-3 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-sm">
+                      <Wrench className="h-4 w-4 flex-shrink-0" />
+                      <span>Veículo já encaminhado para oficina.</span>
+                    </div>
                   );
                 }
 
@@ -710,6 +735,13 @@ export default function SinistroAnalise() {
       <EnviarParaOficinaDialog
         open={showEnviarOficina}
         onOpenChange={setShowEnviarOficina}
+        sinistro={sinistro}
+        onSuccess={() => navigate('/ordens-servico')}
+      />
+
+      <AtribuirFornecedoresDialog
+        open={showAtribuirFornecedores}
+        onOpenChange={setShowAtribuirFornecedores}
         sinistro={sinistro}
         onSuccess={() => navigate('/ordens-servico')}
       />
