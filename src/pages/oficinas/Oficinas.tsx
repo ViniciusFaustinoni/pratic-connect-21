@@ -10,12 +10,13 @@ import { OficinaFormDialog } from '@/components/oficinas/OficinaFormDialog';
 import { OficinaDetailDrawer } from '@/components/oficinas/OficinaDetailDrawer';
 import { ImportarOficinasDialog } from '@/components/oficinas/ImportarOficinasDialog';
 import { STATUS_OFICINA_LABELS, STATUS_OFICINA_COLORS, type Oficina, type StatusOficina } from '@/types/database';
-import { MARCAS_VEICULOS } from '@/lib/fornecedores-constants';
+import { MARCAS_VEICULOS, ESPECIALIDADES } from '@/lib/fornecedores-constants';
 
 export default function Oficinas() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusOficina | 'todos'>('todos');
   const [marcaFilter, setMarcaFilter] = useState<string>('todos');
+  const [espFilter, setEspFilter] = useState<string>('todos');
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedOficina, setSelectedOficina] = useState<Oficina | null>(null);
@@ -24,6 +25,7 @@ export default function Oficinas() {
     search: search || undefined,
     status: statusFilter === 'todos' ? undefined : statusFilter,
     marca: marcaFilter === 'todos' ? undefined : marcaFilter,
+    especialidade: espFilter === 'todos' ? undefined : espFilter,
   });
 
   return (
@@ -73,6 +75,15 @@ export default function Oficinas() {
           <SelectContent>
             <SelectItem value="todos">Todas as marcas</SelectItem>
             {MARCAS_VEICULOS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={espFilter} onValueChange={setEspFilter}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Especialidade" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas especialidades</SelectItem>
+            {ESPECIALIDADES.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>

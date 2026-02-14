@@ -8,17 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { usePrestadoresEvento, type PrestadorEvento } from '@/hooks/usePrestadoresEvento';
 import { PrestadorFormDialog } from '@/components/oficinas/PrestadorFormDialog';
 import { PrestadorDetailDrawer } from '@/components/oficinas/PrestadorDetailDrawer';
-import { ESPECIALIDADES } from '@/lib/fornecedores-constants';
+import { ESPECIALIDADES, MARCAS_VEICULOS } from '@/lib/fornecedores-constants';
 
 export default function Prestadores() {
   const [search, setSearch] = useState('');
   const [espFilter, setEspFilter] = useState<string>('todos');
+  const [marcaFilter, setMarcaFilter] = useState<string>('todos');
   const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState<PrestadorEvento | null>(null);
 
   const { data: prestadores, isLoading } = usePrestadoresEvento({
     search: search || undefined,
     especialidade: espFilter === 'todos' ? undefined : espFilter,
+    marca: marcaFilter === 'todos' ? undefined : marcaFilter,
   });
 
   return (
@@ -46,6 +48,15 @@ export default function Prestadores() {
           <SelectContent>
             <SelectItem value="todos">Todas especialidades</SelectItem>
             {ESPECIALIDADES.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={marcaFilter} onValueChange={setMarcaFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Marca" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as marcas</SelectItem>
+            {MARCAS_VEICULOS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
