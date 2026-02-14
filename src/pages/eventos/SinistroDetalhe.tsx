@@ -12,6 +12,7 @@ import {
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
   Bot, Wrench, Radio, Lock, Navigation, Copy, Send, FileSignature, RefreshCw
 } from 'lucide-react';
+import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteSinistro } from '@/hooks/useSinistros';
 import { ConfirmacaoExclusaoDialog } from '@/components/sinistros/ConfirmacaoExclusaoDialog';
@@ -921,6 +922,16 @@ export default function SinistroDetalhe() {
               )}
             </CardContent>
           </Card>
+
+          {/* Link do Evento (colisão) */}
+          {sinistro.tipo === 'colisao' && (
+            <EventoLinkCard
+              sinistroId={id!}
+              sinistroProtocolo={sinistro.protocolo}
+              associadoWhatsapp={sinistro.associado?.whatsapp || sinistro.associado?.telefone}
+              associadoNome={sinistro.associado?.nome}
+            />
+          )}
 
           {/* Processos Jurídicos */}
           <Card>

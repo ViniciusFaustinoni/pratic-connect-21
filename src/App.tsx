@@ -288,6 +288,7 @@ import AcompanhamentoProposta from "./pages/public/AcompanhamentoProposta";
 import TrackingAssistencia from "./pages/public/TrackingAssistencia";
 import AvaliarAssistencia from "./pages/avaliar/AvaliarAssistencia";
 import UploadDocumentosSinistro from "./pages/public/UploadDocumentosSinistro";
+import EventoColisao from "./pages/public/EventoColisao";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -349,6 +350,9 @@ const App = () => (
             
             {/* Public Upload Documentos Sinistro */}
             <Route path="/sinistro/documentos/:token" element={<UploadDocumentosSinistro />} />
+            
+            {/* Public Evento Colisão Link */}
+            <Route path="/evento/:token" element={<EventoColisao />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
