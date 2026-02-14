@@ -110,6 +110,12 @@ export default function EventoPosAprovacao() {
       </div>
 
       <div className="max-w-lg mx-auto p-4 space-y-4">
+        {/* Mensagem de aprovação */}
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800">
+          <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+          <span className="text-sm font-semibold">Seu evento foi aprovado!</span>
+        </div>
+
         {/* Info card */}
         <Card>
           <CardContent className="pt-4 space-y-1.5">
@@ -127,6 +133,14 @@ export default function EventoPosAprovacao() {
               <span className="text-xs text-muted-foreground">Tipo</span>
               <Badge variant="outline" className="text-xs capitalize">{sinistro?.tipo}</Badge>
             </div>
+            {sinistro?.data_ocorrencia && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Data do Evento</span>
+                <span className="text-sm font-medium">
+                  {new Date(sinistro.data_ocorrencia).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
 

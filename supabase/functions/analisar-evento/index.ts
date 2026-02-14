@@ -174,7 +174,7 @@ serve(async (req) => {
           await supabase.functions.invoke("whatsapp-send-text", {
             body: {
               phone: telefone,
-              message: `✅ *PRATIC - Evento Aprovado*\n\nOlá ${(sinistro as any)?.associado?.nome},\n\nSeu evento foi aprovado! 🎉\n\nAcesse o link abaixo para assinar o Termo de Entrada:\n${linkUrl}\n\n⏰ Este link expira em 72 horas.`,
+              message: `✅ *PRATIC - Evento Aprovado*\n\nOlá ${(sinistro as any)?.associado?.nome},\n\nSeu evento foi aprovado! 🎉\n\nAcesse o link abaixo para efetuar o pagamento da cota de coparticipação e assinar o Termo de Entrada:\n${linkUrl}\n\n⏰ Este link expira em 72 horas.`,
             },
           });
         }
