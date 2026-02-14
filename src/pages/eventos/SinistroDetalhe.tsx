@@ -24,6 +24,8 @@ import { EmitirParecerModal } from '@/components/eventos/EmitirParecerModal';
 import { ConversaIADialog } from '@/components/sinistros/ConversaIADialog';
 import { AcionarRecuperacaoModal } from '@/components/sinistros/AcionarRecuperacaoModal';
 import { CardAcionamentoRoubo } from '@/components/sinistros/CardAcionamentoRoubo';
+import { AlertasFraudeRoubo } from '@/components/sinistros/AlertasFraudeRoubo';
+import { CardRecuperacaoStatus } from '@/components/sinistros/CardRecuperacaoStatus';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { TrajetoColisaoCard } from '@/components/sinistros/TrajetoColisaoCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
@@ -61,6 +63,8 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   negado: { label: 'Negado', class: 'bg-red-100 text-red-800' },
   em_regulacao: { label: 'Em Regulação', class: 'bg-amber-100 text-amber-800' },
   em_reparo: { label: 'Em Reparo', class: 'bg-teal-100 text-teal-800' },
+  em_recuperacao: { label: 'Em Recuperação', class: 'bg-violet-100 text-violet-800' },
+  aguardando_pagamento: { label: 'Aguard. Pagamento', class: 'bg-pink-100 text-pink-800' },
   pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
   encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
   cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
@@ -923,15 +927,14 @@ export default function SinistroDetalhe() {
             </CardContent>
           </Card>
 
-          {/* Link do Evento (colisão) */}
-          {sinistro.tipo === 'colisao' && (
-            <EventoLinkCard
-              sinistroId={id!}
-              sinistroProtocolo={sinistro.protocolo}
-              associadoWhatsapp={sinistro.associado?.whatsapp || sinistro.associado?.telefone}
-              associadoNome={sinistro.associado?.nome}
-            />
-          )}
+          {/* Link do Evento */}
+          <EventoLinkCard
+            sinistroId={id!}
+            sinistroProtocolo={sinistro.protocolo}
+            associadoWhatsapp={sinistro.associado?.whatsapp || sinistro.associado?.telefone}
+            associadoNome={sinistro.associado?.nome}
+            sinistroTipo={sinistro.tipo}
+          />
 
           {/* Processos Jurídicos */}
           <Card>
@@ -990,6 +993,25 @@ export default function SinistroDetalhe() {
               veiculoPlaca={sinistro.veiculo?.placa}
               onAcionar={() => setModalAcionamentoOpen(true)}
               podeAcionar={!['encerrado', 'cancelado', 'negado'].includes(sinistro.status)}
+            />
+          )}
+
+          {/* Alertas de Fraude - para roubo/furto */}
+          {['roubo', 'furto'].includes(sinistro.tipo) && sinistro.veiculo_id && (
+            <AlertasFraudeRoubo
+              veiculoId={sinistro.veiculo_id}
+              dataOcorrencia={sinistro.data_ocorrencia}
+            />
+          )}
+
+          {/* Card de Recuperação - quando em_recuperacao */}
+          {sinistro.status === 'em_recuperacao' && ['roubo', 'furto'].includes(sinistro.tipo) && (
+            <CardRecuperacaoStatus
+              sinistroId={sinistro.id}
+              veiculoId={sinistro.veiculo_id}
+              dataOcorrencia={sinistro.data_ocorrencia}
+              protocolo={sinistro.protocolo}
+              valorFipe={sinistro.valor_fipe}
             />
           )}
 

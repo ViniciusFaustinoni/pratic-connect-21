@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { NovoSinistroModal } from '@/components/eventos/NovoSinistroModal';
+import { PainelNaoRecuperados } from '@/components/sinistros/PainelNaoRecuperados';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,6 +57,8 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   negado: { label: 'Negado', class: 'bg-red-100 text-red-800' },
   em_regulacao: { label: 'Em Regulação', class: 'bg-amber-100 text-amber-800' },
   em_reparo: { label: 'Em Reparo', class: 'bg-teal-100 text-teal-800' },
+  em_recuperacao: { label: 'Em Recuperação', class: 'bg-violet-100 text-violet-800' },
+  aguardando_pagamento: { label: 'Aguard. Pagamento', class: 'bg-pink-100 text-pink-800' },
   pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
   encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
   cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
@@ -210,6 +213,9 @@ export default function SinistrosList() {
         </Card>
       )}
 
+      {/* Painel Veículos Não Recuperados */}
+      <PainelNaoRecuperados />
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Card>
@@ -336,6 +342,8 @@ export default function SinistrosList() {
                 <SelectItem value="aguardando_vistoria">Aguard. Vistoria</SelectItem>
                 <SelectItem value="aprovado">Aprovado</SelectItem>
                 <SelectItem value="negado">Negado</SelectItem>
+                <SelectItem value="em_recuperacao">Em Recuperação</SelectItem>
+                <SelectItem value="aguardando_pagamento">Aguard. Pagamento</SelectItem>
                 <SelectItem value="pago">Pago</SelectItem>
                 <SelectItem value="encerrado">Encerrado</SelectItem>
               </SelectContent>

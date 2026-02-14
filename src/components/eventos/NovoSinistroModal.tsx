@@ -474,6 +474,27 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
       } catch (notifError) {
         console.warn('[NovoSinistroModal] Erro ao notificar (não bloqueante):', notifError);
       }
+
+      // ===== 13. ACIONAMENTO AUTOMÁTICO DO RASTREADOR (ROUBO/FURTO) =====
+      if (isRouboFurto) {
+        try {
+          console.log('[NovoSinistroModal] Acionando rastreador automaticamente para roubo/furto...');
+          const { data: acionResult, error: acionError } = await supabase.functions.invoke('acionar-roubo-furto', {
+            body: {
+              sinistro_id: sinistro.id,
+              veiculo_id: selectedVeiculo!,
+              associado_id: selectedAssociado!,
+            },
+          });
+          if (acionError) {
+            console.error('[NovoSinistroModal] Erro ao acionar rastreador:', acionError);
+          } else {
+            console.log('[NovoSinistroModal] Rastreador acionado com sucesso:', acionResult);
+          }
+        } catch (acionarError) {
+          console.error('[NovoSinistroModal] Erro ao acionar rastreador (não bloqueante):', acionarError);
+        }
+      }
       
       return sinistro;
     },
