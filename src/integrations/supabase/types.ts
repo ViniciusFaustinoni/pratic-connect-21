@@ -18966,6 +18966,7 @@ export type Database = {
           termo_anuencia_assinado_em: string | null
           termo_anuencia_url: string | null
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
+          tipo_agua: string | null
           tipo_dano: string | null
           tipo_local_evento: string | null
           updated_at: string
@@ -19058,6 +19059,7 @@ export type Database = {
           termo_anuencia_assinado_em?: string | null
           termo_anuencia_url?: string | null
           tipo: Database["public"]["Enums"]["tipo_sinistro"]
+          tipo_agua?: string | null
           tipo_dano?: string | null
           tipo_local_evento?: string | null
           updated_at?: string
@@ -19150,6 +19152,7 @@ export type Database = {
           termo_anuencia_assinado_em?: string | null
           termo_anuencia_url?: string | null
           tipo?: Database["public"]["Enums"]["tipo_sinistro"]
+          tipo_agua?: string | null
           tipo_dano?: string | null
           tipo_local_evento?: string | null
           updated_at?: string

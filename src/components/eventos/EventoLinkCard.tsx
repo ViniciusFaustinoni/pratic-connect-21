@@ -68,9 +68,12 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
 
   const isRouboFurto = sinistroTipo === 'roubo' || sinistroTipo === 'furto';
   const isVidros = sinistroTipo === 'vidros';
+  const isFenomenoNatural = sinistroTipo === 'fenomeno_natural';
   
   const etapaLabels = isVidros
     ? ['Não iniciou', 'Fotos do Dano', 'Relato Simples']
+    : isFenomenoNatural
+    ? ['Não iniciou', 'B.O. + Fotos do Dano', 'Comprovante + Fotos In Loco', 'Relato Completo']
     : isRouboFurto 
     ? ['Não iniciou', 'B.O.', 'Relato', sinistroTipo === 'furto' ? 'Chaves + Docs' : 'Documentação']
     : ['Não iniciou', 'Auto Vistoria', 'B.O.', 'Relato Completo'];

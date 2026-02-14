@@ -28,6 +28,7 @@ import { AlertasFraudeRoubo } from '@/components/sinistros/AlertasFraudeRoubo';
 import { CardRecuperacaoStatus } from '@/components/sinistros/CardRecuperacaoStatus';
 import { CardVidrosDetalhe } from '@/components/sinistros/CardVidrosDetalhe';
 import { CardAnaliseIncendio } from '@/components/sinistros/CardAnaliseIncendio';
+import { CardAnaliseAlagamento } from '@/components/sinistros/CardAnaliseAlagamento';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { TrajetoColisaoCard } from '@/components/sinistros/TrajetoColisaoCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
@@ -482,8 +483,8 @@ export default function SinistroDetalhe() {
           )}
           {sinistro.analise_interna === true && (
             <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300 text-sm px-3 py-1">
-              <Flame className="h-4 w-4 mr-1" />
-              Análise Interna
+              {sinistro.tipo === 'fenomeno_natural' ? <CloudRain className="h-4 w-4 mr-1" /> : <Flame className="h-4 w-4 mr-1" />}
+              {sinistro.tipo === 'fenomeno_natural' ? 'Análise Jurídica' : 'Análise Interna'}
             </Badge>
           )}
         </div>
@@ -952,6 +953,11 @@ export default function SinistroDetalhe() {
           {/* Card Análise de Incêndio */}
           {sinistro.tipo === 'incendio' && (
             <CardAnaliseIncendio sinistro={sinistro} />
+          )}
+
+          {/* Card Análise de Alagamento */}
+          {sinistro.tipo === 'fenomeno_natural' && (
+            <CardAnaliseAlagamento sinistro={sinistro} />
           )}
 
           {/* Processos Jurídicos */}
