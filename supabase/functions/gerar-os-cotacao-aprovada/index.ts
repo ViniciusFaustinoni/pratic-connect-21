@@ -30,6 +30,15 @@ serve(async (req) => {
       .single();
     if (errSinistro || !sinistro) throw new Error("Sinistro não encontrado");
 
+    // 1b. Buscar prestadores vinculados ao sinistro
+    const { data: prestadoresVinculados } = await supabase
+      .from("sinistro_prestadores")
+      .select("prestador:prestadores(id, nome, especialidades)")
+      .eq("sinistro_id", sinistro_id);
+    const nomesPrestadores = (prestadoresVinculados || [])
+      .map((p: any) => p.prestador?.nome)
+      .filter(Boolean);
+
     // 2. Buscar cotação aprovada
     const { data: cotacao, error: errCotacao } = await supabase
       .from("evento_cotacoes_pecas")
@@ -64,6 +73,10 @@ serve(async (req) => {
     }));
 
     // 6. Criar OS
+    const observacoesOS = nomesPrestadores.length > 0
+      ? `OS gerada automaticamente a partir do evento ${sinistro.protocolo}. Prestadores vinculados: ${nomesPrestadores.join(', ')}`
+      : `OS gerada automaticamente a partir do evento ${sinistro.protocolo}`;
+
     const { data: os, error: errOS } = await supabase
       .from("ordens_servico")
       .insert({
@@ -76,7 +89,7 @@ serve(async (req) => {
         cotacao_aprovada_id: cotacao.id,
         etapas_reparo: etapasReparo,
         status: "aguardando_entrada",
-        observacoes: `OS gerada automaticamente a partir do evento ${sinistro.protocolo}`,
+        observacoes: observacoesOS,
       })
       .select("id, numero")
       .single();
@@ -149,6 +162,27 @@ serve(async (req) => {
         });
       } catch (e) {
         console.error("Erro ao enviar WhatsApp:", e);
+      }
+    }
+
+    // 10. Agendar mensagem de follow-up 15min após (via cron-contato-sinistro)
+    if (associado && (associado.whatsapp || associado.telefone) && veiculo) {
+      const telefone15 = associado.whatsapp || associado.telefone;
+      const nome15 = associado.nome?.split(" ")[0] || "Associado";
+      const agendadoPara = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const mensagem15 = `${nome15}, aqui é a Pratic Car novamente! 😊 Só confirmando: o pagamento da sua cota foi processado, as peças já estão sendo providenciadas junto ao fornecedor aprovado, e a oficina já está preparada para receber seu veículo ${veiculo.placa}. Vamos te acompanhar em cada etapa do reparo — qualquer novidade, avisamos por aqui! 🚗`;
+
+      try {
+        await supabase.from("sinistro_contatos_agendados").insert({
+          sinistro_id,
+          tipo: "pos_os_gerada",
+          telefone: telefone15,
+          agendado_para: agendadoPara,
+          mensagem_enviada: mensagem15,
+          status: "agendado",
+        });
+      } catch (e) {
+        console.error("Erro ao agendar mensagem 15min:", e);
       }
     }
 
