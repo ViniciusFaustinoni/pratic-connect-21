@@ -392,3 +392,15 @@ verify_jwt = false
 
 [functions.upload-documento-sinistro]
 verify_jwt = false
+
+[functions.agendar-contato-sinistro]
+verify_jwt = false
+
+[functions.cron-contato-sinistro]
+verify_jwt = false
+
+[functions.gerar-link-evento]
+verify_jwt = false
+
+[functions.validar-link-evento]
+verify_jwt = false

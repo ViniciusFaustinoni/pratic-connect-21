@@ -17935,6 +17935,60 @@ export type Database = {
           },
         ]
       }
+      sinistro_contatos_agendados: {
+        Row: {
+          agendado_para: string
+          created_at: string
+          enviado_em: string | null
+          erro_detalhes: string | null
+          id: string
+          link_id: string | null
+          mensagem_enviada: string | null
+          sinistro_id: string
+          status: string
+          tipo_contato: string
+        }
+        Insert: {
+          agendado_para: string
+          created_at?: string
+          enviado_em?: string | null
+          erro_detalhes?: string | null
+          id?: string
+          link_id?: string | null
+          mensagem_enviada?: string | null
+          sinistro_id: string
+          status?: string
+          tipo_contato?: string
+        }
+        Update: {
+          agendado_para?: string
+          created_at?: string
+          enviado_em?: string | null
+          erro_detalhes?: string | null
+          id?: string
+          link_id?: string | null
+          mensagem_enviada?: string | null
+          sinistro_id?: string
+          status?: string
+          tipo_contato?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_contatos_agendados_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "sinistro_evento_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_contatos_agendados_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistro_documentos: {
         Row: {
           arquivo_url: string
@@ -17972,6 +18026,68 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sinistro_documentos_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sinistro_evento_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dados_etapa1: Json | null
+          dados_etapa2: Json | null
+          dados_etapa3: Json | null
+          etapa_atual: number
+          etapa1_completada_em: string | null
+          etapa2_completada_em: string | null
+          etapa3_completada_em: string | null
+          expira_em: string
+          id: string
+          sinistro_id: string
+          status: string
+          tipo: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dados_etapa1?: Json | null
+          dados_etapa2?: Json | null
+          dados_etapa3?: Json | null
+          etapa_atual?: number
+          etapa1_completada_em?: string | null
+          etapa2_completada_em?: string | null
+          etapa3_completada_em?: string | null
+          expira_em: string
+          id?: string
+          sinistro_id: string
+          status?: string
+          tipo?: string
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dados_etapa1?: Json | null
+          dados_etapa2?: Json | null
+          dados_etapa3?: Json | null
+          etapa_atual?: number
+          etapa1_completada_em?: string | null
+          etapa2_completada_em?: string | null
+          etapa3_completada_em?: string | null
+          expira_em?: string
+          id?: string
+          sinistro_id?: string
+          status?: string
+          tipo?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_evento_links_sinistro_id_fkey"
             columns: ["sinistro_id"]
             isOneToOne: false
             referencedRelation: "sinistros"
@@ -18196,6 +18312,7 @@ export type Database = {
           id: string
           justificativa_negacao: string | null
           latitude_informada: number | null
+          link_evento_id: string | null
           local_descricao: string | null
           local_ocorrencia: string | null
           longitude_informada: number | null
@@ -18280,6 +18397,7 @@ export type Database = {
           id?: string
           justificativa_negacao?: string | null
           latitude_informada?: number | null
+          link_evento_id?: string | null
           local_descricao?: string | null
           local_ocorrencia?: string | null
           longitude_informada?: number | null
@@ -18364,6 +18482,7 @@ export type Database = {
           id?: string
           justificativa_negacao?: string | null
           latitude_informada?: number | null
+          link_evento_id?: string | null
           local_descricao?: string | null
           local_ocorrencia?: string | null
           longitude_informada?: number | null
@@ -18486,6 +18605,13 @@ export type Database = {
             columns: ["chamado_origem_id"]
             isOneToOne: false
             referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_link_evento_id_fkey"
+            columns: ["link_evento_id"]
+            isOneToOne: false
+            referencedRelation: "sinistro_evento_links"
             referencedColumns: ["id"]
           },
           {

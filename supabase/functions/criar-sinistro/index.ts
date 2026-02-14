@@ -675,6 +675,21 @@ Deno.serve(async (req) => {
     }
 
     // ============================================
+    // 10.1 AGENDAR CONTATO AUTOMÁTICO (COLISÃO)
+    // ============================================
+    if (payload.tipo_sinistro === 'colisao') {
+      try {
+        console.log('[criar-sinistro] Agendando contato pós-colisão...');
+        const agendarResult = await supabaseAdmin.functions.invoke('agendar-contato-sinistro', {
+          body: { sinistro_id: sinistro.id },
+        });
+        console.log('[criar-sinistro] Contato agendado:', agendarResult.data);
+      } catch (e) {
+        console.error('[criar-sinistro] Erro ao agendar contato (não bloqueante):', e);
+      }
+    }
+
+    // ============================================
     // 11. RETORNAR RESPOSTA DE SUCESSO
     // ============================================
     console.log('[criar-sinistro] Sucesso! Protocolo:', protocolo);
