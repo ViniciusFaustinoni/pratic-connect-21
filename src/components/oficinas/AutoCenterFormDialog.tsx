@@ -70,13 +70,13 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
       if (autoCenter) {
         form.reset({
           nome: autoCenter.nome,
-          razao_social: (autoCenter as any).razao_social || '',
-          nome_fantasia: (autoCenter as any).nome_fantasia || '',
-          cnpj: (autoCenter as any).cnpj || '',
-          inscricao_estadual: (autoCenter as any).inscricao_estadual || '',
+          razao_social: autoCenter.razao_social || '',
+          nome_fantasia: autoCenter.nome_fantasia || '',
+          cnpj: autoCenter.cnpj || '',
+          inscricao_estadual: autoCenter.inscricao_estadual || '',
           tipo: autoCenter.tipo as any,
-          status: (autoCenter as any).status || 'ativo',
-          whatsapp: (autoCenter as any).whatsapp || '',
+          status: (autoCenter.status as any) || 'ativo',
+          whatsapp: autoCenter.whatsapp || '',
           contato_nome: autoCenter.contato_nome || '',
           contato_telefone: autoCenter.contato_telefone || '',
           contato_email: autoCenter.contato_email || '',
@@ -84,16 +84,16 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
           cidade: autoCenter.cidade || '',
           estado: autoCenter.estado || '',
           cep: autoCenter.cep || '',
-          bairro: (autoCenter as any).bairro || '',
-          banco: (autoCenter as any).banco || '',
-          agencia: (autoCenter as any).agencia || '',
-          conta: (autoCenter as any).conta || '',
-          pix_chave: (autoCenter as any).pix_chave || '',
-          pix_tipo: (autoCenter as any).pix_tipo || undefined,
+          bairro: autoCenter.bairro || '',
+          banco: autoCenter.banco || '',
+          agencia: autoCenter.agencia || '',
+          conta: autoCenter.conta || '',
+          pix_chave: autoCenter.pix_chave || '',
+          pix_tipo: (autoCenter.pix_tipo as any) || undefined,
           observacoes: autoCenter.observacoes || '',
         });
-        setMarcas((autoCenter as any).marcas_atendidas || []);
-        setTiposPecas((autoCenter as any).especialidades || []);
+        setMarcas(autoCenter.marcas_atendidas || []);
+        setTiposPecas(autoCenter.especialidades || []);
       } else {
         form.reset({ nome: '', tipo: 'auto_center', whatsapp: '', status: 'ativo', inscricao_estadual: '' });
         setMarcas([]);

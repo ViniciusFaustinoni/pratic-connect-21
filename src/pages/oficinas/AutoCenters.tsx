@@ -127,8 +127,8 @@ export default function AutoCenters() {
                     <Badge className={TIPO_COLORS[ac.tipo] || ''}>
                       {TIPO_LABELS[ac.tipo] || ac.tipo}
                     </Badge>
-                    <Badge variant={(ac as any).status === 'ativo' ? 'default' : 'secondary'}>
-                      {(ac as any).status === 'ativo' ? 'Ativo' : (ac as any).status === 'inativo' ? 'Inativo' : (ac as any).status === 'suspenso' ? 'Suspenso' : 'Ativo'}
+                    <Badge variant={ac.status === 'ativo' ? 'default' : 'secondary'}>
+                      {ac.status === 'ativo' ? 'Ativo' : ac.status === 'inativo' ? 'Inativo' : ac.status === 'suspenso' ? 'Suspenso' : 'Ativo'}
                     </Badge>
                   </div>
                 </div>
@@ -146,29 +146,29 @@ export default function AutoCenters() {
                     </div>
                   )}
                 </div>
-                {(ac as any).marcas_atendidas?.length > 0 && (
+                {ac.marcas_atendidas && ac.marcas_atendidas.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1">
-                    {(ac as any).marcas_atendidas.includes('GLOBAL') ? (
+                    {ac.marcas_atendidas.includes('GLOBAL') ? (
                       <Badge variant="secondary" className="text-xs">GLOBAL</Badge>
                     ) : (
                       <>
-                        {(ac as any).marcas_atendidas.slice(0, 3).map((m: string) => (
+                        {ac.marcas_atendidas.slice(0, 3).map((m) => (
                           <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>
                         ))}
-                        {(ac as any).marcas_atendidas.length > 3 && (
-                          <Badge variant="secondary" className="text-xs">+{(ac as any).marcas_atendidas.length - 3}</Badge>
+                        {ac.marcas_atendidas.length > 3 && (
+                          <Badge variant="secondary" className="text-xs">+{ac.marcas_atendidas.length - 3}</Badge>
                         )}
                       </>
                     )}
                   </div>
                 )}
-                {(ac as any).especialidades?.length > 0 && (
+                {ac.especialidades && ac.especialidades.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {(ac as any).especialidades.slice(0, 3).map((e: string) => (
+                    {ac.especialidades.slice(0, 3).map((e) => (
                       <Badge key={e} variant="outline" className="text-xs">{e}</Badge>
                     ))}
-                    {(ac as any).especialidades.length > 3 && (
-                      <Badge variant="outline" className="text-xs">+{(ac as any).especialidades.length - 3}</Badge>
+                    {ac.especialidades.length > 3 && (
+                      <Badge variant="outline" className="text-xs">+{ac.especialidades.length - 3}</Badge>
                     )}
                   </div>
                 )}
