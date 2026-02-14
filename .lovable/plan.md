@@ -1,44 +1,44 @@
 
 
-# Padronizar Auto-Preenchimento de CEP nos Formularios
-
-## Situacao Atual
-
-Os tres formularios ja possuem logica de auto-preenchimento de CEP via `buscarCep`, porem com implementacoes inconsistentes:
-
-| Formulario | Componente CEP | Mascara | Auto-fill |
-|---|---|---|---|
-| Oficina (NovaOficinaModal) | `CepInput` (masked) | Sim (00000-000) | Funciona via `onCepComplete` |
-| Auto Center (AutoCenterFormDialog) | `Input` (plain) | Nao | Via `onBlur` mas sem mascara |
-| Prestador (PrestadorFormDialog) | `Input` (plain) | Nao | Via `onBlur` mas sem mascara |
+# Adicionar Busca nos Dropdowns do Formulario de Pecas
 
 ## Problema
 
-Os formularios de Auto Center e Prestador usam um `Input` simples sem mascara de CEP. Isso causa:
-- Experiencia inconsistente entre os formularios
-- Sem formatacao visual (00000-000)
-- O usuario pode nao perceber que o auto-preenchimento funciona
+Os quatro dropdowns (Tipo de Peca, Marca, Modelo, Ano) usam o componente `Select` do Radix, que nao possui campo de busca. Com listas longas (ex: marcas FIPE tem 90+ itens, modelos podem ter 200+), o usuario precisa rolar manualmente para encontrar o item desejado.
 
-## Correcao
+## Solucao
 
-Substituir o `Input` por `CepInput` nos dois formularios que ainda usam campo de texto simples, garantindo:
-- Mascara visual 00000-000
-- Auto-preenchimento automatico ao completar 8 digitos (via `onCepComplete`)
-- Indicador visual de loading enquanto busca o CEP
+Substituir os quatro `Select` por comboboxes com campo de busca, usando o padrao `Popover + Command` ja existente no projeto (referencia: `ContaCombobox.tsx`).
 
-### Arquivos a Modificar
+Cada dropdown tera:
+- Um botao que abre um popover
+- Campo de busca (digitacao filtra a lista)
+- Lista filtrada de opcoes
+- Checkmark no item selecionado
 
-| Arquivo | Alteracao |
-|---|---|
-| `src/components/oficinas/AutoCenterFormDialog.tsx` | Trocar `Input` do CEP por `CepInput` com mascara e callback `onCepComplete`; adicionar estado `buscandoCep` para loading |
-| `src/components/oficinas/PrestadorFormDialog.tsx` | Mesmo ajuste: trocar `Input` por `CepInput` com mascara e loading |
+## Arquivo a Modificar
 
-### Detalhes Tecnicos
+`src/components/oficinas/AutoCenterPecaFormDialog.tsx`
 
-Em ambos os arquivos:
-1. Importar `CepInput` de `@/components/inputs/MaskedInputs`
-2. Adicionar estado `const [buscandoCep, setBuscandoCep] = useState(false)`
-3. Adaptar `handleCepBlur` para receber o CEP como parametro (padrao do `onCepComplete`) e incluir loading
-4. No campo CEP do formulario, substituir `<Input {...field} onBlur={handleCepBlur} />` por `<CepInput value={field.value || ''} onChange={field.onChange} onCepComplete={handleCepBlur} disabled={buscandoCep} />`
+## Detalhes Tecnicos
 
-Nenhuma alteracao de banco de dados e necessaria.
+### Imports adicionais
+
+- `Popover, PopoverTrigger, PopoverContent` de `@/components/ui/popover`
+- `Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem` de `@/components/ui/command`
+- `Check, ChevronsUpDown` de `lucide-react`
+- `cn` de `@/lib/utils`
+
+### Substituicoes
+
+Os quatro campos do formulario serao convertidos de `Select` para o padrao Popover+Command:
+
+1. **Tipo de Peca** -- lista estatica `CATALOGO_PECAS`, busca por texto
+2. **Marca** -- lista dinamica `marcas[]`, busca por nome
+3. **Modelo** -- lista dinamica `modelos[]`, busca por nome
+4. **Ano** -- lista dinamica `anos[]`, busca por nome
+
+Cada um tera um state `open` proprio (ex: `openPeca`, `openMarca`, `openModelo`, `openAno`) para controlar o popover individualmente.
+
+A logica de cascata (selecionar marca carrega modelos, selecionar modelo carrega anos) permanece inalterada.
+
