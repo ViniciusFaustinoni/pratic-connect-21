@@ -96,7 +96,7 @@ export function RegistrarCotacaoDialog({
     setObservacoes('');
   };
 
-  const pendentes = cotacoesEnviadas.filter((c) => c.status === 'enviado');
+  const pendentes = cotacoesEnviadas.filter((c) => c.status === 'enviado' || c.status === 'expirado');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
