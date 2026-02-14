@@ -12,11 +12,13 @@ import { AutoCenterDetailDrawer } from '@/components/oficinas/AutoCenterDetailDr
 const TIPO_LABELS: Record<string, string> = {
   auto_center: 'Auto Center',
   ferro_velho: 'Ferro Velho',
+  montadora: 'Montadora',
 };
 
 const TIPO_COLORS: Record<string, string> = {
   auto_center: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   ferro_velho: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+  montadora: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
 };
 
 export default function AutoCenters() {
@@ -61,6 +63,7 @@ export default function AutoCenters() {
             <SelectItem value="todos">Todos os tipos</SelectItem>
             <SelectItem value="auto_center">Auto Center</SelectItem>
             <SelectItem value="ferro_velho">Ferro Velho</SelectItem>
+            <SelectItem value="montadora">Montadora</SelectItem>
           </SelectContent>
         </Select>
       </div>

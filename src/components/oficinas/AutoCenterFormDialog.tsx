@@ -21,7 +21,7 @@ const formSchema = z.object({
   cidade: z.string().optional(),
   estado: z.string().max(2).optional(),
   cep: z.string().optional(),
-  tipo: z.enum(['auto_center', 'ferro_velho']),
+  tipo: z.enum(['auto_center', 'ferro_velho', 'montadora']),
   contato_nome: z.string().optional(),
   contato_telefone: z.string().optional(),
   contato_email: z.string().email('Email inválido').optional().or(z.literal('')),
@@ -61,7 +61,7 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
       if (autoCenter) {
         form.reset({
           nome: autoCenter.nome,
-          tipo: autoCenter.tipo as 'auto_center' | 'ferro_velho',
+          tipo: autoCenter.tipo as 'auto_center' | 'ferro_velho' | 'montadora',
           endereco: autoCenter.endereco || '',
           cidade: autoCenter.cidade || '',
           estado: autoCenter.estado || '',
@@ -138,6 +138,7 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
                     <SelectContent>
                       <SelectItem value="auto_center">Auto Center</SelectItem>
                       <SelectItem value="ferro_velho">Ferro Velho</SelectItem>
+                      <SelectItem value="montadora">Montadora</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
