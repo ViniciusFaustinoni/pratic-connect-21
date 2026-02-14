@@ -1,57 +1,38 @@
 
 
-# Adicionar Regulador e Analista de Eventos aos Perfis de Acesso
+# Remover "Prestadores" duplicado do menu Oficinas
 
 ## Problema
 
-Os tipos `regulador` e `analista_eventos` ja existem no sistema (enum `PerfilAcesso`, labels, cores, guards, layouts e paineis). Porem, ao criar ou editar um usuario, esses dois perfis **nao aparecem como opcao selecionavel** nas telas de formulario.
-
-Tres listas estaticas de perfis precisam ser atualizadas:
+O item "Prestadores" aparece em dois menus do sidebar:
+- **Assistencia 24h** -> Prestadores (`/assistencia/prestadores`) -- CORRETO, deve permanecer
+- **Oficinas** -> Prestadores (`/oficinas/prestadores`) -- DUPLICADO, deve ser removido
 
 ## Correcoes
 
-### 1. Formulario de criacao/edicao de usuario
+### 1. Remover item do menu lateral
 
-**Arquivo:** `src/pages/configuracoes/UsuarioForm.tsx` (linha 19-32)
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
 
-Adicionar ao array `perfisDisponiveis`:
+Remover a linha `{ title: 'Prestadores', url: '/oficinas/prestadores', icon: Puzzle }` do grupo "Oficinas" (linha 233).
 
-```text
-{ value: 'regulador', label: 'Regulador', desc: 'Vistorias e oficina' },
-{ value: 'analista_eventos', label: 'Analista de Eventos', desc: 'Analise de sinistros' },
-```
+### 2. Remover rota duplicada
 
-### 2. Modal "Gerenciar Perfis" (edicao rapida de roles)
+**Arquivo:** `src/App.tsx`
 
-**Arquivo:** `src/components/usuarios/GerenciarPerfisModal.tsx` (linha 40-53)
+Remover a rota `<Route path="/oficinas/prestadores" element={<PrestadoresPage />} />` (linha 574) e o import `PrestadoresPage` (linha 89), ja que a pagina de prestadores e acessada via `/assistencia/prestadores`.
 
-Adicionar ao array `PERFIS_FUNCIONARIO`:
+### 3. Remover pagina duplicada (opcional)
 
-```text
-'regulador',
-'analista_eventos',
-```
+**Arquivo:** `src/pages/oficinas/Prestadores.tsx`
 
-### 3. Modal "Novo Funcionario"
-
-**Arquivo:** `src/components/usuarios/NovoFuncionarioModal.tsx` (linha 36-49)
-
-Adicionar ao array `PERFIS_FUNCIONARIO`:
-
-```text
-'regulador',
-'analista_eventos',
-```
-
-## Resultado
-
-Apos as correcoes, ao criar ou editar um usuario, os cards "Regulador" e "Analista de Eventos" aparecerao na grade de perfis de acesso (como na imagem de referencia). Ao selecionar um desses perfis, o usuario tera acesso ao respectivo painel (`/regulador` ou `/analista-eventos`), que ja estao implementados com seus guards e layouts.
+Se a rota `/assistencia/prestadores` usa um componente diferente, manter ambos. Caso contrario, o arquivo pode ser removido.
 
 ## Arquivos Afetados
 
 | Acao | Arquivo |
 |---|---|
-| Modificar | `src/pages/configuracoes/UsuarioForm.tsx` -- adicionar 2 perfis ao array perfisDisponiveis |
-| Modificar | `src/components/usuarios/GerenciarPerfisModal.tsx` -- adicionar 2 perfis ao array PERFIS_FUNCIONARIO |
-| Modificar | `src/components/usuarios/NovoFuncionarioModal.tsx` -- adicionar 2 perfis ao array PERFIS_FUNCIONARIO |
+| Modificar | `src/components/layout/AppSidebar.tsx` -- remover item Prestadores do grupo Oficinas |
+| Modificar | `src/App.tsx` -- remover rota e import de oficinas/prestadores |
+| Avaliar | `src/pages/oficinas/Prestadores.tsx` -- remover se nao for usado em outro lugar |
 
