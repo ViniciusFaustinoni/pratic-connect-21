@@ -22,6 +22,7 @@ import { Plus, Trash2, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { PecaSelectFields, PecaSelectValues } from '@/components/oficinas/PecaSelectFields';
 
 const ETAPAS_REPARO = [
   { id: 'lanternagem', nome: 'Lanternagem', descricao: 'Chaparia e estrutura da carroceria' },
@@ -38,7 +39,16 @@ interface ItemOrcamento {
   valor_unitario: number;
   quantidade: number;
   valor_total: number;
+  // Structured peca fields
+  tipo_peca?: string;
+  veiculo_marca?: string;
+  veiculo_modelo?: string;
+  veiculo_ano?: string;
 }
+
+const defaultPecaValues: PecaSelectValues = {
+  tipoPeca: '', marcaCodigo: '', marcaNome: '', modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '',
+};
 
 interface VistoriaEventoOrcamentoProps {
   open: boolean;
@@ -68,12 +78,17 @@ export function VistoriaEventoOrcamento({
   const [itens, setItens] = useState<ItemOrcamento[]>([
     { descricao: '', tipo: 'peca', valor_unitario: 0, quantidade: 1, valor_total: 0 },
   ]);
+  // PecaSelectFields values per item index
+  const [pecaValuesMap, setPecaValuesMap] = useState<Record<number, PecaSelectValues>>({
+    0: { ...defaultPecaValues },
+  });
 
   // Parecer
   const [parecerTecnico, setParecerTecnico] = useState('');
   const [recomendacao, setRecomendacao] = useState<'aprovar' | 'analise_detalhada' | ''>('');
 
-  const valorTotal = itens.reduce((sum, item) => sum + item.valor_total, 0);
+  // Only sum non-peca items (peças don't have valor)
+  const valorTotal = itens.reduce((sum, item) => sum + (item.tipo !== 'peca' ? item.valor_total : 0), 0);
 
   const handleItemChange = (index: number, field: keyof ItemOrcamento, value: any) => {
     setItens((prev) => {
@@ -82,16 +97,63 @@ export function VistoriaEventoOrcamento({
       if (field === 'valor_unitario' || field === 'quantidade') {
         novos[index].valor_total = novos[index].valor_unitario * novos[index].quantidade;
       }
+      // When switching to peca, clear value fields; when switching away, clear peca fields
+      if (field === 'tipo') {
+        if (value === 'peca') {
+          novos[index].valor_unitario = 0;
+          novos[index].quantidade = 1;
+          novos[index].valor_total = 0;
+          novos[index].descricao = '';
+          setPecaValuesMap(prev => ({ ...prev, [index]: { ...defaultPecaValues } }));
+        } else {
+          novos[index].tipo_peca = undefined;
+          novos[index].veiculo_marca = undefined;
+          novos[index].veiculo_modelo = undefined;
+          novos[index].veiculo_ano = undefined;
+          setPecaValuesMap(prev => {
+            const copy = { ...prev };
+            delete copy[index];
+            return copy;
+          });
+        }
+      }
+      return novos;
+    });
+  };
+
+  const handlePecaValuesChange = (index: number, pv: PecaSelectValues) => {
+    setPecaValuesMap(prev => ({ ...prev, [index]: pv }));
+    // Update structured fields on the item
+    setItens(prev => {
+      const novos = [...prev];
+      novos[index].tipo_peca = pv.tipoPeca;
+      novos[index].veiculo_marca = pv.marcaNome;
+      novos[index].veiculo_modelo = pv.modeloNome;
+      novos[index].veiculo_ano = pv.anoNome;
+      novos[index].descricao = pv.tipoPeca
+        ? `${pv.tipoPeca}${pv.marcaNome ? ` - ${pv.marcaNome}` : ''}${pv.modeloNome ? ` ${pv.modeloNome}` : ''}${pv.anoNome ? ` ${pv.anoNome}` : ''}`
+        : '';
       return novos;
     });
   };
 
   const adicionarItem = () => {
+    const newIndex = itens.length;
     setItens((prev) => [...prev, { descricao: '', tipo: 'peca', valor_unitario: 0, quantidade: 1, valor_total: 0 }]);
+    setPecaValuesMap(prev => ({ ...prev, [newIndex]: { ...defaultPecaValues } }));
   };
 
   const removerItem = (index: number) => {
     setItens((prev) => prev.filter((_, i) => i !== index));
+    setPecaValuesMap(prev => {
+      const newMap: Record<number, PecaSelectValues> = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const key = parseInt(k);
+        if (key < index) newMap[key] = v;
+        else if (key > index) newMap[key - 1] = v;
+      });
+      return newMap;
+    });
   };
 
   const handleFinalizar = async () => {
@@ -171,12 +233,6 @@ export function VistoriaEventoOrcamento({
     } finally {
       setSaving(false);
     }
-  };
-
-  const tipoLabels: Record<string, string> = {
-    peca: 'Peça',
-    mao_de_obra: 'Mão de Obra',
-    servico: 'Serviço',
   };
 
   return (
@@ -292,12 +348,6 @@ export function VistoriaEventoOrcamento({
                     )}
                   </div>
 
-                  <Input
-                    placeholder="Descrição do serviço ou peça"
-                    value={item.descricao}
-                    onChange={(e) => handleItemChange(i, 'descricao', e.target.value)}
-                  />
-
                   <Select value={item.tipo} onValueChange={(v) => handleItemChange(i, 'tipo', v)}>
                     <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -307,35 +357,51 @@ export function VistoriaEventoOrcamento({
                     </SelectContent>
                   </Select>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <Label className="text-[10px]">Vlr. Unit.</Label>
+                  {item.tipo === 'peca' ? (
+                    <PecaSelectFields
+                      values={pecaValuesMap[i] || defaultPecaValues}
+                      onChange={(pv) => handlePecaValuesChange(i, pv)}
+                      active={open}
+                    />
+                  ) : (
+                    <>
                       <Input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={item.valor_unitario || ''}
-                        onChange={(e) => handleItemChange(i, 'valor_unitario', parseFloat(e.target.value) || 0)}
+                        placeholder="Descrição do serviço"
+                        value={item.descricao}
+                        onChange={(e) => handleItemChange(i, 'descricao', e.target.value)}
                       />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Qtd.</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={item.quantidade || ''}
-                        onChange={(e) => handleItemChange(i, 'quantidade', parseInt(e.target.value) || 1)}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Total</Label>
-                      <Input
-                        value={`R$ ${item.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                        readOnly
-                        className="bg-muted"
-                      />
-                    </div>
-                  </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <Label className="text-[10px]">Vlr. Unit.</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={item.valor_unitario || ''}
+                            onChange={(e) => handleItemChange(i, 'valor_unitario', parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Qtd.</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={item.quantidade || ''}
+                            onChange={(e) => handleItemChange(i, 'quantidade', parseInt(e.target.value) || 1)}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Total</Label>
+                          <Input
+                            value={`R$ ${item.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                            readOnly
+                            className="bg-muted"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
 
@@ -344,12 +410,14 @@ export function VistoriaEventoOrcamento({
                 Adicionar Item
               </Button>
 
-              <div className="flex justify-between items-center rounded-lg bg-muted px-3 py-2">
-                <span className="text-sm font-semibold">Total do Orçamento</span>
-                <span className="text-lg font-bold">
-                  R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
+              {valorTotal > 0 && (
+                <div className="flex justify-between items-center rounded-lg bg-muted px-3 py-2">
+                  <span className="text-sm font-semibold">Total (Serviços/Mão de Obra)</span>
+                  <span className="text-lg font-bold">
+                    R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
             </section>
           )}
 
