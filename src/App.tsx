@@ -283,6 +283,7 @@ import ExecutarManutencao from "./pages/instalador/ExecutarManutencao";
 import ExecutarRetirada from "./pages/instalador/ExecutarRetirada";
 import ReguladorHome from "./pages/regulador/ReguladorHome";
 import ReguladorVistorias from "./pages/regulador/ReguladorVistorias";
+import ExecutarVistoriaEvento from "./pages/regulador/ExecutarVistoriaEvento";
 // Public Pages
 import CotacaoPublicaPage from "./pages/public/CotacaoPublica";
 import CotacaoPublicaCompleta from "./pages/public/CotacaoPublicaCompleta";
@@ -648,6 +649,7 @@ const App = () => (
             <Route element={<ReguladorLayout />}>
               <Route path="/regulador" element={<ReguladorHome />} />
               <Route path="/regulador/vistorias" element={<ReguladorVistorias />} />
+              <Route path="/regulador/vistoria/:id" element={<ExecutarVistoriaEvento />} />
               <Route path="/regulador/perfil" element={<InstaladorPerfil />} />
             </Route>
 

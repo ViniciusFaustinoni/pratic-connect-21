@@ -22372,6 +22372,7 @@ export type Database = {
         | "aguardando_termo"
         | "em_garantia"
         | "em_recuperacao"
+        | "aguardando_analise"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -22759,6 +22760,7 @@ export const Constants = {
         "aguardando_termo",
         "em_garantia",
         "em_recuperacao",
+        "aguardando_analise",
       ],
       status_veiculo: [
         "em_analise",
