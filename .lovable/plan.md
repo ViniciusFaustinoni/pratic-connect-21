@@ -1,24 +1,20 @@
 
-# Fluxo Simplificado de Vidros e Farois
+# Fluxo Especifico de Incendio
 
-## Contexto Atual
+## O que ja existe
 
-O tipo "vidros" ja existe como opcao no registro de sinistro, mas segue exatamente o mesmo fluxo generico de colisao. Nao existe nenhuma logica especifica: sem validacao de carencia, sem verificacao de beneficio contratado, sem selecao de peca, sem limite de utilizacao, sem opcao de reembolso.
+- Tipo `incendio` registrado normalmente no NovoSinistroModal
+- Documentos obrigatorios incluem `laudo_bombeiros` (fixo como obrigatorio)
+- EmitirParecerModal calcula automaticamente `perda_total` vs `parcial` baseado na regra 75% FIPE
+- Quando perda total, veiculo e inativado automaticamente
+- Campo `motivo_analise_interna` ja existe na tabela `sinistros`
+- Fluxo de indenizacao integral ja foi implementado no roubo/furto (reutilizavel)
 
-### O que ja existe no banco:
-- Cobertura `COB-VID` na tabela `coberturas` (carencia_dias = 15, precisa atualizar para 120)
-- Campo `data_adesao` na tabela `associados` (para calcular carencia)
-- Tabela `planos_coberturas` (estrutura existe, mas sem dados vinculando planos a coberturas)
-- Tabela `sinistros` -- SEM campos para peca danificada ou opcao de reparo
+## O que falta
 
-### O que falta:
-- Campos na tabela `sinistros` para dados especificos de vidros
-- Nova tabela para controlar historico de utilizacao por peca
-- Validacoes automaticas no registro (carencia, limite, beneficio)
-- Selecao de peca danificada com lista fixa
-- Fluxo simplificado de documentacao (2 etapas)
-- Logica de reparo com 2 opcoes (via Pratic 60/40 ou reembolso)
-- Analise simplificada sem vistoria presencial
+1. **Campo "bombeiros acionados?" no registro** -- Dinamizar documentacao obrigatoria
+2. **Verificacoes especiais na analise** -- GNV irregular e sobrecarga eletrica com encaminhamento para analise interna
+3. **Perda total encaminha para indenizacao** -- Ja funciona via EmitirParecerModal, mas precisa redirecionar para o fluxo de indenizacao ao inves de simplesmente inativar o veiculo
 
 ---
 
@@ -26,126 +22,59 @@ O tipo "vidros" ja existe como opcao no registro de sinistro, mas segue exatamen
 
 ### Migracoes SQL
 
-**1. Adicionar campos especificos de vidros na tabela `sinistros`:**
-
 ```sql
 ALTER TABLE sinistros 
-  ADD COLUMN peca_danificada TEXT,
-  ADD COLUMN opcao_reparo TEXT CHECK (opcao_reparo IN ('via_pratic', 'reembolso')),
-  ADD COLUMN valor_reembolso NUMERIC,
-  ADD COLUMN nf_reembolso_url TEXT;
+  ADD COLUMN bombeiros_acionados BOOLEAN,
+  ADD COLUMN analise_interna BOOLEAN DEFAULT false,
+  ADD COLUMN analise_interna_motivos TEXT[];
 ```
 
-- `peca_danificada`: qual peca da lista fixa (para-brisa, farol_esquerdo, etc.)
-- `opcao_reparo`: se o reparo sera via auto center credenciado ou reembolso
-- `valor_reembolso`: valor solicitado de reembolso (60% do total)
-- `nf_reembolso_url`: URL da nota fiscal DANFE para reembolso
-
-**2. Criar tabela de historico de utilizacao de vidros:**
-
-```sql
-CREATE TABLE sinistro_vidros_historico (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  associado_id UUID NOT NULL REFERENCES associados(id),
-  veiculo_id UUID NOT NULL REFERENCES veiculos(id),
-  sinistro_id UUID NOT NULL REFERENCES sinistros(id),
-  peca TEXT NOT NULL,
-  data_utilizacao TIMESTAMPTZ NOT NULL DEFAULT now(),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-```
-
-Essa tabela permite verificar se uma peca especifica ja foi utilizada nos ultimos 12 meses.
-
-**3. Atualizar carencia da cobertura COB-VID para 120 dias:**
-
-```sql
-UPDATE coberturas SET carencia_dias = 120 WHERE codigo = 'COB-VID';
-```
+- `bombeiros_acionados`: Se os bombeiros foram acionados (define qual documento exigir)
+- `analise_interna`: Se o sinistro foi encaminhado para analise interna
+- `analise_interna_motivos`: Array com motivos (ex: `['gnv_irregular', 'sobrecarga_eletrica']`)
 
 ---
 
 ## Alteracoes em Codigo
 
-### 1. NovoSinistroModal.tsx -- Validacoes e campos especificos
+### 1. NovoSinistroModal.tsx -- Campo "Bombeiros acionados?" e documentos dinamicos
 
-Quando o tipo selecionado for `vidros`, o modal deve:
+Quando tipo = `incendio`, exibir:
+- Toggle "Os bombeiros foram acionados?" (Sim/Nao)
+- Se Sim: documento obrigatorio = "Certidao de Ocorrencia do Corpo de Bombeiros"
+- Se Nao: documento obrigatorio = "Carta reconhecida em cartorio explicando circunstancias"
 
-**Antes de permitir o submit (validacoes automaticas):**
+Atualizar `DOCUMENTOS_OBRIGATORIOS.incendio` para ser dinamico baseado na resposta. Salvar `bombeiros_acionados` no insert do sinistro.
 
-- **Carencia 120 dias**: Buscar `data_adesao` do associado e calcular se tem 120+ dias. Se nao, exibir mensagem com a data de liberacao.
-- **Beneficio contratado**: Verificar se o plano do associado inclui a cobertura `COB-VID` na tabela `planos_coberturas`. Se nao tem, bloquear com mensagem.
-- **Limite 12 meses por peca**: Consultar `sinistro_vidros_historico` para a peca selecionada nos ultimos 12 meses. Se ja foi acionada, bloquear apenas aquela peca.
+### 2. EventoLinkCard.tsx -- Etapas para incendio
 
-**Campos adicionais no formulario (apenas para tipo vidros):**
+Incendio segue o mesmo fluxo base de colisao (3 etapas: Auto Vistoria, B.O., Relato), sem alteracao necessaria. As etapas genericas ja funcionam.
 
-- Seletor de peca danificada (lista fixa com 14 opcoes)
-- Opcao de reparo: "Via Pratic" ou "Reembolso"
-- Ocultar toggle de reboque (nao se aplica)
-- Descricao minima reduzida (20 caracteres em vez de 50)
+### 3. Novo componente: CardAnaliseIncendio.tsx
 
-**No insert do sinistro:**
+Card que aparece na coluna lateral do SinistroDetalhe para sinistros tipo `incendio` (visivel apenas na fase de analise ou posterior):
 
-- Salvar `peca_danificada` e `opcao_reparo`
-- Apos sucesso, inserir registro em `sinistro_vidros_historico`
+- Exibe se bombeiros foram acionados e qual documento foi enviado
+- Checkboxes de verificacao especial:
+  - "GNV irregular (sem documentacao)" -- nao nega, marca analise interna
+  - "Sobrecarga eletrica (modificacoes/som)" -- nao nega, marca analise interna
+- Botao "Encaminhar para Analise Interna" com selecao de motivos
+- Quando ativado, atualiza `analise_interna = true` e `analise_interna_motivos` no sinistro
+- Badge visual no detalhe indicando "Em Analise Interna"
 
-**Lista fixa de pecas:**
+### 4. EmitirParecerModal.tsx -- Verificacao antes de emitir parecer
 
-```
-- Para-brisa
-- Vidro vigia (traseiro)
-- Vidro lateral dianteiro esquerdo
-- Vidro lateral dianteiro direito
-- Vidro lateral traseiro esquerdo
-- Vidro lateral traseiro direito
-- Vidro fixo lateral esquerdo
-- Vidro fixo lateral direito
-- Farol esquerdo
-- Farol direito
-- Lanterna esquerda
-- Lanterna direita
-- Espelho retrovisor esquerdo
-- Espelho retrovisor direito
-```
+Quando tipo = `incendio` e `analise_interna = true`:
+- Exibir alerta: "Este sinistro esta em analise interna. Motivos: [lista]"
+- Permitir emitir parecer normalmente (a analise interna ja foi concluida)
 
-### 2. EventoLinkCard.tsx -- Etapas simplificadas para vidros
+Quando tipo = `incendio` e resultado = `aprovado` e `tipo_dano = perda_total`:
+- Alem de inativar veiculo (ja existente), mudar status para `aguardando_pagamento` em vez de `aprovado`
+- Reutilizar o fluxo de indenizacao integral implementado no roubo/furto
 
-Para tipo `vidros`, as etapas do link devem ser apenas 2:
-- Etapa 1: Fotos do dano (2-5 fotos)
-- Etapa 2: Relato simples
+### 5. SinistroDetalhe.tsx -- Integrar CardAnaliseIncendio
 
-Sem B.O. obrigatorio, sem agendamento de vistoria.
-
-### 3. SinistroDetalhe.tsx -- Card de detalhes de vidros
-
-Adicionar um card especifico para sinistros de vidros mostrando:
-- Peca danificada
-- Opcao de reparo escolhida (via Pratic ou reembolso)
-- Custo dividido: 60% Pratic / 40% associado
-- Se reembolso: campo para upload de NF e valor
-- Status da NF (pendente/aprovada)
-
-### 4. Novo componente: CardVidrosDetalhe.tsx
-
-Card lateral no detalhe do sinistro que exibe:
-- Peca danificada selecionada
-- Opcao de reparo
-- Calculo 60/40 (quando houver valor)
-- Para "via Pratic": botao para acionar auto center (filtrando por especialidade "Vidros")
-- Para "reembolso": upload de NF DANFE + campo valor + botao aprovar reembolso
-- Observacoes sobre pecas especificas (farois: so a peca, sem instalacao; retrovisores: so o espelho)
-
-### 5. DOCUMENTOS_OBRIGATORIOS -- Atualizar para vidros
-
-Reduzir documentos para vidros:
-```
-vidros: [
-  { tipo: 'foto_dano', nome: 'Fotos do Dano (2-5)', obrigatorio: true },
-  { tipo: 'relato', nome: 'Relato do Ocorrido', obrigatorio: true },
-  { tipo: 'bo', nome: 'Boletim de Ocorrencia', obrigatorio: false },  // so se tentativa de furto
-  { tipo: 'nf_danfe', nome: 'Nota Fiscal DANFE', obrigatorio: false },  // so para reembolso
-]
-```
+Adicionar o CardAnaliseIncendio na coluna lateral quando `sinistro.tipo === 'incendio'`.
 
 ---
 
@@ -153,16 +82,16 @@ vidros: [
 
 | Acao | Arquivo |
 |---|---|
-| Migracoes | Adicionar colunas em `sinistros` + criar `sinistro_vidros_historico` + atualizar `coberturas` |
-| Modificar | `src/components/eventos/NovoSinistroModal.tsx` (validacoes + campos vidros) |
-| Modificar | `src/components/eventos/EventoLinkCard.tsx` (etapas simplificadas) |
-| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` (incluir CardVidrosDetalhe) |
-| Criar | `src/components/sinistros/CardVidrosDetalhe.tsx` (card lateral com logica 60/40) |
+| Migracao | Adicionar colunas `bombeiros_acionados`, `analise_interna`, `analise_interna_motivos` |
+| Modificar | `src/components/eventos/NovoSinistroModal.tsx` (toggle bombeiros + documentos dinamicos) |
+| Modificar | `src/components/eventos/EmitirParecerModal.tsx` (alerta analise interna + perda total para indenizacao) |
+| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` (integrar CardAnaliseIncendio) |
+| Criar | `src/components/sinistros/CardAnaliseIncendio.tsx` (verificacoes especiais + encaminhar analise interna) |
 
 ## Ordem de Implementacao
 
-1. Migracoes SQL (colunas + tabela historico + atualizar carencia)
-2. NovoSinistroModal -- validacoes automaticas + seletor de peca + opcao de reparo
-3. EventoLinkCard -- etapas simplificadas para vidros
-4. CardVidrosDetalhe -- componente novo com logica 60/40 e acoes
-5. SinistroDetalhe -- integrar o CardVidrosDetalhe na coluna lateral
+1. Migracao SQL (3 colunas)
+2. NovoSinistroModal -- toggle bombeiros + documentos dinamicos
+3. CardAnaliseIncendio -- verificacoes GNV/sobrecarga + analise interna
+4. EmitirParecerModal -- alerta analise interna + perda total para indenizacao
+5. SinistroDetalhe -- integrar CardAnaliseIncendio
