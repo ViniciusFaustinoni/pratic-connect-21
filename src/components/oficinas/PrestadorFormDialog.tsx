@@ -21,6 +21,7 @@ const formSchema = z.object({
   razao_social: z.string().min(3, 'Razão social é obrigatória'),
   nome_fantasia: z.string().optional(),
   cnpj: z.string().optional(),
+  inscricao_estadual: z.string().optional(),
   telefone: z.string().optional(),
   whatsapp: z.string().optional(),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
@@ -65,6 +66,7 @@ export function PrestadorFormDialog({ open, onOpenChange, prestador }: Props) {
           razao_social: prestador.razao_social,
           nome_fantasia: prestador.nome_fantasia || '',
           cnpj: prestador.cnpj || '',
+          inscricao_estadual: (prestador as any).inscricao_estadual || '',
           telefone: prestador.telefone || '',
           whatsapp: prestador.whatsapp || '',
           email: prestador.email || '',
@@ -110,6 +112,7 @@ export function PrestadorFormDialog({ open, onOpenChange, prestador }: Props) {
       razao_social: data.razao_social,
       nome_fantasia: data.nome_fantasia || null,
       cnpj: data.cnpj || null,
+      inscricao_estadual: data.inscricao_estadual || null,
       telefone: data.telefone || null,
       whatsapp: data.whatsapp || null,
       email: data.email || null,
@@ -163,6 +166,9 @@ export function PrestadorFormDialog({ open, onOpenChange, prestador }: Props) {
                 )} />
                 <FormField control={form.control} name="cnpj" render={({ field }) => (
                   <FormItem><FormLabel>CNPJ</FormLabel><FormControl><Input {...field} placeholder="00.000.000/0000-00" /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="inscricao_estadual" render={({ field }) => (
+                  <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
             </div>

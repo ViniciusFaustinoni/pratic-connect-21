@@ -22,7 +22,9 @@ const formSchema = z.object({
   razao_social: z.string().optional(),
   nome_fantasia: z.string().optional(),
   cnpj: z.string().optional(),
+  inscricao_estadual: z.string().optional(),
   tipo: z.enum(['auto_center', 'ferro_velho', 'montadora']),
+  status: z.enum(['ativo', 'inativo', 'suspenso']).optional(),
   whatsapp: z.string().min(1, 'WhatsApp é obrigatório para Auto Centers'),
   contato_nome: z.string().optional(),
   contato_telefone: z.string().optional(),
@@ -71,7 +73,9 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
           razao_social: (autoCenter as any).razao_social || '',
           nome_fantasia: (autoCenter as any).nome_fantasia || '',
           cnpj: (autoCenter as any).cnpj || '',
+          inscricao_estadual: (autoCenter as any).inscricao_estadual || '',
           tipo: autoCenter.tipo as any,
+          status: (autoCenter as any).status || 'ativo',
           whatsapp: (autoCenter as any).whatsapp || '',
           contato_nome: autoCenter.contato_nome || '',
           contato_telefone: autoCenter.contato_telefone || '',
@@ -91,7 +95,7 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
         setMarcas((autoCenter as any).marcas_atendidas || []);
         setEspecialidades((autoCenter as any).especialidades || []);
       } else {
-        form.reset({ nome: '', tipo: 'auto_center', whatsapp: '' });
+        form.reset({ nome: '', tipo: 'auto_center', whatsapp: '', status: 'ativo', inscricao_estadual: '' });
         setMarcas([]);
         setEspecialidades([]);
       }
@@ -118,6 +122,8 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
       razao_social: data.razao_social || null,
       nome_fantasia: data.nome_fantasia || null,
       cnpj: data.cnpj || null,
+      inscricao_estadual: data.inscricao_estadual || null,
+      status: data.status || 'ativo',
       whatsapp: data.whatsapp || null,
       endereco: data.endereco || null,
       cidade: data.cidade || null,
@@ -166,6 +172,9 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
                 <FormField control={form.control} name="cnpj" render={({ field }) => (
                   <FormItem><FormLabel>CNPJ</FormLabel><FormControl><Input {...field} placeholder="00.000.000/0000-00" /></FormControl><FormMessage /></FormItem>
                 )} />
+                <FormField control={form.control} name="inscricao_estadual" render={({ field }) => (
+                  <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
                 <FormField control={form.control} name="tipo" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Tipo *</FormLabel>
@@ -175,6 +184,20 @@ export function AutoCenterFormDialog({ open, onOpenChange, autoCenter }: Props) 
                         <SelectItem value="auto_center">Auto Center</SelectItem>
                         <SelectItem value="ferro_velho">Ferro Velho</SelectItem>
                         <SelectItem value="montadora">Montadora</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="status" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || 'ativo'}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="ativo">Ativo</SelectItem>
+                        <SelectItem value="inativo">Inativo</SelectItem>
+                        <SelectItem value="suspenso">Suspenso</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

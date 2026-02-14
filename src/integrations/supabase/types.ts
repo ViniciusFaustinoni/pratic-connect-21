@@ -2619,6 +2619,7 @@ export type Database = {
           especialidades: string[] | null
           estado: string | null
           id: string
+          inscricao_estadual: string | null
           logradouro: string | null
           marcas_atendidas: string[] | null
           nome: string
@@ -2651,6 +2652,7 @@ export type Database = {
           especialidades?: string[] | null
           estado?: string | null
           id?: string
+          inscricao_estadual?: string | null
           logradouro?: string | null
           marcas_atendidas?: string[] | null
           nome: string
@@ -2683,6 +2685,7 @@ export type Database = {
           especialidades?: string[] | null
           estado?: string | null
           id?: string
+          inscricao_estadual?: string | null
           logradouro?: string | null
           marcas_atendidas?: string[] | null
           nome?: string
@@ -15021,6 +15024,7 @@ export type Database = {
           especialidades: string[] | null
           estado: string | null
           id: string
+          inscricao_estadual: string | null
           logradouro: string | null
           marcas_atendidas: string[] | null
           nome_fantasia: string | null
@@ -15048,6 +15052,7 @@ export type Database = {
           especialidades?: string[] | null
           estado?: string | null
           id?: string
+          inscricao_estadual?: string | null
           logradouro?: string | null
           marcas_atendidas?: string[] | null
           nome_fantasia?: string | null
@@ -15075,6 +15080,7 @@ export type Database = {
           especialidades?: string[] | null
           estado?: string | null
           id?: string
+          inscricao_estadual?: string | null
           logradouro?: string | null
           marcas_atendidas?: string[] | null
           nome_fantasia?: string | null

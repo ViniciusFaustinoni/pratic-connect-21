@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAutoCenters, type AutoCenter } from '@/hooks/useAutoCenters';
 import { AutoCenterFormDialog } from '@/components/oficinas/AutoCenterFormDialog';
 import { AutoCenterDetailDrawer } from '@/components/oficinas/AutoCenterDetailDrawer';
-import { MARCAS_VEICULOS } from '@/lib/fornecedores-constants';
+import { MARCAS_VEICULOS, ESPECIALIDADES } from '@/lib/fornecedores-constants';
 
 const TIPO_LABELS: Record<string, string> = {
   auto_center: 'Auto Center',
@@ -26,6 +26,7 @@ export default function AutoCenters() {
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [marcaFilter, setMarcaFilter] = useState<string>('todos');
+  const [espFilter, setEspFilter] = useState<string>('todos');
   const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState<AutoCenter | null>(null);
 
@@ -33,6 +34,7 @@ export default function AutoCenters() {
     search: search || undefined,
     tipo: tipoFilter === 'todos' ? undefined : tipoFilter,
     marca: marcaFilter === 'todos' ? undefined : marcaFilter,
+    especialidade: espFilter === 'todos' ? undefined : espFilter,
   });
 
   return (
@@ -78,6 +80,15 @@ export default function AutoCenters() {
             {MARCAS_VEICULOS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={espFilter} onValueChange={setEspFilter}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Especialidade" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas especialidades</SelectItem>
+            {ESPECIALIDADES.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -112,9 +123,14 @@ export default function AutoCenters() {
                       <p className="text-sm text-muted-foreground">{ac.contato_nome}</p>
                     )}
                   </div>
-                  <Badge className={TIPO_COLORS[ac.tipo] || ''}>
-                    {TIPO_LABELS[ac.tipo] || ac.tipo}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge className={TIPO_COLORS[ac.tipo] || ''}>
+                      {TIPO_LABELS[ac.tipo] || ac.tipo}
+                    </Badge>
+                    <Badge variant={(ac as any).status === 'ativo' ? 'default' : 'secondary'}>
+                      {(ac as any).status === 'ativo' ? 'Ativo' : (ac as any).status === 'inativo' ? 'Inativo' : (ac as any).status === 'suspenso' ? 'Suspenso' : 'Ativo'}
+                    </Badge>
+                  </div>
                 </div>
                 <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                   {ac.cidade && (
