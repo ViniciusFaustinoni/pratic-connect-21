@@ -10,6 +10,19 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+const TIPO_LABELS: Record<string, string> = {
+  colisao: "colisão",
+  roubo: "roubo",
+  furto: "furto",
+  incendio: "incêndio",
+  fenomeno_natural: "fenômeno natural",
+  vidros: "vidros",
+  vandalismo: "vandalismo",
+  terceiros: "terceiros",
+  alagamento: "alagamento",
+  outro: "outro",
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -107,9 +120,10 @@ serve(async (req) => {
         const siteUrl = Deno.env.get("SITE_URL") || "https://pratic-connect-21.lovable.app";
 
         // Montar mensagem
+        const tipoLabel = TIPO_LABELS[sinistro.tipo] || sinistro.tipo;
         const mensagem = `Olá, ${associado.nome}! Aqui é a Pratic Car.
 
-Recebemos a comunicação do seu sinistro de colisão.
+Recebemos a comunicação do seu sinistro de ${tipoLabel}.
 Protocolo: ${sinistro.protocolo}
 
 Sobre a cota de coparticipação:

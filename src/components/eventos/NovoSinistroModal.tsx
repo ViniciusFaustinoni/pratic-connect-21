@@ -108,6 +108,31 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
     queryKey: ['associados-search', searchAssociado],
     queryFn: async () => {
       if (searchAssociado.length < 3) return [];
+      
+      // Verificar se é busca por placa (contém letras + números no padrão de placa)
+      const isBuscaPlaca = /^[A-Za-z]{3}/i.test(searchAssociado.replace(/\s/g, ''));
+      
+      if (isBuscaPlaca) {
+        // Buscar veículo pela placa e retornar o associado
+        const { data: veiculos } = await supabase
+          .from('veiculos')
+          .select('associado_id, placa, associado:associados!inner(id, nome, cpf, status)')
+          .ilike('placa', `%${searchAssociado}%`)
+          .limit(10);
+        
+        if (!veiculos) return [];
+        
+        // Extrair associados únicos dos veículos encontrados
+        const associadoMap = new Map<string, any>();
+        for (const v of veiculos) {
+          const assoc = v.associado as any;
+          if (assoc && assoc.status === 'ativo' && !associadoMap.has(assoc.id)) {
+            associadoMap.set(assoc.id, { id: assoc.id, nome: `${assoc.nome} (${v.placa})`, cpf: assoc.cpf });
+          }
+        }
+        return Array.from(associadoMap.values());
+      }
+      
       const { data } = await supabase
         .from('associados')
         .select('id, nome, cpf')
@@ -312,7 +337,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                   <PopoverContent className="w-[400px] p-0" align="start">
                     <Command shouldFilter={false}>
                       <CommandInput
-                        placeholder="Digite nome ou CPF (mín. 3 caracteres)..."
+                        placeholder="Digite nome, CPF ou placa (mín. 3 caracteres)..."
                         value={searchAssociado}
                         onValueChange={setSearchAssociado}
                       />
