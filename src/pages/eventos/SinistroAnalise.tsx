@@ -51,6 +51,7 @@ import { AtribuirFornecedoresDialog } from '@/components/sinistros/AtribuirForne
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { CotacoesRecebidasTab } from '@/components/sinistros/CotacoesRecebidasTab';
+import { TimelineEventoTab } from '@/components/sinistros/TimelineEventoTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
@@ -524,10 +525,14 @@ export default function SinistroAnalise() {
                 <TabsList>
                   <TabsTrigger value="detalhes">Detalhes</TabsTrigger>
                   <TabsTrigger value="cotacoes">Cotações Recebidas</TabsTrigger>
+                  <TabsTrigger value="timeline">Timeline</TabsTrigger>
                 </TabsList>
                 <TabsContent value="detalhes">{detalhesContent}</TabsContent>
                 <TabsContent value="cotacoes">
                   <CotacoesRecebidasTab sinistroId={sinistro.id} />
+                </TabsContent>
+                <TabsContent value="timeline">
+                  <TimelineEventoTab sinistroId={sinistro.id} />
                 </TabsContent>
               </Tabs>
             );

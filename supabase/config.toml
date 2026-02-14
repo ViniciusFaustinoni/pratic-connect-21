@@ -422,3 +422,12 @@ verify_jwt = false
 
 [functions.gerar-os-cotacao-aprovada]
 verify_jwt = false
+
+[functions.notificar-etapa-os]
+verify_jwt = false
+
+[functions.gerar-link-retirada]
+verify_jwt = false
+
+[functions.confirmar-retirada]
+verify_jwt = false

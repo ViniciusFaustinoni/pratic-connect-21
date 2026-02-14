@@ -8,14 +8,17 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Car, Search, Clock, AlertTriangle, AlertCircle, Phone,
-  CheckCircle2, CircleDot, Circle, Wrench, Building2, Store
+  CheckCircle2, CircleDot, Circle, Wrench, Building2, Store,
+  ClipboardEdit, Video, Shield
 } from 'lucide-react';
 import { differenceInDays, differenceInHours, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { RegistrarAtualizacaoDialog } from '@/components/sinistros/RegistrarAtualizacaoDialog';
+import { VistoriaPresencialDialog } from '@/components/sinistros/VistoriaPresencialDialog';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   aguardando_entrada: { label: 'Aguardando Entrada', color: 'bg-yellow-100 text-yellow-800' },
@@ -24,6 +27,8 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   em_execucao: { label: 'Em Execução', color: 'bg-emerald-100 text-emerald-800' },
   aguardando_peca: { label: 'Aguardando Peça', color: 'bg-purple-100 text-purple-800' },
   pendente_assinatura: { label: 'Pendente Assinatura', color: 'bg-amber-100 text-amber-800' },
+  concluido: { label: 'Concluído', color: 'bg-green-100 text-green-800' },
+  entregue: { label: 'Entregue', color: 'bg-blue-100 text-blue-800' },
   finalizado: { label: 'Finalizado', color: 'bg-green-100 text-green-800' },
 };
 
@@ -77,6 +82,8 @@ export default function ReguladorOficina() {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [oficinaFilter, setOficinaFilter] = useState('todas');
   const [tempoFilter, setTempoFilter] = useState('todos');
+  const [atualizacaoDialog, setAtualizacaoDialog] = useState<VeiculoOficina | null>(null);
+  const [vistoriaDialog, setVistoriaDialog] = useState<VeiculoOficina | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -92,12 +99,45 @@ export default function ReguladorOficina() {
 
   // Contadores (sem filtro para mostrar totais reais)
   const { data: todosVeiculos = [] } = useVeiculosOficina();
+
+  // Buscar atualizações de hoje para badges
+  const hoje = format(new Date(), 'yyyy-MM-dd');
+  const { data: atualizacoesHoje = [] } = useQuery({
+    queryKey: ['atualizacoes-hoje', hoje],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('os_atualizacoes_diarias')
+        .select('ordem_servico_id')
+        .gte('created_at', `${hoje}T00:00:00`)
+        .lte('created_at', `${hoje}T23:59:59`);
+      return (data || []).map((d: any) => d.ordem_servico_id);
+    },
+  });
+
+  // Garantias ativas
+  const { data: garantias = [] } = useQuery({
+    queryKey: ['garantias-ativas'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('ordens_servico')
+        .select(`
+          id, numero, garantia_ate, data_retirada,
+          veiculo:veiculos(placa, marca, modelo),
+          associado:associados(nome)
+        `)
+        .eq('status', 'entregue' as any)
+        .gte('garantia_ate', format(new Date(), 'yyyy-MM-dd'))
+        .order('garantia_ate');
+      return (data || []) as any[];
+    },
+  });
+
   const contadores = useMemo(() => ({
     total: todosVeiculos.length,
     aguardando_entrada: todosVeiculos.filter((v) => v.status === 'aguardando_entrada').length,
     aguardando_peca: todosVeiculos.filter((v) => v.status === 'aguardando_peca').length,
     em_execucao: todosVeiculos.filter((v) => v.status === 'em_execucao').length,
-    pendente_assinatura: todosVeiculos.filter((v) => v.status === 'pendente_assinatura').length,
+    concluido: todosVeiculos.filter((v) => v.status === 'concluido').length,
   }), [todosVeiculos]);
 
   // Métricas de oficinas
@@ -156,6 +196,7 @@ export default function ReguladorOficina() {
           { label: 'Aguard. Entrada', value: contadores.aguardando_entrada, color: 'bg-yellow-50 text-yellow-700' },
           { label: 'Aguard. Peça', value: contadores.aguardando_peca, color: 'bg-purple-50 text-purple-700' },
           { label: 'Em Execução', value: contadores.em_execucao, color: 'bg-emerald-50 text-emerald-700' },
+          { label: 'Concluídos', value: contadores.concluido, color: 'bg-green-50 text-green-700' },
         ].map((c) => (
           <div key={c.label} className={`rounded-lg p-3 ${c.color}`}>
             <p className="text-2xl font-bold">{c.value}</p>
@@ -178,6 +219,7 @@ export default function ReguladorOficina() {
               <SelectItem value="aguardando_entrada">Aguard. Entrada</SelectItem>
               <SelectItem value="em_execucao">Em Execução</SelectItem>
               <SelectItem value="aguardando_peca">Aguard. Peça</SelectItem>
+              <SelectItem value="concluido">Concluído</SelectItem>
               <SelectItem value="pendente_assinatura">Pendente Assin.</SelectItem>
             </SelectContent>
           </Select>
@@ -213,14 +255,20 @@ export default function ReguladorOficina() {
           {veiculos.map((v) => {
             const alerta = getAlertaAtualizacao(v.updated_at);
             const statusInfo = STATUS_MAP[v.status] || { label: v.status, color: 'bg-gray-100 text-gray-800' };
+            const atualizadoHoje = atualizacoesHoje.includes(v.id);
             return (
               <Card key={v.id} className={`overflow-hidden ${alerta === 'urgent' ? 'border-red-400' : alerta === 'warning' ? 'border-yellow-400' : ''}`}>
                 <CardContent className="p-3 space-y-2">
-                  {/* Header: placa + status */}
+                  {/* Header: placa + status + badge atualização */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Car className="h-4 w-4 text-muted-foreground" />
                       <span className="font-bold text-base tracking-wider">{v.veiculo?.placa || '---'}</span>
+                      {atualizadoHoje ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 text-[9px] px-1">✓ Atualizado</Badge>
+                      ) : (
+                        <Badge className="bg-red-100 text-red-700 text-[9px] px-1">Pendente!</Badge>
+                      )}
                     </div>
                     <Badge className={`${statusInfo.color} text-[10px] px-1.5`}>{statusInfo.label}</Badge>
                   </div>
@@ -265,7 +313,7 @@ export default function ReguladorOficina() {
                     </div>
                     {alerta === 'urgent' && (
                       <div className="flex items-center gap-1 text-red-600 font-medium">
-                        <AlertCircle className="h-3 w-3" /> URGENTE — +48h sem atualização
+                        <AlertCircle className="h-3 w-3" /> URGENTE — +48h
                       </div>
                     )}
                     {alerta === 'warning' && (
@@ -279,11 +327,21 @@ export default function ReguladorOficina() {
                   <EtapasProgress etapas={v.etapas_reparo || []} />
 
                   {/* Ações */}
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex flex-wrap gap-2 pt-1">
                     {v.status === 'aguardando_entrada' && (
                       <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => handleRegistrarEntrada(v)}>
                         Registrar Entrada
                       </Button>
+                    )}
+                    {v.status === 'em_execucao' && (
+                      <>
+                        <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => setAtualizacaoDialog(v)}>
+                          <ClipboardEdit className="h-3 w-3 mr-1" /> Atualizar
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setVistoriaDialog(v)}>
+                          <Video className="h-3 w-3 mr-1" /> Vistoria
+                        </Button>
+                      </>
                     )}
                     <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => navigate(`/oficinas/ordens/${v.id}`)}>
                       Ver Detalhes
@@ -316,6 +374,54 @@ export default function ReguladorOficina() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Garantias Ativas */}
+      {garantias.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-1"><Shield className="h-4 w-4" /> Garantias Ativas</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0">
+            <div className="space-y-2">
+              {garantias.map((g: any) => {
+                const diasRestantes = g.garantia_ate ? differenceInDays(new Date(g.garantia_ate), new Date()) : 0;
+                return (
+                  <div key={g.id} className="flex items-center justify-between text-xs border-b last:border-0 pb-1">
+                    <div>
+                      <span className="font-medium">{(g.veiculo as any)?.placa}</span>
+                      <span className="text-muted-foreground ml-2">{(g.associado as any)?.nome}</span>
+                    </div>
+                    <Badge className={diasRestantes <= 7 ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'} variant="outline">
+                      {diasRestantes}d restantes
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dialogs */}
+      {atualizacaoDialog && (
+        <RegistrarAtualizacaoDialog
+          open={!!atualizacaoDialog}
+          onOpenChange={(open) => !open && setAtualizacaoDialog(null)}
+          ordemServico={{
+            id: atualizacaoDialog.id,
+            numero: atualizacaoDialog.numero,
+            etapas_reparo: atualizacaoDialog.etapas_reparo || [],
+            sinistro_id: atualizacaoDialog.sinistro?.id,
+          }}
+        />
+      )}
+      {vistoriaDialog && (
+        <VistoriaPresencialDialog
+          open={!!vistoriaDialog}
+          onOpenChange={(open) => !open && setVistoriaDialog(null)}
+          ordemServico={{ id: vistoriaDialog.id, numero: vistoriaDialog.numero }}
+        />
       )}
     </div>
   );
