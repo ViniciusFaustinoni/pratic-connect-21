@@ -1,70 +1,122 @@
 
-# Relatorios de Oficinas -- Nova Area no Submenu
+
+# Relatorios Completos -- Oficinas, Prestadores e Auto Centers
 
 ## Objetivo
 
-Criar uma nova pagina "Relatorios" dentro do submenu de Oficinas no sidebar, exibindo:
+Reescrever a pagina `/oficinas/relatorios` para se tornar um painel de relatorios abrangente, cobrindo os tres tipos de fornecedores e cruzando dados com marcas, veiculos e tipos de servico.
 
-1. **Veiculos em reparo por oficina** -- quantidade de OS com status ativo em cada oficina
-2. **Tempo medio de conclusao** -- media de dias entre entrada e conclusao/retirada por oficina
+## Estrutura da Pagina
 
-## Alteracoes
+A pagina tera abas (Tabs) para organizar os relatorios:
 
-### 1. Nova pagina `src/pages/oficinas/OficinasRelatorios.tsx`
+### Aba 1: Visao Geral (Resumo)
 
-Pagina com duas secoes principais:
+Cards de resumo no topo:
+- Total de veiculos em reparo (OS ativas)
+- Total de cotacoes de pecas em andamento
+- Total de chamados de assistencia abertos
+- Valor total de orcamentos (OS ativas)
 
-**Tabela/Cards de Oficinas com metricas:**
-- Nome da oficina
-- Quantidade de veiculos em reparo (OS com status ativo: aguardando_entrada, aguardando_orcamento, aguardando_aprovacao, em_execucao, aguardando_peca, pendente_assinatura)
-- Tempo medio de conclusao em dias (calculado a partir de OS finalizadas usando `data_entrada` e `data_conclusao_real` ou `data_retirada`)
-- Indicador visual (badge colorido) para oficinas com muitos veiculos ou tempo medio alto
+Grafico de barras: distribuicao de OS por marca do veiculo (join `ordens_servico` -> `veiculos.marca`)
 
-**Dados vindos de duas queries:**
-- Query 1: Agrupar `ordens_servico` por `oficina_id` onde status e ativo, contar quantidade, fazer join com `oficinas` para nome
-- Query 2: Para OS finalizadas/concluidas, calcular media de `tempo_total_dias` (ja existe na tabela) ou diferenca entre `data_entrada` e `data_conclusao_real`
+### Aba 2: Oficinas (Servicos)
 
-### 2. Atualizar sidebar (`src/components/layout/AppSidebar.tsx`)
+Dados ja existentes (manter), mais:
+- Coluna "Marcas Atendidas" na tabela
+- Coluna "Especialidades" na tabela
+- Coluna "Valor Total Orcamentos" (soma de `valor_orcamento` das OS ativas)
+- Coluna "OS Finalizadas" (contagem de OS concluidas)
+- Grafico: OS por marca do veiculo por oficina (top 10)
+- Tabela: ranking de oficinas por volume e tempo medio
 
-Adicionar item "Relatorios" ao grupo `oficinas`:
+Fonte: `ordens_servico` com join em `oficinas` e `veiculos`
 
+### Aba 3: Auto Centers (Pecas)
+
+- Total de cotacoes enviadas por auto center
+- Total de cotacoes aprovadas vs pendentes vs recusadas
+- Valor total das cotacoes aprovadas
+- Marcas atendidas por auto center
+- Grafico: cotacoes por marca do veiculo (join `evento_cotacoes_pecas` -> `sinistros` -> `veiculos`)
+- Tabela detalhada com colunas: Nome, Cotacoes Enviadas, Aprovadas, Valor Total, Marcas
+
+Fonte: `evento_cotacoes_pecas` com join em `auto_centers`, `sinistros` e `veiculos`
+
+### Aba 4: Prestadores (Assistencias)
+
+- Total de chamados de assistencia atendidos por prestador
+- Tipo de servico mais frequente (campo `tipo_servico` de `chamados_assistencia`)
+- Tempo medio de conclusao (diferenca entre `data_abertura` e `data_conclusao`)
+- Grafico: chamados por tipo de servico
+- Tabela: Nome do prestador, Chamados Atendidos, Tipo Servico Principal, Tempo Medio
+
+Fonte: `chamados_assistencia` com join em `prestadores_evento` e `veiculos`
+
+## Alteracoes Tecnicas
+
+### Arquivo: `src/pages/oficinas/OficinasRelatorios.tsx`
+
+Reescrever completamente para incluir:
+
+1. **Componente principal** com `Tabs` (Radix UI, ja disponivel) para as 4 abas
+2. **Hook `useRelatorioGeral`**: queries para cards de resumo
+3. **Hook `useRelatorioOficinas`**: query atual expandida com join em `veiculos` para trazer marca
+4. **Hook `useRelatorioAutoCenters`**: query em `evento_cotacoes_pecas` com joins
+5. **Hook `useRelatorioPrestadores`**: query em `chamados_assistencia` com joins
+
+Cada aba sera um componente interno para manter o arquivo organizado, mas tudo no mesmo arquivo para simplicidade.
+
+### Queries principais
+
+**Oficinas (expandida)**:
 ```
-{ title: 'Relatorios', url: '/oficinas/relatorios', icon: BarChart3 }
+ordens_servico -> select oficina_id, status, valor_orcamento, tempo_total_dias, 
+  oficina:oficinas(nome_fantasia, razao_social, especialidades, marcas_atendidas),
+  veiculo:veiculos(marca, modelo)
 ```
 
-### 3. Adicionar rota (`src/App.tsx`)
-
-Registrar a nova rota `/oficinas/relatorios` apontando para `OficinasRelatorios`.
-
-## Detalhes Tecnicos
-
-### Query de veiculos em reparo
-
-```sql
-SELECT oficina_id, count(*) as total_em_reparo
-FROM ordens_servico
-WHERE status IN ('aguardando_entrada','aguardando_orcamento','aguardando_aprovacao','em_execucao','aguardando_peca','pendente_assinatura')
-GROUP BY oficina_id
+**Auto Centers**:
+```
+evento_cotacoes_pecas -> select auto_center_id, status, valor_total, aprovada,
+  auto_center:auto_centers(nome, especialidades, marcas_atendidas),
+  sinistro:sinistros!sinistro_id(veiculo:veiculos(marca, modelo))
 ```
 
-### Query de tempo medio
+**Prestadores**:
+```
+chamados_assistencia -> select prestador_id, tipo_servico, status, data_abertura, data_conclusao,
+  prestador:prestadores_evento(razao_social, nome_fantasia, especialidades),
+  veiculo:veiculos(marca, modelo)
+```
 
-Usar a coluna `tempo_total_dias` das OS com status `finalizado`, `concluido` ou `entregue`, agrupando por `oficina_id` e calculando a media.
+### Graficos
 
-### Layout da pagina
+Usar `recharts` (ja instalado) para:
+- Grafico de barras empilhadas: OS por marca
+- Grafico de barras: cotacoes por auto center
+- Grafico de pizza: chamados por tipo de servico
 
-| Oficina | Veiculos em Reparo | Tempo Medio (dias) |
-|---|---|---|
-| Oficina A | 5 | 12.3 |
-| Oficina B | 2 | 8.7 |
-| Oficina C | 0 | 15.1 |
+### Layout Visual
 
-Incluir tambem um grafico de barras (usando recharts, ja instalado) para visualizacao rapida.
+```text
++--------------------------------------------------+
+|  Relatorios de Fornecedores                       |
+|  [Visao Geral] [Oficinas] [Auto Centers] [Prest.] |
++--------------------------------------------------+
+| Cards de resumo (4 cards)                         |
++--------------------------------------------------+
+| Grafico principal da aba selecionada              |
++--------------------------------------------------+
+| Tabela detalhada da aba selecionada               |
++--------------------------------------------------+
+```
 
 ## Arquivos Afetados
 
 | Acao | Arquivo |
 |---|---|
-| Criar | `src/pages/oficinas/OficinasRelatorios.tsx` |
-| Modificar | `src/components/layout/AppSidebar.tsx` (adicionar item no menu) |
-| Modificar | `src/App.tsx` (adicionar rota) |
+| Reescrever | `src/pages/oficinas/OficinasRelatorios.tsx` |
+
+Nenhum outro arquivo precisa ser alterado -- a rota e o menu lateral ja existem.
+
