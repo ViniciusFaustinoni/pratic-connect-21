@@ -40,7 +40,8 @@ type AppRole =
   | 'coordenador_monitoramento'
   | 'analista_plataforma'
   | 'instalador_vistoriador'
-  | 'associado';
+  | 'associado'
+  | 'advogado';
 
 interface RoleConfig {
   label: string;
@@ -121,6 +122,12 @@ const rolesConfig: Record<AppRole, RoleConfig> = {
     desc: 'App do associado', 
     icon: User, 
     color: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200' 
+  },
+  advogado: {
+    label: 'Advogado',
+    desc: 'Módulo jurídico e casos',
+    icon: Scale,
+    color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
   },
 };
 

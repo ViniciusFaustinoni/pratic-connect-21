@@ -55,6 +55,7 @@ const perfis: Perfil[] = [
   // OUTROS
   { id: 'analista_marketing', label: 'Analista Marketing', sigla: 'AnMkt', color: 'bg-rose-500', area: 'Marketing', descricao: 'Gerencia campanhas e leads de marketing' },
   { id: 'analista_juridico', label: 'Analista Jurídico', sigla: 'AnJur', color: 'bg-gray-500', area: 'Jurídico', descricao: 'Acompanha processos e consultas jurídicas' },
+  { id: 'advogado', label: 'Advogado', sigla: 'Adv', color: 'bg-blue-800', area: 'Jurídico', descricao: 'Advogado com acesso ao módulo jurídico' },
   // APP
   { id: 'associado', label: 'Associado', sigla: 'Assoc', color: 'bg-slate-500', area: 'App', descricao: 'Acesso ao aplicativo do associado' },
 ];
@@ -117,6 +118,7 @@ const matrizInicial: Record<string, Record<string, PermValue>> = {
   instalador_vistoriador: { dashboard: false, vendas: false, cadastro: false, monitoramento: 'own', eventos: false, financeiro: false, cobranca: false, assistencia: false, relatorios: false, configuracoes: false },
   analista_marketing: { dashboard: 'read', vendas: 'read', cadastro: false, monitoramento: false, eventos: false, financeiro: false, cobranca: false, assistencia: false, relatorios: 'read', configuracoes: false },
   analista_juridico: { dashboard: 'read', vendas: false, cadastro: 'read', monitoramento: false, eventos: 'read', financeiro: false, cobranca: false, assistencia: false, relatorios: 'read', configuracoes: false },
+  advogado: { dashboard: 'read', vendas: false, cadastro: 'read', monitoramento: false, eventos: 'read', financeiro: false, cobranca: false, assistencia: false, relatorios: 'read', configuracoes: false },
   associado: { dashboard: false, vendas: false, cadastro: false, monitoramento: false, eventos: false, financeiro: false, cobranca: false, assistencia: false, relatorios: false, configuracoes: false },
 };
 

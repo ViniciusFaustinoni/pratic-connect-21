@@ -22917,6 +22917,7 @@ export type Database = {
         | "vistoriador_base"
         | "regulador"
         | "analista_eventos"
+        | "advogado"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -23302,6 +23303,7 @@ export const Constants = {
         "vistoriador_base",
         "regulador",
         "analista_eventos",
+        "advogado",
       ],
       etapa_lead: [
         "novo",

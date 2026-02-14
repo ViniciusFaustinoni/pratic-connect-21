@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   Search,
   Truck,
+  Briefcase,
   ClipboardCheck,
   DollarSign,
   Receipt,
@@ -291,6 +292,7 @@ const menuConfig: {
       color: MENU_COLORS.juridico,
       items: [
         { title: 'Dashboard', url: '/juridico', icon: BarChart3 },
+        { title: 'Casos', url: '/juridico/casos', icon: Briefcase },
         { title: 'Processos', url: '/juridico/processos', icon: FileText },
         { title: 'Advogados', url: '/juridico/advogados', icon: Users },
         { title: 'Prazos', url: '/juridico/prazos', icon: Clock },
