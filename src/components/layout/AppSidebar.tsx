@@ -26,6 +26,7 @@ import {
   LucideIcon,
   Phone,
   AlertTriangle,
+  Search,
   Truck,
   ClipboardCheck,
   DollarSign,
@@ -207,6 +208,7 @@ const menuConfig: {
       items: [
         { title: 'Dashboard', url: '/eventos/dashboard', icon: BarChart3 },
         { title: 'Sinistros', url: '/eventos/sinistros', icon: AlertTriangle },
+        { title: 'Sindicâncias', url: '/eventos/sindicancias', icon: Search },
       ],
     },
     {
