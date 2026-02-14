@@ -1,155 +1,224 @@
 
-
-# Revisao: Geracao de OS, Mensagem 15min, Painel Regulador
+# Revisao FINAL: Atualizacoes Diarias, Conclusao, Retirada, Garantia e Timeline
 
 ## Resultado da Verificacao Completa
 
-### 1. Geracao Automatica da OS (gerar-os-cotacao-aprovada)
+### 1. Atualizacao Diaria Obrigatoria
 
 | Item | Status |
 |---|---|
-| OS contem itens do orcamento do regulador (MO + servicos) | OK (linhas 103-116) |
-| OS contem pecas da cotacao aprovada | OK (linhas 88-101) |
-| Etapas de reparo como checkpoints (status "pendente") | OK (linhas 59-64) |
-| Oficina atribuida vinculada | OK (oficina_id do sinistro, linha 72) |
-| **Prestadores vinculados** | **FALTANDO — edge function nao busca/vincula prestadores da tabela sinistro_prestadores** |
-| Auto center aprovado registrado | OK (auto_center_id e cotacao_aprovada_id, linhas 75-76) |
-| Valores da cotacao aprovada (pecas) substituem estimativas | OK (pecas vem da cotacao.resposta, MO/servicos do orcamento) |
-| Veiculo e associado vinculados | OK (linhas 73-74) |
-| Status inicial: aguardando_entrada | OK (linha 78) |
-| Historico registrado | OK (linhas 128-132) |
-| WhatsApp ao associado | OK (linhas 134-153) |
+| Botao "Registrar Atualizacao" em cada card | OK (linha 390) |
+| Upload fotos: min 2, max 10, obrigatorio | OK (dropzone, slice(0,10), canSave: fotos >= 2) |
+| Upload video: opcional | OK |
+| Descricao (textarea, obrigatorio) | OK (canSave: descricao.trim().length > 0) |
+| Toggle "etapa concluida?" so se ha etapa | OK (condicao `etapaAtual &&`) |
+| Problemas: tipo + descricao | OK |
+| **"Aguardando peca" muda status da OS** | **FALTANDO -- select option existe mas nao atualiza status para aguardando_peca** |
+| Botao salvar so habilita com 2+ fotos E descricao | OK |
+| **NAO pode avancar etapa sem fotos** | **BUG -- concluirEtapa pode ser true mesmo com 0 fotos (canSave bloqueia salvar, mas a mensagem especifica nao existe)** |
+| Badge verde "Atualizado" / vermelho "Pendente!" | OK (linhas 313-317) |
+| **Apos 17h, IA alerta regulador** | **FALTANDO -- nao existe cron/logica para alertar regulador** |
 
-### 2. Mensagem da IA (15 min apos) -- FALTANDO
-
-| Item | Status |
-|---|---|
-| **15 min apos geracao da OS, IA envia WhatsApp** | **FALTANDO — nao existe agendamento de mensagem com delay de 15min** |
-| **Mensagem confirma pagamento + pecas em cotacao + acompanhe** | **FALTANDO** |
-
-O cron-contato-sinistro existente trata de contatos agendados para sinistros (Link 1, coparticipacao), nao de mensagens pos-geracao de OS.
-
-### 3. Painel Regulador — Aba "Veiculos em Oficina" -- OK parcial
+### 2. Mensagens da IA por Etapa Concluida
 
 | Item | Status |
 |---|---|
-| Pagina "Veiculos em Oficina" na area do regulador | OK (ReguladorOficina.tsx) |
-| Contadores: total, aguard. entrada, aguard. peca, em execucao, concluidos | OK |
-| **Contador "em finalizacao"** | **FALTANDO — nao existe no STATUS_MAP nem nos contadores** |
+| Lanternagem: mensagem personalizada | OK |
+| Pintura: mensagem personalizada | OK |
+| Mecanica: mensagem personalizada | OK |
+| Eletrica: mensagem personalizada | OK |
+| Polimento: mensagem personalizada | OK |
+| Lavagem (especial): "OTIMA NOTICIA!" | OK |
+| Mensagens usam nome, placa e proxima etapa | OK |
 
-### 4. Lista de Veiculos (Cards)
-
-| Item | Status |
-|---|---|
-| Placa (destaque), marca/modelo/ano/cor | OK |
-| Nome e telefone do associado | OK |
-| Numero da OS, oficina, auto center | OK |
-| **Prestadores vinculados** | **FALTANDO — query nao busca prestadores, cards nao exibem** |
-| Status (badge), data de entrada, tempo em oficina | OK |
-| Barra de progresso de etapas com icones | OK |
-| Ultima atualizacao com alertas >24h/>48h | OK |
-
-### 5. Filtros e Acoes
+### 3. Vistoria Presencial do Regulador
 
 | Item | Status |
 |---|---|
-| Filtros: oficina, status, tempo, busca placa/nome | OK |
-| Acao "Registrar Entrada" | OK (muda para em_execucao) |
-| **Acao "Registrar Entrada" — notifica associado via WhatsApp** | **FALTANDO — nao envia WhatsApp na entrada** |
-| **Acao "Definir/Alterar Oficina"** | **FALTANDO — nao existe modal para alterar oficina de uma OS** |
-| Acao "Registrar Atualizacao" | OK (RegistrarAtualizacaoDialog) |
-| Acao "Vistoria Presencial" | OK (VistoriaPresencialDialog) |
+| Botao separado "Vistoria" | OK |
+| Grava 1 video (ate 3 min) | OK (timer 179s) |
+| Salvo no Supabase Storage | OK (sinistro-eventos bucket) |
+| Video INTERNO (associado nao ve) | OK (nao aparece em paginas publicas) |
+| Registra data, hora e GPS | OK (created_at + lat/long) |
+| Aparece na timeline da OS | OK (os_vistorias_presenciais na TimelineEventoTab) |
 
-### 6. Metricas por Oficina
-
-| Item | Status |
-|---|---|
-| Ranking: nome, qtd veiculos, tempo medio | OK |
-| **Nota pontualidade** | **FALTANDO — so exibe qtd e media de dias, sem nota** |
-
-### 7. Fluxo de Status da OS -- 2 BUGS
+### 4. Conclusao do Reparo
 
 | Item | Status |
 |---|---|
-| `aguardando_entrada` no enum DB | OK |
-| `entregue` no enum DB | OK |
-| **`aguardando_entrada` e `entregue` no tipo TypeScript** | **BUG — `aguardando_entrada` esta no DB enum mas FALTANDO no TS labels; `entregue` esta no DB enum mas FALTANDO no TS type e labels** |
-| **Cada mudanca gera notificacao WhatsApp** | **FALTANDO — handleRegistrarEntrada nao envia WhatsApp** |
+| Ao concluir ultima etapa: status "concluido" | OK (isUltimaEtapa -> status = concluido) |
+| Data/hora de conclusao registrada | OK (data_conclusao_real) |
+| **Tempo total em oficina calculado** | **PARCIAL -- calculado na pagina de retirada, mas nao salvo na OS no momento da conclusao** |
+| **30 min depois: IA envia WhatsApp com Link 3** | **BUG -- link e enviado IMEDIATAMENTE (sem delay de 30min)** |
+
+### 5. Link de Retirada (Link 3)
+
+| Item | Status |
+|---|---|
+| Link unico, expiravel (72h), validado por token | OK |
+| Logo, "Veiculo pronto!", placa/marca/modelo | OK |
+| Oficina + endereco + "Ver no Mapa" | OK |
+| Resumo das etapas com datas de conclusao | OK |
+| Tempo total em oficina | OK (calculado no frontend) |
+| Data (preenchida com hoje, editavel) | OK |
+| Observacoes (opcional) | OK |
+| Checkbox "Recebi em perfeitas condicoes" | OK |
+| Checkbox "Ciente da garantia de 90 dias" | OK |
+| Assinatura digital (canvas) | OK |
+| Botao "Confirmar Retirada" | OK |
+| Ao confirmar: OS "entregue", Sinistro "em_garantia", inicia 90d | OK (confirmar-retirada edge function) |
+| IA envia mensagem final sobre garantia | OK |
+| **Se nao retirar em 7 dias: lembretes diarios** | **FALTANDO -- nao existe logica de lembrete** |
+
+### 6. Garantia de 90 Dias
+
+| Item | Status |
+|---|---|
+| Periodo de 90 dias contados da data de retirada | OK (confirmar-retirada calcula garantia_ate) |
+| Alerta no painel: garantias vencendo em 7 dias | OK (badge vermelho se diasRestantes <= 7) |
+| **Possibilidade de abrir "retorno de garantia"** | **FALTANDO -- nao existe funcionalidade** |
+| **Dano pertinente volta a oficina sem custo** | **FALTANDO** |
+| **Dano nao pertinente negado** | **FALTANDO** |
+
+### 7. Timeline Completa do Evento
+
+| Item | Status |
+|---|---|
+| 1. Data/hora do evento | OK |
+| 2. Data/hora comunicacao | OK |
+| **3. Tempo entre evento e comunicacao** | **FALTANDO** |
+| 4. Envio do link 1 | OK (sinistro_evento_links) |
+| **5. Conclusao de cada etapa do link (fotos, BO, relato)** | **FALTANDO -- so mostra link enviado, nao detalha etapas** |
+| **6. Agendamento da vistoria** | **PARCIAL -- mostra vistoria, mas nao o agendamento separado** |
+| 7. Vistoria do regulador | OK |
+| 8. Analise (aprovacao/reprovacao) | OK (via sinistro_historico) |
+| **9. Envio do link 2 (pagamento)** | **FALTANDO -- nao diferencia link 2** |
+| **10. Pagamento confirmado** | **FALTANDO -- nao busca cota_paga_em** |
+| **11. Envio do termo (Autentique)** | **FALTANDO -- nao busca termo_anuencia_criado_em** |
+| **12. Assinatura do termo** | **FALTANDO -- nao busca termo_anuencia_assinado_em** |
+| **13. Atribuicao de fornecedores** | **FALTANDO -- nao busca oficina/prestadores atribuidos** |
+| **14. Envio de cotacoes para auto centers** | OK (evento_cotacoes_pecas) |
+| 15. Cotacao aprovada | OK |
+| 16. Geracao da OS | OK |
+| 17. Entrada na oficina | OK |
+| 18. Cada etapa concluida | OK (os_atualizacoes_diarias) |
+| 19. Cada atualizacao diaria | OK |
+| 20. Cada vistoria presencial | OK |
+| 21. Conclusao do reparo | OK |
+| 22. Retirada pelo associado | OK |
+| 23. Inicio da garantia | OK |
+| **Itens clicaveis para ver detalhes (fotos, videos)** | **FALTANDO -- timeline nao e clicavel** |
 
 ---
 
-## Correcoes Necessarias (priorizadas)
+## 8 Correcoes Necessarias
 
-### Correcao 1 — Adicionar `aguardando_entrada` e `entregue` ao tipo TypeScript e labels
+### Correcao 1 — "Aguardando peca" deve mudar status da OS
 
-**Arquivo:** `src/types/database.ts`
+**Arquivo:** `src/components/sinistros/RegistrarAtualizacaoDialog.tsx`
 
-O enum do DB tem `aguardando_entrada` e `entregue`, mas o tipo TypeScript `StatusOrdemServico` nao inclui `aguardando_entrada` (esta faltando no labels/colors) e `entregue` (esta faltando no tipo, labels e colors).
+Quando o problema "Aguardando peca" e selecionado e o formulario salvo, o status da OS deve ser atualizado para `aguardando_peca`. Adicionar apos a insercao da atualizacao:
 
-Adicionar ao tipo:
 ```text
-export type StatusOrdemServico =
-  | 'rascunho'
-  | 'aguardando_entrada'   // ADICIONAR
-  | 'aguardando_orcamento'
-  | ...
-  | 'entregue';            // ADICIONAR
+if (temProblema && tipoProblema === 'Aguardando peça') {
+  await supabase.from('ordens_servico')
+    .update({ status: 'aguardando_peca' as any, updated_at: new Date().toISOString() })
+    .eq('id', ordemServico.id);
+  await supabase.from('ordens_servico_historico').insert({
+    ordem_servico_id: ordemServico.id,
+    status_novo: 'aguardando_peca',
+    observacao: descricaoProblema || 'Aguardando peça',
+  });
+}
 ```
 
-Adicionar aos labels:
+### Correcao 2 — Impedir avancar etapa sem fotos (mensagem explicita)
+
+**Arquivo:** `src/components/sinistros/RegistrarAtualizacaoDialog.tsx`
+
+Embora o botao salvar ja exija 2+ fotos, o toggle de concluir etapa nao tem feedback especifico. Adicionar validacao visual:
+
 ```text
-aguardando_entrada: 'Aguardando Entrada',
-entregue: 'Entregue',
+{concluirEtapa && fotos.length < 2 && (
+  <p className="text-xs text-destructive">Registre a atualização com fotos antes de avançar a etapa</p>
+)}
 ```
 
-Adicionar aos colors:
-```text
-aguardando_entrada: 'bg-yellow-100 text-yellow-800',
-entregue: 'bg-blue-100 text-blue-800',
-```
+### Correcao 3 — Agendar link de retirada com delay de 30 minutos
 
-### Correcao 2 — Vincular prestadores na geracao da OS
+**Arquivo:** `src/components/sinistros/RegistrarAtualizacaoDialog.tsx`
 
-**Arquivo:** `supabase/functions/gerar-os-cotacao-aprovada/index.ts`
+Atualmente o link e gerado imediatamente na conclusao (linha 141). Alterar para agendar via `sinistro_contatos_agendados` com `agendado_para = now + 30min` e `mensagem_enviada` pre-preenchida. O cron-contato-sinistro ja suporta mensagens pre-definidas (correcao anterior).
 
-Apos criar a OS, buscar prestadores vinculados ao sinistro (tabela `sinistro_prestadores`) e registra-los na OS. Como a tabela `ordens_servico` nao tem campo para prestadores, a abordagem sera:
-1. Buscar prestadores de `sinistro_prestadores` para o sinistro
-2. Adicionar a informacao nas observacoes da OS
-3. Registrar no historico
+Alternativa mais simples: manter a geracao imediata do link (token criado na hora) mas agendar o ENVIO da mensagem WhatsApp para 30min depois. Como o token ja fica salvo na OS, basta:
+1. No `gerar-link-retirada`, NAO enviar WhatsApp imediatamente
+2. Em vez disso, inserir na `sinistro_contatos_agendados` com delay de 30min
 
-### Correcao 3 — Enviar WhatsApp ao associado ao registrar entrada
+**Arquivo principal:** `supabase/functions/gerar-link-retirada/index.ts` -- remover envio direto de WhatsApp e agendar na tabela.
+
+### Correcao 4 — Timeline: adicionar pontos faltantes (pagamento, termo, tempo, fornecedores)
+
+**Arquivo:** `src/components/sinistros/TimelineEventoTab.tsx`
+
+Adicionar ao queryFn:
+
+1. **Tempo entre evento e comunicacao**: calcular diferenca entre `data_ocorrencia` e `created_at` e exibir como descricao do item "Comunicacao registrada"
+2. **Pagamento confirmado**: buscar `cota_paga_em` do sinistro e adicionar item
+3. **Termo enviado e assinado**: buscar `termo_anuencia_criado_em` e `termo_anuencia_assinado_em`
+4. **Atribuicao de fornecedores**: buscar `oficina_id`, `auto_center_id` do sinistro quando preenchidos (via sinistro_historico com observacao contendo "oficina" ou "fornecedor")
+5. **Link 2 diferenciado**: os links do tipo `sinistro_evento_links` ja tem campo `tipo` -- garantir que Link 2 (pos-aprovacao) apareca separado
+
+### Correcao 5 — Lembretes diarios se nao retirar em 7 dias
+
+**Arquivo:** `supabase/functions/gerar-link-retirada/index.ts`
+
+Apos gerar o link, agendar lembretes diarios (dias 1 a 7) na tabela `sinistro_contatos_agendados`. Cada agendamento tera `mensagem_enviada` pre-preenchida com "Lembrete: seu veiculo esta pronto para retirada". O cron existente processara automaticamente.
+
+Alternativa: adicionar logica ao cron-contato-sinistro para buscar OS com status "concluido" ha mais de 24h sem retirada e enviar lembrete. Isso e mais eficiente do que criar 7 registros.
+
+**Recomendacao:** Adicionar ao `cron-contato-sinistro` uma verificacao de OS concluidas com `data_conclusao_real` > 24h e `status != 'entregue'` para enviar 1 lembrete/dia.
+
+### Correcao 6 — Retorno de garantia (funcionalidade nova minima)
 
 **Arquivo:** `src/pages/regulador/ReguladorOficina.tsx`
 
-No `handleRegistrarEntrada`, apos atualizar o status, chamar a edge function `whatsapp-send-text` para notificar o associado que o veiculo deu entrada na oficina.
+Na secao "Garantias Ativas", adicionar botao "Abrir Retorno" em cada garantia. Ao clicar:
+1. Abrir dialog com opcoes: "Dano pertinente" (volta a oficina) ou "Dano nao pertinente" (negado)
+2. Se pertinente: criar nova OS vinculada a OS original com status `aguardando_entrada` e flag `retorno_garantia = true`
+3. Se nao pertinente: registrar no historico da OS original como "Retorno de garantia negado"
 
-### Correcao 4 — Mensagem da IA 15min apos geracao da OS
+Nota: isso requer uma coluna `retorno_garantia_os_id` (uuid nullable FK) na tabela `ordens_servico` para vincular a OS de retorno a original.
 
-**Arquivo:** `supabase/functions/gerar-os-cotacao-aprovada/index.ts`
+### Correcao 7 — Alerta as 17h para veiculos nao atualizados
 
-Apos criar a OS com sucesso, agendar um contato na tabela `sinistro_contatos_agendados` com `agendado_para = now() + 15min`. O cron-contato-sinistro ja roda a cada minuto e processara esse agendamento automaticamente.
+Isso requer um cron job que rode as 17h (horario de Brasilia). A abordagem mais pratica: adicionar ao `cron-contato-sinistro` existente uma verificacao especifica para o horario.
 
-Porem, o cron-contato-sinistro atual monta mensagens especificas para o fluxo de Link 1 (auto vistoria, BO, etc), nao para pos-OS. Sera necessario:
-1. Adicionar um campo `tipo` ao agendamento (ex: `pos_os_gerada`)
-2. No cron, tratar esse tipo com mensagem diferente: "Pagamento confirmado, pecas em cotacao, acompanhe por aqui"
+Porem, o cron roda a cada minuto. Adicionar condicao:
 
-**Abordagem mais simples:** Enviar a mensagem diretamente no edge function com um `setTimeout` simulado via agendamento no banco. Como o cron roda a cada minuto, basta inserir na tabela com `agendado_para = now + 15min` e uma mensagem customizada pre-definida.
+```text
+const agora = new Date();
+const horaBrasilia = agora.getUTCHours() - 3; // simplificado
+if (horaBrasilia === 17 && agora.getUTCMinutes() === 0) {
+  // Buscar OS em_execucao sem atualizacao hoje
+  // Enviar alerta ao regulador (notificacao interna ou WhatsApp)
+}
+```
 
-O campo `mensagem_enviada` ja pode ser usado como template override. Ajustar o cron para enviar a `mensagem_enviada` quando ja estiver preenchida (skip montagem de mensagem).
+**Abordagem mais robusta:** Criar cron separado `cron-alerta-atualizacao-oficina` que rode 1x/dia as 17h (BRT) e envie notificacao ao regulador para cada OS em_execucao sem registro em `os_atualizacoes_diarias` no dia.
 
-### Correcao 5 — Exibir prestadores nos cards do painel
+**Recomendacao:** Adicionar logica simples ao cron existente (nao criar novo edge function, conforme instrucao de "nao criar nada novo"). Usar flag de hora para executar apenas as 17h.
 
-**Arquivo:** `src/hooks/useVeiculosOficina.ts`
+### Correcao 8 — Timeline clicavel (expandir detalhes)
 
-Adicionar join com `sinistro_prestadores` via sinistro para buscar os prestadores vinculados. Exibir nos cards com icone.
+**Arquivo:** `src/components/sinistros/TimelineEventoTab.tsx`
 
-**Arquivo:** `src/pages/regulador/ReguladorOficina.tsx` — adicionar exibicao dos prestadores nos cards.
+Tornar cada item da timeline clicavel para expandir detalhes. Para itens com fotos (atualizacoes diarias), exibir as imagens. Para vistorias, exibir o video.
 
-### Correcao 6 — Acao "Definir/Alterar Oficina" (modal simples)
-
-**Arquivo:** `src/pages/regulador/ReguladorOficina.tsx`
-
-Adicionar botao "Alterar Oficina" que abre um dialog com lista de oficinas (reutilizando `useOficinasDisponiveis`) e atualiza o `oficina_id` da OS.
+Adicionar:
+1. Campo `fotos_urls` e `video_url` na query de `os_atualizacoes_diarias`
+2. Campo `video_url` na query de `os_vistorias_presenciais`
+3. Estado `expandedId` para controlar qual item esta expandido
+4. Ao clicar: mostrar fotos em grid e/ou link do video
 
 ---
 
@@ -157,9 +226,9 @@ Adicionar botao "Alterar Oficina" que abre um dialog com lista de oficinas (reut
 
 | Acao | Arquivo |
 |---|---|
-| Modificar | `src/types/database.ts` — adicionar `aguardando_entrada` e `entregue` ao type/labels/colors |
-| Modificar | `supabase/functions/gerar-os-cotacao-aprovada/index.ts` — vincular prestadores + agendar mensagem 15min |
-| Modificar | `src/pages/regulador/ReguladorOficina.tsx` — WhatsApp na entrada + botao alterar oficina + exibir prestadores |
-| Modificar | `src/hooks/useVeiculosOficina.ts` — buscar prestadores no join |
-| Modificar | `supabase/functions/cron-contato-sinistro/index.ts` — tratar mensagem pre-definida (skip template) |
-
+| Modificar | `src/components/sinistros/RegistrarAtualizacaoDialog.tsx` -- status aguardando_peca + msg etapa sem fotos |
+| Modificar | `supabase/functions/gerar-link-retirada/index.ts` -- agendar envio com 30min delay em vez de envio imediato |
+| Modificar | `src/components/sinistros/TimelineEventoTab.tsx` -- adicionar pontos faltantes + tornar clicavel |
+| Modificar | `src/pages/regulador/ReguladorOficina.tsx` -- botao retorno garantia + dialog |
+| Modificar | `supabase/functions/cron-contato-sinistro/index.ts` -- alerta 17h + lembretes retirada |
+| Migracao | Adicionar coluna `retorno_garantia_os_id uuid references ordens_servico(id)` na tabela `ordens_servico` |
