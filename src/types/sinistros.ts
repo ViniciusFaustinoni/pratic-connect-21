@@ -28,24 +28,38 @@ export type StatusSinistro =
   | 'em_pericia'
   | 'analise_interna'
   | 'suspenso'
+  | 'aguardando_diretoria'
+  | 'aguardando_juridico'
   // FASE 5: DECISÃO
   | 'aprovado'
   | 'negado'
+  | 'reprovado'
   // FASE 6: EXECUÇÃO (REPAROS)
   | 'em_regulacao'
   | 'aguardando_termo'
   | 'aguardando_cota'
   | 'em_reparo'
   | 'em_garantia'
+  | 'aguardando_confirmacoes'
+  | 'pronto_para_oficina'
+  | 'em_oficina'
+  | 'aguardando_peca'
+  | 'em_finalizacao'
   // FASE 6B: RECUPERAÇÃO (ROUBO/FURTO)
   | 'em_recuperacao'
   // FASE 7: PAGAMENTO
   | 'aguardando_pagamento'
+  | 'pagamento_confirmado'
   | 'pago'
   | 'indenizado'
+  | 'aguardando_indenizacao'
   // FINAIS
+  | 'concluido'
+  | 'entregue'
+  | 'finalizado'
   | 'encerrado'
-  | 'cancelado';
+  | 'cancelado'
+  | 'aguardando_analise';
 
 export type CanalAbertura = 'app' | 'whatsapp' | 'telefone' | 'presencial';
 
@@ -138,73 +152,83 @@ export const TIPO_SINISTRO_ICONS: Record<TipoSinistro, string> = {
 };
 
 export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
-  // FASE 1
   comunicado: 'Comunicado',
-  // FASE 2
   em_analise: 'Em Análise',
   documentacao_pendente: 'Doc. Pendente',
-  // FASE 3
   aguardando_vistoria: 'Aguard. Vistoria',
   em_vistoria: 'Em Vistoria',
   aguardando_parecer: 'Aguard. Parecer',
-  // FASE 4
   em_sindicancia: 'Em Sindicância',
   em_pericia: 'Em Perícia',
   analise_interna: 'Análise Interna',
   suspenso: 'Suspenso',
-  // FASE 5
+  aguardando_diretoria: 'Aguard. Diretoria',
+  aguardando_juridico: 'Aguard. Jurídico',
   aprovado: 'Aprovado',
   negado: 'Negado',
-  // FASE 6
+  reprovado: 'Reprovado',
   em_regulacao: 'Em Regulação',
   aguardando_termo: 'Aguard. Termo',
   aguardando_cota: 'Aguard. Cota',
   em_reparo: 'Em Reparo',
   em_garantia: 'Em Garantia',
-  // FASE 6B
+  aguardando_confirmacoes: 'Aguard. Confirmações',
+  pronto_para_oficina: 'Pronto p/ Oficina',
+  em_oficina: 'Em Oficina',
+  aguardando_peca: 'Aguard. Peça',
+  em_finalizacao: 'Em Finalização',
   em_recuperacao: 'Em Recuperação',
-  // FASE 7
   aguardando_pagamento: 'Aguard. Pagamento',
+  pagamento_confirmado: 'Pgto Confirmado',
   pago: 'Pago',
   indenizado: 'Indenizado',
-  // FINAIS
+  aguardando_indenizacao: 'Aguard. Indenização',
+  concluido: 'Concluído',
+  entregue: 'Entregue',
+  finalizado: 'Finalizado',
   encerrado: 'Encerrado',
   cancelado: 'Cancelado',
+  aguardando_analise: 'Aguard. Análise',
 };
 
 export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
-  // FASE 1 - Amarelo
   comunicado: 'bg-yellow-100 text-yellow-800',
-  // FASE 2 - Azul
   em_analise: 'bg-blue-100 text-blue-800',
   documentacao_pendente: 'bg-orange-100 text-orange-800',
-  // FASE 3 - Roxo
   aguardando_vistoria: 'bg-purple-100 text-purple-800',
   em_vistoria: 'bg-indigo-100 text-indigo-800',
   aguardando_parecer: 'bg-cyan-100 text-cyan-800',
-  // FASE 4 - Rosa/Vermelho Suave
   em_sindicancia: 'bg-rose-100 text-rose-800',
   em_pericia: 'bg-pink-100 text-pink-800',
   analise_interna: 'bg-amber-100 text-amber-800',
   suspenso: 'bg-slate-200 text-slate-700',
-  // FASE 5 - Verde/Vermelho
+  aguardando_diretoria: 'bg-amber-100 text-amber-800',
+  aguardando_juridico: 'bg-purple-100 text-purple-800',
   aprovado: 'bg-green-100 text-green-800',
   negado: 'bg-red-100 text-red-800',
-  // FASE 6 - Tons de Azul/Verde
+  reprovado: 'bg-red-100 text-red-800',
   em_regulacao: 'bg-teal-100 text-teal-800',
   aguardando_termo: 'bg-sky-100 text-sky-800',
   aguardando_cota: 'bg-lime-100 text-lime-800',
   em_reparo: 'bg-violet-100 text-violet-800',
   em_garantia: 'bg-emerald-100 text-emerald-800',
-  // FASE 6B
+  aguardando_confirmacoes: 'bg-sky-100 text-sky-800',
+  pronto_para_oficina: 'bg-lime-100 text-lime-800',
+  em_oficina: 'bg-violet-100 text-violet-800',
+  aguardando_peca: 'bg-orange-100 text-orange-800',
+  em_finalizacao: 'bg-teal-100 text-teal-800',
   em_recuperacao: 'bg-fuchsia-100 text-fuchsia-800',
-  // FASE 7
   aguardando_pagamento: 'bg-cyan-100 text-cyan-800',
+  pagamento_confirmado: 'bg-green-100 text-green-800',
   pago: 'bg-emerald-100 text-emerald-800',
   indenizado: 'bg-green-100 text-green-800',
-  // FINAIS
+  aguardando_indenizacao: 'bg-pink-100 text-pink-800',
+  concluido: 'bg-green-100 text-green-800',
+  entregue: 'bg-emerald-100 text-emerald-800',
+  finalizado: 'bg-gray-200 text-gray-800',
   encerrado: 'bg-gray-100 text-gray-800',
   cancelado: 'bg-gray-100 text-gray-500',
+  aguardando_analise: 'bg-blue-100 text-blue-800',
 };
 
 export const CANAL_LABELS: Record<CanalAbertura, string> = {
@@ -259,54 +283,43 @@ export const DOCUMENTOS_POR_LOCAL: Record<TipoLocalEvento, { sem_vitima: string[
 // ============================================
 
 export const WORKFLOW_SINISTRO: Record<StatusSinistro, StatusSinistro[]> = {
-  // FASE 1: ENTRADA
   comunicado: ['em_analise', 'cancelado'],
-  
-  // FASE 2: ABERTURA/DOCUMENTAÇÃO
-  em_analise: [
-    'documentacao_pendente', 
-    'aguardando_vistoria', 
-    'em_sindicancia', 
-    'analise_interna',
-    'aprovado', 
-    'negado', 
-    'cancelado'
-  ],
+  em_analise: ['documentacao_pendente', 'aguardando_vistoria', 'em_sindicancia', 'analise_interna', 'aprovado', 'negado', 'cancelado'],
   documentacao_pendente: ['em_analise', 'cancelado'],
-  
-  // FASE 3: VISTORIA
   aguardando_vistoria: ['em_vistoria', 'cancelado'],
   em_vistoria: ['aguardando_parecer', 'em_sindicancia', 'cancelado'],
   aguardando_parecer: ['aprovado', 'negado', 'em_sindicancia'],
-  
-  // FASE 4: ANÁLISES ESPECIAIS
-  em_sindicancia: ['em_pericia', 'em_analise', 'aprovado', 'negado', 'suspenso', 'cancelado'],
-  em_pericia: ['em_sindicancia', 'aprovado', 'negado'],
+  em_sindicancia: ['em_pericia', 'em_analise', 'aprovado', 'negado', 'suspenso', 'aguardando_diretoria', 'cancelado'],
+  em_pericia: ['em_sindicancia', 'aprovado', 'negado', 'aguardando_diretoria'],
   analise_interna: ['em_analise', 'aprovado', 'negado'],
   suspenso: ['em_analise', 'em_sindicancia', 'cancelado'],
-  
-  // FASE 5: DECISÃO
-  aprovado: ['em_regulacao', 'em_recuperacao', 'aguardando_pagamento'], // Recuperação para Roubo/Furto
+  aguardando_diretoria: ['em_analise', 'negado', 'em_sindicancia', 'aguardando_juridico'],
+  aguardando_juridico: ['em_analise', 'negado', 'aprovado'],
+  aprovado: ['em_regulacao', 'em_recuperacao', 'aguardando_pagamento'],
   negado: ['encerrado'],
-  
-  // FASE 6: EXECUÇÃO (REPAROS)
-  em_regulacao: ['aguardando_termo', 'aguardando_cota', 'em_reparo', 'aguardando_pagamento'], 
+  reprovado: ['encerrado'],
+  em_regulacao: ['aguardando_termo', 'aguardando_cota', 'em_reparo', 'aguardando_pagamento'],
   aguardando_termo: ['aguardando_cota', 'cancelado'],
   aguardando_cota: ['em_reparo', 'cancelado'],
   em_reparo: ['em_garantia', 'pago', 'encerrado'],
   em_garantia: ['encerrado'],
-  
-  // FASE 6B: RECUPERAÇÃO (ROUBO/FURTO)
-  em_recuperacao: ['em_regulacao', 'aguardando_pagamento', 'encerrado'], // Recuperado = vai para regulação ou encerra
-  
-  // FASE 7: PAGAMENTO
-  aguardando_pagamento: ['pago', 'indenizado'],
+  aguardando_confirmacoes: ['em_analise', 'aprovado'],
+  pronto_para_oficina: ['em_oficina'],
+  em_oficina: ['aguardando_peca', 'em_finalizacao', 'encerrado'],
+  aguardando_peca: ['em_oficina'],
+  em_finalizacao: ['concluido', 'entregue'],
+  em_recuperacao: ['em_regulacao', 'aguardando_pagamento', 'encerrado'],
+  aguardando_pagamento: ['pago', 'indenizado', 'pagamento_confirmado'],
+  pagamento_confirmado: ['encerrado'],
   pago: ['encerrado'],
   indenizado: ['encerrado'],
-  
-  // FINAIS
+  aguardando_indenizacao: ['indenizado', 'encerrado'],
+  concluido: ['entregue', 'encerrado'],
+  entregue: ['finalizado', 'encerrado'],
+  finalizado: ['encerrado'],
   encerrado: [],
   cancelado: [],
+  aguardando_analise: ['em_analise'],
 };
 
 // ============================================

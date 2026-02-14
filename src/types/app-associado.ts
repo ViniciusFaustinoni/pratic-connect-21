@@ -42,7 +42,29 @@ export type StatusSinistro =
   | 'indenizado'
   | 'pago'
   | 'encerrado'
-  | 'cancelado';
+  | 'cancelado'
+  | 'em_sindicancia'
+  | 'em_pericia'
+  | 'analise_interna'
+  | 'suspenso'
+  | 'aguardando_diretoria'
+  | 'aguardando_juridico'
+  | 'aguardando_confirmacoes'
+  | 'em_oficina'
+  | 'aguardando_peca'
+  | 'em_finalizacao'
+  | 'concluido'
+  | 'entregue'
+  | 'finalizado'
+  | 'aguardando_indenizacao'
+  | 'aguardando_analise'
+  | 'pronto_para_oficina'
+  | 'pagamento_confirmado'
+  | 'aguardando_termo'
+  | 'aguardando_cota'
+  | 'em_garantia'
+  | 'em_recuperacao'
+  | 'aguardando_pagamento';
 
 export type TipoSinistro = 
   | 'roubo' 
@@ -138,12 +160,35 @@ export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
   aprovado: 'Aprovado',
   negado: 'Negado',
   reprovado: 'Reprovado',
-  em_regulacao: 'Em Regulação',
-  em_reparo: 'Em Reparo',
+  em_regulacao: 'Em Análise',
+  em_reparo: 'Em Análise',
   indenizado: 'Indenizado',
   pago: 'Pago',
   encerrado: 'Encerrado',
   cancelado: 'Cancelado',
+  // Status internos → associado vê "Em Análise"
+  em_sindicancia: 'Em Análise',
+  em_pericia: 'Em Análise',
+  analise_interna: 'Em Análise',
+  suspenso: 'Em Análise',
+  aguardando_diretoria: 'Em Análise',
+  aguardando_juridico: 'Em Análise',
+  aguardando_confirmacoes: 'Em Análise',
+  em_oficina: 'Em Reparo',
+  aguardando_peca: 'Em Reparo',
+  em_finalizacao: 'Em Finalização',
+  concluido: 'Concluído',
+  entregue: 'Entregue',
+  finalizado: 'Finalizado',
+  aguardando_indenizacao: 'Em Análise',
+  aguardando_analise: 'Em Análise',
+  pronto_para_oficina: 'Em Análise',
+  pagamento_confirmado: 'Pagamento Confirmado',
+  aguardando_termo: 'Em Análise',
+  aguardando_cota: 'Em Análise',
+  em_garantia: 'Em Garantia',
+  em_recuperacao: 'Em Análise',
+  aguardando_pagamento: 'Aguardando Pagamento',
 };
 
 export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
@@ -162,6 +207,28 @@ export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
   pago: 'bg-green-100 text-green-800',
   encerrado: 'bg-gray-100 text-gray-800',
   cancelado: 'bg-gray-100 text-gray-800',
+  em_sindicancia: 'bg-indigo-100 text-indigo-800',
+  em_pericia: 'bg-indigo-100 text-indigo-800',
+  analise_interna: 'bg-indigo-100 text-indigo-800',
+  suspenso: 'bg-indigo-100 text-indigo-800',
+  aguardando_diretoria: 'bg-indigo-100 text-indigo-800',
+  aguardando_juridico: 'bg-indigo-100 text-indigo-800',
+  aguardando_confirmacoes: 'bg-indigo-100 text-indigo-800',
+  em_oficina: 'bg-purple-100 text-purple-800',
+  aguardando_peca: 'bg-purple-100 text-purple-800',
+  em_finalizacao: 'bg-teal-100 text-teal-800',
+  concluido: 'bg-green-100 text-green-800',
+  entregue: 'bg-emerald-100 text-emerald-800',
+  finalizado: 'bg-gray-100 text-gray-800',
+  aguardando_indenizacao: 'bg-indigo-100 text-indigo-800',
+  aguardando_analise: 'bg-indigo-100 text-indigo-800',
+  pronto_para_oficina: 'bg-indigo-100 text-indigo-800',
+  pagamento_confirmado: 'bg-green-100 text-green-800',
+  aguardando_termo: 'bg-indigo-100 text-indigo-800',
+  aguardando_cota: 'bg-indigo-100 text-indigo-800',
+  em_garantia: 'bg-emerald-100 text-emerald-800',
+  em_recuperacao: 'bg-indigo-100 text-indigo-800',
+  aguardando_pagamento: 'bg-cyan-100 text-cyan-800',
 };
 
 export const TIPO_SINISTRO_LABELS: Record<TipoSinistro, string> = {

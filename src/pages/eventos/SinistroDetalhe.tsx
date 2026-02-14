@@ -35,6 +35,9 @@ import { CardSindicanciaStatus } from '@/components/sinistros/CardSindicanciaSta
 import { EncaminharJuridicoEventoModal } from '@/components/sinistros/EncaminharJuridicoEventoModal';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { TrajetoColisaoCard } from '@/components/sinistros/TrajetoColisaoCard';
+import { BannerAguardandoDiretoria } from '@/components/sinistros/BannerAguardandoDiretoria';
+import { PrazoRessarcimento } from '@/components/sinistros/PrazoRessarcimento';
+import { SecaoSindicanciasJuridico } from '@/components/sinistros/SecaoSindicanciasJuridico';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -76,6 +79,27 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
   cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
   em_sindicancia: { label: 'Em Sindicância', class: 'bg-rose-100 text-rose-800' },
+  em_pericia: { label: 'Em Perícia', class: 'bg-pink-100 text-pink-800' },
+  analise_interna: { label: 'Análise Interna', class: 'bg-amber-100 text-amber-800' },
+  suspenso: { label: 'Suspenso', class: 'bg-slate-200 text-slate-700' },
+  aguardando_diretoria: { label: 'Aguard. Diretoria', class: 'bg-amber-100 text-amber-800' },
+  aguardando_juridico: { label: 'Aguard. Jurídico', class: 'bg-purple-100 text-purple-800' },
+  aguardando_confirmacoes: { label: 'Aguard. Confirmações', class: 'bg-sky-100 text-sky-800' },
+  em_oficina: { label: 'Em Oficina', class: 'bg-violet-100 text-violet-800' },
+  aguardando_peca: { label: 'Aguard. Peça', class: 'bg-orange-100 text-orange-800' },
+  em_finalizacao: { label: 'Em Finalização', class: 'bg-teal-100 text-teal-800' },
+  concluido: { label: 'Concluído', class: 'bg-green-100 text-green-800' },
+  entregue: { label: 'Entregue', class: 'bg-emerald-100 text-emerald-800' },
+  finalizado: { label: 'Finalizado', class: 'bg-gray-200 text-gray-800' },
+  aguardando_indenizacao: { label: 'Aguard. Indenização', class: 'bg-pink-100 text-pink-800' },
+  aguardando_analise: { label: 'Aguard. Análise', class: 'bg-blue-100 text-blue-800' },
+  pronto_para_oficina: { label: 'Pronto p/ Oficina', class: 'bg-lime-100 text-lime-800' },
+  pagamento_confirmado: { label: 'Pgto Confirmado', class: 'bg-green-100 text-green-800' },
+  reprovado: { label: 'Reprovado', class: 'bg-red-100 text-red-800' },
+  indenizado: { label: 'Indenizado', class: 'bg-green-100 text-green-800' },
+  aguardando_cota: { label: 'Aguard. Cota', class: 'bg-lime-100 text-lime-800' },
+  aguardando_termo: { label: 'Aguard. Termo', class: 'bg-sky-100 text-sky-800' },
+  em_garantia: { label: 'Em Garantia', class: 'bg-emerald-100 text-emerald-800' },
 };
 
 const tipoConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -447,6 +471,11 @@ export default function SinistroDetalhe() {
 
   return (
     <div className="space-y-6 p-6">
+      {/* Banner Diretoria */}
+      {sinistro.status === 'aguardando_diretoria' && (
+        <BannerAguardandoDiretoria sinistro={sinistro} />
+      )}
+
       {/* Breadcrumb */}
       <Breadcrumb>
         <BreadcrumbList>
@@ -815,6 +844,9 @@ export default function SinistroDetalhe() {
             associadoId={sinistro.associado_id}
             associadoNome={sinistro.associado?.nome}
           />
+
+          {/* Seção Sindicâncias e Jurídico */}
+          <SecaoSindicanciasJuridico sinistroId={sinistro.id} />
         </div>
 
         {/* Right Column - Sidebar */}
@@ -970,6 +1002,15 @@ export default function SinistroDetalhe() {
               )}
             </CardContent>
           </Card>
+
+          {/* Prazo de Ressarcimento */}
+          <PrazoRessarcimento
+            sinistroId={sinistro.id}
+            dataInicio={sinistro.prazo_ressarcimento_inicio || sinistro.created_at}
+            prazoSuspenso={sinistro.prazo_suspenso}
+            prazoSuspensoEm={sinistro.prazo_suspenso_em}
+            motivoSuspensao={sinistro.prazo_motivo_suspensao}
+          />
 
           {/* Link do Evento */}
           <EventoLinkCard
