@@ -122,8 +122,8 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
         tipoDano = valorIndenizacao >= limite75 ? 'perda_total' : 'parcial';
       }
 
-      // Para incêndio/fenômeno natural com perda total, encaminhar para indenização integral
-      if (['incendio', 'fenomeno_natural'].includes(sinistro.tipo) && tipoDano === 'perda_total' && resultado === 'aprovado') {
+      // Para QUALQUER tipo com perda total aprovada, encaminhar para indenização integral
+      if (tipoDano === 'perda_total' && resultado === 'aprovado') {
         novoStatus = 'aguardando_pagamento';
         console.log(`[EmitirParecer] ${sinistro.tipo} perda total → encaminhando para indenização integral`);
       }

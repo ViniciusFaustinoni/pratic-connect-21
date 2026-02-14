@@ -274,15 +274,23 @@ export function VistoriaEventoOrcamento({
             </div>
 
             {tipoDano === 'total' && (
-              <div className="space-y-1">
-                <Label className="text-xs">Observações de perda total</Label>
-                <Textarea
-                  value={observacoesTotal}
-                  onChange={(e) => setObservacoesTotal(e.target.value)}
-                  placeholder="Observações adicionais sobre a perda total..."
-                  rows={3}
-                />
-              </div>
+              <>
+                <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 p-3 space-y-1">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300">⚠️ Perda Total Identificada</p>
+                  <p className="text-xs text-red-700 dark:text-red-400">
+                    O veículo não será reparado. O fluxo seguirá para indenização integral após aprovação do parecer.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Justificativa da perda total *</Label>
+                  <Textarea
+                    value={observacoesTotal}
+                    onChange={(e) => setObservacoesTotal(e.target.value)}
+                    placeholder="Ex: Danos estruturais comprometeram chassis, motor e suspensão. Custo estimado de reparo ultrapassa 80% da FIPE."
+                    rows={4}
+                  />
+                </div>
+              </>
             )}
           </section>
 
@@ -461,6 +469,8 @@ export function VistoriaEventoOrcamento({
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 Finalizando...
               </>
+            ) : tipoDano === 'total' ? (
+              'Finalizar Vistoria — Perda Total'
             ) : (
               'Finalizar Vistoria e Enviar Orçamento'
             )}

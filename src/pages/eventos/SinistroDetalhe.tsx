@@ -10,7 +10,7 @@ import {
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle, AlertTriangle,
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
-  Bot, Wrench, Radio, Lock, Navigation, Copy, Send, FileSignature, RefreshCw
+  Bot, Wrench, Radio, Lock, Navigation, Copy, Send, FileSignature, RefreshCw, DollarSign
 } from 'lucide-react';
 import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -26,6 +26,7 @@ import { AcionarRecuperacaoModal } from '@/components/sinistros/AcionarRecuperac
 import { CardAcionamentoRoubo } from '@/components/sinistros/CardAcionamentoRoubo';
 import { AlertasFraudeRoubo } from '@/components/sinistros/AlertasFraudeRoubo';
 import { CardRecuperacaoStatus } from '@/components/sinistros/CardRecuperacaoStatus';
+import { IniciarIndenizacaoModal } from '@/components/sinistros/IniciarIndenizacaoModal';
 import { CardVidrosDetalhe } from '@/components/sinistros/CardVidrosDetalhe';
 import { CardAnaliseIncendio } from '@/components/sinistros/CardAnaliseIncendio';
 import { CardAnaliseAlagamento } from '@/components/sinistros/CardAnaliseAlagamento';
@@ -239,6 +240,7 @@ export default function SinistroDetalhe() {
   const [modalSolicitarDocsOpen, setModalSolicitarDocsOpen] = useState(false);
   const [modalAcionamentoOpen, setModalAcionamentoOpen] = useState(false);
   const [mapaLocalizacaoOpen, setMapaLocalizacaoOpen] = useState(false);
+  const [modalIndenizacaoOpen, setModalIndenizacaoOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { isDiretor } = usePermissions();
 
@@ -1039,6 +1041,39 @@ export default function SinistroDetalhe() {
             />
           )}
 
+          {/* Card Indenização - para qualquer tipo com perda total aprovada */}
+          {sinistro.tipo_dano === 'perda_total' && ['aprovado', 'aguardando_pagamento'].includes(sinistro.status) && (
+            <Card className="border-red-300 dark:border-red-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  Perda Total
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Badge variant="destructive">≥ 75% do FIPE</Badge>
+                <p className="text-xs text-muted-foreground">
+                  Veículo classificado como perda total. O fluxo segue para indenização integral.
+                </p>
+                {sinistro.status === 'aprovado' && sinistro.veiculo_id && (
+                  <Button 
+                    className="w-full" 
+                    onClick={() => setModalIndenizacaoOpen(true)}
+                  >
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Iniciar Processo de Indenização
+                  </Button>
+                )}
+                {(sinistro.status as string) === 'aguardando_pagamento' && (
+                  <Badge className="bg-pink-100 text-pink-800">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Aguardando Pagamento
+                  </Badge>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Botão Abrir Localização - para roubo/furto/colisão com rastreador */}
           {tiposComRastreador.includes(sinistro.tipo) && rastreadorVeiculo && (
             <Card>
@@ -1247,6 +1282,18 @@ export default function SinistroDetalhe() {
             marca: sinistro.veiculo.marca || '',
             modelo: sinistro.veiculo.modelo || '',
           }}
+        />
+      )}
+
+      {/* Modal Indenização Integral */}
+      {sinistro && sinistro.veiculo_id && (
+        <IniciarIndenizacaoModal
+          open={modalIndenizacaoOpen}
+          onOpenChange={setModalIndenizacaoOpen}
+          sinistroId={sinistro.id}
+          veiculoId={sinistro.veiculo_id}
+          protocolo={sinistro.protocolo}
+          valorFipe={sinistro.valor_fipe}
         />
       )}
 
