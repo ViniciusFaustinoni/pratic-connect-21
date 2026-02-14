@@ -1,182 +1,206 @@
 
+# Revisao Completa do Fluxo de Eventos (Prompts 1-6)
 
-# Pagina Publica Pos-Aprovacao: Assinatura do Termo + Pagamento da Cota
+## Resumo da Revisao
 
-## Resumo
-
-Criar a pagina publica que o associado acessa pelo novo link gerado apos a aprovacao do analista. A pagina tem 2 etapas: (1) assinatura do Termo de Entrada de Evento e (2) pagamento da cota de coparticipacao via PIX ou cartao de credito, integrado ao ASAAS.
-
----
-
-## 1. Banco de Dados
-
-### Adicionar campos na tabela `sinistro_evento_links`
-
-O novo link gerado pela aprovacao (via `analisar-evento`) ja cria um registro com `etapa_atual = 0`. Precisamos adicionar campos para rastrear as etapas pos-aprovacao:
-
-- `assinatura_url` (text) -- URL da imagem da assinatura no Storage
-- `assinatura_ip` (text) -- IP do associado no momento da assinatura
-- `assinatura_em` (timestamptz) -- data/hora da assinatura
-- `pagamento_confirmado_em` (timestamptz) -- data/hora da confirmacao do pagamento
-
-### Adicionar status `pagamento_confirmado` ao enum `status_sinistro`
-
-O enum ja tem `aguardando_cota` e `aguardando_termo`. Adicionar `pagamento_confirmado` para quando o pagamento for efetivado.
+Analisei todos os arquivos criados nos Prompts 1 a 6, incluindo edge functions, paginas publicas, componentes frontend, hooks de dados e integracoes. Identifiquei **11 problemas** organizados por severidade.
 
 ---
 
-## 2. Edge Function: `processar-termo-evento`
+## PROBLEMAS CRITICOS (impedem o funcionamento)
 
-Nova edge function publica (verify_jwt = false) que centraliza as acoes do associado no link pos-aprovacao:
+### 1. URL do link no WhatsApp esta ERRADA (`analisar-evento`)
 
-**Acao "validar":**
-- Valida token (ativo, nao expirado)
-- Busca dados do sinistro com associado, veiculo, plano
-- Calcula valor da cota no backend: `MAX(valor_fipe * cota_participacao / 100, cota_minima)`
-- Retorna: dados do sinistro, associado, veiculo, valor da cota calculado, status do link (ja assinou? ja pagou?)
+**Arquivo:** `supabase/functions/analisar-evento/index.ts` (linha 179)
 
-**Acao "assinar":**
-- Recebe: token, imagem da assinatura (base64), IP do cliente
-- Faz upload da assinatura para Storage `sinistro-eventos/{sinistro_id}/termo-assinatura.png`
-- Atualiza `sinistro_evento_links`: assinatura_url, assinatura_ip, assinatura_em, etapa_atual = 1
-- Atualiza `sinistros`: termo_anuencia_assinado = true, termo_anuencia_url, termo_anuencia_assinado_em
-- Retorna confirmacao
-
-**Acao "gerar_cobranca_pix":**
-- Recebe: token
-- Valida que ja assinou o termo
-- Calcula valor da cota (novamente, no backend)
-- Sincroniza/busca cliente no ASAAS (reutiliza logica existente)
-- Cria cobranca PIX no ASAAS com descricao "Cota de Coparticipacao - Evento {protocolo}"
-- Salva cobranca em `asaas_cobrancas` com tipo = 'cota_participacao'
-- Atualiza `sinistros.cobranca_cota_id`
-- Retorna: QR Code PIX, codigo copia-e-cola, ID da cobranca
-
-**Acao "gerar_cobranca_cartao":**
-- Recebe: token, dados do cartao (numero, nome, validade, cvv), parcelas
-- Valida que ja assinou o termo
-- Calcula valor da cota
-- Cria cobranca no ASAAS com billingType = 'CREDIT_CARD' e creditCard + creditCardHolderInfo
-- Se aprovado: atualiza status do sinistro, notifica via WhatsApp
-- Se recusado: retorna erro para o frontend
-
-**Acao "verificar_pagamento":**
-- Recebe: token, cobranca_id
-- Verifica status da cobranca no ASAAS (polling do frontend)
-- Se confirmado: atualiza sinistro.status para `pagamento_confirmado`, cota_paga = true, cota_paga_em, notifica WhatsApp
-- Retorna status atual
-
----
-
-## 3. Nova Pagina Publica: `EventoPosAprovacao.tsx`
-
-Pagina em `/evento-aprovado/:token` que reutiliza a mesma estetica da pagina `EventoColisao.tsx`.
-
-### Header
-- Logo Pratic Car
-- Protocolo do evento
-- Dados resumidos (associado, veiculo)
-
-### Logica de estado
-- Se link invalido/expirado: mensagem amigavel com contato
-- Se nao assinou: mostra Etapa "Assinatura do Termo"
-- Se assinou mas nao pagou: mostra Etapa "Pagamento da Cota"
-- Se ja pagou: mostra tela de sucesso
-
-### Etapa Assinatura (`EventoTermoAssinatura.tsx`)
-- Logo Pratic Car
-- Dados do associado (nome, CPF) e veiculo (placa, marca/modelo)
-- Dados do evento (tipo, data, B.O.)
-- Valor da cota (exibido)
-- Texto do termo (placeholder legal extenso com clausulas)
-- O texto deve ter scroll (o associado precisa rolar ate o final)
-- Componente `SignaturePad` reutilizado (ja existe em `src/components/instalador/SignaturePad.tsx`)
-- Botao "Limpar Assinatura" e "Assinar e Prosseguir"
-- Ao assinar: chama edge function acao "assinar", avanca para pagamento
-
-### Etapa Pagamento (`EventoPagamentoCota.tsx`)
-- Titulo "Pagamento da Cota de Coparticipacao"
-- Resumo do calculo transparente: valor FIPE, percentual, cota minima, valor final
-- Tabs ou radio para selecionar metodo: PIX ou Cartao
-
-**PIX:**
-- Ao selecionar, chama "gerar_cobranca_pix"
-- Mostra QR Code (imagem base64)
-- Mostra codigo copia-e-cola com botao copiar
-- Cronometro de 30 minutos
-- Polling a cada 5 segundos via "verificar_pagamento"
-- Quando confirmado: avanca para tela de sucesso
-
-**Cartao:**
-- Formulario: numero, nome, validade, CVV
-- Seletor de parcelas (1x a 10x)
-- Simulacao de parcelas (chamar ASAAS para obter valores com juros)
-- Botao "Pagar"
-- Se aprovado: avanca para sucesso
-- Se recusado: mostra erro, permite tentar novamente
-
-### Tela de Sucesso
-- Icone de check verde
-- "Pagamento confirmado!"
-- "O reparo do seu veiculo sera agendado em breve. Voce recebera atualizacoes pelo WhatsApp."
-- Dados do pagamento (valor, metodo, data)
-
----
-
-## 4. Integracao com ASAAS Webhook
-
-O webhook do ASAAS (`asaas-webhook`) ja existe e processa `PAYMENT_CONFIRMED`. Precisamos adicionar logica para:
-- Quando uma cobranca do tipo `cota_participacao` for confirmada:
-  - Atualizar `sinistros.cota_paga = true, cota_paga_em = now()`
-  - Atualizar `sinistros.status = 'pagamento_confirmado'`
-  - Atualizar `sinistro_evento_links.pagamento_confirmado_em = now()`
-  - Enviar WhatsApp ao associado confirmando pagamento
-
----
-
-## 5. Arquivos a Criar
-
-| Arquivo | Descricao |
-|---|---|
-| Migration SQL | Campos no `sinistro_evento_links`, status `pagamento_confirmado` no enum |
-| `supabase/functions/processar-termo-evento/index.ts` | Validar, assinar, gerar cobranca, verificar pagamento |
-| `src/pages/public/EventoPosAprovacao.tsx` | Pagina principal pos-aprovacao |
-| `src/components/evento/EventoTermoAssinatura.tsx` | Componente da assinatura do termo |
-| `src/components/evento/EventoPagamentoCota.tsx` | Componente de pagamento (PIX + Cartao) |
-
-## 6. Arquivos a Modificar
-
-| Arquivo | Mudanca |
-|---|---|
-| `src/App.tsx` | Rota `/evento-aprovado/:token` |
-| `supabase/config.toml` | `verify_jwt = false` para `processar-termo-evento` |
-| `supabase/functions/asaas-webhook/index.ts` | Tratar cobrancas tipo `cota_participacao` |
-
----
-
-## 7. Calculo da Cota (Backend)
-
+O link enviado ao associado quando o evento e aprovado usa:
 ```text
-// Buscar plano do associado via contrato ativo
-plano = associado -> contratos (ativo) -> plano_id -> planos
+supabaseUrl.replace('.supabase.co', '.lovable.app')
+```
+Isso gera algo como `https://iyxdgmukrrdkffraptsx.lovable.app/evento-aprovado/...` que NAO existe.
 
-valor_fipe = veiculo.valor_fipe
-percentual = plano.cota_participacao (ex: 6)
-cota_minima = plano.cota_minima (ex: 1200)
+A URL correta do app publicado e `https://pratic-connect-21.lovable.app`.
 
-valor_calculado = valor_fipe * percentual / 100
-valor_cota = MAX(valor_calculado, cota_minima)
+**Correcao:** Usar a URL real do app publicado (hard-coded ou via variavel de ambiente).
+
+---
+
+### 2. Campo `dados_etapa1.fotos_urls` nao corresponde ao campo real salvo
+
+**Arquivo:** `supabase/functions/salvar-etapa-evento/index.ts` (linha 115)
+
+O `salvar-etapa-evento` salva as fotos dentro de `dados_etapaN.arquivos_urls` (com prefixo `arquivos_`), mas o analista (`EventoAnaliseDetalhe.tsx` linha 325) busca por `dadosEtapa1?.fotos_urls`.
+
+O mesmo vale para a etapa 2 — o B.O. e salvo em `dados_etapa2.arquivos_urls[0]`, mas o analista tenta acessar `dadosEtapa2?.bo_url`.
+
+**Impacto:** Fotos da auto vistoria e B.O. NAO aparecem no painel do analista.
+
+**Correcao:** Alinhar os nomes dos campos. No frontend (`EventoAnaliseDetalhe.tsx`):
+- Usar `dadosEtapa1?.arquivos_urls` em vez de `dadosEtapa1?.fotos_urls`
+- Usar `dadosEtapa2?.arquivos_urls?.[0]` em vez de `dadosEtapa2?.bo_url`
+- Usar `dadosEtapa2?.numero_bo` em vez de `dadosEtapa2?.bo_numero`
+- Usar `dadosEtapa2?.resumo_bo` em vez de `dadosEtapa2?.bo_resumo`
+
+---
+
+### 3. Campo de audio da etapa 3 — nome incorreto
+
+**Arquivo:** `EventoAnaliseDetalhe.tsx` (linha 270)
+
+O analista busca `dadosEtapa3?.audio_url`, mas o `salvar-etapa-evento` salva o audio dentro de `dadosEtapa3.arquivos_urls` (e o arquivo e um dos URLs genéricos, nao num campo chamado `audio_url`).
+
+**Correcao:** Verificar se o arquivo de audio esta em `dadosEtapa3.arquivos_urls` e filtrar pelo tipo (ou usar o primeiro arquivo que comeca com audio/).
+
+---
+
+### 4. Campo `dadosEtapa3.terceiro_envolvido` vs `dadosEtapa3.houve_terceiro`
+
+O `EventoEtapa3Relato.tsx` salva como `houve_terceiro`, mas o analista (`EventoAnaliseDetalhe.tsx` linha 282) busca por `dadosEtapa3?.terceiro_envolvido`.
+
+Os campos do terceiro tambem divergem:
+- Frontend salva: `dadosEtapa3.terceiro.nome`, `terceiro.placa`, `terceiro.telefone`
+- Analista busca: `dadosEtapa3?.terceiro_nome`, `terceiro_placa`, `terceiro_telefone`
+
+**Correcao:** Alinhar para usar os nomes corretos (os que realmente estao salvos no banco).
+
+---
+
+## PROBLEMAS MEDIOS (funcionalidade parcial)
+
+### 5. Link do analista pega o link MAIS RECENTE, nao necessariamente o correto
+
+**Arquivo:** `src/hooks/useEventoAnaliseDetalhe.ts` (linhas 35-41)
+
+O hook busca o link mais recente por `sinistro_id` com `order('created_at', desc)`. Apos a aprovacao, o `analisar-evento` cria um NOVO link. Se o analista voltar a ver o evento ja aprovado, vera os dados do novo link (que nao tem dados das etapas preenchidos), nao do link original que contem as fotos/B.O./relato.
+
+**Correcao:** Buscar o link com status `completado` (que contem os dados das 3 etapas), nao apenas o mais recente. Alternativamente, buscar o link que tenha `etapa_atual >= 3`.
+
+---
+
+### 6. Bucket `sinistro-eventos` pode nao existir
+
+**Arquivo:** `supabase/functions/processar-termo-evento/index.ts` (linhas 163-183)
+
+Ha um fallback para criar o bucket se o upload falhar, mas o bucket e criado como `public: false`. Depois o codigo usa `getPublicUrl()` (linha 186-187), que NAO funciona em buckets privados.
+
+**Correcao:** Ou criar o bucket como publico via migracao SQL, ou usar `createSignedUrl()` em vez de `getPublicUrl()`.
+
+---
+
+### 7. IP do cliente sempre "browser"
+
+**Arquivo:** `src/components/evento/EventoTermoAssinatura.tsx` (linha 98)
+
+O IP do cliente e enviado como `ip_cliente: 'browser'` (string fixa), o que nao tem valor para auditoria.
+
+**Correcao:** Buscar o IP real via servico externo (ex: `https://api.ipify.org?format=json`) antes de enviar, ou capturar no edge function via `req.headers.get('x-forwarded-for')`.
+
+---
+
+### 8. Simulacao de parcelas com juros hard-coded no frontend
+
+**Arquivo:** `src/components/evento/EventoPagamentoCota.tsx` (linha 304)
+
+O calculo de parcelas usa fator fixo `1.0299`, que pode nao corresponder ao valor real cobrado pelo ASAAS. O plano era buscar os valores reais do ASAAS.
+
+**Correcao:** Criar acao `simular_parcelas` na edge function que consulta o ASAAS para obter valores reais, ou aceitar a aproximacao e adicionar disclaimer "valores aproximados".
+
+---
+
+## PROBLEMAS MENORES (UX/cosmeticos)
+
+### 9. Analista nao ve o campo `dadosEtapa3.completada_em`
+
+**Arquivo:** `EventoAnaliseDetalhe.tsx` (linha 237)
+
+O campo `dadosEtapa3?.completada_em` nao existe — a data de conclusao da etapa 3 esta em `link.etapa3_completada_em` (no proprio link, nao dentro do JSONB). Ja ha um segundo bloco (linha 243) que mostra `link?.etapa3_completada_em`, entao este primeiro bloco e redundante e nunca mostra nada.
+
+**Correcao:** Remover o bloco com `dadosEtapa3?.completada_em`.
+
+---
+
+### 10. Regulador — `window.location.reload()` em vez de invalidar query
+
+**Arquivo:** `src/pages/regulador/ExecutarVistoriaEvento.tsx` (linha 67)
+
+Ao iniciar a vistoria, o codigo faz `window.location.reload()` em vez de invalidar a query do React Query. Isso causa uma experiencia de reload brusco.
+
+**Correcao:** Usar `queryClient.invalidateQueries({ queryKey: ['vistoria-evento-detalhe', id] })`.
+
+---
+
+### 11. CORS headers incompletos nas edge functions
+
+**Arquivo:** Varias edge functions (`processar-termo-evento`, `analisar-evento`, `salvar-etapa-evento`)
+
+Os CORS headers nao incluem os headers recentes do Supabase client:
+```text
+x-supabase-client-platform, x-supabase-client-platform-version, 
+x-supabase-client-runtime, x-supabase-client-runtime-version
 ```
 
-O calculo e feito APENAS no backend (edge function). O frontend apenas exibe o resultado.
+Isso pode causar falhas de CORS em versoes mais recentes do SDK.
+
+**Correcao:** Atualizar os CORS headers em todas as edge functions envolvidas.
 
 ---
 
-## 8. Seguranca
+## Tabela Resumo
 
-- Dados do cartao NUNCA sao armazenados -- enviados direto para ASAAS via edge function
-- O calculo da cota e feito no backend para evitar manipulacao
-- O link e validado a cada acao (token + status ativo + nao expirado)
-- A assinatura captura IP e timestamp para auditoria
-- O pagamento via PIX e verificado tanto por polling quanto por webhook (dupla verificacao)
+| # | Severidade | Problema | Arquivo Principal |
+|---|---|---|---|
+| 1 | CRITICO | URL errada no WhatsApp pos-aprovacao | analisar-evento |
+| 2 | CRITICO | Nomes de campos `fotos_urls` vs `arquivos_urls` | EventoAnaliseDetalhe / salvar-etapa-evento |
+| 3 | CRITICO | Campo `audio_url` nao existe | EventoAnaliseDetalhe |
+| 4 | CRITICO | `terceiro_envolvido` vs `houve_terceiro` | EventoAnaliseDetalhe |
+| 5 | MEDIO | Link errado selecionado pelo analista | useEventoAnaliseDetalhe |
+| 6 | MEDIO | Bucket privado + getPublicUrl | processar-termo-evento |
+| 7 | MEDIO | IP sempre "browser" | EventoTermoAssinatura |
+| 8 | MEDIO | Juros de parcelas hard-coded | EventoPagamentoCota |
+| 9 | MENOR | Campo redundante que nunca renderiza | EventoAnaliseDetalhe |
+| 10 | MENOR | Reload brusco no regulador | ExecutarVistoriaEvento |
+| 11 | MENOR | CORS headers incompletos | Varias edge functions |
 
+---
+
+## Plano de Correcao
+
+### Etapa 1 — Corrigir nomes de campos no analista (problemas 2, 3, 4, 9)
+
+Atualizar `EventoAnaliseDetalhe.tsx`:
+- `dadosEtapa1?.fotos_urls` para `dadosEtapa1?.arquivos_urls`
+- `dadosEtapa2?.bo_url` para `dadosEtapa2?.arquivos_urls?.[0]`
+- `dadosEtapa2?.bo_numero` para `dadosEtapa2?.numero_bo`
+- `dadosEtapa2?.bo_resumo` para `dadosEtapa2?.resumo_bo`
+- `dadosEtapa3?.audio_url` para buscar audio em `dadosEtapa3?.arquivos_urls`
+- `dadosEtapa3?.terceiro_envolvido` para `dadosEtapa3?.houve_terceiro`
+- `dadosEtapa3?.terceiro_nome` para `dadosEtapa3?.terceiro?.nome`
+- Remover bloco `dadosEtapa3?.completada_em`
+
+### Etapa 2 — Corrigir URL do WhatsApp (problema 1)
+
+Atualizar `analisar-evento/index.ts` para usar a URL real publicada do app.
+
+### Etapa 3 — Corrigir busca do link no analista (problema 5)
+
+Atualizar `useEventoAnaliseDetalhe.ts` para buscar o link que tem `etapa_atual >= 3` (completado com dados), nao apenas o mais recente.
+
+### Etapa 4 — Corrigir bucket/URL de assinatura (problema 6)
+
+Atualizar `processar-termo-evento` para usar `createSignedUrl` ou garantir que o bucket existe e e publico via migracao SQL.
+
+### Etapa 5 — Capturar IP real (problema 7)
+
+Atualizar `processar-termo-evento` para extrair IP de `req.headers.get('x-forwarded-for')` em vez de receber do frontend.
+
+### Etapa 6 — Corrigir reload brusco (problema 10)
+
+Atualizar `ExecutarVistoriaEvento.tsx` para usar invalidacao do React Query.
+
+### Etapa 7 — Atualizar CORS headers (problema 11)
+
+Atualizar os corsHeaders em `processar-termo-evento`, `analisar-evento`, `salvar-etapa-evento` e `salvar-vistoria-regulador`.
+
+### Etapa 8 — Adicionar disclaimer de parcelas (problema 8)
+
+Adicionar texto "valores aproximados" no seletor de parcelas do `EventoPagamentoCota.tsx`.
