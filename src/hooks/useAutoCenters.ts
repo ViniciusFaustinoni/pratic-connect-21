@@ -42,6 +42,10 @@ export interface AutoCenterPeca {
   nome: string;
   valor: number | null;
   condicao: string;
+  tipo_peca: string | null;
+  veiculo_marca: string | null;
+  veiculo_modelo: string | null;
+  veiculo_ano: string | null;
   created_at: string;
 }
 
