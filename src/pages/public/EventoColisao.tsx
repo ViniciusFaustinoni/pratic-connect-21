@@ -133,7 +133,9 @@ export default function EventoColisao() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Tipo</span>
-              <Badge variant="outline" className="text-xs">Colisão</Badge>
+              <Badge variant="outline" className="text-xs capitalize">
+                {sinistro?.tipo?.replace(/_/g, ' ') || 'Evento'}
+              </Badge>
             </div>
             {sinistro?.data_ocorrencia && (
               <div className="flex items-center justify-between">
