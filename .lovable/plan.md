@@ -1,169 +1,121 @@
 
-# Modal de Atribuicao de Fornecedores e Cotacao de Pecas
+# Aba "Cotacoes Recebidas" no Detalhe do Evento
 
 ## Resumo
 
-Construir o modal completo de atribuicao de fornecedores que aparece quando um sinistro esta com status `pronto_para_oficina`. O modal permite selecionar oficina, prestadores e auto centers, e dispara cotacoes automaticas de pecas via WhatsApp para os auto centers selecionados.
+Adicionar uma aba "Cotacoes Recebidas" na pagina de analise do sinistro (`SinistroAnalise.tsx`) que mostra pedidos enviados, permite registro manual de cotacoes, exibe comparativo lado a lado e permite aprovar uma unica cotacao por evento.
 
 ---
 
-## Etapa 1 — Criar tabela `evento_cotacoes_pecas`
+## Alteracoes no Banco de Dados
 
-Nova tabela para registrar pedidos de cotacao enviados a auto centers:
-
-```text
-CREATE TABLE evento_cotacoes_pecas (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  sinistro_id uuid REFERENCES sinistros(id) NOT NULL,
-  auto_center_id uuid REFERENCES auto_centers(id) NOT NULL,
-  itens jsonb NOT NULL DEFAULT '[]',
-  mensagem_enviada text,
-  status varchar DEFAULT 'enviado',  -- enviado, respondido, expirado
-  whatsapp_mensagem_id uuid REFERENCES whatsapp_mensagens(id),
-  prazo_resposta timestamp with time zone,
-  resposta jsonb,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-```
-
-Tambem adicionar coluna na tabela `sinistros` para prestadores vinculados (JSONB array de IDs) ou criar tabela de relacionamento `sinistro_prestadores`:
+A tabela `evento_cotacoes_pecas` ja existe com os campos necessarios (`id`, `sinistro_id`, `auto_center_id`, `itens`, `status`, `resposta`, `created_at`, etc.). Precisamos apenas adicionar colunas para suportar aprovacao:
 
 ```text
-CREATE TABLE sinistro_prestadores (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  sinistro_id uuid REFERENCES sinistros(id) NOT NULL,
-  prestador_id uuid REFERENCES prestadores_evento(id) NOT NULL,
-  observacoes text,
-  created_at timestamptz DEFAULT now()
-);
-```
-
-RLS policies para ambas tabelas com acesso autenticado.
-
----
-
-## Etapa 2 — Criar componente `AtribuirFornecedoresDialog.tsx`
-
-Arquivo: `src/components/sinistros/AtribuirFornecedoresDialog.tsx`
-
-Modal dividido em 3 secoes:
-
-**Cabecalho:** Dados do veiculo (marca, modelo, placa) + resumo do orcamento (itens de pecas extraidos de `dados_vistoria`).
-
-**Secao 1 — Oficina (radio, selecao unica):**
-- Busca oficinas filtradas automaticamente por `marcas_atendidas` (marca do veiculo OU "GLOBAL") e status ativo
-- Cards com: nome, endereco, especialidades (badges), marcas (badges), nota_media
-- Contagem de veiculos em oficina (query count de `ordens_servico` com status aberto para aquela oficina)
-- Radio button para selecao unica
-
-**Secao 2 — Prestadores (checkboxes, selecao multipla, opcional):**
-- Busca prestadores por marca compativel e status ativo
-- Sugere prestadores com especialidades complementares (especialidades do orcamento que a oficina selecionada nao cobre)
-- Checkboxes para selecao multipla
-
-**Secao 3 — Auto Centers (checkboxes, selecao multipla):**
-- Busca auto centers por marca compativel e status ativo
-- Filtra por especialidades compatíveis com os tipos de pecas do orcamento
-- Mostra WhatsApp obrigatorio
-- Preview da mensagem de cotacao
-- Recomendacao: minimo 3 para comparacao de precos
-
-**Botao "Confirmar Atribuicao":**
-1. Cria OS vinculada a oficina selecionada (reutiliza logica de `EnviarParaOficinaDialog`)
-2. Insere registros em `sinistro_prestadores`
-3. Para cada auto center: cria registro em `evento_cotacoes_pecas` e invoca edge function para enviar WhatsApp
-
----
-
-## Etapa 3 — Criar Edge Function `enviar-cotacao-pecas`
-
-Arquivo: `supabase/functions/enviar-cotacao-pecas/index.ts`
-
-Recebe: `sinistro_id`, `auto_center_id`, `itens` (array de pecas), `cotacao_id`
-
-Acoes:
-1. Busca dados do auto center (nome, whatsapp)
-2. Busca dados do veiculo (marca, modelo, ano, placa)
-3. Busca protocolo do sinistro
-4. Monta mensagem formatada com a lista de pecas
-5. Envia via `whatsapp-send-text` (ja existente)
-6. Atualiza `evento_cotacoes_pecas` com `whatsapp_mensagem_id`
-
-Mensagem modelo:
-```text
-Ola [Nome]! Aqui e a Pratic Car.
-Precisamos de uma cotacao de pecas para:
-
-Veiculo: [Marca] [Modelo] [Ano] - Placa: [Placa]
-
-Itens para cotacao:
-1. [Descricao] - Qtd: [X]
-2. [Descricao] - Qtd: [X]
-
-Prazo para resposta: 24 horas
-Referencia: Evento #[Protocolo]
-
-Responda com valor de cada item e prazo de entrega. Obrigado!
+ALTER TABLE evento_cotacoes_pecas 
+  ADD COLUMN aprovada boolean DEFAULT false,
+  ADD COLUMN aprovada_em timestamptz,
+  ADD COLUMN aprovada_por uuid REFERENCES profiles(id),
+  ADD COLUMN valor_total numeric DEFAULT 0,
+  ADD COLUMN prazo_geral text,
+  ADD COLUMN observacoes_auto_center text;
 ```
 
 ---
 
-## Etapa 4 — Atualizar `SinistroAnalise.tsx`
+## Arquivos a Criar
 
-No bloco de acoes (linhas 523-548), adicionar condicao para status `pronto_para_oficina`:
+### 1. `src/components/sinistros/CotacoesRecebidasTab.tsx`
 
-- Mostrar banner "Pagamento e termo confirmados — pronto para atribuir fornecedores"
-- Botao "Atribuir Fornecedores" que abre o novo modal
-- Substituir o atual `EnviarParaOficinaDialog` simples pelo novo `AtribuirFornecedoresDialog` para este status
+Componente principal da aba, dividido em 4 secoes:
 
-Manter o `EnviarParaOficinaDialog` existente para status `aprovado` (fluxo legado/simplificado).
+**Secao 1 - Resumo dos Pedidos Enviados:**
+- Query em `evento_cotacoes_pecas` filtrado por `sinistro_id`
+- Join com `auto_centers` para nome
+- Mostra cards com: nome auto center, data envio, status (badge colorido)
+- Pedidos com mais de 24h sem resposta: status automaticamente "expirado" (verificacao no frontend ao renderizar)
+- Botao "Reenviar cotacao" para expirados (chama edge function `enviar-cotacao-pecas` novamente)
+
+**Secao 2 - Botao "Registrar Cotacao Recebida":**
+- Abre modal `RegistrarCotacaoDialog`
+- So aparece se ha pedidos com status "enviado"
+
+**Secao 3 - Comparativo de Cotacoes:**
+- Tabela comparativa horizontal quando ha 2+ cotacoes com resposta
+- Linhas: cada peca do orcamento
+- Colunas: cada auto center que respondeu
+- Celulas: valor unitario + disponibilidade + prazo
+- Rodape: total por auto center, menor preco em verde
+- Pecas indisponiveis em vermelho
+
+**Secao 4 - Cards de Cotacoes com botao Aprovar:**
+- Card por cotacao respondida
+- Botao "Aprovar esta Cotacao" no canto
+- Se ja existe uma aprovada: mostra ela em destaque no topo, demais com badge "nao selecionada" cinza
+- Modal de confirmacao antes de aprovar (irreversivel)
+- Ao aprovar: update `aprovada=true`, `aprovada_em=now()`, `aprovada_por=user_id` e marcar demais como `status='nao_selecionada'`
+
+### 2. `src/components/sinistros/RegistrarCotacaoDialog.tsx`
+
+Modal para registro manual:
+
+- Dropdown de auto centers (apenas os acionados para este evento, filtrados de `evento_cotacoes_pecas`)
+- Lista de pecas pre-preenchida do orcamento (readonly descricao e quantidade)
+- Para cada peca: valor unitario (R$), prazo entrega (texto), disponibilidade (select: Disponivel/Indisponivel/Sob consulta)
+- Valor total calculado automaticamente (soma de unitario x quantidade para itens disponiveis)
+- Campo observacoes (textarea)
+- Campo prazo geral (texto)
+- Ao salvar: update na `evento_cotacoes_pecas` correspondente com `status='respondido'`, `resposta=jsonb` com os valores, `valor_total`, `prazo_geral`, `observacoes_auto_center`
+
+### 3. `src/hooks/useCotacoesEvento.ts`
+
+Hook para buscar cotacoes de um sinistro:
+- Query em `evento_cotacoes_pecas` com join em `auto_centers(nome_fantasia, nome, whatsapp)`
+- Filtro por `sinistro_id`
+- Retorna lista de cotacoes com dados do auto center
 
 ---
 
-## Etapa 5 — Hook `useVistoriaEvento`
+## Arquivos a Modificar
 
-Criar hook para buscar dados da vistoria vinculada ao sinistro (para extrair `dados_vistoria.itens_orcamento` e `dados_vistoria.etapas_reparo`):
+### `src/pages/eventos/SinistroAnalise.tsx`
+
+Transformar a area principal de conteudo (coluna esquerda) em um componente com abas (`Tabs`):
+
+- Aba "Detalhes" (padrao): conteudo atual (cards de associado, veiculo, sinistro, documentos, etc.)
+- Aba "Cotacoes Recebidas": novo componente `CotacoesRecebidasTab`
+- A aba de cotacoes so aparece quando status e `pronto_para_oficina`, `em_reparo` ou posterior
+- Importar componentes `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`
+
+A coluna direita (acoes, checklist, historico) permanece inalterada fora das abas.
+
+---
+
+## Fluxo do Usuario
 
 ```text
-useQuery(['vistoria-evento', sinistroId], ...)
-  -> vistorias_evento WHERE sinistro_id = X AND status = 'concluida'
-  -> retorna dados_vistoria parseado
+1. Evento com status "pronto_para_oficina" ou "em_reparo"
+2. Analista/Regulador abre o evento
+3. Ve aba "Cotacoes Recebidas" ao lado de "Detalhes"
+4. Clica na aba -> ve resumo dos pedidos enviados
+5. Auto center responde via WhatsApp
+6. Analista clica "Registrar Cotacao Recebida"
+7. Preenche valores, disponibilidade, prazos
+8. Salva -> cotacao aparece no comparativo
+9. Repete para outros auto centers
+10. Analisa comparativo lado a lado
+11. Clica "Aprovar esta Cotacao" no melhor custo-beneficio
+12. Confirma -> cotacao aprovada, demais marcadas como nao selecionadas
 ```
 
 ---
 
-## Arquivos afetados
+## Arquivos Afetados
 
 | Acao | Arquivo |
 |---|---|
-| Migration SQL | Criar `evento_cotacoes_pecas` e `sinistro_prestadores` |
-| Criar | `src/components/sinistros/AtribuirFornecedoresDialog.tsx` |
-| Criar | `supabase/functions/enviar-cotacao-pecas/index.ts` |
-| Criar | `src/hooks/useVistoriaEvento.ts` |
-| Modificar | `src/pages/eventos/SinistroAnalise.tsx` — adicionar botao e condicao para `pronto_para_oficina` |
-| Modificar | `src/hooks/useSinistroAnalise.ts` — incluir query de vistoria no retorno |
-
----
-
-## Fluxo resumido
-
-```text
-Sinistro com status "pronto_para_oficina"
-  |
-  v
-Analista/Regulador clica "Atribuir Fornecedores"
-  |
-  v
-Modal abre com 3 secoes (filtradas por marca do veiculo):
-  1. Seleciona 1 oficina (obrigatorio)
-  2. Seleciona prestadores (opcional)
-  3. Seleciona auto centers (recomendado min 3)
-  |
-  v
-Confirmar Atribuicao:
-  - Cria OS vinculada a oficina
-  - Registra prestadores
-  - Para cada auto center: registra cotacao + envia WhatsApp
-  - Status sinistro -> "em_reparo"
-```
+| Migration SQL | Adicionar colunas `aprovada`, `aprovada_em`, `aprovada_por`, `valor_total`, `prazo_geral`, `observacoes_auto_center` em `evento_cotacoes_pecas` |
+| Criar | `src/hooks/useCotacoesEvento.ts` |
+| Criar | `src/components/sinistros/CotacoesRecebidasTab.tsx` |
+| Criar | `src/components/sinistros/RegistrarCotacaoDialog.tsx` |
+| Modificar | `src/pages/eventos/SinistroAnalise.tsx` — adicionar sistema de abas com aba de cotacoes |
