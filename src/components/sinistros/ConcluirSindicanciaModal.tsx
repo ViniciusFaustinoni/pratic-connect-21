@@ -19,6 +19,8 @@ interface ConcluirSindicanciaModalProps {
   onClose: () => void;
   sinistroId: string;
   protocolo: string;
+  associadoId?: string | null;
+  associadoNome?: string | null;
   onSuccess?: () => void;
 }
 
@@ -31,7 +33,7 @@ const RESULTADO_DESCRICAO: Record<ResultadoSindicancia, string> = {
 };
 
 export function ConcluirSindicanciaModal({
-  open, onClose, sinistroId, protocolo, onSuccess,
+  open, onClose, sinistroId, protocolo, associadoId, associadoNome, onSuccess,
 }: ConcluirSindicanciaModalProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -88,13 +90,28 @@ export function ConcluirSindicanciaModal({
       if (resultado === 'irregular' || resultado === 'juridico') {
         await supabase.from('processos').insert({
           sinistro_id: sinistroId,
+          associado_id: associadoId || undefined,
           tipo: resultado === 'irregular' ? 'sindicancia_fraude' : 'sindicancia_complexa',
           natureza: resultado === 'irregular' ? 'Fraude em sinistro' : 'Caso complexo de sindicância',
           objeto: relatorio.substring(0, 200),
-          parte_contraria_nome: 'A definir',
+          parte_contraria_nome: associadoNome || 'A definir',
           status: 'ativo',
           criado_por: user?.id,
           observacoes: relatorio,
+        });
+      }
+
+      // Carta de cancelamento → criar consulta jurídica
+      if (resultado === 'carta_cancelamento') {
+        await supabase.from('consultas_juridicas').insert({
+          sinistro_id: sinistroId,
+          associado_id: associadoId || undefined,
+          solicitante_id: user?.id,
+          assunto: 'Carta de Cancelamento — Sindicância',
+          descricao: `Associado ${associadoNome || ''} desistiu do acionamento (protocolo ${protocolo}). Providenciar registro formal e suspensão do veículo.\n\nRelatório: ${relatorio}`,
+          prioridade: 'alta',
+          departamento: 'eventos',
+          status: 'pendente',
         });
       }
 

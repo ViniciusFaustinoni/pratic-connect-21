@@ -17,6 +17,7 @@ interface CardAnaliseIncendioProps {
     analise_interna?: boolean | null;
     analise_interna_motivos?: string[] | null;
   };
+  associadoId?: string | null;
 }
 
 const MOTIVOS_ANALISE = [
@@ -24,7 +25,7 @@ const MOTIVOS_ANALISE = [
   { value: 'sobrecarga_eletrica', label: 'Sobrecarga elétrica (modificações/som)' },
 ] as const;
 
-export function CardAnaliseIncendio({ sinistro }: CardAnaliseIncendioProps) {
+export function CardAnaliseIncendio({ sinistro, associadoId }: CardAnaliseIncendioProps) {
   const queryClient = useQueryClient();
   const [motivosSelecionados, setMotivosSelecionados] = useState<string[]>(
     (sinistro.analise_interna_motivos as string[]) || []
@@ -52,6 +53,17 @@ export function CardAnaliseIncendio({ sinistro }: CardAnaliseIncendioProps) {
         .eq('id', sinistro.id);
 
       if (error) throw error;
+
+      // Criar consulta jurídica para visibilidade do jurídico
+      await supabase.from('consultas_juridicas').insert({
+        sinistro_id: sinistro.id,
+        associado_id: associadoId || undefined,
+        assunto: 'Análise Interna — Incêndio',
+        descricao: `Evento encaminhado para análise interna. Motivos: ${motivosSelecionados.map(m => MOTIVOS_ANALISE.find(ma => ma.value === m)?.label || m).join(', ')}`,
+        prioridade: 'normal',
+        departamento: 'eventos',
+        status: 'pendente',
+      });
 
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistro.id,

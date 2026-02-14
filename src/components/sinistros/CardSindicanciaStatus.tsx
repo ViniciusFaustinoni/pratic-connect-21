@@ -20,10 +20,12 @@ interface CardSindicanciaStatusProps {
   prazoFim?: string | null;
   resultadoSindicancia?: string | null;
   status: string;
+  associadoId?: string | null;
+  associadoNome?: string | null;
 }
 
 export function CardSindicanciaStatus({
-  sinistroId, protocolo, sindicanteId, prazoFim, resultadoSindicancia, status,
+  sinistroId, protocolo, sindicanteId, prazoFim, resultadoSindicancia, status, associadoId, associadoNome,
 }: CardSindicanciaStatusProps) {
   const { isDiretor, isGerente } = usePermissions();
   const [modalConcluirOpen, setModalConcluirOpen] = useState(false);
@@ -148,6 +150,8 @@ export function CardSindicanciaStatus({
         onClose={() => setModalConcluirOpen(false)}
         sinistroId={sinistroId}
         protocolo={protocolo}
+        associadoId={associadoId}
+        associadoNome={associadoNome}
       />
     </>
   );

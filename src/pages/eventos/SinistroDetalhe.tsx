@@ -32,6 +32,7 @@ import { CardAnaliseIncendio } from '@/components/sinistros/CardAnaliseIncendio'
 import { CardAnaliseAlagamento } from '@/components/sinistros/CardAnaliseAlagamento';
 import { EncaminharSindicanciaDialog } from '@/components/sinistros/EncaminharSindicanciaDialog';
 import { CardSindicanciaStatus } from '@/components/sinistros/CardSindicanciaStatus';
+import { EncaminharJuridicoEventoModal } from '@/components/sinistros/EncaminharJuridicoEventoModal';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { TrajetoColisaoCard } from '@/components/sinistros/TrajetoColisaoCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
@@ -244,6 +245,7 @@ export default function SinistroDetalhe() {
   const [mapaLocalizacaoOpen, setMapaLocalizacaoOpen] = useState(false);
   const [modalIndenizacaoOpen, setModalIndenizacaoOpen] = useState(false);
   const [modalSindicanciaOpen, setModalSindicanciaOpen] = useState(false);
+  const [modalJuridicoOpen, setModalJuridicoOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { isDiretor } = usePermissions();
 
@@ -557,6 +559,13 @@ export default function SinistroDetalhe() {
                 Criar Ordem de Serviço
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem onSelect={(e) => {
+              e.preventDefault();
+              openModalSafely(setModalJuridicoOpen);
+            }}>
+              <Scale className="h-4 w-4 mr-2" />
+              Encaminhar para Jurídico
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate(`/juridico/processos/novo?sinistro_id=${id}`)}>
               <Scale className="h-4 w-4 mr-2" />
               Criar Processo Jurídico
@@ -803,6 +812,8 @@ export default function SinistroDetalhe() {
             prazoFim={sinistro.sindicancia_prazo_fim}
             resultadoSindicancia={sinistro.resultado_sindicancia}
             status={sinistro.status}
+            associadoId={sinistro.associado_id}
+            associadoNome={sinistro.associado?.nome}
           />
         </div>
 
@@ -976,12 +987,12 @@ export default function SinistroDetalhe() {
 
           {/* Card Análise de Incêndio */}
           {sinistro.tipo === 'incendio' && (
-            <CardAnaliseIncendio sinistro={sinistro} />
+            <CardAnaliseIncendio sinistro={sinistro} associadoId={sinistro.associado_id} />
           )}
 
           {/* Card Análise de Alagamento */}
           {sinistro.tipo === 'fenomeno_natural' && (
-            <CardAnaliseAlagamento sinistro={sinistro} />
+            <CardAnaliseAlagamento sinistro={sinistro} associadoId={sinistro.associado_id} />
           )}
 
           {/* Processos Jurídicos */}
@@ -1346,6 +1357,18 @@ export default function SinistroDetalhe() {
           sinistroId={sinistro.id}
           protocolo={sinistro.protocolo}
           tipoEvento={sinistro.tipo}
+        />
+      )}
+
+      {/* Modal Encaminhar para Jurídico */}
+      {sinistro && (
+        <EncaminharJuridicoEventoModal
+          open={modalJuridicoOpen}
+          onClose={() => setModalJuridicoOpen(false)}
+          sinistroId={sinistro.id}
+          protocolo={sinistro.protocolo}
+          associadoId={sinistro.associado_id}
+          associadoNome={sinistro.associado?.nome}
         />
       )}
     </div>
