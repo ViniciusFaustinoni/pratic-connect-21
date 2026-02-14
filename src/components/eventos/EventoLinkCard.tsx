@@ -67,9 +67,15 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
   };
 
   const isRouboFurto = sinistroTipo === 'roubo' || sinistroTipo === 'furto';
-  const etapaLabels = isRouboFurto 
+  const isVidros = sinistroTipo === 'vidros';
+  
+  const etapaLabels = isVidros
+    ? ['Não iniciou', 'Fotos do Dano', 'Relato Simples']
+    : isRouboFurto 
     ? ['Não iniciou', 'B.O.', 'Relato', sinistroTipo === 'furto' ? 'Chaves + Docs' : 'Documentação']
     : ['Não iniciou', 'Auto Vistoria', 'B.O.', 'Relato Completo'];
+  
+  const totalEtapas = isVidros ? 2 : 3;
 
   return (
     <Card className={statusFinal === 'ativo' ? 'border-green-500/50' : statusFinal === 'expirado' ? 'border-amber-500/50' : ''}>
@@ -104,7 +110,7 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs">
-                Etapa {linkAtivo.etapa_atual}/3
+                Etapa {linkAtivo.etapa_atual}/{totalEtapas}
               </Badge>
             </div>
 
@@ -117,7 +123,7 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
               <div className="w-full bg-muted rounded-full h-2">
                 <div
                   className="bg-primary h-2 rounded-full transition-all"
-                  style={{ width: `${(linkAtivo.etapa_atual / 3) * 100}%` }}
+                  style={{ width: `${(linkAtivo.etapa_atual / totalEtapas) * 100}%` }}
                 />
               </div>
             </div>

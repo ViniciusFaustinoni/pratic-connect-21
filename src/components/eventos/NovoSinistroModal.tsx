@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, Check, ChevronsUpDown, Car, Truck } from 'lucide-react';
+import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { differenceInDays } from 'date-fns';
 
 interface NovoSinistroModalProps {
   open: boolean;
@@ -51,15 +53,32 @@ const TIPO_SINISTRO_OPTIONS = [
   { value: 'furto', label: 'Furto' },
   { value: 'incendio', label: 'Incêndio' },
   { value: 'fenomeno_natural', label: 'Fenômeno Natural' },
-  { value: 'vidros', label: 'Vidros' },
+  { value: 'vidros', label: 'Vidros e Faróis' },
   { value: 'outro', label: 'Outro' },
 ];
 
 const TIPO_LABELS: Record<string, string> = {
   colisao: 'Colisão', roubo: 'Roubo', furto: 'Furto', incendio: 'Incêndio',
-  fenomeno_natural: 'Fenômeno Natural', vidros: 'Vidros', vandalismo: 'Vandalismo',
+  fenomeno_natural: 'Fenômeno Natural', vidros: 'Vidros e Faróis', vandalismo: 'Vandalismo',
   terceiros: 'Terceiros', outro: 'Outro',
 };
+
+const PECAS_VIDROS = [
+  'Para-brisa',
+  'Vidro vigia (traseiro)',
+  'Vidro lateral dianteiro esquerdo',
+  'Vidro lateral dianteiro direito',
+  'Vidro lateral traseiro esquerdo',
+  'Vidro lateral traseiro direito',
+  'Vidro fixo lateral esquerdo',
+  'Vidro fixo lateral direito',
+  'Farol esquerdo',
+  'Farol direito',
+  'Lanterna esquerda',
+  'Lanterna direita',
+  'Espelho retrovisor esquerdo',
+  'Espelho retrovisor direito',
+] as const;
 
 const DOCUMENTOS_OBRIGATORIOS: Record<string, Array<{tipo: string; nome: string; obrigatorio: boolean}>> = {
   colisao: [
@@ -95,9 +114,10 @@ const DOCUMENTOS_OBRIGATORIOS: Record<string, Array<{tipo: string; nome: string;
     { tipo: 'comprovante_evento', nome: 'Comprovante do Evento (notícia/defesa civil)', obrigatorio: false },
   ],
   vidros: [
-    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
-    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
-    { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos do Dano (2-5)', obrigatorio: true },
+    { tipo: 'relato', nome: 'Relato do Ocorrido', obrigatorio: true },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: false },
+    { tipo: 'nf_danfe', nome: 'Nota Fiscal DANFE', obrigatorio: false },
   ],
   outro: [
     { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
@@ -154,17 +174,29 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
   });
   const [necessitaReboque, setNecessitaReboque] = useState(false);
 
+  // === Vidros state ===
+  const [pecaDanificada, setPecaDanificada] = useState('');
+  const [opcaoReparo, setOpcaoReparo] = useState<'via_pratic' | 'reembolso'>('via_pratic');
+  const [vidrosValidacao, setVidrosValidacao] = useState<{
+    carenciaOk: boolean;
+    carenciaData?: string;
+    beneficioOk: boolean;
+    pecaLimiteOk: boolean;
+    pecaBloqueada?: string;
+    loading: boolean;
+  }>({ carenciaOk: true, beneficioOk: true, pecaLimiteOk: true, loading: false });
+
+  const isVidros = formData.tipo === 'vidros';
+
   // Buscar associados
   const { data: associados = [] } = useQuery({
     queryKey: ['associados-search', searchAssociado],
     queryFn: async () => {
       if (searchAssociado.length < 3) return [];
       
-      // Verificar se é busca por placa (contém letras + números no padrão de placa)
       const isBuscaPlaca = /^[A-Za-z]{3}/i.test(searchAssociado.replace(/\s/g, ''));
       
       if (isBuscaPlaca) {
-        // Buscar veículo pela placa e retornar o associado
         const { data: veiculos } = await supabase
           .from('veiculos')
           .select('associado_id, placa, associado:associados!inner(id, nome, cpf, status)')
@@ -173,7 +205,6 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         
         if (!veiculos) return [];
         
-        // Extrair associados únicos dos veículos encontrados
         const associadoMap = new Map<string, any>();
         for (const v of veiculos) {
           const assoc = v.associado as any;
@@ -209,10 +240,95 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
     enabled: !!selectedAssociado
   });
 
+  // === Validação de vidros ===
+  useEffect(() => {
+    if (!isVidros || !selectedAssociado || !selectedVeiculo) {
+      setVidrosValidacao({ carenciaOk: true, beneficioOk: true, pecaLimiteOk: true, loading: false });
+      return;
+    }
+
+    const validar = async () => {
+      setVidrosValidacao(prev => ({ ...prev, loading: true }));
+      
+      try {
+        // 1. Verificar carência 120 dias
+        const { data: associadoData } = await supabase
+          .from('associados')
+          .select('data_adesao, plano_id')
+          .eq('id', selectedAssociado)
+          .single();
+
+        let carenciaOk = true;
+        let carenciaData: string | undefined;
+
+        if (associadoData?.data_adesao) {
+          const diasDesdeAdesao = differenceInDays(new Date(), new Date(associadoData.data_adesao));
+          if (diasDesdeAdesao < 120) {
+            carenciaOk = false;
+            const dataLiberacao = new Date(associadoData.data_adesao);
+            dataLiberacao.setDate(dataLiberacao.getDate() + 120);
+            carenciaData = dataLiberacao.toLocaleDateString('pt-BR');
+          }
+        }
+
+        // 2. Verificar benefício contratado
+        let beneficioOk = true;
+        if (associadoData?.plano_id) {
+          const { data: cobertura } = await supabase
+            .from('planos_coberturas')
+            .select('id')
+            .eq('plano_id', associadoData.plano_id)
+            .eq('cobertura_id', (await supabase.from('coberturas').select('id').eq('codigo', 'COB-VID').single()).data?.id || '')
+            .maybeSingle();
+          
+          // Se não encontrar vínculo, mas a tabela pode estar vazia (sem dados populados)
+          // Deixar beneficioOk = true para não bloquear indevidamente enquanto não houver dados
+          if (cobertura === null) {
+            // Verificar se a tabela planos_coberturas tem algum dado
+            const { count } = await supabase.from('planos_coberturas').select('id', { count: 'exact', head: true });
+            if (count && count > 0) {
+              beneficioOk = false;
+            }
+          }
+        }
+
+        // 3. Verificar limite por peça (12 meses)
+        let pecaLimiteOk = true;
+        let pecaBloqueada: string | undefined;
+        if (pecaDanificada) {
+          const dozeAtras = new Date();
+          dozeAtras.setFullYear(dozeAtras.getFullYear() - 1);
+          
+          const { data: historico } = await supabase
+            .from('sinistro_vidros_historico')
+            .select('id')
+            .eq('associado_id', selectedAssociado)
+            .eq('peca', pecaDanificada)
+            .gte('data_utilizacao', dozeAtras.toISOString())
+            .limit(1);
+          
+          if (historico && historico.length > 0) {
+            pecaLimiteOk = false;
+            pecaBloqueada = pecaDanificada;
+          }
+        }
+
+        setVidrosValidacao({ carenciaOk, carenciaData, beneficioOk, pecaLimiteOk, pecaBloqueada, loading: false });
+      } catch (err) {
+        console.error('[NovoSinistroModal] Erro na validação de vidros:', err);
+        setVidrosValidacao({ carenciaOk: true, beneficioOk: true, pecaLimiteOk: true, loading: false });
+      }
+    };
+
+    validar();
+  }, [isVidros, selectedAssociado, selectedVeiculo, pecaDanificada]);
+
   const selectedAssociadoData = associados.find(a => a.id === selectedAssociado);
   const selectedVeiculoData = veiculos.find(v => v.id === selectedVeiculo);
 
-  // Mutation para criar sinistro (fluxo completo alinhado com edge function criar-sinistro)
+  const vidrosBloqueado = isVidros && (!vidrosValidacao.carenciaOk || !vidrosValidacao.beneficioOk || !vidrosValidacao.pecaLimiteOk);
+
+  // Mutation para criar sinistro
   const createMutation = useMutation({
     mutationFn: async () => {
       const veiculoSelecionado = veiculos.find(v => v.id === selectedVeiculo);
@@ -244,13 +360,16 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
       const temCoberturaRouboFurto = veiculoCompleto.cobertura_roubo_furto === true;
       let alertaRecemAtivado = false;
 
-      if (temCoberturaTotal) {
-        // Cobertura total: qualquer tipo permitido
-      } else if (temCoberturaRouboFurto && isRouboFurto) {
-        alertaRecemAtivado = true;
-        console.log('[NovoSinistroModal] ⚠️ Sinistro roubo/furto sem cobertura total - alerta ativado');
-      } else if (!isRouboFurto && !temCoberturaTotal) {
-        throw new Error('Veículo sem cobertura total para este tipo de sinistro. Apenas roubo/furto é permitido.');
+      // Vidros tem validação própria, não depende de cobertura total
+      if (!isVidros) {
+        if (temCoberturaTotal) {
+          // Cobertura total: qualquer tipo permitido
+        } else if (temCoberturaRouboFurto && isRouboFurto) {
+          alertaRecemAtivado = true;
+          console.log('[NovoSinistroModal] ⚠️ Sinistro roubo/furto sem cobertura total - alerta ativado');
+        } else if (!isRouboFurto && !temCoberturaTotal) {
+          throw new Error('Veículo sem cobertura total para este tipo de sinistro. Apenas roubo/furto é permitido.');
+        }
       }
 
       // ===== 3. CAPTURAR POSIÇÃO DO RASTREADOR =====
@@ -262,35 +381,45 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         .maybeSingle();
 
       // ===== 4. INSERIR SINISTRO =====
+      const insertData: any = {
+        protocolo,
+        associado_id: selectedAssociado!,
+        veiculo_id: selectedVeiculo!,
+        tipo: formData.tipo as any,
+        data_ocorrencia: formData.data_ocorrencia,
+        local_ocorrencia: formData.local_ocorrencia,
+        cidade_ocorrencia: formData.cidade_ocorrencia,
+        estado_ocorrencia: formData.estado_ocorrencia,
+        descricao: formData.descricao,
+        bo_numero: formData.bo_numero || null,
+        valor_fipe: veiculoSelecionado?.valor_fipe || null,
+        canal: 'presencial',
+        status: 'comunicado' as any,
+        necessita_reboque: isVidros ? false : necessitaReboque,
+        alerta_recem_ativado: alertaRecemAtivado,
+        rastreador_lat_momento: rastreador?.ultima_posicao_lat || null,
+        rastreador_lng_momento: rastreador?.ultima_posicao_lng || null,
+        rastreador_posicao_capturada_em: rastreador?.ultima_comunicacao || null,
+      };
+
+      // Campos específicos de vidros
+      if (isVidros) {
+        insertData.peca_danificada = pecaDanificada;
+        insertData.opcao_reparo = opcaoReparo;
+      }
+
       const { data: sinistro, error } = await supabase
         .from('sinistros')
-        .insert([{
-          protocolo,
-          associado_id: selectedAssociado!,
-          veiculo_id: selectedVeiculo!,
-          tipo: formData.tipo as any,
-          data_ocorrencia: formData.data_ocorrencia,
-          local_ocorrencia: formData.local_ocorrencia,
-          cidade_ocorrencia: formData.cidade_ocorrencia,
-          estado_ocorrencia: formData.estado_ocorrencia,
-          descricao: formData.descricao,
-          bo_numero: formData.bo_numero || null,
-          valor_fipe: veiculoSelecionado?.valor_fipe || null,
-          canal: 'presencial',
-          status: 'comunicado' as any,
-          necessita_reboque: necessitaReboque,
-          alerta_recem_ativado: alertaRecemAtivado,
-          rastreador_lat_momento: rastreador?.ultima_posicao_lat || null,
-          rastreador_lng_momento: rastreador?.ultima_posicao_lng || null,
-          rastreador_posicao_capturada_em: rastreador?.ultima_comunicacao || null,
-        }])
+        .insert([insertData])
         .select()
         .single();
       
       if (error) throw error;
 
       // ===== 5. REGISTRAR HISTÓRICO =====
-      const observacaoHistorico = alertaRecemAtivado
+      const observacaoHistorico = isVidros
+        ? `Sinistro registrado via sistema - Vidros e Faróis - Peça: ${pecaDanificada} - Opção: ${opcaoReparo === 'via_pratic' ? 'Via Pratic' : 'Reembolso'}`
+        : alertaRecemAtivado
         ? `Sinistro registrado via sistema - ${TIPO_LABELS[formData.tipo] || formData.tipo} - ⚠️ ALERTA: Associado recém-ativado (sem rastreador)`
         : `Sinistro registrado via sistema - ${TIPO_LABELS[formData.tipo] || formData.tipo}`;
 
@@ -301,8 +430,23 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         observacao: observacaoHistorico,
       });
 
-      // ===== 6. CRIAR CHAMADO DE REBOQUE =====
-      if (necessitaReboque) {
+      // ===== 5b. REGISTRAR HISTÓRICO DE VIDROS =====
+      if (isVidros) {
+        try {
+          await supabase.from('sinistro_vidros_historico').insert({
+            associado_id: selectedAssociado!,
+            veiculo_id: selectedVeiculo!,
+            sinistro_id: sinistro.id,
+            peca: pecaDanificada,
+          });
+          console.log('[NovoSinistroModal] Histórico de vidros registrado');
+        } catch (vidErr) {
+          console.error('[NovoSinistroModal] Erro ao registrar histórico de vidros:', vidErr);
+        }
+      }
+
+      // ===== 6. CRIAR CHAMADO DE REBOQUE (não para vidros) =====
+      if (necessitaReboque && !isVidros) {
         try {
           const nowAss = new Date();
           const dateStrAss = `${nowAss.getFullYear()}${String(nowAss.getMonth() + 1).padStart(2, '0')}${String(nowAss.getDate()).padStart(2, '0')}`;
@@ -327,13 +471,11 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
             .single();
 
           if (!chamadoError && chamadoReboque) {
-            // Vincular chamado ao sinistro
             await supabase
               .from('sinistros')
               .update({ chamado_assistencia_id: chamadoReboque.id })
               .eq('id', sinistro.id);
 
-            // Registrar histórico do chamado de assistência
             await supabase.from('chamados_assistencia_historico').insert({
               chamado_id: chamadoReboque.id,
               status_anterior: null,
@@ -453,6 +595,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
               ${alertaRecemAtivado ? '<p style="color: #d97706; font-weight: bold;">ATENÇÃO: Este sinistro foi aberto para associado sem rastreador instalado. Requer análise especial.</p>' : ''}
               <p><strong>Protocolo:</strong> ${protocolo}</p>
               <p><strong>Tipo:</strong> ${TIPO_LABELS[formData.tipo] || formData.tipo}</p>
+              ${isVidros ? `<p><strong>Peça:</strong> ${pecaDanificada}</p><p><strong>Opção:</strong> ${opcaoReparo === 'via_pratic' ? 'Via Pratic (60/40)' : 'Reembolso (60%)'}</p>` : ''}
               <p><strong>Veículo:</strong> ${veicDesc}</p>
               <p><strong>Local:</strong> ${formData.cidade_ocorrencia}/${formData.estado_ocorrencia}</p>
               <p><strong>Canal:</strong> Presencial (registrado via sistema)</p>
@@ -525,20 +668,27 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
       descricao: ''
     });
     setNecessitaReboque(false);
+    setPecaDanificada('');
+    setOpcaoReparo('via_pratic');
     onClose();
   };
 
   const isFormValid = () => {
-    return (
-      selectedAssociado &&
+    const minDescricao = isVidros ? 20 : 50;
+    const baseValid = selectedAssociado &&
       selectedVeiculo &&
       formData.tipo &&
       formData.data_ocorrencia &&
       formData.local_ocorrencia &&
       formData.cidade_ocorrencia &&
       formData.estado_ocorrencia &&
-      formData.descricao.length >= 50
-    );
+      formData.descricao.length >= minDescricao;
+
+    if (isVidros) {
+      return baseValid && pecaDanificada && opcaoReparo && !vidrosBloqueado;
+    }
+
+    return baseValid;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -677,7 +827,13 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                 <Label>Tipo *</Label>
                 <Select
                   value={formData.tipo}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, tipo: value }))}
+                  onValueChange={(value) => {
+                    setFormData(prev => ({ ...prev, tipo: value }));
+                    if (value !== 'vidros') {
+                      setPecaDanificada('');
+                      setOpcaoReparo('via_pratic');
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o tipo" />
@@ -738,16 +894,109 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                 </Select>
               </div>
 
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Nº do Boletim de Ocorrência</Label>
-                <Input
-                  placeholder="Opcional"
-                  value={formData.bo_numero}
-                  onChange={(e) => setFormData(prev => ({ ...prev, bo_numero: e.target.value }))}
-                />
-              </div>
+              {!isVidros && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Nº do Boletim de Ocorrência</Label>
+                  <Input
+                    placeholder="Opcional"
+                    value={formData.bo_numero}
+                    onChange={(e) => setFormData(prev => ({ ...prev, bo_numero: e.target.value }))}
+                  />
+                </div>
+              )}
             </div>
           </div>
+
+          {/* === SEÇÃO VIDROS === */}
+          {isVidros && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">Vidros e Faróis</h3>
+
+              {/* Alertas de validação */}
+              {vidrosValidacao.loading && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Verificando elegibilidade...
+                </div>
+              )}
+
+              {!vidrosValidacao.carenciaOk && (
+                <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-destructive">Carência não cumprida</p>
+                    <p className="text-muted-foreground">
+                      Este benefício possui carência de 120 dias. Disponível a partir de {vidrosValidacao.carenciaData}.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!vidrosValidacao.beneficioOk && (
+                <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-destructive">Benefício não contratado</p>
+                    <p className="text-muted-foreground">
+                      O plano do associado não inclui a cobertura de Vidros e Faróis.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!vidrosValidacao.pecaLimiteOk && (
+                <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-destructive">Limite atingido</p>
+                    <p className="text-muted-foreground">
+                      A peça "{vidrosValidacao.pecaBloqueada}" já foi acionada nos últimos 12 meses. Selecione outra peça.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Seletor de peça */}
+              <div className="space-y-2">
+                <Label>Peça Danificada *</Label>
+                <Select value={pecaDanificada} onValueChange={setPecaDanificada}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a peça danificada" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PECAS_VIDROS.map((peca) => (
+                      <SelectItem key={peca} value={peca}>{peca}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Opção de reparo */}
+              <div className="space-y-2">
+                <Label>Opção de Reparo *</Label>
+                <RadioGroup
+                  value={opcaoReparo}
+                  onValueChange={(v) => setOpcaoReparo(v as 'via_pratic' | 'reembolso')}
+                  className="grid grid-cols-2 gap-3"
+                >
+                  <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
+                    <RadioGroupItem value="via_pratic" id="via_pratic" />
+                    <Label htmlFor="via_pratic" className="cursor-pointer">
+                      <span className="font-medium">Via Pratic</span>
+                      <p className="text-xs text-muted-foreground">Auto center credenciado. Associado paga 40%.</p>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
+                    <RadioGroupItem value="reembolso" id="reembolso" />
+                    <Label htmlFor="reembolso" className="cursor-pointer">
+                      <span className="font-medium">Reembolso</span>
+                      <p className="text-xs text-muted-foreground">Compra por conta própria. Reembolso de 60%.</p>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </div>
+          )}
 
           {/* Seção 3 - Descrição */}
           <div className="space-y-4">
@@ -755,29 +1004,33 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
             
             <div className="space-y-2">
               <Textarea
-                placeholder="Descreva detalhadamente as circunstâncias do sinistro..."
+                placeholder={isVidros 
+                  ? "Descreva brevemente o que aconteceu (pedra, vandalismo, etc.)..." 
+                  : "Descreva detalhadamente as circunstâncias do sinistro..."}
                 value={formData.descricao}
                 onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))}
-                rows={4}
+                rows={isVidros ? 3 : 4}
                 className="resize-none"
               />
               <p className="text-xs text-muted-foreground">
-                Mínimo 50 caracteres ({formData.descricao.length}/50)
+                Mínimo {isVidros ? 20 : 50} caracteres ({formData.descricao.length}/{isVidros ? 20 : 50})
               </p>
             </div>
           </div>
 
-          {/* Precisa de reboque? */}
-          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-            <div className="flex items-center gap-3">
-              <Truck className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium text-sm">Precisa de reboque?</p>
-                <p className="text-xs text-muted-foreground">Criar chamado de assistência 24h automaticamente</p>
+          {/* Precisa de reboque? (não para vidros) */}
+          {!isVidros && (
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Truck className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="font-medium text-sm">Precisa de reboque?</p>
+                  <p className="text-xs text-muted-foreground">Criar chamado de assistência 24h automaticamente</p>
+                </div>
               </div>
+              <Switch checked={necessitaReboque} onCheckedChange={setNecessitaReboque} />
             </div>
-            <Switch checked={necessitaReboque} onCheckedChange={setNecessitaReboque} />
-          </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose}>

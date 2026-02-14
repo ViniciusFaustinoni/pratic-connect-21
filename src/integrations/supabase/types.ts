@@ -18776,6 +18776,121 @@ export type Database = {
           },
         ]
       }
+      sinistro_vidros_historico: {
+        Row: {
+          associado_id: string
+          created_at: string
+          data_utilizacao: string
+          id: string
+          peca: string
+          sinistro_id: string
+          veiculo_id: string
+        }
+        Insert: {
+          associado_id: string
+          created_at?: string
+          data_utilizacao?: string
+          id?: string
+          peca: string
+          sinistro_id: string
+          veiculo_id: string
+        }
+        Update: {
+          associado_id?: string
+          created_at?: string
+          data_utilizacao?: string
+          id?: string
+          peca?: string
+          sinistro_id?: string
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistros: {
         Row: {
           alerta_recem_ativado: boolean | null
@@ -18823,9 +18938,12 @@ export type Database = {
           motivo_negacao: string | null
           motivo_suspensao: string | null
           necessita_reboque: boolean | null
+          nf_reembolso_url: string | null
           oficina_id: string | null
+          opcao_reparo: string | null
           ordem_servico_id: string | null
           parecer: string | null
+          peca_danificada: string | null
           percentual_fipe: number | null
           perito_id: string | null
           prazo_comunicado_dias: number | null
@@ -18856,6 +18974,7 @@ export type Database = {
           valor_orcamento: number | null
           valor_pago: number | null
           valor_participacao: number | null
+          valor_reembolso: number | null
           veiculo_id: string
           veiculo_recuperado: boolean | null
           veiculo_recuperado_em: string | null
@@ -18908,9 +19027,12 @@ export type Database = {
           motivo_negacao?: string | null
           motivo_suspensao?: string | null
           necessita_reboque?: boolean | null
+          nf_reembolso_url?: string | null
           oficina_id?: string | null
+          opcao_reparo?: string | null
           ordem_servico_id?: string | null
           parecer?: string | null
+          peca_danificada?: string | null
           percentual_fipe?: number | null
           perito_id?: string | null
           prazo_comunicado_dias?: number | null
@@ -18941,6 +19063,7 @@ export type Database = {
           valor_orcamento?: number | null
           valor_pago?: number | null
           valor_participacao?: number | null
+          valor_reembolso?: number | null
           veiculo_id: string
           veiculo_recuperado?: boolean | null
           veiculo_recuperado_em?: string | null
@@ -18993,9 +19116,12 @@ export type Database = {
           motivo_negacao?: string | null
           motivo_suspensao?: string | null
           necessita_reboque?: boolean | null
+          nf_reembolso_url?: string | null
           oficina_id?: string | null
+          opcao_reparo?: string | null
           ordem_servico_id?: string | null
           parecer?: string | null
+          peca_danificada?: string | null
           percentual_fipe?: number | null
           perito_id?: string | null
           prazo_comunicado_dias?: number | null
@@ -19026,6 +19152,7 @@ export type Database = {
           valor_orcamento?: number | null
           valor_pago?: number | null
           valor_participacao?: number | null
+          valor_reembolso?: number | null
           veiculo_id?: string
           veiculo_recuperado?: boolean | null
           veiculo_recuperado_em?: string | null
