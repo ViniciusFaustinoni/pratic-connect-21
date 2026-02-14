@@ -1,111 +1,135 @@
 
-# Aba "Cotacoes Recebidas" no Detalhe do Evento
+
+# Geracao Automatica de OS e Painel "Veiculos em Oficina" do Regulador
 
 ## Resumo
 
-Adicionar uma aba "Cotacoes Recebidas" na pagina de analise do sinistro (`SinistroAnalise.tsx`) que mostra pedidos enviados, permite registro manual de cotacoes, exibe comparativo lado a lado e permite aprovar uma unica cotacao por evento.
+Duas entregas principais: (1) Edge function que gera a OS automaticamente quando uma cotacao e aprovada, incluindo todos os itens do orcamento e envio de WhatsApp ao associado; (2) Nova aba "Oficina" no app do regulador com dashboard completo de veiculos em oficina.
 
 ---
 
-## Alteracoes no Banco de Dados
+## PARTE 1 — Geracao Automatica da OS
 
-A tabela `evento_cotacoes_pecas` ja existe com os campos necessarios (`id`, `sinistro_id`, `auto_center_id`, `itens`, `status`, `resposta`, `created_at`, etc.). Precisamos apenas adicionar colunas para suportar aprovacao:
+### Problema Atual
+
+A OS e criada no `AtribuirFornecedoresDialog.handleSubmit` (linha 140) com status `aguardando_orcamento`, MAS os itens do orcamento nao sao inseridos na tabela `ordens_servico_itens`. Alem disso, o status deveria ser `aguardando_entrada` para refletir que o veiculo ainda nao chegou na oficina.
+
+O status `aguardando_entrada` nao existe no enum `status_ordem_servico`. Precisamos adiciona-lo.
+
+### Etapa 1.1 — Migration: adicionar status `aguardando_entrada` ao enum
 
 ```text
-ALTER TABLE evento_cotacoes_pecas 
-  ADD COLUMN aprovada boolean DEFAULT false,
-  ADD COLUMN aprovada_em timestamptz,
-  ADD COLUMN aprovada_por uuid REFERENCES profiles(id),
-  ADD COLUMN valor_total numeric DEFAULT 0,
-  ADD COLUMN prazo_geral text,
-  ADD COLUMN observacoes_auto_center text;
+ALTER TYPE status_ordem_servico ADD VALUE IF NOT EXISTS 'aguardando_entrada' BEFORE 'aguardando_orcamento';
 ```
 
----
-
-## Arquivos a Criar
-
-### 1. `src/components/sinistros/CotacoesRecebidasTab.tsx`
-
-Componente principal da aba, dividido em 4 secoes:
-
-**Secao 1 - Resumo dos Pedidos Enviados:**
-- Query em `evento_cotacoes_pecas` filtrado por `sinistro_id`
-- Join com `auto_centers` para nome
-- Mostra cards com: nome auto center, data envio, status (badge colorido)
-- Pedidos com mais de 24h sem resposta: status automaticamente "expirado" (verificacao no frontend ao renderizar)
-- Botao "Reenviar cotacao" para expirados (chama edge function `enviar-cotacao-pecas` novamente)
-
-**Secao 2 - Botao "Registrar Cotacao Recebida":**
-- Abre modal `RegistrarCotacaoDialog`
-- So aparece se ha pedidos com status "enviado"
-
-**Secao 3 - Comparativo de Cotacoes:**
-- Tabela comparativa horizontal quando ha 2+ cotacoes com resposta
-- Linhas: cada peca do orcamento
-- Colunas: cada auto center que respondeu
-- Celulas: valor unitario + disponibilidade + prazo
-- Rodape: total por auto center, menor preco em verde
-- Pecas indisponiveis em vermelho
-
-**Secao 4 - Cards de Cotacoes com botao Aprovar:**
-- Card por cotacao respondida
-- Botao "Aprovar esta Cotacao" no canto
-- Se ja existe uma aprovada: mostra ela em destaque no topo, demais com badge "nao selecionada" cinza
-- Modal de confirmacao antes de aprovar (irreversivel)
-- Ao aprovar: update `aprovada=true`, `aprovada_em=now()`, `aprovada_por=user_id` e marcar demais como `status='nao_selecionada'`
-
-### 2. `src/components/sinistros/RegistrarCotacaoDialog.tsx`
-
-Modal para registro manual:
-
-- Dropdown de auto centers (apenas os acionados para este evento, filtrados de `evento_cotacoes_pecas`)
-- Lista de pecas pre-preenchida do orcamento (readonly descricao e quantidade)
-- Para cada peca: valor unitario (R$), prazo entrega (texto), disponibilidade (select: Disponivel/Indisponivel/Sob consulta)
-- Valor total calculado automaticamente (soma de unitario x quantidade para itens disponiveis)
-- Campo observacoes (textarea)
-- Campo prazo geral (texto)
-- Ao salvar: update na `evento_cotacoes_pecas` correspondente com `status='respondido'`, `resposta=jsonb` com os valores, `valor_total`, `prazo_geral`, `observacoes_auto_center`
-
-### 3. `src/hooks/useCotacoesEvento.ts`
-
-Hook para buscar cotacoes de um sinistro:
-- Query em `evento_cotacoes_pecas` com join em `auto_centers(nome_fantasia, nome, whatsapp)`
-- Filtro por `sinistro_id`
-- Retorna lista de cotacoes com dados do auto center
-
----
-
-## Arquivos a Modificar
-
-### `src/pages/eventos/SinistroAnalise.tsx`
-
-Transformar a area principal de conteudo (coluna esquerda) em um componente com abas (`Tabs`):
-
-- Aba "Detalhes" (padrao): conteudo atual (cards de associado, veiculo, sinistro, documentos, etc.)
-- Aba "Cotacoes Recebidas": novo componente `CotacoesRecebidasTab`
-- A aba de cotacoes so aparece quando status e `pronto_para_oficina`, `em_reparo` ou posterior
-- Importar componentes `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`
-
-A coluna direita (acoes, checklist, historico) permanece inalterada fora das abas.
-
----
-
-## Fluxo do Usuario
+Tambem adicionar colunas a `ordens_servico` para rastreabilidade:
 
 ```text
-1. Evento com status "pronto_para_oficina" ou "em_reparo"
-2. Analista/Regulador abre o evento
-3. Ve aba "Cotacoes Recebidas" ao lado de "Detalhes"
-4. Clica na aba -> ve resumo dos pedidos enviados
-5. Auto center responde via WhatsApp
-6. Analista clica "Registrar Cotacao Recebida"
-7. Preenche valores, disponibilidade, prazos
-8. Salva -> cotacao aparece no comparativo
-9. Repete para outros auto centers
-10. Analisa comparativo lado a lado
-11. Clica "Aprovar esta Cotacao" no melhor custo-beneficio
-12. Confirma -> cotacao aprovada, demais marcadas como nao selecionadas
+ALTER TABLE ordens_servico
+  ADD COLUMN IF NOT EXISTS auto_center_id uuid REFERENCES auto_centers(id),
+  ADD COLUMN IF NOT EXISTS cotacao_aprovada_id uuid REFERENCES evento_cotacoes_pecas(id),
+  ADD COLUMN IF NOT EXISTS etapas_reparo jsonb DEFAULT '[]';
+```
+
+### Etapa 1.2 — Modificar `useCotacoesEvento.ts` (aprovarCotacao)
+
+Apos aprovar a cotacao (update em `evento_cotacoes_pecas`), adicionar logica para:
+
+1. Buscar dados do sinistro (veiculo_id, associado_id, oficina_id, protocolo)
+2. Buscar vistoria concluida (itens_orcamento, etapas_reparo)
+3. Buscar cotacao aprovada (resposta com valores atualizados)
+4. Criar OS com:
+   - `oficina_id` do sinistro
+   - `auto_center_id` do auto center aprovado
+   - `cotacao_aprovada_id`
+   - `etapas_reparo` como JSONB (cada etapa com nome e status "pendente")
+   - `status`: `aguardando_entrada`
+5. Inserir itens na `ordens_servico_itens`:
+   - Para pecas: usar valores da cotacao aprovada (resposta.itens)
+   - Para mao de obra e servicos: usar valores do orcamento do regulador
+6. Chamar `whatsapp-send-text` apos 15 min via agendamento (ou imediatamente com mensagem sobre pecas em cotacao)
+
+Como o agendamento de 15 minutos e complexo, a alternativa pratica e enviar o WhatsApp imediatamente na aprovacao. A mensagem sera enviada via edge function existente `whatsapp-send-text`.
+
+### Etapa 1.3 — Criar Edge Function `gerar-os-cotacao-aprovada`
+
+Uma edge function dedicada que centraliza a logica de criacao de OS. Chamada pelo frontend apos aprovacao da cotacao.
+
+Recebe: `sinistro_id`, `cotacao_id`
+
+Acoes:
+1. Busca sinistro com veiculo e associado
+2. Busca vistoria concluida (itens + etapas)
+3. Busca cotacao aprovada com resposta
+4. Busca prestadores vinculados
+5. Cria OS com status `aguardando_entrada`
+6. Insere itens no `ordens_servico_itens` (pecas com valores da cotacao, MO/servicos do orcamento)
+7. Registra historico da OS
+8. Envia WhatsApp ao associado confirmando que tudo esta encaminhado
+9. Retorna OS criada
+
+---
+
+## PARTE 2 — Painel "Veiculos em Oficina" do Regulador
+
+### Etapa 2.1 — Criar hook `useVeiculosOficina.ts`
+
+Query que busca todas as `ordens_servico` com status ativo (nao cancelado, nao finalizado), com joins em:
+- `oficinas` (nome, endereco)
+- `veiculos` (placa, marca, modelo, ano, cor)
+- `associados` (nome, telefone)
+- `sinistros` (protocolo)
+- `auto_centers` via `auto_center_id` (nome)
+
+Inclui contadores agregados por status e filtros (oficina, status, tempo, busca por placa/nome).
+
+### Etapa 2.2 — Criar pagina `ReguladorOficina.tsx`
+
+Nova pagina em `src/pages/regulador/ReguladorOficina.tsx` com:
+
+**Dashboard de contadores** (grid 2x2 ou 3 colunas):
+- Total em oficina
+- Aguardando entrada
+- Aguardando peca
+- Em finalizacao / Concluidos
+
+**Filtros**: oficina (dropdown), status (select), tempo em oficina (select), busca por placa/nome (input)
+
+**Lista de cards** — cada card mostra:
+- Placa (destaque), marca/modelo/ano/cor
+- Nome e telefone do associado (com botao WhatsApp)
+- Numero da OS, oficina, auto center fornecedor
+- Status (badge colorido)
+- Data de entrada, tempo em oficina ("Ha X dias")
+- Barra de progresso das etapas: lida de `etapas_reparo` JSONB, mostra cada etapa com icone de status
+- Alerta de tempo: >24h sem updated_at = amarelo, >48h = vermelho
+
+**Acoes por card**:
+- "Registrar Entrada": update status para `em_execucao`, registra data_entrada
+- "Registrar Atualizacao": placeholder para proximo prompt
+- "Ver Detalhes": navega para `/oficinas/ordens/:id`
+
+**Metricas de oficinas**: secao inferior com ranking de oficinas (nome, qtd veiculos, tempo medio)
+
+### Etapa 2.3 — Atualizar `ReguladorLayout.tsx`
+
+Adicionar item de navegacao "Oficina" com icone `Wrench`:
+
+```text
+NAV_ITEMS = [
+  { icon: Home, label: 'Inicio', path: '/regulador' },
+  { icon: ClipboardList, label: 'Vistorias', path: '/regulador/vistorias' },
+  { icon: Wrench, label: 'Oficina', path: '/regulador/oficina' },
+  { icon: User, label: 'Perfil', path: '/regulador/perfil' },
+]
+```
+
+### Etapa 2.4 — Atualizar `App.tsx`
+
+Adicionar rota:
+
+```text
+<Route path="/regulador/oficina" element={<ReguladorOficina />} />
 ```
 
 ---
@@ -114,8 +138,38 @@ A coluna direita (acoes, checklist, historico) permanece inalterada fora das aba
 
 | Acao | Arquivo |
 |---|---|
-| Migration SQL | Adicionar colunas `aprovada`, `aprovada_em`, `aprovada_por`, `valor_total`, `prazo_geral`, `observacoes_auto_center` em `evento_cotacoes_pecas` |
-| Criar | `src/hooks/useCotacoesEvento.ts` |
-| Criar | `src/components/sinistros/CotacoesRecebidasTab.tsx` |
-| Criar | `src/components/sinistros/RegistrarCotacaoDialog.tsx` |
-| Modificar | `src/pages/eventos/SinistroAnalise.tsx` — adicionar sistema de abas com aba de cotacoes |
+| Migration SQL | Adicionar `aguardando_entrada` ao enum + colunas `auto_center_id`, `cotacao_aprovada_id`, `etapas_reparo` em `ordens_servico` |
+| Criar | `supabase/functions/gerar-os-cotacao-aprovada/index.ts` |
+| Modificar | `src/hooks/useCotacoesEvento.ts` — apos aprovar cotacao, chamar edge function para gerar OS |
+| Criar | `src/hooks/useVeiculosOficina.ts` |
+| Criar | `src/pages/regulador/ReguladorOficina.tsx` |
+| Modificar | `src/components/regulador/ReguladorLayout.tsx` — adicionar nav item "Oficina" |
+| Modificar | `src/App.tsx` — adicionar rota `/regulador/oficina` |
+| Modificar | `supabase/config.toml` — registrar nova edge function |
+
+---
+
+## Fluxo Completo
+
+```text
+Cotacao aprovada no CotacoesRecebidasTab
+  |
+  v
+useCotacoesEvento.aprovarCotacao
+  -> Marca cotacao como aprovada
+  -> Chama edge function "gerar-os-cotacao-aprovada"
+  |
+  v
+Edge function:
+  -> Cria OS com status "aguardando_entrada"
+  -> Insere itens (pecas com valores da cotacao, MO/servicos do orcamento)
+  -> Salva etapas_reparo como checkpoints
+  -> Envia WhatsApp ao associado
+  |
+  v
+Regulador acessa aba "Oficina"
+  -> Ve dashboard de contadores
+  -> Ve lista de veiculos com progresso
+  -> Registra entrada do veiculo
+  -> Acompanha etapas de reparo
+```
