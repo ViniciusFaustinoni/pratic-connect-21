@@ -1,136 +1,115 @@
 
-# Logica Completa de Sindicancias
+# Integração Eventos → Jurídico (5 Pontos)
 
-## Resumo do Estado Atual
+## Diagnóstico
 
-### O que ja existe:
-- `EncaminharSindicanciaDialog`: modal basico que atribui sindicante + motivo (texto livre) + prazo de 30 dias. Atualiza status para `em_sindicancia`, grava historico.
-- Colunas no banco: `sindicante_id`, `sindicancia_prazo_fim`, `resultado_sindicancia` (text), `perito_id`, `resultado_pericia` (text)
-- Tipo `ResultadoSindicancia` em `types/sinistros.ts`: apenas `regular | irregular | inconclusivo`
-- Status `em_sindicancia` no workflow com transicoes definidas
-- Dashboard conta sindicancias no grafico de taxa de aprovacao
+Auditei todos os componentes e identifiquei o que falta em cada ponto de integração:
 
-### O que falta:
-1. O `EncaminharSindicanciaDialog` **nao esta conectado** ao `SinistroDetalhe` (nao existe botao nem import)
-2. Nao existe modal de **concluir sindicancia** (registrar resultado)
-3. Nao existe **card visual** no detalhe do sinistro mostrando status da sindicancia ativa
-4. O tipo `ResultadoSindicancia` esta incompleto (faltam `carta_cancelamento` e `juridico`)
-5. Nao existe logica de **suspensao do prazo de 60 dias** visivel no sistema
-6. Falta dropdown de motivos predefinidos no encaminhamento
-7. Alertas do dashboard nao verificam sindicancias vencendo
+### Ponto 1 — Sindicância "Irregular"
+O `ConcluirSindicanciaModal` já cria um registro em `processos`, mas está incompleto:
+- Não puxa o `associado_id` do sinistro para vincular ao processo
+- Não inclui dados do veículo no objeto do processo
+
+### Ponto 2 — Carta de Cancelamento
+O resultado `carta_cancelamento` atualiza o status para `cancelado`, mas NÃO notifica o jurídico de nenhuma forma. Deveria criar uma `consulta_juridica` para registro formal e suspensão do veículo.
+
+### Ponto 3 — Questão Legal Complexa na Análise
+O dropdown de ações do `SinistroDetalhe` tem "Criar Processo Jurídico" (redireciona para o formulário manual) mas NÃO tem "Encaminhar para Jurídico" com criação automática de consulta/caso e mudança de status. Falta um modal dedicado.
+
+### Ponto 4 — Análise Interna Jurídica (Alagamento + Incêndio)
+Os cards `CardAnaliseAlagamento` e `CardAnaliseIncendio` marcam `analise_interna=true` no sinistro, mas NÃO criam nenhum registro no módulo jurídico (`consultas_juridicas`). O jurídico não tem visibilidade desses casos.
+
+### Ponto 5 — Indenização Integral (PT / Roubo não recuperado)
+Não existe acompanhamento jurídico da documentação de indenização (procuração, CRV, transferência). Este ponto será tratado com criação automática de consulta jurídica quando o fluxo de indenização integral é iniciado.
 
 ---
 
-## Alteracoes Planejadas
+## Alterações Planejadas
 
-### 1. Atualizar tipo ResultadoSindicancia
+### 1. Corrigir ConcluirSindicanciaModal (Pontos 1 e 2)
 
-**Arquivo:** `src/types/sinistros.ts`
+**Arquivo:** `src/components/sinistros/ConcluirSindicanciaModal.tsx`
 
-Expandir de 3 para 5 resultados possiveis:
-- `regular` — sem fraude, evento volta para aprovado
-- `irregular` — fraude comprovada, evento negado + cria caso juridico
-- `carta_cancelamento` — associado desiste, notifica juridico
-- `juridico` — caso complexo, encaminha para juridico
-- `inconclusivo` — vai para diretoria decidir
+Mudanças:
+- Adicionar prop `associadoId` e `associadoNome` ao componente
+- No resultado `irregular`: incluir `associado_id` no insert de `processos`
+- No resultado `carta_cancelamento`: criar registro em `consultas_juridicas` com assunto "Carta de Cancelamento", descricao incluindo dados do evento, prioridade "alta", sinistro_id, associado_id, departamento "eventos"
+- No resultado `juridico`: incluir `associado_id` no insert de `processos`
 
-### 2. Melhorar EncaminharSindicanciaDialog
+### 2. Criar EncaminharJuridicoEventoModal (Ponto 3)
 
-**Arquivo:** `src/components/sinistros/EncaminharSindicanciaDialog.tsx`
+**Novo arquivo:** `src/components/sinistros/EncaminharJuridicoEventoModal.tsx`
 
-Adicionar:
-- Dropdown de motivos predefinidos por tipo de evento:
-  - Colisao: "Relato inconsistente", "Fotos nao conferem com B.O.", "Historico de multiplos sinistros", "Tempo suspeito", "Condutor embriagado", "CNH vencida"
-  - Roubo/Furto: "Dados do rastreador suspeitos", "Locais suspeitos", "Mudanca de rotina", "Rastreador nao instalado"
-  - Incendio: "Suspeita de incendio provocado", "GNV irregular", "Sobrecarga eletrica"
-  - Alagamento: "Entrada deliberada em area alagada", "Agua salgada", "Local inadequado"
-- Campo de observacao complementar (textarea)
-- Opcao de marcar como pericia tecnica (checkbox) — mesmo fluxo, motivo diferente
+Modal para encaminhar evento diretamente ao jurídico durante a análise:
+- Dropdown de motivos: "Disputa de propriedade", "Veículo com gravame judicial", "Espólio / massa falida", "Litígio entre partes", "Outro (especificar)"
+- Textarea para descrição detalhada
+- Ao confirmar:
+  - Cria `consulta_juridica` vinculada ao sinistro com prioridade alta
+  - Atualiza status do sinistro para `suspenso`
+  - Registra no histórico
+  - Registra `motivo_suspensao` no sinistro
 
-### 3. Criar ConcluirSindicanciaModal
+### 3. Atualizar CardAnaliseAlagamento e CardAnaliseIncendio (Ponto 4)
 
-**Novo arquivo:** `src/components/sinistros/ConcluirSindicanciaModal.tsx`
+**Arquivos:** `src/components/sinistros/CardAnaliseAlagamento.tsx` e `src/components/sinistros/CardAnaliseIncendio.tsx`
 
-Modal com:
-- RadioGroup com 5 opcoes de resultado (regular, irregular, carta_cancelamento, juridico, inconclusivo)
-- Textarea obrigatoria para relatorio final (min 200 caracteres)
-- Secao de anexar evidencias (upload de arquivos para storage)
-- Para cada resultado, acoes automaticas:
-  - **Regular**: atualiza status para `aprovado`, retoma prazo de 60 dias
-  - **Irregular**: atualiza status para `negado`, cria registro em `processos` com tipo "sindicancia_fraude", motivo_negacao = "fraude_suspeita"
-  - **Carta cancelamento**: atualiza status para `cancelado`, notifica juridico
-  - **Juridico**: atualiza status para `suspenso`, cria registro em `processos`
-  - **Inconclusivo**: atualiza status para `suspenso`, marca para diretoria
-- Grava resultado em `resultado_sindicancia`
-- Registra no historico com observacao detalhada
+Ao encaminhar para análise interna/jurídica, além de marcar `analise_interna=true`, criar automaticamente uma `consulta_juridica` com:
+- assunto: "Análise Jurídica — Alagamento" ou "Análise Interna — Incêndio"
+- descricao: motivos selecionados formatados
+- sinistro_id, associado_id (necessário adicionar prop)
+- prioridade: "normal"
+- departamento: "eventos"
+- Isso garante que o jurídico veja o caso na fila de consultas pendentes
 
-### 4. Criar CardSindicanciaStatus
+### 4. Criar consulta jurídica automática para indenização integral (Ponto 5)
 
-**Novo arquivo:** `src/components/sinistros/CardSindicanciaStatus.tsx`
+**Arquivo:** `src/pages/eventos/SinistroDetalhe.tsx` (ou componente de indenização existente)
 
-Card para a sidebar do SinistroDetalhe, visivel quando `status === 'em_sindicancia'`:
-- Badge "Em Sindicancia" com cor rose
-- Nome do sindicante responsavel (query pelo sindicante_id -> profiles)
-- Contagem regressiva: "X dias restantes de 30" com barra de progresso
-- Alerta vermelho se prazo < 7 dias
-- Alerta critico se prazo vencido
-- Informacao: "Prazo de ressarcimento SUSPENSO durante a sindicancia"
-- Botao "Concluir Sindicancia" que abre o ConcluirSindicanciaModal (visivel para analista/diretor)
-- Se ja concluida (`resultado_sindicancia` preenchido): mostra resultado + data
+Quando o fluxo de indenização integral é acionado (perda total aprovada ou roubo/furto não recuperado), criar automaticamente uma `consulta_juridica` com:
+- assunto: "Acompanhamento de Indenização Integral"
+- descricao: "Documentação de transferência de propriedade — procuração pública, CRV, transferência"
+- sinistro_id, associado_id
+- prioridade: "alta"
+- departamento: "eventos"
 
-### 5. Integrar no SinistroDetalhe
+Isso será integrado na lógica existente de iniciar indenização (no componente/modal que já trata isso).
+
+### 5. Integrar EncaminharJuridicoEventoModal no SinistroDetalhe
 
 **Arquivo:** `src/pages/eventos/SinistroDetalhe.tsx`
 
-- Importar `EncaminharSindicanciaDialog` e `CardSindicanciaStatus`
-- Adicionar state `modalSindicanciaOpen`
-- No dropdown de acoes: adicionar item "Encaminhar para Sindicancia" (visivel quando status permite: `em_analise`, `aguardando_parecer`, `em_vistoria`)
-- Na sidebar: renderizar `CardSindicanciaStatus` quando `status === 'em_sindicancia'`
-- Passar `sindicante_id` na query do sinistro (ja esta: `sindicante:profiles!sinistros_sindicante_id_fkey`)
+- Importar o novo modal
+- Adicionar state `modalJuridicoOpen`
+- Substituir o item "Criar Processo Jurídico" por "Encaminhar para Jurídico" que abre o modal (manter "Vincular Processo" para casos já existentes)
+- O modal cria a consulta automaticamente
 
-Obs: a query principal do sinistro ja faz select de `*` mas nao inclui o join do sindicante. Adicionar:
-```
-sindicante:profiles!sinistros_sindicante_id_fkey(id, nome)
-```
+### 6. Passar associado_id para CardSindicanciaStatus
 
-### 6. Suspensao do Prazo de Ressarcimento
+**Arquivo:** `src/components/sinistros/CardSindicanciaStatus.tsx`
 
-Logica visual no SinistroDetalhe:
-- Quando `status === 'em_sindicancia'`, exibir alerta na secao de valores/prazos: "Prazo de 60 dias uteis SUSPENSO — sindicancia ativa desde DD/MM"
-- Quando sindicancia concluida com resultado `regular`, o historico mostrara "Prazo retomado"
-
-### 7. Alertas no Dashboard
-
-**Arquivo:** `src/hooks/useEventosDashboard.ts`
-
-Na funcao `useAlertasUrgentes`, adicionar:
-- Alerta amarelo: "X sindicancias com prazo vencendo nos proximos 7 dias"
-  - Query: `status = 'em_sindicancia' AND sindicancia_prazo_fim BETWEEN NOW() AND NOW() + 7d`
-- Alerta vermelho: "X sindicancias com prazo vencido"
-  - Query: `status = 'em_sindicancia' AND sindicancia_prazo_fim < NOW()`
+Adicionar prop `associadoId` e repassar ao `ConcluirSindicanciaModal`.
 
 ---
 
 ## Resumo de Arquivos
 
-| Acao | Arquivo |
+| Ação | Arquivo |
 |---|---|
-| Modificar | `src/types/sinistros.ts` (expandir ResultadoSindicancia) |
-| Modificar | `src/components/sinistros/EncaminharSindicanciaDialog.tsx` (dropdown motivos) |
-| Criar | `src/components/sinistros/ConcluirSindicanciaModal.tsx` (5 resultados) |
-| Criar | `src/components/sinistros/CardSindicanciaStatus.tsx` (card sidebar) |
-| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` (integrar sindicancia) |
-| Modificar | `src/hooks/useEventosDashboard.ts` (alertas sindicancia) |
+| Modificar | `src/components/sinistros/ConcluirSindicanciaModal.tsx` (associado_id + carta_cancelamento -> juridico) |
+| Criar | `src/components/sinistros/EncaminharJuridicoEventoModal.tsx` (modal para ponto 3) |
+| Modificar | `src/components/sinistros/CardAnaliseAlagamento.tsx` (criar consulta_juridica) |
+| Modificar | `src/components/sinistros/CardAnaliseIncendio.tsx` (criar consulta_juridica) |
+| Modificar | `src/components/sinistros/CardSindicanciaStatus.tsx` (passar associadoId) |
+| Modificar | `src/pages/eventos/SinistroDetalhe.tsx` (integrar modal + indenização) |
 
-## Migracao de Banco
+## Migração de Banco
 
-Nenhuma migracao necessaria. As colunas `resultado_sindicancia` (text), `sindicancia_prazo_fim`, `sindicante_id` e `perito_id` ja existem na tabela `sinistros`. O campo `resultado_sindicancia` e text livre, nao enum, entao aceita os novos valores sem alteracao de schema.
+Nenhuma migração necessária. As tabelas `consultas_juridicas` e `processos` já possuem `sinistro_id` e `associado_id`. Todos os campos necessários já existem.
 
-## Ordem de Implementacao
+## Ordem de Implementação
 
-1. `types/sinistros.ts` — expandir tipo
-2. `EncaminharSindicanciaDialog.tsx` — melhorar com motivos predefinidos
-3. `ConcluirSindicanciaModal.tsx` — criar modal de conclusao
-4. `CardSindicanciaStatus.tsx` — criar card de status
-5. `SinistroDetalhe.tsx` — integrar tudo
-6. `useEventosDashboard.ts` — alertas de prazo
+1. `ConcluirSindicanciaModal` — corrigir associado_id + carta_cancelamento
+2. `EncaminharJuridicoEventoModal` — criar novo modal
+3. `CardAnaliseAlagamento` + `CardAnaliseIncendio` — criar consultas jurídicas
+4. `CardSindicanciaStatus` — repassar associadoId
+5. `SinistroDetalhe` — integrar tudo + indenização integral
