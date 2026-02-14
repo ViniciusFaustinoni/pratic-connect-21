@@ -1,14 +1,16 @@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { ESPECIALIDADES } from '@/lib/fornecedores-constants';
+import { ESPECIALIDADES_OFICINAS, ESPECIALIDADES_PRESTADORES } from '@/lib/fornecedores-constants';
 
 interface Props {
   value: string[];
   onChange: (value: string[]) => void;
+  contexto?: 'oficina' | 'prestador';
 }
 
-export function EspecialidadesSelect({ value, onChange }: Props) {
+export function EspecialidadesSelect({ value, onChange, contexto = 'oficina' }: Props) {
+  const lista = contexto === 'oficina' ? ESPECIALIDADES_OFICINAS : ESPECIALIDADES_PRESTADORES;
   const toggle = (esp: string) => {
     onChange(
       value.includes(esp)
@@ -32,7 +34,7 @@ export function EspecialidadesSelect({ value, onChange }: Props) {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-md border p-3">
-        {ESPECIALIDADES.map(esp => (
+        {lista.map(esp => (
           <div key={esp} className="flex items-center gap-2">
             <Checkbox
               id={`esp-${esp}`}
