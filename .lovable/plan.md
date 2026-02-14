@@ -1,123 +1,109 @@
 
 
-# Correções: Analista de Eventos
+# Revisao: Cadastro dos 3 Tipos de Fornecedores
 
-## Resultado da Verificação
+## Resultado da Verificacao Completa
 
-### 1. Perfil "analista_eventos" -- OK
-- Existe no enum `app_role`
-- Aparece no dropdown de gestão de usuários com badge dedicada (sky)
-- Segue mesma lógica dos outros perfis via `usePermissions`
+### 1. Tres Tipos de Fornecedores
 
-### 2. Dashboard do Analista -- OK
-- Contadores: aguardando, analisados hoje, aprovados mês, reprovados mês
-- Usa `useEventosContadores()` que consulta corretamente a tabela sinistros
+| Tipo | Existe | Pagina | Hook | Form | Drawer | Menu |
+|---|---|---|---|---|---|---|
+| Oficinas | OK | Oficinas.tsx | useOficinas.ts | OficinaFormDialog | OficinaDetailDrawer | OK |
+| Auto Centers | OK | AutoCenters.tsx | useAutoCenters.ts | AutoCenterFormDialog | AutoCenterDetailDrawer | OK |
+| Prestadores | OK | Prestadores.tsx | usePrestadoresEvento.ts | PrestadorFormDialog | PrestadorDetailDrawer | OK |
 
-### 3. Fila de Eventos -- 1 BUG
-| Item | Status |
-|---|---|
-| Lista com status aguardando_analise | OK |
-| Cards com nome, placa, tipo, data, regulador | OK |
-| Ordenação mais antigo primeiro | OK |
-| **Fallback tipo hardcoded "Colisão"** | **BUG (linha 46)** |
+### 2. Marcas Atendidas
 
-### 4. Tela de Análise (Detalhe) -- 2 FALTANDO
-| Seção | Status |
-|---|---|
-| 1 - Associado (nome, CPF, tel, email, plano, categoria, adimplência, tempo, eventos anteriores) | OK |
-| 2 - Veículo (placa, marca, modelo, ano, cor, FIPE, chassi, rastreador) | OK |
-| 3 - Cronologia (datas, tempo em destaque, alerta 30 dias, alerta 7 dias) | OK |
-| 4 - Relato (texto, áudio, local, terceiro) | OK |
-| 5 - B.O. (número, resumo, visualizador PDF/imagem) | OK |
-| 6 - Fotos Auto Vistoria (grid com zoom) | OK |
-| 7 - Vistoria Regulador (fotos, vídeo, tipo dano, descrição, orçamento, total, parecer, recomendação) | OK |
-| **7 - Etapas de Reparo selecionadas** | **FALTANDO** |
-| 8 - Fotos Vistoria de Adesão (31 fotos para comparação) | OK |
-| Accordion colapsáveis | OK |
+| Item | Oficinas | Auto Centers | Prestadores |
+|---|---|---|---|
+| Selecao multipla no form | OK | OK | OK |
+| Lista completa (31 marcas) | OK | OK | OK |
+| Opcao GLOBAL | OK | OK | OK |
+| GLOBAL desabilita individuais | OK | OK | OK |
+| Badges na listagem | OK | OK | OK |
+| **Filtro por marca na listagem** | OK | OK | **FALTANDO** |
 
-### 5. Ações
-| Item | Status |
-|---|---|
-| Botão Reprovar (vermelho) | OK |
-| Modal: textarea motivo obrigatório | OK |
-| Modal: seletor de motivo padrão (5 opções corretas) | OK |
-| Edge function: status -> reprovado | OK |
-| Edge function: WhatsApp ao associado | OK |
-| Edge function: invalidar links ativos | OK |
-| Botão Aprovar (verde) | OK |
-| Modal: checkbox confirmação | OK |
-| Modal: observações opcional | OK |
-| Modal: resumo (associado, veículo, FIPE, orçamento) | OK |
-| **Modal: cota de coparticipação** | **FALTANDO** |
-| Edge function: status -> aprovado | OK |
-| Edge function: gerar Link 2 (72h) | OK |
-| Edge function: invalidar Link 1 | OK |
-| Edge function: WhatsApp com novo link | OK |
+### 3. Especialidades
+
+| Item | Oficinas | Auto Centers | Prestadores |
+|---|---|---|---|
+| Selecao multipla no form | OK | OK | OK |
+| Lista completa (16 itens) | OK | OK | OK |
+| Badges na listagem | OK | OK | OK |
+| **Filtro por especialidade na listagem** | **FALTANDO** | **FALTANDO** | OK |
+
+### 4. Dados Basicos
+
+| Campo | Oficinas | Auto Centers | Prestadores |
+|---|---|---|---|
+| Razao Social | OK | OK | OK |
+| Nome Fantasia | OK | OK (form) | OK |
+| CNPJ | OK | OK | OK |
+| **Inscricao Estadual** | OK | **FALTANDO** (form+DB) | **FALTANDO** (form+DB) |
+| Telefone | OK | OK (contato_telefone) | OK |
+| WhatsApp | OK | OK (obrigatorio) | OK |
+| Email | OK | OK | OK |
+| CEP, logradouro, numero, complemento, bairro, cidade, estado | OK | OK | OK |
+| Banco, agencia, conta, PIX | OK | OK | OK |
+| Status (ativo/inativo/suspenso) | OK | **NAO GERENCIADO** (coluna existe no DB mas nao no form/listagem) | OK |
+
+### 5. Menus de Navegacao
+- OK: 3 submenus na secao Oficinas
+
+### 6. Formularios
+- Criar e editar funcionam nos 3 tipos
+- Marcas e especialidades sao salvos corretamente
 
 ---
 
-## 3 Correções Necessárias
+## 6 Correcoes Necessarias
 
-### Correção 1 — Fallback tipo na fila (AnalistaEventosFila.tsx)
+### Correcao 1 — Adicionar filtro de especialidade na listagem de Oficinas
 
-**Arquivo:** `src/pages/analista-eventos/AnalistaEventosFila.tsx`
-**Linha 46:** Trocar `{ev.tipo || 'Colisão'}` por `{ev.tipo?.replace(/_/g, ' ') || 'Evento'}`
+**Arquivo:** `src/pages/oficinas/Oficinas.tsx`
 
-### Correção 2 — Exibir etapas de reparo na Seção 7 (EventoAnaliseDetalhe.tsx)
+Adicionar state `espFilter` e um Select com as especialidades (igual ao que ja existe em Prestadores). Passar `especialidade` para o hook `useOficinas`.
 
-**Arquivo:** `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
+### Correcao 2 — Adicionar filtro de especialidade na listagem de Auto Centers
 
-Após o bloco de descrição técnica (linha 351) e antes do bloco de orçamento (linha 353), adicionar exibição das etapas de reparo:
+**Arquivo:** `src/pages/oficinas/AutoCenters.tsx`
 
-```text
-{dadosVistoria?.etapas_reparo?.length > 0 && (
-  <div className="space-y-2">
-    <p className="font-semibold text-xs">Etapas de Reparo</p>
-    <div className="flex flex-wrap items-center gap-1">
-      {dadosVistoria.etapas_reparo
-        .filter((e: any) => typeof e === 'object' ? e.selecionada : true)
-        .map((etapa: any, i: number, arr: any[]) => (
-          <span key={i} className="flex items-center gap-1">
-            <Badge variant="outline" className="text-xs">
-              {typeof etapa === 'string' ? etapa : etapa.nome}
-            </Badge>
-            {i < arr.length - 1 && <span className="text-muted-foreground">→</span>}
-          </span>
-        ))}
-    </div>
-  </div>
-)}
-```
+Adicionar state `espFilter` e Select com especialidades. Passar para `useAutoCenters`. O hook ja suporta o parametro `especialidade`.
 
-Isso mostra a sequência visual tipo "Lanternagem -> Pintura -> Polimento -> Lavagem", compatível tanto com o formato antigo (strings) quanto com o novo formato (objetos com id/nome/status).
+### Correcao 3 — Adicionar filtro de marca na listagem de Prestadores
 
-### Correção 3 — Cota de coparticipação no modal de aprovação (EventoAnaliseDetalhe.tsx)
+**Arquivo:** `src/pages/oficinas/Prestadores.tsx`
 
-**Arquivo:** `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
+Adicionar state `marcaFilter` e Select com marcas de veiculos. Passar para `usePrestadoresEvento`. O hook ja suporta o parametro `marca`.
 
-No modal de aprovação (linha 480-487), após o valor FIPE, adicionar a cota calculada. O hook `useEventoAnaliseDetalhe` já retorna o sinistro com `associado.plano`, que contém os dados necessários.
+### Correcao 4 — Adicionar campo Inscricao Estadual no form de Auto Centers
 
-Adicionar dentro do bloco de resumo:
+**Migracao SQL:** Adicionar coluna `inscricao_estadual text` na tabela `auto_centers`.
 
-```text
-{sinistro.veiculo?.valor_fipe && sinistro.associado?.plano && (
-  <p>
-    <span className="text-muted-foreground">Cota Copartic.:</span>{' '}
-    R$ {Math.max(
-      Number(sinistro.veiculo.valor_fipe) * 0.035,
-      350
-    ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-  </p>
-)}
-```
+**Arquivo:** `src/components/oficinas/AutoCenterFormDialog.tsx` — adicionar campo `inscricao_estadual` no schema zod e no formulario (ao lado do CNPJ).
 
-Nota: O percentual (3.5%) e mínimo (R$350) são valores padrão. Idealmente viriam do plano do associado. Se o plano tiver campos `percentual_coparticipacao` e `valor_minimo_coparticipacao`, a fórmula seria ajustada para usar esses valores.
+### Correcao 5 — Adicionar campo Inscricao Estadual no form de Prestadores
+
+**Migracao SQL:** Adicionar coluna `inscricao_estadual text` na tabela `prestadores_evento`.
+
+**Arquivo:** `src/components/oficinas/PrestadorFormDialog.tsx` — adicionar campo `inscricao_estadual` no schema zod e no formulario.
+
+### Correcao 6 — Gerenciar status no Auto Center (form + listagem)
+
+**Arquivo:** `src/components/oficinas/AutoCenterFormDialog.tsx` — adicionar campo Select de status (ativo/inativo/suspenso) e enviar no payload.
+
+**Arquivo:** `src/pages/oficinas/AutoCenters.tsx` — exibir badge de status nos cards (como Oficinas e Prestadores ja fazem). Adicionar filtro de status.
 
 ---
 
 ## Arquivos Afetados
 
-| Ação | Arquivo |
+| Acao | Arquivo |
 |---|---|
-| Modificar | `src/pages/analista-eventos/AnalistaEventosFila.tsx` — corrigir fallback tipo |
-| Modificar | `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx` — adicionar etapas de reparo + cota no modal |
+| Migracao | Adicionar `inscricao_estadual text` em `auto_centers` e `prestadores_evento` |
+| Modificar | `src/pages/oficinas/Oficinas.tsx` — adicionar filtro especialidade |
+| Modificar | `src/pages/oficinas/AutoCenters.tsx` — adicionar filtro especialidade + status badges/filtro |
+| Modificar | `src/pages/oficinas/Prestadores.tsx` — adicionar filtro marca |
+| Modificar | `src/components/oficinas/AutoCenterFormDialog.tsx` — adicionar inscricao_estadual + status |
+| Modificar | `src/components/oficinas/PrestadorFormDialog.tsx` — adicionar inscricao_estadual |
+
