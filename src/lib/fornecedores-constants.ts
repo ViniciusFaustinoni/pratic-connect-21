@@ -24,3 +24,12 @@ export const ESPECIALIDADES = [
   'Reboque / Guincho',
   'Vistoria Cautelar',
 ] as const;
+
+export const TIPOS_PECAS = [
+  'Peças Novas',
+  'Peças Usadas',
+  'Peças Recondicionadas',
+  'Peças Importadas',
+  'Peças Genuínas / Originais',
+  'Peças Paralelas / Alternativas',
+] as const;
