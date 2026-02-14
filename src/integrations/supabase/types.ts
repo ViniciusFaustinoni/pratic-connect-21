@@ -19015,6 +19015,44 @@ export type Database = {
           },
         ]
       }
+      sinistro_suspensoes_prazo: {
+        Row: {
+          created_at: string | null
+          dias_uteis_suspensos: number | null
+          fim: string | null
+          id: string
+          inicio: string
+          motivo: string
+          sinistro_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          dias_uteis_suspensos?: number | null
+          fim?: string | null
+          id?: string
+          inicio?: string
+          motivo: string
+          sinistro_id: string
+        }
+        Update: {
+          created_at?: string | null
+          dias_uteis_suspensos?: number | null
+          fim?: string | null
+          id?: string
+          inicio?: string
+          motivo?: string
+          sinistro_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_suspensoes_prazo_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistro_vidros_historico: {
         Row: {
           associado_id: string
@@ -19189,6 +19227,11 @@ export type Database = {
           percentual_fipe: number | null
           perito_id: string | null
           prazo_comunicado_dias: number | null
+          prazo_dias_uteis_consumidos: number | null
+          prazo_motivo_suspensao: string | null
+          prazo_ressarcimento_inicio: string | null
+          prazo_suspenso: boolean | null
+          prazo_suspenso_em: string | null
           protocolo: string
           rastreador_lat_momento: number | null
           rastreador_lng_momento: number | null
@@ -19282,6 +19325,11 @@ export type Database = {
           percentual_fipe?: number | null
           perito_id?: string | null
           prazo_comunicado_dias?: number | null
+          prazo_dias_uteis_consumidos?: number | null
+          prazo_motivo_suspensao?: string | null
+          prazo_ressarcimento_inicio?: string | null
+          prazo_suspenso?: boolean | null
+          prazo_suspenso_em?: string | null
           protocolo: string
           rastreador_lat_momento?: number | null
           rastreador_lng_momento?: number | null
@@ -19375,6 +19423,11 @@ export type Database = {
           percentual_fipe?: number | null
           perito_id?: string | null
           prazo_comunicado_dias?: number | null
+          prazo_dias_uteis_consumidos?: number | null
+          prazo_motivo_suspensao?: string | null
+          prazo_ressarcimento_inicio?: string | null
+          prazo_suspenso?: boolean | null
+          prazo_suspenso_em?: string | null
           protocolo?: string
           rastreador_lat_momento?: number | null
           rastreador_lng_momento?: number | null
@@ -23257,6 +23310,17 @@ export type Database = {
         | "aguardando_analise"
         | "pagamento_confirmado"
         | "pronto_para_oficina"
+        | "aguardando_diretoria"
+        | "aguardando_juridico"
+        | "aguardando_confirmacoes"
+        | "em_oficina"
+        | "aguardando_peca"
+        | "em_finalizacao"
+        | "concluido"
+        | "entregue"
+        | "finalizado"
+        | "aguardando_indenizacao"
+        | "aguardando_pagamento"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -23651,6 +23715,17 @@ export const Constants = {
         "aguardando_analise",
         "pagamento_confirmado",
         "pronto_para_oficina",
+        "aguardando_diretoria",
+        "aguardando_juridico",
+        "aguardando_confirmacoes",
+        "em_oficina",
+        "aguardando_peca",
+        "em_finalizacao",
+        "concluido",
+        "entregue",
+        "finalizado",
+        "aguardando_indenizacao",
+        "aguardando_pagamento",
       ],
       status_veiculo: [
         "em_analise",
