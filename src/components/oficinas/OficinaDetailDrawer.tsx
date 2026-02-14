@@ -143,6 +143,25 @@ export function OficinaDetailDrawer({ oficina, open, onOpenChange }: Props) {
               </>
             )}
 
+            {/* Marcas Atendidas */}
+            {(oficina as any).marcas_atendidas?.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h3 className="font-medium">Marcas Atendidas</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(oficina as any).marcas_atendidas.includes('GLOBAL') ? (
+                      <Badge className="bg-primary text-primary-foreground">GLOBAL</Badge>
+                    ) : (
+                      (oficina as any).marcas_atendidas.map((m: string) => (
+                        <Badge key={m} variant="secondary">{m}</Badge>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
             <Separator />
 
             <Button className="w-full" onClick={() => setEditOpen(true)}>

@@ -114,6 +114,40 @@ export function AutoCenterDetailDrawer({ autoCenter, open, onOpenChange }: Props
               </>
             )}
 
+            {/* Marcas Atendidas */}
+            {(autoCenter as any).marcas_atendidas?.length > 0 && (
+              <>
+                <div className="space-y-3">
+                  <h3 className="font-medium">Marcas Atendidas</h3>
+                  <div className="flex flex-wrap gap-1">
+                    {(autoCenter as any).marcas_atendidas.includes('GLOBAL') ? (
+                      <Badge className="bg-primary text-primary-foreground">GLOBAL</Badge>
+                    ) : (
+                      (autoCenter as any).marcas_atendidas.map((m: string) => (
+                        <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>
+                      ))
+                    )}
+                  </div>
+                </div>
+                <Separator />
+              </>
+            )}
+
+            {/* Especialidades */}
+            {(autoCenter as any).especialidades?.length > 0 && (
+              <>
+                <div className="space-y-3">
+                  <h3 className="font-medium">Especialidades</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(autoCenter as any).especialidades.map((e: string) => (
+                      <Badge key={e} variant="outline">{e}</Badge>
+                    ))}
+                  </div>
+                </div>
+                <Separator />
+              </>
+            )}
+
             {/* Peças */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">

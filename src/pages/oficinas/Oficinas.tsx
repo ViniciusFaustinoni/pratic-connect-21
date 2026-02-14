@@ -10,10 +10,12 @@ import { OficinaFormDialog } from '@/components/oficinas/OficinaFormDialog';
 import { OficinaDetailDrawer } from '@/components/oficinas/OficinaDetailDrawer';
 import { ImportarOficinasDialog } from '@/components/oficinas/ImportarOficinasDialog';
 import { STATUS_OFICINA_LABELS, STATUS_OFICINA_COLORS, type Oficina, type StatusOficina } from '@/types/database';
+import { MARCAS_VEICULOS } from '@/lib/fornecedores-constants';
 
 export default function Oficinas() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusOficina | 'todos'>('todos');
+  const [marcaFilter, setMarcaFilter] = useState<string>('todos');
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedOficina, setSelectedOficina] = useState<Oficina | null>(null);
@@ -21,6 +23,7 @@ export default function Oficinas() {
   const { data: oficinas, isLoading, refetch } = useOficinas({
     search: search || undefined,
     status: statusFilter === 'todos' ? undefined : statusFilter,
+    marca: marcaFilter === 'todos' ? undefined : marcaFilter,
   });
 
   return (
@@ -61,6 +64,15 @@ export default function Oficinas() {
             {Object.entries(STATUS_OFICINA_LABELS).map(([value, label]) => (
               <SelectItem key={value} value={value}>{label}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={marcaFilter} onValueChange={setMarcaFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Marca" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as marcas</SelectItem>
+            {MARCAS_VEICULOS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -112,7 +124,7 @@ export default function Oficinas() {
                   )}
                 </div>
                 {oficina.especialidades?.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-1">
+                  <div className="mt-3 flex flex-wrap gap-1">
                     {oficina.especialidades.slice(0, 3).map((esp) => (
                       <Badge key={esp} variant="outline" className="text-xs">
                         {esp}
@@ -122,6 +134,22 @@ export default function Oficinas() {
                       <Badge variant="outline" className="text-xs">
                         +{oficina.especialidades.length - 3}
                       </Badge>
+                    )}
+                  </div>
+                )}
+                {(oficina as any).marcas_atendidas?.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(oficina as any).marcas_atendidas.includes('GLOBAL') ? (
+                      <Badge variant="secondary" className="text-xs">GLOBAL</Badge>
+                    ) : (
+                      <>
+                        {(oficina as any).marcas_atendidas.slice(0, 3).map((m: string) => (
+                          <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>
+                        ))}
+                        {(oficina as any).marcas_atendidas.length > 3 && (
+                          <Badge variant="secondary" className="text-xs">+{(oficina as any).marcas_atendidas.length - 3}</Badge>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

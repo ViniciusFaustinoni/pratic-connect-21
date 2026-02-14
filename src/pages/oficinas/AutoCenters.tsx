@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAutoCenters, type AutoCenter } from '@/hooks/useAutoCenters';
 import { AutoCenterFormDialog } from '@/components/oficinas/AutoCenterFormDialog';
 import { AutoCenterDetailDrawer } from '@/components/oficinas/AutoCenterDetailDrawer';
+import { MARCAS_VEICULOS } from '@/lib/fornecedores-constants';
 
 const TIPO_LABELS: Record<string, string> = {
   auto_center: 'Auto Center',
@@ -24,12 +25,14 @@ const TIPO_COLORS: Record<string, string> = {
 export default function AutoCenters() {
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
+  const [marcaFilter, setMarcaFilter] = useState<string>('todos');
   const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState<AutoCenter | null>(null);
 
   const { data: autoCenters, isLoading } = useAutoCenters({
     search: search || undefined,
     tipo: tipoFilter === 'todos' ? undefined : tipoFilter,
+    marca: marcaFilter === 'todos' ? undefined : marcaFilter,
   });
 
   return (
@@ -64,6 +67,15 @@ export default function AutoCenters() {
             <SelectItem value="auto_center">Auto Center</SelectItem>
             <SelectItem value="ferro_velho">Ferro Velho</SelectItem>
             <SelectItem value="montadora">Montadora</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={marcaFilter} onValueChange={setMarcaFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Marca" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as marcas</SelectItem>
+            {MARCAS_VEICULOS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -118,6 +130,32 @@ export default function AutoCenters() {
                     </div>
                   )}
                 </div>
+                {(ac as any).marcas_atendidas?.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {(ac as any).marcas_atendidas.includes('GLOBAL') ? (
+                      <Badge variant="secondary" className="text-xs">GLOBAL</Badge>
+                    ) : (
+                      <>
+                        {(ac as any).marcas_atendidas.slice(0, 3).map((m: string) => (
+                          <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>
+                        ))}
+                        {(ac as any).marcas_atendidas.length > 3 && (
+                          <Badge variant="secondary" className="text-xs">+{(ac as any).marcas_atendidas.length - 3}</Badge>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+                {(ac as any).especialidades?.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(ac as any).especialidades.slice(0, 3).map((e: string) => (
+                      <Badge key={e} variant="outline" className="text-xs">{e}</Badge>
+                    ))}
+                    {(ac as any).especialidades.length > 3 && (
+                      <Badge variant="outline" className="text-xs">+{(ac as any).especialidades.length - 3}</Badge>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
