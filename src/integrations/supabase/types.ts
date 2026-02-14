@@ -9280,6 +9280,70 @@ export type Database = {
           },
         ]
       }
+      evento_cotacoes_pecas: {
+        Row: {
+          auto_center_id: string
+          created_at: string | null
+          id: string
+          itens: Json
+          mensagem_enviada: string | null
+          prazo_resposta: string | null
+          resposta: Json | null
+          sinistro_id: string
+          status: string | null
+          updated_at: string | null
+          whatsapp_mensagem_id: string | null
+        }
+        Insert: {
+          auto_center_id: string
+          created_at?: string | null
+          id?: string
+          itens?: Json
+          mensagem_enviada?: string | null
+          prazo_resposta?: string | null
+          resposta?: Json | null
+          sinistro_id: string
+          status?: string | null
+          updated_at?: string | null
+          whatsapp_mensagem_id?: string | null
+        }
+        Update: {
+          auto_center_id?: string
+          created_at?: string | null
+          id?: string
+          itens?: Json
+          mensagem_enviada?: string | null
+          prazo_resposta?: string | null
+          resposta?: Json | null
+          sinistro_id?: string
+          status?: string | null
+          updated_at?: string | null
+          whatsapp_mensagem_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evento_cotacoes_pecas_auto_center_id_fkey"
+            columns: ["auto_center_id"]
+            isOneToOne: false
+            referencedRelation: "auto_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evento_cotacoes_pecas_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evento_cotacoes_pecas_whatsapp_mensagem_id_fkey"
+            columns: ["whatsapp_mensagem_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_mensagens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       extratos_bancarios: {
         Row: {
           arquivo_nome: string
@@ -18426,6 +18490,45 @@ export type Database = {
           },
         ]
       }
+      sinistro_prestadores: {
+        Row: {
+          created_at: string | null
+          id: string
+          observacoes: string | null
+          prestador_id: string
+          sinistro_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          observacoes?: string | null
+          prestador_id: string
+          sinistro_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          observacoes?: string | null
+          prestador_id?: string
+          sinistro_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_prestadores_prestador_id_fkey"
+            columns: ["prestador_id"]
+            isOneToOne: false
+            referencedRelation: "prestadores_evento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_prestadores_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistros: {
         Row: {
           alerta_recem_ativado: boolean | null
@@ -22525,6 +22628,7 @@ export type Database = {
         | "em_recuperacao"
         | "aguardando_analise"
         | "pagamento_confirmado"
+        | "pronto_para_oficina"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -22915,6 +23019,7 @@ export const Constants = {
         "em_recuperacao",
         "aguardando_analise",
         "pagamento_confirmado",
+        "pronto_para_oficina",
       ],
       status_veiculo: [
         "em_analise",
