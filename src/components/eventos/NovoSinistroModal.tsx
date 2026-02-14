@@ -55,6 +55,57 @@ const TIPO_SINISTRO_OPTIONS = [
   { value: 'outro', label: 'Outro' },
 ];
 
+const TIPO_LABELS: Record<string, string> = {
+  colisao: 'Colisão', roubo: 'Roubo', furto: 'Furto', incendio: 'Incêndio',
+  fenomeno_natural: 'Fenômeno Natural', vidros: 'Vidros', vandalismo: 'Vandalismo',
+  terceiros: 'Terceiros', outro: 'Outro',
+};
+
+const DOCUMENTOS_OBRIGATORIOS: Record<string, Array<{tipo: string; nome: string; obrigatorio: boolean}>> = {
+  colisao: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
+    { tipo: 'foto_local', nome: 'Fotos do Local', obrigatorio: false },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: false },
+  ],
+  roubo: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+    { tipo: 'chaves', nome: 'Declaração das Chaves', obrigatorio: true },
+  ],
+  furto: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+    { tipo: 'chaves', nome: 'Declaração das Chaves', obrigatorio: true },
+  ],
+  incendio: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+    { tipo: 'laudo_bombeiros', nome: 'Laudo dos Bombeiros', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos do Veículo', obrigatorio: true },
+  ],
+  fenomeno_natural: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
+    { tipo: 'comprovante_evento', nome: 'Comprovante do Evento (notícia/defesa civil)', obrigatorio: false },
+  ],
+  vidros: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos dos Danos', obrigatorio: true },
+  ],
+  outro: [
+    { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+    { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+    { tipo: 'foto_dano', nome: 'Fotos do Ocorrido', obrigatorio: false },
+  ],
+};
+
 const UF_OPTIONS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS',
   'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC',
@@ -161,12 +212,56 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
   const selectedAssociadoData = associados.find(a => a.id === selectedAssociado);
   const selectedVeiculoData = veiculos.find(v => v.id === selectedVeiculo);
 
-  // Mutation para criar sinistro
+  // Mutation para criar sinistro (fluxo completo alinhado com edge function criar-sinistro)
   const createMutation = useMutation({
     mutationFn: async () => {
       const veiculoSelecionado = veiculos.find(v => v.id === selectedVeiculo);
       const protocolo = generateProtocolo();
-      
+
+      // ===== 1. VERIFICAR SINISTRO EM ABERTO =====
+      const { data: sinistroExistente } = await supabase
+        .from('sinistros')
+        .select('id, protocolo, status')
+        .eq('veiculo_id', selectedVeiculo!)
+        .in('status', ['comunicado', 'em_analise', 'documentacao_pendente', 'em_regulacao'] as any)
+        .maybeSingle();
+
+      if (sinistroExistente) {
+        throw new Error(`Já existe sinistro em aberto para este veículo: ${sinistroExistente.protocolo}`);
+      }
+
+      // ===== 2. VALIDAR COBERTURA E CALCULAR FLAG =====
+      const { data: veiculoCompleto, error: veicError } = await supabase
+        .from('veiculos')
+        .select('status, cobertura_roubo_furto, cobertura_total')
+        .eq('id', selectedVeiculo!)
+        .single();
+
+      if (veicError || !veiculoCompleto) throw new Error('Erro ao buscar dados do veículo');
+
+      const isRouboFurto = ['roubo', 'furto'].includes(formData.tipo);
+      const temCoberturaTotal = veiculoCompleto.cobertura_total === true;
+      const temCoberturaRouboFurto = veiculoCompleto.cobertura_roubo_furto === true;
+      let alertaRecemAtivado = false;
+
+      if (temCoberturaTotal) {
+        // Cobertura total: qualquer tipo permitido
+      } else if (temCoberturaRouboFurto && isRouboFurto) {
+        alertaRecemAtivado = true;
+        console.log('[NovoSinistroModal] ⚠️ Sinistro roubo/furto sem cobertura total - alerta ativado');
+      } else if (!isRouboFurto && !temCoberturaTotal) {
+        throw new Error('Veículo sem cobertura total para este tipo de sinistro. Apenas roubo/furto é permitido.');
+      }
+
+      // ===== 3. CAPTURAR POSIÇÃO DO RASTREADOR =====
+      const { data: rastreador } = await supabase
+        .from('rastreadores')
+        .select('id, ultima_posicao_lat, ultima_posicao_lng, ultima_comunicacao')
+        .eq('veiculo_id', selectedVeiculo!)
+        .eq('status', 'instalado')
+        .maybeSingle();
+
+      // ===== 4. INSERIR SINISTRO =====
       const { data: sinistro, error } = await supabase
         .from('sinistros')
         .insert([{
@@ -184,21 +279,29 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
           canal: 'presencial',
           status: 'comunicado' as any,
           necessita_reboque: necessitaReboque,
+          alerta_recem_ativado: alertaRecemAtivado,
+          rastreador_lat_momento: rastreador?.ultima_posicao_lat || null,
+          rastreador_lng_momento: rastreador?.ultima_posicao_lng || null,
+          rastreador_posicao_capturada_em: rastreador?.ultima_comunicacao || null,
         }])
         .select()
         .single();
       
       if (error) throw error;
-      
-      // Registrar no histórico
+
+      // ===== 5. REGISTRAR HISTÓRICO =====
+      const observacaoHistorico = alertaRecemAtivado
+        ? `Sinistro registrado via sistema - ${TIPO_LABELS[formData.tipo] || formData.tipo} - ⚠️ ALERTA: Associado recém-ativado (sem rastreador)`
+        : `Sinistro registrado via sistema - ${TIPO_LABELS[formData.tipo] || formData.tipo}`;
+
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistro.id,
         status_novo: 'comunicado',
         usuario_id: user?.id,
-        observacao: 'Sinistro registrado via sistema'
+        observacao: observacaoHistorico,
       });
 
-      // Criar chamado de reboque se necessário
+      // ===== 6. CRIAR CHAMADO DE REBOQUE =====
       if (necessitaReboque) {
         try {
           const nowAss = new Date();
@@ -233,16 +336,129 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
           console.error('[NovoSinistroModal] Erro ao criar reboque:', rebError);
         }
       }
-      
-      // Notificar associado via WhatsApp/Email/Sistema
+
+      // ===== 7. CRIAR DOCUMENTOS PENDENTES =====
+      try {
+        const documentosPendentes = DOCUMENTOS_OBRIGATORIOS[formData.tipo] || DOCUMENTOS_OBRIGATORIOS.outro;
+        const docsToInsert = documentosPendentes.map(doc => ({
+          sinistro_id: sinistro.id,
+          tipo: doc.tipo,
+          arquivo_url: '',
+          nome_arquivo: doc.nome,
+          status: 'pendente',
+        }));
+        await supabase.from('sinistro_documentos').insert(docsToInsert);
+        console.log('[NovoSinistroModal] Documentos pendentes criados:', documentosPendentes.length);
+      } catch (docError) {
+        console.error('[NovoSinistroModal] Erro ao criar documentos (não bloqueante):', docError);
+      }
+
+      // ===== 8. NOTIFICAR ANALISTAS E DIRETORES =====
+      try {
+        const { data: analistas } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'analista_eventos');
+
+        let destinatarios = analistas || [];
+        if (destinatarios.length === 0) {
+          const { data: diretores } = await supabase
+            .from('user_roles')
+            .select('user_id')
+            .eq('role', 'diretor');
+          destinatarios = diretores || [];
+        }
+
+        const tituloNotificacao = alertaRecemAtivado
+          ? '🆕⚠️ Sinistro Recém-Ativado (sem rastreador)'
+          : '🆕 Novo Sinistro Registrado';
+
+        const veicPlaca = veiculoSelecionado?.placa || '';
+        for (const dest of destinatarios) {
+          await supabase.from('notificacoes').insert({
+            user_id: dest.user_id,
+            titulo: tituloNotificacao,
+            mensagem: `Sinistro ${protocolo} - ${TIPO_LABELS[formData.tipo] || formData.tipo} - Veículo ${veicPlaca}`,
+            tipo: 'alerta',
+            categoria: 'sinistros',
+            referencia_tipo: 'sinistro',
+            referencia_id: sinistro.id,
+            link: `/sinistros/${sinistro.id}`,
+            lida: false,
+          });
+        }
+        console.log('[NovoSinistroModal] Notificações enviadas para', destinatarios.length, 'analistas/diretores');
+      } catch (notifError) {
+        console.error('[NovoSinistroModal] Erro ao notificar analistas (não bloqueante):', notifError);
+      }
+
+      // ===== 9. NOTIFICAR ASSOCIADO =====
+      try {
+        const { data: associadoData } = await supabase
+          .from('associados')
+          .select('user_id, nome')
+          .eq('id', selectedAssociado!)
+          .single();
+
+        if (associadoData?.user_id) {
+          await supabase.from('notificacoes').insert({
+            user_id: associadoData.user_id,
+            titulo: '✅ Sinistro Registrado',
+            mensagem: `Seu sinistro foi registrado com sucesso. Protocolo: ${protocolo}. Em breve iniciaremos a análise.`,
+            tipo: 'info',
+            categoria: 'sinistros',
+            referencia_tipo: 'sinistro',
+            referencia_id: sinistro.id,
+            link: `/app/sinistros/${sinistro.id}`,
+            lida: false,
+          });
+        }
+      } catch (assocNotifError) {
+        console.error('[NovoSinistroModal] Erro ao notificar associado (não bloqueante):', assocNotifError);
+      }
+
+      // ===== 10. AGENDAR CONTATO D+1 =====
+      try {
+        await supabase.functions.invoke('agendar-contato-sinistro', {
+          body: { sinistro_id: sinistro.id },
+        });
+        console.log('[NovoSinistroModal] Contato D+1 agendado');
+      } catch (agendarError) {
+        console.error('[NovoSinistroModal] Erro ao agendar contato (não bloqueante):', agendarError);
+      }
+
+      // ===== 11. ENVIAR EMAIL PARA EQUIPE =====
+      try {
+        const veicDesc = veiculoSelecionado ? `${veiculoSelecionado.placa} - ${veiculoSelecionado.marca} ${veiculoSelecionado.modelo}` : '';
+        await supabase.functions.invoke('send-email', {
+          body: {
+            to: 'sinistros@praticprotect.com.br',
+            subject: alertaRecemAtivado
+              ? `⚠️ Sinistro Recém-Ativado: ${protocolo} - ${veiculoSelecionado?.placa}`
+              : `Novo Sinistro: ${protocolo} - ${veiculoSelecionado?.placa}`,
+            html: `
+              <h2>${alertaRecemAtivado ? '⚠️ Sinistro de Associado Recém-Ativado' : 'Novo Sinistro Registrado'}</h2>
+              ${alertaRecemAtivado ? '<p style="color: #d97706; font-weight: bold;">ATENÇÃO: Este sinistro foi aberto para associado sem rastreador instalado. Requer análise especial.</p>' : ''}
+              <p><strong>Protocolo:</strong> ${protocolo}</p>
+              <p><strong>Tipo:</strong> ${TIPO_LABELS[formData.tipo] || formData.tipo}</p>
+              <p><strong>Veículo:</strong> ${veicDesc}</p>
+              <p><strong>Local:</strong> ${formData.cidade_ocorrencia}/${formData.estado_ocorrencia}</p>
+              <p><strong>Canal:</strong> Presencial (registrado via sistema)</p>
+              <p><strong>Descrição:</strong></p>
+              <p>${formData.descricao}</p>
+            `,
+          },
+        });
+        console.log('[NovoSinistroModal] Email enviado para equipe');
+      } catch (emailError) {
+        console.error('[NovoSinistroModal] Erro ao enviar email (não bloqueante):', emailError);
+      }
+
+      // ===== 12. NOTIFICAR VIA EDGE FUNCTION =====
       try {
         await supabase.functions.invoke('notificar-sinistro', {
-          body: {
-            sinistro_id: sinistro.id,
-            status: 'comunicado',
-          }
+          body: { sinistro_id: sinistro.id, status: 'comunicado' },
         });
-        console.log('[NovoSinistroModal] Notificação enviada');
       } catch (notifError) {
         console.warn('[NovoSinistroModal] Erro ao notificar (não bloqueante):', notifError);
       }
@@ -257,7 +473,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
       handleClose();
     },
     onError: (error) => {
-      toast.error('Erro ao registrar sinistro');
+      toast.error(error instanceof Error ? error.message : 'Erro ao registrar sinistro');
       console.error(error);
     }
   });
