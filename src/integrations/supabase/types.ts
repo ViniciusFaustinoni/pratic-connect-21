@@ -3902,6 +3902,147 @@ export type Database = {
           },
         ]
       }
+      caso_juridico_documentos: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string
+          consulta_id: string | null
+          created_at: string | null
+          id: string
+          processo_id: string | null
+          registrado_por: string | null
+          tipo: string | null
+          titulo: string
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url: string
+          consulta_id?: string | null
+          created_at?: string | null
+          id?: string
+          processo_id?: string | null
+          registrado_por?: string | null
+          tipo?: string | null
+          titulo: string
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string
+          consulta_id?: string | null
+          created_at?: string | null
+          id?: string
+          processo_id?: string | null
+          registrado_por?: string | null
+          tipo?: string | null
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caso_juridico_documentos_consulta_id_fkey"
+            columns: ["consulta_id"]
+            isOneToOne: false
+            referencedRelation: "consultas_juridicas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caso_juridico_documentos_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caso_juridico_documentos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caso_juridico_documentos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "caso_juridico_documentos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      caso_juridico_historico: {
+        Row: {
+          consulta_id: string | null
+          created_at: string | null
+          descricao: string | null
+          id: string
+          processo_id: string | null
+          tipo: string
+          titulo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          consulta_id?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          processo_id?: string | null
+          tipo: string
+          titulo: string
+          usuario_id?: string | null
+        }
+        Update: {
+          consulta_id?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          processo_id?: string | null
+          tipo?: string
+          titulo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caso_juridico_historico_consulta_id_fkey"
+            columns: ["consulta_id"]
+            isOneToOne: false
+            referencedRelation: "consultas_juridicas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caso_juridico_historico_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caso_juridico_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caso_juridico_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "caso_juridico_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       centros_custo: {
         Row: {
           ativo: boolean | null
@@ -6224,6 +6365,10 @@ export type Database = {
           associado_id: string | null
           assunto: string
           created_at: string | null
+          decisao: string | null
+          decisao_em: string | null
+          decisao_observacoes: string | null
+          decisao_por: string | null
           departamento: string | null
           descricao: string
           id: string
@@ -6242,6 +6387,10 @@ export type Database = {
           associado_id?: string | null
           assunto: string
           created_at?: string | null
+          decisao?: string | null
+          decisao_em?: string | null
+          decisao_observacoes?: string | null
+          decisao_por?: string | null
           departamento?: string | null
           descricao: string
           id?: string
@@ -6260,6 +6409,10 @@ export type Database = {
           associado_id?: string | null
           assunto?: string
           created_at?: string | null
+          decisao?: string | null
+          decisao_em?: string | null
+          decisao_observacoes?: string | null
+          decisao_por?: string | null
           departamento?: string | null
           descricao?: string
           id?: string
@@ -6316,6 +6469,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_decisao_por_fkey"
+            columns: ["decisao_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_decisao_por_fkey"
+            columns: ["decisao_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_decisao_por_fkey"
+            columns: ["decisao_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
           },
           {
             foreignKeyName: "consultas_juridicas_processo_id_fkey"

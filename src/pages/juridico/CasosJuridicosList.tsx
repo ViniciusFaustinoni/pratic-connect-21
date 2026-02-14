@@ -270,9 +270,7 @@ export default function CasosJuridicosList() {
                   const tipoBadge = getTipoBadge(caso.assunto, caso.tipo);
                   const origemBadge = getOrigem(caso.departamento, caso.assunto, caso.tipo);
                   const diasAberto = differenceInDays(new Date(), new Date(caso.created_at));
-                  const linkDetalhe = caso._source === 'consulta'
-                    ? `/juridico/consultas/${caso.id}`
-                    : `/juridico/processos/${caso.id}`;
+                  const linkDetalhe = `/juridico/casos/${caso.id}`;
 
                   return (
                     <TableRow key={`${caso._source}-${caso.id}`}>
