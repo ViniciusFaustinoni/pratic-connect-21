@@ -1,38 +1,55 @@
 
 
-# Remover "Prestadores" duplicado do menu Oficinas
+# Substituir "Especialidades" por "Tipos de Pecas" no formulario de Auto Centers
 
 ## Problema
 
-O item "Prestadores" aparece em dois menus do sidebar:
-- **Assistencia 24h** -> Prestadores (`/assistencia/prestadores`) -- CORRETO, deve permanecer
-- **Oficinas** -> Prestadores (`/oficinas/prestadores`) -- DUPLICADO, deve ser removido
+O formulario de Auto Centers exibe uma secao "Especialidades" com opcoes de servicos (Funilaria, Mecanica, Pintura, etc.). Auto Centers nao realizam servicos -- eles **vendem pecas**. A secao deve listar categorias de pecas, nao servicos.
 
 ## Correcoes
 
-### 1. Remover item do menu lateral
+### 1. Criar constante TIPOS_PECAS
 
-**Arquivo:** `src/components/layout/AppSidebar.tsx`
+**Arquivo:** `src/lib/fornecedores-constants.ts`
 
-Remover a linha `{ title: 'Prestadores', url: '/oficinas/prestadores', icon: Puzzle }` do grupo "Oficinas" (linha 233).
+Adicionar novo array com categorias de pecas:
 
-### 2. Remover rota duplicada
+```text
+Peças Novas
+Peças Usadas
+Peças Recondicionadas
+Peças Importadas
+Peças Genuínas / Originais
+Peças Paralelas / Alternativas
+```
 
-**Arquivo:** `src/App.tsx`
+### 2. Criar componente TiposPecasSelect
 
-Remover a rota `<Route path="/oficinas/prestadores" element={<PrestadoresPage />} />` (linha 574) e o import `PrestadoresPage` (linha 89), ja que a pagina de prestadores e acessada via `/assistencia/prestadores`.
+**Arquivo:** `src/components/oficinas/TiposPecasSelect.tsx`
 
-### 3. Remover pagina duplicada (opcional)
+Componente com checkboxes (mesmo padrao visual do EspecialidadesSelect), mas usando a lista TIPOS_PECAS. Label: "Tipos de Pecas".
 
-**Arquivo:** `src/pages/oficinas/Prestadores.tsx`
+### 3. Substituir EspecialidadesSelect no formulario
 
-Se a rota `/assistencia/prestadores` usa um componente diferente, manter ambos. Caso contrario, o arquivo pode ser removido.
+**Arquivo:** `src/components/oficinas/AutoCenterFormDialog.tsx`
+
+- Trocar o import de `EspecialidadesSelect` por `TiposPecasSelect`
+- Renomear o state `especialidades` para `tiposPecas`
+- No payload do submit, enviar `especialidades: tiposPecas` (manter o campo do banco como `especialidades` para nao precisar de migracao)
+
+### 4. Atualizar filtro na listagem
+
+**Arquivo:** `src/pages/oficinas/AutoCenters.tsx`
+
+- No select de filtro "Especialidade", trocar label para "Tipo de Peca" e usar a lista TIPOS_PECAS em vez de ESPECIALIDADES
+- Trocar o placeholder para "Todos os tipos de peca"
 
 ## Arquivos Afetados
 
 | Acao | Arquivo |
 |---|---|
-| Modificar | `src/components/layout/AppSidebar.tsx` -- remover item Prestadores do grupo Oficinas |
-| Modificar | `src/App.tsx` -- remover rota e import de oficinas/prestadores |
-| Avaliar | `src/pages/oficinas/Prestadores.tsx` -- remover se nao for usado em outro lugar |
+| Modificar | `src/lib/fornecedores-constants.ts` -- adicionar TIPOS_PECAS |
+| Criar | `src/components/oficinas/TiposPecasSelect.tsx` -- novo componente |
+| Modificar | `src/components/oficinas/AutoCenterFormDialog.tsx` -- trocar EspecialidadesSelect por TiposPecasSelect |
+| Modificar | `src/pages/oficinas/AutoCenters.tsx` -- atualizar filtro de especialidade para tipos de peca |
 
