@@ -50,6 +50,8 @@ import { EnviarParaOficinaDialog } from '@/components/sinistros/EnviarParaOficin
 import { AtribuirFornecedoresDialog } from '@/components/sinistros/AtribuirFornecedoresDialog';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
+import { CotacoesRecebidasTab } from '@/components/sinistros/CotacoesRecebidasTab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -327,192 +329,209 @@ export default function SinistroAnalise() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Coluna Esquerda - 2/3 */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Dados do Associado */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Dados do Associado
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <InfoItem icon={User} label="Nome" value={associado?.nome} />
-              <InfoItem icon={FileText} label="CPF" value={maskCPF(associado?.cpf)} />
-              <InfoItem icon={Phone} label="Telefone" value={associado?.telefone} />
-              <InfoItem icon={Mail} label="Email" value={associado?.email} />
-              <InfoItem
-                icon={MapPin}
-                label="Endereço"
-                value={associado ? `${associado.logradouro || ''}, ${associado.numero || ''} - ${associado.bairro || ''}, ${associado.cidade || ''}/${associado.uf || ''}` : null}
-              />
-              <InfoItem icon={Calendar} label="Data de Adesão" value={formatDate(associado?.data_adesao)} />
-            </CardContent>
-          </Card>
+          {(() => {
+            const showCotacoesTab = ['pronto_para_oficina', 'em_reparo'].includes(sinistro.status as string);
 
-          {/* Dados do Veículo */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Car className="h-5 w-5" />
-                Dados do Veículo
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <InfoItem icon={Car} label="Placa" value={veiculo?.placa} highlight />
-              <InfoItem icon={Car} label="Marca/Modelo" value={`${veiculo?.marca || ''} ${veiculo?.modelo || ''}`} />
-              <InfoItem icon={Calendar} label="Ano" value={veiculo?.ano_modelo?.toString()} />
-              <InfoItem icon={Car} label="Cor" value={veiculo?.cor} />
-              <InfoItem icon={FileText} label="Chassi" value={veiculo?.chassi} />
-              <InfoItem icon={DollarSign} label="Valor FIPE" value={formatCurrency(veiculo?.valor_fipe)} highlight />
-              <InfoItem icon={FileText} label="Código FIPE" value={veiculo?.codigo_fipe} />
-            </CardContent>
-          </Card>
+            const detalhesContent = (
+              <div className="space-y-6">
+                {/* Dados do Associado */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <User className="h-5 w-5" />
+                      Dados do Associado
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 md:grid-cols-2">
+                    <InfoItem icon={User} label="Nome" value={associado?.nome} />
+                    <InfoItem icon={FileText} label="CPF" value={maskCPF(associado?.cpf)} />
+                    <InfoItem icon={Phone} label="Telefone" value={associado?.telefone} />
+                    <InfoItem icon={Mail} label="Email" value={associado?.email} />
+                    <InfoItem
+                      icon={MapPin}
+                      label="Endereço"
+                      value={associado ? `${associado.logradouro || ''}, ${associado.numero || ''} - ${associado.bairro || ''}, ${associado.cidade || ''}/${associado.uf || ''}` : null}
+                    />
+                    <InfoItem icon={Calendar} label="Data de Adesão" value={formatDate(associado?.data_adesao)} />
+                  </CardContent>
+                </Card>
 
-          {/* Informações do Sinistro */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TipoIcon className="h-5 w-5" />
-                Informações do Sinistro
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <InfoItem icon={TipoIcon} label="Tipo" value={tipoConfig[sinistro.tipo]?.label || sinistro.tipo} />
-              <InfoItem icon={Calendar} label="Data da Ocorrência" value={formatDateTime(sinistro.data_ocorrencia)} />
-              <InfoItem icon={MapPin} label="Local" value={sinistro.local_ocorrencia} />
-              <InfoItem icon={MapPin} label="Cidade/UF" value={`${sinistro.cidade_ocorrencia || ''}/${sinistro.estado_ocorrencia || ''}`} />
-              <InfoItem icon={FileText} label="Nº B.O." value={sinistro.bo_numero} />
-              <InfoItem icon={Clock} label="Comunicado em" value={formatDateTime(sinistro.created_at)} />
-              <div className="md:col-span-2">
-                <p className="text-sm text-muted-foreground mb-1">Descrição</p>
-                <p className="text-foreground bg-muted p-3 rounded-md">{sinistro.descricao || '---'}</p>
-              </div>
-            </CardContent>
-          </Card>
+                {/* Dados do Veículo */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Car className="h-5 w-5" />
+                      Dados do Veículo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 md:grid-cols-2">
+                    <InfoItem icon={Car} label="Placa" value={veiculo?.placa} highlight />
+                    <InfoItem icon={Car} label="Marca/Modelo" value={`${veiculo?.marca || ''} ${veiculo?.modelo || ''}`} />
+                    <InfoItem icon={Calendar} label="Ano" value={veiculo?.ano_modelo?.toString()} />
+                    <InfoItem icon={Car} label="Cor" value={veiculo?.cor} />
+                    <InfoItem icon={FileText} label="Chassi" value={veiculo?.chassi} />
+                    <InfoItem icon={DollarSign} label="Valor FIPE" value={formatCurrency(veiculo?.valor_fipe)} highlight />
+                    <InfoItem icon={FileText} label="Código FIPE" value={veiculo?.codigo_fipe} />
+                  </CardContent>
+                </Card>
 
-          {/* Trajeto 24h - Se tiver rastreador */}
-          {temRastreadorAtivo && (
-            <TrajetoSinistroCard
-              veiculoId={sinistro.veiculo_id}
-              dataOcorrencia={sinistro.data_ocorrencia}
-              localOcorrencia={sinistro.local_ocorrencia}
-              sinistroId={sinistro.id}
-              protocolo={sinistro.protocolo}
-              veiculo={veiculo}
-              associado={associado}
-              latitudeInformada={sinistro.latitude_informada}
-              longitudeInformada={sinistro.longitude_informada}
-              rastreadorLat={rastreador?.ultima_posicao_lat}
-              rastreadorLng={rastreador?.ultima_posicao_lng}
-            />
-          )}
-
-          {/* Comparação GPS */}
-          <ComparacaoPosicoes
-            latitudeInformada={sinistro.latitude_informada}
-            longitudeInformada={sinistro.longitude_informada}
-            rastreadorLat={rastreador?.ultima_posicao_lat}
-            rastreadorLng={rastreador?.ultima_posicao_lng}
-            rastreadorCapturadoEm={rastreador?.ultima_comunicacao}
-            localOcorrencia={sinistro.local_ocorrencia}
-          />
-
-          {/* Documentos Anexados */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileCheck className="h-5 w-5" />
-                Documentos ({documentos.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {documentos.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">
-                  Nenhum documento anexado
-                </p>
-              ) : (
-                <div className="grid gap-2">
-                  {documentos.map((doc) => {
-                    const docUrl = resolverUrl(doc.arquivo_url);
-                    const isEnviado = doc.status === 'enviado' && docUrl;
-                    const isImage = docUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(docUrl);
-                    const isPdf = docUrl && /\.pdf$/i.test(docUrl);
-                    return (
-                      <div
-                        key={doc.id}
-                        className="flex items-center gap-3 p-3 rounded-md bg-muted"
-                      >
-                        {/* Thumbnail */}
-                        {isEnviado && isImage ? (
-                          <img
-                            src={docUrl}
-                            alt={doc.nome_arquivo || doc.tipo}
-                            className="h-14 w-14 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity border"
-                            onClick={() => setPreviewDoc(doc)}
-                          />
-                        ) : (
-                          <div className="h-14 w-14 rounded-md bg-background border flex items-center justify-center flex-shrink-0">
-                            <FileText className="h-6 w-6 text-muted-foreground" />
-                          </div>
-                        )}
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium truncate block">{doc.nome_arquivo || doc.tipo}</span>
-                          <Badge variant={doc.status === 'enviado' ? 'default' : 'outline'} className="mt-1 text-xs">
-                            {doc.status}
-                          </Badge>
-                        </div>
-
-                        {/* Action */}
-                        {isEnviado && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-3 text-xs flex-shrink-0"
-                            onClick={() => setPreviewDoc(doc)}
-                          >
-                            Ampliar
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Sinistros Anteriores */}
-          {sinistrosAnteriores.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <History className="h-5 w-5" />
-                  Sinistros Anteriores ({sinistrosAnteriores.length})
-                </CardTitle>
-                <CardDescription>Histórico de sinistros deste veículo</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {sinistrosAnteriores.map((ant) => (
-                    <div
-                      key={ant.id}
-                      className="flex items-center justify-between p-3 rounded-md bg-muted"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{ant.protocolo}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {tipoConfig[ant.tipo]?.label || ant.tipo} • {formatDate(ant.data_ocorrencia)}
-                        </p>
-                      </div>
-                      <Badge variant="outline">{ant.status}</Badge>
+                {/* Informações do Sinistro */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TipoIcon className="h-5 w-5" />
+                      Informações do Sinistro
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 md:grid-cols-2">
+                    <InfoItem icon={TipoIcon} label="Tipo" value={tipoConfig[sinistro.tipo]?.label || sinistro.tipo} />
+                    <InfoItem icon={Calendar} label="Data da Ocorrência" value={formatDateTime(sinistro.data_ocorrencia)} />
+                    <InfoItem icon={MapPin} label="Local" value={sinistro.local_ocorrencia} />
+                    <InfoItem icon={MapPin} label="Cidade/UF" value={`${sinistro.cidade_ocorrencia || ''}/${sinistro.estado_ocorrencia || ''}`} />
+                    <InfoItem icon={FileText} label="Nº B.O." value={sinistro.bo_numero} />
+                    <InfoItem icon={Clock} label="Comunicado em" value={formatDateTime(sinistro.created_at)} />
+                    <div className="md:col-span-2">
+                      <p className="text-sm text-muted-foreground mb-1">Descrição</p>
+                      <p className="text-foreground bg-muted p-3 rounded-md">{sinistro.descricao || '---'}</p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  </CardContent>
+                </Card>
+
+                {/* Trajeto 24h */}
+                {temRastreadorAtivo && (
+                  <TrajetoSinistroCard
+                    veiculoId={sinistro.veiculo_id}
+                    dataOcorrencia={sinistro.data_ocorrencia}
+                    localOcorrencia={sinistro.local_ocorrencia}
+                    sinistroId={sinistro.id}
+                    protocolo={sinistro.protocolo}
+                    veiculo={veiculo}
+                    associado={associado}
+                    latitudeInformada={sinistro.latitude_informada}
+                    longitudeInformada={sinistro.longitude_informada}
+                    rastreadorLat={rastreador?.ultima_posicao_lat}
+                    rastreadorLng={rastreador?.ultima_posicao_lng}
+                  />
+                )}
+
+                {/* Comparação GPS */}
+                <ComparacaoPosicoes
+                  latitudeInformada={sinistro.latitude_informada}
+                  longitudeInformada={sinistro.longitude_informada}
+                  rastreadorLat={rastreador?.ultima_posicao_lat}
+                  rastreadorLng={rastreador?.ultima_posicao_lng}
+                  rastreadorCapturadoEm={rastreador?.ultima_comunicacao}
+                  localOcorrencia={sinistro.local_ocorrencia}
+                />
+
+                {/* Documentos */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileCheck className="h-5 w-5" />
+                      Documentos ({documentos.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {documentos.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-4">
+                        Nenhum documento anexado
+                      </p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {documentos.map((doc) => {
+                          const docUrl = resolverUrl(doc.arquivo_url);
+                          const isEnviado = doc.status === 'enviado' && docUrl;
+                          const isImage = docUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(docUrl);
+                          return (
+                            <div
+                              key={doc.id}
+                              className="flex items-center gap-3 p-3 rounded-md bg-muted"
+                            >
+                              {isEnviado && isImage ? (
+                                <img
+                                  src={docUrl}
+                                  alt={doc.nome_arquivo || doc.tipo}
+                                  className="h-14 w-14 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity border"
+                                  onClick={() => setPreviewDoc(doc)}
+                                />
+                              ) : (
+                                <div className="h-14 w-14 rounded-md bg-background border flex items-center justify-center flex-shrink-0">
+                                  <FileText className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium truncate block">{doc.nome_arquivo || doc.tipo}</span>
+                                <Badge variant={doc.status === 'enviado' ? 'default' : 'outline'} className="mt-1 text-xs">
+                                  {doc.status}
+                                </Badge>
+                              </div>
+                              {isEnviado && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 px-3 text-xs flex-shrink-0"
+                                  onClick={() => setPreviewDoc(doc)}
+                                >
+                                  Ampliar
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Sinistros Anteriores */}
+                {sinistrosAnteriores.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <History className="h-5 w-5" />
+                        Sinistros Anteriores ({sinistrosAnteriores.length})
+                      </CardTitle>
+                      <CardDescription>Histórico de sinistros deste veículo</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {sinistrosAnteriores.map((ant) => (
+                          <div
+                            key={ant.id}
+                            className="flex items-center justify-between p-3 rounded-md bg-muted"
+                          >
+                            <div>
+                              <p className="text-sm font-medium">{ant.protocolo}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {tipoConfig[ant.tipo]?.label || ant.tipo} • {formatDate(ant.data_ocorrencia)}
+                              </p>
+                            </div>
+                            <Badge variant="outline">{ant.status}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            );
+
+            if (!showCotacoesTab) return detalhesContent;
+
+            return (
+              <Tabs defaultValue="detalhes">
+                <TabsList>
+                  <TabsTrigger value="detalhes">Detalhes</TabsTrigger>
+                  <TabsTrigger value="cotacoes">Cotações Recebidas</TabsTrigger>
+                </TabsList>
+                <TabsContent value="detalhes">{detalhesContent}</TabsContent>
+                <TabsContent value="cotacoes">
+                  <CotacoesRecebidasTab sinistroId={sinistro.id} />
+                </TabsContent>
+              </Tabs>
+            );
+          })()}
         </div>
 
         {/* Coluna Direita - 1/3 */}

@@ -9282,45 +9282,84 @@ export type Database = {
       }
       evento_cotacoes_pecas: {
         Row: {
+          aprovada: boolean | null
+          aprovada_em: string | null
+          aprovada_por: string | null
           auto_center_id: string
           created_at: string | null
           id: string
           itens: Json
           mensagem_enviada: string | null
+          observacoes_auto_center: string | null
+          prazo_geral: string | null
           prazo_resposta: string | null
           resposta: Json | null
           sinistro_id: string
           status: string | null
           updated_at: string | null
+          valor_total: number | null
           whatsapp_mensagem_id: string | null
         }
         Insert: {
+          aprovada?: boolean | null
+          aprovada_em?: string | null
+          aprovada_por?: string | null
           auto_center_id: string
           created_at?: string | null
           id?: string
           itens?: Json
           mensagem_enviada?: string | null
+          observacoes_auto_center?: string | null
+          prazo_geral?: string | null
           prazo_resposta?: string | null
           resposta?: Json | null
           sinistro_id: string
           status?: string | null
           updated_at?: string | null
+          valor_total?: number | null
           whatsapp_mensagem_id?: string | null
         }
         Update: {
+          aprovada?: boolean | null
+          aprovada_em?: string | null
+          aprovada_por?: string | null
           auto_center_id?: string
           created_at?: string | null
           id?: string
           itens?: Json
           mensagem_enviada?: string | null
+          observacoes_auto_center?: string | null
+          prazo_geral?: string | null
           prazo_resposta?: string | null
           resposta?: Json | null
           sinistro_id?: string
           status?: string | null
           updated_at?: string | null
+          valor_total?: number | null
           whatsapp_mensagem_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "evento_cotacoes_pecas_aprovada_por_fkey"
+            columns: ["aprovada_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evento_cotacoes_pecas_aprovada_por_fkey"
+            columns: ["aprovada_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "evento_cotacoes_pecas_aprovada_por_fkey"
+            columns: ["aprovada_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
           {
             foreignKeyName: "evento_cotacoes_pecas_auto_center_id_fkey"
             columns: ["auto_center_id"]
