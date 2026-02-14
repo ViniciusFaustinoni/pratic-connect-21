@@ -114,7 +114,7 @@ export function VistoriaEventoDados({ associado, veiculo, sinistro, linkEvento }
 
         {/* Evento */}
         <SectionCollapsible title="Evento" icon={AlertTriangle}>
-          <InfoRow label="Tipo" value={sinistro?.tipo || 'Colisão'} />
+          <InfoRow label="Tipo" value={sinistro?.tipo?.replace(/_/g, ' ') || 'Evento'} />
           <InfoRow label="Data/hora evento" value={sinistro?.data_ocorrencia ? new Date(sinistro.data_ocorrencia).toLocaleString('pt-BR') : '—'} />
           <InfoRow label="Data/hora comunicação" value={sinistro?.created_at ? new Date(sinistro.created_at).toLocaleString('pt-BR') : '—'} />
           {tempoEntre && (
@@ -169,8 +169,14 @@ export function VistoriaEventoDados({ associado, veiculo, sinistro, linkEvento }
           )}
 
           {/* B.O. */}
-          {dadosEtapa2?.bo_numero && (
-            <InfoRow label="Nº do B.O." value={dadosEtapa2.bo_numero} />
+          {dadosEtapa2?.numero_bo && (
+            <InfoRow label="Nº do B.O." value={dadosEtapa2.numero_bo} />
+          )}
+          {dadosEtapa2?.resumo_bo && (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground mb-1">Resumo do B.O.:</p>
+              <p className="text-sm bg-muted/50 rounded p-2">{dadosEtapa2.resumo_bo}</p>
+            </div>
           )}
           {dadosEtapa2?.bo_url && (
             <div className="mt-2">
