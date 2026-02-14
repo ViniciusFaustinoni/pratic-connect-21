@@ -15305,17 +15305,29 @@ export type Database = {
           data_encerramento: string | null
           data_sentenca: string | null
           data_transito_julgado: string | null
+          decisao: string | null
+          decisao_observacoes: string | null
+          decisao_parcelas: number | null
+          decisao_prazo_recurso: string | null
+          decisao_registrada_em: string | null
+          decisao_registrada_por: string | null
+          decisao_valor: number | null
           fase: string | null
           id: string
+          instancia: string | null
           natureza: string
           numero: string | null
           numero_processo: string | null
           objeto: string
           observacoes: string | null
+          origem: string | null
           parte_contraria_advogado: string | null
           parte_contraria_cpf_cnpj: string | null
           parte_contraria_nome: string
           parte_contraria_oab: string | null
+          parte_contraria_telefone: string | null
+          parte_contraria_tipo: string | null
+          prioridade: string | null
           responsavel_id: string | null
           rito: string | null
           sinistro_id: string | null
@@ -15340,17 +15352,29 @@ export type Database = {
           data_encerramento?: string | null
           data_sentenca?: string | null
           data_transito_julgado?: string | null
+          decisao?: string | null
+          decisao_observacoes?: string | null
+          decisao_parcelas?: number | null
+          decisao_prazo_recurso?: string | null
+          decisao_registrada_em?: string | null
+          decisao_registrada_por?: string | null
+          decisao_valor?: number | null
           fase?: string | null
           id?: string
+          instancia?: string | null
           natureza: string
           numero?: string | null
           numero_processo?: string | null
           objeto: string
           observacoes?: string | null
+          origem?: string | null
           parte_contraria_advogado?: string | null
           parte_contraria_cpf_cnpj?: string | null
           parte_contraria_nome: string
           parte_contraria_oab?: string | null
+          parte_contraria_telefone?: string | null
+          parte_contraria_tipo?: string | null
+          prioridade?: string | null
           responsavel_id?: string | null
           rito?: string | null
           sinistro_id?: string | null
@@ -15375,17 +15399,29 @@ export type Database = {
           data_encerramento?: string | null
           data_sentenca?: string | null
           data_transito_julgado?: string | null
+          decisao?: string | null
+          decisao_observacoes?: string | null
+          decisao_parcelas?: number | null
+          decisao_prazo_recurso?: string | null
+          decisao_registrada_em?: string | null
+          decisao_registrada_por?: string | null
+          decisao_valor?: number | null
           fase?: string | null
           id?: string
+          instancia?: string | null
           natureza?: string
           numero?: string | null
           numero_processo?: string | null
           objeto?: string
           observacoes?: string | null
+          origem?: string | null
           parte_contraria_advogado?: string | null
           parte_contraria_cpf_cnpj?: string | null
           parte_contraria_nome?: string
           parte_contraria_oab?: string | null
+          parte_contraria_telefone?: string | null
+          parte_contraria_tipo?: string | null
+          prioridade?: string | null
           responsavel_id?: string | null
           rito?: string | null
           sinistro_id?: string | null

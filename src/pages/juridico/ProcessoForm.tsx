@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
@@ -27,6 +27,8 @@ import { AssociadoCombobox } from '@/components/cadastro/AssociadoCombobox';
 import { SinistroCombobox } from '@/components/oficina/SinistroCombobox';
 import { 
   TIPO_PROCESSO_LABELS, NATUREZA_PROCESSO_LABELS, RITO_PROCESSO_LABELS,
+  TIPOS_EVENTO, TIPOS_EXTERNO, TIPOS_GERAIS,
+  INSTANCIA_LABELS, PARTE_CONTRARIA_TIPO_LABELS, PRIORIDADE_LABELS,
   TipoProcesso, NaturezaProcesso, RitoProcesso
 } from '@/types/juridico';
 
@@ -36,6 +38,8 @@ const processoSchema = z.object({
   natureza: z.string().min(1, 'Natureza é obrigatória'),
   rito: z.string().optional().nullable(),
   numero_processo: z.string().optional().nullable(),
+  prioridade: z.string().default('normal'),
+  instancia: z.string().optional().nullable(),
   
   // Tribunal
   tribunal: z.string().optional().nullable(),
@@ -43,10 +47,12 @@ const processoSchema = z.object({
   vara: z.string().optional().nullable(),
   
   // Partes
-  parte_contraria_nome: z.string().min(1, 'Nome da parte contrária é obrigatório'),
+  parte_contraria_nome: z.string().optional().nullable(),
   parte_contraria_cpf_cnpj: z.string().optional().nullable(),
   parte_contraria_advogado: z.string().optional().nullable(),
   parte_contraria_oab: z.string().optional().nullable(),
+  parte_contraria_tipo: z.string().default('pessoa_fisica'),
+  parte_contraria_telefone: z.string().optional().nullable(),
   
   // Vinculações
   associado_id: z.string().optional().nullable(),
@@ -124,6 +130,8 @@ export default function ProcessoForm() {
       natureza: '',
       rito: null,
       numero_processo: null,
+      prioridade: 'normal',
+      instancia: null,
       tribunal: null,
       comarca: null,
       vara: null,
@@ -131,6 +139,8 @@ export default function ProcessoForm() {
       parte_contraria_cpf_cnpj: null,
       parte_contraria_advogado: null,
       parte_contraria_oab: null,
+      parte_contraria_tipo: 'pessoa_fisica',
+      parte_contraria_telefone: null,
       associado_id: null,
       sinistro_id: sinistroIdFromUrl || null,
       advogado_id: null,
@@ -153,6 +163,8 @@ export default function ProcessoForm() {
         natureza: processo.natureza || '',
         rito: processo.rito,
         numero_processo: processo.numero_processo,
+        prioridade: processo.prioridade || 'normal',
+        instancia: processo.instancia || null,
         tribunal: processo.tribunal,
         comarca: processo.comarca,
         vara: processo.vara,
@@ -160,6 +172,8 @@ export default function ProcessoForm() {
         parte_contraria_cpf_cnpj: processo.parte_contraria_cpf_cnpj,
         parte_contraria_advogado: processo.parte_contraria_advogado,
         parte_contraria_oab: processo.parte_contraria_oab,
+        parte_contraria_tipo: processo.parte_contraria_tipo || 'pessoa_fisica',
+        parte_contraria_telefone: processo.parte_contraria_telefone || null,
         associado_id: processo.associado_id,
         sinistro_id: processo.sinistro_id,
         advogado_id: processo.advogado_id,
@@ -209,19 +223,26 @@ export default function ProcessoForm() {
     mutationFn: async (formData: ProcessoFormData) => {
       const user = await supabase.auth.getUser();
       
+      // Determinar origem
+      const origem = formData.sinistro_id ? 'evento_direto' : 'manual';
+      
       // Preparar dados para envio
       const processData = {
         tipo: formData.tipo as TipoProcesso,
         natureza: formData.natureza as NaturezaProcesso,
         rito: formData.rito as RitoProcesso | null,
         numero_processo: formData.numero_processo || null,
+        prioridade: formData.prioridade || 'normal',
+        instancia: formData.instancia || null,
         tribunal: formData.tribunal || null,
         comarca: formData.comarca || null,
         vara: formData.vara || null,
-        parte_contraria_nome: formData.parte_contraria_nome,
+        parte_contraria_nome: formData.parte_contraria_nome || '',
         parte_contraria_cpf_cnpj: formData.parte_contraria_cpf_cnpj || null,
         parte_contraria_advogado: formData.parte_contraria_advogado || null,
         parte_contraria_oab: formData.parte_contraria_oab || null,
+        parte_contraria_tipo: formData.parte_contraria_tipo || 'pessoa_fisica',
+        parte_contraria_telefone: formData.parte_contraria_telefone || null,
         associado_id: formData.associado_id || null,
         sinistro_id: formData.sinistro_id || null,
         advogado_id: formData.advogado_id || null,
@@ -252,6 +273,7 @@ export default function ProcessoForm() {
           .from('processos')
           .insert({
             ...processData,
+            origem,
             status: 'ativo',
             fase: 'inicial',
             criado_por: user.data.user?.id
@@ -340,9 +362,24 @@ export default function ProcessoForm() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {Object.entries(TIPO_PROCESSO_LABELS).map(([key, label]) => (
-                          <SelectItem key={key} value={key}>{label}</SelectItem>
-                        ))}
+                        <SelectGroup>
+                          <SelectLabel>Eventos e Sinistros</SelectLabel>
+                          {TIPOS_EVENTO.map((key) => (
+                            <SelectItem key={key} value={key}>{TIPO_PROCESSO_LABELS[key]}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Demandas Externas e Administrativas</SelectLabel>
+                          {TIPOS_EXTERNO.map((key) => (
+                            <SelectItem key={key} value={key}>{TIPO_PROCESSO_LABELS[key]}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Gerais</SelectLabel>
+                          {TIPOS_GERAIS.map((key) => (
+                            <SelectItem key={key} value={key}>{TIPO_PROCESSO_LABELS[key]}</SelectItem>
+                          ))}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -364,6 +401,29 @@ export default function ProcessoForm() {
                       </FormControl>
                       <SelectContent>
                         {Object.entries(NATUREZA_PROCESSO_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="prioridade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prioridade</FormLabel>
+                    <Select value={field.value || 'normal'} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Prioridade" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Object.entries(PRIORIDADE_LABELS).map(([key, label]) => (
                           <SelectItem key={key} value={key}>{label}</SelectItem>
                         ))}
                       </SelectContent>
@@ -423,7 +483,7 @@ export default function ProcessoForm() {
                 Tribunal
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <FormField
                 control={form.control}
                 name="tribunal"
@@ -465,6 +525,29 @@ export default function ProcessoForm() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="instancia"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Instância</FormLabel>
+                    <Select value={field.value || ''} onValueChange={(v) => field.onChange(v || null)}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Object.entries(INSTANCIA_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </CardContent>
           </Card>
 
@@ -472,18 +555,41 @@ export default function ProcessoForm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
-                Partes
+                Parte Contrária
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="parte_contraria_tipo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo</FormLabel>
+                    <Select value={field.value || 'pessoa_fisica'} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Object.entries(PARTE_CONTRARIA_TIPO_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="parte_contraria_nome"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nome da Parte Contrária *</FormLabel>
+                    <FormLabel>Nome</FormLabel>
                     <FormControl>
-                      <Input placeholder="Nome completo" {...field} />
+                      <Input placeholder="Nome completo" {...field} value={field.value || ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -498,6 +604,20 @@ export default function ProcessoForm() {
                     <FormLabel>CPF/CNPJ</FormLabel>
                     <FormControl>
                       <Input placeholder="000.000.000-00" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="parte_contraria_telefone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefone</FormLabel>
+                    <FormControl>
+                      <Input placeholder="(00) 00000-0000" {...field} value={field.value || ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

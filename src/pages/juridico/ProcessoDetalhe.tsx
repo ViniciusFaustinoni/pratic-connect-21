@@ -15,6 +15,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { 
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, 
   DropdownMenuSeparator, DropdownMenuTrigger 
@@ -25,13 +29,17 @@ import { supabase } from '@/integrations/supabase/client';
 
 import { useProcesso } from '@/hooks/useProcessos';
 import { useProcessosPrazos } from '@/hooks/useProcessosPrazos';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   TIPO_PROCESSO_LABELS, NATUREZA_PROCESSO_LABELS, STATUS_PROCESSO_LABELS,
   STATUS_PROCESSO_COLORS, FASE_PROCESSO_LABELS, RITO_PROCESSO_LABELS,
   TIPO_ANDAMENTO_LABELS, PRIORIDADE_LABELS, PRIORIDADE_COLORS,
   STATUS_PRAZO_LABELS, STATUS_PRAZO_COLORS, TIPO_AUDIENCIA_LABELS,
   STATUS_AUDIENCIA_LABELS, STATUS_AUDIENCIA_COLORS, TIPO_CUSTA_LABELS,
-  STATUS_CUSTA_LABELS, STATUS_CUSTA_COLORS, TIPO_DOCUMENTO_PROCESSO_LABELS
+  STATUS_CUSTA_LABELS, STATUS_CUSTA_COLORS, TIPO_DOCUMENTO_PROCESSO_LABELS,
+  PARTE_CONTRARIA_TIPO_LABELS, INSTANCIA_LABELS,
+  DECISAO_PROCESSO_EXTERNO_LABELS, TIPOS_EVENTO,
+  type DecisaoProcessoExterno,
 } from '@/types/juridico';
 
 import { NovoAndamentoModal } from '@/components/juridico/NovoAndamentoModal';
@@ -74,10 +82,23 @@ const getDiasRestantes = (dataFim: string) => {
   return { label: `${dias} dias`, class: 'bg-muted text-muted-foreground' };
 };
 
+// Map decisão to processo status
+const DECISAO_STATUS_MAP: Record<DecisaoProcessoExterno, string> = {
+  procedente: 'encerrado_procedente',
+  improcedente: 'encerrado_improcedente',
+  acordo_judicial: 'acordo',
+  acordo_extrajudicial: 'acordo',
+  sentenca_favoravel: 'encerrado_improcedente',
+  sentenca_desfavoravel: 'encerrado_procedente',
+  recurso_interposto: 'ativo',
+  arquivado: 'arquivado',
+};
+
 export default function ProcessoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('resumo');
   
   // Modal states
@@ -86,6 +107,13 @@ export default function ProcessoDetalhe() {
   const [uploadDocumentoOpen, setUploadDocumentoOpen] = useState(false);
   const [novoPrazoOpen, setNovoPrazoOpen] = useState(false);
   const [novaCustaOpen, setNovaCustaOpen] = useState(false);
+
+  // Decisão states
+  const [decisaoSelecionada, setDecisaoSelecionada] = useState<string>('');
+  const [decisaoValor, setDecisaoValor] = useState('');
+  const [decisaoParcelas, setDecisaoParcelas] = useState('');
+  const [decisaoObs, setDecisaoObs] = useState('');
+  const [decisaoPrazoRecurso, setDecisaoPrazoRecurso] = useState('');
 
   const { processo, andamentos, audiencias, documentos, custas, isLoading } = useProcesso(id);
   const { prazos, cumprirPrazo, cancelarPrazo, isCumprindo } = useProcessosPrazos({ processo_id: id });
@@ -113,6 +141,11 @@ export default function ProcessoDetalhe() {
     return { pendente, pago };
   }, [custas]);
 
+  const isProcessoExterno = useMemo(() => {
+    if (!processo) return false;
+    return !TIPOS_EVENTO.includes(processo.tipo as any) || !processo.sinistro_id;
+  }, [processo]);
+
   // Mutation para alterar status do processo
   const alterarStatusMutation = useMutation({
     mutationFn: async (novoStatus: string) => {
@@ -126,6 +159,52 @@ export default function ProcessoDetalhe() {
       queryClient.invalidateQueries({ queryKey: ['processos'] });
       queryClient.invalidateQueries({ queryKey: ['juridico-stats'] });
       toast.success('Status do processo atualizado!');
+    },
+    onError: (e: Error) => toast.error('Erro: ' + e.message),
+  });
+
+  // Mutation para registrar decisão
+  const registrarDecisaoMutation = useMutation({
+    mutationFn: async () => {
+      const decisao = decisaoSelecionada as DecisaoProcessoExterno;
+      const novoStatus = DECISAO_STATUS_MAP[decisao] || 'ativo';
+      const valor = decisaoValor ? parseFloat(decisaoValor.replace(/\./g, '').replace(',', '.')) : null;
+      const parcelas = decisaoParcelas ? parseInt(decisaoParcelas) : null;
+
+      const { error } = await supabase
+        .from('processos')
+        .update({
+          decisao: decisaoSelecionada,
+          decisao_observacoes: decisaoObs || null,
+          decisao_valor: valor,
+          decisao_parcelas: parcelas,
+          decisao_prazo_recurso: decisaoPrazoRecurso || null,
+          decisao_registrada_em: new Date().toISOString(),
+          decisao_registrada_por: user?.id,
+          status: novoStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      if (error) throw error;
+
+      // Registrar andamento
+      await supabase.from('processos_andamentos').insert({
+        processo_id: id,
+        data: new Date().toISOString().split('T')[0],
+        descricao: `Decisão registrada: ${DECISAO_PROCESSO_EXTERNO_LABELS[decisao]}${decisaoObs ? `. ${decisaoObs}` : ''}`,
+        tipo: 'decisao',
+        registrado_por: user?.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['processos'] });
+      queryClient.invalidateQueries({ queryKey: ['juridico-stats'] });
+      toast.success('Decisão registrada com sucesso!');
+      setDecisaoSelecionada('');
+      setDecisaoValor('');
+      setDecisaoParcelas('');
+      setDecisaoObs('');
+      setDecisaoPrazoRecurso('');
     },
     onError: (e: Error) => toast.error('Erro: ' + e.message),
   });
@@ -169,6 +248,11 @@ export default function ProcessoDetalhe() {
               <Badge className={STATUS_PROCESSO_COLORS[processo.status as keyof typeof STATUS_PROCESSO_COLORS] || ''}>
                 {STATUS_PROCESSO_LABELS[processo.status as keyof typeof STATUS_PROCESSO_LABELS] || processo.status}
               </Badge>
+              {processo.prioridade && processo.prioridade !== 'normal' && (
+                <Badge className={PRIORIDADE_COLORS[processo.prioridade as keyof typeof PRIORIDADE_COLORS] || ''}>
+                  {PRIORIDADE_LABELS[processo.prioridade as keyof typeof PRIORIDADE_LABELS] || processo.prioridade}
+                </Badge>
+              )}
             </div>
             {processo.numero_processo && (
               <p className="text-muted-foreground mt-1">CNJ: {processo.numero_processo}</p>
@@ -225,7 +309,7 @@ export default function ProcessoDetalhe() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="andamentos">Andamentos</TabsTrigger>
           <TabsTrigger value="prazos">
@@ -237,6 +321,7 @@ export default function ProcessoDetalhe() {
             )}
           </TabsTrigger>
           <TabsTrigger value="audiencias">Audiências</TabsTrigger>
+          <TabsTrigger value="decisao">Decisão</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="custas">Custas</TabsTrigger>
         </TabsList>
@@ -266,6 +351,12 @@ export default function ProcessoDetalhe() {
                   <p className="text-sm text-muted-foreground">Rito</p>
                   <p className="font-medium">{RITO_PROCESSO_LABELS[processo.rito as keyof typeof RITO_PROCESSO_LABELS] || processo.rito || '-'}</p>
                 </div>
+                {processo.instancia && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Instância</p>
+                    <p className="font-medium">{INSTANCIA_LABELS[processo.instancia as keyof typeof INSTANCIA_LABELS] || processo.instancia}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-sm text-muted-foreground">Tribunal / Comarca / Vara</p>
                   <p className="font-medium">
@@ -294,14 +385,42 @@ export default function ProcessoDetalhe() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Parte Contrária</p>
-                  <p className="font-medium">{processo.parte_contraria_nome || '-'}</p>
-                  {processo.parte_contraria_cpf_cnpj && (
-                    <p className="text-sm text-muted-foreground">{processo.parte_contraria_cpf_cnpj}</p>
-                  )}
-                </div>
-                <Separator />
+                {processo.parte_contraria_nome && (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Parte Contrária</p>
+                      <p className="font-medium">{processo.parte_contraria_nome}</p>
+                      {processo.parte_contraria_tipo && (
+                        <Badge variant="outline" className="mt-1">
+                          {PARTE_CONTRARIA_TIPO_LABELS[processo.parte_contraria_tipo as keyof typeof PARTE_CONTRARIA_TIPO_LABELS] || processo.parte_contraria_tipo}
+                        </Badge>
+                      )}
+                      {processo.parte_contraria_cpf_cnpj && (
+                        <p className="text-sm text-muted-foreground mt-1">{processo.parte_contraria_cpf_cnpj}</p>
+                      )}
+                    </div>
+                    {processo.parte_contraria_telefone && (
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <a href={`tel:${processo.parte_contraria_telefone}`}>
+                            <Phone className="h-3 w-3 mr-1" />
+                            {processo.parte_contraria_telefone}
+                          </a>
+                        </Button>
+                      </div>
+                    )}
+                    {(processo.parte_contraria_advogado || processo.parte_contraria_oab) && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Advogado da Parte</p>
+                        <p className="font-medium">{processo.parte_contraria_advogado || '-'}</p>
+                        {processo.parte_contraria_oab && (
+                          <p className="text-sm text-muted-foreground">OAB: {processo.parte_contraria_oab}</p>
+                        )}
+                      </div>
+                    )}
+                    <Separator />
+                  </>
+                )}
                 {processo.associado && (
                   <div>
                     <p className="text-sm text-muted-foreground">Associado Vinculado</p>
@@ -600,6 +719,120 @@ export default function ProcessoDetalhe() {
             <Card>
               <CardContent className="py-8 text-center text-muted-foreground">
                 Nenhuma audiência agendada
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Tab Decisão */}
+        <TabsContent value="decisao" className="space-y-4">
+          <h3 className="text-lg font-semibold">Registrar Decisão</h3>
+
+          {processo.decisao ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Decisão Registrada</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Decisão</p>
+                  <Badge className="bg-primary text-primary-foreground">
+                    {DECISAO_PROCESSO_EXTERNO_LABELS[processo.decisao as keyof typeof DECISAO_PROCESSO_EXTERNO_LABELS] || processo.decisao}
+                  </Badge>
+                </div>
+                {processo.decisao_valor && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Valor</p>
+                    <p className="font-medium text-lg">{formatCurrency(processo.decisao_valor)}</p>
+                  </div>
+                )}
+                {processo.decisao_parcelas && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Parcelas</p>
+                    <p className="font-medium">{processo.decisao_parcelas}x</p>
+                  </div>
+                )}
+                {processo.decisao_prazo_recurso && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Prazo para Recurso</p>
+                    <p className="font-medium">{formatDate(processo.decisao_prazo_recurso)}</p>
+                  </div>
+                )}
+                {processo.decisao_observacoes && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Observações</p>
+                    <p className="whitespace-pre-wrap">{processo.decisao_observacoes}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm text-muted-foreground">Registrada em</p>
+                  <p className="font-medium">{formatDateTime(processo.decisao_registrada_em)}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="pt-6 space-y-6">
+                <RadioGroup value={decisaoSelecionada} onValueChange={setDecisaoSelecionada}>
+                  {Object.entries(DECISAO_PROCESSO_EXTERNO_LABELS).map(([key, label]) => (
+                    <div key={key} className="flex items-center space-x-2">
+                      <RadioGroupItem value={key} id={`decisao-${key}`} />
+                      <Label htmlFor={`decisao-${key}`} className="cursor-pointer">{label}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+
+                {/* Campos condicionais */}
+                {['procedente', 'acordo_judicial', 'acordo_extrajudicial', 'sentenca_desfavoravel'].includes(decisaoSelecionada) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Valor (R$)</Label>
+                      <Input 
+                        placeholder="0,00" 
+                        value={decisaoValor} 
+                        onChange={(e) => setDecisaoValor(e.target.value)} 
+                      />
+                    </div>
+                    {['acordo_judicial', 'acordo_extrajudicial'].includes(decisaoSelecionada) && (
+                      <div className="space-y-2">
+                        <Label>Parcelas</Label>
+                        <Input 
+                          type="number" 
+                          placeholder="1" 
+                          value={decisaoParcelas} 
+                          onChange={(e) => setDecisaoParcelas(e.target.value)} 
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {decisaoSelecionada === 'sentenca_desfavoravel' && (
+                  <div className="space-y-2">
+                    <Label>Prazo para Recurso</Label>
+                    <Input 
+                      type="date" 
+                      value={decisaoPrazoRecurso} 
+                      onChange={(e) => setDecisaoPrazoRecurso(e.target.value)} 
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>Observações</Label>
+                  <Textarea 
+                    placeholder="Detalhes da decisão..." 
+                    value={decisaoObs} 
+                    onChange={(e) => setDecisaoObs(e.target.value)} 
+                  />
+                </div>
+
+                <Button 
+                  onClick={() => registrarDecisaoMutation.mutate()}
+                  disabled={!decisaoSelecionada || registrarDecisaoMutation.isPending}
+                >
+                  Registrar Decisão
+                </Button>
               </CardContent>
             </Card>
           )}
