@@ -187,6 +187,7 @@ Deno.serve(async (req) => {
         parecer_tecnico: dados.parecer_tecnico,
         recomendacao: dados.recomendacao,
         observacoes_perda_total: dados.observacoes_perda_total || null,
+        etapas_reparo: dados.etapas_reparo || [],
       };
 
       // Update vistoria

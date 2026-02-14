@@ -16,10 +16,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Trash2, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+
+const ETAPAS_REPARO = [
+  { id: 'lanternagem', nome: 'Lanternagem', descricao: 'Chaparia e estrutura da carroceria' },
+  { id: 'pintura', nome: 'Pintura', descricao: 'Aplicação de primer, tinta e verniz' },
+  { id: 'mecanica', nome: 'Mecânica', descricao: 'Reparos no motor, câmbio, suspensão' },
+  { id: 'eletrica', nome: 'Elétrica', descricao: 'Fiação, módulos, sensores, faróis' },
+  { id: 'polimento', nome: 'Polimento', descricao: 'Acabamento final da pintura' },
+  { id: 'lavagem', nome: 'Lavagem', descricao: 'Limpeza completa antes da entrega' },
+] as const;
 
 interface ItemOrcamento {
   descricao: string;
@@ -51,6 +62,7 @@ export function VistoriaEventoOrcamento({
   const [tipoDano, setTipoDano] = useState<'parcial' | 'total' | ''>('');
   const [descricaoTecnica, setDescricaoTecnica] = useState('');
   const [observacoesTotal, setObservacoesTotal] = useState('');
+  const [etapasReparo, setEtapasReparo] = useState<string[]>([]);
 
   // Orçamento
   const [itens, setItens] = useState<ItemOrcamento[]>([
@@ -99,6 +111,10 @@ export function VistoriaEventoOrcamento({
       toast.error('Selecione a recomendação');
       return;
     }
+    if (tipoDano === 'parcial' && etapasReparo.length === 0) {
+      toast.error('Selecione pelo menos uma etapa de reparo');
+      return;
+    }
     if (tipoDano === 'parcial' && itens.length === 0) {
       toast.error('Adicione pelo menos um item ao orçamento');
       return;
@@ -117,6 +133,7 @@ export function VistoriaEventoOrcamento({
         parecer_tecnico: parecerTecnico,
         recomendacao: recomendacao,
         observacoes_perda_total: tipoDano === 'total' ? observacoesTotal : null,
+        etapas_reparo: tipoDano === 'parcial' ? etapasReparo : [],
       };
 
       const formData = new FormData();
@@ -203,6 +220,52 @@ export function VistoriaEventoOrcamento({
               </div>
             )}
           </section>
+
+          {/* Etapas do Reparo - apenas para parcial */}
+          {tipoDano === 'parcial' && (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold">Etapas Necessárias para o Reparo</h3>
+
+              <div className="space-y-2">
+                {ETAPAS_REPARO.map((etapa) => (
+                  <label
+                    key={etapa.id}
+                    className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
+                    <Checkbox
+                      checked={etapasReparo.includes(etapa.id)}
+                      onCheckedChange={(checked) => {
+                        setEtapasReparo((prev) =>
+                          checked
+                            ? [...prev, etapa.id]
+                            : prev.filter((id) => id !== etapa.id)
+                        );
+                      }}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium">{etapa.nome}</span>
+                      <p className="text-xs text-muted-foreground">{etapa.descricao}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              {etapasReparo.length > 0 && (
+                <div className="rounded-lg bg-muted px-3 py-2">
+                  <p className="text-xs text-muted-foreground mb-1.5">Sequência de execução:</p>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {ETAPAS_REPARO.filter((e) => etapasReparo.includes(e.id)).map((etapa, i, arr) => (
+                      <span key={etapa.id} className="flex items-center gap-1">
+                        <Badge variant="secondary" className="text-xs">{etapa.nome}</Badge>
+                        {i < arr.length - 1 && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Itens do Orçamento - apenas para parcial */}
           {tipoDano === 'parcial' && (
