@@ -1,173 +1,155 @@
 
-# Revisao: Atribuicao de Fornecedores, Cotacoes e Aprovacao
 
-## Resultado da Verificacao
+# Revisao: Geracao de OS, Mensagem 15min, Painel Regulador
 
-### 1. Modal de Atribuicao — OK parcial
+## Resultado da Verificacao Completa
 
-| Item | Status |
-|---|---|
-| Botao "Atribuir Fornecedores" quando pronto_para_oficina | OK |
-| Modal com dados do veiculo (marca, modelo, placa) | OK |
-| Resumo do orcamento no topo | OK |
-
-### 2. Secao Oficina — 2 BUGS
+### 1. Geracao Automatica da OS (gerar-os-cotacao-aprovada)
 
 | Item | Status |
 |---|---|
-| Filtra por marca OU GLOBAL | OK |
-| Filtra por status ativo | OK |
-| **Filtra por especialidades compativeis com etapas** | **FALTANDO** |
-| Card: nome, cidade/estado, especialidades (badges) | OK |
-| Card: nota media | OK |
-| **Card: endereco completo** | **FALTANDO** (so mostra cidade-estado) |
-| **Card: qtd veiculos atual, tempo medio** | **FALTANDO** (colunas nao existem no DB) |
-| Selecao via radio (1 oficina) | OK |
-| Mensagem se nenhuma compativel | OK |
+| OS contem itens do orcamento do regulador (MO + servicos) | OK (linhas 103-116) |
+| OS contem pecas da cotacao aprovada | OK (linhas 88-101) |
+| Etapas de reparo como checkpoints (status "pendente") | OK (linhas 59-64) |
+| Oficina atribuida vinculada | OK (oficina_id do sinistro, linha 72) |
+| **Prestadores vinculados** | **FALTANDO — edge function nao busca/vincula prestadores da tabela sinistro_prestadores** |
+| Auto center aprovado registrado | OK (auto_center_id e cotacao_aprovada_id, linhas 75-76) |
+| Valores da cotacao aprovada (pecas) substituem estimativas | OK (pecas vem da cotacao.resposta, MO/servicos do orcamento) |
+| Veiculo e associado vinculados | OK (linhas 73-74) |
+| Status inicial: aguardando_entrada | OK (linha 78) |
+| Historico registrado | OK (linhas 128-132) |
+| WhatsApp ao associado | OK (linhas 134-153) |
 
-### 3. Secao Prestadores — OK
-
-| Item | Status |
-|---|---|
-| Filtra por marca OU GLOBAL | OK |
-| Checkboxes multiplos | OK |
-| Selecao OPCIONAL | OK |
-| Cards com nome, cidade, especialidades | OK |
-
-### 4. Secao Auto Centers — 1 BUG
+### 2. Mensagem da IA (15 min apos) -- FALTANDO
 
 | Item | Status |
 |---|---|
-| Filtra por marca OU GLOBAL | OK |
-| WhatsApp visivel | OK |
-| Checkboxes multiplos | OK |
-| Recomendado minimo 3 | OK (texto) |
-| Preview da mensagem | OK |
-| **Filtra por especialidades compativeis com tipos de peca** | **FALTANDO** |
+| **15 min apos geracao da OS, IA envia WhatsApp** | **FALTANDO — nao existe agendamento de mensagem com delay de 15min** |
+| **Mensagem confirma pagamento + pecas em cotacao + acompanhe** | **FALTANDO** |
 
-### 5. Confirmacao — OK
+O cron-contato-sinistro existente trata de contatos agendados para sinistros (Link 1, coparticipacao), nao de mensagens pos-geracao de OS.
+
+### 3. Painel Regulador — Aba "Veiculos em Oficina" -- OK parcial
 
 | Item | Status |
 |---|---|
-| Botao "Confirmar Atribuicao" | OK |
-| Vincula oficina a OS | OK |
-| Registra prestadores | OK |
-| Para cada auto center: envia WhatsApp via edge function | OK |
+| Pagina "Veiculos em Oficina" na area do regulador | OK (ReguladorOficina.tsx) |
+| Contadores: total, aguard. entrada, aguard. peca, em execucao, concluidos | OK |
+| **Contador "em finalizacao"** | **FALTANDO — nao existe no STATUS_MAP nem nos contadores** |
 
-### 6. Mensagem de Cotacao (IA -> Auto Center) — OK
-
-| Item | Status |
-|---|---|
-| Saudacao com nome | OK |
-| Dados do veiculo | OK |
-| Lista APENAS pecas (sem MO) | OK |
-| Prazo 24h | OK |
-| Referencia do evento | OK |
-
-### 7. Aba Cotacoes Recebidas — 1 BUG
+### 4. Lista de Veiculos (Cards)
 
 | Item | Status |
 |---|---|
-| Resumo dos pedidos (auto center, data, status) | OK |
-| Apos 24h sem resposta: status expirado | OK |
-| Botao Reenviar quando expirado | OK |
-| **Botao "Registrar Cotacao Recebida"** | **BUG — so aparece quando status=enviado, deveria incluir expirado** |
-| Modal com seletor de auto center | OK |
-| Para cada peca: descricao (readonly), qtd (readonly), valor, prazo, disponibilidade | OK |
-| Total calculado automaticamente | OK |
-| Observacoes e prazo geral | OK |
+| Placa (destaque), marca/modelo/ano/cor | OK |
+| Nome e telefone do associado | OK |
+| Numero da OS, oficina, auto center | OK |
+| **Prestadores vinculados** | **FALTANDO — query nao busca prestadores, cards nao exibem** |
+| Status (badge), data de entrada, tempo em oficina | OK |
+| Barra de progresso de etapas com icones | OK |
+| Ultima atualizacao com alertas >24h/>48h | OK |
 
-### 8. Comparativo de Cotacoes — OK
-
-| Item | Status |
-|---|---|
-| Com 2+ cotacoes: comparativo lado a lado | OK |
-| Cada peca x cada auto center | OK |
-| Total por auto center no rodape | OK |
-| Menor preco em verde | OK |
-| Indisponiveis em vermelho | OK |
-
-### 9. Aprovacao de Cotacao — OK
+### 5. Filtros e Acoes
 
 | Item | Status |
 |---|---|
-| Botao "Aprovar esta Cotacao" em cada card | OK |
-| APENAS 1 aprovada por evento | OK |
-| Modal de confirmacao irreversivel | OK |
-| Aprovada: badge verde, imutavel | OK |
-| Demais: badge cinza "nao selecionada" | OK |
-| Aprovada em destaque no topo | OK |
-| Gera OS automaticamente (edge function gerar-os-cotacao-aprovada) | OK |
-| WhatsApp ao associado confirmando pecas | OK |
+| Filtros: oficina, status, tempo, busca placa/nome | OK |
+| Acao "Registrar Entrada" | OK (muda para em_execucao) |
+| **Acao "Registrar Entrada" — notifica associado via WhatsApp** | **FALTANDO — nao envia WhatsApp na entrada** |
+| **Acao "Definir/Alterar Oficina"** | **FALTANDO — nao existe modal para alterar oficina de uma OS** |
+| Acao "Registrar Atualizacao" | OK (RegistrarAtualizacaoDialog) |
+| Acao "Vistoria Presencial" | OK (VistoriaPresencialDialog) |
+
+### 6. Metricas por Oficina
+
+| Item | Status |
+|---|---|
+| Ranking: nome, qtd veiculos, tempo medio | OK |
+| **Nota pontualidade** | **FALTANDO — so exibe qtd e media de dias, sem nota** |
+
+### 7. Fluxo de Status da OS -- 2 BUGS
+
+| Item | Status |
+|---|---|
+| `aguardando_entrada` no enum DB | OK |
+| `entregue` no enum DB | OK |
+| **`aguardando_entrada` e `entregue` no tipo TypeScript** | **BUG — `aguardando_entrada` esta no DB enum mas FALTANDO no TS labels; `entregue` esta no DB enum mas FALTANDO no TS type e labels** |
+| **Cada mudanca gera notificacao WhatsApp** | **FALTANDO — handleRegistrarEntrada nao envia WhatsApp** |
 
 ---
 
-## 4 Correcoes Necessarias
+## Correcoes Necessarias (priorizadas)
 
-### Correcao 1 — Filtrar oficinas por especialidades compativeis (AtribuirFornecedoresDialog.tsx)
+### Correcao 1 — Adicionar `aguardando_entrada` e `entregue` ao tipo TypeScript e labels
 
-**Problema:** O modal busca oficinas filtrando apenas por marca, sem considerar se a oficina tem especialidades compativeis com as etapas de reparo do orcamento.
+**Arquivo:** `src/types/database.ts`
 
-**Correcao:** Adicionar filtragem client-side (pos-query) das oficinas, mantendo apenas as que possuem pelo menos 1 especialidade em comum com as etapas de reparo. Exemplo: se as etapas incluem "Funilaria / Lanternagem" e "Pintura Automotiva", so exibir oficinas que tenham pelo menos uma dessas especialidades.
+O enum do DB tem `aguardando_entrada` e `entregue`, mas o tipo TypeScript `StatusOrdemServico` nao inclui `aguardando_entrada` (esta faltando no labels/colors) e `entregue` (esta faltando no tipo, labels e colors).
 
-Adicionar um `useMemo` apos a query de oficinas:
-
+Adicionar ao tipo:
 ```text
-const oficinasCompativeis = useMemo(() => {
-  if (!oficinas || etapasReparo.length === 0) return oficinas || [];
-  return oficinas.filter((o: any) => {
-    if (!o.especialidades?.length) return false;
-    return etapasReparo.some((etapa: string) =>
-      o.especialidades.some((esp: string) =>
-        esp.toLowerCase().includes(etapa.toLowerCase()) ||
-        etapa.toLowerCase().includes(esp.toLowerCase())
-      )
-    );
-  });
-}, [oficinas, etapasReparo]);
+export type StatusOrdemServico =
+  | 'rascunho'
+  | 'aguardando_entrada'   // ADICIONAR
+  | 'aguardando_orcamento'
+  | ...
+  | 'entregue';            // ADICIONAR
 ```
 
-Usar `oficinasCompativeis` no lugar de `oficinas` no render.
-
-### Correcao 2 — Filtrar auto centers por especialidades compativeis com tipos de peca (AtribuirFornecedoresDialog.tsx)
-
-**Problema:** Auto centers sao filtrados apenas por marca. Se o orcamento tem pecas de "Vidros e Farois", auto centers sem essa especialidade nao deveriam aparecer (ou pelo menos as compativeis deveriam ter destaque).
-
-**Correcao:** Como auto centers vendem pecas diversas e a filtragem rigida poderia excluir fornecedores uteis, a abordagem mais pratica e: manter todos visiveis mas **ordenar** os compativeis por especialidade primeiro, e adicionar um badge "Compativel" nos que tem match.
-
-### Correcao 3 — Botao "Registrar Cotacao" tambem para expiradas (CotacoesRecebidasTab.tsx)
-
-**Problema:** Linha 62: `const temPendentes = cotacoesComStatus.some((c) => c.status === 'enviado')`. O botao "Registrar Cotacao Recebida" so aparece se ha cotacoes com status `enviado`. Quando todas expiram, o botao desaparece, impedindo o registro de respostas tardias.
-
-**Correcao:** Alterar para incluir tambem `expirado`:
-
+Adicionar aos labels:
 ```text
-const temRegistraveis = cotacoesComStatus.some(
-  (c) => (c.status === 'enviado' || c.status === 'expirado') && !c.aprovada
-);
+aguardando_entrada: 'Aguardando Entrada',
+entregue: 'Entregue',
 ```
 
-E no `RegistrarCotacaoDialog`, linha 99, alterar o filtro de `pendentes` para incluir expiradas:
-
+Adicionar aos colors:
 ```text
-const pendentes = cotacoesEnviadas.filter((c) => c.status === 'enviado' || c.status === 'expirado');
+aguardando_entrada: 'bg-yellow-100 text-yellow-800',
+entregue: 'bg-blue-100 text-blue-800',
 ```
 
-### Correcao 4 — Exibir endereco completo nos cards de oficina (AtribuirFornecedoresDialog.tsx)
+### Correcao 2 — Vincular prestadores na geracao da OS
 
-**Problema:** Os cards de oficina mostram apenas cidade-estado (linha 335). Falta logradouro, numero e bairro para o operador avaliar a proximidade.
+**Arquivo:** `supabase/functions/gerar-os-cotacao-aprovada/index.ts`
 
-**Correcao:** Alterar a linha 334-336 para exibir endereco mais completo:
+Apos criar a OS, buscar prestadores vinculados ao sinistro (tabela `sinistro_prestadores`) e registra-los na OS. Como a tabela `ordens_servico` nao tem campo para prestadores, a abordagem sera:
+1. Buscar prestadores de `sinistro_prestadores` para o sinistro
+2. Adicionar a informacao nas observacoes da OS
+3. Registrar no historico
 
-```text
-<p className="text-sm text-muted-foreground">
-  {[oficina.logradouro, oficina.numero, oficina.bairro].filter(Boolean).join(', ')}
-  {oficina.cidade && ` — ${oficina.cidade}`}
-  {oficina.estado && `/${oficina.estado}`}
-</p>
-```
+### Correcao 3 — Enviar WhatsApp ao associado ao registrar entrada
 
-**Nota sobre "qtd veiculos atual" e "tempo medio":** Estes campos nao existem na tabela `oficinas` do banco de dados. Adiciona-los requer: (1) criar colunas ou views calculadas, (2) logica de atualizacao baseada em OS ativas. Como a instrucao e "NAO crie nada novo", esses campos serao omitidos nesta correcao. Podem ser adicionados em uma iteracao futura quando o modulo de OS tiver maturidade suficiente para calcular essas metricas.
+**Arquivo:** `src/pages/regulador/ReguladorOficina.tsx`
+
+No `handleRegistrarEntrada`, apos atualizar o status, chamar a edge function `whatsapp-send-text` para notificar o associado que o veiculo deu entrada na oficina.
+
+### Correcao 4 — Mensagem da IA 15min apos geracao da OS
+
+**Arquivo:** `supabase/functions/gerar-os-cotacao-aprovada/index.ts`
+
+Apos criar a OS com sucesso, agendar um contato na tabela `sinistro_contatos_agendados` com `agendado_para = now() + 15min`. O cron-contato-sinistro ja roda a cada minuto e processara esse agendamento automaticamente.
+
+Porem, o cron-contato-sinistro atual monta mensagens especificas para o fluxo de Link 1 (auto vistoria, BO, etc), nao para pos-OS. Sera necessario:
+1. Adicionar um campo `tipo` ao agendamento (ex: `pos_os_gerada`)
+2. No cron, tratar esse tipo com mensagem diferente: "Pagamento confirmado, pecas em cotacao, acompanhe por aqui"
+
+**Abordagem mais simples:** Enviar a mensagem diretamente no edge function com um `setTimeout` simulado via agendamento no banco. Como o cron roda a cada minuto, basta inserir na tabela com `agendado_para = now + 15min` e uma mensagem customizada pre-definida.
+
+O campo `mensagem_enviada` ja pode ser usado como template override. Ajustar o cron para enviar a `mensagem_enviada` quando ja estiver preenchida (skip montagem de mensagem).
+
+### Correcao 5 — Exibir prestadores nos cards do painel
+
+**Arquivo:** `src/hooks/useVeiculosOficina.ts`
+
+Adicionar join com `sinistro_prestadores` via sinistro para buscar os prestadores vinculados. Exibir nos cards com icone.
+
+**Arquivo:** `src/pages/regulador/ReguladorOficina.tsx` — adicionar exibicao dos prestadores nos cards.
+
+### Correcao 6 — Acao "Definir/Alterar Oficina" (modal simples)
+
+**Arquivo:** `src/pages/regulador/ReguladorOficina.tsx`
+
+Adicionar botao "Alterar Oficina" que abre um dialog com lista de oficinas (reutilizando `useOficinasDisponiveis`) e atualiza o `oficina_id` da OS.
 
 ---
 
@@ -175,6 +157,9 @@ const pendentes = cotacoesEnviadas.filter((c) => c.status === 'enviado' || c.sta
 
 | Acao | Arquivo |
 |---|---|
-| Modificar | `src/components/sinistros/AtribuirFornecedoresDialog.tsx` — filtro especialidades oficinas, ordenacao auto centers, endereco completo |
-| Modificar | `src/components/sinistros/CotacoesRecebidasTab.tsx` — botao registrar para expiradas |
-| Modificar | `src/components/sinistros/RegistrarCotacaoDialog.tsx` — filtro inclui expiradas |
+| Modificar | `src/types/database.ts` — adicionar `aguardando_entrada` e `entregue` ao type/labels/colors |
+| Modificar | `supabase/functions/gerar-os-cotacao-aprovada/index.ts` — vincular prestadores + agendar mensagem 15min |
+| Modificar | `src/pages/regulador/ReguladorOficina.tsx` — WhatsApp na entrada + botao alterar oficina + exibir prestadores |
+| Modificar | `src/hooks/useVeiculosOficina.ts` — buscar prestadores no join |
+| Modificar | `supabase/functions/cron-contato-sinistro/index.ts` — tratar mensagem pre-definida (skip template) |
+
