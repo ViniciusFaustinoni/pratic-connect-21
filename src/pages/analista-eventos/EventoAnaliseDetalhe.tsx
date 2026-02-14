@@ -350,6 +350,24 @@ export default function EventoAnaliseDetalhe() {
                 )}
               </div>
 
+              {dadosVistoria?.etapas_reparo?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="font-semibold text-xs">Etapas de Reparo</p>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {dadosVistoria.etapas_reparo
+                      .filter((e: any) => typeof e === 'object' ? e.selecionada : true)
+                      .map((etapa: any, i: number, arr: any[]) => (
+                        <span key={i} className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {typeof etapa === 'string' ? etapa : etapa.nome}
+                          </Badge>
+                          {i < arr.length - 1 && <span className="text-muted-foreground">→</span>}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               {dadosVistoria?.itens_orcamento?.length > 0 && (
                 <div className="space-y-2">
                   <p className="font-semibold text-xs">Orçamento</p>
@@ -481,6 +499,11 @@ export default function EventoAnaliseDetalhe() {
               <p><span className="text-muted-foreground">Associado:</span> {sinistro.associado?.nome}</p>
               <p><span className="text-muted-foreground">Veículo:</span> {sinistro.veiculo?.placa} - {sinistro.veiculo?.marca} {sinistro.veiculo?.modelo}</p>
               <p><span className="text-muted-foreground">Valor FIPE:</span> R$ {Number(sinistro.veiculo?.valor_fipe || 0).toLocaleString('pt-BR')}</p>
+              {sinistro.veiculo?.valor_fipe && (
+                <p><span className="text-muted-foreground">Cota Copartic.:</span>{' '}
+                  R$ {Math.max(Number(sinistro.veiculo.valor_fipe) * 0.035, 350).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              )}
               {dadosVistoria?.valor_total_orcamento && (
                 <p><span className="text-muted-foreground">Valor Orçamento:</span> R$ {Number(dadosVistoria.valor_total_orcamento).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               )}
