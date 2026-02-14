@@ -407,3 +407,6 @@ verify_jwt = false
 
 [functions.salvar-etapa-evento]
 verify_jwt = false
+
+[functions.agendar-vistoria-evento]
+verify_jwt = false
