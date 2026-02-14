@@ -1,49 +1,38 @@
 
-# Separar Especialidades por Contexto (Oficina vs Prestador)
+# Corrigir Filtro por Marca do Veiculo no Dialog de Atribuicao
 
-## Problema
+## Situacao Atual
 
-A lista `ESPECIALIDADES` em `fornecedores-constants.ts` e compartilhada entre Oficinas e Prestadores de Evento, mas contem itens que nao pertencem a oficinas:
+O `AtribuirFornecedoresDialog.tsx` ja filtra oficinas, prestadores e auto centers pela marca do veiculo do sinistro (incluindo fornecedores GLOBAL). Os tres hooks (`useOficinas`, `usePrestadoresEvento`, `useAutoCenters`) ja implementam o filtro corretamente com a query:
 
-- **Pecas** (Pecas Novas, Pecas Recondicionadas, Pecas Importadas) -- pertencem aos Auto Centers
-- **Servicos de prestador** (Reboque / Guincho, Vistoria Cautelar) -- pertencem aos Prestadores de Evento
+```
+marcas_atendidas.cs.{MARCA},marcas_atendidas.cs.{GLOBAL}
+```
 
-## Solucao
+## Problema Encontrado
 
-Criar listas separadas para cada contexto, mantendo a lista original para compatibilidade com prestadores.
+Ha um bug de case sensitivity na linha 56 do `AtribuirFornecedoresDialog.tsx`:
 
-### Alteracoes
+```typescript
+const marcaVeiculo = veiculo?.marca?.toUpperCase() || '';
+```
 
-**Arquivo: `src/lib/fornecedores-constants.ts`**
+O `.toUpperCase()` converte "Chevrolet" para "CHEVROLET", mas os valores salvos em `marcas_atendidas` usam a grafia original da constante `MARCAS_VEICULOS` (ex: "Chevrolet", "Fiat", "Toyota"). O operador `cs` do PostgREST e case-sensitive para arrays de texto, entao "CHEVROLET" nao encontra "Chevrolet".
 
-Criar uma nova constante `ESPECIALIDADES_OFICINAS` contendo apenas as especialidades de servico de oficina (11 itens), removendo as 5 que nao se aplicam:
+## Correcao
 
-| Manter (Oficinas) | Remover |
-|---|---|
-| Funilaria / Lanternagem | Pecas Novas |
-| Pintura Automotiva | Pecas Recondicionadas |
-| Mecanica Geral | Pecas Importadas |
-| Mecanica Especializada (cambio, motor) | Reboque / Guincho |
-| Eletrica Automotiva | Vistoria Cautelar |
-| Vidros e Farois | |
-| Ar Condicionado | |
-| Suspensao e Freios | |
-| Polimento e Estetica | |
-| Tapecaria / Estofamento | |
-| Martelinho de Ouro | |
+**Arquivo:** `src/components/sinistros/AtribuirFornecedoresDialog.tsx`
 
-Criar tambem `ESPECIALIDADES_PRESTADORES` com a lista completa (ou especifica para prestadores) para uso no formulario de prestadores.
+Remover o `.toUpperCase()` da linha 56:
 
-**Arquivo: `src/components/oficinas/EspecialidadesSelect.tsx`**
+```typescript
+// Antes
+const marcaVeiculo = veiculo?.marca?.toUpperCase() || '';
 
-Adicionar uma prop `contexto` (opcional, default "oficina") para determinar qual lista usar. Quando `contexto="oficina"`, usa `ESPECIALIDADES_OFICINAS`. Quando `contexto="prestador"`, usa `ESPECIALIDADES` (lista completa).
+// Depois
+const marcaVeiculo = veiculo?.marca || '';
+```
 
-**Arquivo: `src/pages/oficinas/Oficinas.tsx`**
+Isso faz com que a marca seja passada exatamente como esta no cadastro do veiculo, garantindo correspondencia com os valores armazenados em `marcas_atendidas`.
 
-Trocar a importacao de `ESPECIALIDADES` por `ESPECIALIDADES_OFICINAS` no filtro de especialidades da listagem de oficinas.
-
-**Arquivo: `src/components/oficinas/PrestadorFormDialog.tsx`**
-
-Passar `contexto="prestador"` ao componente `EspecialidadesSelect` para manter a lista completa.
-
-Nenhum arquivo de oficina (OficinaFormDialog) precisa de alteracao alem do componente `EspecialidadesSelect`, pois ele ja o utiliza e herdara o comportamento default "oficina".
+Nenhuma outra alteracao necessaria -- os tres hooks e toda a logica de filtragem ja funcionam corretamente.
