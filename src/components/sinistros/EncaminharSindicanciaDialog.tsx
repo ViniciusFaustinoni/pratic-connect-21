@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, Search, UserCheck, AlertTriangle } from 'lucide-react';
+import { notificarSindicanciaAberta } from '@/components/sinistros/NotificacaoHelper';
 import { addDays, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -90,9 +91,19 @@ export function EncaminharSindicanciaDialog({
         status: statusNovo as any,
         sindicante_id: tipoResponsavel === 'interno' ? sindicanteId : null,
         sindicancia_prazo_fim: prazoFim,
+        prazo_suspenso: true,
+        prazo_suspenso_em: new Date().toISOString(),
+        prazo_motivo_suspensao: 'sindicancia',
         updated_at: new Date().toISOString(),
       }).eq('id', sinistroId);
       if (updateError) throw updateError;
+
+      // Registrar suspensão de prazo
+      await supabase.from('sinistro_suspensoes_prazo').insert({
+        sinistro_id: sinistroId,
+        motivo: 'sindicancia',
+        inicio: new Date().toISOString(),
+      });
 
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistroId,
@@ -100,6 +111,12 @@ export function EncaminharSindicanciaDialog({
         usuario_id: user?.id,
         observacao: `Encaminhado para ${tipoLabel}. Motivo: ${motivo}. Responsável: ${responsavelInfo}. Prazo: ${prazoDias} dias (${format(new Date(prazoFim), 'dd/MM/yyyy')}). ${descricao}`,
       });
+
+      // Notificar responsável
+      const responsavelId = tipoResponsavel === 'interno' ? sindicanteId : null;
+      if (responsavelId) {
+        notificarSindicanciaAberta(sinistroId, protocolo, responsavelId, format(new Date(prazoFim), 'dd/MM/yyyy'));
+      }
 
       try {
         await supabase.functions.invoke('notificar-sinistro', {

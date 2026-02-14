@@ -26,6 +26,7 @@ import { RegistrarAcaoModal } from '@/components/juridico/RegistrarAcaoModal';
 import { differenceInDays, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { notificarDecisaoRegistrada, notificarParecerEmitido } from '@/components/sinistros/NotificacaoHelper';
 
 // ===== Helpers =====
 function getTipoBadge(assunto: string, tipo?: string) {
@@ -186,6 +187,11 @@ export default function CasoJuridicoDetalhe() {
       queryClient.invalidateQueries({ queryKey: ['caso-detalhe'] });
       setEditingParecer(false);
       setParecerFiles([]);
+      // Notificar analista + diretores
+      const casoData = caso as any;
+      const casoNum = casoData?.assunto || id || '';
+      const analistaId = casoData?.solicitante_id;
+      notificarParecerEmitido(casoNum, analistaId);
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -251,6 +257,28 @@ export default function CasoJuridicoDetalhe() {
     onSuccess: () => {
       toast.success('Decisão registrada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['caso-detalhe'] });
+      // Notificar analista + diretores
+      const casoData = caso as any;
+      const casoNum = casoData?.assunto || id || '';
+      const analistaId = casoData?.solicitante_id;
+      const decisaoLabel = DECISOES.find(d => d.value === decisao)?.label || decisao;
+      notificarDecisaoRegistrada(casoNum, decisaoLabel, analistaId);
+
+      // Retomar prazo de ressarcimento se aprovado ou arquivado
+      const sinId = casoData?.sinistro?.id;
+      if (sinId && ['aprovado', 'arquivar'].includes(decisao)) {
+        supabase.from('sinistros').update({
+          prazo_suspenso: false,
+          prazo_suspenso_em: null,
+          prazo_motivo_suspensao: null,
+        }).eq('id', sinId).then(() => {});
+        // Fechar suspensão aberta
+        supabase.from('sinistro_suspensoes_prazo')
+          .update({ fim: new Date().toISOString() })
+          .eq('sinistro_id', sinId)
+          .is('fim', null)
+          .then(() => {});
+      }
     },
     onError: (err: any) => toast.error(err.message),
   });
