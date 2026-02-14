@@ -25,7 +25,8 @@ import {
   ChevronDown,
   Clock,
   ImageIcon,
-  Loader2
+  Loader2,
+  Truck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -39,6 +40,7 @@ import { Progress } from '@/components/ui/progress';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCreateSinistro } from '@/hooks/useSinistros';
@@ -206,6 +208,7 @@ export default function NovoSinistro() {
   // Step 3 - Descrição
   const [descricao, setDescricao] = useState('');
   const [envolveTerceiros, setEnvolveTerceiros] = useState<boolean | null>(null);
+  const [necessitaReboque, setNecessitaReboque] = useState(false);
   
   // Step 4 - Fotos
   const [fotos, setFotos] = useState<FotoUpload[]>([]);
@@ -361,6 +364,7 @@ export default function NovoSinistro() {
         numero_bo: numeroBO || undefined,
         latitude: coordenadas?.[0],
         longitude: coordenadas?.[1],
+        necessita_reboque: necessitaReboque,
       });
       
       // Upload fotos após criar sinistro
@@ -724,6 +728,18 @@ export default function NovoSinistro() {
                 </div>
               </div>
             )}
+
+            {/* Precisa de reboque? */}
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Truck className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="font-medium">Precisa de reboque?</p>
+                  <p className="text-sm text-muted-foreground">Solicitar guincho junto com o sinistro</p>
+                </div>
+              </div>
+              <Switch checked={necessitaReboque} onCheckedChange={setNecessitaReboque} />
+            </div>
           </div>
         )}
         

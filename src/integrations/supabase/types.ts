@@ -18170,6 +18170,7 @@ export type Database = {
           bo_arquivo_url: string | null
           bo_numero: string | null
           canal: string
+          chamado_assistencia_id: string | null
           chamado_origem_id: string | null
           cidade_ocorrencia: string | null
           cobranca_cota_id: string | null
@@ -18201,6 +18202,7 @@ export type Database = {
           motivo_analise_interna: string | null
           motivo_negacao: string | null
           motivo_suspensao: string | null
+          necessita_reboque: boolean | null
           oficina_id: string | null
           ordem_servico_id: string | null
           parecer: string | null
@@ -18252,6 +18254,7 @@ export type Database = {
           bo_arquivo_url?: string | null
           bo_numero?: string | null
           canal?: string
+          chamado_assistencia_id?: string | null
           chamado_origem_id?: string | null
           cidade_ocorrencia?: string | null
           cobranca_cota_id?: string | null
@@ -18283,6 +18286,7 @@ export type Database = {
           motivo_analise_interna?: string | null
           motivo_negacao?: string | null
           motivo_suspensao?: string | null
+          necessita_reboque?: boolean | null
           oficina_id?: string | null
           ordem_servico_id?: string | null
           parecer?: string | null
@@ -18334,6 +18338,7 @@ export type Database = {
           bo_arquivo_url?: string | null
           bo_numero?: string | null
           canal?: string
+          chamado_assistencia_id?: string | null
           chamado_origem_id?: string | null
           cidade_ocorrencia?: string | null
           cobranca_cota_id?: string | null
@@ -18365,6 +18370,7 @@ export type Database = {
           motivo_analise_interna?: string | null
           motivo_negacao?: string | null
           motivo_suspensao?: string | null
+          necessita_reboque?: boolean | null
           oficina_id?: string | null
           ordem_servico_id?: string | null
           parecer?: string | null
@@ -18467,6 +18473,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistros_chamado_assistencia_id_fkey"
+            columns: ["chamado_assistencia_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "sinistros_chamado_origem_id_fkey"

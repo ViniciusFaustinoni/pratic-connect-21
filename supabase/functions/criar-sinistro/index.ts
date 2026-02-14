@@ -99,6 +99,7 @@ interface CriarSinistroRequest {
   delegacia_bo?: string;
   fotos?: string[];
   envolveu_terceiros?: boolean;
+  necessita_reboque?: boolean;
 }
 
 // Gerar protocolo único
@@ -459,6 +460,7 @@ Deno.serve(async (req) => {
         bo_numero: payload.numero_bo || null,
         status: 'comunicado',
         canal: 'app',
+        necessita_reboque: payload.necessita_reboque || false,
         // ===== FLAG DE ALERTA RECÉM-ATIVADO =====
         alerta_recem_ativado: alertaRecemAtivado,
         // ===== CAMPOS DE POSIÇÃO (EVIDÊNCIA - TEMPO REAL QUANDO POSSÍVEL) =====
@@ -503,6 +505,56 @@ Deno.serve(async (req) => {
     });
 
     console.log('[criar-sinistro] Histórico registrado');
+
+    // ============================================
+    // 7.1 CRIAR CHAMADO DE REBOQUE (SE NECESSÁRIO)
+    // ============================================
+    let chamadoReboqueId: string | null = null;
+    let chamadoReboqueProtocolo: string | null = null;
+
+    if (payload.necessita_reboque) {
+      try {
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+        const rndAss = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+        const protocoloAss = `ASS-${dateStr}-${rndAss}`;
+
+        const { data: chamadoReboque, error: chamadoError } = await supabaseAdmin
+          .from('chamados_assistencia')
+          .insert({
+            protocolo: protocoloAss,
+            associado_id: associado.id,
+            veiculo_id: payload.veiculo_id,
+            tipo_servico: 'guincho',
+            descricao: `Reboque solicitado junto ao sinistro ${protocolo}`,
+            origem_endereco: payload.endereco_evento || null,
+            origem_lat: payload.latitude || null,
+            origem_lng: payload.longitude || null,
+            canal: 'app',
+            status: 'aberto',
+            data_abertura: new Date().toISOString(),
+          })
+          .select('id, protocolo')
+          .single();
+
+        if (chamadoError) {
+          console.error('[criar-sinistro] Erro ao criar chamado de reboque:', chamadoError);
+        } else {
+          chamadoReboqueId = chamadoReboque.id;
+          chamadoReboqueProtocolo = chamadoReboque.protocolo;
+
+          // Vincular chamado ao sinistro
+          await supabaseAdmin
+            .from('sinistros')
+            .update({ chamado_assistencia_id: chamadoReboque.id })
+            .eq('id', sinistro.id);
+
+          console.log('[criar-sinistro] Chamado de reboque criado:', chamadoReboqueProtocolo);
+        }
+      } catch (rebError) {
+        console.error('[criar-sinistro] Erro ao criar reboque (não bloqueante):', rebError);
+      }
+    }
 
     // ============================================
     // 8. CRIAR DOCUMENTOS PENDENTES
@@ -635,13 +687,17 @@ Deno.serve(async (req) => {
         status: 'comunicado',
         documentos_pendentes: documentosPendentes,
         analista_responsavel: null,
-        mensagem_confirmacao: `Sinistro registrado com sucesso! Protocolo: ${protocolo}. Em breve iniciaremos a análise.`,
+        mensagem_confirmacao: chamadoReboqueProtocolo
+          ? `Sinistro registrado com sucesso! Protocolo: ${protocolo}. Reboque solicitado: ${chamadoReboqueProtocolo}.`
+          : `Sinistro registrado com sucesso! Protocolo: ${protocolo}. Em breve iniciaremos a análise.`,
         veiculo: {
           placa: veiculo.placa,
           modelo: `${veiculo.marca} ${veiculo.modelo}`,
         },
         data_criacao: dataCriacao,
         alerta_recem_ativado: alertaRecemAtivado,
+        chamado_reboque_id: chamadoReboqueId,
+        chamado_reboque_protocolo: chamadoReboqueProtocolo,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

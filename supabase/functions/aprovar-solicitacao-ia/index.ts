@@ -164,6 +164,7 @@ serve(async (req) => {
           descricao: dados.descricao as string || null,
           status: "comunicado",
           canal: "ia",
+          necessita_reboque: dados.necessita_reboque === true,
         })
         .select("id, protocolo")
         .single();
@@ -186,6 +187,42 @@ serve(async (req) => {
         status_novo: "comunicado",
         observacao: "Sinistro criado via aprovação de solicitação IA",
       });
+
+      // Criar chamado de reboque se necessário
+      if (dados.necessita_reboque === true) {
+        try {
+          const nowAss = new Date();
+          const dateStrAss = `${nowAss.getFullYear()}${String(nowAss.getMonth() + 1).padStart(2, "0")}${String(nowAss.getDate()).padStart(2, "0")}`;
+          const randomAss = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
+          const protocoloAss = `ASS-${dateStrAss}-${randomAss}`;
+
+          const { data: chamadoReboque, error: chamadoError } = await supabaseAdmin
+            .from("chamados_assistencia")
+            .insert({
+              protocolo: protocoloAss,
+              associado_id: solicitacao.associado_id,
+              veiculo_id: veiculoId,
+              tipo_servico: "guincho",
+              descricao: `Reboque solicitado junto ao sinistro ${protocolo}`,
+              origem_endereco: dados.local as string || null,
+              canal: "ia",
+              status: "aberto",
+              data_abertura: new Date().toISOString(),
+            })
+            .select("id, protocolo")
+            .single();
+
+          if (!chamadoError && chamadoReboque) {
+            await supabaseAdmin
+              .from("sinistros")
+              .update({ chamado_assistencia_id: chamadoReboque.id })
+              .eq("id", sinistro.id);
+            console.log("[aprovar-solicitacao-ia] Chamado de reboque criado:", chamadoReboque.protocolo);
+          }
+        } catch (rebError) {
+          console.error("[aprovar-solicitacao-ia] Erro ao criar reboque (não bloqueante):", rebError);
+        }
+      }
 
       // Transferir documentos coletados pela IA para sinistro_documentos
       const boPath = dados.bo_path as string | null;

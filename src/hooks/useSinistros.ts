@@ -122,6 +122,7 @@ export interface CriarSinistroPayload {
   delegacia_bo?: string;
   fotos?: string[];
   envolveu_terceiros?: boolean;
+  necessita_reboque?: boolean;
 }
 
 export interface CriarSinistroResponse {
