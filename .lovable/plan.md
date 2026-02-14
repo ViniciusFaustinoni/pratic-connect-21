@@ -1,133 +1,129 @@
 
-# Modulo de Sindicancias — Lista + Detalhe
+# Modulo Juridico — Dashboard de Casos + Lista de Casos + Perfil Advogado
 
 ## Resumo
 
-Criar duas paginas novas dentro do modulo Eventos: lista de sindicancias (com KPIs e tabela filtrada) e tela de trabalho do investigador (detalhe, evidencias, resultado). Adicionar submenu no sidebar e criar tabela de evidencias no banco.
+Adicionar o perfil "advogado" ao sistema, criar a pagina "Casos" (casos juridicos originados de eventos/sindicancias), e enriquecer o Dashboard Juridico com KPIs focados nesses casos. Adicionar submenu "Casos" no sidebar.
 
 ## Migracao de Banco
 
-Criar tabela `sindicancia_evidencias` para armazenar as evidencias coletadas durante a investigacao:
+Adicionar `advogado` ao enum `app_role`:
 
 ```text
-sindicancia_evidencias
-- id (uuid PK)
-- sinistro_id (FK sinistros.id)
-- tipo (text): documento, foto, video, depoimento, laudo_tecnico, relatorio_rastreador, pesquisa_externa, outro
-- titulo (text, NOT NULL)
-- descricao (text)
-- arquivo_url (text) - referencia ao Storage bucket 'sinistros'
-- arquivo_nome (text)
-- registrado_por (uuid FK profiles.id)
-- created_at (timestamptz)
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'advogado';
 ```
-
-RLS: usuarios autenticados podem ler e inserir. O bucket `sinistros` ja existe e e publico.
 
 ## Arquivos a Criar
 
-### 1. `src/pages/eventos/SindicanciasList.tsx`
+### 1. `src/pages/juridico/CasosJuridicosList.tsx`
 
-Pagina de lista com:
+Pagina de lista unificada de casos juridicos originados de eventos. A fonte de dados principal e a tabela `consultas_juridicas` onde `sinistro_id IS NOT NULL`, complementada por `processos` onde `sinistro_id IS NOT NULL` (criados por sindicancias com resultado irregular/juridico).
 
-**4 KPI Cards no topo:**
-- Abertas (ambar) — count de sinistros com status `em_sindicancia` ou `em_pericia`
-- Vencendo em 7 dias (vermelho se > 0) — sindicancias com `sindicancia_prazo_fim` nos proximos 7 dias
-- Concluidas este mes — sinistros com `resultado_sindicancia IS NOT NULL` e updated_at no mes corrente
-- Taxa de Irregularidade — percentual de concluidas com resultado `irregular` sobre total concluidas
+**Tabela:**
+- Colunas: numero do caso (link para detalhe da consulta ou processo), tipo (badge colorido baseado no assunto — fraude, carta cancelamento, questao legal, indenizacao, etc.), origem (badge: "Sindicancia" se veio de resultado de sindicancia, "Encaminhamento" se veio direto da analise, "Analise Interna" se departamento=analise_interna), associado (nome via join com associados), placa (via join sinistro -> veiculo), protocolo do evento (link para /eventos/sinistros/:sinistro_id), advogado responsavel (via respondido_por em consultas ou advogado em processos), prioridade (badge), status (badge), dias aberto (differenceInDays entre created_at e hoje), ultima atualizacao (updated_at formatada)
+- Query unificada: busca em `consultas_juridicas` com `sinistro_id IS NOT NULL` fazendo join com sinistros (protocolo, veiculo_id, associado_id), associados (nome), veiculos (placa, modelo), profiles (respondido_por para nome do advogado)
+- Tambem busca em `processos` com `sinistro_id IS NOT NULL` com joins similares
+- Resultados combinados e ordenados por prioridade (urgente primeiro) e depois por data de criacao (mais recentes primeiro)
+- Filtros: status (pendente, em_analise, respondida, arquivada, ativo, suspenso), tipo, prioridade, advogado/responsavel, periodo, busca textual por numero/nome/placa
+- Nao tem botao de criar — casos nascem automaticamente
 
-**Tabela abaixo:**
-- Colunas: protocolo (link), tipo (badge sindicancia/pericia), motivo, associado, placa, responsavel, status (badge), prazo, dias restantes (vermelho se < 7, "VENCIDA" se expirada), resultado
-- Query: sinistros com status `em_sindicancia`, `em_pericia`, ou que tenham `resultado_sindicancia` preenchido
-- Join com profiles (sindicante), associados (nome), veiculos (placa/modelo)
-- Filtros: status, tipo (sindicancia/pericia), responsavel, periodo
-- Ordenacao padrao: abertas primeiro, por prazo crescente (mais urgentes no topo)
+**Determinacao de origem:**
+- Se consulta tem `departamento = 'eventos'` e o assunto contem "Sindicancia" -> origem = "Sindicancia"
+- Se consulta tem `departamento = 'eventos'` e assunto contem "Encaminhamento" -> origem = "Encaminhamento"
+- Se consulta tem `departamento = 'analise_interna'` -> origem = "Analise Interna"
+- Para processos com `tipo = 'sindicancia_fraude'` ou `sindicancia_complexa` -> origem = "Sindicancia"
 
-### 2. `src/pages/eventos/SindicanciaDetalhe.tsx`
-
-Tela de trabalho do investigador, dividida em secoes:
-
-**Topo:**
-- Titulo "Sindicancia" ou "Pericia Tecnica" com badge de status
-- Barra de progresso visual do prazo (% do tempo decorrido)
-- Banner vermelho se prazo vencido
-
-**Card Informacoes Gerais:**
-- Quem abriu, quando, motivo, responsavel, prazo com vencimento, status, descricao detalhada
-- Dados extraidos do historico do sinistro (a entry que registrou o encaminhamento)
-
-**Card Dados do Evento:**
-- Protocolo, tipo, data, associado (nome, telefone), veiculo (placa, modelo), status atual
-- Botao "Ver evento completo" abre SinistroDetalhe em nova aba
-
-**Card Evidencias:**
-- Lista de evidencias ja registradas com tipo (badge), titulo, descricao, arquivo (link download), quem registrou e quando
-- Botao "Nova Evidencia" abre modal com: tipo (select), titulo (obrigatorio), descricao (textarea), upload de arquivo (aceita imagem, video, PDF, ate 50MB)
-- Upload vai para o bucket `sinistros` no path `{sinistro_id}/evidencias/`
-
-**Card Resultado (so se ainda nao concluida):**
-- Reutilizar a logica existente do `ConcluirSindicanciaModal` mas como secao inline, nao modal
-- 5 opcoes de resultado com descricao detalhada das consequencias:
-  - Regular: volta para `em_analise`, descongela prazo
-  - Irregular: nega evento, cria processo juridico tipo `sindicancia_fraude`, notifica juridico
-  - Carta de Cancelamento: cancela evento, cria consulta juridica
-  - Encaminhar ao Juridico: muda para `suspenso`, cria processo juridico
-  - Inconclusivo: muda para `suspenso`, notifica diretores
-- Parecer final obrigatorio (min 200 caracteres)
-- Upload de relatorio PDF opcional
-- Botao "Concluir Sindicancia" com dialog de confirmacao "Tem certeza? Esta acao nao pode ser desfeita."
-- Criacao automatica de caso juridico e obrigatoria para irregular, carta_cancelamento e juridico
-
-**Secao Resultado (se ja concluida):**
-- Modo somente leitura: resultado, parecer, data de conclusao
-- Link para o caso juridico criado (quando aplicavel)
-
-### 3. `src/components/sinistros/NovaEvidenciaModal.tsx`
-
-Modal para adicionar evidencia:
-- Select de tipo: documento, foto, video, depoimento de testemunha, laudo tecnico, relatorio do rastreador, pesquisa externa, outro
-- Input titulo (obrigatorio)
-- Textarea descricao
-- Dropzone para upload (aceita imagem/video/PDF, max 50MB)
-- Upload para Storage bucket `sinistros/{sinistro_id}/evidencias/{timestamp}_{filename}`
-- Insert na tabela `sindicancia_evidencias`
+**Tipos para badges coloridos:**
+- `sindicancia_fraude` / assunto contem "Fraude" -> vermelho, label "Fraude"
+- assunto contem "Carta de Cancelamento" -> laranja, label "Carta Cancel."
+- assunto contem "Encaminhamento Juridico" -> roxo, label "Questao Legal"
+- assunto contem "indenizacao" ou "Indenizacao" -> azul, label "Indenizacao"
+- assunto contem "alagamento" ou "incendio" -> amarelo, label "Analise Tecnica"
+- padrao -> cinza, label "Outro"
 
 ## Arquivos a Modificar
 
-### 4. `src/components/layout/AppSidebar.tsx`
+### 2. Enriquecer `src/pages/juridico/JuridicoDashboard.tsx`
 
-Adicionar item no grupo `eventos`:
+Adicionar uma nova linha de 5 KPI cards ACIMA da linha existente, focada em casos de eventos:
+
+**Novos 5 KPI Cards (linha 1):**
+- "Casos Abertos" — count de consultas_juridicas onde sinistro_id IS NOT NULL e status IN ('pendente', 'em_analise') MAIS processos onde sinistro_id IS NOT NULL e status = 'ativo'. Cor ambar.
+- "Aguardando Parecer" — count de consultas_juridicas onde sinistro_id IS NOT NULL e status = 'pendente' (advogado ainda nao analisou). Cor vermelha se > 0.
+- "Fraudes este Ano" — count de processos onde tipo = 'sindicancia_fraude' e created_at no ano corrente. Cor vermelha.
+- "Aguardando Diretoria" — count de sinistros onde status = 'suspenso' e motivo_suspensao contendo 'diretoria' ou resultado_sindicancia = 'inconclusivo'. Cor amarela.
+- "Finalizados este Mes" — count de consultas_juridicas onde sinistro_id IS NOT NULL e status = 'respondida' e respondido_em no mes corrente MAIS processos onde sinistro_id IS NOT NULL e status em lista de encerrados e updated_at no mes. Cor verde.
+
+**Grafico de rosca** — distribuicao dos casos abertos por tipo (fraude, carta cancelamento, questao legal, indenizacao, analise tecnica, outro). Usar Recharts PieChart.
+
+**Grafico de barras** — evolucao mensal dos ultimos 6 meses: total de casos criados por mes. Usar Recharts BarChart.
+
+**Lista de casos urgentes** — consultas_juridicas com sinistro_id IS NOT NULL e prioridade IN ('alta', 'urgente') e status IN ('pendente', 'em_analise'), mostradas como cards clicaveis que levam para /juridico/consultas/:id.
+
+Manter toda a secao existente do dashboard (processos, prazos, audiencias, andamentos) abaixo, separada por um Separator com label "Processos Judiciais".
+
+### 3. Modificar `src/hooks/usePermissions.ts`
+
+Na linha que define `canManageJuridico`, adicionar `hasRole('advogado')`:
+
 ```text
-items: [
-  { title: 'Dashboard', url: '/eventos/dashboard', icon: BarChart3 },
-  { title: 'Sinistros', url: '/eventos/sinistros', icon: AlertTriangle },
-  { title: 'Sindicancias', url: '/eventos/sindicancias', icon: Search },  // NOVO
-],
+canManageJuridico: isDiretor || hasRole('gerente_comercial') || hasRole('analista_juridico') || hasRole('advogado') || isDesenvolvedor,
 ```
 
-### 5. `src/App.tsx`
+### 4. Modificar `src/components/layout/AppSidebar.tsx`
 
-Adicionar rotas:
+Adicionar item "Casos" no grupo `juridico`, logo apos Dashboard:
+
 ```text
-<Route path="/eventos/sindicancias" element={<SindicanciasList />} />
-<Route path="/eventos/sindicancias/:id" element={<SindicanciaDetalhe />} />
+items: [
+  { title: 'Dashboard', url: '/juridico', icon: BarChart3 },
+  { title: 'Casos', url: '/juridico/casos', icon: FileText },  // NOVO
+  { title: 'Processos', url: '/juridico/processos', icon: FileText },
+  ...
+]
+```
+
+### 5. Modificar `src/App.tsx`
+
+Adicionar rota:
+
+```text
+<Route path="/juridico/casos" element={<CasosJuridicosList />} />
+```
+
+### 6. Atualizar `src/pages/configuracoes/Perfis.tsx` e `src/pages/diretoria/PerfisAcesso.tsx`
+
+Adicionar o perfil `advogado` na lista de perfis com:
+- label: 'Advogado'
+- sigla: 'Adv'
+- color: azul escuro
+- area: 'Juridico'
+- descricao: 'Advogado com acesso ao modulo juridico'
+
+### 7. Atualizar `src/types/database.ts` (ROLE_LABELS)
+
+Adicionar entrada para o novo role:
+
+```text
+advogado: 'Advogado',
 ```
 
 ## Detalhes Tecnicos
 
-- A query da lista busca em `sinistros` filtrando por `status IN ('em_sindicancia', 'em_pericia') OR resultado_sindicancia IS NOT NULL`
-- O detalhe busca o sinistro pelo ID com joins em associados, veiculos, profiles (sindicante e analista)
-- Evidencias: query em `sindicancia_evidencias` filtrada por `sinistro_id`
-- O calculo de dias restantes usa `differenceInDays(sindicancia_prazo_fim, today)`
-- A barra de progresso calcula `(dias_decorridos / prazo_total) * 100`
-- O resultado reutiliza a mesma logica do `ConcluirSindicanciaModal` (criar processo, consulta juridica, atualizar status, registrar historico) mas integrada inline na pagina
-- Nao ha botao de criar sindicancia na lista — elas so nascem pela tela de analise
+- A query de casos unificada combina resultados de `consultas_juridicas` e `processos`, ambos filtrados por `sinistro_id IS NOT NULL`
+- Cada fonte recebe um campo virtual `_source: 'consulta' | 'processo'` para diferenciar no frontend
+- O link do numero do caso leva para `/juridico/consultas/:id` (consultas) ou `/juridico/processos/:id` (processos)
+- O link do protocolo do evento leva para `/eventos/sinistros/:sinistro_id`
+- Dias aberto calculado com `differenceInDays(new Date(), new Date(created_at))`
+- Graficos usam Recharts (PieChart e BarChart), ja instalado no projeto
+- Nao e necessaria nenhuma nova tabela — toda a informacao ja existe em consultas_juridicas e processos
 
 ## Ordem de Implementacao
 
-1. Migracao: criar tabela `sindicancia_evidencias` com RLS
-2. `NovaEvidenciaModal.tsx` — modal de upload de evidencias
-3. `SindicanciasList.tsx` — pagina de lista com KPIs
-4. `SindicanciaDetalhe.tsx` — tela de trabalho do investigador
-5. `AppSidebar.tsx` — adicionar submenu
-6. `App.tsx` — adicionar rotas
+1. Migracao: adicionar `advogado` ao enum `app_role`
+2. `CasosJuridicosList.tsx` — criar pagina de lista
+3. `JuridicoDashboard.tsx` — enriquecer com novos KPIs, graficos e lista urgente
+4. `usePermissions.ts` — adicionar role advogado
+5. `AppSidebar.tsx` — adicionar submenu Casos
+6. `App.tsx` — adicionar rota
+7. `Perfis.tsx`, `PerfisAcesso.tsx`, `database.ts` — registrar novo perfil
