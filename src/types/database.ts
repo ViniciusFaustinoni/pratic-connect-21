@@ -19,7 +19,8 @@ export type AppRole =
   | 'instalador_vistoriador'
   | 'associado'
   | 'analista_marketing'
-  | 'analista_juridico';
+  | 'analista_juridico'
+  | 'advogado';
 
 export type TipoUsuario = 'funcionario' | 'associado' | 'prestador';
 
@@ -606,6 +607,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   associado: 'Associado',
   analista_marketing: 'Analista de Marketing',
   analista_juridico: 'Analista Jurídico',
+  advogado: 'Advogado',
 };
 
 export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {

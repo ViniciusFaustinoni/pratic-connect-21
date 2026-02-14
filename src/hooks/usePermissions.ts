@@ -269,7 +269,7 @@ export function usePermissions() {
     canManageSinistros: hasRole('analista_cadastro') || isGerencia() || isDesenvolvedor,
     canApproveOS: isGerencia() || isDesenvolvedor,
     canManageContabilidade: isDiretor || hasRole('gerente_comercial') || isDesenvolvedor,
-    canManageJuridico: isDiretor || hasRole('gerente_comercial') || hasRole('analista_juridico') || isDesenvolvedor,
+    canManageJuridico: isDiretor || hasRole('gerente_comercial') || hasRole('analista_juridico') || hasRoleByName('advogado') || isDesenvolvedor,
     canManageRH: isDiretor || hasRole('gerente_comercial') || isDesenvolvedor,
     canManageMarketing: isDiretor || hasRole('gerente_comercial') || hasRole('analista_marketing') || isDesenvolvedor,
     canManageOuvidoria: (isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao,
