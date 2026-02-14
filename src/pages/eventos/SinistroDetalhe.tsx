@@ -26,6 +26,7 @@ import { AcionarRecuperacaoModal } from '@/components/sinistros/AcionarRecuperac
 import { CardAcionamentoRoubo } from '@/components/sinistros/CardAcionamentoRoubo';
 import { AlertasFraudeRoubo } from '@/components/sinistros/AlertasFraudeRoubo';
 import { CardRecuperacaoStatus } from '@/components/sinistros/CardRecuperacaoStatus';
+import { CardVidrosDetalhe } from '@/components/sinistros/CardVidrosDetalhe';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { TrajetoColisaoCard } from '@/components/sinistros/TrajetoColisaoCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
@@ -935,6 +936,11 @@ export default function SinistroDetalhe() {
             associadoNome={sinistro.associado?.nome}
             sinistroTipo={sinistro.tipo}
           />
+
+          {/* Card Vidros e Faróis */}
+          {sinistro.tipo === 'vidros' && sinistro.peca_danificada && (
+            <CardVidrosDetalhe sinistro={sinistro} />
+          )}
 
           {/* Processos Jurídicos */}
           <Card>
