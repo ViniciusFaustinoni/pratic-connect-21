@@ -265,7 +265,7 @@ export function usePermissions() {
     canViewDashboard: profile?.tipo === 'funcionario',
     canAccessApp: profile?.tipo === 'associado',
     canManageCadastro: hasRole('analista_cadastro') || isGerencia() || isDesenvolvedor,
-    canManageOficinas: hasRole('analista_cadastro') || isGerencia() || isDesenvolvedor,
+    canManageOficinas: hasRole('analista_cadastro') || isAnalistaEventos || isGerencia() || isDesenvolvedor,
     canManageSinistros: hasRole('analista_cadastro') || isAnalistaEventos || isGerencia() || isDesenvolvedor,
     canApproveOS: isGerencia() || isDesenvolvedor,
     canManageContabilidade: isDiretor || hasRole('gerente_comercial') || isDesenvolvedor,
