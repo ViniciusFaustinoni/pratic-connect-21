@@ -149,7 +149,7 @@ export default function EventoColisao() {
         </Card>
 
         {/* Stepper */}
-        <EventoStepper etapaAtual={etapaAtual} />
+        <EventoStepper etapaAtual={isAgendado ? 4 : etapaAtual} />
 
         {/* Step content */}
         <Card>
