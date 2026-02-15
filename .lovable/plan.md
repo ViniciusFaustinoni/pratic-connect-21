@@ -1,31 +1,27 @@
 
-# Corrigir label do status "aguardando_analise"
+
+# Adicionar etapa de Agendamento na Timeline
 
 ## Problema
 
-O status `aguardando_analise` nao possui entrada no `statusConfig` da pagina de analise (`SinistroAnalise.tsx`), entao o badge exibe o texto cru "aguardando_analise" em vez de um label legivel. Alem disso, na listagem (`SinistrosList.tsx`), o label atual eh "Aguard. Analise" -- o usuario deseja que seja "Aguardando Analise Final".
+A timeline (`TimelineEventoTab.tsx`) busca os links de evento mas so exibe "Link enviado". Nao exibe quando cada etapa foi completada pelo associado, em especial a etapa 4 (Agendamento).
 
-## Alteracoes
+## Alteracao
 
-### 1. `src/pages/eventos/SinistroAnalise.tsx` (linha ~83)
+### Arquivo: `src/components/sinistros/TimelineEventoTab.tsx`
 
-Adicionar entrada no `statusConfig`:
-
-```typescript
-aguardando_analise: { label: 'Aguardando Análise Final', class: 'bg-blue-100 text-blue-800 border-blue-300' },
-```
-
-### 2. `src/pages/eventos/SinistrosList.tsx` (linha ~68)
-
-Alterar o label de `aguardando_analise` de "Aguard. Analise" para "Aguard. Análise Final":
+Na secao 3 (links do evento), expandir o `select` para incluir os campos de conclusao de cada etapa:
 
 ```typescript
-aguardando_analise: { label: 'Aguard. Análise Final', class: 'bg-blue-100 text-blue-800' },
+.select('id, created_at, tipo, status, etapa_atual, etapa1_completada_em, etapa2_completada_em, etapa3_completada_em, etapa4_completada_em')
 ```
 
-(Na listagem usa-se a versao abreviada para caber na tabela.)
+Apos o push do "Link enviado", adicionar entradas na timeline para cada etapa completada:
 
-## Resultado esperado
+- **etapa1_completada_em**: "Auto Vistoria concluída pelo associado" (icone Car)
+- **etapa2_completada_em**: "B.O. enviado pelo associado" (icone FileText)
+- **etapa3_completada_em**: "Relato enviado pelo associado" (icone MessageSquare)
+- **etapa4_completada_em**: "Agendamento realizado pelo associado" (icone Calendar, badge verde "Agendado")
 
-- Na pagina de analise: badge exibe "Aguardando Analise Final" com estilo azul
-- Na listagem de sinistros: badge exibe "Aguard. Analise Final"
+Cada entrada so sera adicionada se o respectivo campo nao for null, e usara a data/hora do campo como timestamp.
+
