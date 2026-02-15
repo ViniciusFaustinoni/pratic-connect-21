@@ -1,21 +1,44 @@
 
 
-# Mostrar numero do B.O. preenchido pelo associado
+# Adicionar etapa "Agendamento" na timeline do link do cliente
 
 ## Problema
 
-O campo "N B.O." na secao "Informacoes do Sinistro" mostra `sinistro.bo_numero`, que esta vazio porque o numero foi preenchido pelo associado atraves do link de auto-vistoria e ficou armazenado em `linkEvento.dados_etapa2.numero_bo`.
+O fluxo do link de evento tem 4 etapas reais:
+1. Auto Vistoria
+2. B.O.
+3. Relato
+4. Agendamento (vistoria presencial)
+
+Porem o stepper (`EventoStepper`) so mostra 3 etapas. Quando o associado completa as 3 primeiras e cai na tela de agendamento, a timeline nao reflete essa etapa.
 
 ## Solucao
 
-Arquivo: `src/pages/eventos/SinistroAnalise.tsx` (linha 571)
+**Arquivo: `src/components/evento/EventoStepper.tsx`**
 
-Alterar o valor exibido para usar o numero do B.O. do link de evento como fallback:
+- Adicionar uma 4a etapa no array `etapas`: `{ numero: 4, titulo: 'Agendamento', icon: Calendar }`
+- Importar o icone `Calendar` do lucide-react
 
-- Antes: `sinistro.bo_numero`
-- Depois: `sinistro.bo_numero || linkEvento?.dados_etapa2?.numero_bo`
+**Arquivo: `src/pages/public/EventoColisao.tsx`**
 
-Isso garante que, se o campo `bo_numero` do sinistro estiver vazio, o numero preenchido pelo associado na etapa 2 do link de evento sera exibido.
+- Passar `etapaAtual` ajustado para o stepper:
+  - Etapas 0-2 continuam mapeando para etapas 1-3 do stepper (o stepper ja soma 1 internamente via comparacao `etapaAtual >= etapa.numero`)
+  - Quando `isCompleted` (etapa >= 3) e nao agendado, o stepper deve marcar etapas 1-3 como completas e a etapa 4 como atual
+  - Quando `isAgendado`, todas as 4 etapas ficam completas
 
-Alteracao de uma unica linha, sem impacto em outros componentes.
+Atualmente o stepper recebe `etapaAtual` (0-based) e compara com `etapa.numero` (1-based): `completada = etapaAtual >= etapa.numero`. Isso significa que `etapaAtual=3` ja marca as 3 primeiras como completas. Para a etapa 4, precisamos que `etapaAtual=3` a marque como "atual" e `etapaAtual=4` a marque como "completada".
+
+Ajuste na pagina:
+- Quando `isAgendado`: passar `etapaAtual={4}` para marcar tudo como completo
+- O valor atual `etapaAtual` (que ja eh 3 quando completa as 3 etapas) funcionara naturalmente para mostrar a etapa 4 como atual
+
+## Detalhes tecnicos
+
+No `EventoStepper.tsx`:
+- Adicionar `Calendar` ao import do lucide-react
+- Adicionar `{ numero: 4, titulo: 'Agendamento', icon: Calendar }` ao array `etapas`
+
+No `EventoColisao.tsx`:
+- Calcular o valor do stepper: `const stepperEtapa = isAgendado ? 4 : etapaAtual;`
+- Passar para o componente: `<EventoStepper etapaAtual={stepperEtapa} />`
 
