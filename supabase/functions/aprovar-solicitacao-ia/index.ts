@@ -6,6 +6,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function addBusinessDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const dow = result.getDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return result;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -255,6 +266,104 @@ serve(async (req) => {
       
       if (fotosPaths.length > 0) {
         console.log(`[aprovar-solicitacao-ia] ${fotosPaths.length} foto(s) anexadas ao sinistro`);
+      }
+
+      // ========== PÓS-CRIAÇÃO: Automações do sinistro ==========
+
+      // 1. Gerar link de auto-vistoria de eventos
+      let tokenEvento: string | null = null;
+      try {
+        const linkResp = await fetch(`${SUPABASE_URL}/functions/v1/gerar-link-evento`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({ sinistro_id: sinistro.id }),
+        });
+        const linkData = await linkResp.json();
+        if (linkData.success && linkData.token) {
+          tokenEvento = linkData.token;
+          console.log(`[aprovar-solicitacao-ia] Link de evento gerado: ${tokenEvento}`);
+        } else {
+          console.error("[aprovar-solicitacao-ia] Falha ao gerar link evento:", linkData);
+        }
+      } catch (linkErr) {
+        console.error("[aprovar-solicitacao-ia] Erro ao gerar link evento (não bloqueante):", linkErr);
+      }
+
+      // 2. Enviar WhatsApp ao associado com link e instruções
+      try {
+        const { data: associadoSin } = await supabaseAdmin
+          .from("associados")
+          .select("nome, whatsapp, telefone")
+          .eq("id", solicitacao.associado_id)
+          .single();
+
+        if (associadoSin) {
+          const telefoneSin = associadoSin.whatsapp || associadoSin.telefone;
+          if (telefoneSin) {
+            const SITE_URL = Deno.env.get("SITE_URL") || "https://pratic-connect-21.lovable.app";
+            const linkUrl = tokenEvento ? `${SITE_URL}/evento/${tokenEvento}` : null;
+
+            let mensagemSin = `Olá ${associadoSin.nome}!\n\nSeu sinistro *${protocolo}* foi registrado com sucesso.\n\nPara darmos andamento, você precisa completar 3 etapas:\n\n*Etapa 1* — Enviar no mínimo 5 fotos do veículo danificado\n*Etapa 2* — Enviar o Boletim de Ocorrência e número do B.O.\n*Etapa 3* — Enviar um relato escrito ou em áudio sobre o ocorrido\n`;
+
+            if (linkUrl) {
+              mensagemSin += `\nAcesse o link abaixo para enviar:\n${linkUrl}\n\n⏰ Este link é válido por 72 horas.\n`;
+            }
+
+            mensagemSin += `\nUm regulador será agendado para vistoria em até 3 dias úteis.\n\nABP PraticCar`;
+
+            await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              },
+              body: JSON.stringify({ telefone: telefoneSin, mensagem: mensagemSin }),
+            });
+            console.log(`[aprovar-solicitacao-ia] WhatsApp enviado para ${telefoneSin}`);
+          }
+        }
+      } catch (whatsErr) {
+        console.error("[aprovar-solicitacao-ia] Erro ao enviar WhatsApp sinistro (não bloqueante):", whatsErr);
+      }
+
+      // 3. Agendar vistoria do regulador (3 dias úteis)
+      try {
+        const dataVistoria = addBusinessDays(new Date(), 3);
+        await supabaseAdmin.from("servicos").insert({
+          tipo: "vistoria_sinistro",
+          tipo_servico: "vistoria_sinistro",
+          status: "pendente",
+          data_agendada: dataVistoria.toISOString().split("T")[0],
+          sinistro_id: sinistro.id,
+          associado_id: solicitacao.associado_id,
+          veiculo_id: veiculoId || null,
+          origem: "sinistro_ia",
+          observacoes: `Vistoria do regulador para sinistro ${protocolo} — agendada automaticamente`,
+        });
+        console.log(`[aprovar-solicitacao-ia] Vistoria do regulador agendada para ${dataVistoria.toISOString().split("T")[0]}`);
+      } catch (servErr) {
+        console.error("[aprovar-solicitacao-ia] Erro ao agendar vistoria (não bloqueante):", servErr);
+      }
+
+      // 4. Atualizar sinistro para em_analise
+      try {
+        await supabaseAdmin
+          .from("sinistros")
+          .update({ status: "em_analise" })
+          .eq("id", sinistro.id);
+
+        await supabaseAdmin.from("sinistro_historico").insert({
+          sinistro_id: sinistro.id,
+          status_anterior: "comunicado",
+          status_novo: "em_analise",
+          observacao: "Status atualizado automaticamente após aprovação — link de evento gerado e vistoria agendada",
+        });
+        console.log(`[aprovar-solicitacao-ia] Sinistro ${sinistro.id} atualizado para em_analise`);
+      } catch (statusErr) {
+        console.error("[aprovar-solicitacao-ia] Erro ao atualizar status (não bloqueante):", statusErr);
       }
 
     } else if (solicitacao.tipo === "assistencia") {
