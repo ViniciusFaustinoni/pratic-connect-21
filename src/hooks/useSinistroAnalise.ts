@@ -185,6 +185,22 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
     enabled: !!sinistro?.veiculo_id,
   });
 
+  // Link do evento (dados das etapas de auto-vistoria)
+  const { data: linkEvento } = useQuery({
+    queryKey: ['sinistro-analise-link-evento', sinistroId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('sinistro_evento_links' as any)
+        .select('*')
+        .eq('sinistro_id', sinistroId!)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as any;
+    },
+    enabled: !!sinistroId,
+  });
+
   return {
     sinistro,
     documentos,
@@ -194,6 +210,7 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
     sinistrosAnteriores,
     contratoAtivo,
     veiculoHistorico,
+    linkEvento,
     isLoading: loadingSinistro,
   };
 }
