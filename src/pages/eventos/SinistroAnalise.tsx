@@ -58,6 +58,8 @@ import { EncaminharSindicanciaDialog } from '@/components/sinistros/EncaminharSi
 import { AnaliseInternaModal } from '@/components/sinistros/AnaliseInternaModal';
 import { EncaminharJuridicoEventoModal } from '@/components/sinistros/EncaminharJuridicoEventoModal';
 import { SuspenderEventoModal } from '@/components/sinistros/SuspenderEventoModal';
+import { SolicitarOrcamentoDialog } from '@/components/sinistros/SolicitarOrcamentoDialog';
+import { Input } from '@/components/ui/input';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
@@ -218,6 +220,9 @@ export default function SinistroAnalise() {
   const [enviandoLinkAgendamento, setEnviandoLinkAgendamento] = useState(false);
   const [enviandoLinkAutoVistoria, setEnviandoLinkAutoVistoria] = useState(false);
   const [fotoViewer, setFotoViewer] = useState({ open: false, index: 0 });
+  const [showSolicitarOrcamento, setShowSolicitarOrcamento] = useState(false);
+  const [valoresPecas, setValoresPecas] = useState<Record<number, number>>({});
+  const [salvandoValores, setSalvandoValores] = useState(false);
 
   const {
     sinistro,
@@ -512,7 +517,7 @@ export default function SinistroAnalise() {
         {/* Coluna Esquerda - 2/3 */}
         <div className="lg:col-span-2 space-y-6">
           {(() => {
-            const showCotacoesTab = ['pronto_para_oficina', 'em_reparo'].includes(sinistro.status as string);
+            const showCotacoesTab = ['aprovado', 'pronto_para_oficina', 'em_reparo'].includes(sinistro.status as string);
 
             const detalhesContent = (
               <div className="space-y-6">
@@ -895,13 +900,14 @@ export default function SinistroAnalise() {
                                   <Separator />
                                   <div>
                                     <p className="text-sm font-semibold mb-2">📋 Itens do Orçamento ({itens.length})</p>
-                                    <div className="rounded-md border overflow-hidden">
+                                    <div className="rounded-md border overflow-hidden overflow-x-auto">
                                       <table className="w-full text-sm">
                                         <thead>
                                           <tr className="bg-muted">
                                             <th className="text-left p-2 font-medium">Descrição</th>
                                             <th className="text-left p-2 font-medium">Tipo</th>
                                             <th className="text-center p-2 font-medium">Qtd</th>
+                                            <th className="text-right p-2 font-medium">Valor Unit.</th>
                                           </tr>
                                         </thead>
                                         <tbody>
@@ -914,6 +920,26 @@ export default function SinistroAnalise() {
                                                 </Badge>
                                               </td>
                                               <td className="p-2 text-center">{item.quantidade}</td>
+                                              <td className="p-2 text-right">
+                                                {item.tipo === 'peca' ? (
+                                                  <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    placeholder="R$ 0,00"
+                                                    className="w-28 ml-auto text-right h-8"
+                                                    value={valoresPecas[i] ?? item.valor_unitario ?? ''}
+                                                    onChange={(e) => {
+                                                      const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                                      setValoresPecas((prev) => ({ ...prev, [i]: val as any }));
+                                                    }}
+                                                  />
+                                                ) : (
+                                                  <span className="text-muted-foreground">
+                                                    {item.valor_unitario != null ? formatCurrency(item.valor_unitario) : '---'}
+                                                  </span>
+                                                )}
+                                              </td>
                                             </tr>
                                           ))}
                                         </tbody>
@@ -924,6 +950,57 @@ export default function SinistroAnalise() {
                                         Custo médio estimado de mão de obra: <strong>{formatCurrency(dados.valor_total_orcamento)}</strong>
                                       </p>
                                     )}
+                                    <div className="flex gap-2 mt-3">
+                                      {Object.keys(valoresPecas).length > 0 && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          disabled={salvandoValores}
+                                          onClick={async () => {
+                                            if (!vistoriaEvento) return;
+                                            setSalvandoValores(true);
+                                            try {
+                                              const updatedItens = itens.map((item: any, i: number) => {
+                                                if (item.tipo === 'peca' && valoresPecas[i] !== undefined) {
+                                                  return {
+                                                    ...item,
+                                                    valor_unitario: valoresPecas[i],
+                                                    valor_total: (valoresPecas[i] || 0) * (item.quantidade || 1),
+                                                  };
+                                                }
+                                                return item;
+                                              });
+                                              const updatedDados = {
+                                                ...dados,
+                                                itens_orcamento: updatedItens,
+                                              };
+                                              const { error } = await supabase
+                                                .from('vistorias_evento')
+                                                .update({ dados_vistoria: updatedDados })
+                                                .eq('id', (vistoriaEvento as any).id);
+                                              if (error) throw error;
+                                              toast.success('Valores das peças salvos!');
+                                              setValoresPecas({});
+                                              queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+                                            } catch (err: any) {
+                                              toast.error('Erro ao salvar valores: ' + err.message);
+                                            } finally {
+                                              setSalvandoValores(false);
+                                            }
+                                          }}
+                                        >
+                                          {salvandoValores ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <DollarSign className="h-4 w-4 mr-1" />}
+                                          Salvar Valores
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        onClick={() => setShowSolicitarOrcamento(true)}
+                                      >
+                                        <Send className="h-4 w-4 mr-1" />
+                                        Solicitar Orçamento
+                                      </Button>
+                                    </div>
                                   </div>
                                 </>
                               )}
@@ -1419,6 +1496,20 @@ export default function SinistroAnalise() {
         sinistroId={sinistro.id}
         protocolo={sinistro.protocolo}
       />
+
+      <SolicitarOrcamentoDialog
+        open={showSolicitarOrcamento}
+        onOpenChange={setShowSolicitarOrcamento}
+        sinistroId={sinistro.id}
+        veiculo={veiculo}
+        itensPecas={
+          (vistoriaEvento as any)?.dados_vistoria?.itens_orcamento?.filter(
+            (item: any) => item.tipo === 'peca'
+          ) || []
+        }
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] })}
+      />
+
 
       <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
