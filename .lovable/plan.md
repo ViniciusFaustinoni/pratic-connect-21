@@ -1,55 +1,54 @@
 
+# Analista de Eventos: Migrar para Versao Web
 
-# Configurar Telefone 0800 da Assistencia 24h
+## Situacao Atual
 
-## Problema
+O perfil `analista_eventos` usa um layout mobile-first dedicado (`/analista-eventos`) com bottom navigation, header escuro e container `max-w-md`. O `useRouteGuard` forca o redirecionamento para `/analista-eventos` se o usuario tentar acessar qualquer outra rota.
 
-O numero 0800 esta hardcoded em 5 arquivos do frontend e 1 do backend. Nao existe configuracao no banco de dados para o diretor alterar esse numero. O webhook do WhatsApp ja tenta buscar a chave `assistencia_telefone_central` na tabela `configuracoes`, mas ela nao existe.
+## O que sera feito
 
-## Solucao
+Remover a restricao mobile e permitir que o analista de eventos acesse o sistema web completo (com sidebar, dashboard e as paginas de eventos existentes).
 
-### 1. Criar configuracao no banco de dados
+### Mudanca 1 — Adicionar permissao `canManageSinistros` ao analista de eventos
 
-Inserir a chave `assistencia_telefone_central` na tabela `configuracoes` com categoria `empresa`, tipo `texto`, editavel, para que apareca automaticamente na tela de Configuracoes do Sistema (aba Empresa).
+No `src/hooks/usePermissions.ts`, adicionar `isAnalistaEventos` na lista de perfis que possuem `canManageSinistros`. Isso faz o menu "Eventos" (Dashboard, Sinistros, Sindicancias) aparecer na sidebar.
 
-```sql
-INSERT INTO configuracoes (chave, valor, tipo, categoria, descricao, editavel)
-VALUES ('assistencia_telefone_central', '0800 980 0001', 'texto', 'empresa', 
-        'Telefone 0800 da Assistência 24h (exibido no app e usado pela IA)', true);
+```
+// Antes:
+canManageSinistros: hasRole('analista_cadastro') || isGerencia() || isDesenvolvedor,
+
+// Depois:
+canManageSinistros: hasRole('analista_cadastro') || isAnalistaEventos || isGerencia() || isDesenvolvedor,
 ```
 
-### 2. Criar hook para buscar o 0800
+### Mudanca 2 — Remover redirect forcado do useRouteGuard
 
-Criar `src/hooks/useConfig0800.ts` — um hook simples que busca o valor da chave `assistencia_telefone_central` da tabela `configuracoes`, com fallback para `0800 980 0001` e cache de 10 minutos.
+No `src/hooks/useRouteGuard.ts`, remover o bloco que forca `analista_eventos` para `/analista-eventos`. O analista agora acessara `/dashboard` como qualquer funcionario web.
 
-### 3. Atualizar arquivos do frontend (5 arquivos)
+### Mudanca 3 — Remover `isAnalistaEventosOnly` de `isPerfilLimitado`
 
-Substituir todas as ocorrencias hardcoded `08009800001` e `0800 980 0001` pelo valor dinamico do hook:
+No `src/hooks/usePermissions.ts`, remover `isAnalistaEventosOnly` da lista `isPerfilLimitado`. Isso garante que o analista veja o menu lateral completo (sidebar) ao inves do menu simplificado de "Perfil".
 
-| Arquivo | Ocorrencias |
-|---------|------------|
-| `src/pages/app/AppAssistencia.tsx` | 3 (botao, texto, FAB) |
-| `src/pages/app/SolicitarAssistencia.tsx` | 2 (link tel, texto) |
-| `src/pages/app/AppPlano.tsx` | 4 (detalhes plano, texto, botoes) |
-| `src/pages/app/OuvidoriaMenu.tsx` | 2 (link tel, texto) |
-| `src/data/planosPrecos.ts` | 1 (constante — manter hardcoded ou remover uso) |
+### Mudanca 4 — Ajustar rotas permitidas no useRouteGuard
 
-Cada componente importara o hook e usara o valor retornado tanto no `href="tel:..."` quanto no texto visivel.
+Adicionar rotas `/eventos/*`, `/dashboard` e `/perfil` como rotas permitidas para o analista de eventos (similar ao que ja existe para `isAnalistaCadastroOnly`), caso o perfil precise de restricao parcial. Alternativamente, simplesmente nao restringir o analista de eventos (ele acessa tudo que `canManageSinistros` permite via sidebar).
 
-### 4. Atualizar WhatsApp webhook (hardcoded fallback)
+### Mudanca 5 — Manter rotas `/analista-eventos` como fallback
 
-O webhook ja busca `assistencia_telefone_central` (linha 1215). Apenas atualizar as 2 mensagens de erro (linhas 2036 e 2233) que ainda tem `0800 980 0001` hardcoded para usar a mesma variavel `telefoneCentral` — ou buscar da config nessas funcoes tambem.
-
-### 5. Atualizar assistente-chat (se referencia o 0800)
-
-Verificar e atualizar o assistente do App para tambem buscar o telefone da config ao inves de usar hardcoded.
+As rotas `/analista-eventos/*` continuam existindo no `App.tsx` para nao quebrar links antigos, mas o analista sera redirecionado para `/dashboard` ao fazer login.
 
 ---
 
+## Arquivos a Modificar
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/hooks/usePermissions.ts` | Adicionar `isAnalistaEventos` em `canManageSinistros`, remover de `isPerfilLimitado` |
+| `src/hooks/useRouteGuard.ts` | Remover bloco de redirect forcado para `/analista-eventos` |
+
 ## Resultado
 
-- O diretor configura o 0800 em **Configuracoes do Sistema > Empresa > Assistencia Telefone Central**
-- O app do associado exibe o numero configurado em todas as telas de assistencia
-- A IA do WhatsApp envia o numero configurado quando necessario
-- Fallback para `0800 980 0001` caso a config nao exista
-
+- O analista de eventos faz login e ve o dashboard web com sidebar
+- No menu lateral, aparece "Eventos" com Dashboard, Sinistros e Sindicancias
+- Ele acessa as mesmas telas que diretores/gerentes usam para gerenciar eventos
+- As rotas mobile `/analista-eventos/*` continuam funcionando como fallback
