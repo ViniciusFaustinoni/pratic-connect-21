@@ -1,54 +1,36 @@
 
-
-# Adicionar captura de video na Etapa 1 - Auto Vistoria
+# Corrigir tela "Link Invalido" apos conclusao das 3 etapas
 
 ## Problema
 
-A Etapa 1 do link de evento (auto vistoria do associado) solicita apenas fotos. Deve tambem solicitar um video do veiculo danificado.
+Quando o associado completa a etapa 3, a edge function `salvar-etapa-evento` muda o status do link para `"completado"` (linha 132). Em seguida, o frontend chama `validar()` para atualizar os dados, mas a edge function `validar-link-evento` rejeita qualquer link com status diferente de `"ativo"` (linha 57), retornando `valid: false`. Isso faz o frontend exibir "Link Invalido" em vez da tela de sucesso.
 
 ## Solucao
 
-### 1. Frontend: `src/components/evento/EventoEtapa1Vistoria.tsx`
+### Arquivo: `supabase/functions/validar-link-evento/index.ts`
 
-Adicionar uma secao de captura de video abaixo da grade de fotos:
+Alterar a verificacao de status (linha 57) para aceitar tambem o status `"completado"` como valido. Links completados devem retornar `valid: true` para que o frontend exiba a tela de sucesso/agendamento.
 
-- Reutilizar um input `accept="video/*" capture="environment"` simples (o associado usa celular)
-- Exibir preview do video quando capturado
-- Botao de remover video
-- O botao "Proxima Etapa" so habilita quando tiver >= 5 fotos **e** 1 video
-- No submit, enviar o video junto no FormData como `video`
-- Texto: "Grave um video curto (ate 2 minutos) mostrando os danos no veiculo"
-
-Fluxo visual:
-```text
-[Fotos do Veiculo Danificado]
-  - Grade de fotos (existente)
-
-[Video do Veiculo]
-  - Botao "Gravar/Selecionar Video"
-  - Preview do video quando capturado
-  - Indicador de status (pendente/enviado)
-
-[Botao: Proxima Etapa]
-  - Desabilitado ate ter 5+ fotos E 1 video
+Logica atual:
+```
+if (link.status !== "ativo") {
+  return { valid: false, reason: link.status }
+}
 ```
 
-### 2. Backend: `supabase/functions/salvar-etapa-evento/index.ts`
+Logica corrigida:
+```
+if (link.status !== "ativo" && link.status !== "completado") {
+  return { valid: false, reason: link.status }
+}
+```
 
-Atualizar a validacao da etapa 1:
-- Linha 69: Alterar validacao para exigir pelo menos 5 fotos **e** 1 video (verificar se ha arquivo com tipo `video/*` no FormData)
-- Os arquivos de video serao salvos no mesmo bucket `sinistro-eventos` no caminho `{linkId}/etapa1/`
-
-### 3. Mensagem WhatsApp (ja atualizada anteriormente)
-
-Adicionar mencao ao video na descricao da Etapa 1 em `src/pages/eventos/SinistroAnalise.tsx`:
-- Atualizar texto da etapa 1 na mensagem para incluir "e 1 video dos danos"
+Isso permite que o frontend receba os dados do link completado e mostre corretamente a tela de sucesso (EventoSucesso) ou agendamento (EventoAgendamento), pois o componente EventoColisao ja verifica `etapaAtual >= 3` para decidir o que exibir.
 
 ## Detalhes tecnicos
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/evento/EventoEtapa1Vistoria.tsx` | Adicionar state para video, input de captura de video, preview, e incluir no FormData do submit. Condicionar botao a ter fotos + video |
-| `supabase/functions/salvar-etapa-evento/index.ts` | Linha 69: validar que etapa 1 tenha >= 5 fotos e >= 1 video |
-| `src/pages/eventos/SinistroAnalise.tsx` | Atualizar texto da mensagem WhatsApp para mencionar video na etapa 1 |
+| `supabase/functions/validar-link-evento/index.ts` | Linha 57: aceitar status "completado" como valido alem de "ativo" |
 
+Apenas uma linha precisa ser alterada. Nenhuma mudanca no frontend e necessaria pois a logica de exibicao ja esta correta (verifica `etapaAtual >= 3` para mostrar sucesso).
