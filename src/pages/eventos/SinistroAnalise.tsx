@@ -227,6 +227,8 @@ export default function SinistroAnalise() {
   const [valoresPecas, setValoresPecas] = useState<Record<number, number>>({});
   const [fornecedoresPecas, setFornecedoresPecas] = useState<Record<number, { id: string; nome: string }>>({});
   const [salvandoValores, setSalvandoValores] = useState(false);
+  const [reenviandoAssinatura, setReenviandoAssinatura] = useState(false);
+  const [reenviandoPagamento, setReenviandoPagamento] = useState(false);
 
   const {
     sinistro,
@@ -447,6 +449,51 @@ export default function SinistroAnalise() {
     }
   };
 
+  const handleReenviarAssinatura = async () => {
+    if (!sinistro || !associado) return;
+    const telefone = associado.whatsapp || associado.telefone;
+    if (!telefone) { toast.error('Associado não possui telefone cadastrado.'); return; }
+    setReenviandoAssinatura(true);
+    try {
+      const nome = associado.nome?.split(' ')[0] || 'Associado';
+      const mensagem = `Olá ${nome}! Tudo bem?\n\nNotamos que o Termo de Entrada do seu evento ${sinistro.protocolo} ainda não foi assinado.\n\nPara darmos continuidade ao processo, precisamos da sua assinatura digital. É bem rápido e simples!\n\nAcesse o link do email enviado por "Autentique" para assinar.\n\nQualquer dúvida, estamos aqui para ajudar!\n\nABP PraticCar`;
+      const { error } = await supabase.functions.invoke('whatsapp-send-text', { body: { telefone, mensagem } });
+      if (error) throw error;
+      toast.success('Lembrete de assinatura enviado via WhatsApp!');
+    } catch (err: any) {
+      toast.error('Erro ao reenviar: ' + (err.message || 'Tente novamente'));
+    } finally {
+      setReenviandoAssinatura(false);
+    }
+  };
+
+  const handleReenviarPagamento = async () => {
+    if (!sinistro || !associado) return;
+    const telefone = associado.whatsapp || associado.telefone;
+    if (!telefone) { toast.error('Associado não possui telefone cadastrado.'); return; }
+    if (!sinistro.cobranca_cota_id) { toast.error('Nenhuma cobrança vinculada a este evento.'); return; }
+    setReenviandoPagamento(true);
+    try {
+      const { data: cobranca, error: cobErr } = await supabase
+        .from('asaas_cobrancas')
+        .select('asaas_id, valor')
+        .eq('id', sinistro.cobranca_cota_id)
+        .single();
+      if (cobErr || !cobranca) throw new Error('Cobrança não encontrada');
+      const nome = associado.nome?.split(' ')[0] || 'Associado';
+      const valorFmt = cobranca.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const linkPag = `https://www.asaas.com/c/${cobranca.asaas_id}`;
+      const mensagem = `Olá ${nome}! Tudo bem?\n\nO Termo de Entrada do evento ${sinistro.protocolo} já foi assinado com sucesso!\n\nPara que seu veículo seja encaminhado à oficina, falta apenas o pagamento da cota de coparticipação:\n\n💰 Valor: ${valorFmt}\n📋 Link de pagamento: ${linkPag}\n\nApós a confirmação do pagamento, seu evento será encaminhado para reparo.\n\nEstamos à disposição!\n\nABP PraticCar`;
+      const { error } = await supabase.functions.invoke('whatsapp-send-text', { body: { telefone, mensagem } });
+      if (error) throw error;
+      toast.success('Link de pagamento reenviado via WhatsApp!');
+    } catch (err: any) {
+      toast.error('Erro ao reenviar: ' + (err.message || 'Tente novamente'));
+    } finally {
+      setReenviandoPagamento(false);
+    }
+  };
+
   const TipoIcon = tipoConfig[sinistro.tipo]?.icon || FileText;
   const statusInfo = statusConfig[sinistro.status] || { label: sinistro.status, class: '' };
 
@@ -496,6 +543,18 @@ export default function SinistroAnalise() {
             <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
               <AlertTriangle className="h-4 w-4 mr-1" />
               Recém-ativado
+            </Badge>
+          )}
+          {sinistro.autentique_documento_id && !sinistro.termo_anuencia_assinado && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+              <FileCheck className="h-4 w-4 mr-1" />
+              Assinatura Pendente
+            </Badge>
+          )}
+          {sinistro.termo_anuencia_assinado && !sinistro.cota_paga && (
+            <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300">
+              <DollarSign className="h-4 w-4 mr-1" />
+              Pag. Cota Pendente
             </Badge>
           )}
         </div>
@@ -1285,6 +1344,23 @@ export default function SinistroAnalise() {
                         <CheckCircle className="h-4 w-4 flex-shrink-0" />
                         <span><strong>Sinistro aprovado</strong> — aguardando encaminhamento para oficina.</span>
                       </div>
+                      {sinistro.termo_anuencia_assinado && !sinistro.cota_paga && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 p-3 rounded-md bg-orange-50 border border-orange-200 text-orange-800 text-sm">
+                            <DollarSign className="h-4 w-4 flex-shrink-0" />
+                            <span><strong>Pendente de Pagamento da Cota de Coparticipação</strong></span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={handleReenviarPagamento}
+                            disabled={reenviandoPagamento}
+                          >
+                            {reenviandoPagamento ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                            Reenviar Link de Pagamento
+                          </Button>
+                        </div>
+                      )}
                       <Button
                         className="w-full"
                         onClick={() => setShowEnviarOficina(true)}
@@ -1312,9 +1388,20 @@ export default function SinistroAnalise() {
 
                 if (aguardandoAssinatura) {
                   return (
-                    <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-                      <FileCheck className="h-4 w-4 flex-shrink-0" />
-                      <span>Aguardando assinatura do <strong>Termo de Entrada de Evento</strong> pelo associado. Nenhuma ação disponível até a assinatura.</span>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                        <FileCheck className="h-4 w-4 flex-shrink-0" />
+                        <span>Aguardando assinatura do <strong>Termo de Entrada de Evento</strong> pelo associado.</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={handleReenviarAssinatura}
+                        disabled={reenviandoAssinatura}
+                      >
+                        {reenviandoAssinatura ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                        Reenviar Lembrete de Assinatura
+                      </Button>
                     </div>
                   );
                 }
