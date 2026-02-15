@@ -1,243 +1,234 @@
 
+# Expansao do Plano de Contas + Ajustes Finais do Modulo Contabilidade
 
-# Fase 5-5: Modulo Contabilidade Completo conforme Especificacao
+## Contexto
 
-## Resumo
+A implementacao anterior (Fase 5-5) ja entregou toda a estrutura de UI: Dashboard com 6 KPIs e 4 graficos, DRE estruturado com indicadores, Balancete com saldo anterior e niveis, Balanco Patrimonial com comparacao e analise V/H, e Fechamentos com checklist de 10 itens e reabertura.
 
-O modulo de contabilidade existe com estrutura basica funcional, mas esta significativamente simplificado em relacao a especificacao completa. Esta fase implementa todas as lacunas identificadas para atingir o funcionamento completo descrito no documento.
-
----
-
-## Gaps Identificados (Atual vs Especificacao)
-
-### 1. Plano de Contas Incompleto
-O plano atual tem ~47 contas. A especificacao exige ~120+ contas detalhadas. Faltam categorias inteiras:
-- Ativo: PDD, Adiantamentos, Estoques (rastreadores, salvados), Imobilizado completo, Intangivel
-- Passivo: Provisoes (sinistros, indenizacoes, contingencias), contribuicoes antecipadas, valores a restituir
-- Patrimonio Social: superavits/deficits acumulados, reservas estatutarias, fundo de reserva
-- Despesas: toda a estrutura de beneficios mutualistas (reparos, indenizacoes, assistencia 24h, sindicancia, rastreamento), administrativas detalhadas, juridicas, marketing, depreciacao, provisoes
-- Receitas: contribuicao ABP, coparticipacao, vistoria, troca de titularidade, salvados, receitas financeiras
-
-### 2. Dashboard Contabil Limitado
-- Atual: 4 KPIs (Receitas, Despesas, Resultado, Lancamentos) + 1 grafico donut
-- Especificacao: 6 KPIs (Ativo Total, Passivo Total, Patrimonio Social, Receita Acumulada Ano, Despesa Acumulada Ano, Resultado Exercicio) + 4 graficos + sistema de alertas
-
-### 3. DRE Simplificado
-- Atual: lista plana de receitas e despesas, resultado unico
-- Especificacao: DRE estruturado com 8 secoes (Receitas Operacionais, Despesas com Beneficios Mutualistas, Resultado Operacional Bruto, Despesas Administrativas, Resultado Operacional Liquido, Resultado Financeiro, Outras Receitas, Tributos, Superavit/Deficit) + indicadores calculados (sinistralidade, custo administrativo, margens) + comparacao com periodo anterior
-
-### 4. Balancete sem Saldo Anterior
-- Falta: coluna saldo anterior, niveis de detalhamento (sintetico/analitico), comparacao com periodo anterior
-
-### 5. Balanco Patrimonial sem Comparacao
-- Falta: coluna exercicio anterior lado a lado, analise vertical (% do total), analise horizontal (variacao %), notas explicativas
-
-### 6. Fechamento Incompleto
-- Falta: checklist completo com 10 itens, reabertura com motivo e aprovacao, fechamento anual (apuracao do resultado, transferencia para PL, geracao de demonstrativos finais)
+O que falta e a **expansao do plano de contas no banco de dados** (de 47 para ~120 contas) e ajustes pontuais no codigo para cobrir secoes do DRE que a especificacao exige (Tributos, Depreciacao).
 
 ---
 
-## Implementacao
+## Etapa 1 — Inserir contas faltantes no banco
 
-### Etapa 1 — Expandir Plano de Contas (SQL INSERT)
+O plano atual tem 47 contas. A especificacao exige ~120. As contas serao inseridas mantendo a estrutura existente (grupos 1-5), sem renumerar contas com lancamentos.
 
-Inserir todas as contas faltantes no banco via ferramenta de insert. Nao e migracao (sao dados, nao schema). Reorganizar a numeracao conforme especificacao:
+### Grupo 1 — ATIVO (novas contas)
 
-- Grupo 1: Ativo (circulante + nao circulante) — ~25 novas contas
-- Grupo 2: Passivo (circulante + nao circulante + patrimonio social) — ~25 novas contas
-- Grupo 3: Despesas (beneficios mutualistas, administrativas, financeiras, tributarias, depreciacao, provisoes) — ~40 novas contas
-- Grupo 4: Receitas (contribuicoes, outras operacionais, financeiras) — ~15 novas contas
+- 1.1.01.003 Banco Conta Movimento (Bradesco) — pai: 1.1.01
+- 1.1.01.004 Aplicacoes Financeiras de Liquidez Imediata — pai: 1.1.01
+- 1.1.01.005 Conta ASAAS (Gateway) — pai: 1.1.01
+- 1.1.02.003 Cotas de Eventos a Receber — pai: 1.1.02
+- 1.1.02.004 Outras Receitas a Receber — pai: 1.1.02
+- 1.1.02.005 (-) Provisao para Devedores Duvidosos (PDD) — pai: 1.1.02
+- 1.1.03 Adiantamentos e Depositos (sintetica) — pai: 1.1
+- 1.1.03.001 Adiantamento a Fornecedores — pai: 1.1.03
+- 1.1.03.002 Adiantamento a Funcionarios — pai: 1.1.03
+- 1.1.03.003 Despesas Pagas Antecipadamente — pai: 1.1.03
+- 1.1.04 Estoques (sintetica) — pai: 1.1
+- 1.1.04.001 Rastreadores em Estoque — pai: 1.1.04
+- 1.1.04.002 Salvados — pai: 1.1.04
+- 1.2 ATIVO NAO CIRCULANTE (sintetica) — pai: 1
+- 1.2.01 Imobilizado (sintetica) — pai: 1.2
+- 1.2.01.001 Moveis e Utensilios — pai: 1.2.01
+- 1.2.01.002 Equipamentos de Informatica — pai: 1.2.01
+- 1.2.01.003 Veiculos da Associacao — pai: 1.2.01
+- 1.2.01.004 Instalacoes e Benfeitorias — pai: 1.2.01
+- 1.2.01.005 (-) Depreciacao Acumulada — pai: 1.2.01
+- 1.2.02 Intangivel (sintetica) — pai: 1.2
+- 1.2.02.001 Software — pai: 1.2.02
+- 1.2.02.002 (-) Amortizacao Acumulada — pai: 1.2.02
 
-Atualizar `src/lib/contabilidade-config.ts` com os novos IDs das contas inseridas.
+### Grupo 2 — PASSIVO (novas contas)
 
-### Etapa 2 — Dashboard Contabil Completo
+- 2.1.01.003 Prestadores de Servico a Pagar — pai: 2.1.01
+- 2.1.01.004 Assistencia 24h a Pagar — pai: 2.1.01
+- 2.1.01.005 Outros Fornecedores a Pagar — pai: 2.1.01
+- 2.1.02.002 FGTS a Recolher — pai: 2.1.02
+- 2.1.02.003 INSS a Recolher — pai: 2.1.02
+- 2.1.02.004 IRRF a Recolher — pai: 2.1.02
+- 2.1.02.005 Ferias e 13o Provisionados — pai: 2.1.02
+- 2.1.02.006 Comissoes a Pagar — pai: 2.1.02
+- 2.1.03.002 COFINS a Recolher — pai: 2.1.03
+- 2.1.03.003 ISS a Recolher — pai: 2.1.03
+- 2.1.03.004 IRPJ a Recolher — pai: 2.1.03
+- 2.1.03.005 CSLL a Recolher — pai: 2.1.03
+- 2.1.04 Provisoes (sintetica) — pai: 2.1
+- 2.1.04.001 Provisao para Sinistros — pai: 2.1.04
+- 2.1.04.002 Provisao para Indenizacoes — pai: 2.1.04
+- 2.1.04.003 Provisao para Contingencias Judiciais — pai: 2.1.04
+- 2.1.05 Outras Obrigacoes (sintetica) — pai: 2.1
+- 2.1.05.001 Contribuicoes Recebidas Antecipadamente — pai: 2.1.05
+- 2.1.05.002 Valores a Restituir a Associados — pai: 2.1.05
+- 2.2 PASSIVO NAO CIRCULANTE (sintetica) — pai: 2
+- 2.2.01 Provisoes de Longo Prazo (sintetica) — pai: 2.2
+- 2.2.01.001 Provisao para Contingencias LP — pai: 2.2.01
 
-Reescrever `src/pages/contabilidade/ContabilidadeDashboard.tsx`:
+### Grupo 3 — PATRIMONIO SOCIAL (adequar nomenclatura)
 
-**6 KPIs:**
-- Ativo Total: soma saldos devedores das contas grupo 1
-- Passivo Total: soma saldos credores das contas grupo 2 (exceto PL)
-- Patrimonio Social: Ativo - Passivo
-- Receita Acumulada (ano): soma receitas do exercicio corrente
-- Despesa Acumulada (ano): soma despesas do exercicio corrente
-- Resultado do Exercicio: Receita - Despesa (superavit/deficit com cor)
+- Renomear grupo 3 de "PATRIMONIO LIQUIDO" para "PATRIMONIO SOCIAL"
+- Renomear 3.1 de "Capital Social" para "Patrimonio Social Inicial"
+- 3.2.02 Fundo de Reserva para Sinistros — pai: 3.2
+- Renomear 3.3 para "Superavits/Deficits Acumulados"
+- 3.3.01 Superavits Acumulados — pai: 3.3
+- 3.3.02 Deficits Acumulados — pai: 3.3
+- 3.4 Superavit/Deficit do Exercicio Corrente — pai: 3
 
-**4 Graficos (recharts):**
-- Receita vs Despesa por Mes (BarChart agrupado, 12 meses)
-- Composicao do Ativo (PieChart: caixa, contas a receber, imobilizado, outros)
-- Composicao das Despesas por natureza (PieChart: beneficios, administrativas, pessoal, tributarias, depreciacao)
-- Evolucao do Patrimonio Social (LineChart, 12 meses)
+### Grupo 4 — RECEITAS (novas contas)
 
-**Alertas:**
-- Vermelho: resultado mensal deficitario, PL caindo ha 3 meses, lancamentos pendentes
-- Amarelo: fechamento atrasado, provisoes nao registradas, divergencia financeiro/contabilidade
-- Azul: obrigacoes acessorias com prazo proximo
+- 4.1.01.002 Contribuicao Associativa ABP — pai: 4.1.01
+- 4.1.01.003 Cotas de Coparticipacao em Eventos — pai: 4.1.01
+- 4.1.02.002 Taxas de Vistoria — pai: 4.1.02
+- 4.1.02.003 Taxas de Troca de Titularidade — pai: 4.1.02
+- 4.2 OUTRAS RECEITAS OPERACIONAIS (sintetica) — pai: 4
+- 4.2.01 Outras Receitas (sintetica) — pai: 4.2
+- 4.2.01.001 Receita com Venda de Salvados — pai: 4.2.01
+- 4.2.01.002 Recuperacao de Despesas — pai: 4.2.01
+- 4.2.01.003 Receitas Eventuais — pai: 4.2.01
+- 4.3 RECEITAS FINANCEIRAS (sintetica) — pai: 4
+- 4.3.01 Receitas Financeiras (sintetica) — pai: 4.3
+- 4.3.01.001 Rendimentos de Aplicacoes Financeiras — pai: 4.3.01
+- 4.3.01.002 Juros Recebidos — pai: 4.3.01
+- 4.3.01.003 Descontos Obtidos — pai: 4.3.01
 
-### Etapa 3 — DRE Estruturado
+### Grupo 5 — DESPESAS (novas contas)
 
-Reescrever `src/pages/contabilidade/DRE.tsx`:
+- 5.1.01.003 Servicos de Prestadores — pai: 5.1.01
+- 5.1.01.004 Pintura — pai: 5.1.01
+- 5.1.02.003 Carro Reserva — pai: 5.1.02
+- 5.1.02.004 Outros Servicos de Assistencia — pai: 5.1.02
+- 5.1.03.003 Beneficios (VT, VR, plano de saude) — pai: 5.1.03
+- 5.1.03.004 Ferias e 13o — pai: 5.1.03
+- 5.1.03.005 Comissoes de Consultores — pai: 5.1.03
+- 5.1.03.006 Comissoes de Reguladores — pai: 5.1.03
+- 5.1.04.005 Limpeza e Conservacao — pai: 5.1.04
+- 5.2 DESPESAS COM BENEFICIOS DETALHADAS (sintetica) — nao criar, ja mapeado em 5.1.01/5.1.02
+- 5.2 Despesas com Tecnologia (sintetica) — pai: 5
+- 5.2.01 Tecnologia (sintetica) — pai: 5.2
+- 5.2.01.001 Sistemas e Software — pai: 5.2.01
+- 5.2.01.002 Gateway de Pagamento (ASAAS) — pai: 5.2.01
+- 5.2.01.003 Hospedagem e Dominio — pai: 5.2.01
+- 5.2.01.004 Desenvolvimento de Software — pai: 5.2.01
+- 5.3 Despesas Juridicas (sintetica) — pai: 5
+- 5.3.01 Juridicas (sintetica) — pai: 5.3
+- 5.3.01.001 Honorarios Advocaticios — pai: 5.3.01
+- 5.3.01.002 Custas Judiciais — pai: 5.3.01
+- 5.3.01.003 Despesas com Cartorio e SPC/Serasa — pai: 5.3.01
+- 5.4 Despesas com Marketing (sintetica) — pai: 5
+- 5.4.01.001 Publicidade e Propaganda — pai: 5.4
+- 5.4.01.002 Eventos e Patrocinios — pai: 5.4
+- 5.4.01.003 Materiais Impressos — pai: 5.4
+- 5.5 Despesas Tributarias (sintetica) — pai: 5
+- 5.5.01.001 PIS sobre Receita — pai: 5.5
+- 5.5.01.002 COFINS sobre Receita — pai: 5.5
+- 5.5.01.003 ISS — pai: 5.5
+- 5.5.01.004 IRPJ — pai: 5.5
+- 5.5.01.005 CSLL — pai: 5.5
+- 5.5.01.006 IPTU — pai: 5.5
+- 5.6 Depreciacao e Amortizacao (sintetica) — pai: 5
+- 5.6.01.001 Depreciacao de Imobilizado — pai: 5.6
+- 5.6.01.002 Amortizacao de Intangivel — pai: 5.6
+- 5.7 Provisoes (sintetica) — pai: 5
+- 5.7.01.001 Provisao para Devedores Duvidosos — pai: 5.7
+- 5.7.01.002 Provisao para Contingencias — pai: 5.7
+- 5.8 Despesas com Sindicancia e Pericia (sintetica) — pai: 5
+- 5.8.01.001 Empresas de Sindicancia — pai: 5.8
+- 5.8.01.002 Pericia Tecnica — pai: 5.8
+- 5.9 Despesas com Rastreamento (sintetica) — pai: 5
+- 5.9.01.001 Mensalidade de Rastreadores — pai: 5.9
+- 5.9.01.002 Instalacao de Rastreadores — pai: 5.9
+- 5.9.01.003 Manutencao de Rastreadores — pai: 5.9
 
-**Estrutura do DRE:**
+Total: ~75 novas contas a inserir.
+
+---
+
+## Etapa 2 — Renomear contas existentes
+
+- `3` PATRIMONIO LIQUIDO -> PATRIMONIO SOCIAL
+- `3.1` Capital Social -> Patrimonio Social Inicial
+- `3.3` Resultado Acumulado -> Superavits/Deficits Acumulados
+- `2.1.03.001` Impostos a Pagar -> PIS a Recolher (primeiro imposto, os demais serao novas contas)
+
+---
+
+## Etapa 3 — Atualizar DRE para incluir secoes faltantes
+
+Modificar `useDREEstruturado` em `src/hooks/useContabilidade.ts` para adicionar secoes:
+
+- **Despesas com Sindicancia/Pericia**: prefixo `5.8`
+- **Despesas com Rastreamento**: prefixo `5.9`
+- **Despesas com Tecnologia**: prefixo `5.2`
+- **Despesas Juridicas**: prefixo `5.3`
+- **Despesas com Marketing**: prefixo `5.4`
+- **Tributos**: prefixo `5.5`
+- **Depreciacao e Amortizacao**: prefixo `5.6`
+- **Provisoes**: prefixo `5.7`
+
+Reorganizar o DRE conforme especificacao:
+
 ```text
-RECEITAS OPERACIONAIS
-  Contribuicoes Mensais
-  Taxas de Adesao
-  Cotas de Coparticipacao
-  Contribuicao ABP
-  Taxas de Vistoria e Outros
-TOTAL RECEITAS OPERACIONAIS
-
-(-) DESPESAS COM BENEFICIOS MUTUALISTAS
-  Reparos de Veiculos
-  Indenizacoes
-  Assistencia 24h
-  Sindicancia e Pericia
-  Rastreamento
-TOTAL DESPESAS COM BENEFICIOS
-
+RECEITAS OPERACIONAIS (4.1)
+(-) DESP. BENEFICIOS MUTUALISTAS (5.1.01, 5.1.02, 5.8, 5.9)
 RESULTADO OPERACIONAL BRUTO
-  Margem bruta: X%
-
-(-) DESPESAS ADMINISTRATIVAS
-  Pessoal
-  Gerais
-  Tecnologia
-  Juridicas
-  Marketing
-  Depreciacao e Amortizacao
-  Provisao PDD
-TOTAL DESPESAS ADMINISTRATIVAS
-
+(-) DESP. ADMINISTRATIVAS (5.1.03, 5.1.04, 5.2, 5.3, 5.4, 5.6, 5.7)
 RESULTADO OPERACIONAL LIQUIDO
-
-(+/-) RESULTADO FINANCEIRO
-  Receitas Financeiras
-  (-) Despesas Financeiras
-
-(+/-) OUTRAS RECEITAS/DESPESAS
-  Venda de Salvados
-  Recuperacao de Despesas
-  Multas e Juros Recebidos
-
+(+/-) RESULTADO FINANCEIRO (4.3 - 5.1.05)
+(+/-) OUTRAS RECEITAS (4.2)
 RESULTADO ANTES DOS TRIBUTOS
-
-(-) TRIBUTOS
-
-SUPERAVIT (DEFICIT) DO EXERCICIO
-  Margem final: X%
+(-) TRIBUTOS (5.5)
+SUPERAVIT/DEFICIT DO EXERCICIO
 ```
 
-**Indicadores calculados:**
-- Sinistralidade: despesas beneficios / receita total (ideal < 65%)
-- Custo Administrativo: despesas admin / receita total (ideal < 25%)
-- Margem Operacional: resultado operacional / receita total
-- Margem Final: superavit / receita total
-
-**Comparacao com periodo anterior** (coluna lado a lado) e analise horizontal (variacao %).
-
-**Periodo:** opcao de mensal ou exercicio completo (acumulado Jan-Dez).
-
-### Etapa 4 — Balancete Aprimorado
-
-Modificar `src/pages/contabilidade/Balancete.tsx`:
-
-- Adicionar coluna **Saldo Anterior** (buscar saldos do mes anterior)
-- Seletor de **nivel de detalhamento** (sintetico nivel 2 / analitico nivel 4 / personalizado)
-- Botao **Comparar com Periodo Anterior** (mostra 2 periodos lado a lado)
-- Exportar Excel (CSV ja existe)
-
-### Etapa 5 — Balanco Patrimonial Aprimorado
-
-Modificar `src/pages/contabilidade/BalancoPatrimonial.tsx`:
-
-- Adicionar coluna **Exercicio Anterior** (buscar dados do mesmo mes do ano anterior)
-- **Analise Vertical**: % de cada linha em relacao ao total do grupo
-- **Analise Horizontal**: variacao % de cada linha vs exercicio anterior
-- Toggle para mostrar/ocultar analises
-- Campo **Notas Explicativas** (textarea para o contador)
-- Titulo correto: "Patrimonio Social" ao inves de "Patrimonio Liquido"
-
-### Etapa 6 — Fechamento Completo
-
-Reescrever `src/pages/contabilidade/Fechamentos.tsx`:
-
-**Checklist de Fechamento Mensal (10 itens):**
-1. Todos os lancamentos automaticos classificados
-2. Conciliacao bancaria concluida
-3. Depreciacao mensal registrada
-4. PDD atualizada
-5. Provisao ferias e 13o atualizada
-6. Provisao para sinistros atualizada
-7. Impostos apurados e registrados
-8. Balancete confere (diferenca = 0)
-9. Receitas e despesas revisadas
-10. Nenhum lancamento pendente de aprovacao
-
-Itens 3, 8, 10 podem ser verificados automaticamente pelo sistema. Os demais sao marcados manualmente pelo contador.
-
-**Reabertura:**
-- Botao "Reabrir Periodo" nos meses fechados
-- Dialog com campo motivo (obrigatorio)
-- Registro de quem reabriu, quando, motivo
-- Status muda para "reaberto"
-
-**Fechamento Anual:**
-- Botao "Fechar Exercicio [ano]" — so disponivel quando 12 meses fechados
-- Apuracao automatica: Total Receitas - Total Despesas = Superavit/Deficit
-- Lancamento automatico de transferencia para PL (zera contas 3 e 4, transfere para 2.3)
-- Geracao dos demonstrativos finais (Balanco + DRE do exercicio)
-- Calendario de obrigacoes acessorias com alertas (DCTF, ECD, ECF)
+Modificar `src/pages/contabilidade/DRE.tsx` para renderizar a secao de Tributos e Resultado Antes dos Tributos.
 
 ---
 
-## Arquivos a Criar
+## Etapa 4 — Atualizar contabilidade-config.ts
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/components/contabilidade/AlertasContabeis.tsx` | Sistema de alertas contabeis (vermelho/amarelo/azul) |
-| `src/components/contabilidade/ChecklistFechamento.tsx` | Checklist de 10 itens para fechamento mensal |
-| `src/components/contabilidade/FechamentoAnual.tsx` | Dialog/fluxo de fechamento do exercicio |
-| `src/components/contabilidade/IndicadoresDRE.tsx` | Cards de indicadores (sinistralidade, margens) |
+Apos inserir as contas, capturar os IDs gerados e atualizar `CONTAS_PADRAO` com as novas contas relevantes para lancamentos automaticos:
+- PDD, Provisao para Sinistros, Provisao para Indenizacoes
+- Novas contas de receita (ABP, coparticipacao, vistoria)
+- Novas contas de despesa detalhadas
+
+Atualizar `RECEITA_POR_TIPO` e `DESPESA_POR_CATEGORIA` com mapeamentos mais precisos.
+
+---
+
+## Etapa 5 — Atualizar Dashboard para novos prefixos de despesa
+
+Modificar o agrupamento de despesas por natureza no dashboard (`ContabilidadeDashboard.tsx`) para reconhecer os novos prefixos:
+- `5.1.01`, `5.1.02`, `5.8`, `5.9` -> Beneficios/Sinistros
+- `5.1.03` -> Pessoal
+- `5.1.04`, `5.2` -> Administrativas/Tecnologia
+- `5.1.05` -> Financeiras
+- `5.3` -> Juridicas
+- `5.4` -> Marketing
+- `5.5` -> Tributarias
+- `5.6` -> Depreciacao
+
+---
 
 ## Arquivos a Modificar
 
-| Arquivo | Mudancas |
-|---------|----------|
-| `src/pages/contabilidade/ContabilidadeDashboard.tsx` | Reescrever: 6 KPIs, 4 graficos, alertas |
-| `src/pages/contabilidade/DRE.tsx` | Reescrever: estrutura completa, indicadores, comparacao |
-| `src/pages/contabilidade/Balancete.tsx` | Adicionar saldo anterior, niveis, comparacao |
-| `src/pages/contabilidade/BalancoPatrimonial.tsx` | Adicionar exercicio anterior, analise V/H, notas |
-| `src/pages/contabilidade/Fechamentos.tsx` | Checklist completo, reabertura, fechamento anual |
-| `src/hooks/useContabilidade.ts` | Novos hooks: useAtivoTotal, usePassivoTotal, usePatrimonioSocial, useDREEstruturado, useReabrirFechamento, useFechamentoAnual |
-| `src/lib/contabilidade-config.ts` | Atualizar mapeamentos com novos IDs de contas |
-| `src/components/contabilidade/index.ts` | Exportar novos componentes |
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/hooks/useContabilidade.ts` | Atualizar `useDREEstruturado` com novos prefixos e secao de tributos |
+| `src/pages/contabilidade/DRE.tsx` | Renderizar secao Tributos e Resultado Antes dos Tributos |
+| `src/pages/contabilidade/ContabilidadeDashboard.tsx` | Atualizar agrupamento de despesas por natureza |
+| `src/lib/contabilidade-config.ts` | Adicionar novos IDs de contas e mapeamentos |
 
-## Dados a Inserir (SQL INSERT — nao migracao)
+## SQL a Executar no SQL Editor
 
-Inserir ~80 novas contas no plano de contas seguindo a estrutura completa da especificacao. Exemplo das categorias principais:
-- 1.1.02.003 a 1.1.02.005 (Contas a Receber detalhadas + PDD)
-- 1.1.03.x (Adiantamentos)
-- 1.1.04.x (Estoques: rastreadores, salvados)
-- 1.2.x (Imobilizado, Intangivel com depreciacao/amortizacao)
-- 2.1.01.003 a 2.1.01.005 (Fornecedores detalhados)
-- 2.1.02.x (Obrigacoes trabalhistas detalhadas)
-- 2.1.03.x (Obrigacoes fiscais detalhadas)
-- 2.1.04.x (Provisoes: sinistros, indenizacoes, contingencias)
-- 2.1.05.x (Outras obrigacoes)
-- 2.2.x (Passivo nao circulante)
-- 2.3.x (Patrimonio Social completo) — reajustar do grupo 3 atual para grupo 2.3
-- 3.1.x a 3.6.x (Despesas detalhadas) — reajustar do grupo 5 atual
-- 4.1.x a 4.3.x (Receitas detalhadas) — reajustar do grupo 4 atual
+Um grande bloco INSERT com ~75 contas + UPDATE para renomear as existentes. Sera fornecido como SQL para execucao manual.
 
-**Nota importante:** A numeracao atual usa 1-5 (1=Ativo, 2=Passivo, 3=PL, 4=Receitas, 5=Despesas). A especificacao usa 1-4 (1=Ativo, 2=Passivo+PL, 3=Despesas, 4=Receitas). Como ja existem lancamentos com as contas atuais, NÃO vamos renumerar — vamos adicionar as contas faltantes DENTRO da estrutura existente (grupos 1-5 atuais), mantendo compatibilidade com lancamentos ja registrados.
+---
 
 ## Detalhes Tecnicos
 
-- Todos os calculos de KPI usam regime de competencia (data_competencia)
-- Graficos usam recharts (ja instalado): BarChart, PieChart, LineChart, ResponsiveContainer
-- Saldo anterior calculado via soma de partidas ate o ultimo dia do mes anterior
-- Comparacao com periodo anterior: query duplicada com datas do ano anterior
-- Fechamento anual gera lancamento automatico via `useLancamentosContabeis.criarLancamentoAutomatico`
-- Checklist persistido no campo JSONB existente ou em nova coluna no fechamentos_contabeis
-- Nenhuma nova tabela necessaria — a estrutura de banco atual suporta tudo
-
+- INSERTs usam `gen_random_uuid()` para gerar IDs
+- Contas sinteticas: `sintetica = true`, `aceita_lancamento = false`
+- Contas analiticas: `sintetica = false`, `aceita_lancamento = true`
+- Natureza: ativo = devedora, passivo/PL/receita = credora, despesa = devedora
+- Ordem segue o codigo numerico
+- Apos INSERT, consultar IDs gerados para atualizar `contabilidade-config.ts`
