@@ -155,7 +155,7 @@ function InfoItem({
 export default function SinistroAnalise() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isDiretor } = usePermissions();
+  const { isDiretor, isAnalistaEventos } = usePermissions();
 
   const [showAprovar, setShowAprovar] = useState(false);
   const [showReprovar, setShowReprovar] = useState(false);
@@ -208,13 +208,13 @@ export default function SinistroAnalise() {
   };
 
   // Verificar acesso
-  if (!isDiretor) {
+  if (!isDiretor && !isAnalistaEventos) {
     return (
       <div className="text-center py-12">
         <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-warning" />
         <h2 className="text-xl font-semibold text-foreground">Acesso Restrito</h2>
         <p className="text-muted-foreground mt-2">
-          Apenas diretores podem analisar sinistros.
+          Apenas diretores e analistas de eventos podem analisar sinistros.
         </p>
         <Button variant="outline" className="mt-4" onClick={() => navigate('/eventos/sinistros')}>
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -655,7 +655,7 @@ export default function SinistroAnalise() {
                         <span>Aguardando envio de {docsPendentes.length} documento(s) solicitado(s)</span>
                       </div>
                     )}
-                    {!temDocsPendentes && (
+                    {isDiretor && !temDocsPendentes && (
                       <Button
                         className="w-full bg-green-600 hover:bg-green-700 text-white"
                         onClick={() => setShowAprovar(true)}
@@ -664,14 +664,22 @@ export default function SinistroAnalise() {
                         Aprovar Sinistro
                       </Button>
                     )}
-                    <Button
-                      variant="destructive"
-                      className="w-full"
-                      onClick={() => setShowReprovar(true)}
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Reprovar Sinistro
-                    </Button>
+                    {isDiretor && (
+                      <Button
+                        variant="destructive"
+                        className="w-full"
+                        onClick={() => setShowReprovar(true)}
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Reprovar Sinistro
+                      </Button>
+                    )}
+                    {!isDiretor && isAnalistaEventos && (
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                        <FileCheck className="h-4 w-4 flex-shrink-0" />
+                        <span>Analise o sinistro e encaminhe para aprovação da diretoria.</span>
+                      </div>
+                    )}
                     {!temDocsPendentes && (
                       <Button
                         variant="outline"

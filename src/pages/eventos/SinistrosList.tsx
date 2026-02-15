@@ -83,7 +83,7 @@ interface Filters {
 
 export default function SinistrosList() {
   const navigate = useNavigate();
-  const { isDiretor } = usePermissions();
+  const { isDiretor, isAnalistaEventos } = usePermissions();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>({
     busca: '',
@@ -436,7 +436,7 @@ export default function SinistrosList() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {isDiretor && sinistro.status === 'comunicado' && (
+                          {(isDiretor || isAnalistaEventos) && (sinistro.status === 'comunicado' || sinistro.status === 'em_analise') && (
                             <Button
                               variant="default"
                               size="icon"
