@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Calculator, Handshake, FileText, User } from 'lucide-react';
+import { ArrowLeft, Calculator, Handshake, FileText, User, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,9 +9,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAcordos } from '@/hooks/useAcordos';
+import { useAuth } from '@/contexts/AuthContext';
 import { format, addMonths } from 'date-fns';
 
 const formatCurrency = (value: number) =>
@@ -23,11 +25,41 @@ const formatCpf = (cpf: string) => {
   return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9)}`;
 };
 
+// Configuração de faixas de desconto (configurável)
+const DESCONTO_CONFIG = {
+  jurosMulta: { maxPct: 100, aprovacaoAuto: true },
+  principal: {
+    faixas: [
+      { maxPct: 10, aprovacao: 'auto', label: 'Operador' },
+      { maxPct: 20, aprovacao: 'financeiro', label: 'Financeiro (Priscila)' },
+      { maxPct: 100, aprovacao: 'diretor', label: 'Diretor (Adriano)' },
+    ],
+  },
+};
+
+const PARCELAS_CONFIG = {
+  min: 2,
+  max: 12,
+  valorMinimo: 50,
+};
+
+type AprovacaoNivel = 'auto' | 'financeiro' | 'diretor';
+
+function getDescontoAprovacao(descontoPctPrincipal: number): { nivel: AprovacaoNivel; label: string } {
+  for (const faixa of DESCONTO_CONFIG.principal.faixas) {
+    if (descontoPctPrincipal <= faixa.maxPct) {
+      return { nivel: faixa.aprovacao as AprovacaoNivel, label: faixa.label };
+    }
+  }
+  return { nivel: 'diretor', label: 'Diretor' };
+}
+
 const NovoAcordo = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const associadoId = searchParams.get('associado');
   const boletosIds = searchParams.get('boletos')?.split(',').filter(Boolean) || [];
+  const { hasRole } = useAuth();
 
   const { criarAcordo, isCriando } = useAcordos();
 
@@ -96,6 +128,51 @@ const NovoAcordo = () => {
     return valorRestante / qtdParcelas;
   }, [valorRestante, qtdParcelas]);
 
+  // Validações
+  const aprovacao = useMemo(() => {
+    return getDescontoAprovacao(descontoPct);
+  }, [descontoPct]);
+
+  const precisaAprovacao = aprovacao.nivel !== 'auto';
+
+  const podeAprovarDireto = useMemo(() => {
+    if (aprovacao.nivel === 'auto') return true;
+    // Financeiro e diretor aprovam descontos de 11-20%, apenas diretor acima de 20%
+    if (aprovacao.nivel === 'financeiro') return hasRole('diretor');
+    if (aprovacao.nivel === 'diretor') return hasRole('diretor');
+    return false;
+  }, [aprovacao.nivel, hasRole]);
+
+  const validacoes = useMemo(() => {
+    const erros: string[] = [];
+    const avisos: string[] = [];
+
+    if (qtdParcelas < PARCELAS_CONFIG.min) {
+      erros.push(`Mínimo de ${PARCELAS_CONFIG.min} parcelas`);
+    }
+    if (qtdParcelas > PARCELAS_CONFIG.max) {
+      erros.push(`Máximo de ${PARCELAS_CONFIG.max} parcelas`);
+    }
+    if (valorParcela > 0 && valorParcela < PARCELAS_CONFIG.valorMinimo) {
+      erros.push(`Valor mínimo da parcela: ${formatCurrency(PARCELAS_CONFIG.valorMinimo)}`);
+    }
+    if (descontoPct > 100) {
+      erros.push('Desconto não pode ultrapassar 100%');
+    }
+    if (valorEntrada > valorAcordo) {
+      erros.push('Entrada não pode ser maior que o valor do acordo');
+    }
+    if (valorParcela <= 0 && qtdParcelas > 0) {
+      erros.push('Valor do acordo deve ser positivo');
+    }
+
+    if (precisaAprovacao && !podeAprovarDireto) {
+      avisos.push(`Desconto de ${descontoPct}% no principal requer aprovação de: ${aprovacao.label}`);
+    }
+
+    return { erros, avisos, valido: erros.length === 0 };
+  }, [qtdParcelas, valorParcela, descontoPct, valorEntrada, valorAcordo, precisaAprovacao, podeAprovarDireto, aprovacao.label]);
+
   // Preview parcelas
   const previewParcelas = useMemo(() => {
     const parcelas = [];
@@ -117,7 +194,7 @@ const NovoAcordo = () => {
   }, [qtdParcelas, primeiraParcela, diaVencimento, valorParcela]);
 
   const handleSubmit = async () => {
-    if (!associadoId || boletosIds.length === 0) return;
+    if (!associadoId || boletosIds.length === 0 || !validacoes.valido) return;
 
     await criarAcordo({
       associado_id: associadoId,
@@ -130,7 +207,10 @@ const NovoAcordo = () => {
       valor_parcela: valorParcela,
       dia_vencimento: diaVencimento,
       primeira_parcela_data: primeiraParcela,
-      valor_entrada: valorEntrada > 0 ? valorEntrada : undefined
+      valor_entrada: valorEntrada > 0 ? valorEntrada : undefined,
+      // Se precisa aprovação e o usuário não tem permissão para aprovar direto,
+      // o acordo é criado com status 'aguardando_aprovacao'
+      ...(precisaAprovacao && !podeAprovarDireto ? { status_override: 'aguardando_aprovacao' } : {}),
     });
 
     navigate('/cobranca/acordos');
@@ -173,6 +253,29 @@ const NovoAcordo = () => {
           <h1 className="text-2xl font-bold">Novo Acordo</h1>
         </div>
       </div>
+
+      {/* Alertas de validação */}
+      {validacoes.erros.length > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <ul className="list-disc pl-4 space-y-1">
+              {validacoes.erros.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {validacoes.avisos.length > 0 && (
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <ShieldCheck className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">
+            <ul className="list-disc pl-4 space-y-1">
+              {validacoes.avisos.map((a, i) => <li key={i}>{a}</li>)}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Coluna Esquerda - Dados */}
@@ -250,7 +353,7 @@ const NovoAcordo = () => {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Desconto (%)</Label>
+                  <Label>Desconto no principal (%)</Label>
                   <Input
                     type="number"
                     min={0}
@@ -258,6 +361,15 @@ const NovoAcordo = () => {
                     value={descontoPct}
                     onChange={(e) => setDescontoPct(Number(e.target.value))}
                   />
+                  {descontoPct > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {descontoPct <= 10
+                        ? '✅ Aprovação automática'
+                        : descontoPct <= 20
+                          ? '⚠️ Requer aprovação do Financeiro'
+                          : '🔒 Requer aprovação do Diretor'}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Juros (%)</Label>
@@ -272,11 +384,11 @@ const NovoAcordo = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Nº de Parcelas</Label>
+                  <Label>Nº de Parcelas ({PARCELAS_CONFIG.min}-{PARCELAS_CONFIG.max})</Label>
                   <Input
                     type="number"
-                    min={1}
-                    max={24}
+                    min={PARCELAS_CONFIG.min}
+                    max={PARCELAS_CONFIG.max}
                     value={qtdParcelas}
                     onChange={(e) => setQtdParcelas(Number(e.target.value))}
                   />
@@ -311,6 +423,15 @@ const NovoAcordo = () => {
                     onChange={(e) => setValorEntrada(Number(e.target.value))}
                   />
                 </div>
+              </div>
+
+              {/* Regras de desconto */}
+              <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">Política de desconto:</p>
+                <p>• Até 10% no principal — aprovação automática</p>
+                <p>• 11% a 20% — requer aprovação do Financeiro</p>
+                <p>• Acima de 20% — requer aprovação do Diretor</p>
+                <p>• Parcelas: {PARCELAS_CONFIG.min} a {PARCELAS_CONFIG.max}x, mínimo {formatCurrency(PARCELAS_CONFIG.valorMinimo)}/parcela</p>
               </div>
             </CardContent>
           </Card>
@@ -365,6 +486,23 @@ const NovoAcordo = () => {
                 <p className="text-3xl font-bold text-primary">{formatCurrency(valorParcela)}</p>
                 <p className="text-sm text-muted-foreground">{qtdParcelas}x parcelas</p>
               </div>
+
+              {/* Status de aprovação */}
+              {precisaAprovacao && (
+                <div className={`p-3 rounded-lg text-sm ${podeAprovarDireto ? 'bg-green-50 border-green-200 text-green-800' : 'bg-yellow-50 border-yellow-200 text-yellow-800'} border`}>
+                  {podeAprovarDireto ? (
+                    <p className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Você tem permissão para aprovar este desconto
+                    </p>
+                  ) : (
+                    <p className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Será enviado para aprovação: {aprovacao.label}
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -402,9 +540,13 @@ const NovoAcordo = () => {
             className="w-full"
             size="lg"
             onClick={handleSubmit}
-            disabled={isCriando || valorParcela <= 0}
+            disabled={isCriando || !validacoes.valido}
           >
-            {isCriando ? 'Criando...' : 'Criar Acordo'}
+            {isCriando 
+              ? 'Criando...' 
+              : precisaAprovacao && !podeAprovarDireto
+                ? 'Enviar para Aprovação'
+                : 'Criar Acordo'}
           </Button>
         </div>
       </div>

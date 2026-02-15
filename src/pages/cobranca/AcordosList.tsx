@@ -24,6 +24,7 @@ const getStatusBadge = (status: string) => {
   const map: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     'ativo': { label: 'Ativo', variant: 'default' },
     'pendente': { label: 'Aguardando Entrada', variant: 'secondary' },
+    'aguardando_aprovacao': { label: 'Aguardando Aprovação', variant: 'secondary' },
     'quitado': { label: 'Quitado', variant: 'outline' },
     'quebrado': { label: 'Quebrado', variant: 'destructive' },
     'cancelado': { label: 'Cancelado', variant: 'secondary' }
@@ -43,6 +44,7 @@ const AcordosList = () => {
     ativos: acordos.filter(a => a.status === 'ativo').length,
     quitados: acordos.filter(a => a.status === 'quitado').length,
     quebrados: acordos.filter(a => a.status === 'quebrado').length,
+    aguardandoAprovacao: acordos.filter(a => a.status === 'aguardando_aprovacao').length,
     valorTotal: acordos.filter(a => a.status === 'ativo').reduce((acc, a) => acc + (a.valor_acordo || 0), 0)
   };
 
@@ -80,7 +82,7 @@ const AcordosList = () => {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -117,6 +119,20 @@ const AcordosList = () => {
           </CardContent>
         </Card>
 
+        {stats.aguardandoAprovacao > 0 && (
+          <Card className="border-yellow-200">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-yellow-600 flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Aguardando Aprovação
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-yellow-600">{stats.aguardandoAprovacao}</p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -151,6 +167,7 @@ const AcordosList = () => {
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="ativo">Ativos</SelectItem>
                 <SelectItem value="pendente">Aguardando Entrada</SelectItem>
+                <SelectItem value="aguardando_aprovacao">Aguardando Aprovação</SelectItem>
                 <SelectItem value="quitado">Quitados</SelectItem>
                 <SelectItem value="quebrado">Quebrados</SelectItem>
                 <SelectItem value="cancelado">Cancelados</SelectItem>

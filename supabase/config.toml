@@ -443,3 +443,6 @@ verify_jwt = false
 
 [functions.cron-gerar-despesas-recorrentes]
 verify_jwt = false
+
+[functions.verificar-acordos-quebrados]
+verify_jwt = false
