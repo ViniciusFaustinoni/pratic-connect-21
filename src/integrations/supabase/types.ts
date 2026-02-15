@@ -14428,6 +14428,92 @@ export type Database = {
           },
         ]
       }
+      pesquisas_antecedentes: {
+        Row: {
+          associado_id: string | null
+          cpf_cnpj: string
+          created_at: string | null
+          id: string
+          nome: string
+          pesquisado_por: string | null
+          processo_id: string | null
+          resultado: Json
+          score_risco: string | null
+        }
+        Insert: {
+          associado_id?: string | null
+          cpf_cnpj: string
+          created_at?: string | null
+          id?: string
+          nome: string
+          pesquisado_por?: string | null
+          processo_id?: string | null
+          resultado?: Json
+          score_risco?: string | null
+        }
+        Update: {
+          associado_id?: string | null
+          cpf_cnpj?: string
+          created_at?: string | null
+          id?: string
+          nome?: string
+          pesquisado_por?: string | null
+          processo_id?: string | null
+          resultado?: Json
+          score_risco?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pesquisas_antecedentes_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_benefits: {
         Row: {
           additional_info: string | null

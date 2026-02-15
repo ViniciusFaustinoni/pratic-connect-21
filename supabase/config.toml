@@ -437,3 +437,6 @@ verify_jwt = false
 
 [functions.cron-verificar-prazos]
 verify_jwt = false
+
+[functions.pesquisar-antecedentes]
+verify_jwt = false

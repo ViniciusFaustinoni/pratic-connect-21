@@ -297,7 +297,8 @@ const menuConfig: {
         { title: 'Advogados', url: '/juridico/advogados', icon: Users },
         { title: 'Prazos', url: '/juridico/prazos', icon: Clock },
         { title: 'Audiências', url: '/juridico/audiencias', icon: Calendar },
-        { title: 'Consultas', url: '/juridico/consultas', icon: HelpCircle },
+        { title: 'Consultas 360', url: '/juridico/consultas', icon: Search },
+        { title: 'Pareceres', url: '/juridico/pareceres', icon: HelpCircle },
       ],
     },
     {
