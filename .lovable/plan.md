@@ -1,105 +1,112 @@
 
-
-# Nova Area de Alertas em Monitoramento
+# Preenchimento de Valor de Pecas e Solicitacao de Orcamentos pelo Analista de Eventos
 
 ## Resumo
 
-Criar uma nova pagina dedicada `/monitoramento/alertas` dentro do modulo de Monitoramento que exibe todos os alertas recebidos via webhook da Softruck e de outras fontes. Essa pagina sera uma versao completa e expandida do widget `AlertasWidget` que ja existe no dashboard do coordenador.
+Na tela de analise do sinistro (`SinistroAnalise.tsx`), a tabela de "Itens do Orcamento" atualmente mostra apenas descricao, tipo e quantidade. O plano adiciona:
 
-Alem disso, o webhook `softruck-webhook` sera atualizado para suportar os novos tipos de eventos fornecidos pela Softruck (Service Orders, Provider, Section, Custom Fields, Completion, Acknowledgement).
+1. **Campo de valor editavel** nas pecas (somente pecas) com botao de salvar
+2. **Botao "Solicitar Orcamento"** que abre um modal com Auto Centers/Ferro Velhos/Montadoras compativeis
+3. **Fluxo de cotacao via WhatsApp com IA** (reutilizando a infra existente)
+4. **Card "Orcamentos Recebidos"** mostrando valores por estabelecimento (ja existe como `CotacoesRecebidasTab`)
 
-## O que ja existe
-
-- Tabela `rastreador_alertas` com campos: id, rastreador_id, tipo, severidade, mensagem, dados, status, tratado_por, tratado_em, observacao_tratamento
-- Tabela `softruck_eventos` que registra todos os webhooks recebidos
-- View `view_alertas_ativos` usada pelo `AlertasWidget`
-- Edge Function `softruck-webhook` que ja processa DEVICES.ASSOCIATED, DEVICES.DISASSOCIATED, VEHICLES.CREATED, VEHICLES.DELETED e device-events
-- Componente `AlertasWidget` (widget compacto usado no dashboard)
-- Componente `SoftruckWebhooksPanel` (painel tecnico de eventos)
+---
 
 ## Alteracoes
 
-### 1. Nova pagina: `src/pages/monitoramento/AlertasMonitoramento.tsx`
+### 1. Tabela de Itens do Orcamento — Valor editavel para pecas
 
-Pagina completa de alertas com:
-- Cards de metricas no topo (total abertos, criticos, visualizados, tratados hoje)
-- Filtros: por tipo (sem_comunicacao, bateria_baixa, desinstalacao, offline, veiculo_removido, os_atualizada, os_concluida, device_associado, device_desassociado), por severidade (critica, alta, media, baixa), por status (aberto, visualizado, tratado, ignorado)
-- Lista de alertas com acoes (visualizar, tratar, ignorar, WhatsApp)
-- Cada alerta mostra: placa/rastreador, associado, tipo, severidade, mensagem, tempo decorrido
-- Usa a mesma `view_alertas_ativos` e tabela `rastreador_alertas`
-- Opcao de ver tambem alertas ja tratados/ignorados (toggle "Mostrar todos")
+**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx` (secao ~linhas 892-929)
 
-### 2. Atualizar Edge Function `softruck-webhook`
+- Adicionar coluna "Valor Unit." na tabela de itens do orcamento
+- Para itens do tipo `peca`: renderizar um `<Input type="number">` editavel
+- Para itens de mao de obra/servico: exibir o valor ja preenchido pelo regulador (somente leitura)
+- Usar estado local (`useState`) para armazenar valores editados das pecas
+- Botao "Salvar Valores" abaixo da tabela (visivel apenas quando ha alteracoes pendentes)
+- Ao salvar: atualizar o campo `dados_vistoria.itens_orcamento` na tabela `vistorias_evento` com os novos valores das pecas
 
-Adicionar handlers para os novos tipos de eventos:
-- `TASKS.UPDATED` / `TASKS.DELETED` - Ordem de servico atualizada/removida
-- `TASKS.COMPLETED` / `TASKS.UNCOMPLETED` - OS concluida/reaberta
-- `TASKS.ASSIGNEE_UPDATED` / `TASKS.ASSIGNEE_DELETED` - Prestador atualizado
-- `TASKS.SECTION_UPDATED` / `TASKS.SECTION_DELETED` - Secao da OS
-- `TASKS.CUSTOM_FIELDS_UPDATED` / `TASKS.CUSTOM_FIELDS_DELETED` - Campos customizados
-- `TASKS.ACKNOWLEDGEMENT_UPDATED` / `TASKS.ACKNOWLEDGEMENT_DELETED` - Ciencia de OS
-- `DEVICES.ASSOCIATED` / `DEVICES.ASSOCIATION_UPDATED` / `DEVICES.DISASSOCIATED` (ja existem parcialmente)
+### 2. Botao "Solicitar Orcamento"
 
-Para cada tipo, o webhook:
-1. Ja registra na `softruck_eventos` (isso ja funciona para qualquer payload)
-2. Cria alerta na `rastreador_alertas` com tipo e severidade adequados
-3. Extrai dados relevantes do `data.params` (formato padrao Softruck)
+**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
 
-A estrutura de payload da Softruck segue o padrao `{ data: { type: "TIPO", platform: "WEBHOOK", params: { ... } } }`, entao o parser sera atualizado para reconhecer esse formato.
+- Adicionar botao "Solicitar Orcamento" logo abaixo da tabela de itens (ao lado do botao Salvar)
+- Ao clicar, abre o novo modal `SolicitarOrcamentoDialog`
 
-### 3. Atualizar rota e menu lateral
+### 3. Novo componente: `SolicitarOrcamentoDialog`
 
-- Adicionar rota `/monitoramento/alertas` no `App.tsx`
-- Adicionar item "Alertas" no sidebar em `AppSidebar.tsx` (com icone Bell, dentro do grupo Monitoramento)
-- Adicionar breadcrumb em `GlobalBreadcrumb.tsx`
+**Arquivo:** `src/components/sinistros/SolicitarOrcamentoDialog.tsx` (NOVO)
 
-### 4. Atualizar `AlertasWidget` no dashboard
+Modal contendo:
+- Cabecalho com dados do veiculo (marca, modelo, ano, placa)
+- Lista de pecas do orcamento (somente leitura, para referencia)
+- Lista de Auto Centers compativeis com checkboxes (multiselecao):
+  - Filtrados por `marcas_atendidas` contendo a marca do veiculo OU "GLOBAL"
+  - Filtrados por status "ativo" e com whatsapp cadastrado
+  - Agrupados por tipo (Auto Center, Ferro Velho, Montadora — campo `tipo` da tabela `auto_centers`)
+  - Mostra nome, cidade, tipos de peca que trabalha
+- Botao "Solicitar Orcamentos" no footer
+- Ao confirmar:
+  1. Para cada Auto Center selecionado, cria registro em `evento_cotacoes_pecas` (status: "enviado")
+  2. Invoca a edge function `enviar-cotacao-pecas` para enviar WhatsApp (ja existente)
+  3. Toast de sucesso
+  4. Ativa a aba "Cotacoes Recebidas" (que ja existe em `CotacoesRecebidasTab`)
 
-Adicionar botao "Ver todos" que navega para `/monitoramento/alertas`
+### 4. Garantir visibilidade da aba "Cotacoes Recebidas"
+
+**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
+
+- A variavel `showCotacoesTab` ja existe e controla a exibicao das tabs. Verificar que ela se torna `true` apos o envio de cotacoes (ela verifica se existem cotacoes na tabela `evento_cotacoes_pecas`).
+- O componente `CotacoesRecebidasTab` ja implementa todo o fluxo de: exibir cotacoes enviadas, registrar respostas, comparar valores, aprovar cotacao. Nao precisa de alteracao.
+
+---
+
+## Fluxo completo do ponto de vista do Analista
+
+```text
+1. Analista abre sinistro aprovado
+2. Ve tabela de itens com pecas sem valor
+3. (Opcional) Preenche valores manualmente e salva
+4. Clica "Solicitar Orcamento"
+5. Seleciona Auto Centers/Ferro Velhos
+6. Clica "Solicitar Orcamentos"
+7. WhatsApp e enviado para cada estabelecimento
+8. IA processa respostas (fluxo ja existente)
+9. Aba "Cotacoes Recebidas" mostra respostas e comparativo
+10. Analista aprova a melhor cotacao
+```
 
 ## Arquivos afetados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/monitoramento/AlertasMonitoramento.tsx` | NOVO - pagina completa de alertas |
-| `supabase/functions/softruck-webhook/index.ts` | Atualizar parser e adicionar handlers para novos eventos |
-| `src/App.tsx` | Adicionar rota /monitoramento/alertas |
-| `src/components/layout/AppSidebar.tsx` | Adicionar item "Alertas" no menu |
-| `src/components/layout/GlobalBreadcrumb.tsx` | Adicionar breadcrumb |
-| `src/components/monitoramento/AlertasWidget.tsx` | Adicionar botao "Ver todos" |
+| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar inputs de valor nas pecas, botao salvar, botao solicitar orcamento |
+| `src/components/sinistros/SolicitarOrcamentoDialog.tsx` | NOVO — modal de selecao de Auto Centers |
 
 ## Detalhes tecnicos
 
-### Parser atualizado do webhook
+### Salvamento dos valores de pecas
 
-O webhook atualmente espera `payload.event` ou `payload.type`. O formato Softruck usa `payload.data.type`. O parser sera atualizado:
+Os itens do orcamento ficam em `vistorias_evento.dados_vistoria.itens_orcamento` (JSONB). Para salvar:
 
 ```text
-eventoTipo = payload.event 
-          || payload.type 
-          || payload.data?.type    // <-- novo
-          || "unknown"
+UPDATE vistorias_evento
+SET dados_vistoria = jsonb_set(
+  dados_vistoria,
+  '{itens_orcamento}',
+  <novo_array_json>
+)
+WHERE id = <vistoria_id>
 ```
 
-Os `params` virao de `payload.data?.params` em vez de campos raiz.
+No frontend, via Supabase client:
+- Ler o `dados_vistoria` atual
+- Atualizar apenas `valor_unitario` e `valor_total` dos itens do tipo `peca`
+- Salvar o objeto inteiro de volta
 
-### Mapeamento de severidade dos novos eventos
+### Filtro de Auto Centers
 
-| Evento | Tipo alerta | Severidade |
-|---|---|---|
-| TASKS.COMPLETED | os_concluida | baixa (informativo) |
-| TASKS.DELETED | os_removida | media |
-| TASKS.UPDATED | os_atualizada | baixa |
-| TASKS.UNCOMPLETED | os_reaberta | media |
-| TASKS.ASSIGNEE_UPDATED | prestador_atualizado | baixa |
-| TASKS.ACKNOWLEDGEMENT_UPDATED | ciencia_os | baixa |
-| DEVICES.ASSOCIATED | device_associado | baixa |
-| DEVICES.ASSOCIATION_UPDATED | device_atualizado | baixa |
-| DEVICES.DISASSOCIATED | desinstalacao | critica (ja existe) |
-| VEHICLES.CREATED | veiculo_criado | baixa (ja existe sem alerta) |
-| VEHICLES.DELETED | veiculo_removido | alta (ja existe) |
+Reutilizar o hook `useAutoCenters({ marca: marcaVeiculo })` que ja faz o filtro `marcas_atendidas.cs.{marca}` OR `marcas_atendidas.cs.{GLOBAL}`. Adicionar filtro local por `status === 'ativo'` e `whatsapp` preenchido.
 
-### Migracao de banco
+### Criacao de cotacoes e envio
 
-Adicionar coluna `titulo` e `veiculo_id` na tabela `rastreador_alertas` (o webhook ja tenta inserir esses campos mas eles nao existem na tabela). Tambem tornar `rastreador_id` nullable para alertas de veiculo sem rastreador associado. Adicionar coluna `dados_extras` (jsonb).
-
+Reutilizar exatamente a mesma logica de `AtribuirFornecedoresDialog.tsx` (linhas 227-265) para criar registros em `evento_cotacoes_pecas` e invocar `enviar-cotacao-pecas`.
