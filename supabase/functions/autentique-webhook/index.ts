@@ -467,6 +467,193 @@ serve(async (req) => {
               link: `/eventos/sinistros/${sinistroDoc.id}`,
             });
           }
+
+          // ====== GERAR COBRANÇA ASAAS E ENVIAR LINK DE PAGAMENTO VIA WHATSAPP ======
+          try {
+            const valorCota = sinistroDoc.valor_cota_participacao;
+            const cotaPaga = sinistroDoc.cota_paga;
+            const cobrancaCotaId = sinistroDoc.cobranca_cota_id;
+            const associado = sinistroDoc.associado;
+
+            if (valorCota && valorCota > 0 && !cotaPaga && associado) {
+              const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
+              if (!ASAAS_API_KEY) {
+                console.error("[autentique-webhook] ASAAS_API_KEY não configurada, pulando cobrança");
+              } else {
+                const isSandbox = ASAAS_API_KEY.includes('_hmlg_');
+                const ASAAS_BASE_URL = isSandbox
+                  ? 'https://sandbox.asaas.com/api/v3'
+                  : 'https://api.asaas.com/v3';
+
+                const asaasReq = async (endpoint: string, method: string, body?: object) => {
+                  const resp = await fetch(`${ASAAS_BASE_URL}${endpoint}`, {
+                    method,
+                    headers: { 'Content-Type': 'application/json', 'access_token': ASAAS_API_KEY },
+                    body: body ? JSON.stringify(body) : undefined,
+                  });
+                  const d = await resp.json();
+                  if (!resp.ok) throw new Error(d.errors?.[0]?.description || `Erro ASAAS: ${resp.status}`);
+                  return d;
+                };
+
+                let cobrancaAsaasId: string | null = null;
+                let invoiceUrl: string | null = null;
+                let pixQrCode: string | null = null;
+                let pixPayload: string | null = null;
+
+                if (!cobrancaCotaId) {
+                  // === CRIAR COBRANÇA ===
+                  console.log(`[autentique-webhook] Criando cobrança Asaas para sinistro ${sinistroDoc.protocolo}, valor: ${valorCota}`);
+
+                  // 1. Buscar/criar cliente Asaas
+                  let customerAsaasId: string | null = null;
+                  const { data: clienteExistente } = await supabase
+                    .from("asaas_clientes")
+                    .select("asaas_id")
+                    .eq("associado_id", associado.id)
+                    .maybeSingle();
+
+                  if (clienteExistente?.asaas_id) {
+                    customerAsaasId = clienteExistente.asaas_id;
+                    console.log(`[autentique-webhook] Cliente Asaas existente: ${customerAsaasId}`);
+                  } else {
+                    // Criar cliente
+                    const novoCliente = await asaasReq('/customers', 'POST', {
+                      name: associado.nome,
+                      cpfCnpj: associado.cpf?.replace(/\D/g, ''),
+                      email: associado.email,
+                      mobilePhone: (associado.whatsapp || associado.telefone)?.replace(/\D/g, ''),
+                      externalReference: associado.id,
+                    });
+                    customerAsaasId = novoCliente.id;
+                    console.log(`[autentique-webhook] Cliente Asaas criado: ${customerAsaasId}`);
+
+                    await supabase.from("asaas_clientes").insert({
+                      asaas_id: novoCliente.id,
+                      associado_id: associado.id,
+                      nome: associado.nome,
+                      cpf_cnpj: associado.cpf,
+                      email: associado.email,
+                      telefone: associado.whatsapp || associado.telefone,
+                      sincronizado_em: new Date().toISOString(),
+                    });
+                  }
+
+                  // 2. Criar cobrança PIX
+                  const dueDate = new Date();
+                  dueDate.setDate(dueDate.getDate() + 3); // Vencimento em 3 dias
+                  const dueDateStr = dueDate.toISOString().split('T')[0];
+
+                  const cobranca = await asaasReq('/payments', 'POST', {
+                    customer: customerAsaasId,
+                    billingType: 'PIX',
+                    value: valorCota,
+                    dueDate: dueDateStr,
+                    description: `Cota de Coparticipação - Evento ${sinistroDoc.protocolo}`,
+                    externalReference: sinistroDoc.id,
+                  });
+
+                  cobrancaAsaasId = cobranca.id;
+                  invoiceUrl = cobranca.invoiceUrl || `https://www.asaas.com/c/${cobranca.id}`;
+                  console.log(`[autentique-webhook] Cobrança criada: ${cobrancaAsaasId}`);
+
+                  // 3. Buscar QR Code PIX
+                  try {
+                    const pixData = await asaasReq(`/payments/${cobranca.id}/pixQrCode`, 'GET');
+                    pixQrCode = pixData.encodedImage;
+                    pixPayload = pixData.payload;
+                  } catch (pixErr: any) {
+                    console.log("[autentique-webhook] PIX QR Code não disponível ainda:", pixErr.message);
+                  }
+
+                  // 4. Salvar cobrança no banco
+                  const { data: cobrancaSalva } = await supabase
+                    .from("asaas_cobrancas")
+                    .insert({
+                      asaas_id: cobranca.id,
+                      asaas_cliente_id: customerAsaasId,
+                      associado_id: associado.id,
+                      tipo: 'cota_participacao',
+                      referencia: sinistroDoc.protocolo,
+                      valor: valorCota,
+                      data_emissao: new Date().toISOString().split('T')[0],
+                      data_vencimento: dueDateStr,
+                      status: cobranca.status,
+                      forma_pagamento: 'PIX',
+                      pix_qrcode: pixQrCode,
+                      pix_copia_cola: pixPayload,
+                    })
+                    .select()
+                    .single();
+
+                  // 5. Atualizar sinistro com cobranca_cota_id
+                  if (cobrancaSalva) {
+                    await supabase
+                      .from("sinistros")
+                      .update({ cobranca_cota_id: cobrancaSalva.id })
+                      .eq("id", sinistroDoc.id);
+                  }
+                } else {
+                  // === COBRANÇA JÁ EXISTE - buscar dados ===
+                  console.log(`[autentique-webhook] Cobrança já existe (${cobrancaCotaId}), buscando dados para reenvio...`);
+                  const { data: cobrancaExistente } = await supabase
+                    .from("asaas_cobrancas")
+                    .select("asaas_id, pix_copia_cola")
+                    .eq("id", cobrancaCotaId)
+                    .single();
+
+                  if (cobrancaExistente) {
+                    cobrancaAsaasId = cobrancaExistente.asaas_id;
+                    invoiceUrl = `https://www.asaas.com/c/${cobrancaExistente.asaas_id}`;
+                    pixPayload = cobrancaExistente.pix_copia_cola;
+                  }
+                }
+
+                // === ENVIAR LINK DE PAGAMENTO VIA WHATSAPP ===
+                if (cobrancaAsaasId && (associado.whatsapp || associado.telefone)) {
+                  const telefone = associado.whatsapp || associado.telefone;
+                  const valorFormatado = valorCota.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                  const linkPagamento = invoiceUrl || `https://www.asaas.com/c/${cobrancaAsaasId}`;
+
+                  let mensagem = `💳 *PRATIC - Pagamento da Cota de Coparticipação*\n\n`;
+                  mensagem += `Olá ${associado.nome},\n\n`;
+                  mensagem += `O Termo de Entrada do evento *${sinistroDoc.protocolo}* foi assinado com sucesso! ✅\n\n`;
+                  mensagem += `Agora, efetue o pagamento da cota de coparticipação:\n\n`;
+                  mensagem += `💰 *Valor:* R$ ${valorFormatado}\n`;
+                  mensagem += `📋 *Link de pagamento:* ${linkPagamento}\n`;
+                  if (pixPayload) {
+                    mensagem += `\n📱 *PIX Copia e Cola:*\n${pixPayload}\n`;
+                  }
+                  mensagem += `\nApós o pagamento, seu evento será encaminhado para a oficina.`;
+
+                  try {
+                    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+                    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+                    const whatsResp = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseServiceKey}`,
+                      },
+                      body: JSON.stringify({ telefone, mensagem }),
+                    });
+                    const whatsResult = await whatsResp.json();
+                    console.log(`[autentique-webhook] WhatsApp pagamento enviado:`, whatsResult.success);
+                  } catch (whatsErr: any) {
+                    console.error("[autentique-webhook] Erro ao enviar WhatsApp pagamento:", whatsErr.message);
+                  }
+                } else {
+                  console.log("[autentique-webhook] Sem telefone do associado para enviar link de pagamento");
+                }
+              }
+            } else {
+              console.log(`[autentique-webhook] Cobrança não necessária: valorCota=${valorCota}, cotaPaga=${cotaPaga}`);
+            }
+          } catch (cobrancaErr: any) {
+            console.error("[autentique-webhook] Erro ao gerar cobrança/enviar link:", cobrancaErr.message);
+            // Não falha o webhook principal
+          }
         } else if (eventType === "signature.viewed") {
           console.log(`[autentique-webhook] Termo de evento ${sinistroDoc.protocolo} visualizado`);
         }

@@ -452,3 +452,6 @@ verify_jwt = false
 
 [functions.gerar-fila-cobranca]
 verify_jwt = false
+
+[functions.retroativo-pagamento-termo]
+verify_jwt = false
