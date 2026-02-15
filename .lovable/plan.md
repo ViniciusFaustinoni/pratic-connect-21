@@ -1,232 +1,151 @@
 
-# Expansao de Processos Manuais — Tipos, Formulario, Lista e Detalhe
+# Gestao de Advogados — Lista Expandida, Formulario e Perfil Individual
 
 ## Resumo
 
-Expandir o modulo de processos judiciais para permitir criacao manual de processos que nao vem de sinistros (danos a terceiros, cobranca judicial, acao do associado, defesa regulatoria, etc). Inclui: novos tipos de processo, campos de parte contraria expandidos, instancia, prioridade, formulario com tipos agrupados, lista com colunas extras e filtro de origem, e decisoes diferenciadas para processos externos vs eventos.
+Expandir a pagina de advogados existente (`AdvogadosList.tsx`) com 4 KPI cards no topo e colunas extras (pareceres mes, proximo prazo), criar formulario de cadastro/edicao (`AdvogadoForm.tsx`) e perfil individual completo (`AdvogadoDetalhe.tsx`) com KPIs, processos atribuidos, prazos, audiencias e historico de desempenho.
 
-## Migracao de Banco
+## Nenhuma Migracao Necessaria
 
-### Novas colunas na tabela `processos`
+A tabela `advogados` ja possui todas as colunas necessarias: tipo, nome, cpf_cnpj, oab, oab_estado, email, telefone, whatsapp, endereco completo, especialidades (array), banco/agencia/conta/pix, tipo_contrato, valor_fixo, percentual_exito, ativo. Os dados de processos, prazos e audiencias ja existem em tabelas separadas.
 
-```text
-ALTER TABLE public.processos
-  ADD COLUMN IF NOT EXISTS parte_contraria_tipo varchar DEFAULT 'pessoa_fisica',
-  ADD COLUMN IF NOT EXISTS parte_contraria_telefone varchar,
-  ADD COLUMN IF NOT EXISTS instancia varchar DEFAULT '1a_instancia',
-  ADD COLUMN IF NOT EXISTS prioridade varchar DEFAULT 'normal',
-  ADD COLUMN IF NOT EXISTS origem varchar DEFAULT 'manual',
-  ADD COLUMN IF NOT EXISTS decisao varchar,
-  ADD COLUMN IF NOT EXISTS decisao_observacoes text,
-  ADD COLUMN IF NOT EXISTS decisao_valor numeric,
-  ADD COLUMN IF NOT EXISTS decisao_parcelas integer,
-  ADD COLUMN IF NOT EXISTS decisao_prazo_recurso date,
-  ADD COLUMN IF NOT EXISTS decisao_registrada_em timestamptz,
-  ADD COLUMN IF NOT EXISTS decisao_registrada_por uuid;
-```
+## Arquivos a Criar
 
-Campos:
-- `parte_contraria_tipo`: pessoa_fisica, pessoa_juridica, orgao_publico
-- `instancia`: 1a_instancia, 2a_instancia, tribunal_superior, extrajudicial
-- `prioridade`: baixa, normal, alta, urgente
-- `origem`: sindicancia, evento_direto, manual (para classificar de onde veio o processo)
-- `decisao` e campos relacionados: para registrar a decisao final do processo (separado do CasoJuridicoDetalhe que lida com consultas_juridicas)
+### 1. `src/pages/juridico/AdvogadoForm.tsx` (novo)
 
-### Atualizar processos existentes
+Formulario completo de cadastro e edicao de advogado, acessivel por `/juridico/advogados/novo` e `/juridico/advogados/:id/editar`.
 
-Os processos ja existentes que tem `sinistro_id` devem receber `origem = 'evento_direto'`. Isso sera feito via SQL de dados (insert tool):
+Secoes do formulario:
 
-```text
-UPDATE processos SET origem = 'evento_direto' WHERE sinistro_id IS NOT NULL AND origem = 'manual';
-```
+**Dados Pessoais / Escritorio:**
+- Nome completo / Razao social (obrigatorio)
+- Tipo: Interno ou Terceirizado (mapeando para `interno` e `externo`/`escritorio`)
+- CPF ou CNPJ
+- OAB: numero + seccional (estado) — dois campos lado a lado
+- Telefone, Email, WhatsApp
+
+**Endereco (colapsavel, para escritorios):**
+- CEP, logradouro, numero, complemento, bairro, cidade, estado
+
+**Especialidades (multi-select com checkboxes):**
+Expandir `ESPECIALIDADES_ADVOGADO` em `juridico.ts` para incluir as novas areas pedidas:
+- Seguros e Protecao Veicular (`seguros`)
+- Recuperacao de Credito / Cobranca (`cobranca`)
+
+Renderizar como grid de checkboxes (ja existe pattern no sistema).
+
+**Informacoes Contratuais (visivel se tipo = externo ou escritorio):**
+- Tipo de contratacao: por_processo, fixo (mensalista), hibrido — mapeia para `tipo_contrato`
+- Valor por processo (`valor_fixo` se por_processo)
+- Valor mensal (`valor_fixo` se fixo)
+- Percentual de exito (`percentual_exito`)
+
+**Conta para Pagamento (visivel se tipo = externo ou escritorio):**
+- Banco, agencia, conta, chave PIX, tipo PIX
+
+**Observacoes:** campo Textarea livre.
+
+**Status:** Switch ativo/inativo.
+
+Ao salvar:
+- Modo criacao: usa `criarAdvogado` do hook `useAdvogados`
+- Modo edicao: usa `atualizarAdvogado` do hook
+- Redireciona para lista apos salvar
+
+Usa react-hook-form com zod, seguindo o pattern do `ProcessoForm.tsx`.
+
+### 2. `src/pages/juridico/AdvogadoDetalhe.tsx` (novo)
+
+Pagina de perfil individual acessivel por `/juridico/advogados/:id`.
+
+**Header:** nome, OAB, tipo (badge), status (badge), botao "Editar Cadastro" que leva ao form de edicao. Botao voltar para lista.
+
+**4 KPI Cards:**
+
+1. Processos Ativos — count de `processos` com `advogado_id = id` e `status = 'ativo'`
+2. Pareceres este Mes — count de `consultas_juridicas` com `respondido_por = id` (ou vinculadas ao advogado) e `respondido_em` no mes corrente
+3. Prazos Pendentes (30d) — count de `processos_prazos` com status `pendente` vinculados aos processos desse advogado e `data_fim` nos proximos 30 dias
+4. Audiencias Agendadas (30d) — count de `processos_audiencias` com status `agendada` vinculadas aos processos desse advogado e `data_hora` nos proximos 30 dias
+
+**Secao "Processos Atribuidos":**
+Tabela com processos vinculados ao advogado: numero, tipo, status (badge), prioridade (badge), dias aberto (calculado), ultimo andamento. Filtro por status. Link para `/juridico/processos/:id`.
+
+**Secao "Prazos":**
+Lista de prazos dos processos do advogado, ordenados por data_fim asc. Badge de urgencia por cor (mesma logica do dashboard: verde > 15d, amarelo 7-15d, laranja 3-7d, vermelho < 3d, preto/vermelho se vencido). Link para processo.
+
+**Secao "Audiencias":**
+Proximas audiencias agendadas. Data/hora, tipo (badge), processo vinculado, local ou "Virtual". Destaque se hoje.
+
+**Secao "Historico de Desempenho" (ultimos 6 meses):**
+Grafico de barras com recharts mostrando processos recebidos vs finalizados por mes. Cards com:
+- Tempo medio de resolucao (media de dias entre `created_at` e `data_encerramento` dos processos encerrados)
+- Total finalizados no periodo
+
+Queries: todas usam `useQuery` com queryKeys distintas, filtrando por `advogado_id`.
 
 ## Arquivos a Modificar
 
-### 1. `src/types/juridico.ts`
+### 3. `src/pages/juridico/AdvogadosList.tsx`
 
-**Expandir `TipoProcesso`** para incluir os novos tipos:
+**Adicionar 4 KPI cards no topo (antes dos filtros):**
 
-Tipos existentes (mantidos): civel, trabalhista, criminal, consumidor, transito, administrativo, tributario, outros
+1. "Total Ativos" — count de advogados ativos
+2. "Internos" — count de advogados com tipo = 'interno'
+3. "Terceirizados" — count com tipo = 'externo' ou 'escritorio'
+4. "Carga Media" — media de processos ativos por advogado (total processos ativos / total advogados ativos)
 
-Novos tipos a adicionar:
-- sindicancia_fraude
-- carta_cancelamento
-- questao_legal_evento
-- analise_juridica_interna
-- indenizacao_documentacao
-- danos_terceiros
-- cobranca_judicial
-- acao_associado
-- notificacao_extrajudicial
-- defesa_regulatoria
-- rescisao_contenciosa
+Usar dados ja disponiveis de `advogados` e `contagemProcessos`.
 
-**Atualizar `TIPO_PROCESSO_LABELS`** com os labels dos novos tipos, agrupados para referencia:
+**Expandir card de advogado** com:
+- Pareceres no mes (query extra)
+- Proximo prazo (query extra, com badge de urgencia se < 3 dias)
 
+**Adicionar filtro por especialidade** — Select com opcoes de `ESPECIALIDADES_ADVOGADO`. Filtra no frontend (array includes).
+
+**Alerta ao inativar** — nao implementado agora (nao ha toggle inline), mas o form de edicao mostrara alerta se desativar advogado com processos ativos.
+
+### 4. `src/types/juridico.ts`
+
+Expandir `ESPECIALIDADES_ADVOGADO` com:
 ```text
-Grupo "Eventos e Sinistros":
-  sindicancia_fraude: 'Fraude Comprovada'
-  carta_cancelamento: 'Carta de Cancelamento'
-  questao_legal_evento: 'Questão Legal de Evento'
-  analise_juridica_interna: 'Análise Jurídica Interna'
-  indenizacao_documentacao: 'Indenização - Documentação'
-
-Grupo "Demandas Externas":
-  danos_terceiros: 'Danos a Terceiros'
-  cobranca_judicial: 'Cobrança Judicial'
-  acao_associado: 'Ação do Associado contra Pratic'
-  notificacao_extrajudicial: 'Notificação Extrajudicial'
-  defesa_regulatoria: 'Defesa Regulatória'
-  rescisao_contenciosa: 'Rescisão Contenciosa'
+'seguros',
+'cobranca',
 ```
 
-**Novos types e labels:**
-
+Expandir `ESPECIALIDADE_LABELS` com:
 ```text
-export type ParteContrariaTipo = 'pessoa_fisica' | 'pessoa_juridica' | 'orgao_publico';
-export type InstanciaProcesso = '1a_instancia' | '2a_instancia' | 'tribunal_superior' | 'extrajudicial';
-export type OrigemProcesso = 'sindicancia' | 'evento_direto' | 'manual';
-export type DecisaoProcessoExterno = 'procedente' | 'improcedente' | 'acordo_judicial' | 'acordo_extrajudicial' | 'sentenca_favoravel' | 'sentenca_desfavoravel' | 'recurso_interposto' | 'arquivado';
-
-PARTE_CONTRARIA_TIPO_LABELS
-INSTANCIA_LABELS
-ORIGEM_LABELS
-DECISAO_PROCESSO_EXTERNO_LABELS (com descricoes para cada decisao)
+seguros: 'Seguros e Proteção Veicular',
+cobranca: 'Recuperação de Crédito / Cobrança',
 ```
 
-Adicionar constante `TIPOS_EVENTO` (array dos 5 tipos de evento) e `TIPOS_EXTERNO` (array dos 6 tipos de demanda externa + outros) para uso na logica de formulario e decisao.
+### 5. `src/App.tsx`
 
-### 2. `src/pages/juridico/ProcessoForm.tsx`
-
-Mudancas no formulario de criacao/edicao:
-
-**Campo Tipo**: trocar o Select simples por um Select com optgroups (usando SelectGroup/SelectLabel do Radix):
-
+Adicionar 3 novas rotas:
 ```text
-<SelectGroup>
-  <SelectLabel>Eventos e Sinistros</SelectLabel>
-  <SelectItem value="sindicancia_fraude">Fraude Comprovada</SelectItem>
-  ...
-</SelectGroup>
-<SelectGroup>
-  <SelectLabel>Demandas Externas e Administrativas</SelectLabel>
-  <SelectItem value="danos_terceiros">Danos a Terceiros</SelectItem>
-  ...
-</SelectGroup>
-<SelectGroup>
-  <SelectLabel>Gerais</SelectLabel>
-  <SelectItem value="civel">Cível</SelectItem>
-  ...
-</SelectGroup>
+/juridico/advogados/novo -> AdvogadoForm
+/juridico/advogados/:id -> AdvogadoDetalhe
+/juridico/advogados/:id/editar -> AdvogadoForm
 ```
 
-**Novo campo Prioridade**: Select com baixa/normal/alta/urgente, posicionado ao lado do tipo.
+Importar os novos componentes.
 
-**Expandir secao Parte Contraria**:
-- Manter: nome (obrigatorio), CPF/CNPJ, advogado, OAB
-- Adicionar: Tipo (pessoa_fisica/pessoa_juridica/orgao_publico), Telefone
-- Tornar `parte_contraria_nome` opcional (nao obrigatorio) para processos que nao tem parte contraria definida (ex: defesa regulatoria pode nao ter). Ajustar schema zod para `.optional()`.
+### 6. `src/hooks/useAdvogados.ts`
 
-**Novo campo Instancia**: Select com 1a instancia, 2a instancia, tribunal superior, extrajudicial. Posicionar na secao Tribunal.
-
-**Ajustar Vinculacoes**:
-- Sinistro: manter como esta (busca por protocolo)
-- Associado: manter como esta (busca por nome/CPF)
-- Ambos sao opcionais
-
-**Salvar `origem` automaticamente**:
-- Se `sinistro_id` vem da URL (redirecionamento automatico): `origem = 'evento_direto'`
-- Se nao tem sinistro_id: `origem = 'manual'`
-- Incluir `prioridade`, `parte_contraria_tipo`, `parte_contraria_telefone`, `instancia` no processData
-
-**Atualizar schema zod** para incluir os novos campos.
-
-### 3. `src/pages/juridico/ProcessosList.tsx`
-
-**Nova coluna "Valor"**: adicionar coluna na tabela entre "Parte Contraria" e "Fase" mostrando `valor_causa` formatado como moeda. Se nulo, mostrar "-".
-
-**Novo filtro "Origem"**: adicionar Select no painel de filtros com opcoes: Todos, Sindicancia, Evento Direto, Manual. Filtra por `processo.origem`.
-
-**Expandir filtro Tipo**: o Select de tipo ja usa `TIPO_PROCESSO_LABELS` que sera atualizado com os novos tipos — funciona automaticamente.
-
-**Adicionar coluna "Prioridade"**: badge colorida com a prioridade do processo.
-
-**Atualizar query** para incluir o campo `origem` no filtro:
-```text
-if (filters.origem && filters.origem !== 'todos') {
-  query = query.eq('origem', filters.origem);
-}
-```
-
-### 4. `src/pages/juridico/ProcessoDetalhe.tsx`
-
-**Aba Resumo — Card "Parte Contraria" expandido**:
-- Se tem `parte_contraria_tipo`: mostrar "Tipo: Pessoa Fisica / Pessoa Juridica / Orgao Publico"
-- Se tem `parte_contraria_telefone`: mostrar telefone com botao "Ligar"
-- Se nao tem parte contraria (nome vazio): nao mostrar o card
-
-**Aba Resumo — Card "Dados Processuais" expandido**:
-- Mostrar `instancia` se preenchido
-- Mostrar `prioridade` como badge colorida
-
-**Aba Resumo — Cards condicionais**:
-- Se nao tem `sinistro_id`: nao mostrar os cards de Sinistro/Evento (ja funciona assim parcialmente)
-
-**Nova aba "Decisao" (7a aba)**:
-- Detectar se o processo e de evento (`sinistro_id` preenchido e tipo em TIPOS_EVENTO) ou externo
-- **Processo de evento**: mostrar as 7 decisoes do CasoJuridicoDetalhe (aprovado, negado, suspensao, exclusao, acao_judicial, acordo, arquivar) — pode redirecionar para o CasoJuridicoDetalhe se ja tem consulta vinculada
-- **Processo externo**: mostrar 8 decisoes novas em RadioGroup:
-  1. Procedente — campo: valor a pagar
-  2. Improcedente — processo arquivado
-  3. Acordo judicial — campos: valor do acordo, parcelas
-  4. Acordo extrajudicial — campos: valor, condicoes (texto)
-  5. Sentenca favoravel — processo arquivado
-  6. Sentenca desfavoravel — campos: valor da condenacao, prazo para recurso (data)
-  7. Recurso interposto — campo: observacoes
-  8. Arquivado — sem campos extras
-
-Ao registrar decisao:
-- Salvar em `processos.decisao`, `decisao_observacoes`, `decisao_valor`, `decisao_parcelas`, `decisao_prazo_recurso`, `decisao_registrada_em`, `decisao_registrada_por`
-- Atualizar status do processo conforme decisao (procedente -> encerrado_procedente, improcedente -> encerrado_improcedente, acordo -> acordo, etc)
-- Registrar andamento automatico
-- Notificar advogado e diretores
-
-**Tabs atualizado**: de 6 para 7 abas (Resumo, Andamentos, Prazos, Audiencias, Decisao, Documentos, Custas)
-
-### 5. `src/hooks/useProcessos.ts`
-
-Atualizar a interface `ProcessoFilters` para incluir `origem`:
-
-```text
-interface ProcessoFilters {
-  status?: string;
-  tipo?: string;
-  fase?: string;
-  advogado_id?: string;
-  associado_id?: string;
-  origem?: string;
-}
-```
-
-Adicionar filtro na query:
-```text
-if (filters?.origem) query = query.eq('origem', filters.origem);
-```
+Expandir `criarAdvogado` e `atualizarAdvogado` para aceitar todos os campos novos no tipo (endereco, banco, etc). Os campos ja existem na tabela — apenas o tipo TypeScript precisa ser expandido.
 
 ## Detalhes Tecnicos
 
-- O numero sequencial (0025/2026) ja e gerado automaticamente pelo backend (trigger ou logica existente no insert). Nao precisa de mudanca.
-- A `origem` e setada automaticamente: se o processo vem de um sinistro (sinistro_id preenchido), e 'evento_direto'; se vem de sindicancia (tipo = sindicancia_fraude), e 'sindicancia'; caso contrario, 'manual'.
-- O formulario ja existe como pagina separada (/juridico/processos/novo). O botao "+ Novo Processo" ja existe na lista. Apenas expandimos o formulario.
-- A aba Decisao no ProcessoDetalhe e independente da aba Decisao do CasoJuridicoDetalhe. O CasoJuridicoDetalhe lida com consultas_juridicas (casos de eventos). O ProcessoDetalhe lida com processos judiciais.
-- Os campos de decisao ficam na propria tabela `processos` para simplicidade, sem criar tabela extra.
+- O hook `useAdvogados` ja faz CRUD basico. Apenas expandimos os tipos aceitos nas mutations.
+- O hook `useAdvogado(id)` ja existe e busca um advogado por id — usado no detalhe e no form de edicao.
+- Queries de processos, prazos e audiencias no perfil do advogado: filtrar `processos` por `advogado_id`, depois usar os IDs dos processos para buscar prazos e audiencias relacionados.
+- O historico de desempenho usa `processos` filtrados por `advogado_id` com `created_at` nos ultimos 6 meses, agrupados por mes no frontend.
+- Nenhuma dependencia nova necessaria — usa recharts, date-fns, react-hook-form, zod ja instalados.
 
 ## Ordem de Implementacao
 
-1. Migracao: novas colunas em `processos`
-2. Atualizar `src/types/juridico.ts` com novos tipos, labels e constantes
-3. Atualizar `src/pages/juridico/ProcessoForm.tsx` com tipos agrupados, prioridade, instancia, parte contraria expandida
-4. Atualizar `src/pages/juridico/ProcessosList.tsx` com colunas Valor e Prioridade, filtro Origem
-5. Atualizar `src/pages/juridico/ProcessoDetalhe.tsx` com aba Decisao e cards expandidos
-6. Atualizar `src/hooks/useProcessos.ts` com filtro origem
-7. Atualizar processos existentes com `origem` correta (SQL de dados)
+1. Atualizar `src/types/juridico.ts` — adicionar especialidades novas
+2. Atualizar `src/hooks/useAdvogados.ts` — expandir tipos das mutations
+3. Criar `src/pages/juridico/AdvogadoForm.tsx` — formulario completo
+4. Criar `src/pages/juridico/AdvogadoDetalhe.tsx` — perfil com KPIs, processos, prazos, audiencias, desempenho
+5. Expandir `src/pages/juridico/AdvogadosList.tsx` — 4 KPI cards, filtro especialidade, dados extras nos cards
+6. Atualizar `src/App.tsx` — novas rotas
