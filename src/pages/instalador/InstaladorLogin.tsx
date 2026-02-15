@@ -20,10 +20,13 @@ export default function InstaladorLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Redirect if already logged in as instalador
+  // Redirect if already logged in
   useEffect(() => {
     if (user && hasRole('instalador_vistoriador')) {
       navigate('/instalador', { replace: true });
+    }
+    if (user && hasRole('analista_eventos' as any)) {
+      navigate('/dashboard', { replace: true });
     }
   }, [user, hasRole, navigate]);
 

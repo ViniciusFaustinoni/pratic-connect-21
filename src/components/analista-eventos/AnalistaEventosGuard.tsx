@@ -22,7 +22,7 @@ export function AnalistaEventosGuard({ children }: AnalistaEventosGuardProps) {
   }
 
   if (!user) {
-    return <Navigate to="/instalador/login" state={{ from: location }} replace />;
+    return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
   if (!hasRole('analista_eventos' as any)) {
