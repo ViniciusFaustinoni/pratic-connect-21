@@ -54,7 +54,13 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
   const [openModelo, setOpenModelo] = useState(false);
   const [openAno, setOpenAno] = useState(false);
 
-  const autoMatchedRef = useRef(false);
+  const autoMatchMarcaRef = useRef(false);
+  const autoMatchModeloRef = useRef(false);
+  const autoMatchAnoRef = useRef(false);
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Load marcas
   useEffect(() => {
@@ -63,12 +69,12 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
     fipeFetch('marcas').then((data) => {
       setMarcas(data);
       // Auto-match marca from vehicle data
-      if (initialVeiculo?.marca && !autoMatchedRef.current && !values.marcaCodigo) {
+      if (initialVeiculo?.marca && !autoMatchMarcaRef.current && !valuesRef.current.marcaCodigo) {
         const needle = initialVeiculo.marca.toLowerCase();
         const match = data.find(m => m.nome.toLowerCase().includes(needle) || needle.includes(m.nome.toLowerCase()));
         if (match) {
-          autoMatchedRef.current = true;
-          onChange({ ...values, marcaCodigo: match.codigo, marcaNome: match.nome, modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '' });
+          autoMatchMarcaRef.current = true;
+          onChangeRef.current({ ...valuesRef.current, marcaCodigo: match.codigo, marcaNome: match.nome, modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '' });
         }
       }
     }).catch(() => setMarcas([])).finally(() => setLoadingMarcas(false));
@@ -81,11 +87,12 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
     fipeFetch('modelos', { marcaCodigo: values.marcaCodigo }).then((data) => {
       setModelos(data);
       // Auto-match modelo
-      if (initialVeiculo?.modelo && autoMatchedRef.current && !values.modeloCodigo) {
+      if (initialVeiculo?.modelo && autoMatchMarcaRef.current && !autoMatchModeloRef.current && !valuesRef.current.modeloCodigo) {
         const needle = initialVeiculo.modelo.toLowerCase();
         const match = data.find(m => m.nome.toLowerCase().includes(needle) || needle.includes(m.nome.toLowerCase()));
         if (match) {
-          onChange({ ...values, modeloCodigo: String(match.codigo), modeloNome: match.nome, anoCodigo: '', anoNome: '' });
+          autoMatchModeloRef.current = true;
+          onChangeRef.current({ ...valuesRef.current, modeloCodigo: String(match.codigo), modeloNome: match.nome, anoCodigo: '', anoNome: '' });
         }
       }
     }).catch(() => setModelos([])).finally(() => setLoadingModelos(false));
@@ -98,11 +105,12 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
     fipeFetch('anos', { marcaCodigo: values.marcaCodigo, modeloCodigo: values.modeloCodigo }).then((data) => {
       setAnos(data);
       // Auto-match ano
-      if (initialVeiculo?.ano_modelo && autoMatchedRef.current && !values.anoCodigo) {
+      if (initialVeiculo?.ano_modelo && autoMatchModeloRef.current && !autoMatchAnoRef.current && !valuesRef.current.anoCodigo) {
         const anoStr = String(initialVeiculo.ano_modelo);
         const match = data.find(a => a.nome.includes(anoStr));
         if (match) {
-          onChange({ ...values, anoCodigo: match.codigo, anoNome: match.nome });
+          autoMatchAnoRef.current = true;
+          onChangeRef.current({ ...valuesRef.current, anoCodigo: match.codigo, anoNome: match.nome });
         }
       }
     }).catch(() => setAnos([])).finally(() => setLoadingAnos(false));
