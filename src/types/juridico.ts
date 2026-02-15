@@ -548,6 +548,8 @@ export const ESPECIALIDADES_ADVOGADO = [
   'empresarial',
   'familia',
   'previdenciario',
+  'seguros',
+  'cobranca',
 ] as const;
 
 export const ESPECIALIDADE_LABELS: Record<string, string> = {
@@ -561,4 +563,6 @@ export const ESPECIALIDADE_LABELS: Record<string, string> = {
   empresarial: 'Empresarial',
   familia: 'Família',
   previdenciario: 'Previdenciário',
+  seguros: 'Seguros e Proteção Veicular',
+  cobranca: 'Recuperação de Crédito / Cobrança',
 };
