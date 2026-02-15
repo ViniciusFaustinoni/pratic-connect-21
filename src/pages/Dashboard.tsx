@@ -38,6 +38,7 @@ import { usePendingDocumentos, useDocumentosContagem } from '@/hooks/useDocument
 import { useInstalacoesDoDia, useInstalacoesMetricas } from '@/hooks/useInstalacoes';
 import { FollowupWidget } from '@/components/vendas/FollowupWidget';
 import { DashboardCadastro } from '@/components/cadastro/DashboardCadastro';
+import AnalistaEventosHome from '@/pages/analista-eventos/AnalistaEventosHome';
 import DashboardCoordenador from '@/pages/monitoramento/DashboardCoordenador';
 import DiretoriaDashboard from '@/pages/diretoria/DiretoriaDashboard';
 
@@ -290,7 +291,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const { isAnalistaCadastroOnly, isCoordenadorMonitoramentoOnly, isCoordenadorMonitoramento, isInstaladorVistoriador, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
+  const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isCoordenadorMonitoramento, isInstaladorVistoriador, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
 
   // Verificar se é APENAS instalador/vistoriador (sem perfis de gerência ou admin)
   const isInstaladorVistoriadorOnly = isInstaladorVistoriador && 
@@ -309,6 +310,11 @@ export default function Dashboard() {
   // Se é analista de cadastro, mostrar dashboard específico
   if (isAnalistaCadastroOnly) {
     return <DashboardCadastro />;
+  }
+
+  // Se é analista de eventos, mostrar dashboard específico
+  if (isAnalistaEventosOnly) {
+    return <AnalistaEventosHome />;
   }
 
   // Se é coordenador de monitoramento, mostrar dashboard específico
