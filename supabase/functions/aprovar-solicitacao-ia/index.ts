@@ -41,22 +41,23 @@ serve(async (req) => {
 
     // Validate JWT and get user
     const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claims?.claims?.sub) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
+      console.error("[aprovar-solicitacao-ia] Erro ao validar token:", userError);
       return new Response(JSON.stringify({ error: "Token inválido" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = claims.claims.sub;
+    const userId = user.id;
 
     // Verificar se usuário é diretor
     const { data: userRole, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId)
-      .in("role", ["diretor", "admin_master", "desenvolvedor"])
+      .in("role", ["diretor", "admin_master", "desenvolvedor", "analista_eventos"])
       .maybeSingle();
 
     if (roleError || !userRole) {
