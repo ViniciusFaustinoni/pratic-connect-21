@@ -1,151 +1,221 @@
 
-# Gestao de Advogados — Lista Expandida, Formulario e Perfil Individual
+# Pagina de Prazos Completa — Calendario, Lista e Notificacoes
 
 ## Resumo
 
-Expandir a pagina de advogados existente (`AdvogadosList.tsx`) com 4 KPI cards no topo e colunas extras (pareceres mes, proximo prazo), criar formulario de cadastro/edicao (`AdvogadoForm.tsx`) e perfil individual completo (`AdvogadoDetalhe.tsx`) com KPIs, processos atribuidos, prazos, audiencias e historico de desempenho.
+Reescrever completamente o `PrazosControl.tsx` existente para incluir: 5 KPI cards (Hoje, Semana, Mes, Vencidos, Total Ativos), alternancia Calendario/Lista, visualizacao calendario mensal interativa com painel lateral, lista expandida com coluna Tipo e filtros completos, modal de criacao expandido com tipo/processo/evento/advogado/lembrete, acoes de prorrogar e cancelar, e toggle "Meus prazos / Todos".
 
-## Nenhuma Migracao Necessaria
+## Migracao de Banco
 
-A tabela `advogados` ja possui todas as colunas necessarias: tipo, nome, cpf_cnpj, oab, oab_estado, email, telefone, whatsapp, endereco completo, especialidades (array), banco/agencia/conta/pix, tipo_contrato, valor_fixo, percentual_exito, ativo. Os dados de processos, prazos e audiencias ja existem em tabelas separadas.
+A tabela `processos_prazos` precisa de novas colunas:
 
-## Arquivos a Criar
+```text
+ALTER TABLE public.processos_prazos
+  ADD COLUMN IF NOT EXISTS tipo varchar DEFAULT 'judicial',
+  ADD COLUMN IF NOT EXISTS evento_id uuid REFERENCES sinistros(id),
+  ADD COLUMN IF NOT EXISTS hora_vencimento time,
+  ADD COLUMN IF NOT EXISTS alerta_enviado_7d boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS lembrete_ativo boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS lembrete_dias integer[] DEFAULT '{7,3,1}',
+  ADD COLUMN IF NOT EXISTS prorrogado_de date,
+  ADD COLUMN IF NOT EXISTS prorrogacao_motivo text,
+  ADD COLUMN IF NOT EXISTS cancelamento_motivo text;
+```
 
-### 1. `src/pages/juridico/AdvogadoForm.tsx` (novo)
-
-Formulario completo de cadastro e edicao de advogado, acessivel por `/juridico/advogados/novo` e `/juridico/advogados/:id/editar`.
-
-Secoes do formulario:
-
-**Dados Pessoais / Escritorio:**
-- Nome completo / Razao social (obrigatorio)
-- Tipo: Interno ou Terceirizado (mapeando para `interno` e `externo`/`escritorio`)
-- CPF ou CNPJ
-- OAB: numero + seccional (estado) — dois campos lado a lado
-- Telefone, Email, WhatsApp
-
-**Endereco (colapsavel, para escritorios):**
-- CEP, logradouro, numero, complemento, bairro, cidade, estado
-
-**Especialidades (multi-select com checkboxes):**
-Expandir `ESPECIALIDADES_ADVOGADO` em `juridico.ts` para incluir as novas areas pedidas:
-- Seguros e Protecao Veicular (`seguros`)
-- Recuperacao de Credito / Cobranca (`cobranca`)
-
-Renderizar como grid de checkboxes (ja existe pattern no sistema).
-
-**Informacoes Contratuais (visivel se tipo = externo ou escritorio):**
-- Tipo de contratacao: por_processo, fixo (mensalista), hibrido — mapeia para `tipo_contrato`
-- Valor por processo (`valor_fixo` se por_processo)
-- Valor mensal (`valor_fixo` se fixo)
-- Percentual de exito (`percentual_exito`)
-
-**Conta para Pagamento (visivel se tipo = externo ou escritorio):**
-- Banco, agencia, conta, chave PIX, tipo PIX
-
-**Observacoes:** campo Textarea livre.
-
-**Status:** Switch ativo/inativo.
-
-Ao salvar:
-- Modo criacao: usa `criarAdvogado` do hook `useAdvogados`
-- Modo edicao: usa `atualizarAdvogado` do hook
-- Redireciona para lista apos salvar
-
-Usa react-hook-form com zod, seguindo o pattern do `ProcessoForm.tsx`.
-
-### 2. `src/pages/juridico/AdvogadoDetalhe.tsx` (novo)
-
-Pagina de perfil individual acessivel por `/juridico/advogados/:id`.
-
-**Header:** nome, OAB, tipo (badge), status (badge), botao "Editar Cadastro" que leva ao form de edicao. Botao voltar para lista.
-
-**4 KPI Cards:**
-
-1. Processos Ativos — count de `processos` com `advogado_id = id` e `status = 'ativo'`
-2. Pareceres este Mes — count de `consultas_juridicas` com `respondido_por = id` (ou vinculadas ao advogado) e `respondido_em` no mes corrente
-3. Prazos Pendentes (30d) — count de `processos_prazos` com status `pendente` vinculados aos processos desse advogado e `data_fim` nos proximos 30 dias
-4. Audiencias Agendadas (30d) — count de `processos_audiencias` com status `agendada` vinculadas aos processos desse advogado e `data_hora` nos proximos 30 dias
-
-**Secao "Processos Atribuidos":**
-Tabela com processos vinculados ao advogado: numero, tipo, status (badge), prioridade (badge), dias aberto (calculado), ultimo andamento. Filtro por status. Link para `/juridico/processos/:id`.
-
-**Secao "Prazos":**
-Lista de prazos dos processos do advogado, ordenados por data_fim asc. Badge de urgencia por cor (mesma logica do dashboard: verde > 15d, amarelo 7-15d, laranja 3-7d, vermelho < 3d, preto/vermelho se vencido). Link para processo.
-
-**Secao "Audiencias":**
-Proximas audiencias agendadas. Data/hora, tipo (badge), processo vinculado, local ou "Virtual". Destaque se hoje.
-
-**Secao "Historico de Desempenho" (ultimos 6 meses):**
-Grafico de barras com recharts mostrando processos recebidos vs finalizados por mes. Cards com:
-- Tempo medio de resolucao (media de dias entre `created_at` e `data_encerramento` dos processos encerrados)
-- Total finalizados no periodo
-
-Queries: todas usam `useQuery` com queryKeys distintas, filtrando por `advogado_id`.
+Campos:
+- `tipo`: judicial, sindicancia, ressarcimento, documentacao, recuperacao, notificacao, garantia, administrativo, outro
+- `evento_id`: vinculacao opcional a um evento/sinistro (alternativa ao processo)
+- `hora_vencimento`: para audiencias e prazos com hora especifica
+- `alerta_enviado_7d`: flag para notificacao de 7 dias
+- `lembrete_ativo`: se o lembrete automatico esta ativo
+- `lembrete_dias`: array com os dias de antecedencia para lembrete
+- `prorrogado_de`: data original antes da prorrogacao
+- `prorrogacao_motivo`: motivo da prorrogacao
+- `cancelamento_motivo`: motivo do cancelamento
 
 ## Arquivos a Modificar
 
-### 3. `src/pages/juridico/AdvogadosList.tsx`
+### 1. `src/types/juridico.ts`
 
-**Adicionar 4 KPI cards no topo (antes dos filtros):**
+Adicionar novos tipos e labels:
 
-1. "Total Ativos" — count de advogados ativos
-2. "Internos" — count de advogados com tipo = 'interno'
-3. "Terceirizados" — count com tipo = 'externo' ou 'escritorio'
-4. "Carga Media" — media de processos ativos por advogado (total processos ativos / total advogados ativos)
-
-Usar dados ja disponiveis de `advogados` e `contagemProcessos`.
-
-**Expandir card de advogado** com:
-- Pareceres no mes (query extra)
-- Proximo prazo (query extra, com badge de urgencia se < 3 dias)
-
-**Adicionar filtro por especialidade** — Select com opcoes de `ESPECIALIDADES_ADVOGADO`. Filtra no frontend (array includes).
-
-**Alerta ao inativar** — nao implementado agora (nao ha toggle inline), mas o form de edicao mostrara alerta se desativar advogado com processos ativos.
-
-### 4. `src/types/juridico.ts`
-
-Expandir `ESPECIALIDADES_ADVOGADO` com:
 ```text
-'seguros',
-'cobranca',
+export type TipoPrazo = 'judicial' | 'sindicancia' | 'ressarcimento' | 'documentacao' | 'recuperacao' | 'notificacao' | 'garantia' | 'administrativo' | 'outro';
+
+export const TIPO_PRAZO_LABELS: Record<TipoPrazo, string> = {
+  judicial: 'Judicial',
+  sindicancia: 'Sindicância',
+  ressarcimento: 'Ressarcimento',
+  documentacao: 'Documentação',
+  recuperacao: 'Recuperação',
+  notificacao: 'Notificação',
+  garantia: 'Garantia',
+  administrativo: 'Administrativo',
+  outro: 'Outro',
+};
+
+export const TIPO_PRAZO_COLORS: Record<TipoPrazo, string> = {
+  judicial: 'bg-blue-100 text-blue-800',
+  sindicancia: 'bg-yellow-100 text-yellow-800',
+  ressarcimento: 'bg-green-100 text-green-800',
+  documentacao: 'bg-orange-100 text-orange-800',
+  recuperacao: 'bg-purple-100 text-purple-800',
+  notificacao: 'bg-gray-100 text-gray-800',
+  garantia: 'bg-cyan-100 text-cyan-800',
+  administrativo: 'bg-pink-100 text-pink-800',
+  outro: 'bg-gray-100 text-gray-800',
+};
 ```
 
-Expandir `ESPECIALIDADE_LABELS` com:
+### 2. `src/pages/juridico/PrazosControl.tsx` (reescrever)
+
+O componente atual tem 519 linhas com lista basica e 4 KPI cards. Sera reescrito completamente mantendo a mesma rota.
+
+**Estrutura principal:**
+
+Estado de view: `viewMode: 'lista' | 'calendario'`
+Estado de toggle: `meusPrazos: boolean` (filtra por `responsavel_id = currentUserId`)
+Estado de calendario: `mesSelecionado: Date`, `diaSelecionado: Date | null`
+
+**5 KPI Cards (topo):**
+
+1. "Vencendo Hoje" — count de prazos pendentes com `data_fim = hoje`. Card vermelho se > 0.
+2. "Esta Semana" — count de prazos pendentes com `data_fim` entre hoje e hoje+7.
+3. "Este Mes" — count de prazos pendentes com `data_fim` entre hoje e hoje+30.
+4. "Vencidos em Aberto" — count de prazos com `data_fim < hoje` e `status = pendente`. Sempre vermelho. Card mais critico.
+5. "Total Ativos" — count de prazos com `status = pendente`.
+
+Estes KPIs usam uma query separada sem filtros para mostrar numeros reais.
+
+**Barra de acoes (abaixo dos KPIs):**
+
+- Toggle "Meus Prazos / Todos"
+- Botoes de alternancia: "Lista" e "Calendario"
+- Botao "+ Novo Prazo" (abre NovoPrazoModal expandido)
+
+**Visualizacao Calendario:**
+
+Grid de 7 colunas (Dom-Sab) com as celulas do mes atual. Cada celula:
+- Numero do dia
+- Se tem prazos: badge numerico colorido pela urgencia mais alta
+- Borda azul se e hoje
+- Fundo vermelho claro se ja passou e tem prazo pendente nao cumprido
+- Clicavel: ao clicar, abre painel lateral direito (Sheet ou panel) com lista de prazos daquele dia
+
+O painel lateral mostra:
+- Data selecionada no header
+- Lista de prazos: descricao, tipo (badge), processo vinculado (link), advogado, botao "Cumprir" e "Prorrogar"
+
+Navegacao: botoes prev/next mes, botao "Hoje" para voltar ao mes atual.
+
+Dados do calendario: query de todos os prazos do mes selecionado, agrupados por dia no frontend.
+
+**Visualizacao Lista (expandida):**
+
+Tabela completa com colunas:
+- Status icon
+- Descricao
+- Tipo (badge colorido)
+- Processo/Evento (numero com link)
+- Advogado (responsavel)
+- Vencimento (data formatada)
+- Dias Restantes (badge com cores: verde > 15d, amarelo 7-15d, laranja 3-7d, vermelho 1-3d, preto/vermelho VENCIDO)
+- Status
+- Acoes (cumprir, prorrogar, cancelar)
+
+Filtros expandidos:
+- Status: Pendentes (padrao), Vencidos, Cumpridos, Cancelados, Todos
+- Tipo de prazo (select com os 9 tipos)
+- Advogado responsavel (select de advogados)
+- Periodo (date range picker ou presets: hoje/semana/mes/vencidos)
+- Urgencia (so vencendo em 7d, so vencidos)
+- Busca textual
+
+**Modais:**
+
+1. Modal Cumprir (manter existente): observacao + confirmar
+2. Modal Prorrogar (novo): nova data de vencimento (date picker), motivo (textarea obrigatorio). Ao salvar: atualiza `data_fim`, salva `prorrogado_de` (data antiga), `prorrogacao_motivo`, registra andamento no processo.
+3. Modal Cancelar (novo): motivo (textarea obrigatorio). Ao salvar: atualiza `status = cancelado`, salva `cancelamento_motivo`.
+
+### 3. `src/components/juridico/NovoPrazoModal.tsx` (expandir)
+
+O modal existente e simples e recebe `processoId` obrigatorio. Precisa ser expandido para funcionar de forma autonoma (sem processo pre-vinculado).
+
+Mudancas:
+- `processoId` passa a ser opcional
+- Adicionar campo "Tipo" (select com 9 tipos)
+- Adicionar campo "Processo vinculado" (busca por numero, obrigatorio se tipo = judicial)
+- Adicionar campo "Evento vinculado" (busca por protocolo, alternativa ao processo)
+- Adicionar campo "Advogado responsavel" (select de advogados ativos)
+- Adicionar campo "Hora de vencimento" (time input, opcional)
+- Adicionar checkbox "Lembrete automatico?" + campo "Quantos dias antes?" (multi-input ou preset 7,3,1)
+- Adicionar campo "Observacoes" (textarea)
+- Manter campos existentes: descricao, data inicio, prazo dias / data especifica, prioridade
+
+### 4. `src/hooks/useProcessosPrazos.ts` (expandir)
+
+Atualizar interface `PrazoFilters`:
 ```text
-seguros: 'Seguros e Proteção Veicular',
-cobranca: 'Recuperação de Crédito / Cobrança',
+interface PrazoFilters {
+  status?: string;
+  responsavel_id?: string;
+  processo_id?: string;
+  tipo?: string;
+  advogado_id?: string;
+  data_inicio?: string;
+  data_fim_de?: string;
+  data_fim_ate?: string;
+}
 ```
+
+Adicionar mutation `prorrogarPrazo`:
+```text
+mutationFn: async ({ id, novaData, motivo }) => {
+  // Buscar data atual do prazo
+  // Update com nova data_fim, prorrogado_de = data antiga, prorrogacao_motivo
+}
+```
+
+Expandir mutation `cancelarPrazo` para aceitar motivo.
+
+Adicionar mutation `criarPrazo` expandida com novos campos (tipo, evento_id, hora_vencimento, lembrete, responsavel_id).
 
 ### 5. `src/App.tsx`
 
-Adicionar 3 novas rotas:
-```text
-/juridico/advogados/novo -> AdvogadoForm
-/juridico/advogados/:id -> AdvogadoDetalhe
-/juridico/advogados/:id/editar -> AdvogadoForm
-```
+Nenhuma mudanca necessaria — a rota `/juridico/prazos` ja existe e aponta para `PrazosControl`.
 
-Importar os novos componentes.
+## Notificacoes Automaticas
 
-### 6. `src/hooks/useAdvogados.ts`
+O sistema ja tem `alerta_enviado_3d`, `alerta_enviado_1d`, `alerta_enviado_hoje` na tabela. A migracao adiciona `alerta_enviado_7d`. Para a verificacao diaria:
 
-Expandir `criarAdvogado` e `atualizarAdvogado` para aceitar todos os campos novos no tipo (endereco, banco, etc). Os campos ja existem na tabela — apenas o tipo TypeScript precisa ser expandido.
+Criar edge function `cron-verificar-prazos` que:
+1. Busca todos os prazos com status `pendente`
+2. Para cada prazo, calcula dias restantes
+3. Se 7 dias e `alerta_enviado_7d = false`: notifica advogado, marca flag
+4. Se 3 dias e `alerta_enviado_3d = false`: notifica advogado + diretor, marca flag
+5. Se 1 dia e `alerta_enviado_1d = false`: notifica advogado + diretor + admins, marca flag
+6. Se hoje e `alerta_enviado_hoje = false`: notificacao vermelha urgente, marca flag
+7. Se vencido: notificacao diaria "PRAZO VENCIDO HA X DIAS"
+
+Usa `disparar-notificacao` ja existente para enviar. Agendamento via pg_cron (SQL insert).
+
+A edge function sera simples: busca prazos pendentes, calcula dias, chama disparar-notificacao para cada caso.
 
 ## Detalhes Tecnicos
 
-- O hook `useAdvogados` ja faz CRUD basico. Apenas expandimos os tipos aceitos nas mutations.
-- O hook `useAdvogado(id)` ja existe e busca um advogado por id — usado no detalhe e no form de edicao.
-- Queries de processos, prazos e audiencias no perfil do advogado: filtrar `processos` por `advogado_id`, depois usar os IDs dos processos para buscar prazos e audiencias relacionados.
-- O historico de desempenho usa `processos` filtrados por `advogado_id` com `created_at` nos ultimos 6 meses, agrupados por mes no frontend.
-- Nenhuma dependencia nova necessaria — usa recharts, date-fns, react-hook-form, zod ja instalados.
+- O calendario e construido manualmente com CSS grid 7 colunas, sem biblioteca extra. Usa `date-fns` para calcular inicio/fim do mes, dia da semana, etc.
+- A query do calendario busca todos os prazos do mes selecionado (`data_fim >= primeiro_dia_mes AND data_fim <= ultimo_dia_mes`) para montar o mapa dia -> prazos no frontend.
+- O toggle "Meus Prazos" usa o `auth.uid()` do usuario logado para filtrar `responsavel_id`.
+- Prazos vencidos NUNCA sao filtrados automaticamente — sempre aparecem na lista pendente com destaque vermelho.
+- A coluna `dias_uteis` ja existe na tabela — a UI deve indicar quando um prazo e em dias uteis (badge ou icone).
+- Nenhuma dependencia nova necessaria.
 
 ## Ordem de Implementacao
 
-1. Atualizar `src/types/juridico.ts` — adicionar especialidades novas
-2. Atualizar `src/hooks/useAdvogados.ts` — expandir tipos das mutations
-3. Criar `src/pages/juridico/AdvogadoForm.tsx` — formulario completo
-4. Criar `src/pages/juridico/AdvogadoDetalhe.tsx` — perfil com KPIs, processos, prazos, audiencias, desempenho
-5. Expandir `src/pages/juridico/AdvogadosList.tsx` — 4 KPI cards, filtro especialidade, dados extras nos cards
-6. Atualizar `src/App.tsx` — novas rotas
+1. Migracao: novas colunas em `processos_prazos` (tipo, evento_id, hora_vencimento, alerta_enviado_7d, lembrete, prorrogacao, cancelamento)
+2. Atualizar `src/types/juridico.ts` com TipoPrazo, labels e colors
+3. Expandir `src/hooks/useProcessosPrazos.ts` com novos filtros e mutations
+4. Expandir `src/components/juridico/NovoPrazoModal.tsx` com campos tipo, processo, evento, advogado, hora, lembrete
+5. Reescrever `src/pages/juridico/PrazosControl.tsx` com calendario, lista expandida, 5 KPIs, toggle meus/todos
+6. Criar edge function `cron-verificar-prazos` para notificacoes diarias
+7. Agendar cron job via SQL (pg_cron + pg_net)
