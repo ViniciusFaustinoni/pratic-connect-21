@@ -1,36 +1,43 @@
 
-# Corrigir tela "Link Invalido" apos conclusao das 3 etapas
+# Corrigir status "Aguardando auto vistoria" quando link ja foi completado
 
 ## Problema
 
-Quando o associado completa a etapa 3, a edge function `salvar-etapa-evento` muda o status do link para `"completado"` (linha 132). Em seguida, o frontend chama `validar()` para atualizar os dados, mas a edge function `validar-link-evento` rejeita qualquer link com status diferente de `"ativo"` (linha 57), retornando `valid: false`. Isso faz o frontend exibir "Link Invalido" em vez da tela de sucesso.
+Na pagina do analista (`SinistroAnalise.tsx`), a secao "Acoes" verifica apenas `sinistro.status === 'em_analise'` (linha 824) e exibe fixamente "Aguardando auto vistoria -- link enviado ao associado". Porem, quando o associado completa todas as 3 etapas, o `sinistro_evento_links.status` muda para `"completado"`, mas o `sinistros.status` permanece `"em_analise"`. Resultado: o analista ve "Aguardando" mesmo com tudo ja enviado.
 
 ## Solucao
 
-### Arquivo: `supabase/functions/validar-link-evento/index.ts`
+Dentro do bloco `sinistro.status === 'em_analise'` (linha 824), verificar se o link do evento ja foi completado. Se sim, exibir uma mensagem diferente informando que a documentacao foi recebida e que o evento esta pronto para analise.
 
-Alterar a verificacao de status (linha 57) para aceitar tambem o status `"completado"` como valido. Links completados devem retornar `valid: true` para que o frontend exiba a tela de sucesso/agendamento.
+### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
 
-Logica atual:
+Alterar o bloco nas linhas 823-833:
+
+**Logica atual:**
 ```
-if (link.status !== "ativo") {
-  return { valid: false, reason: link.status }
+if (sinistro.status === 'em_analise') {
+  return "Aguardando auto vistoria — link enviado ao associado."
 }
 ```
 
-Logica corrigida:
+**Logica corrigida:**
 ```
-if (link.status !== "ativo" && link.status !== "completado") {
-  return { valid: false, reason: link.status }
+if (sinistro.status === 'em_analise') {
+  // Verificar se o link ja foi completado usando linkAtivo do hook useEventoLink
+  if (linkAtivo?.status === 'completado') {
+    return mensagem verde: "Documentacao recebida — pronto para analise."
+  } else {
+    return mensagem amarela: "Aguardando auto vistoria — link enviado ao associado."
+  }
 }
 ```
 
-Isso permite que o frontend receba os dados do link completado e mostre corretamente a tela de sucesso (EventoSucesso) ou agendamento (EventoAgendamento), pois o componente EventoColisao ja verifica `etapaAtual >= 3` para decidir o que exibir.
+O hook `useEventoLink` ja esta sendo usado na pagina e retorna `linkAtivo` com o status do link mais recente.
 
-## Detalhes tecnicos
+### Detalhes tecnicos
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `supabase/functions/validar-link-evento/index.ts` | Linha 57: aceitar status "completado" como valido alem de "ativo" |
+| `src/pages/eventos/SinistroAnalise.tsx` | Linhas 823-833: dentro do bloco `em_analise`, verificar `linkAtivo?.status === 'completado'` e exibir mensagem verde "Documentacao recebida" com icone CheckCircle em vez de "Aguardando auto vistoria" |
 
-Apenas uma linha precisa ser alterada. Nenhuma mudanca no frontend e necessaria pois a logica de exibicao ja esta correta (verifica `etapaAtual >= 3` para mostrar sucesso).
+Apenas uma verificacao condicional adicional. Nenhuma nova dependencia ou tabela necessaria.
