@@ -228,6 +228,7 @@ export default function SinistroAnalise() {
     contratoAtivo,
     veiculoHistorico,
     linkEvento,
+    vistoriaEvento,
     isLoading,
   } = useSinistroAnalise(id);
 
@@ -719,10 +720,10 @@ export default function SinistroAnalise() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <FileCheck className="h-5 w-5" />
-                          Documentos ({todosDocumentos.length})
+                          Anexos do Regulador ({todosDocumentos.length})
                         </CardTitle>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="space-y-4">
                         {todosDocumentos.length === 0 ? (
                           <p className="text-muted-foreground text-center py-4">
                             Nenhum documento anexado
@@ -795,6 +796,171 @@ export default function SinistroAnalise() {
                             })}
                           </div>
                         )}
+
+                        {/* Dados da Vistoria do Regulador */}
+                        {(() => {
+                          const dados = (vistoriaEvento as any)?.dados_vistoria;
+                          if (!dados) return null;
+
+                          const fotosRegulador = (dados.fotos_urls || []) as string[];
+                          const videoRegulador = dados.video_url as string | undefined;
+                          const etapas = (dados.etapas_reparo || []) as any[];
+                          const itens = (dados.itens_orcamento || []) as any[];
+
+                          return (
+                            <>
+                              {/* Fotos do Regulador */}
+                              {fotosRegulador.length > 0 && (
+                                <>
+                                  <Separator />
+                                  <div>
+                                    <p className="text-sm font-semibold mb-2">📸 Fotos do Regulador ({fotosRegulador.length})</p>
+                                    <div className="grid grid-cols-5 gap-2">
+                                      {fotosRegulador.map((url, i) => (
+                                        <img
+                                          key={i}
+                                          src={resolverUrl(url)}
+                                          alt={`Foto regulador ${i + 1}`}
+                                          className="h-16 w-full rounded-md object-cover cursor-pointer hover:opacity-80 transition-opacity border"
+                                          onClick={() => setFotoViewer({
+                                            open: true,
+                                            index: i,
+                                          })}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Vídeo do Regulador */}
+                              {videoRegulador && (
+                                <>
+                                  <Separator />
+                                  <div>
+                                    <p className="text-sm font-semibold mb-2">🎬 Vídeo do Regulador</p>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => window.open(resolverUrl(videoRegulador), '_blank')}
+                                    >
+                                      Assistir Vídeo
+                                    </Button>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Diagnóstico */}
+                              {(dados.tipo_dano || dados.descricao_tecnica) && (
+                                <>
+                                  <Separator />
+                                  <div>
+                                    <p className="text-sm font-semibold mb-2">🔍 Diagnóstico</p>
+                                    {dados.tipo_dano && (
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-sm text-muted-foreground">Tipo de dano:</span>
+                                        <Badge variant={dados.tipo_dano === 'total' ? 'destructive' : 'default'}>
+                                          {dados.tipo_dano === 'total' ? 'Perda Total' : 'Parcial'}
+                                        </Badge>
+                                      </div>
+                                    )}
+                                    {dados.descricao_tecnica && (
+                                      <p className="text-sm text-foreground mt-1">{dados.descricao_tecnica}</p>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Etapas de Reparo */}
+                              {etapas.length > 0 && (
+                                <>
+                                  <Separator />
+                                  <div>
+                                    <p className="text-sm font-semibold mb-2">🔧 Etapas de Reparo</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {etapas
+                                        .filter((e: any) => e.selecionada)
+                                        .map((e: any, i: number) => (
+                                          <Badge key={i} variant="outline">{e.nome}</Badge>
+                                        ))}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Itens do Orçamento */}
+                              {itens.length > 0 && (
+                                <>
+                                  <Separator />
+                                  <div>
+                                    <p className="text-sm font-semibold mb-2">📋 Itens do Orçamento ({itens.length})</p>
+                                    <div className="rounded-md border overflow-hidden">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="bg-muted">
+                                            <th className="text-left p-2 font-medium">Descrição</th>
+                                            <th className="text-left p-2 font-medium">Tipo</th>
+                                            <th className="text-center p-2 font-medium">Qtd</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {itens.map((item: any, i: number) => (
+                                            <tr key={i} className="border-t">
+                                              <td className="p-2">{item.descricao}</td>
+                                              <td className="p-2">
+                                                <Badge variant="outline" className="text-xs">
+                                                  {item.tipo === 'peca' ? 'Peça' : item.tipo === 'mao_de_obra' ? 'Mão de Obra' : item.tipo}
+                                                </Badge>
+                                              </td>
+                                              <td className="p-2 text-center">{item.quantidade}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                    {dados.valor_total_orcamento != null && (
+                                      <p className="text-sm text-muted-foreground mt-2">
+                                        Valor total estimado: <strong>{formatCurrency(dados.valor_total_orcamento)}</strong>
+                                      </p>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Parecer do Regulador */}
+                              {(dados.parecer_tecnico || dados.recomendacao) && (
+                                <>
+                                  <Separator />
+                                  <div>
+                                    <p className="text-sm font-semibold mb-2">📝 Parecer do Regulador</p>
+                                    {dados.parecer_tecnico && (
+                                      <p className="text-sm text-foreground whitespace-pre-wrap mb-2">{dados.parecer_tecnico}</p>
+                                    )}
+                                    {dados.recomendacao && (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">Recomendação:</span>
+                                        <Badge variant={dados.recomendacao === 'aprovar' ? 'default' : 'secondary'}>
+                                          {dados.recomendacao === 'aprovar' ? '✅ Aprovar' : '🔍 Análise Detalhada'}
+                                        </Badge>
+                                      </div>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Observações Perda Total */}
+                              {dados.tipo_dano === 'total' && dados.observacoes_perda_total && (
+                                <>
+                                  <Separator />
+                                  <div>
+                                    <p className="text-sm font-semibold mb-2">⚠️ Observações — Perda Total</p>
+                                    <p className="text-sm text-foreground whitespace-pre-wrap">{dados.observacoes_perda_total}</p>
+                                  </div>
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
                       </CardContent>
                     </Card>
                   );

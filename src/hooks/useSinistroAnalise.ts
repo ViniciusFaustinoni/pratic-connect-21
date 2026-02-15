@@ -201,6 +201,22 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
     enabled: !!sinistroId,
   });
 
+  // Vistoria do regulador (dados completos da vistoria de evento)
+  const { data: vistoriaEvento } = useQuery({
+    queryKey: ['sinistro-analise-vistoria-evento', sinistroId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('vistorias_evento')
+        .select('*')
+        .eq('sinistro_id', sinistroId!)
+        .order('concluida_em', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!sinistroId,
+  });
+
   return {
     sinistro,
     documentos,
@@ -211,6 +227,7 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
     contratoAtivo,
     veiculoHistorico,
     linkEvento,
+    vistoriaEvento,
     isLoading: loadingSinistro,
   };
 }
