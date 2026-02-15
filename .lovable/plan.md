@@ -1,88 +1,57 @@
 
 
-# Badges de Status e Botoes de Reenvio no Evento
+# Mostrar Valores Individuais de Servico e Mao de Obra na Tabela de Orcamento
 
 ## Problema
-O analista de eventos nao tem visibilidade clara do status de assinatura e pagamento no evento. Precisa de:
-1. Badge "Assinatura Pendente" quando o link de assinatura foi enviado mas nao assinado
-2. Badge "Pendente de Pagamento" quando assinou mas nao pagou
-3. Botao "Reenviar Assinatura" no menu de acoes
-4. Botao "Reenviar Link de Pagamento" no menu de acoes
-5. O envio deve ser feito pela IA com mensagem amigavel via WhatsApp
+
+Atualmente, a tabela "Itens do Orcamento" na pagina de Analise do Evento exibe os itens de mao de obra e servico com valor unitario como texto cinza discreto ("---" quando nulo). O rodape mostra apenas o total agregado ("Custo medio estimado de mao de obra: R$ 300,00"), sem detalhar quanto custa cada servico individualmente.
+
+O analista de eventos precisa ver o custo de **cada** item de mao de obra e servico preenchido pelo regulador.
 
 ## Alteracoes
 
 ### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
 
-**1. Badges no header (apos o badge de status, linha ~494)**
+**1. Exibir valor unitario de servico/mao de obra com destaque (linhas 1065-1069)**
 
-Adicionar dois badges condicionais:
-- **Assinatura Pendente** (amber): quando `sinistro.autentique_documento_id` existe e `sinistro.termo_anuencia_assinado` e falso
-- **Pendente de Pagamento** (orange): quando `sinistro.termo_anuencia_assinado` e true, `sinistro.cota_paga` e false
+Substituir o bloco que mostra o valor de itens nao-peca (atualmente texto cinza discreto) por uma exibicao mais clara:
+- Se `item.valor_unitario` existir: mostrar valor formatado em negrito (sem ser cinza)
+- Se nao existir: manter "---"
 
-**2. Botoes no menu de Acoes (dentro do CardContent)**
+**2. Adicionar coluna "Valor Total" na tabela (apos a coluna "Valor Unit.")**
 
-No bloco onde `aguardandoAssinatura` e true (linha ~1313), ao inves de apenas mostrar um texto informativo:
-- Manter o texto informativo
-- Adicionar botao "Reenviar Assinatura" que chama a edge function `whatsapp-send-text` com mensagem amigavel contendo o link de assinatura
+Adicionar uma nova coluna "Total" que calcula `valor_unitario * quantidade` para cada item:
+- Para pecas: usa o valor da IA (se disponivel) ou o valor manual multiplicado pela quantidade
+- Para mao de obra/servico: `item.valor_unitario * item.quantidade`
 
-No bloco de status "aprovado" (linha ~1281), quando `sinistro.termo_anuencia_assinado === true` e `sinistro.cota_paga !== true`:
-- Adicionar info badge "Pendente de Pagamento da Cota"
-- Adicionar botao "Reenviar Link de Pagamento" que busca a cobranca em `asaas_cobrancas` pelo `sinistro.cobranca_cota_id` e envia o link via WhatsApp
+**3. Atualizar rodape com resumo por categoria (linhas 1077-1081)**
 
-**3. Estados de loading**
+Substituir o resumo unico por um detalhamento:
+- Total Mao de Obra: R$ X (soma dos itens tipo mao_de_obra)
+- Total Servicos: R$ Y (soma dos itens tipo servico)
+- Total Pecas: R$ Z (soma dos valores de pecas, quando preenchidos)
 
-Adicionar dois novos estados:
-- `reenviandoAssinatura` (boolean)
-- `reenviandoPagamento` (boolean)
+Manter o total geral ao final.
 
-**4. Funcoes de reenvio**
+## Resultado Visual Esperado
 
-- `handleReenviarAssinatura`: busca o `autentique_documento_id` do sinistro, monta mensagem amigavel com link de assinatura e envia via `whatsapp-send-text`
-- `handleReenviarPagamento`: busca a cobranca pelo `cobranca_cota_id` na tabela `asaas_cobrancas`, monta mensagem amigavel com link de pagamento (`https://www.asaas.com/c/{asaas_id}`) e envia via `whatsapp-send-text`
+```text
+| Descricao                    | Tipo         | Qtd | Fornecedor | Valor Unit. | Total    |
+|------------------------------|--------------|-----|------------|-------------|----------|
+| Para-choque Dianteiro - ...  | Peca         |  1  | [Select]   | R$ 0,00     | R$ 0,00  |
+| Troca de peca                | Mao de Obra  |  1  | --         | R$ 150,00   | R$ 150,00|
+| troca do para choque         | servico      |  1  | --         | R$ 150,00   | R$ 150,00|
 
-## Mensagens WhatsApp (tom amigavel, enviadas pela IA)
-
-**Reenvio de Assinatura:**
-```
-Ola {nome}! Tudo bem?
-
-Notamos que o Termo de Entrada do seu evento {protocolo} ainda nao foi assinado.
-
-Para darmos continuidade ao processo, precisamos da sua assinatura digital. E bem rapido e simples!
-
-Acesse o link do email enviado por "Autentique" para assinar.
-
-Qualquer duvida, estamos aqui para ajudar!
-
-ABP PraticCar
-```
-
-**Reenvio de Link de Pagamento:**
-```
-Ola {nome}! Tudo bem?
-
-O Termo de Entrada do evento {protocolo} ja foi assinado com sucesso!
-
-Para que seu veiculo seja encaminhado a oficina, falta apenas o pagamento da cota de coparticipacao:
-
-Valor: R$ {valor}
-Link de pagamento: https://www.asaas.com/c/{asaas_id}
-
-Apos a confirmacao do pagamento, seu evento sera encaminhado para reparo.
-
-Estamos a disposicao!
-
-ABP PraticCar
+Mao de obra: R$ 150,00 | Servicos: R$ 150,00
+Custo medio estimado (mao de obra + servicos): R$ 300,00
 ```
 
 ## Detalhes Tecnicos
 
 | Local | Alteracao |
 |---|---|
-| Header badges (linha ~494) | 2 badges condicionais: "Assinatura Pendente" (amber) e "Pag. Cota Pendente" (orange) |
-| Menu Acoes - aguardando assinatura (linha ~1313) | Botao "Reenviar Assinatura" com envio via whatsapp-send-text |
-| Menu Acoes - aprovado (linha ~1281) | Condicional: se termo assinado mas cota nao paga, mostrar botao "Reenviar Link de Pagamento" |
-| Estados (linha ~229) | `reenviandoAssinatura`, `reenviandoPagamento` |
-| Funcoes handler (apos linha ~448) | `handleReenviarAssinatura`, `handleReenviarPagamento` |
+| Linha 982-986 (thead) | Adicionar coluna `<th>Total</th>` |
+| Linha 1065-1069 (valor nao-peca) | Exibir `item.valor_unitario` com fonte normal (nao cinza) quando existir |
+| Apos linha 1070 (nova td) | Adicionar celula com calculo `valor_unitario * quantidade` |
+| Linhas 1077-1081 (rodape) | Detalhar totais por categoria: mao de obra, servicos e pecas separadamente |
 
