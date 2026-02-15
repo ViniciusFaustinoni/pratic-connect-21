@@ -210,7 +210,7 @@ export default function SinistrosList() {
             <Button 
               variant="outline" 
               className="border-amber-500 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/50"
-              onClick={() => navigate('/diretoria/solicitacoes-ia')}
+              onClick={() => navigate('/eventos/solicitacoes-ia')}
             >
               <Bot className="mr-2 h-4 w-4" />
               Revisar Solicitações
