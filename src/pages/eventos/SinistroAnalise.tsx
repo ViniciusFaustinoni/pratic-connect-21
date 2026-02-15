@@ -59,6 +59,7 @@ import { EncaminharJuridicoEventoModal } from '@/components/sinistros/Encaminhar
 import { SuspenderEventoModal } from '@/components/sinistros/SuspenderEventoModal';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
+import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
 import { CotacoesRecebidasTab } from '@/components/sinistros/CotacoesRecebidasTab';
 import { TimelineEventoTab } from '@/components/sinistros/TimelineEventoTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -870,6 +871,15 @@ export default function SinistroAnalise() {
               })()}
             </CardContent>
           </Card>
+
+          {/* Link de Auto-Vistoria */}
+          <EventoLinkCard
+            sinistroId={id!}
+            sinistroProtocolo={sinistro.protocolo}
+            associadoWhatsapp={associado?.whatsapp || associado?.telefone}
+            associadoNome={associado?.nome}
+            sinistroTipo={sinistro.tipo}
+          />
 
           {/* Checklist */}
           <Card>
