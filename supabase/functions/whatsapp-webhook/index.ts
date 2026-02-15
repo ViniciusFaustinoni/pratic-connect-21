@@ -313,11 +313,13 @@ Após registrar um sinistro com sucesso (tool criar_solicitacao_sinistro retorno
 4. Se responder NÃO, encerre normalmente com mensagem de acolhimento
 IMPORTANTE: Só ofereça assistência 24h se o veículo tiver cobertura_total = true. Se tiver apenas cobertura de roubo/furto, NÃO mencione assistência 24h.
 
-## Coleta de Dados para ASSISTÊNCIA 24H
+## Coleta de Dados para ASSISTÊNCIA 24H (OBRIGATÓRIO COLETAR TODOS!)
 1. Tipo do serviço (guincho, chaveiro, troca de pneu, pane seca, pane elétrica)
-2. Localização atual (endereço completo ou compartilhar localização)
-3. Descrição do problema
-4. Tipo de veículo (carro ou moto)
+2. Endereço de RETIRADA — endereço completo COM número ou ponto de referência próximo. Pergunte: "Próximo a qual número ou ponto de referência você está?"
+3. Endereço de DESTINO — para onde o veículo será levado. Pergunte: "Para onde o veículo deve ser levado? (oficina, residência, outro endereço)"
+4. Descrição do problema
+5. Tipo de veículo (carro ou moto)
+IMPORTANTE: Se for guincho vinculado a sinistro que acabou de ser reportado, o local do sinistro já serve como endereço de origem — mas SEMPRE pergunte o destino.
 
 ## EVENTOS NOVOS vs EXISTENTES (MUITO IMPORTANTE!)
 - Se o contexto mostra "Nenhum sinistro em aberto" e o associado relata um novo acidente, TRATE COMO NOVO SINISTRO
@@ -544,15 +546,16 @@ const tools = [
     type: "function",
     function: {
       name: "criar_solicitacao_assistencia",
-      description: "Cria solicitação de assistência 24h. IMPORTANTE: Só pode ser usado se veículo tiver cobertura_total = true.",
+      description: "Cria chamado de assistência 24h diretamente na fila. IMPORTANTE: Só pode ser usado se veículo tiver cobertura_total = true. Coletar TODOS os dados antes: tipo_servico, localizacao (com número/referência), destino e descricao.",
       parameters: {
         type: "object",
         properties: {
           tipo_servico: { type: "string", enum: ["guincho", "chaveiro", "troca_pneu", "pane_seca", "pane_eletrica", "outros"] },
-          localizacao: { type: "string" },
-          descricao: { type: "string" },
+          localizacao: { type: "string", description: "Endereço completo de retirada com número ou ponto de referência" },
+          destino: { type: "string", description: "Endereço de destino (oficina, residência, outro endereço)" },
+          descricao: { type: "string", description: "Descrição do problema" },
         },
-        required: ["tipo_servico", "localizacao", "descricao"],
+        required: ["tipo_servico", "localizacao", "destino", "descricao"],
       },
     },
   },
@@ -841,24 +844,60 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         });
       }
 
-      const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
-        associado_id: associadoId,
-        tipo: "assistencia",
-        dados: {
-          veiculo_id: veiculo?.id,
-          tipo_servico: args.tipo_servico,
-          localizacao: args.localizacao,
-          descricao: args.descricao,
-          origem: "whatsapp",
-        },
-        status: "pendente",
-      }).select("id").single();
+      // Verificar se já tem chamado em aberto
+      const { data: chamadoExistente } = await supabase
+        .from("chamados_assistencia")
+        .select("id, protocolo, status")
+        .eq("associado_id", associadoId)
+        .in("status", ['aberto', 'aguardando_prestador', 'prestador_despachado', 'prestador_a_caminho', 'em_atendimento'])
+        .maybeSingle();
 
-      if (error) throw error;
+      if (chamadoExistente) {
+        return JSON.stringify({
+          sucesso: false,
+          message: `Você já tem um chamado em aberto (${chamadoExistente.protocolo}). Aguarde a conclusão antes de abrir outro.`,
+        });
+      }
+
+      // Gerar protocolo
+      const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,'');
+      const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+      const protocolo = `ASS-${dateStr}-${random}`;
+
+      // Inserir diretamente na fila de chamados_assistencia
+      const { data: chamado, error } = await supabase
+        .from("chamados_assistencia")
+        .insert({
+          protocolo,
+          associado_id: associadoId,
+          veiculo_id: veiculo.id,
+          tipo_servico: args.tipo_servico,
+          descricao: args.descricao,
+          origem_endereco: args.localizacao,
+          destino_endereco: args.destino,
+          canal: 'whatsapp',
+          status: 'aberto',
+          data_abertura: new Date().toISOString(),
+        })
+        .select("id, protocolo")
+        .single();
+
+      if (error) {
+        console.error("[whatsapp-webhook] Erro ao criar chamado assistência:", error);
+        throw error;
+      }
+
+      // Inserir histórico
+      await supabase.from("chamados_assistencia_historico").insert({
+        chamado_id: chamado.id,
+        status_novo: 'aberto',
+        observacao: `Chamado aberto via WhatsApp - ${args.tipo_servico}`,
+      });
 
       return JSON.stringify({
         sucesso: true,
-        message: "Solicitação de assistência registrada! Um diretor irá aprovar em breve.",
+        protocolo: chamado.protocolo,
+        message: `Chamado de assistência aberto com sucesso! Protocolo: *${chamado.protocolo}*. Nossa equipe já está sendo acionada.`,
       });
     }
 
