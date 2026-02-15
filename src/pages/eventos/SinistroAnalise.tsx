@@ -1222,52 +1222,79 @@ export default function SinistroAnalise() {
                         <span>Aguardando envio de {docsPendentes.length} documento(s) solicitado(s)</span>
                       </div>
                     )}
-                    {isDiretor && !temDocsPendentes && (
-                      ['comunicado', 'aberto'].includes(sinistro.status as string) ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-                            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                            <span>A IA informará ao associado sobre a cota de coparticipação ao enviar o link.</span>
+                    {(() => {
+                      const analistaPodeDecidir = isAnalistaEventos && sinistro.status === 'aguardando_analise';
+                      const podeAprovar = (isDiretor || analistaPodeDecidir) && !temDocsPendentes;
+
+                      if (isDiretor && !temDocsPendentes && ['comunicado', 'aberto'].includes(sinistro.status as string)) {
+                        return (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                              <span>A IA informará ao associado sobre a cota de coparticipação ao enviar o link.</span>
+                            </div>
+                            <Button
+                              className="w-full bg-green-600 hover:bg-green-700 text-white"
+                              onClick={handleEnviarLinkAutoVistoria}
+                              disabled={enviandoLinkAutoVistoria}
+                            >
+                              {enviandoLinkAutoVistoria ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Send className="h-4 w-4 mr-2" />
+                              )}
+                              Enviar Link de Auto Vistoria
+                            </Button>
                           </div>
+                        );
+                      }
+
+                      if (podeAprovar) {
+                        return (
+                          <>
+                            <Button
+                              className="w-full bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() => setShowAprovar(true)}
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Aprovar Evento
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              className="w-full"
+                              onClick={() => setShowReprovar(true)}
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Recusar Evento
+                            </Button>
+                          </>
+                        );
+                      }
+
+                      if (isDiretor) {
+                        return (
                           <Button
-                            className="w-full bg-green-600 hover:bg-green-700 text-white"
-                            onClick={handleEnviarLinkAutoVistoria}
-                            disabled={enviandoLinkAutoVistoria}
+                            variant="destructive"
+                            className="w-full"
+                            onClick={() => setShowReprovar(true)}
                           >
-                            {enviandoLinkAutoVistoria ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Send className="h-4 w-4 mr-2" />
-                            )}
-                            Enviar Link de Auto Vistoria
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Reprovar Sinistro
                           </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          className="w-full bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => setShowAprovar(true)}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Aprovar Sinistro
-                        </Button>
-                      )
-                    )}
-                    {isDiretor && (
-                      <Button
-                        variant="destructive"
-                        className="w-full"
-                        onClick={() => setShowReprovar(true)}
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Reprovar Sinistro
-                      </Button>
-                    )}
-                    {!isDiretor && isAnalistaEventos && (
-                      <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-                        <FileCheck className="h-4 w-4 flex-shrink-0" />
-                        <span>Analise o sinistro e encaminhe para aprovação da diretoria.</span>
-                      </div>
-                    )}
+                        );
+                      }
+
+                      if (isAnalistaEventos) {
+                        return (
+                          <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                            <FileCheck className="h-4 w-4 flex-shrink-0" />
+                            <span>Analise o sinistro e encaminhe para aprovação da diretoria.</span>
+                          </div>
+                        );
+                      }
+
+                      return null;
+                    })()}
                     {!temDocsPendentes && (
                       <Button
                         variant="outline"
@@ -1454,6 +1481,7 @@ export default function SinistroAnalise() {
         open={showEnviarOficina}
         onOpenChange={setShowEnviarOficina}
         sinistro={sinistro}
+        marca={veiculo?.marca}
         onSuccess={() => navigate('/ordens-servico')}
       />
 

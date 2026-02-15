@@ -27,6 +27,7 @@ interface EnviarParaOficinaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sinistro: any;
+  marca?: string;
   onSuccess?: () => void;
 }
 
@@ -34,6 +35,7 @@ export function EnviarParaOficinaDialog({
   open,
   onOpenChange,
   sinistro,
+  marca,
   onSuccess,
 }: EnviarParaOficinaDialogProps) {
   const [oficinaId, setOficinaId] = useState('');
@@ -41,7 +43,7 @@ export function EnviarParaOficinaDialog({
   const [observacoes, setObservacoes] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { data: oficinas, isLoading: loadingOficinas } = useOficinas({ status: 'ativo' });
+  const { data: oficinas, isLoading: loadingOficinas } = useOficinas({ status: 'ativo', marca: marca || undefined });
 
   const handleSubmit = async () => {
     if (!oficinaId) {
