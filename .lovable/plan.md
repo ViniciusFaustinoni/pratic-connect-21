@@ -1,102 +1,74 @@
 
-# Corrigir Calculo da Cota de Coparticipacao no Fluxo de Aprovacao
+# Adicionar Botao de Excluir Chamado de Assistencia 24h (Apenas Diretor)
 
-## Problema Identificado
+## Resumo
 
-A cobranca de R$ 750,00 esta errada. O valor e um **hardcoded** (`VALORES_SINISTRO.cota_participacao_padrao = 750`). O fluxo atual nao consulta o plano do associado para calcular a cota corretamente.
-
-**Dados reais do sinistro SIN-20260215-0004:**
-- Plano: SELECT EXCLUSIVE → `cota_participacao = 6%`, `cota_minima = R$ 1.200`
-- Veiculo FIPE: R$ 70.008,00
-- Calculo correto: `max(70.008 * 6%, 1.200) = R$ 4.200,48`
-- Valor cobrado: R$ 750,00 (errado)
-
-**Causa raiz:** A edge function `aprovar-sinistro` nao calcula nem salva o `valor_cota_participacao` no sinistro. Quando o webhook do Autentique e acionado apos assinatura, ele le esse campo (que esta null ou foi preenchido com o default de R$ 750).
-
-## Formula de Calculo
-
-```text
-valor_cota = max(valor_fipe_veiculo * plano.cota_participacao / 100, plano.cota_minima)
-
-Se veiculo.uso_aplicativo = true:
-  valor_cota = max(valor_fipe * plano.cota_app_percent / 100, plano.cota_app_min)
-```
+Adicionar a opcao "Excluir Permanentemente" no dropdown de acoes da pagina de detalhe do chamado de assistencia, visivel apenas para diretores. A exclusao remove todas as dependencias (historico, atendimentos) e desvincula sinistros relacionados. Inclui dialogo de confirmacao com motivo obrigatorio.
 
 ## Alteracoes
 
-### 1. Edge Function `aprovar-sinistro/index.ts`
+### 1. Nova Edge Function: `supabase/functions/delete-chamado-assistencia/index.ts`
 
-Ao aprovar o sinistro, **calcular e salvar** o `valor_cota_participacao` correto:
+Seguindo o mesmo padrao da `delete-sinistro`, esta funcao ira:
 
-1. Alterar a query de busca do sinistro para incluir `plano_id` do associado e `valor_fipe, uso_aplicativo` do veiculo
-2. Buscar o plano do associado: `cota_participacao`, `cota_minima`, `cota_app_percent`, `cota_app_min`
-3. Calcular: `max(valor_fipe * percentual / 100, minimo)`
-4. Incluir `valor_cota_participacao` no update do sinistro
+1. Verificar autenticacao e role `diretor`
+2. Buscar dados do chamado para auditoria
+3. Exclusao em cascata:
+   - Excluir registros de `chamados_assistencia_atendimentos` (chamado_id)
+   - Excluir registros de `chamados_assistencia_historico` (chamado_id)
+   - Desvincular sinistros: `UPDATE sinistros SET chamado_origem_id = null, chamado_assistencia_id = null WHERE chamado_origem_id = ID OR chamado_assistencia_id = ID`
+   - Excluir o chamado principal de `chamados_assistencia`
+4. Registrar log de auditoria em `auth_logs`
 
-**Impacto:** Todo sinistro aprovado a partir de agora tera o valor correto salvo. O webhook do Autentique e a cobranca Asaas usarao esse valor automaticamente.
+### 2. Frontend: `src/pages/assistencia/ChamadoDetalhe.tsx`
 
-### 2. Constante `VALORES_SINISTRO.cota_participacao_padrao` em `src/types/sinistros.ts`
+- Importar `usePermissions`, `Trash2`, `ConfirmacaoExclusaoDialog` (reutilizar o componente existente de sinistros, ou criar um generico)
+- Adicionar estado para controlar o dialogo de confirmacao
+- No dropdown de acoes (linha 289-293), adicionar item "Excluir Permanentemente" visivel apenas quando `isDiretor`
+- Adicionar funcao `handleExcluir` que chama a edge function e redireciona para a lista apos sucesso
+- Renderizar o dialogo de confirmacao (reutilizando `ConfirmacaoExclusaoDialog` adaptando o protocolo)
 
-Manter a constante como fallback, mas nao sera mais usada no fluxo principal. O valor real vira do calculo do plano.
+### 3. Dialogo de Confirmacao
 
-### 3. Correcao retroativa do sinistro SIN-20260215-0004
+Reutilizar o componente `ConfirmacaoExclusaoDialog` ja existente em `src/components/sinistros/`, que ja possui:
+- Campo de motivo obrigatorio (minimo 5 caracteres)
+- Aviso de acao irreversivel
+- Lista de dados que serao excluidos
 
-Atualizar o `valor_cota_participacao` do sinistro atual para o valor correto (R$ 4.200,48) e, se ja houver cobranca Asaas criada, cancelar/ajustar.
+Adaptar o titulo/descricao para mencionar "Chamado de Assistencia" em vez de "Sinistro". Para isso, criar uma variante generica ou um novo componente similar em `src/components/assistencia/`.
 
 ## Detalhes Tecnicos
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/aprovar-sinistro/index.ts` | Calcular cota com base no plano + FIPE e salvar no sinistro ao aprovar |
+| `supabase/functions/delete-chamado-assistencia/index.ts` | Nova edge function para exclusao em cascata |
+| `src/pages/assistencia/ChamadoDetalhe.tsx` | Botao de excluir no dropdown (apenas diretor) + dialogo de confirmacao |
+| `src/components/assistencia/ConfirmacaoExclusaoChamadoDialog.tsx` | Novo componente de confirmacao (baseado no de sinistros) |
 
-### Trecho de codigo a adicionar (aprovar-sinistro)
+### Tabelas afetadas na exclusao
 
-Apos buscar o sinistro (linha ~36), buscar tambem o plano e calcular a cota:
-
-```
-// Buscar plano do associado para calcular cota
-const { data: associadoPlano } = await supabase
-  .from('associados')
-  .select('plano_id')
-  .eq('id', sinistro.associado.id)
-  .single();
-
-let valorCotaCalculado = null;
-if (associadoPlano?.plano_id && sinistro.veiculo?.valor_fipe) {
-  const { data: plano } = await supabase
-    .from('planos')
-    .select('cota_participacao, cota_minima, cota_app_percent, cota_app_min')
-    .eq('id', associadoPlano.plano_id)
-    .single();
-
-  if (plano) {
-    const { data: veiculoFull } = await supabase
-      .from('veiculos')
-      .select('uso_aplicativo')
-      .eq('id', sinistro.veiculo.id)
-      .single();
-
-    let percentual = plano.cota_participacao || 6;
-    let minimo = plano.cota_minima || 1200;
-    if (veiculoFull?.uso_aplicativo && plano.cota_app_percent) {
-      percentual = plano.cota_app_percent;
-      minimo = plano.cota_app_min || minimo;
-    }
-
-    valorCotaCalculado = Math.max(
-      sinistro.veiculo.valor_fipe * percentual / 100,
-      minimo
-    );
-  }
-}
+```text
+chamados_assistencia_atendimentos  --> DELETE WHERE chamado_id = X
+chamados_assistencia_historico     --> DELETE WHERE chamado_id = X
+sinistros                          --> UPDATE SET chamado_origem_id = null, chamado_assistencia_id = null
+chamados_assistencia               --> DELETE WHERE id = X
 ```
 
-Depois, no update do sinistro, incluir:
+### Trecho do dropdown (ChamadoDetalhe.tsx)
 
-```
-.update({
-  status: 'aprovado',
-  valor_cota_participacao: valorCotaCalculado,
-  updated_at: new Date().toISOString(),
-})
+Apos o item "Cancelar Chamado", adicionar:
+
+```tsx
+{isDiretor && (
+  <>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem
+      className="text-red-600"
+      onClick={() => setDialogExcluir(true)}
+    >
+      <Trash2 className="h-4 w-4 mr-2" />
+      Excluir Permanentemente
+    </DropdownMenuItem>
+  </>
+)}
 ```
