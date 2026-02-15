@@ -11,6 +11,7 @@ import {
 import { useCanais, useUpdateCanal, usePerformanceCanais } from '@/hooks/useMarketing';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CanalFormDialog } from '@/components/marketing/CanalFormDialog';
+import { useNavigate } from 'react-router-dom';
 
 const tipoIcons: Record<string, any> = {
   organico: Globe,
@@ -43,6 +44,7 @@ const tipoCores: Record<string, string> = {
 };
 
 export default function Canais() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingCanal, setEditingCanal] = useState<any>(null);
@@ -128,7 +130,8 @@ export default function Canais() {
             return (
               <Card 
                 key={canal.id} 
-                className={`transition-all hover:shadow-md ${!canal.ativo && 'opacity-60'}`}
+                className={`transition-all hover:shadow-md cursor-pointer ${!canal.ativo && 'opacity-60'}`}
+                onClick={() => navigate(`/marketing/canais/${canal.id}`)}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">

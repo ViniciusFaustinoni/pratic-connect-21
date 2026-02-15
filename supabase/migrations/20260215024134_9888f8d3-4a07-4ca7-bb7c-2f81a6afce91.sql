@@ -1,0 +1,1 @@
+ALTER TABLE distribuicao_config ADD COLUMN IF NOT EXISTS metodo varchar DEFAULT 'rodizio';
