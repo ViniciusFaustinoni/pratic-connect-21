@@ -226,7 +226,7 @@ const tools = [
     type: "function",
     function: {
       name: "criar_solicitacao_assistencia",
-      description: "Cria uma solicitação de assistência 24h que será analisada por um diretor. Use APENAS após coletar: tipo de serviço, localização e descrição do problema.",
+      description: "Cria chamado de assistência 24h diretamente na fila de atendimento. Use APENAS após coletar: tipo de serviço, localização de retirada (com número/referência), destino e descrição do problema.",
       parameters: {
         type: "object",
         properties: {
@@ -241,14 +241,18 @@ const tools = [
           },
           localizacao: {
             type: "string",
-            description: "Endereço ou localização atual do veículo",
+            description: "Endereço completo de retirada com número ou ponto de referência",
+          },
+          destino: {
+            type: "string",
+            description: "Endereço de destino (oficina, residência, outro endereço)",
           },
           descricao: {
             type: "string",
             description: "Descrição do problema",
           },
         },
-        required: ["tipo_servico", "localizacao", "descricao"],
+        required: ["tipo_servico", "localizacao", "destino", "descricao"],
       },
     },
   },
@@ -512,32 +516,78 @@ async function executeTool(
         if (!veiculoId) {
           const { data: veiculos } = await supabase
             .from("veiculos")
-            .select("id")
+            .select("id, cobertura_total")
             .eq("associado_id", associadoId)
             .eq("status", "ativo")
             .limit(1);
 
-          veiculoId = veiculos?.[0]?.id;
+          const veiculo = veiculos?.[0];
+          veiculoId = veiculo?.id;
+
+          // Verificar cobertura
+          if (veiculo && !veiculo.cobertura_total) {
+            return JSON.stringify({
+              sucesso: false,
+              bloqueado: true,
+              message: "Sua cobertura atual é apenas para roubo/furto. A assistência 24h está disponível apenas para veículos com cobertura total.",
+            });
+          }
         }
 
-        const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
-          associado_id: associadoId,
-          tipo: "assistencia",
-          dados: {
+        // Verificar se já tem chamado em aberto
+        const { data: chamadoExistente } = await supabase
+          .from("chamados_assistencia")
+          .select("id, protocolo, status")
+          .eq("associado_id", associadoId)
+          .in("status", ['aberto', 'aguardando_prestador', 'prestador_despachado', 'prestador_a_caminho', 'em_atendimento'])
+          .maybeSingle();
+
+        if (chamadoExistente) {
+          return JSON.stringify({
+            sucesso: false,
+            message: `Você já tem um chamado em aberto (${chamadoExistente.protocolo}). Aguarde a conclusão antes de abrir outro.`,
+          });
+        }
+
+        // Gerar protocolo
+        const dateStrAss = new Date().toISOString().slice(0,10).replace(/-/g,'');
+        const randomAss = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+        const protocoloAss = `ASS-${dateStrAss}-${randomAss}`;
+
+        // Inserir diretamente na fila de chamados_assistencia
+        const { data: chamadoNovo, error: chamadoError } = await supabase
+          .from("chamados_assistencia")
+          .insert({
+            protocolo: protocoloAss,
+            associado_id: associadoId,
             veiculo_id: veiculoId,
             tipo_servico: args.tipo_servico,
-            localizacao: args.localizacao,
             descricao: args.descricao,
-          },
-          status: "pendente",
-        }).select("id").single();
+            origem_endereco: args.localizacao,
+            destino_endereco: args.destino,
+            canal: 'app',
+            status: 'aberto',
+            data_abertura: new Date().toISOString(),
+          })
+          .select("id, protocolo")
+          .single();
 
-        if (error) throw error;
+        if (chamadoError) {
+          console.error("[assistente-chat] Erro ao criar chamado assistência:", chamadoError);
+          throw chamadoError;
+        }
+
+        // Inserir histórico
+        await supabase.from("chamados_assistencia_historico").insert({
+          chamado_id: chamadoNovo.id,
+          status_novo: 'aberto',
+          observacao: `Chamado aberto via App - ${args.tipo_servico}`,
+        });
 
         return JSON.stringify({
           sucesso: true,
-          message: "Solicitação de assistência 24h registrada! Um diretor irá analisar e aprovar em breve.",
-          id: data.id,
+          protocolo: chamadoNovo.protocolo,
+          message: `Chamado de assistência aberto com sucesso! Protocolo: **${chamadoNovo.protocolo}**. Nossa equipe já está sendo acionada.`,
         });
       }
 
