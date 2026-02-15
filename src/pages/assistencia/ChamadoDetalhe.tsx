@@ -127,6 +127,21 @@ export default function ChamadoDetalhe() {
     refetch: refetchPosicao 
   } = useChamadoPosicaoTempoReal(chamado?.veiculo?.id);
 
+  // Query: Sinistro vinculado ao chamado
+  const { data: sinistroVinculado } = useQuery({
+    queryKey: ['chamado-sinistro', id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('sinistros')
+        .select('id, protocolo')
+        .or(`chamado_assistencia_id.eq.${id},chamado_origem_id.eq.${id}`)
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!id,
+  });
+
   // Query: Histórico do Chamado
   const { data: historico } = useQuery({
     queryKey: ['chamado-historico', id],
@@ -256,12 +271,21 @@ export default function ChamadoDetalhe() {
               Atualizar Status
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              onClick={() => navigate(`/eventos/sinistros/novo?chamado_id=${chamado.id}&associado_id=${chamado.associado?.id}&veiculo_id=${chamado.veiculo?.id}`)}
-            >
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Abrir Sinistro
-            </DropdownMenuItem>
+            {sinistroVinculado ? (
+              <DropdownMenuItem 
+                onClick={() => navigate(`/eventos/sinistros/${sinistroVinculado.id}`)}
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Ver Sinistro ({sinistroVinculado.protocolo})
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem 
+                onClick={() => navigate(`/eventos/sinistros/novo?chamado_id=${chamado.id}&associado_id=${chamado.associado?.id}&veiculo_id=${chamado.veiculo?.id}`)}
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Abrir Sinistro
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-red-600">
               <XCircle className="h-4 w-4 mr-2" />
