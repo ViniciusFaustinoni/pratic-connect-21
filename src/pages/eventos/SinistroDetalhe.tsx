@@ -34,6 +34,7 @@ import { EncaminharSindicanciaDialog } from '@/components/sinistros/EncaminharSi
 import { CardSindicanciaStatus } from '@/components/sinistros/CardSindicanciaStatus';
 import { EncaminharJuridicoEventoModal } from '@/components/sinistros/EncaminharJuridicoEventoModal';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
+import { TimelineEventoTab } from '@/components/sinistros/TimelineEventoTab';
 import { TrajetoColisaoCard } from '@/components/sinistros/TrajetoColisaoCard';
 import { BannerAguardandoDiretoria } from '@/components/sinistros/BannerAguardandoDiretoria';
 import { PrazoRessarcimento } from '@/components/sinistros/PrazoRessarcimento';
@@ -1226,51 +1227,7 @@ export default function SinistroDetalhe() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {historico && historico.length > 0 ? (
-            <div className="relative">
-              <div className="absolute left-4 top-0 bottom-0 w-px bg-border" />
-              <div className="space-y-6">
-                {historico.map((item, index) => {
-                  const statusAnterior = item.status_anterior ? statusConfig[item.status_anterior] : null;
-                  const statusNovo = statusConfig[item.status_novo] || { label: item.status_novo, class: 'bg-gray-100 text-gray-800' };
-                  
-                  return (
-                    <div key={item.id} className="relative pl-10">
-                      <div className="absolute left-2 top-1 w-4 h-4 rounded-full bg-primary border-2 border-background" />
-                      <div className="bg-muted/50 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm text-muted-foreground">
-                            {formatDateTime(item.created_at)}
-                          </p>
-                          {item.usuario?.nome && (
-                            <p className="text-sm text-muted-foreground">
-                              Por: {item.usuario.nome}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {statusAnterior && (
-                            <>
-                              <Badge className={statusAnterior.class}>{statusAnterior.label}</Badge>
-                              <span className="text-muted-foreground">→</span>
-                            </>
-                          )}
-                          <Badge className={statusNovo.class}>{statusNovo.label}</Badge>
-                        </div>
-                        {item.observacao && (
-                          <p className="mt-2 text-sm">{item.observacao}</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Nenhuma atualização registrada
-            </p>
-          )}
+          <TimelineEventoTab sinistroId={id!} />
         </CardContent>
       </Card>
 

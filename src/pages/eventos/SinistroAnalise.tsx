@@ -1341,35 +1341,7 @@ export default function SinistroAnalise() {
               <CardTitle className="text-sm">📜 Histórico</CardTitle>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-64">
-                <div className="space-y-3">
-                  {historicoSinistro.map((h) => (
-                    <div key={h.id} className="border-l-2 border-muted pl-3 py-1">
-                      <p className="text-xs text-muted-foreground">
-                        {formatDateTime(h.created_at)}
-                      </p>
-                      <p className="text-sm">
-                        <Badge variant="outline" className="text-xs mr-2">
-                          {h.status_novo}
-                        </Badge>
-                      </p>
-                      {h.observacao && (
-                        <p className="text-xs text-muted-foreground mt-1">{h.observacao}</p>
-                      )}
-                      {h.usuario && (
-                        <p className="text-xs text-muted-foreground">
-                          por {(h.usuario as any).nome}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                  {historicoSinistro.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      Nenhum histórico
-                    </p>
-                  )}
-                </div>
-              </ScrollArea>
+              <TimelineEventoTab sinistroId={sinistro.id} />
             </CardContent>
           </Card>
         </div>
