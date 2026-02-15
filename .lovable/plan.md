@@ -1,54 +1,76 @@
 
-# Analista de Eventos: Migrar para Versao Web
+# Automatizar Pos-Aprovacao de Sinistro
 
-## Situacao Atual
+## Problema
 
-O perfil `analista_eventos` usa um layout mobile-first dedicado (`/analista-eventos`) com bottom navigation, header escuro e container `max-w-md`. O `useRouteGuard` forca o redirecionamento para `/analista-eventos` se o usuario tentar acessar qualquer outra rota.
+Quando o diretor aprova um sinistro na tela "Solicitacoes IA", o sistema apenas cria o registro na tabela `sinistros` com status `comunicado` e para ali. Nao gera link de auto-vistoria, nao notifica o associado, e nao agenda vistoria do regulador.
 
 ## O que sera feito
 
-Remover a restricao mobile e permitir que o analista de eventos acesse o sistema web completo (com sidebar, dashboard e as paginas de eventos existentes).
+Adicionar 4 acoes automaticas no bloco de sinistro da edge function `aprovar-solicitacao-ia`, logo apos a criacao do sinistro (depois da linha 258):
 
-### Mudanca 1 — Adicionar permissao `canManageSinistros` ao analista de eventos
+### 1. Gerar link de auto-vistoria de eventos
 
-No `src/hooks/usePermissions.ts`, adicionar `isAnalistaEventos` na lista de perfis que possuem `canManageSinistros`. Isso faz o menu "Eventos" (Dashboard, Sinistros, Sindicancias) aparecer na sidebar.
+Chamar internamente a edge function `gerar-link-evento` passando o `sinistro_id` recem-criado. Isso cria o registro em `sinistro_evento_links` com token unico e validade de 72h.
 
-```
-// Antes:
-canManageSinistros: hasRole('analista_cadastro') || isGerencia() || isDesenvolvedor,
+### 2. Enviar link via WhatsApp ao associado
 
-// Depois:
-canManageSinistros: hasRole('analista_cadastro') || isAnalistaEventos || isGerencia() || isDesenvolvedor,
-```
+Buscar dados do associado (nome, whatsapp/telefone) e enviar mensagem explicando as 3 etapas:
+- Etapa 1: Enviar no minimo 5 fotos do veiculo danificado
+- Etapa 2: Enviar Boletim de Ocorrencia e numero do B.O.
+- Etapa 3: Relato escrito ou em audio sobre o ocorrido
 
-### Mudanca 2 — Remover redirect forcado do useRouteGuard
+A mensagem incluira o link publico de auto-vistoria (formato: `https://{preview_url}/evento/{token}`).
 
-No `src/hooks/useRouteGuard.ts`, remover o bloco que forca `analista_eventos` para `/analista-eventos`. O analista agora acessara `/dashboard` como qualquer funcionario web.
+### 3. Agendar vistoria do regulador
 
-### Mudanca 3 — Remover `isAnalistaEventosOnly` de `isPerfilLimitado`
+Inserir na tabela `servicos` com:
+- `tipo`: `vistoria_sinistro`
+- `tipo_servico`: `vistoria_sinistro`
+- `status`: `pendente`
+- `data_agendada`: 3 dias uteis a partir de hoje
+- `sinistro_id`: o sinistro recem-criado
+- `associado_id` e `veiculo_id`: do sinistro
+- `origem`: `sinistro_ia`
+- `observacoes`: referencia ao protocolo
 
-No `src/hooks/usePermissions.ts`, remover `isAnalistaEventosOnly` da lista `isPerfilLimitado`. Isso garante que o analista veja o menu lateral completo (sidebar) ao inves do menu simplificado de "Perfil".
+### 4. Atualizar status do sinistro para `em_analise`
 
-### Mudanca 4 — Ajustar rotas permitidas no useRouteGuard
-
-Adicionar rotas `/eventos/*`, `/dashboard` e `/perfil` como rotas permitidas para o analista de eventos (similar ao que ja existe para `isAnalistaCadastroOnly`), caso o perfil precise de restricao parcial. Alternativamente, simplesmente nao restringir o analista de eventos (ele acessa tudo que `canManageSinistros` permite via sidebar).
-
-### Mudanca 5 — Manter rotas `/analista-eventos` como fallback
-
-As rotas `/analista-eventos/*` continuam existindo no `App.tsx` para nao quebrar links antigos, mas o analista sera redirecionado para `/dashboard` ao fazer login.
+Apos todas as acoes, atualizar o sinistro de `comunicado` para `em_analise` e registrar no historico.
 
 ---
 
-## Arquivos a Modificar
+## Arquivo a Modificar
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/hooks/usePermissions.ts` | Adicionar `isAnalistaEventos` em `canManageSinistros`, remover de `isPerfilLimitado` |
-| `src/hooks/useRouteGuard.ts` | Remover bloco de redirect forcado para `/analista-eventos` |
+| `supabase/functions/aprovar-solicitacao-ia/index.ts` | Adicionar bloco pos-criacao no case `sinistro` (linhas 258+) |
 
-## Resultado
+## Detalhes Tecnicos
 
-- O analista de eventos faz login e ve o dashboard web com sidebar
-- No menu lateral, aparece "Eventos" com Dashboard, Sinistros e Sindicancias
-- Ele acessa as mesmas telas que diretores/gerentes usam para gerenciar eventos
-- As rotas mobile `/analista-eventos/*` continuam funcionando como fallback
+**Calculo de 3 dias uteis:**
+```typescript
+function addBusinessDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const dow = result.getDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return result;
+}
+```
+
+**Fluxo apos criar sinistro (linhas 258+):**
+```
+1. Gerar link evento via fetch para gerar-link-evento
+2. Buscar associado (nome, whatsapp, telefone)
+3. Montar URL do link: {SITE_URL}/evento/{token}
+4. Enviar WhatsApp com instrucoes e link
+5. Inserir servico tipo vistoria_sinistro (data_agendada = +3 dias uteis)
+6. Atualizar sinistro status -> em_analise
+7. Registrar historico da mudanca de status
+```
+
+Todas as acoes pos-criacao serao envolvidas em try/catch individual para nao bloquear a aprovacao caso alguma falhe.
