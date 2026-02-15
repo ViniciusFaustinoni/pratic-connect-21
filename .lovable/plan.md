@@ -1,83 +1,126 @@
 
-# Criar Contas a Pagar Automaticamente a Partir de Eventos
 
-## Contexto
+# Aba Recorrentes em Contas a Pagar + Cron Job
 
-Atualmente, as contas a pagar sao criadas apenas manualmente pelo financeiro (via `NovaContaPagarModal`). Tres pontos criticos do fluxo de eventos nao geram registros automaticos em `contas_pagar`:
+## Resumo
 
-1. **Cotacao de pecas aprovada** -- o auto center forneceu pecas, precisa receber
-2. **Reparo concluido (veiculo liberado)** -- a oficina fez o trabalho, precisa receber
-3. **Indenizacao aprovada** -- o associado tem direito ao valor, precisa receber
+Adicionar uma aba "Recorrentes" na tela de Contas a Pagar para cadastrar despesas fixas que se repetem (aluguel, salarios, sistemas, etc.). Criar uma edge function cron que roda diariamente e gera automaticamente as contas a pagar quando a data configurada chega.
 
-A tabela `contas_pagar` ja tem os campos `referencia_tipo` e `referencia_id` para vincular a origem.
+## Etapa 1 -- Criar tabela `despesas_recorrentes`
 
-## Plano de Implementacao
+Nova tabela no banco de dados com os campos:
 
-### 1. Cotacao Aprovada -- Conta para o Auto Center
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| id | uuid (PK) | Identificador |
+| fornecedor_nome | text | Nome do fornecedor |
+| fornecedor_documento | text | CPF/CNPJ |
+| categoria | text | Mesmas categorias de contas_pagar |
+| subcategoria | text | Opcional |
+| descricao | text | Ex: "Aluguel sede", "Lovable mensal" |
+| valor | numeric | Valor fixo da despesa |
+| frequencia | text | mensal, quinzenal, semanal, anual |
+| dia_vencimento | integer | Dia do mes para gerar (1-28) |
+| forma_pagamento | text | PIX, transferencia, boleto |
+| banco | text | Dados bancarios opcionais |
+| agencia | text | |
+| conta | text | |
+| pix_chave | text | |
+| observacao | text | |
+| ativo | boolean | Se esta ativo ou pausado |
+| ultimo_lancamento | date | Data do ultimo lancamento gerado |
+| proximo_lancamento | date | Proximo vencimento calculado |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
 
-**Arquivo:** `src/hooks/useCotacoesEvento.ts`
+RLS: habilitar com policy para usuarios autenticados (perfis financeiro e diretor).
 
-No `onSuccess` do `aprovarCotacao` (linha 115), apos gerar a OS via edge function, inserir automaticamente em `contas_pagar`:
+## Etapa 2 -- Componente `DespesaRecorrenteModal`
 
-- Buscar dados do auto center (nome, documento) da cotacao aprovada
-- Inserir conta com:
-  - `fornecedor_nome`: nome do auto center
-  - `categoria`: `pecas`
-  - `valor`: `cotacao.valor_total`
-  - `data_vencimento`: 30 dias a partir de hoje (prazo padrao fornecedor)
-  - `referencia_tipo`: `cotacao_pecas`
-  - `referencia_id`: `cotacaoId`
-  - `observacao`: protocolo do sinistro + numero OS
-  - `status`: `pendente`
+Novo arquivo: `src/components/financeiro/DespesaRecorrenteModal.tsx`
 
-### 2. Reparo Concluido -- Conta para a Oficina
+Modal para criar/editar despesas recorrentes com campos:
+- Fornecedor (nome + documento)
+- Categoria (select, mesmas opcoes de contas_pagar)
+- Descricao
+- Valor (R$)
+- Frequencia (mensal, quinzenal, semanal, anual)
+- Dia do vencimento (1-28)
+- Forma de pagamento + dados bancarios/PIX
+- Observacao
 
-**Arquivo:** `src/components/oficinas/OSConclusaoModal.tsx`
+Segue o mesmo padrao visual do `NovaContaPagarModal.tsx`.
 
-Na funcao `handleLiberarVeiculo` (linha 208), apos o lancamento contabil (linha 236-251), inserir conta a pagar para a oficina:
+## Etapa 3 -- Adicionar aba "Recorrentes" em `ContasPagar.tsx`
 
-- Separar valor de pecas (ja coberto na conta do auto center) do valor de mao de obra
-- Inserir conta com:
-  - `fornecedor_nome`: nome da oficina
-  - `fornecedor_documento`: CNPJ da oficina
-  - `categoria`: `mao_de_obra`
-  - `valor`: valor da mao de obra da OS (itens tipo `servico` e `mao_de_obra`)
-  - `data_vencimento`: 15 dias a partir de hoje
-  - `referencia_tipo`: `ordem_servico`
-  - `referencia_id`: `os.id`
-  - `observacao`: numero da OS + protocolo sinistro
-  - `status`: `pendente`
+Modificar `src/pages/financeiro/ContasPagar.tsx`:
 
-### 3. Indenizacao Aprovada -- Conta para o Associado
+- Mover as tabs existentes (Todas, Pendentes, Vencidas, Pagas, Canceladas) para ficarem dentro de uma aba "Contas"
+- Adicionar nova aba de nivel superior: **Contas** | **Recorrentes**
+- Na aba "Recorrentes":
+  - Botao "+ Nova Despesa Recorrente"
+  - Tabela com colunas: Descricao, Fornecedor, Categoria, Valor, Frequencia, Proximo Vencimento, Status (ativo/inativo), Acoes
+  - Acoes: Editar, Pausar/Ativar, Gerar agora (cria conta imediatamente), Excluir
+  - Query em `despesas_recorrentes` ordenada por `proximo_lancamento`
 
-**Arquivo:** `src/components/sinistros/IniciarIndenizacaoModal.tsx`
+## Etapa 4 -- Edge Function `cron-gerar-despesas-recorrentes`
 
-Na `mutationFn` (linha 62), apos atualizar sinistro e criar documentos (passo 3, linha 88), inserir conta a pagar:
+Novo arquivo: `supabase/functions/cron-gerar-despesas-recorrentes/index.ts`
 
-- Buscar dados do associado (nome, CPF)
-- Inserir conta com:
-  - `fornecedor_nome`: nome do associado
-  - `fornecedor_documento`: CPF do associado
-  - `categoria`: `indenizacao`
-  - `valor`: `valorFinal` (FIPE - depreciacoes)
-  - `data_vencimento`: 60 dias uteis a partir de hoje (prazo regulamento)
-  - `referencia_tipo`: `sinistro`
-  - `referencia_id`: `sinistroId`
-  - `observacao`: protocolo + "Indenizacao integral - Perda total ou roubo nao recuperado"
-  - `status`: `pendente`
+Logica:
+1. Buscar todas as despesas recorrentes onde `ativo = true` e `proximo_lancamento <= hoje`
+2. Para cada uma, inserir em `contas_pagar`:
+   - Copiar fornecedor, categoria, valor, forma de pagamento
+   - `data_vencimento` = `proximo_lancamento`
+   - `referencia_tipo` = `despesa_recorrente`
+   - `referencia_id` = id da despesa recorrente
+   - `observacao` = descricao + " (recorrente)"
+   - `status` = `pendente`
+3. Atualizar `despesas_recorrentes`:
+   - `ultimo_lancamento` = hoje
+   - `proximo_lancamento` = calcular proximo baseado na frequencia (mensal: +1 mes, quinzenal: +15 dias, semanal: +7 dias, anual: +1 ano)
+4. Retornar contagem de contas geradas
+
+Adicionar ao `supabase/config.toml`:
+```
+[functions.cron-gerar-despesas-recorrentes]
+verify_jwt = false
+```
+
+## Etapa 5 -- Agendar Cron Job
+
+Executar SQL para agendar a edge function diariamente as 6h (usando `pg_cron` + `pg_net`):
+
+```sql
+select cron.schedule(
+  'gerar-despesas-recorrentes-diario',
+  '0 6 * * *',
+  $$
+  select net.http_post(
+    url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-gerar-despesas-recorrentes',
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}'::jsonb,
+    body:='{}'::jsonb
+  ) as request_id;
+  $$
+);
+```
+
+## Arquivos Criados/Modificados
+
+| Arquivo | Acao |
+|---------|------|
+| Migracao SQL (tabela `despesas_recorrentes`) | Criar |
+| `src/components/financeiro/DespesaRecorrenteModal.tsx` | Criar |
+| `src/pages/financeiro/ContasPagar.tsx` | Modificar (adicionar aba) |
+| `supabase/functions/cron-gerar-despesas-recorrentes/index.ts` | Criar |
+| `supabase/config.toml` | Modificar (adicionar funcao) |
+| SQL insert para `cron.schedule` | Executar |
 
 ## Detalhes Tecnicos
 
-- Todas as insercoes usam `supabase.from('contas_pagar').insert(...)` seguindo o padrao ja existente em `NovaContaPagarModal.tsx`
-- `referencia_tipo` + `referencia_id` vinculam a conta a origem (cotacao, OS ou sinistro)
-- As insercoes sao feitas em `try/catch` separados para nao bloquear o fluxo principal se falharem (o fluxo de evento/OS e mais critico que o registro financeiro)
-- Invalidacao de queries `['contas-pagar']` e `['contas-pagar-kpis']` apos cada insercao para atualizar a tela de Contas a Pagar
-- Para o calculo de 60 dias uteis da indenizacao, usaremos uma aproximacao de 84 dias corridos (60 uteis x 1.4)
-- Nenhuma migracao de banco necessaria -- todos os campos ja existem na tabela `contas_pagar`
-- Nenhuma edge function nova necessaria
+- A tabela `despesas_recorrentes` e separada de `contas_pagar` porque sao conceitos diferentes: uma e o template, outra e o lancamento real
+- O campo `dia_vencimento` e limitado a 28 para evitar problemas com meses de 28/29/30/31 dias
+- O cron roda diariamente mas so gera se `proximo_lancamento <= hoje`, entao nao duplica
+- A acao "Gerar agora" na UI permite forcar a geracao fora do horario do cron
+- Despesas pausadas (`ativo = false`) sao ignoradas pelo cron
 
-## Arquivos Modificados
-
-1. `src/hooks/useCotacoesEvento.ts` -- adicionar insercao em `contas_pagar` no `onSuccess` de `aprovarCotacao`
-2. `src/components/oficinas/OSConclusaoModal.tsx` -- adicionar insercao em `contas_pagar` no `handleLiberarVeiculo`
-3. `src/components/sinistros/IniciarIndenizacaoModal.tsx` -- adicionar insercao em `contas_pagar` na `mutationFn`
