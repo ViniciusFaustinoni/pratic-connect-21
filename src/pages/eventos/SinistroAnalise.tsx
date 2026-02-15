@@ -173,6 +173,7 @@ export default function SinistroAnalise() {
   const [showJuridico, setShowJuridico] = useState(false);
   const [showSuspender, setShowSuspender] = useState(false);
   const [enviandoLinkAgendamento, setEnviandoLinkAgendamento] = useState(false);
+  const [enviandoLinkAutoVistoria, setEnviandoLinkAutoVistoria] = useState(false);
 
   const {
     sinistro,
@@ -295,6 +296,57 @@ export default function SinistroAnalise() {
       setEnviandoLinkAgendamento(false);
     }
   };
+  const handleEnviarLinkAutoVistoria = async () => {
+    if (!sinistro || !associado) return;
+    const telefone = associado.whatsapp || associado.telefone;
+    if (!telefone) {
+      toast.error('Associado não possui telefone cadastrado.');
+      return;
+    }
+    setEnviandoLinkAutoVistoria(true);
+    try {
+      // 1. Gerar link de evento
+      const { data: linkData, error: linkError } = await supabase.functions.invoke('gerar-link-evento', {
+        body: { sinistro_id: sinistro.id },
+      });
+      if (linkError || !linkData?.success) {
+        throw new Error(linkData?.error || linkError?.message || 'Erro ao gerar link');
+      }
+
+      // 2. Montar e enviar mensagem WhatsApp
+      const link = `https://pratic-connect-21.lovable.app/evento/${linkData.token}`;
+      const nome = associado.nome?.split(' ')[0] || 'Associado';
+      const mensagem = `Olá ${nome}!\n\nSeu sinistro ${sinistro.protocolo} foi registrado com sucesso.\n\nPara dar andamento ao processo, você precisa realizar a *auto vistoria* através do link abaixo:\n\n${link}\n\n📸 *Etapa 1* - Envie as fotos do veículo\n📋 *Etapa 2* - Envie o Boletim de Ocorrência\n📝 *Etapa 3* - Relate o que aconteceu\n\n⚠️ *Importante:* A IA irá informá-lo sobre a cota de coparticipação aplicável.\n\nO link é válido por 72 horas.\n\nABP PraticCar`;
+
+      const { error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
+        body: { telefone, mensagem },
+      });
+      if (whatsError) throw whatsError;
+
+      // 3. Atualizar status do sinistro
+      await supabase
+        .from('sinistros')
+        .update({ status: 'em_analise' })
+        .eq('id', sinistro.id);
+
+      // 4. Registrar no histórico
+      await supabase.from('sinistro_historico').insert({
+        sinistro_id: sinistro.id,
+        status_anterior: sinistro.status,
+        status_novo: 'em_analise',
+        observacao: 'Link de auto vistoria enviado ao associado via WhatsApp',
+      });
+
+      toast.success('Link de auto vistoria enviado com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+    } catch (err: any) {
+      console.error('Erro ao enviar link auto vistoria:', err);
+      toast.error('Erro ao enviar link: ' + (err.message || 'Tente novamente'));
+    } finally {
+      setEnviandoLinkAutoVistoria(false);
+    }
+  };
+
   const TipoIcon = tipoConfig[sinistro.tipo]?.icon || FileText;
   const statusInfo = statusConfig[sinistro.status] || { label: sinistro.status, class: '' };
 
@@ -784,13 +836,34 @@ export default function SinistroAnalise() {
                       </div>
                     )}
                     {isDiretor && !temDocsPendentes && (
-                      <Button
-                        className="w-full bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => setShowAprovar(true)}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Aprovar Sinistro
-                      </Button>
+                      ['comunicado', 'aberto'].includes(sinistro.status as string) ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                            <span>A IA informará ao associado sobre a cota de coparticipação ao enviar o link.</span>
+                          </div>
+                          <Button
+                            className="w-full bg-green-600 hover:bg-green-700 text-white"
+                            onClick={handleEnviarLinkAutoVistoria}
+                            disabled={enviandoLinkAutoVistoria}
+                          >
+                            {enviandoLinkAutoVistoria ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Send className="h-4 w-4 mr-2" />
+                            )}
+                            Enviar Link de Auto Vistoria
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => setShowAprovar(true)}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Aprovar Sinistro
+                        </Button>
+                      )
                     )}
                     {isDiretor && (
                       <Button
