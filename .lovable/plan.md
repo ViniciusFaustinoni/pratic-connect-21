@@ -1,226 +1,175 @@
 
-# Pagina de Audiencias Completa — Calendario, Lista, Detalhe e Notificacoes
+
+# Consultas Juridicas 360 — Pesquisa Unificada e Antecedentes
 
 ## Resumo
 
-Reescrever completamente o `AudienciasAgenda.tsx` existente com 4 KPI cards (Hoje, Semana, Mes, Pendentes de Registro), novos tipos de audiencia (administrativa, mediacao), calendario expandido com painel lateral Sheet, lista com colunas Partes/Forum/Advogado/Resultado, modal de agendamento expandido com modalidade/advogado/testemunhas/documentos/prazo automatico, e criar pagina de detalhe individual. Expandir hook `useAudiencias` e tabela `processos_audiencias` com novas colunas.
+Transformar a pagina `/juridico/consultas` em uma central de pesquisa 360 para o advogado. A pagina atual (pareceres juridicos internos) sera movida para `/juridico/pareceres` e a rota `/juridico/consultas` recebera a nova funcionalidade: barra de busca inteligente (CPF, placa, protocolo, nome), tabs por tipo de resultado (Associados, Veiculos, Eventos, Processos, Antecedentes, Regulamento), cards expandiveis com visao 360, e pesquisa de antecedentes via IA.
 
 ## Migracao de Banco
 
-A tabela `processos_audiencias` precisa de novas colunas para suportar modalidade, advogado responsavel, juiz, testemunhas estruturadas, documentos necessarios, e dados de resultado expandidos:
+Criar tabela `pesquisas_antecedentes` para salvar relatorios:
 
 ```text
-ALTER TABLE public.processos_audiencias
-  ADD COLUMN IF NOT EXISTS modalidade varchar DEFAULT 'presencial',
-  ADD COLUMN IF NOT EXISTS forum varchar,
-  ADD COLUMN IF NOT EXISTS vara varchar,
-  ADD COLUMN IF NOT EXISTS sala varchar,
-  ADD COLUMN IF NOT EXISTS endereco_completo text,
-  ADD COLUMN IF NOT EXISTS advogado_id uuid REFERENCES advogados(id),
-  ADD COLUMN IF NOT EXISTS juiz_orgao varchar,
-  ADD COLUMN IF NOT EXISTS testemunhas_lista jsonb DEFAULT '[]',
-  ADD COLUMN IF NOT EXISTS documentos_necessarios jsonb DEFAULT '[]',
-  ADD COLUMN IF NOT EXISTS resultado_tipo varchar,
-  ADD COLUMN IF NOT EXISTS resultado_valor numeric,
-  ADD COLUMN IF NOT EXISTS resultado_condicoes text,
-  ADD COLUMN IF NOT EXISTS resultado_prazo_pagamento date,
-  ADD COLUMN IF NOT EXISTS resultado_prazo_recurso date,
-  ADD COLUMN IF NOT EXISTS resultado_nova_data timestamptz,
-  ADD COLUMN IF NOT EXISTS resultado_motivo_adiamento text,
-  ADD COLUMN IF NOT EXISTS resultado_resumo text,
-  ADD COLUMN IF NOT EXISTS prazo_automatico_criado boolean DEFAULT false,
-  ADD COLUMN IF NOT EXISTS registrado_em timestamptz,
-  ADD COLUMN IF NOT EXISTS registrado_por uuid;
+CREATE TABLE public.pesquisas_antecedentes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  cpf_cnpj varchar NOT NULL,
+  nome varchar NOT NULL,
+  resultado jsonb NOT NULL DEFAULT '{}',
+  score_risco varchar, -- baixo, atencao, alto
+  associado_id uuid REFERENCES associados(id),
+  processo_id uuid REFERENCES processos(id),
+  pesquisado_por uuid,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.pesquisas_antecedentes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users can manage pesquisas" ON public.pesquisas_antecedentes FOR ALL USING (auth.uid() IS NOT NULL);
 ```
 
-Campos:
-- `modalidade`: presencial, virtual, hibrida
-- `forum`, `vara`, `sala`, `endereco_completo`: dados de localizacao detalhados
-- `advogado_id`: advogado responsavel por representar a Pratic
-- `juiz_orgao`: nome do juiz ou orgao que preside
-- `testemunhas_lista`: JSON array com objetos {nome, funcao, confirmado}
-- `documentos_necessarios`: JSON array com objetos {descricao, preparado}
-- `resultado_tipo`: acordo, conciliacao_frustrada, instrucao_concluida, sentenca, nova_audiencia, adiada, nao_compareceu
-- `resultado_valor`, `resultado_condicoes`, etc: campos especificos do resultado
-- `prazo_automatico_criado`: flag se o prazo automatico foi criado ao agendar
+## Arquivos a Criar
+
+### 1. `src/pages/juridico/ConsultasUnificadas.tsx` (novo — pagina principal)
+
+Pagina completa com:
+
+**Barra de busca grande centralizada** (estilo Google):
+- Input com placeholder "Buscar por CPF, placa, protocolo, nome..."
+- Deteccao automatica do tipo de busca:
+  - 11 digitos ou formato XXX.XXX.XXX-XX → busca associado por CPF
+  - Formato ABC1D23 ou ABC-1234 (7 chars) → busca veiculo por placa
+  - Formato EVT-20XX-XXXX → busca sinistro por protocolo
+  - Formato XXXX/20XX → busca processo por numero
+  - Texto livre → busca por nome em associados, parte_contraria_nome em processos
+
+**Tabs abaixo da busca:**
+- Associados / Veiculos / Eventos / Processos / Antecedentes / Regulamento
+
+**Cada tab renderiza o componente correspondente** passando o termo de busca.
+
+### 2. `src/components/juridico/consultas/ConsultaAssociado.tsx`
+
+Recebe `associadoId` ou resultado de busca. Mostra:
+
+- Card "Dados Pessoais": nome, CPF, telefone, email, endereco, status (badge), data adesao, plano
+- Card "Veiculos": lista de veiculos do associado com placa, marca/modelo, valor FIPE, status, coberturas. Link para cada veiculo.
+- Card "Historico de Eventos": todos os sinistros do associado, ordenados por data. Badge "Historico frequente" se > 3 eventos em 24 meses.
+- Card "Processos Juridicos": processos onde associado_id = id. Numero, tipo, status, advogado.
+- Card "Sindicancias": busca sinistros com sindicancia vinculada. Alerta vermelho se fraude comprovada.
+- Card "Situacao Financeira": query em `cobrancas` — total em aberto, boletos atrasados, valor em debito.
+
+Queries: todas com `useQuery` usando o `associadoId` como chave.
+
+### 3. `src/components/juridico/consultas/ConsultaVeiculo.tsx`
+
+Recebe `veiculoId` ou resultado de busca por placa. Mostra:
+
+- Card "Dados do Veiculo": placa, marca/modelo/ano/cor, chassi, RENAVAM, valor FIPE, combustivel, coberturas ativas, uso_aplicativo. Alerta se veiculo de leilao.
+- Card "Proprietario Atual": dados do associado dono. Link para consulta do associado.
+- Card "Historico de Proprietarios": busca veiculos com `substituido_por` ou troca de `associado_id` (se existir historico no sistema).
+- Card "Historico de Eventos": sinistros com `veiculo_id = id`. Alerta se > 3 eventos.
+- Card "Vistoria de Adesao": usa hook `useFotosVistoriaPorVeiculo` ja existente para exibir fotos agrupadas.
+
+### 4. `src/components/juridico/consultas/ConsultaEvento.tsx`
+
+Recebe `eventoId` (sinistro). Mostra visao consolidada:
+
+- Timeline visual simplificada: data do evento, comunicacao, documentacao recebida, vistoria, analise, sindicancia (se houver), juridico (se houver), pagamento (se houver), conclusao. Usa dados de `status` e timestamps do sinistro + andamentos.
+- Card "Valores": valor FIPE, valor participacao, valor indenizacao, valor pago.
+- Card "Sindicancias Vinculadas": busca `sindicancias` com `sinistro_id = id`.
+- Card "Processos Vinculados": busca `processos` com `sinistro_id = id`.
+- Card "Documentos": busca documentos do sinistro em `documentos_sinistro` (ou tabela equivalente).
+
+### 5. `src/components/juridico/consultas/ConsultaProcessos.tsx`
+
+Lista de processos encontrados pela busca (por numero ou texto). Cada resultado e um card com: numero, tipo (badge), partes, status (badge), advogado, valor da causa. Link para `/juridico/processos/:id`.
+
+### 6. `src/components/juridico/consultas/ConsultaAntecedentes.tsx`
+
+Interface de pesquisa de antecedentes:
+
+- Campos: CPF ou CNPJ (obrigatorio) + Nome completo (obrigatorio)
+- Botao "Pesquisar Antecedentes" — chama edge function `pesquisar-antecedentes`
+- Enquanto pesquisa: skeleton + spinner
+- Resultado organizado em secoes colapsaveis:
+  - Situacao Cadastral
+  - Processos Judiciais Publicos
+  - Protestos
+  - Redes Sociais Publicas
+  - Noticias
+  - Score de Risco visual (verde/amarelo/vermelho)
+- Campo "Resultado Manual" — textarea para o advogado colar pesquisas externas
+- Botao "Salvar Relatorio" — grava na tabela `pesquisas_antecedentes`
+- Se houver processo vinculado (select opcional), salva referencia
+- Historico de pesquisas anteriores (lista abaixo)
+
+### 7. `src/components/juridico/consultas/ConsultaRegulamento.tsx`
+
+Secao de referencia com artigos do regulamento organizados por tema:
+
+- Acordeao (Accordion) com temas:
+  - "Irregularidades e Nao Coberturas (art. 7)" — subitens 7.2, 7.58
+  - "Ressarcimento Integral (art. 10)" — subitens 10.1, 10.2, 10.4, 10.5, 10.11, 10.12
+  - "Documentacao (art. 8)" — subitens 8.3, 8.5, 8.6
+- Cada artigo expandivel com texto completo (hardcoded inicialmente, pode ser migrado para tabela depois)
+- Campo de busca dentro do regulamento (filtra artigos por texto)
+
+### 8. `supabase/functions/pesquisar-antecedentes/index.ts` (novo)
+
+Edge function que usa Lovable AI para pesquisar informacoes publicas:
+
+- Recebe: `{ cpf_cnpj, nome }`
+- Usa `LOVABLE_API_KEY` com modelo `google/gemini-3-flash-preview`
+- Prompt instruindo a IA a pesquisar e organizar informacoes publicas sobre a pessoa/empresa
+- Retorna JSON estruturado com secoes: situacao_cadastral, processos, protestos, redes_sociais, noticias, score_risco
+- Trata erros 429/402 como os outros edge functions do projeto
 
 ## Arquivos a Modificar
 
-### 1. `src/types/juridico.ts`
+### 9. `src/App.tsx`
 
-Expandir tipos de audiencia e adicionar novos tipos:
+- Adicionar rota `/juridico/pareceres` → `ConsultasJuridicas` (componente existente renomeado)
+- Alterar rota `/juridico/consultas` → `ConsultasUnificadas` (nova pagina)
+- Importar novos componentes
 
+### 10. `src/components/layout/AppSidebar.tsx`
+
+Atualizar menu do juridico:
+- "Consultas" → `/juridico/consultas` (nova pagina 360) com icone Search
+- Adicionar "Pareceres" → `/juridico/pareceres` com icone HelpCircle
+
+### 11. `src/components/layout/GlobalBreadcrumb.tsx`
+
+Adicionar patterns para:
+- `/juridico/consultas` → "Consultas 360"
+- `/juridico/pareceres` → "Pareceres Jurídicos"
+
+### 12. `supabase/config.toml`
+
+Adicionar configuracao da nova edge function:
 ```text
-export type TipoAudiencia = 'conciliacao' | 'instrucao' | 'julgamento' | 'administrativa' | 'mediacao' | 'una' | 'especial';
-
-export type ModalidadeAudiencia = 'presencial' | 'virtual' | 'hibrida';
-
-export type ResultadoAudiencia = 'acordo' | 'conciliacao_frustrada' | 'instrucao_concluida' | 'sentenca' | 'nova_audiencia' | 'adiada' | 'nao_compareceu';
-
-// Adicionar 'nao_compareceu' ao StatusAudiencia
-export type StatusAudiencia = 'agendada' | 'realizada' | 'adiada' | 'cancelada' | 'redesignada' | 'nao_compareceu';
+[functions.pesquisar-antecedentes]
+verify_jwt = false
 ```
-
-Adicionar labels e colors para:
-- TIPO_AUDIENCIA_LABELS: administrativa -> 'Administrativa', mediacao -> 'Mediação'
-- TIPO_AUDIENCIA_COLORS: conciliacao -> verde, instrucao -> azul, julgamento -> roxo, administrativa -> cinza, mediacao -> laranja
-- MODALIDADE_AUDIENCIA_LABELS
-- RESULTADO_AUDIENCIA_LABELS com descricoes
-- STATUS_AUDIENCIA_LABELS e COLORS: adicionar nao_compareceu -> vermelho
-
-### 2. `src/hooks/useAudiencias.ts`
-
-Expandir interface `Audiencia`:
-- Adicionar todos os novos campos da migracao
-- Expandir a query select para incluir `advogado:advogados(id, nome, oab, oab_estado)`
-
-Expandir `AudienciasFilters`:
-- Adicionar: `advogado_id`, `processo_id`
-
-Adicionar mutations:
-- `criarAudiencia`: insert completo com todos os novos campos. Apos criar, se `prazo_automatico` = true, criar prazo na tabela `processos_prazos` com tipo='judicial', lembrete_dias=[7,3,1]
-- `registrarResultado`: update expandido que:
-  - Salva resultado_tipo, resultado_valor, resultado_resumo, etc
-  - Atualiza status conforme resultado (acordo -> realizada, nao_compareceu -> nao_compareceu, etc)
-  - Se resultado_tipo = 'nova_audiencia': cria nova audiencia automaticamente com resultado_nova_data
-  - Se resultado_tipo = 'sentenca' e resultado_prazo_recurso: cria prazo automatico de recurso
-  - Registra andamento no processo vinculado
-  - Define registrado_em e registrado_por
-
-### 3. `src/components/juridico/NovaAudienciaModal.tsx` (reescrever)
-
-Expandir para modal grande com todas as secoes:
-
-- `processoId` passa a ser opcional (pode buscar processo)
-- Campo "Processo vinculado": busca por numero do processo (obrigatorio). Ao selecionar, puxa partes do processo.
-- Campo "Tipo": select expandido com administrativa e mediacao
-- Campos "Data" e "Hora": manter
-- Campo "Modalidade": radio group (presencial, virtual, hibrida)
-  - Se presencial ou hibrida: campos forum, vara, sala, endereco completo
-  - Se virtual ou hibrida: campo link videoconferencia
-- Campo "Advogado representante": select dos advogados ativos (obrigatorio)
-- Campo "Juiz / Orgao": input texto opcional
-- Secao "Testemunhas da Pratic": lista dinamica. Cada item: nome, funcao, checkbox confirmado. Botoes adicionar/remover.
-- Secao "Documentos necessarios": lista dinamica. Cada item: descricao do documento, checkbox "Ja preparado?". Botoes adicionar/remover.
-- Campo "Observacoes/Pauta": textarea
-- Checkbox "Criar prazo automaticamente?" (default: sim). Se marcado, cria prazo com lembretes de 7, 3 e 1 dia.
-
-### 4. `src/pages/juridico/AudienciasAgenda.tsx` (reescrever)
-
-**4 KPI Cards (topo):**
-
-1. "Hoje" — count de audiencias agendadas com data_hora = hoje. Destaque vermelho/urgente se > 0.
-2. "Esta Semana" — proximos 7 dias, status agendada.
-3. "Este Mes" — proximos 30 dias, status agendada.
-4. "Pendentes de Registro" — audiencias com status 'agendada' e data_hora < agora (ja passaram e ninguem registrou resultado). Sempre vermelho.
-
-KPIs usam query separada sem filtros de periodo para refletir numeros reais.
-
-**Barra de acoes:**
-- Toggle Calendario / Lista (manter)
-- Botao "+ Agendar Audiencia" (abre NovaAudienciaModal expandido)
-- Filtros: status, tipo, advogado (select de advogados), busca
-
-**Calendario (expandido):**
-- Grid mensal como ja existe, mas com melhorias:
-  - Badge numerico com cor da urgencia mais alta (pendente registro = vermelho, hoje = laranja, futuro = azul)
-  - Celulas de dias passados com audiencias nao registradas: fundo vermelho claro
-  - Ao clicar dia: abre Sheet lateral (em vez de card fixo) com lista de audiencias do dia
-  - Cada audiencia no Sheet mostra: hora, tipo badge, processo link, partes, advogado, local/virtual, botoes "Ver Detalhe" e "Registrar Resultado"
-
-**Lista (expandida):**
-Tabela com colunas:
-- Data/Hora
-- Tipo (badge colorido por tipo)
-- Processo (numero como link)
-- Partes (resumo: "Pratic Car x [parte contraria]")
-- Forum/Vara (ou "Virtual — [plataforma]" se virtual)
-- Advogado (nome do advogado atribuido)
-- Status (badge)
-- Resultado (texto curto se preenchido, "-" se nao)
-- Acoes (ver detalhe, registrar resultado)
-
-Filtros completos: status, tipo, advogado, periodo, busca textual.
-
-### 5. `src/pages/juridico/AudienciaDetalhe.tsx` (novo)
-
-Pagina completa acessivel por `/juridico/audiencias/:id`.
-
-**Header:** data/hora, tipo badge, status badge, processo como link. Botao "Voltar" e botao "Editar" (abre modal de edicao).
-
-**Card "Informacoes da Audiencia":**
-Todos os dados cadastrados: tipo, modalidade, forum/vara/sala, advogado, juiz, horario. Se virtual, link da videoconferencia como botao clicavel "Entrar na Videoconferencia". Se hibrida, mostra ambos.
-
-**Card "Processo Vinculado":**
-Resumo do processo: numero, tipo, partes (Pratic x parte contraria), status, prioridade. Link "Ver processo completo" -> /juridico/processos/:id.
-
-**Card "Preparacao":**
-- Testemunhas listadas com status (confirmado/pendente/dispensado). Toggle para marcar confirmacao.
-- Documentos necessarios com checkbox de controle "Ja preparado?". Toggle inline.
-- Botao "Ver documentos do processo" -> navega para aba documentos do processo vinculado.
-
-**Secao "Registro da Audiencia" (aparece quando data_hora < agora e status = agendada ou sempre visivel se ja registrado):**
-
-Se nao registrado:
-- Select "O que aconteceu?":
-  1. Acordo alcancado -> campos: valor do acordo, condicoes, prazo para pagamento
-  2. Conciliacao frustrada -> campo: observacoes
-  3. Instrucao concluida -> campo: resumo das provas produzidas
-  4. Sentenca proferida -> campos: favoravel/desfavoravel (select), valor da condenacao, prazo para recurso (date)
-  5. Nova audiencia designada -> campo: data da proxima (datetime)
-  6. Audiencia adiada -> campos: motivo, nova data
-  7. Pratic nao compareceu -> campo: motivo (GRAVE — destaque visual)
-
-- Campo "Resumo detalhado" — textarea obrigatorio
-- Botao "Registrar Resultado"
-
-Se ja registrado: mostra os dados de resultado como leitura, com badge de tipo de resultado.
-
-Ao registrar:
-- Audiencia muda status conforme resultado
-- Se "Nova audiencia designada": CRIA nova audiencia automaticamente
-- Se "Sentenca" com prazo recurso: CRIA prazo automatico
-- Registra andamento no processo: "Audiencia de [tipo] realizada em DD/MM. Resultado: [X]"
-- Marca registrado_em e registrado_por
-
-### 6. `src/App.tsx`
-
-Adicionar rota:
-```text
-/juridico/audiencias/:id -> AudienciaDetalhe
-```
-
-Importar AudienciaDetalhe.
-
-### 7. `src/components/layout/GlobalBreadcrumb.tsx`
-
-Adicionar pattern para `/juridico/audiencias/:id` com label dinamico.
-
-## Notificacoes
-
-Expandir a edge function `cron-verificar-prazos` (ja existente) para tambem verificar audiencias:
-- 3 dias antes: notifica advogado "Audiencia de [tipo] em 3 dias — Verifique documentacao e testemunhas"
-- 1 dia antes: notifica advogado "Audiencia AMANHA — [horario] — [forum]"
-- No dia: notifica advogado "Audiencia HOJE as [hora] — [forum/link]"
-- 48h apos sem registro: notifica advogado "Audiencia de DD/MM nao foi registrada. Registre o resultado."
-
-Isso e feito adicionando uma secao na mesma edge function, buscando `processos_audiencias` com status 'agendada'.
 
 ## Detalhes Tecnicos
 
-- O calendario usa o mesmo pattern do PrazosControl: CSS grid 7 colunas, date-fns para calculos, Sheet para painel lateral.
-- Testemunhas e documentos necessarios sao armazenados como JSONB arrays para flexibilidade, sem criar tabelas extras.
-- A criacao automatica de nova audiencia (quando resultado = 'nova_audiencia') reutiliza a mesma mutation de criar, preenchendo os dados basicos.
-- A criacao automatica de prazo de recurso (quando resultado = 'sentenca') insere em `processos_prazos` com tipo='judicial'.
+- A barra de busca usa deteccao por regex no frontend. CPF: `/^\d{11}$/` ou `/^\d{3}\.\d{3}\.\d{3}-\d{2}$/`. Placa: `/^[A-Z]{3}\d[A-Z0-9]\d{2}$/i` ou `/^[A-Z]{3}-\d{4}$/i`. Protocolo: `/^EVT-\d{4}-\d+$/i`. Processo: `/^\d+\/\d{4}$/`.
+- Cada componente de consulta faz suas proprias queries com `useQuery` — nao ha uma query gigante. O componente so e montado quando a tab esta ativa.
+- A consulta por associado faz 6 queries paralelas (dados pessoais, veiculos, sinistros, processos, sindicancias, cobrancas).
+- O regulamento e hardcoded em um arquivo de constantes (`src/data/regulamento.ts`) — pode ser migrado para BD depois.
+- O componente de antecedentes salva o resultado bruto da IA como JSONB para consulta futura.
+- A LOVABLE_API_KEY ja esta configurada no projeto.
 - Nenhuma dependencia nova necessaria.
 
 ## Ordem de Implementacao
 
-1. Migracao: novas colunas em `processos_audiencias`
-2. Atualizar `src/types/juridico.ts` com novos tipos, labels e colors de audiencia
-3. Expandir `src/hooks/useAudiencias.ts` com novos campos, filtros e mutations
-4. Reescrever `src/components/juridico/NovaAudienciaModal.tsx` com modalidade, advogado, testemunhas, documentos, prazo automatico
-5. Reescrever `src/pages/juridico/AudienciasAgenda.tsx` com 4 KPIs corretos, calendario expandido com Sheet, lista com colunas completas
-6. Criar `src/pages/juridico/AudienciaDetalhe.tsx` com cards informativos, preparacao e registro de resultado
-7. Atualizar `src/App.tsx` e breadcrumb com nova rota
-8. Expandir edge function `cron-verificar-prazos` com alertas de audiencia
+1. Migracao: criar tabela `pesquisas_antecedentes`
+2. Criar `src/data/regulamento.ts` com os artigos do regulamento
+3. Criar os 6 componentes de consulta em `src/components/juridico/consultas/`
+4. Criar `src/pages/juridico/ConsultasUnificadas.tsx` (pagina principal com busca + tabs)
+5. Criar edge function `pesquisar-antecedentes`
+6. Atualizar `src/App.tsx` — nova rota `/juridico/pareceres`, alterar `/juridico/consultas`
+7. Atualizar sidebar e breadcrumb
+8. Atualizar `supabase/config.toml`
+
