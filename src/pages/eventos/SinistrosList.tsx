@@ -65,7 +65,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
   encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
   cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
-  aguardando_analise: { label: 'Aguard. Análise', class: 'bg-blue-100 text-blue-800' },
+  aguardando_analise: { label: 'Aguard. Análise Final', class: 'bg-blue-100 text-blue-800' },
 };
 
 // Tipo configuration
