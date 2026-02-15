@@ -587,3 +587,391 @@ export function useAtualizarConta() {
     },
   });
 }
+
+// ========== NOVOS HOOKS - FASE 5-5 ==========
+
+// Saldos acumulados para Dashboard KPIs
+export function useSaldosAcumulados(mes: number, ano: number) {
+  return useQuery({
+    queryKey: ['saldos-acumulados', mes, ano],
+    queryFn: async () => {
+      const fimPeriodo = new Date(ano, mes, 0).toISOString().split('T')[0];
+      const inicioAno = `${ano}-01-01`;
+
+      // Partidas acumuladas (todo o histórico até fim do período) para ativo/passivo/PL
+      const { data: partidasAcum } = await supabase
+        .from('lancamentos_partidas')
+        .select(`
+          tipo, valor,
+          conta:plano_contas!inner(codigo, tipo, natureza),
+          lancamento:lancamento_id!inner(data_competencia, status)
+        `)
+        .lte('lancamento.data_competencia', fimPeriodo)
+        .eq('lancamento.status', 'ativo');
+
+      // Year-to-date para receitas/despesas
+      const { data: partidasAno } = await supabase
+        .from('lancamentos_partidas')
+        .select(`
+          tipo, valor,
+          conta:plano_contas!inner(codigo, tipo),
+          lancamento:lancamento_id!inner(data_competencia, status)
+        `)
+        .gte('lancamento.data_competencia', inicioAno)
+        .lte('lancamento.data_competencia', fimPeriodo)
+        .eq('lancamento.status', 'ativo');
+
+      let ativoTotal = 0;
+      let passivoTotal = 0;
+      let plTotal = 0;
+
+      (partidasAcum as any[] || []).forEach((p: any) => {
+        const valor = Number(p.valor);
+        const contaTipo = p.conta?.tipo;
+        if (contaTipo === 'ativo') {
+          ativoTotal += p.tipo === 'debito' ? valor : -valor;
+        } else if (contaTipo === 'passivo') {
+          passivoTotal += p.tipo === 'credito' ? valor : -valor;
+        } else if (contaTipo === 'patrimonio_liquido') {
+          plTotal += p.tipo === 'credito' ? valor : -valor;
+        }
+      });
+
+      let receitaAno = 0;
+      let despesaAno = 0;
+
+      (partidasAno as any[] || []).forEach((p: any) => {
+        const valor = Number(p.valor);
+        if (p.conta?.tipo === 'receita' && p.tipo === 'credito') {
+          receitaAno += valor;
+        } else if (p.conta?.tipo === 'despesa' && p.tipo === 'debito') {
+          despesaAno += valor;
+        }
+      });
+
+      return {
+        ativoTotal,
+        passivoTotal,
+        patrimonioSocial: plTotal,
+        receitaAno,
+        despesaAno,
+        resultadoExercicio: receitaAno - despesaAno,
+      };
+    },
+    enabled: !!mes && !!ano,
+  });
+}
+
+// Receita vs Despesa por mês (12 meses)
+export function useReceitaDespesaMensal(ano: number) {
+  return useQuery({
+    queryKey: ['receita-despesa-mensal', ano],
+    queryFn: async () => {
+      const inicioAno = `${ano}-01-01`;
+      const fimAno = `${ano}-12-31`;
+
+      const { data: partidas } = await supabase
+        .from('lancamentos_partidas')
+        .select(`
+          tipo, valor,
+          conta:plano_contas!inner(tipo),
+          lancamento:lancamento_id!inner(data_competencia, status)
+        `)
+        .gte('lancamento.data_competencia', inicioAno)
+        .lte('lancamento.data_competencia', fimAno)
+        .eq('lancamento.status', 'ativo');
+
+      const meses = Array.from({ length: 12 }, (_, i) => ({
+        mes: i + 1,
+        receitas: 0,
+        despesas: 0,
+      }));
+
+      (partidas as any[] || []).forEach((p: any) => {
+        const mesIdx = new Date(p.lancamento.data_competencia).getMonth();
+        const valor = Number(p.valor);
+        if (p.conta?.tipo === 'receita' && p.tipo === 'credito') {
+          meses[mesIdx].receitas += valor;
+        } else if (p.conta?.tipo === 'despesa' && p.tipo === 'debito') {
+          meses[mesIdx].despesas += valor;
+        }
+      });
+
+      return meses;
+    },
+  });
+}
+
+// Composição do Ativo (para PieChart)
+export function useComposicaoAtivo(mes: number, ano: number) {
+  return useQuery({
+    queryKey: ['composicao-ativo', mes, ano],
+    queryFn: async () => {
+      const fimPeriodo = new Date(ano, mes, 0).toISOString().split('T')[0];
+
+      const { data: partidas } = await supabase
+        .from('lancamentos_partidas')
+        .select(`
+          tipo, valor,
+          conta:plano_contas!inner(codigo, descricao, tipo),
+          lancamento:lancamento_id!inner(data_competencia, status)
+        `)
+        .eq('conta.tipo', 'ativo')
+        .lte('lancamento.data_competencia', fimPeriodo)
+        .eq('lancamento.status', 'ativo');
+
+      const grupos: Record<string, number> = {};
+      (partidas as any[] || []).forEach((p: any) => {
+        const codigo = p.conta.codigo;
+        let grupo = 'Outros';
+        if (codigo.startsWith('1.1.01')) grupo = 'Caixa e Bancos';
+        else if (codigo.startsWith('1.1.02')) grupo = 'Contas a Receber';
+        else if (codigo.startsWith('1.1.03')) grupo = 'Adiantamentos';
+        else if (codigo.startsWith('1.1.04')) grupo = 'Estoques';
+        else if (codigo.startsWith('1.2')) grupo = 'Imobilizado';
+
+        const valor = Number(p.valor);
+        grupos[grupo] = (grupos[grupo] || 0) + (p.tipo === 'debito' ? valor : -valor);
+      });
+
+      return Object.entries(grupos)
+        .filter(([_, v]) => Math.abs(v) > 0.01)
+        .map(([name, value]) => ({ name, value: Math.abs(value) }))
+        .sort((a, b) => b.value - a.value);
+    },
+    enabled: !!mes && !!ano,
+  });
+}
+
+// DRE Estruturado
+export interface DRESecao {
+  titulo: string;
+  contas: { codigo: string; descricao: string; valorAtual: number; valorAnterior: number }[];
+  totalAtual: number;
+  totalAnterior: number;
+}
+
+export function useDREEstruturado(mes: number, ano: number, compararAnterior: boolean = false) {
+  return useQuery({
+    queryKey: ['dre-estruturado', mes, ano, compararAnterior],
+    queryFn: async () => {
+      const fetchPeriodo = async (m: number, a: number) => {
+        const dataInicio = `${a}-${String(m).padStart(2, '0')}-01`;
+        const dataFim = new Date(a, m, 0).toISOString().split('T')[0];
+
+        const { data: partidas } = await supabase
+          .from('lancamentos_partidas')
+          .select(`
+            tipo, valor,
+            conta:plano_contas!inner(codigo, descricao, tipo),
+            lancamento:lancamento_id!inner(data_competencia, status)
+          `)
+          .gte('lancamento.data_competencia', dataInicio)
+          .lte('lancamento.data_competencia', dataFim)
+          .eq('lancamento.status', 'ativo');
+
+        const porConta = new Map<string, { codigo: string; descricao: string; valor: number; tipo: string }>();
+        (partidas as any[] || []).forEach((p: any) => {
+          const key = p.conta.codigo;
+          const existing = porConta.get(key) || { codigo: p.conta.codigo, descricao: p.conta.descricao, valor: 0, tipo: p.conta.tipo };
+          const valor = Number(p.valor);
+          if (p.conta.tipo === 'receita') {
+            existing.valor += p.tipo === 'credito' ? valor : -valor;
+          } else if (p.conta.tipo === 'despesa') {
+            existing.valor += p.tipo === 'debito' ? valor : -valor;
+          }
+          porConta.set(key, existing);
+        });
+
+        return porConta;
+      };
+
+      const atual = await fetchPeriodo(mes, ano);
+      const anterior = compararAnterior
+        ? await fetchPeriodo(mes === 1 ? 12 : mes - 1, mes === 1 ? ano - 1 : ano)
+        : new Map();
+
+      const criarSecao = (titulo: string, prefixos: string[], tipo: 'receita' | 'despesa'): DRESecao => {
+        const contas: DRESecao['contas'] = [];
+        let totalAtual = 0;
+        let totalAnterior = 0;
+
+        atual.forEach((v, k) => {
+          if (v.tipo === tipo && prefixos.some(p => k.startsWith(p))) {
+            const va = anterior.get(k)?.valor || 0;
+            contas.push({ codigo: k, descricao: v.descricao, valorAtual: v.valor, valorAnterior: va });
+            totalAtual += v.valor;
+            totalAnterior += va;
+          }
+        });
+
+        // Add accounts only in anterior
+        if (compararAnterior) {
+          anterior.forEach((v, k) => {
+            if (v.tipo === tipo && prefixos.some(p => k.startsWith(p)) && !atual.has(k)) {
+              contas.push({ codigo: k, descricao: v.descricao, valorAtual: 0, valorAnterior: v.valor });
+              totalAnterior += v.valor;
+            }
+          });
+        }
+
+        contas.sort((a, b) => a.codigo.localeCompare(b.codigo));
+        return { titulo, contas, totalAtual, totalAnterior };
+      };
+
+      const receitasOperacionais = criarSecao('RECEITAS OPERACIONAIS', ['4.1'], 'receita');
+      const outrasReceitas = criarSecao('OUTRAS RECEITAS', ['4.2', '4.3'], 'receita');
+      const despBeneficios = criarSecao('DESPESAS COM BENEFÍCIOS MUTUALISTAS', ['5.1.01', '5.1.02'], 'despesa');
+      const despAdministrativas = criarSecao('DESPESAS ADMINISTRATIVAS', ['5.1.03', '5.1.04'], 'despesa');
+      const despFinanceiras = criarSecao('DESPESAS FINANCEIRAS', ['5.1.05'], 'despesa');
+
+      // Catch-all for uncategorized despesas
+      const categorizadas = new Set([
+        ...despBeneficios.contas.map(c => c.codigo),
+        ...despAdministrativas.contas.map(c => c.codigo),
+        ...despFinanceiras.contas.map(c => c.codigo),
+      ]);
+      const outrasDesp: DRESecao['contas'] = [];
+      let outrosDespTotal = 0;
+      let outrosDespAnterior = 0;
+      atual.forEach((v, k) => {
+        if (v.tipo === 'despesa' && !categorizadas.has(k)) {
+          const va = anterior.get(k)?.valor || 0;
+          outrasDesp.push({ codigo: k, descricao: v.descricao, valorAtual: v.valor, valorAnterior: va });
+          outrosDespTotal += v.valor;
+          outrosDespAnterior += va;
+        }
+      });
+
+      const totalReceitasAtual = receitasOperacionais.totalAtual + outrasReceitas.totalAtual;
+      const totalReceitasAnterior = receitasOperacionais.totalAnterior + outrasReceitas.totalAnterior;
+      const totalDespesasAtual = despBeneficios.totalAtual + despAdministrativas.totalAtual + despFinanceiras.totalAtual + outrosDespTotal;
+      const totalDespesasAnterior = despBeneficios.totalAnterior + despAdministrativas.totalAnterior + despFinanceiras.totalAnterior + outrosDespAnterior;
+
+      const resultadoBrutoAtual = receitasOperacionais.totalAtual - despBeneficios.totalAtual;
+      const resultadoBrutoAnterior = receitasOperacionais.totalAnterior - despBeneficios.totalAnterior;
+      const resultadoOpAtual = resultadoBrutoAtual - despAdministrativas.totalAtual;
+      const resultadoOpAnterior = resultadoBrutoAnterior - despAdministrativas.totalAnterior;
+      const resultadoFinalAtual = totalReceitasAtual - totalDespesasAtual;
+      const resultadoFinalAnterior = totalReceitasAnterior - totalDespesasAnterior;
+
+      return {
+        receitasOperacionais,
+        outrasReceitas,
+        despBeneficios,
+        despAdministrativas,
+        despFinanceiras,
+        outrasDespesas: { titulo: 'OUTRAS DESPESAS', contas: outrasDesp, totalAtual: outrosDespTotal, totalAnterior: outrosDespAnterior },
+        totalReceitasAtual,
+        totalReceitasAnterior,
+        totalDespesasAtual,
+        totalDespesasAnterior,
+        resultadoBrutoAtual,
+        resultadoBrutoAnterior,
+        resultadoOpAtual,
+        resultadoOpAnterior,
+        resultadoFinalAtual,
+        resultadoFinalAnterior,
+        indicadores: {
+          sinistralidade: totalReceitasAtual > 0 ? (despBeneficios.totalAtual / totalReceitasAtual) * 100 : 0,
+          custoAdmin: totalReceitasAtual > 0 ? (despAdministrativas.totalAtual / totalReceitasAtual) * 100 : 0,
+          margemOperacional: totalReceitasAtual > 0 ? (resultadoOpAtual / totalReceitasAtual) * 100 : 0,
+          margemFinal: totalReceitasAtual > 0 ? (resultadoFinalAtual / totalReceitasAtual) * 100 : 0,
+        },
+      };
+    },
+    enabled: !!mes && !!ano,
+  });
+}
+
+// Balancete com saldo anterior
+export function useBalanceteCompleto(mes: number, ano: number) {
+  return useQuery({
+    queryKey: ['balancete-completo', mes, ano],
+    queryFn: async () => {
+      const contas = await supabase
+        .from('plano_contas')
+        .select('*')
+        .eq('ativa', true)
+        .order('codigo');
+
+      if (contas.error) throw contas.error;
+
+      const dataInicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
+      const dataFim = new Date(ano, mes, 0).toISOString().split('T')[0];
+      const dataAnteriorFim = new Date(ano, mes - 1, 0).toISOString().split('T')[0];
+
+      // Partidas do período atual
+      const { data: partidasAtual } = await supabase
+        .from('lancamentos_partidas')
+        .select('conta_id, tipo, valor, lancamento:lancamento_id!inner(data_competencia, status)')
+        .gte('lancamento.data_competencia', dataInicio)
+        .lte('lancamento.data_competencia', dataFim)
+        .eq('lancamento.status', 'ativo');
+
+      // Partidas até fim do período anterior (saldo anterior)
+      const { data: partidasAnteriores } = await supabase
+        .from('lancamentos_partidas')
+        .select('conta_id, tipo, valor, lancamento:lancamento_id!inner(data_competencia, status)')
+        .lte('lancamento.data_competencia', dataAnteriorFim)
+        .eq('lancamento.status', 'ativo');
+
+      const saldosAnteriores = new Map<string, number>();
+      (partidasAnteriores as any[] || []).forEach((p: any) => {
+        const atual = saldosAnteriores.get(p.conta_id) || 0;
+        saldosAnteriores.set(p.conta_id, atual + (p.tipo === 'debito' ? Number(p.valor) : -Number(p.valor)));
+      });
+
+      const movimentacao = new Map<string, { debitos: number; creditos: number }>();
+      (partidasAtual as any[] || []).forEach((p: any) => {
+        const atual = movimentacao.get(p.conta_id) || { debitos: 0, creditos: 0 };
+        if (p.tipo === 'debito') atual.debitos += Number(p.valor);
+        else atual.creditos += Number(p.valor);
+        movimentacao.set(p.conta_id, atual);
+      });
+
+      return (contas.data as PlanoContas[]).map(conta => {
+        const saldoAnterior = saldosAnteriores.get(conta.id) || 0;
+        const mov = movimentacao.get(conta.id) || { debitos: 0, creditos: 0 };
+        const saldoAtual = saldoAnterior + mov.debitos - mov.creditos;
+
+        return {
+          ...conta,
+          saldoAnterior,
+          debitos: mov.debitos,
+          creditos: mov.creditos,
+          saldoAtual,
+        };
+      });
+    },
+    enabled: !!mes && !!ano,
+  });
+}
+
+// Reabrir fechamento
+export function useReabrirFechamento() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
+      const { error } = await supabase
+        .from('fechamentos_contabeis')
+        .update({
+          status: 'reaberto',
+          motivo_reabertura: motivo,
+          data_reabertura: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fechamentos'] });
+      toast({ title: 'Período reaberto', description: 'O período foi reaberto com sucesso.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao reabrir', description: error.message, variant: 'destructive' });
+    },
+  });
+}
