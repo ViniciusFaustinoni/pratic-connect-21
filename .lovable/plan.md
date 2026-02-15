@@ -1,112 +1,85 @@
 
-# Preenchimento de Valor de Pecas e Solicitacao de Orcamentos pelo Analista de Eventos
+# Botoes de Aprovar/Recusar para Analista de Eventos e Novo Fluxo Pos-Aprovacao
 
 ## Resumo
 
-Na tela de analise do sinistro (`SinistroAnalise.tsx`), a tabela de "Itens do Orcamento" atualmente mostra apenas descricao, tipo e quantidade. O plano adiciona:
-
-1. **Campo de valor editavel** nas pecas (somente pecas) com botao de salvar
-2. **Botao "Solicitar Orcamento"** que abre um modal com Auto Centers/Ferro Velhos/Montadoras compativeis
-3. **Fluxo de cotacao via WhatsApp com IA** (reutilizando a infra existente)
-4. **Card "Orcamentos Recebidos"** mostrando valores por estabelecimento (ja existe como `CotacoesRecebidasTab`)
-
----
+Atualmente, somente diretores podem aprovar ou reprovar sinistros. O analista de eventos ve apenas uma mensagem informativa. Este plano adiciona os botoes "Aprovar Evento" e "Recusar Evento" para o analista quando a auto-vistoria e a vistoria do regulador estiverem concluidas (status `aguardando_analise`). Alem disso, o botao "Enviar para Oficina" sera atualizado para filtrar oficinas pela marca do veiculo ou GLOBAL.
 
 ## Alteracoes
 
-### 1. Tabela de Itens do Orcamento — Valor editavel para pecas
+### 1. Exibir botoes Aprovar/Recusar para o Analista de Eventos
 
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx` (secao ~linhas 892-929)
+**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx` (linhas ~1217-1270)
 
-- Adicionar coluna "Valor Unit." na tabela de itens do orcamento
-- Para itens do tipo `peca`: renderizar um `<Input type="number">` editavel
-- Para itens de mao de obra/servico: exibir o valor ja preenchido pelo regulador (somente leitura)
-- Usar estado local (`useState`) para armazenar valores editados das pecas
-- Botao "Salvar Valores" abaixo da tabela (visivel apenas quando ha alteracoes pendentes)
-- Ao salvar: atualizar o campo `dados_vistoria.itens_orcamento` na tabela `vistorias_evento` com os novos valores das pecas
+Condicao atual (linhas 1225-1269):
+- `isDiretor && !temDocsPendentes` → mostra botoes Aprovar/Reprovar
+- `!isDiretor && isAnalistaEventos` → mostra apenas mensagem informativa
 
-### 2. Botao "Solicitar Orcamento"
+Nova logica:
+- Quando o status for `aguardando_analise` (vistoria do regulador concluida), o analista de eventos (`isAnalistaEventos`) tambem vera os botoes "Aprovar Evento" e "Recusar Evento", pois isso indica que tanto a auto-vistoria quanto a vistoria do regulador foram realizadas
+- Quando o status for `comunicado` ou `aberto`, manter comportamento atual (somente diretor envia link de auto-vistoria)
+- Para os demais status, manter a mensagem informativa para analistas
 
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
+### 2. Atualizar "Enviar para Oficina" com filtro por marca
 
-- Adicionar botao "Solicitar Orcamento" logo abaixo da tabela de itens (ao lado do botao Salvar)
-- Ao clicar, abre o novo modal `SolicitarOrcamentoDialog`
+**Arquivo:** `src/components/sinistros/EnviarParaOficinaDialog.tsx`
 
-### 3. Novo componente: `SolicitarOrcamentoDialog`
+Alteracoes:
+- Receber a `marca` do veiculo como prop
+- Passar `marca` para o hook `useOficinas` para filtrar oficinas que atendam aquela marca ou sejam GLOBAL
+- Manter selecao de apenas UMA oficina (ja e assim)
+- Exibir as especialidades e cidade de cada oficina para facilitar a escolha
 
-**Arquivo:** `src/components/sinistros/SolicitarOrcamentoDialog.tsx` (NOVO)
-
-Modal contendo:
-- Cabecalho com dados do veiculo (marca, modelo, ano, placa)
-- Lista de pecas do orcamento (somente leitura, para referencia)
-- Lista de Auto Centers compativeis com checkboxes (multiselecao):
-  - Filtrados por `marcas_atendidas` contendo a marca do veiculo OU "GLOBAL"
-  - Filtrados por status "ativo" e com whatsapp cadastrado
-  - Agrupados por tipo (Auto Center, Ferro Velho, Montadora — campo `tipo` da tabela `auto_centers`)
-  - Mostra nome, cidade, tipos de peca que trabalha
-- Botao "Solicitar Orcamentos" no footer
-- Ao confirmar:
-  1. Para cada Auto Center selecionado, cria registro em `evento_cotacoes_pecas` (status: "enviado")
-  2. Invoca a edge function `enviar-cotacao-pecas` para enviar WhatsApp (ja existente)
-  3. Toast de sucesso
-  4. Ativa a aba "Cotacoes Recebidas" (que ja existe em `CotacoesRecebidasTab`)
-
-### 4. Garantir visibilidade da aba "Cotacoes Recebidas"
+### 3. Passar marca do veiculo ao dialog
 
 **Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
 
-- A variavel `showCotacoesTab` ja existe e controla a exibicao das tabs. Verificar que ela se torna `true` apos o envio de cotacoes (ela verifica se existem cotacoes na tabela `evento_cotacoes_pecas`).
-- O componente `CotacoesRecebidasTab` ja implementa todo o fluxo de: exibir cotacoes enviadas, registrar respostas, comparar valores, aprovar cotacao. Nao precisa de alteracao.
+- Ao renderizar `<EnviarParaOficinaDialog>`, passar a marca do veiculo como nova prop
 
----
-
-## Fluxo completo do ponto de vista do Analista
+## Fluxo completo apos as alteracoes
 
 ```text
-1. Analista abre sinistro aprovado
-2. Ve tabela de itens com pecas sem valor
-3. (Opcional) Preenche valores manualmente e salva
-4. Clica "Solicitar Orcamento"
-5. Seleciona Auto Centers/Ferro Velhos
-6. Clica "Solicitar Orcamentos"
-7. WhatsApp e enviado para cada estabelecimento
-8. IA processa respostas (fluxo ja existente)
-9. Aba "Cotacoes Recebidas" mostra respostas e comparativo
-10. Analista aprova a melhor cotacao
+1. Associado faz auto-vistoria (3 etapas) → status em_analise
+2. Analista envia link de agendamento da vistoria do regulador
+3. Regulador conclui vistoria → status aguardando_analise
+4. Analista ve dados da vistoria + botoes "Aprovar Evento" / "Recusar Evento"
+5. Analista aprova → edge function aprovar-sinistro:
+   - Gera cobranca ASAAS
+   - Envia link de pagamento ao associado via WhatsApp
+6. Associado paga (PIX ou Cartao) → status pagamento_confirmado
+7. Sistema envia Termo de Entrada (Autentique)
+8. Associado assina → status pronto_para_oficina
+9. Analista ve botao "Enviar para Oficina" (filtrado por marca/GLOBAL)
+10. Seleciona oficina → cria OS
 ```
 
 ## Arquivos afetados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar inputs de valor nas pecas, botao salvar, botao solicitar orcamento |
-| `src/components/sinistros/SolicitarOrcamentoDialog.tsx` | NOVO — modal de selecao de Auto Centers |
+| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar botoes Aprovar/Recusar para analista quando status=aguardando_analise; passar marca ao EnviarParaOficinaDialog |
+| `src/components/sinistros/EnviarParaOficinaDialog.tsx` | Receber prop `marca` e filtrar oficinas por marca/GLOBAL |
 
 ## Detalhes tecnicos
 
-### Salvamento dos valores de pecas
-
-Os itens do orcamento ficam em `vistorias_evento.dados_vistoria.itens_orcamento` (JSONB). Para salvar:
+### Condicao para exibir botoes ao analista
 
 ```text
-UPDATE vistorias_evento
-SET dados_vistoria = jsonb_set(
-  dados_vistoria,
-  '{itens_orcamento}',
-  <novo_array_json>
-)
-WHERE id = <vistoria_id>
+// Analista pode aprovar/reprovar quando:
+// 1. Vistoria do regulador foi concluida (status aguardando_analise)
+// 2. OU diretor (em qualquer status, como ja funciona)
+const analistaPodeDecidir = isAnalistaEventos && sinistro.status === 'aguardando_analise';
+
+if ((isDiretor || analistaPodeDecidir) && !temDocsPendentes) {
+  // Mostrar botoes Aprovar e Reprovar
+}
 ```
 
-No frontend, via Supabase client:
-- Ler o `dados_vistoria` atual
-- Atualizar apenas `valor_unitario` e `valor_total` dos itens do tipo `peca`
-- Salvar o objeto inteiro de volta
+### Filtro de oficinas por marca
 
-### Filtro de Auto Centers
+O hook `useOficinas` ja suporta o filtro `marca` que faz:
+```text
+query.or(`marcas_atendidas.cs.{MARCA},marcas_atendidas.cs.{GLOBAL}`)
+```
 
-Reutilizar o hook `useAutoCenters({ marca: marcaVeiculo })` que ja faz o filtro `marcas_atendidas.cs.{marca}` OR `marcas_atendidas.cs.{GLOBAL}`. Adicionar filtro local por `status === 'ativo'` e `whatsapp` preenchido.
-
-### Criacao de cotacoes e envio
-
-Reutilizar exatamente a mesma logica de `AtribuirFornecedoresDialog.tsx` (linhas 227-265) para criar registros em `evento_cotacoes_pecas` e invocar `enviar-cotacao-pecas`.
+Basta passar `{ status: 'ativo', marca: veiculo?.marca }` ao invocar o hook no `EnviarParaOficinaDialog`.
