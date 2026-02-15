@@ -60,6 +60,7 @@ import {
   Ban,
   RefreshCw,
   Store,
+  Bot,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -211,6 +212,7 @@ const menuConfig: {
         { title: 'Sinistros', url: '/eventos/sinistros', icon: AlertTriangle },
         { title: 'SLA', url: '/eventos/sla', icon: Clock },
         { title: 'Sindicâncias', url: '/eventos/sindicancias', icon: Search },
+        { title: 'Solicitações IA', url: '/eventos/solicitacoes-ia', icon: Bot },
       ],
     },
     {

@@ -440,6 +440,7 @@ const App = () => (
               <Route path="/eventos/sindicancias" element={<SindicanciasList />} />
               <Route path="/eventos/sindicancias/:id" element={<SindicanciaDetalhe />} />
               <Route path="/eventos/sla" element={<EventosSLADashboard />} />
+              <Route path="/eventos/solicitacoes-ia" element={<SolicitacoesIA />} />
               
               {/* Assistência 24h */}
               <Route path="/assistencia" element={<AssistenciaDashboard />} />

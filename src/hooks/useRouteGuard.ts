@@ -51,7 +51,7 @@ export function useRouteGuard() {
         '/eventos',
         '/perfil',
         '/notificacoes',
-        '/diretoria/solicitacoes-ia',
+        '/eventos/solicitacoes-ia',
         '/assistencia',
       ];
       const isAllowed = allowedPaths.some(path =>
