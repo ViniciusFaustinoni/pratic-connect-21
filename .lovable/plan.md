@@ -1,32 +1,53 @@
 
-# Analista de Eventos: Acesso a Sinistros e Botoes de Acao
+# Analista de Eventos nao visualiza os Eventos
 
-## Problema
+## Problema Identificado
 
-1. Na tela de listagem de sinistros (`SinistrosList.tsx`), o botao "Analisar" so aparece para `isDiretor` (linha 439). O analista de eventos ve a tabela mas sem botao de acao.
-2. Na tela de detalhe/analise (`SinistroAnalise.tsx`), existem botoes "Aprovar Sinistro" e "Reprovar Sinistro" que nao deveriam existir para o analista — ele deve apenas poder analisar, ja que existe um fluxo completo de pre-aprovacao.
+O Analista de Eventos ainda esta acessando a interface mobile antiga (`/analista-eventos/fila`) que filtra apenas sinistros com `status = 'aguardando_analise'`. Alem disso:
 
-## Mudancas
+1. O `AnalistaEventosGuard` redireciona para `/instalador/login` quando nao autenticado, e esse login nao redireciona o analista para `/dashboard`
+2. O `AnalistaEventosLayout` ainda tem o header "Analista de Eventos" com a nav mobile antiga
+3. Nao ha nenhum bloco no `useRouteGuard` que force o analista_eventos para fora das rotas `/analista-eventos/*` e em direcao ao `/dashboard`
 
-### 1. SinistrosList.tsx — Mostrar botao "Analisar" para o analista de eventos
+## Solucao
 
-Na coluna de Acoes (linha 439), trocar `isDiretor` por `isDiretor || isAnalistaEventos` para que o botao de analisar apareca tambem para o analista. Importar `isAnalistaEventos` do hook `usePermissions`.
+Adicionar um redirecionamento no `useRouteGuard` para que o analista de eventos seja forçado para o sistema web quando tentar acessar `/analista-eventos/*`. Tambem ajustar o guard e o login redirect.
 
-Tambem aplicar a mesma logica no botao "Enviar para Oficina" (linha 450) — manter apenas para `isDiretor`, ja que o analista nao deve ter essa acao.
+### Mudanca 1 — useRouteGuard: redirecionar analista_eventos para /dashboard
 
-### 2. SinistroAnalise.tsx — Remover Aprovar/Recusar para analista
+No `src/hooks/useRouteGuard.ts`, adicionar um bloco que detecta quando `isAnalistaEventosOnly` tenta acessar `/analista-eventos/*` e redireciona para `/dashboard`. Tambem restringir as rotas permitidas (similar ao analista de cadastro):
 
-Na pagina de analise do sinistro, o bloco de acoes (linhas 650-686) mostra "Aprovar Sinistro" e "Reprovar Sinistro". Para o analista de eventos:
+```
+if (isAnalistaEventosOnly) {
+  // Redirecionar das rotas mobile antigas para o sistema web
+  if (location.pathname.startsWith('/analista-eventos')) {
+    navigate('/dashboard', { replace: true });
+    return;
+  }
+  
+  // Rotas permitidas para o analista de eventos
+  const allowedPaths = [
+    '/dashboard',
+    '/eventos',
+    '/perfil',
+    '/notificacoes',
+  ];
+  const isAllowed = allowedPaths.some(path =>
+    location.pathname === path || location.pathname.startsWith(path + '/')
+  );
+  if (!isAllowed) {
+    navigate('/dashboard', { replace: true });
+  }
+}
+```
 
-- Remover os botoes "Aprovar Sinistro" e "Reprovar Sinistro"
-- Manter apenas acoes de analise/pre-aprovacao: "Solicitar Documentos", "Abrir Sindicancia"
-- O analista pode ver todas as informacoes do sinistro, adicionar observacoes e encaminhar para a diretoria, mas NAO pode aprovar ou reprovar diretamente
+### Mudanca 2 — InstaladorLogin: redirecionar analista_eventos para /auth
 
-A logica sera: os botoes "Aprovar" e "Reprovar" so aparecem quando `isDiretor` for true. Para o analista, exibir uma mensagem informativa como "Analise o sinistro e encaminhe para aprovacao da diretoria".
+No `src/pages/instalador/InstaladorLogin.tsx`, adicionar no `useEffect` (linha 24-28) uma verificacao para `analista_eventos` que redireciona para `/dashboard` ao inves de ficar preso na tela de login do instalador.
 
-### 3. SinistrosList.tsx — Botao "Analisar" como acao principal para sinistros novos
+### Mudanca 3 — AnalistaEventosGuard: redirecionar para /auth ao inves de /instalador/login
 
-Para sinistros com status `comunicado` ou `em_analise`, o botao principal na tabela sera "Analisar" (icone ClipboardCheck) apontando para a rota `/eventos/sinistros/:id/analisar`. Isso ja funciona assim para o diretor, basta estender para o analista.
+No `src/components/analista-eventos/AnalistaEventosGuard.tsx`, trocar o redirect de `/instalador/login` para `/auth` (caso as rotas antigas ainda sejam acessadas).
 
 ---
 
@@ -34,12 +55,13 @@ Para sinistros com status `comunicado` ou `em_analise`, o botao principal na tab
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/eventos/SinistrosList.tsx` | Adicionar `isAnalistaEventos` na condicao do botao "Analisar" (linha 439) |
-| `src/pages/eventos/SinistroAnalise.tsx` | Condicionar botoes Aprovar/Reprovar a `isDiretor` apenas; para analista, mostrar acoes de analise |
+| `src/hooks/useRouteGuard.ts` | Adicionar bloco de redirecionamento para `isAnalistaEventosOnly` — redirecionar de `/analista-eventos/*` para `/dashboard` e restringir rotas permitidas |
+| `src/pages/instalador/InstaladorLogin.tsx` | Adicionar redirect para analista_eventos logado ir para `/dashboard` |
+| `src/components/analista-eventos/AnalistaEventosGuard.tsx` | Trocar redirect de `/instalador/login` para `/auth` |
 
 ## Resultado
 
-- O analista de eventos ve o botao "Analisar" na listagem de sinistros
-- Ao clicar, acessa a tela de analise completa com todas as informacoes
-- Na analise, pode solicitar documentos, abrir sindicancia, mas NAO pode aprovar ou reprovar
-- Apenas o diretor mantem os botoes de Aprovar e Reprovar
+- Analista de eventos que acessa `/analista-eventos/*` sera automaticamente redirecionado para `/dashboard`
+- Do dashboard, acessa "Eventos" na sidebar com a listagem completa de sinistros
+- Se tentar logar via `/instalador/login`, sera redirecionado para `/dashboard`
+- As rotas permitidas incluem `/dashboard`, `/eventos/*`, `/perfil` e `/notificacoes`
