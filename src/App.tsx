@@ -142,6 +142,7 @@ import Extrato from "./pages/financeiro/Extrato";
 import ExtratosBancarios from "./pages/financeiro/ExtratosBancarios";
 import ExtratoDetalhe from "./pages/financeiro/ExtratoDetalhe";
 import ContasBancarias from "./pages/financeiro/ContasBancarias";
+import ExtratoAssociado from "./pages/financeiro/ExtratoAssociado";
 
 // Contabilidade
 import ContabilidadeDashboard from "./pages/contabilidade/ContabilidadeDashboard";
@@ -454,6 +455,7 @@ const App = () => (
               <Route path="/financeiro/extratos-bancarios" element={<ExtratosBancarios />} />
               <Route path="/financeiro/extratos/:id" element={<ExtratoDetalhe />} />
               <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />
+              <Route path="/financeiro/extrato-associado" element={<ExtratoAssociado />} />
               
               {/* Cobrança */}
               <Route path="/cobranca" element={<CobrancaDashboard />} />
