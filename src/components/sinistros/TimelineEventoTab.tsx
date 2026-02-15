@@ -27,6 +27,31 @@ interface TimelineItem {
   expandable?: boolean;
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  comunicado: 'Comunicado',
+  em_analise: 'Em Análise',
+  aguardando_analise: 'Aguardando Análise',
+  aguardando_vistoria: 'Aguardando Vistoria',
+  em_vistoria: 'Em Vistoria',
+  aguardando_parecer: 'Aguardando Parecer',
+  aprovado: 'Aprovado',
+  negado: 'Negado',
+  em_regulacao: 'Em Regulação',
+  em_reparo: 'Em Reparo',
+  aguardando_diretoria: 'Aguardando Diretoria',
+  em_sindicancia: 'Em Sindicância',
+  suspensa: 'Suspensa',
+  pago: 'Pago',
+  encerrado: 'Encerrado',
+  cancelado: 'Cancelado',
+  pendente: 'Pendente',
+  agendada: 'Agendada',
+  concluida: 'Concluída',
+  em_andamento: 'Em Andamento',
+};
+
+const getLabel = (status: string) => STATUS_LABELS[status] || status;
+
 export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -113,8 +138,8 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
         );
         timeline.push({
           id: `hist-${h.id}`, date: h.created_at!,
-          title: isAtribuicao ? 'Atribuição de fornecedores' : `Status: ${h.status_novo}`,
-          description: h.observacao || `${h.status_anterior || '—'} → ${h.status_novo}`,
+          title: isAtribuicao ? 'Atribuição de fornecedores' : `Status: ${getLabel(h.status_novo)}`,
+          description: h.observacao || `${h.status_anterior ? getLabel(h.status_anterior) : '—'} → ${getLabel(h.status_novo)}`,
           icon: isAtribuicao ? Building2 : Clock,
           color: isAtribuicao ? 'text-teal-600' : 'text-gray-500',
         });
@@ -186,9 +211,9 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
         }
         timeline.push({
           id: `vistoria-${v.id}`, date: v.created_at!,
-          title: 'Vistoria do evento', description: `Status: ${v.status}`,
+          title: 'Vistoria do evento', description: `Status: ${getLabel(v.status)}`,
           icon: ClipboardCheck, color: 'text-teal-500',
-          badge: v.status, badgeColor: v.status === 'concluida' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800',
+          badge: getLabel(v.status), badgeColor: v.status === 'concluida' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800',
         });
       });
 
