@@ -20,8 +20,10 @@ export type StatusPrazo = 'pendente' | 'em_andamento' | 'cumprido' | 'perdido' |
 
 export type TipoDocumentoProcesso = 'peticao_inicial' | 'contestacao' | 'replica' | 'recurso' | 'contrarrazoes' | 'sentenca' | 'acordao' | 'procuracao' | 'substabelecimento' | 'laudo' | 'ata_audiencia' | 'comprovante' | 'notificacao' | 'outros';
 
-export type TipoAudiencia = 'conciliacao' | 'instrucao' | 'julgamento' | 'una' | 'especial';
-export type StatusAudiencia = 'agendada' | 'realizada' | 'adiada' | 'cancelada' | 'redesignada';
+export type TipoAudiencia = 'conciliacao' | 'instrucao' | 'julgamento' | 'administrativa' | 'mediacao' | 'una' | 'especial';
+export type ModalidadeAudiencia = 'presencial' | 'virtual' | 'hibrida';
+export type ResultadoAudiencia = 'acordo' | 'conciliacao_frustrada' | 'instrucao_concluida' | 'sentenca' | 'nova_audiencia' | 'adiada' | 'nao_compareceu';
+export type StatusAudiencia = 'agendada' | 'realizada' | 'adiada' | 'cancelada' | 'redesignada' | 'nao_compareceu';
 
 export type TipoCusta = 'custas_iniciais' | 'custas_finais' | 'honorarios_advocaticios' | 'honorarios_sucumbencia' | 'honorarios_pericia' | 'diligencia' | 'taxa_judiciaria' | 'deposito_recursal' | 'multa' | 'outros';
 export type StatusCusta = 'pendente' | 'pago' | 'vencido' | 'cancelado';
@@ -395,8 +397,36 @@ export const TIPO_AUDIENCIA_LABELS: Record<TipoAudiencia, string> = {
   conciliacao: 'Conciliação',
   instrucao: 'Instrução',
   julgamento: 'Julgamento',
+  administrativa: 'Administrativa',
+  mediacao: 'Mediação',
   una: 'Una',
   especial: 'Especial',
+};
+
+export const TIPO_AUDIENCIA_COLORS: Record<TipoAudiencia, string> = {
+  conciliacao: 'bg-green-100 text-green-800',
+  instrucao: 'bg-blue-100 text-blue-800',
+  julgamento: 'bg-purple-100 text-purple-800',
+  administrativa: 'bg-gray-100 text-gray-800',
+  mediacao: 'bg-orange-100 text-orange-800',
+  una: 'bg-indigo-100 text-indigo-800',
+  especial: 'bg-pink-100 text-pink-800',
+};
+
+export const MODALIDADE_AUDIENCIA_LABELS: Record<ModalidadeAudiencia, string> = {
+  presencial: 'Presencial',
+  virtual: 'Virtual',
+  hibrida: 'Híbrida',
+};
+
+export const RESULTADO_AUDIENCIA_LABELS: Record<ResultadoAudiencia, string> = {
+  acordo: 'Acordo alcançado',
+  conciliacao_frustrada: 'Conciliação frustrada',
+  instrucao_concluida: 'Instrução concluída',
+  sentenca: 'Sentença proferida',
+  nova_audiencia: 'Nova audiência designada',
+  adiada: 'Audiência adiada',
+  nao_compareceu: 'Pratic não compareceu',
 };
 
 export const STATUS_AUDIENCIA_LABELS: Record<StatusAudiencia, string> = {
@@ -405,6 +435,7 @@ export const STATUS_AUDIENCIA_LABELS: Record<StatusAudiencia, string> = {
   adiada: 'Adiada',
   cancelada: 'Cancelada',
   redesignada: 'Redesignada',
+  nao_compareceu: 'Não Compareceu',
 };
 
 export const TIPO_CUSTA_LABELS: Record<TipoCusta, string> = {
@@ -514,6 +545,7 @@ export const STATUS_AUDIENCIA_COLORS: Record<StatusAudiencia, string> = {
   adiada: 'bg-yellow-100 text-yellow-800',
   cancelada: 'bg-red-100 text-red-800',
   redesignada: 'bg-purple-100 text-purple-800',
+  nao_compareceu: 'bg-red-100 text-red-800',
 };
 
 export const STATUS_CUSTA_COLORS: Record<StatusCusta, string> = {

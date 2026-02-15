@@ -116,8 +116,66 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ===== VERIFICAR AUDIÊNCIAS =====
+    let notificacoesAudiencias = 0;
+    const { data: audiencias, error: errAud } = await supabase
+      .from("processos_audiencias")
+      .select("id, tipo, data_hora, processo_id, advogado_id, status, resultado_tipo")
+      .eq("status", "agendada");
+
+    if (!errAud && audiencias) {
+      for (const aud of audiencias) {
+        const dataAud = new Date(aud.data_hora);
+        dataAud.setHours(0, 0, 0, 0);
+        const diffAud = dataAud.getTime() - hoje.getTime();
+        const diasAud = Math.ceil(diffAud / (1000 * 60 * 60 * 24));
+
+        const destAud: string[] = [];
+        if (aud.advogado_id) {
+          // advogado_id references advogados table, not profiles - notify directors instead
+          const { data: dirs } = await supabase.from("profiles").select("id").in("role", ["diretor"]);
+          if (dirs) dirs.forEach((d) => { if (!destAud.includes(d.id)) destAud.push(d.id); });
+        }
+
+        let shouldNotifyAud = false;
+        let tituloAud = "";
+        let tipoNotif = "info";
+
+        if (diasAud === 3) {
+          shouldNotifyAud = true;
+          tituloAud = `📋 Audiência de ${aud.tipo} em 3 dias — Verifique documentação e testemunhas`;
+        } else if (diasAud === 1) {
+          shouldNotifyAud = true;
+          tituloAud = `⚠️ Audiência AMANHÃ — ${new Date(aud.data_hora).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+          tipoNotif = "warning";
+        } else if (diasAud === 0) {
+          shouldNotifyAud = true;
+          tituloAud = `🔴 Audiência HOJE às ${new Date(aud.data_hora).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+          tipoNotif = "urgente";
+        } else if (diasAud < -2 && !aud.resultado_tipo) {
+          shouldNotifyAud = true;
+          tituloAud = `🚨 Audiência de ${new Date(aud.data_hora).toLocaleDateString("pt-BR")} NÃO FOI REGISTRADA. Registre o resultado.`;
+          tipoNotif = "urgente";
+        }
+
+        if (shouldNotifyAud && destAud.length > 0) {
+          for (const userId of destAud) {
+            await supabase.from("notificacoes").insert({
+              user_id: userId,
+              titulo: tituloAud,
+              mensagem: `Processo: ${aud.processo_id}`,
+              tipo: tipoNotif,
+              lida: false,
+              link: `/juridico/audiencias/${aud.id}`,
+            });
+          }
+          notificacoesAudiencias++;
+        }
+      }
+    }
+
     return new Response(
-      JSON.stringify({ success: true, prazos_verificados: prazos?.length || 0, notificacoes_enviadas: notificacoes }),
+      JSON.stringify({ success: true, prazos_verificados: prazos?.length || 0, notificacoes_enviadas: notificacoes, audiencias_verificadas: audiencias?.length || 0, notificacoes_audiencias: notificacoesAudiencias }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

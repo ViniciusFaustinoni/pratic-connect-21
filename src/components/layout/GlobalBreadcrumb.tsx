@@ -249,6 +249,17 @@ const DYNAMIC_ROUTES: Record<string, RouteConfig> = {
       return data?.numero || 'Processo';
     },
   },
+  '/juridico/audiencias/:id': {
+    label: 'Audiência',
+    resolver: async (id: string) => {
+      const { data } = await supabase.from('processos_audiencias').select('tipo, data_hora').eq('id', id).single();
+      if (data) {
+        const tipos: Record<string, string> = { conciliacao: 'Conciliação', instrucao: 'Instrução', julgamento: 'Julgamento', administrativa: 'Administrativa', mediacao: 'Mediação', una: 'Una', especial: 'Especial' };
+        return `${tipos[data.tipo] || data.tipo} — ${new Date(data.data_hora).toLocaleDateString('pt-BR')}`;
+      }
+      return 'Audiência';
+    },
+  },
   
   // RH
   '/rh/funcionarios/:id': {
