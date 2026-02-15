@@ -785,8 +785,20 @@ export default function SinistroAnalise() {
                   );
                 }
 
-                // Sinistro já aprovado - mostrar status e botão Enviar para Oficina (fluxo legado)
-                if (sinistro.status === 'em_analise' || sinistro.status === 'aprovado') {
+                // Status em_analise: aguardando auto vistoria do associado
+                if (sinistro.status === 'em_analise') {
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                        <Clock className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Aguardando auto vistoria</strong> — link enviado ao associado.</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Sinistro aprovado (pós-vistoria)
+                if (sinistro.status === 'aprovado') {
                   return (
                     <>
                       <div className="flex items-center gap-2 p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
