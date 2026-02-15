@@ -1,44 +1,49 @@
 
-# Ocultar Ouvidoria e Configuracoes do menu do Analista de Eventos
+
+# Mover Solicitacoes IA para rota propria do modulo Eventos
 
 ## Problema
 
-O Analista de Eventos ve no sidebar os menus "Ouvidoria" e "Configuracoes", mas nao tem permissao para acessar essas areas (o `useRouteGuard` ja bloqueia e redireciona). O menu deve refletir as rotas permitidas.
+O Analista de Eventos acessa a pagina de Solicitacoes IA pela rota `/diretoria/solicitacoes-ia`, que:
+1. Mostra o breadcrumb "Diretoria > Solicitacoes-ia" -- um caminho exclusivo de diretores
+2. Da a impressao de que o analista esta numa area que nao lhe pertence
 
-## Causa
-
-- `canManageOuvidoria` inclui `isFuncionario()`, que abrange todos os funcionarios -- incluindo analista de eventos
-- Configuracoes usa `canViewDashboard` que e `profile?.tipo === 'funcionario'`, tambem abrangendo analista de eventos
+Alem disso, a pagina ja funciona (RLS corrigido anteriormente), so precisa de rota e navegacao corretas.
 
 ## Solucao
 
-### Arquivo 1: `src/hooks/usePermissions.ts`
+### 1. Criar rota duplicada em `/eventos/solicitacoes-ia` (App.tsx)
 
-Excluir `isAnalistaEventosOnly` da permissao `canManageOuvidoria`:
+Adicionar uma nova rota que renderiza o mesmo componente `SolicitacoesIA`, mas dentro do grupo de rotas de Eventos:
 
-```typescript
-// De:
-canManageOuvidoria: (isDiretor || ... || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao,
-
-// Para:
-canManageOuvidoria: (isDiretor || ... || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao && !isAnalistaEventosOnly,
+```
+/eventos/solicitacoes-ia  -->  <SolicitacoesIA />
 ```
 
-### Arquivo 2: `src/components/layout/AppSidebar.tsx`
+A rota antiga `/diretoria/solicitacoes-ia` permanece para diretores.
 
-Adicionar uma permissao especifica ao item de Configuracoes que exclua o analista de eventos. A abordagem mais simples e filtrar diretamente no render: se `isAnalistaEventosOnly`, nao renderizar o item de Configuracoes.
+### 2. Alterar a navegacao do botao "Revisar Solicitacoes" (SinistrosList.tsx)
 
-Alterar o array `configItems` para incluir uma flag ou adicionar logica no filtro que ja existe (`filterByPermission`). A opcao mais limpa e adicionar uma verificacao no bloco que renderiza os `configItems`:
+Mudar o `navigate('/diretoria/solicitacoes-ia')` para `navigate('/eventos/solicitacoes-ia')` -- assim todos os usuarios do modulo Eventos vao para a rota correta, com breadcrumb "Eventos > Solicitacoes-ia".
 
-```typescript
-// Filtrar configItems para analista de eventos
-const filteredConfigItems = filterByPermission(configItems)
-  .filter(item => !(permissions.isAnalistaEventosOnly && item.url === '/configuracoes'));
+### 3. Adicionar item no menu sidebar de Eventos (AppSidebar.tsx)
+
+Incluir "Solicitacoes IA" como subitem do grupo Eventos no sidebar, visivel para analista de eventos e diretores:
+
+```
+{ title: 'Solicitacoes IA', url: '/eventos/solicitacoes-ia', icon: Bot }
 ```
 
-### Resumo de arquivos
+### 4. Atualizar rotas permitidas no useRouteGuard (useRouteGuard.ts)
+
+A rota `/eventos/solicitacoes-ia` ja esta coberta pelo allowedPath `/eventos`, entao nenhuma mudanca e necessaria nesse arquivo -- mas trocar `/diretoria/solicitacoes-ia` por `/eventos/solicitacoes-ia` na lista de `allowedPaths` para manter consistencia e remover o acesso a rota de diretoria.
+
+## Arquivos a modificar
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/hooks/usePermissions.ts` | Adicionar `&& !isAnalistaEventosOnly` em `canManageOuvidoria` |
-| `src/components/layout/AppSidebar.tsx` | Ocultar item Configuracoes para `isAnalistaEventosOnly` |
+| `src/App.tsx` | Adicionar rota `/eventos/solicitacoes-ia` apontando para `SolicitacoesIA` |
+| `src/pages/eventos/SinistrosList.tsx` | Mudar navegacao de `/diretoria/solicitacoes-ia` para `/eventos/solicitacoes-ia` |
+| `src/components/layout/AppSidebar.tsx` | Adicionar "Solicitacoes IA" no grupo Eventos do sidebar |
+| `src/hooks/useRouteGuard.ts` | Trocar `/diretoria/solicitacoes-ia` por `/eventos/solicitacoes-ia` no allowedPaths do analista de eventos |
+
