@@ -93,6 +93,7 @@ export function ConversaIADialog({
                         .replace(/\[UPLOAD_BO\]/g, '')
                         .replace(/\[UPLOAD_FOTOS\]/g, '')
                         .replace(/\[UPLOAD_DOCUMENTO\]/g, '')
+                        .replace(/\[LINK_AUTO_VISTORIA\]/g, '📋 (Link de auto-vistoria enviado)')
                         .trim()}
                     </p>
                     <p

@@ -177,6 +177,7 @@ export default function SinistroAnalise() {
     sinistrosAnteriores,
     contratoAtivo,
     veiculoHistorico,
+    linkEvento,
     isLoading,
   } = useSinistroAnalise(id);
 
@@ -435,6 +436,96 @@ export default function SinistroAnalise() {
                   rastreadorCapturadoEm={rastreador?.ultima_comunicacao}
                   localOcorrencia={sinistro.local_ocorrencia}
                 />
+
+                {/* Auto-Vistoria do Associado */}
+                {linkEvento && (
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                          <Image className="h-5 w-5" />
+                          Fotos da Auto-Vistoria
+                        </CardTitle>
+                        <Badge variant={
+                          linkEvento.status === 'completado' ? 'default' :
+                          linkEvento.status === 'expirado' ? 'destructive' : 'outline'
+                        }>
+                          {linkEvento.status === 'completado' ? 'Completado' :
+                           linkEvento.status === 'expirado' ? 'Expirado' : 'Pendente'}
+                        </Badge>
+                      </div>
+                      <CardDescription>Dados enviados pelo associado via link de auto-vistoria</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Fotos - Etapa 1 */}
+                      {linkEvento.dados_etapa1?.fotos_urls?.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium mb-2">Fotos do Veículo ({linkEvento.dados_etapa1.fotos_urls.length})</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {linkEvento.dados_etapa1.fotos_urls.map((url: string, idx: number) => (
+                              <img
+                                key={idx}
+                                src={resolverUrl(url)}
+                                alt={`Foto ${idx + 1}`}
+                                className="h-24 w-full rounded-md object-cover cursor-pointer hover:opacity-80 transition-opacity border"
+                                onClick={() => setPreviewDoc({ arquivo_url: url, nome_arquivo: `Foto ${idx + 1}` })}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* B.O. - Etapa 2 */}
+                      {linkEvento.dados_etapa2 && (
+                        <div>
+                          <Separator className="my-2" />
+                          <p className="text-sm font-medium mb-1">Boletim de Ocorrência</p>
+                          <div className="flex items-center gap-2">
+                            {linkEvento.dados_etapa2.numero_bo && (
+                              <span className="text-sm">Nº {linkEvento.dados_etapa2.numero_bo}</span>
+                            )}
+                            {linkEvento.dados_etapa2.arquivo_url && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => window.open(resolverUrl(linkEvento.dados_etapa2.arquivo_url), '_blank')}
+                              >
+                                <FileText className="h-3 w-3 mr-1" />
+                                Ver arquivo
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Relato - Etapa 3 */}
+                      {linkEvento.dados_etapa3 && (
+                        <div>
+                          <Separator className="my-2" />
+                          <p className="text-sm font-medium mb-1">Relato do Associado</p>
+                          {linkEvento.dados_etapa3.texto && (
+                            <p className="text-sm text-muted-foreground bg-muted p-3 rounded-md">
+                              {linkEvento.dados_etapa3.texto}
+                            </p>
+                          )}
+                          {linkEvento.dados_etapa3.audio_url && (
+                            <audio controls className="w-full mt-1">
+                              <source src={resolverUrl(linkEvento.dados_etapa3.audio_url)} />
+                            </audio>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Link pendente sem dados */}
+                      {linkEvento.status !== 'completado' && !linkEvento.dados_etapa1 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Aguardando envio das informações pelo associado
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Documentos */}
                 <Card>
