@@ -568,7 +568,7 @@ export default function SinistroAnalise() {
                     <InfoItem icon={Calendar} label="Data da Ocorrência" value={formatDateTime(sinistro.data_ocorrencia)} />
                     <InfoItem icon={MapPin} label="Local" value={sinistro.local_ocorrencia} />
                     <InfoItem icon={MapPin} label="Cidade/UF" value={`${sinistro.cidade_ocorrencia || ''}/${sinistro.estado_ocorrencia || ''}`} />
-                    <InfoItem icon={FileText} label="Nº B.O." value={sinistro.bo_numero} />
+                    <InfoItem icon={FileText} label="Nº B.O." value={sinistro.bo_numero || linkEvento?.dados_etapa2?.numero_bo} />
                     <InfoItem icon={Clock} label="Comunicado em" value={formatDateTime(sinistro.created_at)} />
                     <div className="md:col-span-2">
                       <p className="text-sm text-muted-foreground mb-1">Descrição</p>
@@ -1113,7 +1113,7 @@ export default function SinistroAnalise() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "h-4 w-4 rounded-full",
-                  (sinistro.bo_numero || documentos.some((d: any) => d.tipo === 'bo' && d.status !== 'pendente')) ? "bg-green-500" : "bg-muted"
+                  (sinistro.bo_numero || linkEvento?.dados_etapa2?.numero_bo || documentos.some((d: any) => d.tipo === 'bo' && d.status !== 'pendente')) ? "bg-green-500" : "bg-muted"
                 )} />
                 <span className="text-sm">B.O. informado</span>
               </div>
