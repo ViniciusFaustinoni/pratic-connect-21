@@ -1,36 +1,46 @@
 
 
-# Corrigir acesso do regulador a vistorias de evento
+# Corrigir query do hook useVistoriaEventoDetalhe
 
 ## Problema
 
-O regulador nao consegue carregar a vistoria porque a tabela `sinistros` nao tem uma policy de SELECT que permita acesso para usuarios com role `regulador`. A query no hook `useVistoriaEventoDetalhe` faz um join de `vistorias_evento` com `sinistros`, mas o RLS de `sinistros` so permite acesso ao proprio associado (via `get_my_associado_id`) ou por `upload_token`. Resultado: o join retorna null e a query falha.
+A query no hook `useVistoriaEventoDetalhe` referencia colunas que nao existem na tabela `sinistros`:
+- `relato` (nao existe -- o campo correto eh `descricao`)
+- `local_evento`, `local_numero`, `local_bairro`, `local_cidade`, `local_uf` (nao existem -- so existem `local_descricao` e `local_ocorrencia`)
+- `terceiro_envolvido`, `terceiro_nome`, `terceiro_placa`, `terceiro_telefone`, `terceiro_seguradora` (nao existem)
 
-A tabela `sinistro_evento_links` tambem so tem uma policy generica (`true` para anon), que funciona mas nao eh ideal.
+Isso causa o erro HTTP 400: `column sinistros_1.relato does not exist`, impedindo o regulador de carregar qualquer vistoria.
 
 ## Solucao
 
-Criar uma nova RLS policy na tabela `sinistros` que permita SELECT para reguladores:
+**Arquivo: `src/hooks/useVistoriaEventoDetalhe.ts`**
 
-```sql
-CREATE POLICY "Reguladores podem ver sinistros"
-  ON public.sinistros
-  FOR SELECT
-  TO authenticated
-  USING (
-    has_role(auth.uid(), 'regulador')
-    OR has_role(auth.uid(), 'diretor')
-    OR has_role(auth.uid(), 'gerente_comercial')
-    OR has_role(auth.uid(), 'coordenador_monitoramento')
-    OR has_role(auth.uid(), 'analista_cadastro')
-  );
+Atualizar o select da query para usar apenas colunas que realmente existem na tabela `sinistros`:
+
+```typescript
+sinistro:sinistros!vistorias_evento_sinistro_id_fkey(
+  id, protocolo, tipo, status, data_ocorrencia, created_at, descricao,
+  local_descricao, local_ocorrencia, cidade_ocorrencia, estado_ocorrencia,
+  condutor_nome, condutor_cnh, condutor_relacao,
+  associado:associados!sinistros_associado_id_fkey(
+    id, nome, cpf, telefone, email, plano_id, whatsapp
+  ),
+  veiculo:veiculos!sinistros_veiculo_id_fkey(
+    id, placa, marca, modelo, ano_modelo, cor, chassi, valor_fipe
+  )
+)
 ```
 
-Isso segue o mesmo padrao de roles ja usado na policy de `vistorias_evento`. Nenhuma alteracao de codigo eh necessaria -- apenas a criacao desta policy no banco de dados.
+Remover as colunas inexistentes (`relato`, `local_evento`, `local_numero`, `local_bairro`, `local_cidade`, `local_uf`, `terceiro_envolvido`, `terceiro_nome`, `terceiro_placa`, `terceiro_telefone`, `terceiro_seguradora`) e substituir pelos nomes corretos.
+
+Os dados de terceiro e relato detalhado ficam no campo JSON `dados_etapa3` da tabela `sinistro_evento_links`, que ja eh buscado separadamente pelo hook (variavel `linkEvento`).
+
+**Arquivo: `src/components/regulador/VistoriaEventoDados.tsx`** (se necessario)
+
+Verificar se este componente referencia os campos antigos e ajustar para usar os nomes corretos ou extrair dos dados do `linkEvento`.
 
 ## Impacto
 
-- Corrige o erro "Erro ao carregar vistoria" para reguladores
-- Permite que o join com sinistros funcione corretamente
-- Sem alteracao em arquivos de codigo, apenas migracao SQL
-
+- Corrige o erro 400 que impede o regulador de carregar vistorias
+- Nenhuma alteracao de banco de dados necessaria
+- Alteracao apenas nos nomes de colunas na query do hook
