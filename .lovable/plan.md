@@ -1,49 +1,42 @@
 
 
-# Mover Solicitacoes IA para rota propria do modulo Eventos
+# Diferenciar visualmente cards de Sinistro e Assistencia 24h
 
 ## Problema
 
-O Analista de Eventos acessa a pagina de Solicitacoes IA pela rota `/diretoria/solicitacoes-ia`, que:
-1. Mostra o breadcrumb "Diretoria > Solicitacoes-ia" -- um caminho exclusivo de diretores
-2. Da a impressao de que o analista esta numa area que nao lhe pertence
-
-Alem disso, a pagina ja funciona (RLS corrigido anteriormente), so precisa de rota e navegacao corretas.
+Na pagina de Solicitacoes IA, os cards de Sinistro e Assistencia 24h usam a mesma cor de borda lateral (amber/amarelo), dificultando a identificacao rapida do tipo.
 
 ## Solucao
 
-### 1. Criar rota duplicada em `/eventos/solicitacoes-ia` (App.tsx)
+Alterar o componente `SolicitacoesIA.tsx` para aplicar cores diferentes na borda lateral e no fundo do card conforme o tipo:
 
-Adicionar uma nova rota que renderiza o mesmo componente `SolicitacoesIA`, mas dentro do grupo de rotas de Eventos:
+- **Sinistro**: borda vermelha (`border-l-red-500`) e fundo sutil vermelho
+- **Assistencia 24h**: borda azul (`border-l-blue-500`) e fundo sutil azul
+- **Cancelamento**: borda laranja (`border-l-orange-500`)
+- **Troca de Titularidade**: borda roxa (`border-l-purple-500`)
 
+## Arquivo a modificar
+
+**`src/pages/diretoria/SolicitacoesIA.tsx`**
+
+Na linha ~231-234, substituir a logica de cor fixa `border-l-amber-400` por cores dinamicas baseadas no `solicitacao.tipo`:
+
+```typescript
+const borderColorByTipo: Record<string, string> = {
+  sinistro: 'border-l-red-500 bg-red-50/30 dark:bg-red-950/10',
+  assistencia: 'border-l-blue-500 bg-blue-50/30 dark:bg-blue-950/10',
+  cancelamento: 'border-l-orange-500 bg-orange-50/30 dark:bg-orange-950/10',
+  troca_titularidade: 'border-l-purple-500 bg-purple-50/30 dark:bg-purple-950/10',
+};
 ```
-/eventos/solicitacoes-ia  -->  <SolicitacoesIA />
+
+Aplicar no Card:
+```typescript
+<Card className={cn(
+  "transition-all border-l-4",
+  borderColorByTipo[solicitacao.tipo] || "border-l-amber-400"
+)}>
 ```
 
-A rota antiga `/diretoria/solicitacoes-ia` permanece para diretores.
-
-### 2. Alterar a navegacao do botao "Revisar Solicitacoes" (SinistrosList.tsx)
-
-Mudar o `navigate('/diretoria/solicitacoes-ia')` para `navigate('/eventos/solicitacoes-ia')` -- assim todos os usuarios do modulo Eventos vao para a rota correta, com breadcrumb "Eventos > Solicitacoes-ia".
-
-### 3. Adicionar item no menu sidebar de Eventos (AppSidebar.tsx)
-
-Incluir "Solicitacoes IA" como subitem do grupo Eventos no sidebar, visivel para analista de eventos e diretores:
-
-```
-{ title: 'Solicitacoes IA', url: '/eventos/solicitacoes-ia', icon: Bot }
-```
-
-### 4. Atualizar rotas permitidas no useRouteGuard (useRouteGuard.ts)
-
-A rota `/eventos/solicitacoes-ia` ja esta coberta pelo allowedPath `/eventos`, entao nenhuma mudanca e necessaria nesse arquivo -- mas trocar `/diretoria/solicitacoes-ia` por `/eventos/solicitacoes-ia` na lista de `allowedPaths` para manter consistencia e remover o acesso a rota de diretoria.
-
-## Arquivos a modificar
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/App.tsx` | Adicionar rota `/eventos/solicitacoes-ia` apontando para `SolicitacoesIA` |
-| `src/pages/eventos/SinistrosList.tsx` | Mudar navegacao de `/diretoria/solicitacoes-ia` para `/eventos/solicitacoes-ia` |
-| `src/components/layout/AppSidebar.tsx` | Adicionar "Solicitacoes IA" no grupo Eventos do sidebar |
-| `src/hooks/useRouteGuard.ts` | Trocar `/diretoria/solicitacoes-ia` por `/eventos/solicitacoes-ia` no allowedPaths do analista de eventos |
+Isso se aplica a todos os status (pendente, aprovado, rejeitado), nao apenas pendentes, para manter a identificacao visual consistente.
 
