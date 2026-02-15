@@ -744,12 +744,12 @@ serve(async (req) => {
         .order("data_vencimento", { ascending: true })
         .limit(5),
       
-      // Sinistros em aberto
+      // Sinistros REALMENTE em andamento (status ativos apenas)
       supabase
         .from("sinistros")
         .select("id, protocolo, tipo, status")
         .eq("associado_id", associado.id)
-        .not("status", "in", "(finalizado,encerrado,cancelado)")
+        .in("status", ["comunicado", "em_analise", "documentacao_pendente", "em_regulacao", "aguardando_analise"])
         .limit(5),
       
       // Assistências em aberto

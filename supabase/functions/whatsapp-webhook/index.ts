@@ -319,6 +319,13 @@ IMPORTANTE: Só ofereça assistência 24h se o veículo tiver cobertura_total = 
 3. Descrição do problema
 4. Tipo de veículo (carro ou moto)
 
+## EVENTOS NOVOS vs EXISTENTES (MUITO IMPORTANTE!)
+- Se o contexto mostra "Nenhum sinistro em aberto" e o associado relata um novo acidente, TRATE COMO NOVO SINISTRO
+- NAO assuma que é continuação de um evento anterior já finalizado
+- Se houver sinistro em andamento E o associado relatar novo evento, pergunte: "Vi que você já tem um sinistro em andamento (protocolo X). Esse é um novo evento ou é sobre o mesmo?"
+- Eventos com status finalizado/encerrado/aprovado/indenizado JÁ FORAM RESOLVIDOS — ignore-os para novas solicitações
+- Se o histórico de conversa menciona sinistros anteriores mas o contexto mostra que estão finalizados, IGNORE o histórico antigo
+
 ## Regras Gerais
 - Use a DATA ATUAL fornecida para datas relativas
 - Confirme TODOS os dados antes de criar solicitações
@@ -755,6 +762,23 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     }
 
     case "criar_solicitacao_sinistro": {
+      // Verificar se já existe solicitação pendente
+      const { data: solicitacaoPendente } = await supabase
+        .from("chat_solicitacoes_ia")
+        .select("id, created_at")
+        .eq("associado_id", associadoId)
+        .eq("tipo", "sinistro")
+        .eq("status", "pendente")
+        .limit(1)
+        .maybeSingle();
+
+      if (solicitacaoPendente) {
+        return JSON.stringify({
+          sucesso: false,
+          message: "Você já tem uma solicitação de sinistro pendente de análise. Aguarde a resposta da diretoria antes de abrir uma nova.",
+        });
+      }
+
       const { data: veiculos } = await supabase
         .from("veiculos")
         .select("id, cobertura_total, cobertura_roubo_furto")
@@ -1417,12 +1441,23 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
     .order("data_vencimento", { ascending: true })
     .limit(3);
 
-  // Buscar sinistros em andamento
+  // Buscar sinistros REALMENTE em andamento (status ativos apenas)
   const { data: sinistros } = await supabase
     .from("sinistros")
     .select("protocolo, tipo, status")
     .eq("associado_id", associadoId)
-    .not("status", "in", "(finalizado,encerrado,cancelado)")
+    .in("status", ["comunicado", "em_analise", "documentacao_pendente", "em_regulacao", "aguardando_analise"])
+    .limit(3);
+
+  // Buscar sinistros recentes finalizados (para referência, últimos 30 dias)
+  const trintaDiasAtras = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: sinistrosFinalizados } = await supabase
+    .from("sinistros")
+    .select("protocolo, tipo, status")
+    .eq("associado_id", associadoId)
+    .not("status", "in", "(comunicado,em_analise,documentacao_pendente,em_regulacao,aguardando_analise)")
+    .gte("updated_at", trintaDiasAtras)
+    .order("updated_at", { ascending: false })
     .limit(3);
 
   // Buscar assistências em andamento
@@ -1457,10 +1492,15 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
       ).join('\n')
     : 'Nenhum boleto pendente ✅';
 
-  // Formatar sinistros
+  // Formatar sinistros em andamento
   const sinistrosFormatados = sinistros?.length > 0
     ? sinistros.map((s: any) => `- ${s.protocolo}: ${s.tipo} (${s.status})`).join('\n')
     : 'Nenhum sinistro em aberto';
+
+  // Formatar sinistros finalizados recentes
+  const sinistrosFinalizadosFormatados = sinistrosFinalizados?.length > 0
+    ? sinistrosFinalizados.map((s: any) => `- ${s.protocolo}: ${s.tipo} (${s.status}) — JÁ FINALIZADO`).join('\n')
+    : 'Nenhum sinistro finalizado recentemente';
 
   // Formatar assistências
   const assistenciasFormatadas = assistencias?.length > 0
@@ -1502,6 +1542,9 @@ ${boletosFormatados}
 ## SINISTROS EM ANDAMENTO
 ${sinistrosFormatados}
 
+## SINISTROS FINALIZADOS RECENTEMENTE (apenas referência — NÃO são em andamento!)
+${sinistrosFinalizadosFormatados}
+
 ## ASSISTÊNCIAS EM ANDAMENTO
 ${assistenciasFormatadas}
 
@@ -1515,10 +1558,13 @@ ${assistenciasFormatadas}
 
 // Buscar histórico de conversa
 async function getConversationHistory(supabase: any, associadoId: string, telefone: string) {
+  // Limitar histórico às últimas 2 horas para evitar contexto de conversas antigas
+  const duasHorasAtras = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const { data } = await supabase
     .from("chat_mensagens_ia")
     .select("role, content")
     .eq("associado_id", associadoId)
+    .gte("created_at", duasHorasAtras)
     .order("created_at", { ascending: false })
     .limit(10);
 
