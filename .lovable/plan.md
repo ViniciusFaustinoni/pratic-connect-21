@@ -1,57 +1,102 @@
 
+# Corrigir Calculo da Cota de Coparticipacao no Fluxo de Aprovacao
 
-# Mostrar Valores Individuais de Servico e Mao de Obra na Tabela de Orcamento
+## Problema Identificado
 
-## Problema
+A cobranca de R$ 750,00 esta errada. O valor e um **hardcoded** (`VALORES_SINISTRO.cota_participacao_padrao = 750`). O fluxo atual nao consulta o plano do associado para calcular a cota corretamente.
 
-Atualmente, a tabela "Itens do Orcamento" na pagina de Analise do Evento exibe os itens de mao de obra e servico com valor unitario como texto cinza discreto ("---" quando nulo). O rodape mostra apenas o total agregado ("Custo medio estimado de mao de obra: R$ 300,00"), sem detalhar quanto custa cada servico individualmente.
+**Dados reais do sinistro SIN-20260215-0004:**
+- Plano: SELECT EXCLUSIVE → `cota_participacao = 6%`, `cota_minima = R$ 1.200`
+- Veiculo FIPE: R$ 70.008,00
+- Calculo correto: `max(70.008 * 6%, 1.200) = R$ 4.200,48`
+- Valor cobrado: R$ 750,00 (errado)
 
-O analista de eventos precisa ver o custo de **cada** item de mao de obra e servico preenchido pelo regulador.
+**Causa raiz:** A edge function `aprovar-sinistro` nao calcula nem salva o `valor_cota_participacao` no sinistro. Quando o webhook do Autentique e acionado apos assinatura, ele le esse campo (que esta null ou foi preenchido com o default de R$ 750).
+
+## Formula de Calculo
+
+```text
+valor_cota = max(valor_fipe_veiculo * plano.cota_participacao / 100, plano.cota_minima)
+
+Se veiculo.uso_aplicativo = true:
+  valor_cota = max(valor_fipe * plano.cota_app_percent / 100, plano.cota_app_min)
+```
 
 ## Alteracoes
 
-### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
+### 1. Edge Function `aprovar-sinistro/index.ts`
 
-**1. Exibir valor unitario de servico/mao de obra com destaque (linhas 1065-1069)**
+Ao aprovar o sinistro, **calcular e salvar** o `valor_cota_participacao` correto:
 
-Substituir o bloco que mostra o valor de itens nao-peca (atualmente texto cinza discreto) por uma exibicao mais clara:
-- Se `item.valor_unitario` existir: mostrar valor formatado em negrito (sem ser cinza)
-- Se nao existir: manter "---"
+1. Alterar a query de busca do sinistro para incluir `plano_id` do associado e `valor_fipe, uso_aplicativo` do veiculo
+2. Buscar o plano do associado: `cota_participacao`, `cota_minima`, `cota_app_percent`, `cota_app_min`
+3. Calcular: `max(valor_fipe * percentual / 100, minimo)`
+4. Incluir `valor_cota_participacao` no update do sinistro
 
-**2. Adicionar coluna "Valor Total" na tabela (apos a coluna "Valor Unit.")**
+**Impacto:** Todo sinistro aprovado a partir de agora tera o valor correto salvo. O webhook do Autentique e a cobranca Asaas usarao esse valor automaticamente.
 
-Adicionar uma nova coluna "Total" que calcula `valor_unitario * quantidade` para cada item:
-- Para pecas: usa o valor da IA (se disponivel) ou o valor manual multiplicado pela quantidade
-- Para mao de obra/servico: `item.valor_unitario * item.quantidade`
+### 2. Constante `VALORES_SINISTRO.cota_participacao_padrao` em `src/types/sinistros.ts`
 
-**3. Atualizar rodape com resumo por categoria (linhas 1077-1081)**
+Manter a constante como fallback, mas nao sera mais usada no fluxo principal. O valor real vira do calculo do plano.
 
-Substituir o resumo unico por um detalhamento:
-- Total Mao de Obra: R$ X (soma dos itens tipo mao_de_obra)
-- Total Servicos: R$ Y (soma dos itens tipo servico)
-- Total Pecas: R$ Z (soma dos valores de pecas, quando preenchidos)
+### 3. Correcao retroativa do sinistro SIN-20260215-0004
 
-Manter o total geral ao final.
-
-## Resultado Visual Esperado
-
-```text
-| Descricao                    | Tipo         | Qtd | Fornecedor | Valor Unit. | Total    |
-|------------------------------|--------------|-----|------------|-------------|----------|
-| Para-choque Dianteiro - ...  | Peca         |  1  | [Select]   | R$ 0,00     | R$ 0,00  |
-| Troca de peca                | Mao de Obra  |  1  | --         | R$ 150,00   | R$ 150,00|
-| troca do para choque         | servico      |  1  | --         | R$ 150,00   | R$ 150,00|
-
-Mao de obra: R$ 150,00 | Servicos: R$ 150,00
-Custo medio estimado (mao de obra + servicos): R$ 300,00
-```
+Atualizar o `valor_cota_participacao` do sinistro atual para o valor correto (R$ 4.200,48) e, se ja houver cobranca Asaas criada, cancelar/ajustar.
 
 ## Detalhes Tecnicos
 
-| Local | Alteracao |
+| Arquivo | Alteracao |
 |---|---|
-| Linha 982-986 (thead) | Adicionar coluna `<th>Total</th>` |
-| Linha 1065-1069 (valor nao-peca) | Exibir `item.valor_unitario` com fonte normal (nao cinza) quando existir |
-| Apos linha 1070 (nova td) | Adicionar celula com calculo `valor_unitario * quantidade` |
-| Linhas 1077-1081 (rodape) | Detalhar totais por categoria: mao de obra, servicos e pecas separadamente |
+| `supabase/functions/aprovar-sinistro/index.ts` | Calcular cota com base no plano + FIPE e salvar no sinistro ao aprovar |
 
+### Trecho de codigo a adicionar (aprovar-sinistro)
+
+Apos buscar o sinistro (linha ~36), buscar tambem o plano e calcular a cota:
+
+```
+// Buscar plano do associado para calcular cota
+const { data: associadoPlano } = await supabase
+  .from('associados')
+  .select('plano_id')
+  .eq('id', sinistro.associado.id)
+  .single();
+
+let valorCotaCalculado = null;
+if (associadoPlano?.plano_id && sinistro.veiculo?.valor_fipe) {
+  const { data: plano } = await supabase
+    .from('planos')
+    .select('cota_participacao, cota_minima, cota_app_percent, cota_app_min')
+    .eq('id', associadoPlano.plano_id)
+    .single();
+
+  if (plano) {
+    const { data: veiculoFull } = await supabase
+      .from('veiculos')
+      .select('uso_aplicativo')
+      .eq('id', sinistro.veiculo.id)
+      .single();
+
+    let percentual = plano.cota_participacao || 6;
+    let minimo = plano.cota_minima || 1200;
+    if (veiculoFull?.uso_aplicativo && plano.cota_app_percent) {
+      percentual = plano.cota_app_percent;
+      minimo = plano.cota_app_min || minimo;
+    }
+
+    valorCotaCalculado = Math.max(
+      sinistro.veiculo.valor_fipe * percentual / 100,
+      minimo
+    );
+  }
+}
+```
+
+Depois, no update do sinistro, incluir:
+
+```
+.update({
+  status: 'aprovado',
+  valor_cota_participacao: valorCotaCalculado,
+  updated_at: new Date().toISOString(),
+})
+```
