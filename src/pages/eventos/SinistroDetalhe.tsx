@@ -562,6 +562,30 @@ export default function SinistroDetalhe() {
               {sinistro.tipo === 'fenomeno_natural' ? 'Análise Jurídica' : 'Análise Interna'}
             </Badge>
           )}
+          {sinistro.autentique_documento_id && !sinistro.termo_anuencia_assinado && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-sm px-3 py-1">
+              <FileCheck className="h-4 w-4 mr-1" />
+              Assinatura Pendente
+            </Badge>
+          )}
+          {sinistro.termo_anuencia_assinado && (
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-sm px-3 py-1">
+              <FileCheck className="h-4 w-4 mr-1" />
+              Termo Assinado
+            </Badge>
+          )}
+          {sinistro.termo_anuencia_assinado && !(sinistro as any).cota_paga && (
+            <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300 text-sm px-3 py-1">
+              <DollarSign className="h-4 w-4 mr-1" />
+              Pag. Cota Pendente
+            </Badge>
+          )}
+          {(sinistro as any).cota_paga && (
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-sm px-3 py-1">
+              <DollarSign className="h-4 w-4 mr-1" />
+              Cota Paga
+            </Badge>
+          )}
         </div>
 
         <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen} modal={false}>
