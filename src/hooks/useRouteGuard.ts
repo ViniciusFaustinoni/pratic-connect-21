@@ -53,6 +53,8 @@ export function useRouteGuard() {
         '/notificacoes',
         '/eventos/solicitacoes-ia',
         '/assistencia',
+        '/oficinas',
+        '/ordens-servico',
       ];
       const isAllowed = allowedPaths.some(path =>
         location.pathname === path || location.pathname.startsWith(path + '/')
