@@ -15824,8 +15824,10 @@ export type Database = {
         Row: {
           alerta_enviado_1d: boolean | null
           alerta_enviado_3d: boolean | null
+          alerta_enviado_7d: boolean | null
           alerta_enviado_hoje: boolean | null
           andamento_id: string | null
+          cancelamento_motivo: string | null
           created_at: string | null
           cumprido_em: string | null
           cumprido_por: string | null
@@ -15833,19 +15835,28 @@ export type Database = {
           data_inicio: string
           descricao: string
           dias_uteis: boolean | null
+          evento_id: string | null
+          hora_vencimento: string | null
           id: string
+          lembrete_ativo: boolean | null
+          lembrete_dias: number[] | null
           observacao_cumprimento: string | null
           prioridade: string | null
           processo_id: string
+          prorrogacao_motivo: string | null
+          prorrogado_de: string | null
           responsavel_id: string | null
           status: string | null
+          tipo: string | null
           updated_at: string | null
         }
         Insert: {
           alerta_enviado_1d?: boolean | null
           alerta_enviado_3d?: boolean | null
+          alerta_enviado_7d?: boolean | null
           alerta_enviado_hoje?: boolean | null
           andamento_id?: string | null
+          cancelamento_motivo?: string | null
           created_at?: string | null
           cumprido_em?: string | null
           cumprido_por?: string | null
@@ -15853,19 +15864,28 @@ export type Database = {
           data_inicio: string
           descricao: string
           dias_uteis?: boolean | null
+          evento_id?: string | null
+          hora_vencimento?: string | null
           id?: string
+          lembrete_ativo?: boolean | null
+          lembrete_dias?: number[] | null
           observacao_cumprimento?: string | null
           prioridade?: string | null
           processo_id: string
+          prorrogacao_motivo?: string | null
+          prorrogado_de?: string | null
           responsavel_id?: string | null
           status?: string | null
+          tipo?: string | null
           updated_at?: string | null
         }
         Update: {
           alerta_enviado_1d?: boolean | null
           alerta_enviado_3d?: boolean | null
+          alerta_enviado_7d?: boolean | null
           alerta_enviado_hoje?: boolean | null
           andamento_id?: string | null
+          cancelamento_motivo?: string | null
           created_at?: string | null
           cumprido_em?: string | null
           cumprido_por?: string | null
@@ -15873,12 +15893,19 @@ export type Database = {
           data_inicio?: string
           descricao?: string
           dias_uteis?: boolean | null
+          evento_id?: string | null
+          hora_vencimento?: string | null
           id?: string
+          lembrete_ativo?: boolean | null
+          lembrete_dias?: number[] | null
           observacao_cumprimento?: string | null
           prioridade?: string | null
           processo_id?: string
+          prorrogacao_motivo?: string | null
+          prorrogado_de?: string | null
           responsavel_id?: string | null
           status?: string | null
+          tipo?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -15909,6 +15936,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "processos_prazos_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "processos_prazos_processo_id_fkey"
