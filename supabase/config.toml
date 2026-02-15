@@ -434,3 +434,6 @@ verify_jwt = false
 
 [functions.cron-verificar-sindicancias]
 verify_jwt = false
+
+[functions.cron-verificar-prazos]
+verify_jwt = false

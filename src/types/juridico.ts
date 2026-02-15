@@ -251,6 +251,33 @@ export interface ConsultaJuridica {
   respondido_usuario?: { id: string; nome: string };
 }
 
+// Tipos de Prazo
+export type TipoPrazo = 'judicial' | 'sindicancia' | 'ressarcimento' | 'documentacao' | 'recuperacao' | 'notificacao' | 'garantia' | 'administrativo' | 'outro';
+
+export const TIPO_PRAZO_LABELS: Record<TipoPrazo, string> = {
+  judicial: 'Judicial',
+  sindicancia: 'Sindicância',
+  ressarcimento: 'Ressarcimento',
+  documentacao: 'Documentação',
+  recuperacao: 'Recuperação',
+  notificacao: 'Notificação',
+  garantia: 'Garantia',
+  administrativo: 'Administrativo',
+  outro: 'Outro',
+};
+
+export const TIPO_PRAZO_COLORS: Record<TipoPrazo, string> = {
+  judicial: 'bg-blue-100 text-blue-800',
+  sindicancia: 'bg-yellow-100 text-yellow-800',
+  ressarcimento: 'bg-green-100 text-green-800',
+  documentacao: 'bg-orange-100 text-orange-800',
+  recuperacao: 'bg-purple-100 text-purple-800',
+  notificacao: 'bg-gray-100 text-gray-800',
+  garantia: 'bg-cyan-100 text-cyan-800',
+  administrativo: 'bg-pink-100 text-pink-800',
+  outro: 'bg-gray-100 text-gray-800',
+};
+
 // Labels
 export const TIPO_ADVOGADO_LABELS: Record<TipoAdvogado, string> = {
   interno: 'Interno',
