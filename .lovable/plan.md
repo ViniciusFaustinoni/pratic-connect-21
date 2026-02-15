@@ -1,51 +1,43 @@
 
 
-# Pre-preencher Marca, Modelo e Ano no Orcamento
+# Corrigir auto-preenchimento de Modelo e Ano no Orcamento
 
 ## Problema
 
-Quando o regulador abre o modal de orcamento e adiciona um item do tipo "Peca", os campos Marca, Modelo e Ano aparecem vazios, embora o veiculo do sinistro ja tenha essas informacoes. O regulador precisa selecionar manualmente cada campo toda vez.
+A marca eh encontrada e selecionada corretamente (como mostrado na screenshot com "Toyota"), mas o modelo e o ano nao sao preenchidos. Isso ocorre por um bug de "stale closure" nos `useEffect` do componente `PecaSelectFields`.
+
+Quando o `useEffect` de marcas chama `onChange(...)`, o React re-renderiza o componente com novos `values`. Porem, o `useEffect` de modelos (que depende de `values.marcaCodigo`) captura `values` e `onChange` do closure anterior, causando conflitos: ao chamar `onChange({ ...values, modeloCodigo: ... })`, o spread de `values` antigo pode sobrescrever campos ja atualizados.
 
 ## Solucao
 
-Passar os dados do veiculo (marca, modelo, ano) para o componente de orcamento e usá-los para pré-selecionar automaticamente os campos FIPE no `PecaSelectFields`.
+Usar `useRef` para manter referencias atualizadas de `values` e `onChange`, garantindo que os efeitos de auto-match sempre acessem os valores mais recentes.
 
 ## Alteracoes
 
-### 1. `src/pages/regulador/ExecutarVistoriaEvento.tsx`
-- Passar prop `veiculo` para `VistoriaEventoOrcamento` (ja disponivel no `data.veiculo`)
+### Arquivo: `src/components/oficinas/PecaSelectFields.tsx`
 
-### 2. `src/components/regulador/VistoriaEventoOrcamento.tsx`
-- Receber nova prop `veiculo` com `{ marca, modelo, ano_modelo }`
-- Passar `veiculo` para `PecaSelectFields` via nova prop `initialVeiculo`
-- Ao criar novos itens do tipo "peca", ja incluir os dados do veiculo nos `pecaValuesMap` defaults
+1. Adicionar refs para `values` e `onChange` que sao atualizados a cada render:
 
-### 3. `src/components/oficinas/PecaSelectFields.tsx`
-- Adicionar prop opcional `initialVeiculo?: { marca: string; modelo: string; ano_modelo: string | number }`
-- Quando as marcas carregarem da FIPE, buscar automaticamente a marca que corresponde ao nome do veiculo (match case-insensitive/parcial)
-- Ao encontrar a marca, disparar o carregamento dos modelos e selecionar o modelo correspondente
-- Ao encontrar o modelo, carregar os anos e selecionar o ano correspondente
-- Usar um `useRef` para garantir que o auto-match so aconteca uma vez (na primeira carga)
-
-### Fluxo do auto-preenchimento
-
-```text
-Marcas carregam via FIPE API
-  -> Busca marca cujo nome inclui "Chevrolet" (do veiculo)
-  -> Seleciona automaticamente (codigo + nome)
-  -> Modelos carregam via FIPE API
-    -> Busca modelo cujo nome inclui "Onix" (do veiculo)
-    -> Seleciona automaticamente
-    -> Anos carregam via FIPE API
-      -> Busca ano que contem "2022" (do veiculo)
-      -> Seleciona automaticamente
+```typescript
+const valuesRef = useRef(values);
+valuesRef.current = values;
+const onChangeRef = useRef(onChange);
+onChangeRef.current = onChange;
 ```
 
-O regulador ainda podera alterar qualquer campo manualmente caso necessario, mas na maioria dos casos os campos ja estarao corretos ao abrir.
+2. Nos 3 `useEffect` de auto-match, substituir `values` por `valuesRef.current` e `onChange` por `onChangeRef.current`:
 
-## Detalhes tecnicos
+- **Effect de marcas (linha ~63-74)**: usar `valuesRef.current` no spread e `onChangeRef.current` para chamar o callback
+- **Effect de modelos (linha ~78-91)**: mesmo ajuste -- usar refs em vez de closure
+- **Effect de anos (linha ~95-108)**: mesmo ajuste
 
-- O match de marca sera feito com `nome.toLowerCase().includes(veiculo.marca.toLowerCase())` para lidar com variantes (ex: "CHEVROLET" vs "Chevrolet")
-- O match de modelo usara a mesma logica parcial
-- O match de ano usara `nome.includes(String(ano_modelo))`
-- Um `useRef(false)` chamado `autoMatchedRef` impedira que o auto-match se repita ao reabrir popovers ou ao trocar de item
+3. Separar o flag de auto-match em 3 flags independentes (`autoMatchMarcaRef`, `autoMatchModeloRef`, `autoMatchAnoRef`) para evitar que o match de marca bloqueie ou interfira nos matches subsequentes. A marca marca `autoMatchMarcaRef = true`, o modelo verifica `autoMatchMarcaRef.current && !autoMatchModeloRef.current`, e o ano verifica `autoMatchModeloRef.current && !autoMatchAnoRef.current`.
+
+## Resultado esperado
+
+Ao abrir o modal de orcamento e adicionar uma peca:
+1. Marca eh selecionada automaticamente (ex: "Toyota")
+2. Modelos carregam e o modelo correspondente eh selecionado (ex: "Corolla")
+3. Anos carregam e o ano correspondente eh selecionado (ex: "2022")
+
+O regulador ainda pode alterar qualquer campo manualmente.
