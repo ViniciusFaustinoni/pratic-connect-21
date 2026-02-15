@@ -5,7 +5,9 @@ import {
   FileCheck, FileText, Clock, AlertTriangle,
   Receipt, CheckCircle, XCircle, Send, MapPin, MessageCircle, Mail,
   Wifi, WifiOff, Calendar, Camera, Radio, DollarSign, CreditCard, Shield,
+  Pencil, Check, X,
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -160,6 +162,46 @@ export default function AssociadoDetalhe() {
   const [rastreadorModalOpen, setRastreadorModalOpen] = useState(false);
   const [rastreadorModalData, setRastreadorModalData] = useState<any>(null);
   const [isProcessingCancelamento, setIsProcessingCancelamento] = useState(false);
+  const [editingContatos, setEditingContatos] = useState(false);
+  const [editTelefone, setEditTelefone] = useState('');
+  const [editTelefoneSecundario, setEditTelefoneSecundario] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [isSavingContatos, setIsSavingContatos] = useState(false);
+
+  const canEditContatos = isDiretor || isAnalistaCadastroOnly || isDesenvolvedor || isAdminMaster;
+
+  const handleStartEditContatos = () => {
+    if (!associado) return;
+    setEditTelefone(associado.telefone || '');
+    setEditTelefoneSecundario(associado.telefone_secundario || '');
+    setEditEmail(associado.email || '');
+    setEditingContatos(true);
+  };
+
+  const handleSaveContatos = async () => {
+    if (!id) return;
+    setIsSavingContatos(true);
+    try {
+      const { error } = await supabase
+        .from('associados')
+        .update({
+          telefone: editTelefone,
+          telefone_secundario: editTelefoneSecundario || null,
+          email: editEmail,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      if (error) throw error;
+      toast.success('Contatos atualizados com sucesso');
+      setEditingContatos(false);
+      refetch();
+    } catch (error) {
+      console.error('Erro ao salvar contatos:', error);
+      toast.error('Erro ao salvar contatos');
+    } finally {
+      setIsSavingContatos(false);
+    }
+  };
 
   const criarSolicitacaoRetirada = useCriarSolicitacaoRetiradaCadastro();
 
@@ -420,11 +462,47 @@ export default function AssociadoDetalhe() {
             </Card>
 
             <Card className="border-border/60">
-              <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold">Contatos</CardTitle></CardHeader>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-semibold">Contatos</CardTitle>
+                {canEditContatos && !editingContatos && (
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={handleStartEditContatos}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {editingContatos && (
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-600" onClick={handleSaveContatos} disabled={isSavingContatos}>
+                      {isSavingContatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => setEditingContatos(false)} disabled={isSavingContatos}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <DataField label="Telefone Principal" value={formatPhone(associado.telefone)} />
-                <DataField label="Telefone Secundário" value={formatPhone(associado.telefone_secundario)} />
-                <DataField label="Email" value={associado.email || '—'} />
+                {editingContatos ? (
+                  <>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground mb-1">Telefone Principal</p>
+                      <Input value={editTelefone} onChange={(e) => setEditTelefone(e.target.value)} placeholder="(00) 00000-0000" className="h-8 text-sm" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground mb-1">Telefone Secundário</p>
+                      <Input value={editTelefoneSecundario} onChange={(e) => setEditTelefoneSecundario(e.target.value)} placeholder="(00) 00000-0000" className="h-8 text-sm" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground mb-1">Email</p>
+                      <Input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="email@exemplo.com" className="h-8 text-sm" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <DataField label="Telefone Principal" value={formatPhone(associado.telefone)} />
+                    <DataField label="Telefone Secundário" value={formatPhone(associado.telefone_secundario)} />
+                    <DataField label="Email" value={associado.email || '—'} />
+                  </>
+                )}
                 <div className="flex gap-2 pt-2">
                   <Button size="sm" variant="outline" onClick={handleWhatsApp}>
                     <MessageCircle className="mr-1.5 h-3.5 w-3.5" /> WhatsApp
