@@ -1,44 +1,32 @@
 
 
-# Adicionar etapa "Agendamento" na timeline do link do cliente
+# Atualizar status do sinistro apos agendamento
 
 ## Problema
 
-O fluxo do link de evento tem 4 etapas reais:
-1. Auto Vistoria
-2. B.O.
-3. Relato
-4. Agendamento (vistoria presencial)
-
-Porem o stepper (`EventoStepper`) so mostra 3 etapas. Quando o associado completa as 3 primeiras e cai na tela de agendamento, a timeline nao reflete essa etapa.
+Quando o associado conclui o agendamento da vistoria, a edge function `agendar-vistoria-evento` atualiza apenas o campo `etapa4_completada_em` no link, mas nao atualiza o status do sinistro. O sinistro permanece como "documentacao_enviada" ao inves de mudar para um status que reflita que a vistoria foi agendada.
 
 ## Solucao
 
-**Arquivo: `src/components/evento/EventoStepper.tsx`**
+**Arquivo: `supabase/functions/agendar-vistoria-evento/index.ts`**
 
-- Adicionar uma 4a etapa no array `etapas`: `{ numero: 4, titulo: 'Agendamento', icon: Calendar }`
-- Importar o icone `Calendar` do lucide-react
+Adicionar uma chamada para atualizar o status do sinistro para `pendente_vistoria_regulador` logo apos atualizar o `etapa4_completada_em` do link (linha 159):
 
-**Arquivo: `src/pages/public/EventoColisao.tsx`**
+```typescript
+// Atualizar link com etapa4_completada_em
+await supabase
+  .from("sinistro_evento_links")
+  .update({ etapa4_completada_em: new Date().toISOString() })
+  .eq("id", link.id);
 
-- Passar `etapaAtual` ajustado para o stepper:
-  - Etapas 0-2 continuam mapeando para etapas 1-3 do stepper (o stepper ja soma 1 internamente via comparacao `etapaAtual >= etapa.numero`)
-  - Quando `isCompleted` (etapa >= 3) e nao agendado, o stepper deve marcar etapas 1-3 como completas e a etapa 4 como atual
-  - Quando `isAgendado`, todas as 4 etapas ficam completas
+// Atualizar status do sinistro para pendente de vistoria
+await supabase
+  .from("sinistros")
+  .update({ status: "pendente_vistoria_regulador" })
+  .eq("id", link.sinistro_id);
+```
 
-Atualmente o stepper recebe `etapaAtual` (0-based) e compara com `etapa.numero` (1-based): `completada = etapaAtual >= etapa.numero`. Isso significa que `etapaAtual=3` ja marca as 3 primeiras como completas. Para a etapa 4, precisamos que `etapaAtual=3` a marque como "atual" e `etapaAtual=4` a marque como "completada".
+Isso fara com que, apos o agendamento, o status do evento mude automaticamente de "Documentacao Recebida" para "Pendente Vistoria Regulador", refletindo corretamente o estado real do fluxo.
 
-Ajuste na pagina:
-- Quando `isAgendado`: passar `etapaAtual={4}` para marcar tudo como completo
-- O valor atual `etapaAtual` (que ja eh 3 quando completa as 3 etapas) funcionara naturalmente para mostrar a etapa 4 como atual
-
-## Detalhes tecnicos
-
-No `EventoStepper.tsx`:
-- Adicionar `Calendar` ao import do lucide-react
-- Adicionar `{ numero: 4, titulo: 'Agendamento', icon: Calendar }` ao array `etapas`
-
-No `EventoColisao.tsx`:
-- Calcular o valor do stepper: `const stepperEtapa = isAgendado ? 4 : etapaAtual;`
-- Passar para o componente: `<EventoStepper etapaAtual={stepperEtapa} />`
+Alteracao de 4 linhas em um unico arquivo (edge function).
 
