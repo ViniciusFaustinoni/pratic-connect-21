@@ -518,6 +518,18 @@ export default function SinistroDetalhe() {
               Recém-ativado
             </Badge>
           )}
+          {(sinistro as any).alerta_inadimplente && (
+            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300 text-sm px-3 py-1">
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              Pendência Financeira
+            </Badge>
+          )}
+          {(sinistro as any).fluxo_simplificado && (
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 text-sm px-3 py-1">
+              <Square className="h-4 w-4 mr-1" />
+              Fluxo Simplificado
+            </Badge>
+          )}
           {sinistro.analise_interna === true && (
             <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300 text-sm px-3 py-1">
               {sinistro.tipo === 'fenomeno_natural' ? <CloudRain className="h-4 w-4 mr-1" /> : <Flame className="h-4 w-4 mr-1" />}
@@ -541,13 +553,16 @@ export default function SinistroDetalhe() {
               <FileCheck className="h-4 w-4 mr-2" />
               Atualizar Status
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={(e) => {
-              e.preventDefault();
-              openModalSafely(setModalVistoriaOpen);
-            }}>
-              <Calendar className="h-4 w-4 mr-2" />
-              Agendar Vistoria
-            </DropdownMenuItem>
+            {/* Ocultar vistoria para vidros (fluxo simplificado) */}
+            {sinistro.tipo !== 'vidros' && (
+              <DropdownMenuItem onSelect={(e) => {
+                e.preventDefault();
+                openModalSafely(setModalVistoriaOpen);
+              }}>
+                <Calendar className="h-4 w-4 mr-2" />
+                Agendar Vistoria
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={(e) => {
               e.preventDefault();
               openModalSafely(setModalParecerOpen);
@@ -582,7 +597,8 @@ export default function SinistroDetalhe() {
                 Acionar Recuperação
               </DropdownMenuItem>
             )}
-            {['aprovado', 'em_regulacao', 'em_reparo'].includes(sinistro.status) && (
+            {/* Ocultar OS de oficina para vidros (fluxo simplificado) */}
+            {['aprovado', 'em_regulacao', 'em_reparo'].includes(sinistro.status) && sinistro.tipo !== 'vidros' && (
               <DropdownMenuItem onClick={() => navigate(`/oficina/ordens-servico?novo=true&sinistro_id=${id}`)}>
                 <Wrench className="h-4 w-4 mr-2" />
                 Criar Ordem de Serviço
@@ -1021,8 +1037,8 @@ export default function SinistroDetalhe() {
             sinistroTipo={sinistro.tipo}
           />
 
-          {/* Card Vidros e Faróis */}
-          {sinistro.tipo === 'vidros' && sinistro.peca_danificada && (
+          {/* Card Vidros e Faróis - fluxo simplificado */}
+          {sinistro.tipo === 'vidros' && (
             <CardVidrosDetalhe sinistro={sinistro} />
           )}
 

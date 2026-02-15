@@ -19462,6 +19462,7 @@ export type Database = {
       }
       sinistros: {
         Row: {
+          alerta_inadimplente: boolean | null
           alerta_recem_ativado: boolean | null
           analise_interna: boolean | null
           analise_interna_motivos: string[] | null
@@ -19497,6 +19498,7 @@ export type Database = {
           data_prazo_termo: string | null
           descricao: string | null
           estado_ocorrencia: string | null
+          fluxo_simplificado: boolean | null
           garantia_observacoes: string | null
           houve_vitima: boolean | null
           id: string
@@ -19560,6 +19562,7 @@ export type Database = {
           veiculo_recuperado_local: string | null
         }
         Insert: {
+          alerta_inadimplente?: boolean | null
           alerta_recem_ativado?: boolean | null
           analise_interna?: boolean | null
           analise_interna_motivos?: string[] | null
@@ -19595,6 +19598,7 @@ export type Database = {
           data_prazo_termo?: string | null
           descricao?: string | null
           estado_ocorrencia?: string | null
+          fluxo_simplificado?: boolean | null
           garantia_observacoes?: string | null
           houve_vitima?: boolean | null
           id?: string
@@ -19658,6 +19662,7 @@ export type Database = {
           veiculo_recuperado_local?: string | null
         }
         Update: {
+          alerta_inadimplente?: boolean | null
           alerta_recem_ativado?: boolean | null
           analise_interna?: boolean | null
           analise_interna_motivos?: string[] | null
@@ -19693,6 +19698,7 @@ export type Database = {
           data_prazo_termo?: string | null
           descricao?: string | null
           estado_ocorrencia?: string | null
+          fluxo_simplificado?: boolean | null
           garantia_observacoes?: string | null
           houve_vitima?: boolean | null
           id?: string
