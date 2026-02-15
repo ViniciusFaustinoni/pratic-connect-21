@@ -31,6 +31,8 @@ import {
   AlertTriangle,
   FileText,
   Loader2,
+  Send,
+  Info,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -365,25 +367,46 @@ export default function SolicitacoesIA() {
                         )}
                       </div>
 
+                      {/* Info coparticipação para sinistros */}
+                      {solicitacao.tipo === 'sinistro' && solicitacao.status === 'pendente' && (
+                        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-400">
+                          <Info className="h-4 w-4 shrink-0" />
+                          A IA informará ao associado sobre a cota de coparticipação ao enviar o link.
+                        </div>
+                      )}
+
                       {/* Botões de Ação (apenas pendentes) */}
                       {solicitacao.status === 'pendente' && (
                         <div className="flex gap-3 pt-2">
-                          <Button
-                            variant="default"
-                            className="flex-1"
-                            onClick={() => handleAcao(solicitacao, 'aprovar')}
-                          >
-                            <CheckCircle2 className="h-4 w-4 mr-2" />
-                            Aprovar
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="flex-1"
-                            onClick={() => handleAcao(solicitacao, 'rejeitar')}
-                          >
-                            <XCircle className="h-4 w-4 mr-2" />
-                            Rejeitar
-                          </Button>
+                          {solicitacao.tipo === 'sinistro' ? (
+                            <Button
+                              variant="default"
+                              className="flex-1"
+                              onClick={() => handleAcao(solicitacao, 'aprovar')}
+                            >
+                              <Send className="h-4 w-4 mr-2" />
+                              Enviar Link de Auto Vistoria (IA)
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                variant="default"
+                                className="flex-1"
+                                onClick={() => handleAcao(solicitacao, 'aprovar')}
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                Aprovar
+                              </Button>
+                              <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => handleAcao(solicitacao, 'rejeitar')}
+                              >
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Rejeitar
+                              </Button>
+                            </>
+                          )}
                         </div>
                       )}
                     </CardContent>
@@ -401,15 +424,25 @@ export default function SolicitacoesIA() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {acao === 'aprovar' ? (
-                <CheckCircle2 className="h-5 w-5 text-primary" />
+                selectedSolicitacao?.tipo === 'sinistro' ? (
+                  <Send className="h-5 w-5 text-primary" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                )
               ) : (
                 <AlertTriangle className="h-5 w-5 text-destructive" />
               )}
-              {acao === 'aprovar' ? 'Aprovar Solicitação' : 'Rejeitar Solicitação'}
+              {acao === 'aprovar'
+                ? selectedSolicitacao?.tipo === 'sinistro'
+                  ? 'Enviar Link de Auto Vistoria'
+                  : 'Aprovar Solicitação'
+                : 'Rejeitar Solicitação'}
             </DialogTitle>
             <DialogDescription>
               {acao === 'aprovar'
-                ? `Isso irá criar um ${selectedSolicitacao?.tipo === 'sinistro' ? 'sinistro' : 'chamado de assistência'} real no sistema.`
+                ? selectedSolicitacao?.tipo === 'sinistro'
+                  ? 'Isso criará o registro do sinistro e enviará o link de auto vistoria ao associado via WhatsApp, informando sobre a cota de coparticipação.'
+                  : `Isso irá criar um chamado de assistência real no sistema.`
                 : 'Informe o motivo da rejeição.'}
             </DialogDescription>
           </DialogHeader>
@@ -436,7 +469,11 @@ export default function SolicitacoesIA() {
               disabled={processarMutation.isPending || (acao === 'rejeitar' && !motivo.trim())}
             >
               {processarMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {acao === 'aprovar' ? 'Confirmar Aprovação' : 'Confirmar Rejeição'}
+              {acao === 'aprovar'
+                ? selectedSolicitacao?.tipo === 'sinistro'
+                  ? 'Confirmar Envio'
+                  : 'Confirmar Aprovação'
+                : 'Confirmar Rejeição'}
             </Button>
           </DialogFooter>
         </DialogContent>
