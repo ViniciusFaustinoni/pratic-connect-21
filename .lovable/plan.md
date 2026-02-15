@@ -1,45 +1,45 @@
 
-# Adicionar opcao "Ver Sinistro" quando chamado ja tem sinistro vinculado
+# Corrigir listagem de prestadores no modal de atribuicao
 
-## Contexto
+## Problema
 
-Quando um chamado de assistencia foi criado a partir de um sinistro, o menu de acoes ainda mostra "Abrir Sinistro" (que cria um novo). O correto seria mostrar "Ver Sinistro" e navegar para o sinistro existente.
+O modal "Atribuir Prestador" nao mostra nenhum prestador porque ha uma incompatibilidade nos valores de tipo de servico:
 
-## Como funciona hoje
+- Os chamados sao criados com `tipo_servico: 'guincho'` (pelo sistema de sinistros, IA e webhook WhatsApp)
+- Porem os prestadores cadastrados possuem `tipos_servico: ['reboque']`
+- A query filtra com `.contains('tipos_servico', ['guincho'])`, que nao encontra match com `['reboque']`
 
-- A tabela `sinistros` possui os campos `chamado_assistencia_id` e `chamado_origem_id` que vinculam um sinistro a um chamado
-- O menu de acoes sempre mostra "Abrir Sinistro" com link para criar um novo, independente de ja existir um vinculado
+O label no proprio codigo ja reconhece que sao o mesmo servico: `reboque: 'Reboque/Guincho'`.
 
 ## Solucao
 
-Arquivo: `src/pages/assistencia/ChamadoDetalhe.tsx`
+Arquivo: `src/components/assistencia/AtribuirPrestadorModal.tsx`
 
-1. **Nova query**: Buscar na tabela `sinistros` se existe algum registro com `chamado_assistencia_id` ou `chamado_origem_id` igual ao ID do chamado atual
-2. **Condicional no menu**: 
-   - Se existir sinistro vinculado: mostrar "Ver Sinistro" com icone e navegar para `/eventos/sinistros/{sinistro_id}`
-   - Se nao existir: manter o comportamento atual de "Abrir Sinistro" (criacao)
+1. Criar um mapa de aliases para tipos de servico equivalentes (ex: `guincho` e `reboque` sao o mesmo)
+2. Na query de busca, expandir o filtro para incluir todos os aliases do tipo de servico do chamado
+3. Ao inves de usar `.contains()` com um unico valor, usar `.overlaps()` com a lista expandida de tipos equivalentes
 
-### Detalhes tecnicos
+### Mapa de equivalencias
 
-Nova query no componente `ChamadoDetalhe`:
-
-```typescript
-const { data: sinistroVinculado } = useQuery({
-  queryKey: ['chamado-sinistro', id],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('sinistros')
-      .select('id, protocolo')
-      .or(`chamado_assistencia_id.eq.${id},chamado_origem_id.eq.${id}`)
-      .limit(1)
-      .maybeSingle();
-    return data;
-  },
-  enabled: !!id,
-});
+```
+guincho <-> reboque
 ```
 
-No menu de acoes (linhas 258-264), substituir o item fixo por condicional:
+### Mudanca na query
 
-- Com sinistro: "Ver Sinistro (PROT-XXXXX)" navegando para a pagina do sinistro
-- Sem sinistro: "Abrir Sinistro" criando novo (comportamento atual)
+Antes:
+```
+.contains('tipos_servico', [chamado.tipo_servico])
+```
+
+Depois:
+```
+.overlaps('tipos_servico', ['guincho', 'reboque'])  // quando tipo_servico eh 'guincho' ou 'reboque'
+```
+
+## Detalhes tecnicos
+
+- Adicionar constante `TIPOS_EQUIVALENTES` mapeando aliases bidirecionalmente
+- Criar funcao `expandirTipoServico(tipo)` que retorna array com o tipo original + equivalentes
+- Substituir `.contains()` por `.overlaps()` usando o array expandido
+- Isso garante que um chamado do tipo "guincho" encontre prestadores cadastrados com "reboque" e vice-versa
