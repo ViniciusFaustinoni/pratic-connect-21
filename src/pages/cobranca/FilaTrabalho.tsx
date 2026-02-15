@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Play, Users, User, Clock, CheckCircle, Phone, MessageSquare, RefreshCw, Headphones } from 'lucide-react';
+import { Play, Users, User, Clock, CheckCircle, Phone, MessageSquare, RefreshCw, Headphones, Target, ListPlus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -14,6 +15,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { ModoTrabalhoModal } from '@/components/cobranca/ModoTrabalhoModal';
+import { MetricasOperador } from '@/components/cobranca/MetricasOperador';
 
 const formatTelefone = (tel: string) => {
   const clean = tel?.replace(/\D/g, '') || '';
@@ -66,6 +68,22 @@ const FilaTrabalho = () => {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [modoTrabalhoOpen, setModoTrabalhoOpen] = useState(false);
   const [currentModoIndex, setCurrentModoIndex] = useState(0);
+  const META_DIARIA = 30;
+
+  // Gerar fila do dia
+  const gerarFila = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('gerar-fila-cobranca');
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(`Fila gerada: ${data?.tarefas_criadas || 0} novas tarefas`);
+      queryClient.invalidateQueries({ queryKey: ['fila-cobranca'] });
+      queryClient.invalidateQueries({ queryKey: ['fila-cobranca-stats'] });
+    },
+    onError: () => toast.error('Erro ao gerar fila')
+  });
 
   // Fila de trabalho
   const { data: fila, isLoading } = useQuery({
@@ -246,6 +264,14 @@ const FilaTrabalho = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Fila de Trabalho</h1>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => gerarFila.mutate()}
+            disabled={gerarFila.isPending}
+          >
+            <ListPlus className="h-4 w-4 mr-2" />
+            {gerarFila.isPending ? 'Gerando...' : 'Gerar Fila do Dia'}
+          </Button>
           <Button 
             variant="outline"
             size="lg" 
@@ -265,6 +291,34 @@ const FilaTrabalho = () => {
           </Button>
         </div>
       </div>
+
+      {/* Barra de Progresso - Meta Diária */}
+      {stats && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Meta Diária</span>
+              </div>
+              <span className="text-sm font-bold">
+                {stats.concluidosHoje} de {META_DIARIA} contatos
+              </span>
+            </div>
+            <Progress 
+              value={Math.min((stats.concluidosHoje / META_DIARIA) * 100, 100)}
+              className="h-3"
+              indicatorClassName={
+                (stats.concluidosHoje / META_DIARIA) >= 0.8
+                  ? 'bg-green-500'
+                  : (stats.concluidosHoje / META_DIARIA) >= 0.5
+                    ? 'bg-yellow-500'
+                    : 'bg-red-500'
+              }
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Cards Resumo */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -488,6 +542,12 @@ const FilaTrabalho = () => {
           )}
         </CardContent>
       </Card>
+      {/* Métricas do Operador */}
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">Suas Métricas</h3>
+        <MetricasOperador />
+      </div>
+
       {/* Modal Modo Trabalho */}
       <ModoTrabalhoModal
         open={modoTrabalhoOpen}
