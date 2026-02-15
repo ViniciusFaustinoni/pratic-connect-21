@@ -983,6 +983,7 @@ export default function SinistroAnalise() {
                                             <th className="text-center p-2 font-medium">Qtd</th>
                                             <th className="text-left p-2 font-medium">Fornecedor</th>
                                             <th className="text-right p-2 font-medium">Valor Unit.</th>
+                                            <th className="text-right p-2 font-medium">Total</th>
                                           </tr>
                                         </thead>
                                         <tbody>
@@ -1063,10 +1064,23 @@ export default function SinistroAnalise() {
                                                     />
                                                   )
                                                 ) : (
-                                                  <span className="text-muted-foreground">
-                                                    {item.valor_unitario != null ? formatCurrency(item.valor_unitario) : '---'}
-                                                  </span>
+                                                  item.valor_unitario != null ? (
+                                                    <span className="font-medium">{formatCurrency(item.valor_unitario)}</span>
+                                                  ) : (
+                                                    <span className="text-muted-foreground">---</span>
+                                                  )
                                                 )}
+                                              </td>
+                                              <td className="p-2 text-right">
+                                                {(() => {
+                                                  if (item.tipo === 'peca') {
+                                                    const v = pecaViaIA ? iaValor : (valoresPecas[i] ?? item.valor_unitario);
+                                                    return v != null ? <span className="font-medium">{formatCurrency(v * (item.quantidade || 1))}</span> : <span className="text-muted-foreground">---</span>;
+                                                  }
+                                                  return item.valor_unitario != null
+                                                    ? <span className="font-medium">{formatCurrency(item.valor_unitario * (item.quantidade || 1))}</span>
+                                                    : <span className="text-muted-foreground">---</span>;
+                                                })()}
                                               </td>
                                             </tr>
                                             );
@@ -1074,11 +1088,23 @@ export default function SinistroAnalise() {
                                         </tbody>
                                       </table>
                                     </div>
-                                    {dados.valor_total_orcamento != null && (
-                                      <p className="text-sm text-muted-foreground mt-2">
-                                        Custo médio estimado de mão de obra: <strong>{formatCurrency(dados.valor_total_orcamento)}</strong>
-                                      </p>
-                                    )}
+                                    {(() => {
+                                      const totalMaoObra = itens
+                                        .filter((it: any) => it.tipo === 'mao_de_obra' && it.valor_unitario != null)
+                                        .reduce((s: number, it: any) => s + (it.valor_unitario * (it.quantidade || 1)), 0);
+                                      const totalServicos = itens
+                                        .filter((it: any) => it.tipo === 'servico' && it.valor_unitario != null)
+                                        .reduce((s: number, it: any) => s + (it.valor_unitario * (it.quantidade || 1)), 0);
+                                      const totalGeral = totalMaoObra + totalServicos;
+                                      if (totalGeral === 0 && dados.valor_total_orcamento == null) return null;
+                                      return (
+                                        <div className="text-sm text-muted-foreground mt-2 space-y-0.5">
+                                          {totalMaoObra > 0 && <p>Mão de obra: <strong>{formatCurrency(totalMaoObra)}</strong></p>}
+                                          {totalServicos > 0 && <p>Serviços: <strong>{formatCurrency(totalServicos)}</strong></p>}
+                                          <p>Custo médio estimado (mão de obra + serviços): <strong>{formatCurrency(totalGeral || dados.valor_total_orcamento || 0)}</strong></p>
+                                        </div>
+                                      );
+                                    })()}
                                     {/* Aviso de cotações pendentes */}
                                     {!temCotacaoAprovada && cotacoesRespondidas.length > 0 && (
                                       <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
