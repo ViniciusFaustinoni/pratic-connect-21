@@ -269,18 +269,16 @@ serve(async (req) => {
       throw new Error('veiculo_id é obrigatório');
     }
 
-    // Buscar associado do usuário
-    const { data: associado, error: assocError } = await supabaseAdmin
-      .from('associados')
-      .select('id')
+    // Verificar se é funcionário (tem perfil com tipo 'funcionario')
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, tipo')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (assocError || !associado) {
-      throw new Error('Associado não encontrado');
-    }
+    const isFuncionario = profile?.tipo === 'funcionario';
 
-    // Verificar se o veículo pertence ao associado
+    // Buscar o veículo
     const { data: veiculo, error: veicError } = await supabaseAdmin
       .from('veiculos')
       .select('id, placa, modelo, marca, associado_id')
@@ -291,8 +289,21 @@ serve(async (req) => {
       throw new Error('Veículo não encontrado');
     }
 
-    if (veiculo.associado_id !== associado.id) {
-      throw new Error('Veículo não pertence ao associado');
+    // Se não for funcionário, validar que é o associado dono do veículo
+    if (!isFuncionario) {
+      const { data: associado, error: assocError } = await supabaseAdmin
+        .from('associados')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (assocError || !associado) {
+        throw new Error('Associado não encontrado');
+      }
+
+      if (veiculo.associado_id !== associado.id) {
+        throw new Error('Veículo não pertence ao associado');
+      }
     }
 
     // Buscar rastreador do veículo com plataforma
