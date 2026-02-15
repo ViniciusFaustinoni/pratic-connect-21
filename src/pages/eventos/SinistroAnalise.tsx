@@ -316,7 +316,7 @@ export default function SinistroAnalise() {
       // 2. Montar e enviar mensagem WhatsApp
       const link = `https://pratic-connect-21.lovable.app/evento/${linkData.token}`;
       const nome = associado.nome?.split(' ')[0] || 'Associado';
-      const mensagem = `Olá ${nome}!\n\nSeu sinistro ${sinistro.protocolo} foi registrado com sucesso.\n\nPara dar andamento ao processo, você precisa realizar a *auto vistoria* através do link abaixo:\n\n${link}\n\n📸 *Etapa 1* - Envie as fotos do veículo\n📋 *Etapa 2* - Envie o Boletim de Ocorrência\n📝 *Etapa 3* - Relate o que aconteceu\n\n⚠️ *Importante:* A IA irá informá-lo sobre a cota de coparticipação aplicável.\n\nO link é válido por 72 horas.\n\nABP PraticCar`;
+      const mensagem = `Olá ${nome}!\n\nSeu sinistro ${sinistro.protocolo} foi registrado com sucesso.\n\nPara dar andamento ao processo, acesse o link abaixo e envie os documentos necessários:\n\n${link}\n\n*DOCUMENTOS NECESSÁRIOS:*\n\n📸 *Etapa 1 - Auto Vistoria (fotos do veículo)*\n- Frente, traseira, laterais e teto\n- Detalhes dos danos\n- Painel/hodômetro\n- Mínimo de 5 fotos\n\n📋 *Etapa 2 - Boletim de Ocorrência*\n- Número do B.O.\n- Foto ou PDF do documento\n\n📝 *Etapa 3 - Relato do ocorrido*\n- Descrição detalhada do que aconteceu\n- Áudio ou texto\n- Localização do evento\n\n⚠️ *Importante:* Você será informado sobre a cota de coparticipação aplicável.\n\nO link é válido por 72 horas.\n\nABP PraticCar`;
 
       const { error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
         body: { telefone, mensagem },
