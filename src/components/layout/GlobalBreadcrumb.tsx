@@ -37,6 +37,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/eventos': { label: 'Eventos' },
   '/eventos/dashboard': { label: 'Dashboard' },
   '/eventos/sinistros': { label: 'Sinistros' },
+  '/eventos/sla': { label: 'SLA' },
   
   // Assistência 24h
   '/assistencia': { label: 'Assistência 24h' },

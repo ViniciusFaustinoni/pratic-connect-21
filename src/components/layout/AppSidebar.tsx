@@ -209,6 +209,7 @@ const menuConfig: {
       items: [
         { title: 'Dashboard', url: '/eventos/dashboard', icon: BarChart3 },
         { title: 'Sinistros', url: '/eventos/sinistros', icon: AlertTriangle },
+        { title: 'SLA', url: '/eventos/sla', icon: Clock },
         { title: 'Sindicâncias', url: '/eventos/sindicancias', icon: Search },
       ],
     },
