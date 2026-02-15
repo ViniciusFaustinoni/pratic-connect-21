@@ -35,6 +35,184 @@ import autoTable from 'jspdf-autotable';
 
 type PeriodoType = 'este_mes' | 'ultimo_mes' | 'trimestre' | 'ano';
 
+// ===== Consultores Tab =====
+function ConsultoresTab({ periodoRange }: { periodoRange: { inicio: Date; fim: Date } }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['relatorio-consultores', periodoRange.inicio.toISOString(), periodoRange.fim.toISOString()],
+    queryFn: async () => {
+      // Get leads with vendedor in period
+      const { data: leads } = await supabase
+        .from('leads')
+        .select('vendedor_id, etapa, created_at, updated_at')
+        .gte('created_at', periodoRange.inicio.toISOString())
+        .lte('created_at', periodoRange.fim.toISOString())
+        .not('vendedor_id', 'is', null);
+      
+      if (!leads || leads.length === 0) return [];
+      
+      // Get vendedor names
+      const vendedorIds = [...new Set(leads.map(l => l.vendedor_id).filter(Boolean))] as string[];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, nome')
+        .in('id', vendedorIds);
+      
+      const nameMap = new Map((profiles || []).map(p => [p.id, p.nome || 'Sem nome']));
+      
+      // Group by vendedor
+      const grouped: Record<string, { total: number; conversoes: number; temposDias: number[] }> = {};
+      leads.forEach(l => {
+        const vid = l.vendedor_id!;
+        if (!grouped[vid]) grouped[vid] = { total: 0, conversoes: 0, temposDias: [] };
+        grouped[vid].total++;
+        if (l.etapa === 'ganho') {
+          grouped[vid].conversoes++;
+          if (l.updated_at && l.created_at) {
+            const dias = (new Date(l.updated_at).getTime() - new Date(l.created_at).getTime()) / (1000 * 60 * 60 * 24);
+            grouped[vid].temposDias.push(dias);
+          }
+        }
+      });
+      
+      return Object.entries(grouped)
+        .map(([id, v]) => ({
+          id,
+          nome: nameMap.get(id) || 'Sem nome',
+          total: v.total,
+          conversoes: v.conversoes,
+          taxa: v.total > 0 ? (v.conversoes / v.total) * 100 : 0,
+          tempoMedio: v.temposDias.length > 0 ? v.temposDias.reduce((a, b) => a + b, 0) / v.temposDias.length : null,
+        }))
+        .sort((a, b) => b.conversoes - a.conversoes);
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Performance dos Consultores</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-12">#</TableHead>
+              <TableHead>Consultor</TableHead>
+              <TableHead className="text-center">Leads Recebidos</TableHead>
+              <TableHead className="text-center">Conversões</TableHead>
+              <TableHead className="text-center">Taxa</TableHead>
+              <TableHead className="text-center">Tempo Médio (dias)</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+            ) : data && data.length > 0 ? (
+              data.map((c, idx) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                      idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                      idx === 1 ? 'bg-gray-100 text-gray-700' :
+                      idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-muted'
+                    }`}>
+                      {idx + 1}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium">{c.nome}</TableCell>
+                  <TableCell className="text-center">{c.total}</TableCell>
+                  <TableCell className="text-center text-green-600 font-medium">{c.conversoes}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant={c.taxa >= 10 ? 'default' : 'secondary'}>{c.taxa.toFixed(1)}%</Badge>
+                  </TableCell>
+                  <TableCell className="text-center">{c.tempoMedio !== null ? c.tempoMedio.toFixed(1) : '-'}</TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum dado disponível</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ===== Jornada Tab =====
+function JornadaTab({ periodoRange }: { periodoRange: { inicio: Date; fim: Date } }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['relatorio-jornada', periodoRange.inicio.toISOString(), periodoRange.fim.toISOString()],
+    queryFn: async () => {
+      const { data: leads } = await supabase
+        .from('leads')
+        .select('origem, created_at, updated_at')
+        .eq('etapa', 'ganho' as any)
+        .gte('created_at', periodoRange.inicio.toISOString())
+        .lte('created_at', periodoRange.fim.toISOString());
+      
+      if (!leads || leads.length === 0) return [];
+      
+      const grouped: Record<string, number[]> = {};
+      leads.forEach(l => {
+        const origem = l.origem || 'Não informado';
+        if (!grouped[origem]) grouped[origem] = [];
+        if (l.updated_at && l.created_at) {
+          const dias = (new Date(l.updated_at).getTime() - new Date(l.created_at).getTime()) / (1000 * 60 * 60 * 24);
+          grouped[origem].push(dias);
+        }
+      });
+      
+      return Object.entries(grouped)
+        .map(([origem, dias]) => ({
+          origem,
+          convertidos: dias.length,
+          tempoMedio: dias.length > 0 ? dias.reduce((a, b) => a + b, 0) / dias.length : 0,
+          maisRapido: dias.length > 0 ? Math.min(...dias) : 0,
+          maisLento: dias.length > 0 ? Math.max(...dias) : 0,
+        }))
+        .sort((a, b) => b.convertidos - a.convertidos);
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Jornada do Lead — Tempo até Conversão</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Canal</TableHead>
+              <TableHead className="text-center">Leads Convertidos</TableHead>
+              <TableHead className="text-center">Tempo Médio (dias)</TableHead>
+              <TableHead className="text-center">Mais Rápido</TableHead>
+              <TableHead className="text-center">Mais Lento</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+            ) : data && data.length > 0 ? (
+              data.map(j => (
+                <TableRow key={j.origem}>
+                  <TableCell className="font-medium">{j.origem}</TableCell>
+                  <TableCell className="text-center">{j.convertidos}</TableCell>
+                  <TableCell className="text-center font-medium">{j.tempoMedio.toFixed(1)}</TableCell>
+                  <TableCell className="text-center text-green-600">{j.maisRapido.toFixed(1)}</TableCell>
+                  <TableCell className="text-center text-red-600">{j.maisLento.toFixed(1)}</TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum dado disponível</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function RelatoriosMarketing() {
   const [periodo, setPeriodo] = useState<PeriodoType>('este_mes');
 
@@ -593,16 +771,7 @@ export default function RelatoriosMarketing() {
 
             {/* Tab: Consultores */}
             <TabsContent value="consultores" className="mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Performance dos Consultores</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-center text-muted-foreground py-8">
-                    Relatório de consultores com leads recebidos, conversões e tempo médio de contato será populado com dados reais do pipeline.
-                  </p>
-                </CardContent>
-              </Card>
+              <ConsultoresTab periodoRange={periodoRange} />
             </TabsContent>
 
             {/* Tab: ROI/LTV */}
@@ -653,16 +822,7 @@ export default function RelatoriosMarketing() {
 
             {/* Tab: Jornada */}
             <TabsContent value="jornada" className="mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Jornada do Lead</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-center text-muted-foreground py-8">
-                    Análise de tempo médio em cada etapa do funil por canal. Dados serão populados com base nos timestamps de mudança de etapa dos leads.
-                  </p>
-                </CardContent>
-              </Card>
+              <JornadaTab periodoRange={periodoRange} />
             </TabsContent>
           </Tabs>
         </>
