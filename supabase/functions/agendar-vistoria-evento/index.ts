@@ -158,6 +158,12 @@ serve(async (req) => {
       .update({ etapa4_completada_em: new Date().toISOString() })
       .eq("id", link.id);
 
+    // Atualizar status do sinistro para pendente de vistoria
+    await supabase
+      .from("sinistros")
+      .update({ status: "pendente_vistoria_regulador" })
+      .eq("id", link.sinistro_id);
+
     // Notificar reguladores sobre nova vistoria agendada
     try {
       const { data: sinistroData } = await supabase
