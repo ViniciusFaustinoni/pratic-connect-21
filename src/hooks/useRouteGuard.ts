@@ -9,7 +9,7 @@ import { usePermissions } from './usePermissions';
 export function useRouteGuard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly } = usePermissions();
+  const { isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isAnalistaEventosOnly } = usePermissions();
 
   useEffect(() => {
     // Regulador só pode acessar /regulador/*
@@ -40,6 +40,26 @@ export function useRouteGuard() {
       }
     }
 
+    // Analista de eventos - redirecionar das rotas mobile antigas para o sistema web
+    if (isAnalistaEventosOnly) {
+      if (location.pathname.startsWith('/analista-eventos')) {
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+      const allowedPaths = [
+        '/dashboard',
+        '/eventos',
+        '/perfil',
+        '/notificacoes',
+      ];
+      const isAllowed = allowedPaths.some(path =>
+        location.pathname === path || location.pathname.startsWith(path + '/')
+      );
+      if (!isAllowed) {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+
     // Analista de cadastro - rotas permitidas específicas
     if (isAnalistaCadastroOnly) {
       const allowedPaths = [
@@ -57,5 +77,5 @@ export function useRouteGuard() {
         navigate('/dashboard', { replace: true });
       }
     }
-  }, [location.pathname, isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, navigate]);
+  }, [location.pathname, isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isAnalistaEventosOnly, navigate]);
 }
