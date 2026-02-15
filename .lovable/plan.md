@@ -1,55 +1,61 @@
 
-# Corrigir acesso do Analista de Eventos aos dados da vistoria do regulador
+# Posicao do Veiculo na Hora do Evento para o Analista
 
-## Problema identificado
+## Contexto
 
-A tabela `vistorias_evento` possui uma politica RLS (Row Level Security) que nao inclui o perfil `analista_eventos` na lista de roles com permissao de SELECT. Os roles permitidos atualmente sao:
+A API Softruck ja esta integrada via edge function `rastreador-historico`, que consulta `/v2/vehicles/{id}/trajectories/` com filtros de data. Isso permite buscar posicoes retroativas sob demanda, sem depender do polling de 10 em 10 minutos.
 
-- regulador
-- diretor
-- gerente_comercial
-- analista_cadastro
-- coordenador_monitoramento
+O componente `TrajetoSinistroCard` ja usa essa edge function para exibir o trajeto das 24h anteriores ao evento -- porem so aparece nas telas `SinistroAnalise.tsx` e `SinistroDetalhe.tsx`. A tela do analista de eventos (`EventoAnaliseDetalhe.tsx`) nao possui nenhum componente de mapa ou trajeto.
 
-O `analista_eventos` precisa ler esses dados para realizar a analise final do sinistro (orcamento, parecer, observacoes do regulador).
+## Sobre o polling de 10 em 10 minutos
 
-## Evidencia
+O `sync-rastreadores` (cron) grava posicoes no banco a cada 10 minutos. Isso e util para o monitoramento geral, mas para analise de eventos **nao e necessario** -- a API de trajetos da Softruck retorna o historico completo com granularidade muito maior (pontos a cada poucos segundos). Portanto, para o caso de uso de analise, a consulta sob demanda ja resolve sem depender do cron.
 
-A query HTTP para `vistorias_evento?sinistro_id=eq.cc55af17...` retorna `[]` (array vazio) quando logado como analista de eventos, mesmo existindo um registro concluido para esse sinistro no banco.
+## Alteracoes
 
-## Alteracao necessaria
+### 1. Adicionar secao de Mapa/Trajeto na tela do Analista de Eventos
 
-### Migration SQL
+**Arquivo:** `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
 
-Atualizar a politica RLS de SELECT na tabela `vistorias_evento` para incluir o role `analista_eventos`:
+- Importar `TrajetoSinistroCard` (componente ja existente e funcional)
+- Adicionar uma nova secao no Accordion (entre "Cronologia" e "Relato") com o card de trajeto
+- Passar `veiculoId`, `dataOcorrencia`, `localOcorrencia`, `sinistroId` e dados do veiculo como props
+- Condicionar a exibicao a existencia de `sinistro.veiculo_id`
 
-```sql
-DROP POLICY "Reguladores e gestores podem ver vistorias" ON vistorias_evento;
+### 2. Verificar RLS da tabela `rastreadores`
 
-CREATE POLICY "Reguladores gestores e analistas podem ver vistorias"
-ON vistorias_evento
-FOR SELECT
-TO authenticated
-USING (
-  has_role(auth.uid(), 'regulador'::app_role)
-  OR has_role(auth.uid(), 'diretor'::app_role)
-  OR has_role(auth.uid(), 'gerente_comercial'::app_role)
-  OR has_role(auth.uid(), 'analista_cadastro'::app_role)
-  OR has_role(auth.uid(), 'coordenador_monitoramento'::app_role)
-  OR has_role(auth.uid(), 'analista_eventos'::app_role)
-);
-```
-
-Nenhuma alteracao de codigo e necessaria -- o frontend ja possui toda a logica de exibicao dos dados da vistoria (diagnostico, etapas de reparo, itens do orcamento, parecer do regulador e observacoes de perda total). O problema e exclusivamente de permissao de acesso ao banco.
+A tela do analista precisa consultar a tabela `rastreadores` (via `TrajetoSinistroCard` internamente) para descobrir o ID do rastreador do veiculo. Verificar se o role `analista_eventos` tem permissao SELECT nessa tabela. Se nao tiver, criar migration para adicionar.
 
 ## Resultado esperado
 
-Apos a alteracao da politica RLS, o analista de eventos vera no card "Anexos do Regulador":
+O analista de eventos vera, na tela de analise do sinistro:
 
-1. Fotos do regulador (galeria)
-2. Video do regulador (se existir)
-3. Diagnostico com tipo de dano e descricao tecnica
-4. Etapas de reparo selecionadas
-5. Itens do orcamento (pecas e servicos)
-6. Parecer tecnico e recomendacao
-7. Observacoes de perda total (se aplicavel)
+1. Mapa com o trajeto das 24h anteriores ao evento (dados vindos diretamente da API Softruck)
+2. Marcador no local do sinistro (ultima posicao antes do horario do evento)
+3. Paradas identificadas ao longo do trajeto
+4. Badge indicando se os dados vieram da API ou do banco local
+5. Opcao de expandir o mapa em tela cheia
+
+Tudo isso sem depender do polling de 10 em 10 minutos -- a consulta e feita sob demanda usando o endpoint de trajetos da Softruck.
+
+## Secao tecnica
+
+```text
+EventoAnaliseDetalhe.tsx
+  |
+  +-- AccordionItem "trajeto-veiculo" (novo)
+  |     |
+  |     +-- TrajetoSinistroCard (componente existente)
+  |           |
+  |           +-- useQuery -> rastreadores (busca rastreador do veiculo)
+  |           +-- useQuery -> supabase.functions.invoke('rastreador-historico')
+  |                 |
+  |                 +-- Edge Function rastreador-historico
+  |                       |
+  |                       +-- Softruck API: /v2/vehicles/{id}/trajectories/
+  |                             (filtros: 24h antes da data_ocorrencia)
+```
+
+Nenhuma nova edge function ou tabela sera criada. Apenas:
+- 1 alteracao de arquivo (EventoAnaliseDetalhe.tsx)
+- 1 possivel migration RLS (se necessario para tabela rastreadores)
