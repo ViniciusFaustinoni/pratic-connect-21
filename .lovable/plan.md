@@ -1,53 +1,57 @@
 
-
-# Substituir "Aprovar Sinistro" por "Enviar Link de Auto Vistoria" na pagina de Analise de Sinistro
+# Corrigir status exibido para sinistros em analise
 
 ## Problema
 
-Na pagina `SinistroAnalise.tsx`, o botao "Aprovar Sinistro" aparece para sinistros que ainda nao passaram pela etapa de auto vistoria. O fluxo correto e primeiro enviar o link de auto vistoria ao associado (informando sobre coparticipacao), e so depois aprovar.
-
-Isso ja foi feito na pagina de Solicitacoes IA, mas deve valer para **todos** os sinistros, independente de terem vindo da IA ou nao.
+Quando o analista de eventos envia o link de auto vistoria, o sinistro muda para status `em_analise`. Porem, a pagina de analise exibe **"Sinistro aprovado -- aguardando encaminhamento para oficina"**, o que e incorreto. O status correto a exibir e **"Aguardando auto vistoria"**.
 
 ## Solucao
 
-### 1. Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
+### Arquivo: `src/pages/eventos/SinistroAnalise.tsx` (linhas 788-805)
 
-**Substituir botao "Aprovar Sinistro" (linhas 786-793)**
+Separar o tratamento dos status `em_analise` e `aprovado`:
 
-O botao atual chama `AprovarSinistroDialog` que invoca `aprovar-sinistro` (muda status para "aprovado" e envia termo). Para o fluxo correto, deve-se:
+**Status `em_analise`** (link de auto vistoria enviado):
+- Exibir banner amarelo/amber: "Aguardando auto vistoria -- link enviado ao associado"
+- Nao exibir botao "Enviar para Oficina"
+- Opcionalmente exibir botao para reenviar o link
 
-- Trocar o botao "Aprovar Sinistro" por **"Enviar Link de Auto Vistoria"** para sinistros que ainda nao tiveram o link enviado (status `comunicado` ou `aberto`)
-- Adicionar informacao sobre coparticipacao: "A IA informara ao associado sobre a cota de coparticipacao ao enviar o link."
-- Ao clicar, chamar a edge function `gerar-link-evento` (ja existe) para gerar o token, e depois `whatsapp-send-text` para enviar o link ao associado
-- Manter o botao "Aprovar Sinistro" original para sinistros que ja passaram pela etapa de vistoria (status mais avancados onde aprovar faz sentido)
+**Status `aprovado`** (sinistro ja aprovado apos vistoria):
+- Manter o banner verde atual: "Sinistro aprovado -- aguardando encaminhamento para oficina"
+- Manter o botao "Enviar para Oficina"
 
-**Adicionar logica de envio do link de auto vistoria**
+### Codigo
 
-Criar uma nova funcao `handleEnviarLinkAutoVistoria` que:
-1. Invoca `gerar-link-evento` com o `sinistro_id`
-2. Monta a mensagem WhatsApp com as 3 etapas (fotos, B.O., relato) e link
-3. Envia via `whatsapp-send-text`
-4. Atualiza o status do sinistro para `em_analise`
-5. Registra no historico
+```typescript
+// Status em_analise: aguardando auto vistoria do associado
+if (sinistro.status === 'em_analise') {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+        <Clock className="h-4 w-4 flex-shrink-0" />
+        <span><strong>Aguardando auto vistoria</strong> -- link enviado ao associado.</span>
+      </div>
+    </div>
+  );
+}
 
-**Adicionar nota de coparticipacao acima do botao**
-
-Exibir um alerta informativo azul (igual ao da pagina IA):
+// Sinistro aprovado (pos-vistoria)
+if (sinistro.status === 'aprovado') {
+  return (
+    <>
+      <div className="flex items-center gap-2 p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
+        <CheckCircle className="h-4 w-4 flex-shrink-0" />
+        <span><strong>Sinistro aprovado</strong> -- aguardando encaminhamento para oficina.</span>
+      </div>
+      <Button className="w-full" onClick={() => setShowEnviarOficina(true)}>
+        <Wrench className="h-4 w-4 mr-2" />
+        Enviar para Oficina
+      </Button>
+    </>
+  );
+}
 ```
-A IA informara ao associado sobre a cota de coparticipacao ao enviar o link.
-```
-
-### 2. Arquivo: `src/components/sinistros/AprovarSinistroDialog.tsx`
-
-Manter este dialog como esta, pois ele sera usado apenas para sinistros em estagio avancado (pos-vistoria). Nenhuma alteracao necessaria.
-
-## Detalhes tecnicos
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/pages/eventos/SinistroAnalise.tsx` | Substituir botao "Aprovar" por "Enviar Link de Auto Vistoria" para sinistros em status inicial (comunicado/aberto), adicionar handler que chama `gerar-link-evento` + `whatsapp-send-text`, adicionar info coparticipacao, manter "Aprovar" para status avancados |
-
-A logica condicional sera:
-- Status `comunicado` ou `aberto` (sem vistoria): exibir "Enviar Link de Auto Vistoria"
-- Demais status (ja com vistoria realizada): manter "Aprovar Sinistro" como esta
-
+| `src/pages/eventos/SinistroAnalise.tsx` | Separar `em_analise` (banner amarelo "Aguardando auto vistoria") de `aprovado` (banner verde com botao oficina) |
