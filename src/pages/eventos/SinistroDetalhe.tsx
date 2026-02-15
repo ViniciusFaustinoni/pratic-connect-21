@@ -10,7 +10,7 @@ import {
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle, AlertTriangle,
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
-  Bot, Wrench, Radio, Lock, Navigation, Copy, Send, FileSignature, RefreshCw, DollarSign, Search
+  Bot, Wrench, Radio, Lock, Navigation, Copy, Send, FileSignature, RefreshCw, DollarSign, Search, ClipboardCheck
 } from 'lucide-react';
 import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -62,7 +62,13 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog as PhotoDialog, DialogContent as PhotoDialogContent } from '@/components/ui/dialog';
 
+function resolverUrl(url: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return supabase.storage.from('sinistros').getPublicUrl(url).data.publicUrl;
+}
 const statusConfig: Record<string, { label: string; class: string }> = {
   comunicado: { label: 'Comunicado', class: 'bg-yellow-100 text-yellow-800' },
   em_analise: { label: 'Em Análise', class: 'bg-blue-100 text-blue-800' },
@@ -395,6 +401,25 @@ export default function SinistroDetalhe() {
     },
     enabled: !!sinistro?.associado_id && !!solicitacaoIA,
   });
+
+  // Query para buscar vistoria do regulador (dados da vistoria de evento)
+  const { data: vistoriaEvento } = useQuery({
+    queryKey: ['sinistro-vistoria-evento', id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('vistorias_evento')
+        .select('*')
+        .eq('sinistro_id', id!)
+        .order('concluida_em', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  const [fotoViewerOpen, setFotoViewerOpen] = useState(false);
+  const [fotoViewerUrl, setFotoViewerUrl] = useState('');
 
   // Tipos de sinistro que precisam de rastreador
   const tiposComRastreador = ['roubo', 'furto', 'colisao', 'colisao_parcial', 'colisao_total'];
@@ -850,6 +875,167 @@ export default function SinistroDetalhe() {
               </CardContent>
             </Card>
           )}
+
+          {/* Vistoria do Regulador */}
+          {(() => {
+            const dados = (vistoriaEvento as any)?.dados_vistoria;
+            if (!dados) return null;
+
+            const fotosRegulador = (dados.fotos_urls || []) as string[];
+            const videoRegulador = dados.video_url as string | undefined;
+            const etapas = (dados.etapas_reparo || []) as any[];
+            const itens = (dados.itens_orcamento || []) as any[];
+
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ClipboardCheck className="h-5 w-5" />
+                    Vistoria do Regulador
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Fotos */}
+                  {fotosRegulador.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold mb-2">📸 Fotos do Regulador ({fotosRegulador.length})</p>
+                      <div className="grid grid-cols-5 gap-2">
+                        {fotosRegulador.map((url, i) => (
+                          <img
+                            key={i}
+                            src={resolverUrl(url)}
+                            alt={`Foto regulador ${i + 1}`}
+                            className="h-20 w-full rounded-md object-cover cursor-pointer hover:opacity-80 transition-opacity border"
+                            onClick={() => {
+                              setFotoViewerUrl(resolverUrl(url));
+                              setFotoViewerOpen(true);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vídeo */}
+                  {videoRegulador && (
+                    <>
+                      <Separator />
+                      <div>
+                        <p className="text-sm font-semibold mb-2">🎬 Vídeo do Regulador</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(resolverUrl(videoRegulador), '_blank')}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Assistir Vídeo
+                        </Button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Diagnóstico */}
+                  {(dados.tipo_dano || dados.descricao_tecnica) && (
+                    <>
+                      <Separator />
+                      <div>
+                        <p className="text-sm font-semibold mb-2">🔍 Diagnóstico</p>
+                        {dados.tipo_dano && (
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm text-muted-foreground">Tipo de dano:</span>
+                            <Badge variant={dados.tipo_dano === 'total' ? 'destructive' : 'default'}>
+                              {dados.tipo_dano === 'total' ? 'Perda Total' : 'Parcial'}
+                            </Badge>
+                          </div>
+                        )}
+                        {dados.descricao_tecnica && (
+                          <p className="text-sm text-foreground mt-1">{dados.descricao_tecnica}</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Etapas de Reparo */}
+                  {etapas.length > 0 && (
+                    <>
+                      <Separator />
+                      <div>
+                        <p className="text-sm font-semibold mb-2">🔧 Etapas de Reparo</p>
+                        <div className="flex flex-wrap gap-1">
+                          {etapas
+                            .filter((e: any) => e.selecionada)
+                            .map((e: any, i: number) => (
+                              <Badge key={i} variant="outline">{e.nome}</Badge>
+                            ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Itens do Orçamento */}
+                  {itens.length > 0 && (
+                    <>
+                      <Separator />
+                      <div>
+                        <p className="text-sm font-semibold mb-2">📋 Itens do Orçamento ({itens.length})</p>
+                        <div className="rounded-md border overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-muted">
+                                <th className="text-left p-2 font-medium">Descrição</th>
+                                <th className="text-left p-2 font-medium">Tipo</th>
+                                <th className="text-center p-2 font-medium">Qtd</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {itens.map((item: any, i: number) => (
+                                <tr key={i} className="border-t">
+                                  <td className="p-2">{item.descricao}</td>
+                                  <td className="p-2">
+                                    <Badge variant="outline" className="text-xs">
+                                      {item.tipo === 'peca' ? 'Peça' : item.tipo === 'mao_de_obra' ? 'Mão de Obra' : item.tipo}
+                                    </Badge>
+                                  </td>
+                                  <td className="p-2 text-center">{item.quantidade}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {dados.valor_total_orcamento != null && (
+                          <p className="text-sm text-muted-foreground mt-2">
+                            Custo médio estimado de mão de obra: <strong>{formatCurrency(dados.valor_total_orcamento)}</strong>
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Parecer do Regulador */}
+                  {(dados.parecer_tecnico || dados.recomendacao) && (
+                    <>
+                      <Separator />
+                      <div>
+                        <p className="text-sm font-semibold mb-2">📝 Parecer do Regulador</p>
+                        {dados.parecer_tecnico && (
+                          <p className="text-sm text-foreground whitespace-pre-wrap mb-2">{dados.parecer_tecnico}</p>
+                        )}
+                        {dados.recomendacao && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Recomendação:</span>
+                            <Badge variant={dados.recomendacao === 'aprovar' ? 'default' : 'secondary'}>
+                              {dados.recomendacao === 'aprovar' ? '✅ Aprovar' : '🔍 Análise Detalhada'}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Card Sindicância */}
           <CardSindicanciaStatus
             sinistroId={sinistro.id}
@@ -1385,6 +1571,19 @@ export default function SinistroDetalhe() {
           associadoNome={sinistro.associado?.nome}
         />
       )}
+
+      {/* Foto Viewer */}
+      <Dialog open={fotoViewerOpen} onOpenChange={setFotoViewerOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-2">
+          {fotoViewerUrl && (
+            <img
+              src={fotoViewerUrl}
+              alt="Foto ampliada"
+              className="w-full h-auto max-h-[85vh] object-contain rounded-md"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
