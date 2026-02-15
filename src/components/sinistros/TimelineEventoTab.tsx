@@ -123,11 +123,11 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
       // 3. Links do evento (diferenciando Link 1, Link 2, Link 3)
       const { data: links } = await supabase
         .from('sinistro_evento_links')
-        .select('id, created_at, tipo, status')
+        .select('id, created_at, tipo, status, etapa_atual, etapa1_completada_em, etapa2_completada_em, etapa3_completada_em, etapa4_completada_em')
         .eq('sinistro_id', sinistroId)
         .order('created_at');
 
-      links?.forEach((l) => {
+      links?.forEach((l: any) => {
         const tipoLabel = l.tipo === 'pagamento' ? 'Link 2 (Pagamento)'
           : l.tipo === 'retirada' ? 'Link 3 (Retirada)'
           : 'Link 1 (Documentação)';
@@ -136,6 +136,36 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
           title: `${tipoLabel} enviado`, description: `Status: ${l.status}`,
           icon: Send, color: 'text-purple-500',
         });
+
+        if (l.etapa1_completada_em) {
+          timeline.push({
+            id: `link-etapa1-${l.id}`, date: l.etapa1_completada_em,
+            title: 'Auto Vistoria concluída pelo associado',
+            icon: Car, color: 'text-emerald-500',
+          });
+        }
+        if (l.etapa2_completada_em) {
+          timeline.push({
+            id: `link-etapa2-${l.id}`, date: l.etapa2_completada_em,
+            title: 'B.O. enviado pelo associado',
+            icon: FileText, color: 'text-blue-500',
+          });
+        }
+        if (l.etapa3_completada_em) {
+          timeline.push({
+            id: `link-etapa3-${l.id}`, date: l.etapa3_completada_em,
+            title: 'Relato enviado pelo associado',
+            icon: MessageSquare, color: 'text-indigo-500',
+          });
+        }
+        if (l.etapa4_completada_em) {
+          timeline.push({
+            id: `link-etapa4-${l.id}`, date: l.etapa4_completada_em,
+            title: 'Agendamento realizado pelo associado',
+            icon: Calendar, color: 'text-green-600',
+            badge: 'Agendado', badgeColor: 'bg-green-100 text-green-800',
+          });
+        }
       });
 
       // 4. Vistorias
