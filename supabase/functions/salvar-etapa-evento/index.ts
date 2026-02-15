@@ -66,11 +66,15 @@ Deno.serve(async (req) => {
     }
 
     // Validate per step
-    if (etapa === 1 && arquivos.length < 5) {
-      return new Response(
-        JSON.stringify({ error: "Etapa 1 requer no mínimo 5 fotos" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (etapa === 1) {
+      const fotos = arquivos.filter((f) => f.type.startsWith("image/"));
+      const videos = arquivos.filter((f) => f.type.startsWith("video/"));
+      if (fotos.length < 5 || videos.length < 1) {
+        return new Response(
+          JSON.stringify({ error: "Etapa 1 requer no mínimo 5 fotos e 1 vídeo" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
     if (etapa === 2 && (arquivos.length < 1 || !dados.numero_bo)) {
       return new Response(
