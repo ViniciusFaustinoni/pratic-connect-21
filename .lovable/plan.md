@@ -1,24 +1,44 @@
 
-# Adicionar EventoLinkCard na tela de Analise de Sinistro
+# Ocultar Ouvidoria e Configuracoes do menu do Analista de Eventos
 
 ## Problema
 
-O analista de eventos precisa voltar a tela de detalhe do sinistro para gerar e enviar o link de auto-vistoria. Isso quebra o fluxo de trabalho.
+O Analista de Eventos ve no sidebar os menus "Ouvidoria" e "Configuracoes", mas nao tem permissao para acessar essas areas (o `useRouteGuard` ja bloqueia e redireciona). O menu deve refletir as rotas permitidas.
+
+## Causa
+
+- `canManageOuvidoria` inclui `isFuncionario()`, que abrange todos os funcionarios -- incluindo analista de eventos
+- Configuracoes usa `canViewDashboard` que e `profile?.tipo === 'funcionario'`, tambem abrangendo analista de eventos
 
 ## Solucao
 
-Adicionar o componente `EventoLinkCard` (ja existente) na coluna direita da pagina `SinistroAnalise.tsx`, logo abaixo do card de Acoes. O componente ja recebe todas as props necessarias e o hook `useSinistroAnalise` ja retorna os dados do associado e do sinistro.
+### Arquivo 1: `src/hooks/usePermissions.ts`
 
-## Arquivo a modificar
+Excluir `isAnalistaEventosOnly` da permissao `canManageOuvidoria`:
 
-**`src/pages/eventos/SinistroAnalise.tsx`**
+```typescript
+// De:
+canManageOuvidoria: (isDiretor || ... || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao,
 
-1. Importar `EventoLinkCard` de `@/components/eventos/EventoLinkCard`
-2. Adicionar o componente na coluna direita (apos o card de Acoes, ~linha 680-681), passando as props:
-   - `sinistroId={id!}`
-   - `sinistroProtocolo={sinistro.protocolo}`
-   - `associadoWhatsapp={associado?.whatsapp || associado?.telefone}`
-   - `associadoNome={associado?.nome}`
-   - `sinistroTipo={sinistro.tipo}`
+// Para:
+canManageOuvidoria: (isDiretor || ... || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao && !isAnalistaEventosOnly,
+```
 
-Nenhum arquivo novo precisa ser criado. O componente e os hooks ja existem.
+### Arquivo 2: `src/components/layout/AppSidebar.tsx`
+
+Adicionar uma permissao especifica ao item de Configuracoes que exclua o analista de eventos. A abordagem mais simples e filtrar diretamente no render: se `isAnalistaEventosOnly`, nao renderizar o item de Configuracoes.
+
+Alterar o array `configItems` para incluir uma flag ou adicionar logica no filtro que ja existe (`filterByPermission`). A opcao mais limpa e adicionar uma verificacao no bloco que renderiza os `configItems`:
+
+```typescript
+// Filtrar configItems para analista de eventos
+const filteredConfigItems = filterByPermission(configItems)
+  .filter(item => !(permissions.isAnalistaEventosOnly && item.url === '/configuracoes'));
+```
+
+### Resumo de arquivos
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/hooks/usePermissions.ts` | Adicionar `&& !isAnalistaEventosOnly` em `canManageOuvidoria` |
+| `src/components/layout/AppSidebar.tsx` | Ocultar item Configuracoes para `isAnalistaEventosOnly` |
