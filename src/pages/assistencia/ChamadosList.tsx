@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LucideIcon,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { NovoChamadoModal } from '@/components/assistencia/NovoChamadoModal';
+import { ConfirmacaoExclusaoChamadoDialog } from '@/components/assistencia/ConfirmacaoExclusaoChamadoDialog';
+import { usePermissions } from '@/hooks/usePermissions';
+import { toast } from 'sonner';
 
 const statusOptions = [
   { value: 'todos', label: 'Todos os status' },
@@ -91,8 +95,32 @@ const STATUS_CANCELADOS: StatusChamado[] = ['cancelado_associado', 'cancelado_si
 
 export default function ChamadosList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isDiretor } = usePermissions();
   const perPage = 20;
   const [modalNovoChamado, setModalNovoChamado] = useState(false);
+  const [dialogExcluir, setDialogExcluir] = useState(false);
+  const [chamadoParaExcluir, setChamadoParaExcluir] = useState<{ id: string; protocolo: string } | null>(null);
+
+  const handleExcluir = async (motivo: string) => {
+    if (!chamadoParaExcluir) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) { toast.error('Sessão expirada'); return; }
+
+    const res = await supabase.functions.invoke('delete-chamado-assistencia', {
+      body: { chamadoId: chamadoParaExcluir.id, motivo },
+    });
+
+    if (res.error || res.data?.error) {
+      toast.error(res.data?.error || res.error?.message || 'Erro ao excluir chamado');
+      throw new Error('falha');
+    }
+
+    toast.success(`Chamado ${chamadoParaExcluir.protocolo} excluído`);
+    queryClient.invalidateQueries({ queryKey: ['chamados-assistencia'] });
+    queryClient.invalidateQueries({ queryKey: ['chamados-contadores'] });
+  };
 
   const [filters, setFilters] = useState({
     status: 'todos',
@@ -411,16 +439,32 @@ export default function ChamadosList() {
                         })}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/assistencia/chamados/${chamado.id}`);
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/assistencia/chamados/${chamado.id}`);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {isDiretor && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setChamadoParaExcluir({ id: chamado.id, protocolo: chamado.protocolo });
+                                setDialogExcluir(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -471,6 +515,14 @@ export default function ChamadosList() {
             </Button>
           </div>
         </div>
+      )}
+      {chamadoParaExcluir && (
+        <ConfirmacaoExclusaoChamadoDialog
+          open={dialogExcluir}
+          onOpenChange={setDialogExcluir}
+          protocolo={chamadoParaExcluir.protocolo}
+          onConfirm={handleExcluir}
+        />
       )}
     </div>
   );
