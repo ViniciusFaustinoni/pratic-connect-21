@@ -125,18 +125,19 @@ Deno.serve(async (req) => {
     // 2. Buscar fotos e excluir do storage
     const { data: fotos } = await supabaseAdmin
       .from("sinistro_fotos")
-      .select("id, url")
+      .select("id, storage_path")
       .eq("sinistro_id", sinistroId);
 
     if (fotos && fotos.length > 0) {
-      // Tentar extrair paths do storage das URLs
       for (const foto of fotos) {
         try {
-          if (foto.url && foto.url.includes("/storage/v1/object/public/")) {
-            const path = foto.url.split("/storage/v1/object/public/")[1];
-            if (path) {
-              const [bucket, ...filePath] = path.split("/");
-              await supabaseAdmin.storage.from(bucket).remove([filePath.join("/")]);
+          if (foto.storage_path) {
+            // storage_path format: "bucket/path/to/file"
+            const parts = foto.storage_path.split("/");
+            const bucket = parts[0];
+            const filePath = parts.slice(1).join("/");
+            if (bucket && filePath) {
+              await supabaseAdmin.storage.from(bucket).remove([filePath]);
             }
           }
         } catch (e) {
@@ -185,14 +186,14 @@ Deno.serve(async (req) => {
       console.error("[delete-sinistro] Erro ao excluir gastos:", gastosError);
     }
 
-    // 7. Excluir solicitações do chat IA (se houver)
-    const { error: chatError } = await supabaseAdmin
-      .from("chat_solicitacoes_ia")
-      .delete()
+    // 7. Desvincular ordens de serviço
+    const { error: osError } = await supabaseAdmin
+      .from("ordens_servico")
+      .update({ sinistro_id: null })
       .eq("sinistro_id", sinistroId);
 
-    if (chatError) {
-      console.error("[delete-sinistro] Erro ao excluir chat IA:", chatError);
+    if (osError) {
+      console.error("[delete-sinistro] Erro ao desvincular ordens de serviço:", osError);
     }
 
     // 8. Desvincular processos (não exclui, apenas remove referência)
