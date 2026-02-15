@@ -249,6 +249,53 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
             console.error('[OSConclusao] Erro ao criar lançamento contábil:', contErr);
           }
         }
+
+        // 4. Criar conta a pagar para a oficina (mão de obra)
+        try {
+          const oficinaNome = oficina?.nome_fantasia || oficina?.razao_social || 'N/I';
+          // Calcular valor de mão de obra (itens tipo servico/mao_de_obra)
+          const itens = (os.itens || []) as any[];
+          const valorMaoDeObra = itens
+            .filter((i: any) => i.tipo === 'servico' || i.tipo === 'mao_de_obra')
+            .reduce((acc: number, i: any) => acc + Number(i.valor_total || i.valor || 0), 0);
+
+          const valorConta = valorMaoDeObra > 0 ? valorMaoDeObra : Number(os.valor_orcamento || 0);
+
+          if (valorConta > 0) {
+            // Buscar protocolo do sinistro
+            let protocolo = '';
+            if (os.sinistro_id) {
+              try {
+                const { data: sinistro } = await supabase
+                  .from('sinistros')
+                  .select('protocolo')
+                  .eq('id', os.sinistro_id)
+                  .single();
+                protocolo = sinistro?.protocolo || '';
+              } catch {}
+            }
+
+            const vencimento = new Date();
+            vencimento.setDate(vencimento.getDate() + 15);
+
+            await supabase.from('contas_pagar').insert({
+              fornecedor_nome: oficinaNome,
+              fornecedor_documento: oficina?.cnpj || null,
+              categoria: 'mao_de_obra',
+              valor: valorConta,
+              data_vencimento: vencimento.toISOString().split('T')[0],
+              referencia_tipo: 'ordem_servico',
+              referencia_id: os.id,
+              observacao: `Mão de obra OS ${os.numero}${protocolo ? ` - Sinistro ${protocolo}` : ''}`,
+              status: 'pendente',
+            });
+
+            queryClient.invalidateQueries({ queryKey: ['contas-pagar'] });
+            queryClient.invalidateQueries({ queryKey: ['contas-pagar-kpis'] });
+          }
+        } catch (cpErr) {
+          console.error('[OSConclusao] Erro ao criar conta a pagar (oficina):', cpErr);
+        }
       }
 
       // 4. Histórico OS

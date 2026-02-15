@@ -116,6 +116,38 @@ export function IniciarIndenizacaoModal({
             sinistroId,
           },
         });
+
+        // 5. Criar conta a pagar para o associado (indenização)
+        try {
+          const { data: assocData } = await supabase
+            .from('associados')
+            .select('nome, cpf')
+            .eq('id', veiculo.associado_id)
+            .single();
+
+          if (assocData && valorFinal > 0) {
+            // 60 dias úteis ≈ 84 dias corridos
+            const vencimento = new Date();
+            vencimento.setDate(vencimento.getDate() + 84);
+
+            await supabase.from('contas_pagar').insert({
+              fornecedor_nome: assocData.nome,
+              fornecedor_documento: assocData.cpf,
+              categoria: 'indenizacao',
+              valor: valorFinal,
+              data_vencimento: vencimento.toISOString().split('T')[0],
+              referencia_tipo: 'sinistro',
+              referencia_id: sinistroId,
+              observacao: `Indenização integral - ${protocolo} - Perda total ou roubo não recuperado`,
+              status: 'pendente',
+            });
+
+            queryClient.invalidateQueries({ queryKey: ['contas-pagar'] });
+            queryClient.invalidateQueries({ queryKey: ['contas-pagar-kpis'] });
+          }
+        } catch (cpErr) {
+          console.error('Erro ao criar conta a pagar (indenização):', cpErr);
+        }
       }
 
       return { valorFinal };
