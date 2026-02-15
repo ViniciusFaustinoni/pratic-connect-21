@@ -160,6 +160,7 @@ export default function ExecutarVistoriaEvento() {
         vistoriaId={id!}
         sinistroId={sinistro?.id || ''}
         valorFipe={veiculo?.valor_fipe || null}
+        veiculo={veiculo}
       />
     </div>
   );

@@ -56,6 +56,7 @@ interface VistoriaEventoOrcamentoProps {
   vistoriaId: string;
   sinistroId: string;
   valorFipe: number | null;
+  veiculo?: { marca?: string; modelo?: string; ano_modelo?: string | number } | null;
 }
 
 export function VistoriaEventoOrcamento({
@@ -64,6 +65,7 @@ export function VistoriaEventoOrcamento({
   vistoriaId,
   sinistroId,
   valorFipe,
+  veiculo,
 }: VistoriaEventoOrcamentoProps) {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
@@ -370,6 +372,7 @@ export function VistoriaEventoOrcamento({
                       values={pecaValuesMap[i] || defaultPecaValues}
                       onChange={(pv) => handlePecaValuesChange(i, pv)}
                       active={open}
+                      initialVeiculo={veiculo ? { marca: veiculo.marca || '', modelo: veiculo.modelo || '', ano_modelo: veiculo.ano_modelo || '' } : undefined}
                     />
                   ) : (
                     <>
