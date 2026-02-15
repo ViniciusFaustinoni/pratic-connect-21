@@ -53,13 +53,72 @@ Deno.serve(async (req) => {
 
     const statusAnterior = sinistro.status;
 
+    // Calcular cota de coparticipação com base no plano do associado
+    let valorCotaCalculado: number | null = null;
+    try {
+      const associadoId = (sinistro.associado as any)?.id;
+      const veiculoId = (sinistro.veiculo as any)?.id;
+
+      if (associadoId) {
+        const { data: associadoData } = await supabase
+          .from('associados')
+          .select('plano_id')
+          .eq('id', associadoId)
+          .single();
+
+        if (associadoData?.plano_id) {
+          const [{ data: plano }, { data: veiculoFull }] = await Promise.all([
+            supabase
+              .from('planos')
+              .select('cota_participacao, cota_minima, cota_app_percent, cota_app_min')
+              .eq('id', associadoData.plano_id)
+              .single(),
+            supabase
+              .from('veiculos')
+              .select('valor_fipe, uso_aplicativo')
+              .eq('id', veiculoId)
+              .single(),
+          ]);
+
+          if (plano && veiculoFull?.valor_fipe) {
+            let percentual = plano.cota_participacao || 6;
+            let minimo = plano.cota_minima || 1200;
+
+            if (veiculoFull.uso_aplicativo && plano.cota_app_percent) {
+              percentual = plano.cota_app_percent;
+              minimo = plano.cota_app_min || minimo;
+            }
+
+            valorCotaCalculado = Math.max(
+              veiculoFull.valor_fipe * percentual / 100,
+              minimo
+            );
+            console.log('[aprovar-sinistro] Cota calculada:', {
+              valor_fipe: veiculoFull.valor_fipe,
+              percentual,
+              minimo,
+              uso_app: veiculoFull.uso_aplicativo,
+              valor_cota: valorCotaCalculado,
+            });
+          }
+        }
+      }
+    } catch (cotaErr) {
+      console.error('[aprovar-sinistro] Erro ao calcular cota:', cotaErr);
+    }
+
     // Atualizar status para 'aprovado'
+    const updateData: Record<string, any> = {
+      status: 'aprovado',
+      updated_at: new Date().toISOString(),
+    };
+    if (valorCotaCalculado !== null) {
+      updateData.valor_cota_participacao = valorCotaCalculado;
+    }
+
     const { error: updateError } = await supabase
       .from('sinistros')
-      .update({
-        status: 'aprovado',
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', sinistro_id);
 
     if (updateError) {
