@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
+import { ConfirmacaoExclusaoChamadoDialog } from '@/components/assistencia/ConfirmacaoExclusaoChamadoDialog';
+import { toast } from 'sonner';
 import { AtribuirPrestadorModal } from '@/components/assistencia/AtribuirPrestadorModal';
 import { AtualizarStatusChamadoModal } from '@/components/assistencia/AtualizarStatusChamadoModal';
 import { MapaChamado } from '@/components/assistencia/MapaChamado';
@@ -12,7 +15,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Phone, MessageSquare, MapPin, Clock, User, Car, Star,
   Truck, AlertTriangle, MoreHorizontal, Key, Circle, Fuel, Battery,
-  HelpCircle, UserPlus, RefreshCw, XCircle, AlertCircle, LucideIcon,
+  HelpCircle, UserPlus, RefreshCw, XCircle, AlertCircle, LucideIcon, Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -94,6 +97,31 @@ export default function ChamadoDetalhe() {
   const navigate = useNavigate();
   const [modalPrestador, setModalPrestador] = useState(false);
   const [modalStatus, setModalStatus] = useState(false);
+  const [dialogExcluir, setDialogExcluir] = useState(false);
+  const { isDiretor } = usePermissions();
+
+  const handleExcluir = async (motivo: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      toast.error('Sessão expirada');
+      return;
+    }
+    const res = await fetch(
+      `https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/delete-chamado-assistencia`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ chamadoId: id, motivo }),
+      }
+    );
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Erro ao excluir');
+    toast.success(result.message || 'Chamado excluído com sucesso');
+    navigate('/assistencia/chamados');
+  };
 
   // Query: Dados do Chamado
   const { data: chamado, isLoading } = useQuery({
@@ -291,6 +319,18 @@ export default function ChamadoDetalhe() {
               <XCircle className="h-4 w-4 mr-2" />
               Cancelar Chamado
             </DropdownMenuItem>
+            {isDiretor && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-600"
+                  onClick={() => setDialogExcluir(true)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir Permanentemente
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -683,6 +723,14 @@ export default function ChamadoDetalhe() {
         onClose={() => setModalStatus(false)}
         chamado={chamado}
         veiculoId={chamado.veiculo?.id}
+      />
+
+      {/* Dialog Excluir Chamado (Diretor) */}
+      <ConfirmacaoExclusaoChamadoDialog
+        open={dialogExcluir}
+        onOpenChange={setDialogExcluir}
+        protocolo={chamado.protocolo}
+        onConfirm={handleExcluir}
       />
     </div>
   );
