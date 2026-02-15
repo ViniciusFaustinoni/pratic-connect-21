@@ -200,10 +200,10 @@ export default function SinistrosList() {
               <Bot className="h-8 w-8 text-amber-600" />
               <div>
                 <p className="font-semibold text-amber-800 dark:text-amber-200">
-                  {pendenciasIA.count} sinistro(s) aguardando aprovação via IA
+                  {pendenciasIA.count} sinistro(s) aguardando análise
                 </p>
                 <p className="text-sm text-amber-600 dark:text-amber-400">
-                  Solicitações geradas via WhatsApp/App precisam ser aprovadas
+                  Solicitações geradas via WhatsApp/App precisam ser analisadas
                 </p>
               </div>
             </div>
