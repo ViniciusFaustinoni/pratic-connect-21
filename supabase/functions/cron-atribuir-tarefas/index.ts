@@ -458,6 +458,24 @@ serve(async (req) => {
               .from('vistorias')
               .update(vistUpdateData)
               .eq('id', servico.vistoria_origem_id);
+
+            // Enviar push notification para o regulador atribuído
+            try {
+              await supabase.functions.invoke('send-push-profissional', {
+                body: {
+                  profissional_id: prof.vistoriador_id,
+                  notification: {
+                    title: 'Nova Vistoria Atribuída',
+                    body: `Vistoria ${servico.is_encaixe ? '(encaixe) ' : ''}atribuída - ${servico.associado_nome}`,
+                    tag: `vistoria-${servico.vistoria_origem_id}`,
+                    data: { url: '/instalador', tarefa_id: servico.id, tipo: 'vistoria' },
+                  }
+                }
+              });
+              console.log(`[cron-atribuir-tarefas] ✓ Push enviado para regulador ${prof.vistoriador_id}`);
+            } catch (pushErr) {
+              console.error('[cron-atribuir-tarefas] Erro ao enviar push:', pushErr);
+            }
           }
 
           // 6. Criar ou atualizar rota do dia
