@@ -1,106 +1,39 @@
 
-# Correção do Fluxo de Análise: Fotos da Auto-Vistoria + IA com Cobertura de Conserto
+# Analista de Eventos nao ve sinistros gerados pela IA
 
-## Contexto
+## Problema
 
-Atualmente, quando um sinistro de colisão é criado via IA:
-- A IA confirma o reboque (se necessário) e cria o chamado de assistência
-- Mas NAO informa ao associado sobre a possibilidade de conserto coberto pelo plano
-- NAO envia o link de auto-vistoria de eventos com passo a passo
-- Na tela de análise (`SinistroAnalise.tsx`), as fotos enviadas pelo associado via link de auto-vistoria NAO aparecem
+O sinistro gerado pela IA fica como solicitacao pendente na tabela `chat_solicitacoes_ia` (status `pendente`). Ele so aparece na tabela `sinistros` apos ser aprovado via a pagina `/diretoria/solicitacoes-ia`.
 
-## Mudancas
+O Analista de Eventos:
+- Ve o alerta "1 sinistro aguardando aprovacao via IA" na listagem
+- Mas o botao "Revisar Solicitacoes" aponta para `/diretoria/solicitacoes-ia`
+- Essa rota esta **bloqueada** pelo route guard (so permite `/dashboard`, `/eventos`, `/perfil`, `/notificacoes`)
+- Resultado: o analista nao consegue acessar, aprovar, nem ver o sinistro
 
-### 1. Prompt da IA — Explicar cobertura de conserto e enviar link (assistente-chat)
+## Solucao
 
-**Arquivo:** `supabase/functions/assistente-chat/index.ts`
+Permitir que o Analista de Eventos acesse a pagina de solicitacoes IA para aprovar/rejeitar sinistros.
 
-No `SYSTEM_PROMPT`, após o bloco "FLUXO SINISTRO + ASSISTÊNCIA", adicionar instrução para que após confirmar a necessidade de reboque e criar o chamado de assistência, a IA:
+### Mudanca 1 — Liberar rota no route guard
 
-- Informe ao associado que seu plano de cobertura total inclui o **conserto do veículo** (reparo em oficina credenciada)
-- Explique que para dar andamento ao processo de conserto, o associado precisa completar 3 etapas via link:
-  - Etapa 1: Enviar no mínimo 5 fotos do veículo danificado
-  - Etapa 2: Enviar o Boletim de Ocorrência
-  - Etapa 3: Enviar um relato escrito ou em áudio
-- Inclua o marcador `[LINK_AUTO_VISTORIA]` na mensagem para que o frontend saiba exibir o link
-- Essa explicação só deve acontecer se o veículo tiver **cobertura total** (se for apenas roubo/furto, não se aplica)
+**Arquivo:** `src/hooks/useRouteGuard.ts`
 
-Texto sugerido para o prompt:
+Adicionar `/diretoria/solicitacoes-ia` na lista de `allowedPaths` do bloco `isAnalistaEventosOnly`:
 
 ```
-## FLUXO PÓS-REBOQUE PARA COLISÃO (COBERTURA TOTAL)
-Após confirmar a necessidade de reboque e criar o chamado de assistência para um sinistro de COLISÃO com cobertura TOTAL:
-
-1. Informe ao associado: "Seu plano inclui cobertura para conserto do veículo em oficina credenciada!"
-2. Explique que para dar andamento, ele precisa completar 3 etapas simples pelo link que será enviado:
-   - **Etapa 1** — Enviar no mínimo 5 fotos do veículo danificado (diferentes ângulos)
-   - **Etapa 2** — Enviar o Boletim de Ocorrência (foto ou PDF) e o número do B.O.
-   - **Etapa 3** — Enviar um relato escrito ou em áudio sobre o ocorrido
-3. Diga: "Você receberá um link por WhatsApp para enviar essas informações. O link é válido por 72 horas."
-4. Conclua: "Após o envio, um regulador será agendado para vistoria em até 3 dias úteis."
-
-IMPORTANTE: Só mencione conserto se a cobertura for TOTAL. Para cobertura apenas roubo/furto, não há cobertura de conserto.
+const allowedPaths = [
+  '/dashboard',
+  '/eventos',
+  '/perfil',
+  '/notificacoes',
+  '/diretoria/solicitacoes-ia',
+];
 ```
 
-### 2. Tela de Análise — Exibir fotos da auto-vistoria de eventos
+### Mudanca 2 — Sidebar (se necessario)
 
-**Arquivo:** `src/hooks/useSinistroAnalise.ts`
-
-Adicionar uma query para buscar o `sinistro_evento_links` mais recente do sinistro, que contem os dados das 3 etapas (fotos em `dados_etapa1.fotos_urls`, B.O. em `dados_etapa2`, relato em `dados_etapa3`).
-
-```typescript
-// Link do evento (dados das etapas de auto-vistoria)
-const { data: linkEvento } = useQuery({
-  queryKey: ['sinistro-analise-link-evento', sinistroId],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('sinistro_evento_links')
-      .select('*')
-      .eq('sinistro_id', sinistroId!)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return data;
-  },
-  enabled: !!sinistroId,
-});
-```
-
-Retornar `linkEvento` no hook.
-
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
-
-Após o card de "Documentos", adicionar um novo card **"Fotos da Auto-Vistoria"** que exibe:
-
-- Grid de fotos da `dados_etapa1.fotos_urls` (com clique para ampliar)
-- Informacoes do B.O. da `dados_etapa2` (número e arquivo)
-- Relato do associado da `dados_etapa3` (texto ou link de áudio)
-- Badge indicando o status do link (completado, pendente, expirado)
-
-O card ficará posicionado logo acima do card de "Documentos" para que seja a primeira coisa que o analista vê.
-
-Layout do card:
-
-```
-+------------------------------------------+
-| Fotos da Auto-Vistoria do Associado (X)  |
-| Status: Completado / Pendente            |
-+------------------------------------------+
-| [foto1] [foto2] [foto3]                 |
-| [foto4] [foto5] [foto6]                 |
-+------------------------------------------+
-| B.O.: Número XXXX | [Ver arquivo]        |
-+------------------------------------------+
-| Relato: "Texto do relato..."             |
-| ou [Ouvir áudio]                         |
-+------------------------------------------+
-```
-
-### 3. Conversa da IA — Exibir link no chat do associado
-
-**Arquivo:** `src/components/sinistros/ConversaIADialog.tsx`
-
-Adicionar tratamento para o marcador `[LINK_AUTO_VISTORIA]` no conteúdo exibido (similar aos outros marcadores já tratados como `[BOTAO_LOCALIZACAO]`, `[UPLOAD_BO]`, etc.).
+Verificar se o item "Solicitacoes IA" aparece na sidebar para o analista de eventos. Se nao aparece, garantir que o link no alerta da SinistrosList ja funciona (ja aponta para `/diretoria/solicitacoes-ia`).
 
 ---
 
@@ -108,13 +41,10 @@ Adicionar tratamento para o marcador `[LINK_AUTO_VISTORIA]` no conteúdo exibido
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/assistente-chat/index.ts` | Adicionar bloco no prompt sobre fluxo pós-reboque com explicação de conserto e link de auto-vistoria |
-| `src/hooks/useSinistroAnalise.ts` | Adicionar query para buscar `sinistro_evento_links` com dados das etapas |
-| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar card "Fotos da Auto-Vistoria" com grid de fotos, B.O. e relato do associado |
-| `src/components/sinistros/ConversaIADialog.tsx` | Tratar marcador `[LINK_AUTO_VISTORIA]` no conteúdo |
+| `src/hooks/useRouteGuard.ts` | Adicionar `/diretoria/solicitacoes-ia` ao array `allowedPaths` do `isAnalistaEventosOnly` |
 
 ## Resultado
 
-- A IA, após confirmar reboque em sinistro de colisão com cobertura total, explica que o plano cobre conserto e orienta o associado sobre as 3 etapas do link
-- O associado recebe o link de auto-vistoria via WhatsApp (já funciona via `aprovar-solicitacao-ia`)
-- Quando o analista de eventos abre a tela de análise, as fotos enviadas pelo associado via link já estão visíveis, junto com o B.O. e o relato
+- O Analista de Eventos clica em "Revisar Solicitacoes" no alerta amarelo
+- Acessa a pagina de solicitacoes IA e pode aprovar/rejeitar sinistros pendentes
+- Apos aprovacao, o sinistro aparece na listagem de sinistros com status "comunicado"
