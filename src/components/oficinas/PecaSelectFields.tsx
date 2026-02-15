@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
@@ -37,10 +37,11 @@ interface PecaSelectFieldsProps {
   values: PecaSelectValues;
   onChange: (values: PecaSelectValues) => void;
   disabled?: boolean;
-  active?: boolean; // whether to load FIPE data (defaults to true)
+  active?: boolean;
+  initialVeiculo?: { marca: string; modelo: string; ano_modelo: string | number };
 }
 
-export function PecaSelectFields({ values, onChange, disabled, active = true }: PecaSelectFieldsProps) {
+export function PecaSelectFields({ values, onChange, disabled, active = true, initialVeiculo }: PecaSelectFieldsProps) {
   const [marcas, setMarcas] = useState<FipeItem[]>([]);
   const [modelos, setModelos] = useState<FipeItem[]>([]);
   const [anos, setAnos] = useState<FipeItem[]>([]);
@@ -53,25 +54,58 @@ export function PecaSelectFields({ values, onChange, disabled, active = true }: 
   const [openModelo, setOpenModelo] = useState(false);
   const [openAno, setOpenAno] = useState(false);
 
+  const autoMatchedRef = useRef(false);
+
   // Load marcas
   useEffect(() => {
     if (!active) return;
     setLoadingMarcas(true);
-    fipeFetch('marcas').then(setMarcas).catch(() => setMarcas([])).finally(() => setLoadingMarcas(false));
+    fipeFetch('marcas').then((data) => {
+      setMarcas(data);
+      // Auto-match marca from vehicle data
+      if (initialVeiculo?.marca && !autoMatchedRef.current && !values.marcaCodigo) {
+        const needle = initialVeiculo.marca.toLowerCase();
+        const match = data.find(m => m.nome.toLowerCase().includes(needle) || needle.includes(m.nome.toLowerCase()));
+        if (match) {
+          autoMatchedRef.current = true;
+          onChange({ ...values, marcaCodigo: match.codigo, marcaNome: match.nome, modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '' });
+        }
+      }
+    }).catch(() => setMarcas([])).finally(() => setLoadingMarcas(false));
   }, [active]);
 
   // Load modelos when marca changes
   useEffect(() => {
     if (!values.marcaCodigo) { setModelos([]); return; }
     setLoadingModelos(true);
-    fipeFetch('modelos', { marcaCodigo: values.marcaCodigo }).then(setModelos).catch(() => setModelos([])).finally(() => setLoadingModelos(false));
+    fipeFetch('modelos', { marcaCodigo: values.marcaCodigo }).then((data) => {
+      setModelos(data);
+      // Auto-match modelo
+      if (initialVeiculo?.modelo && autoMatchedRef.current && !values.modeloCodigo) {
+        const needle = initialVeiculo.modelo.toLowerCase();
+        const match = data.find(m => m.nome.toLowerCase().includes(needle) || needle.includes(m.nome.toLowerCase()));
+        if (match) {
+          onChange({ ...values, modeloCodigo: String(match.codigo), modeloNome: match.nome, anoCodigo: '', anoNome: '' });
+        }
+      }
+    }).catch(() => setModelos([])).finally(() => setLoadingModelos(false));
   }, [values.marcaCodigo]);
 
   // Load anos when modelo changes
   useEffect(() => {
     if (!values.marcaCodigo || !values.modeloCodigo) { setAnos([]); return; }
     setLoadingAnos(true);
-    fipeFetch('anos', { marcaCodigo: values.marcaCodigo, modeloCodigo: values.modeloCodigo }).then(setAnos).catch(() => setAnos([])).finally(() => setLoadingAnos(false));
+    fipeFetch('anos', { marcaCodigo: values.marcaCodigo, modeloCodigo: values.modeloCodigo }).then((data) => {
+      setAnos(data);
+      // Auto-match ano
+      if (initialVeiculo?.ano_modelo && autoMatchedRef.current && !values.anoCodigo) {
+        const anoStr = String(initialVeiculo.ano_modelo);
+        const match = data.find(a => a.nome.includes(anoStr));
+        if (match) {
+          onChange({ ...values, anoCodigo: match.codigo, anoNome: match.nome });
+        }
+      }
+    }).catch(() => setAnos([])).finally(() => setLoadingAnos(false));
   }, [values.modeloCodigo]);
 
   const update = (partial: Partial<PecaSelectValues>) => {
@@ -159,10 +193,10 @@ export function PecaSelectFields({ values, onChange, disabled, active = true }: 
                 <CommandGroup>
                   {modelos.map(m => (
                     <CommandItem key={m.codigo} value={m.nome} onSelect={() => {
-                      update({ modeloCodigo: m.codigo, modeloNome: m.nome, anoCodigo: '', anoNome: '' });
+                      update({ modeloCodigo: String(m.codigo), modeloNome: m.nome, anoCodigo: '', anoNome: '' });
                       setOpenModelo(false);
                     }}>
-                      <Check className={cn('mr-2 h-4 w-4', values.modeloCodigo === m.codigo ? 'opacity-100' : 'opacity-0')} />
+                      <Check className={cn('mr-2 h-4 w-4', values.modeloCodigo === String(m.codigo) ? 'opacity-100' : 'opacity-0')} />
                       {m.nome}
                     </CommandItem>
                   ))}
