@@ -1,10 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { NovoSinistroModal } from '@/components/eventos/NovoSinistroModal';
 import { PainelNaoRecuperados } from '@/components/sinistros/PainelNaoRecuperados';
+import { ConfirmacaoExclusaoDialog } from '@/components/sinistros/ConfirmacaoExclusaoDialog';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useDeleteSinistro } from '@/hooks/useSinistros';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +43,7 @@ import {
   ClipboardCheck,
   Bot,
   Wrench,
+  Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -85,6 +88,9 @@ export default function SinistrosList() {
   const navigate = useNavigate();
   const { isDiretor, isAnalistaEventos } = usePermissions();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [sinistroParaExcluir, setSinistroParaExcluir] = useState<any>(null);
+  const [modalExcluirOpen, setModalExcluirOpen] = useState(false);
+  const { mutateAsync: deleteSinistro } = useDeleteSinistro();
   const [filters, setFilters] = useState<Filters>({
     busca: '',
     status: 'todos',
@@ -465,6 +471,20 @@ export default function SinistrosList() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+                          {isDiretor && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => {
+                                setSinistroParaExcluir(sinistro);
+                                setModalExcluirOpen(true);
+                              }}
+                              title="Excluir Sinistro"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -484,6 +504,20 @@ export default function SinistrosList() {
           </Table>
         </CardContent>
       </Card>
+
+      {isDiretor && sinistroParaExcluir && (
+        <ConfirmacaoExclusaoDialog
+          open={modalExcluirOpen}
+          onOpenChange={setModalExcluirOpen}
+          protocolo={sinistroParaExcluir.protocolo}
+          onConfirm={async (motivo) => {
+            await deleteSinistro({
+              sinistroId: sinistroParaExcluir.id,
+              motivo,
+            });
+          }}
+        />
+      )}
     </div>
   );
 }
