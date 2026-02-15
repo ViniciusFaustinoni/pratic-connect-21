@@ -440,3 +440,6 @@ verify_jwt = false
 
 [functions.pesquisar-antecedentes]
 verify_jwt = false
+
+[functions.cron-gerar-despesas-recorrentes]
+verify_jwt = false

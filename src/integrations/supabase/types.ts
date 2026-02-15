@@ -8286,6 +8286,75 @@ export type Database = {
           },
         ]
       }
+      despesas_recorrentes: {
+        Row: {
+          agencia: string | null
+          ativo: boolean
+          banco: string | null
+          categoria: string
+          conta: string | null
+          created_at: string
+          descricao: string
+          dia_vencimento: number
+          forma_pagamento: string | null
+          fornecedor_documento: string | null
+          fornecedor_nome: string
+          frequencia: string
+          id: string
+          observacao: string | null
+          pix_chave: string | null
+          proximo_lancamento: string | null
+          subcategoria: string | null
+          ultimo_lancamento: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          agencia?: string | null
+          ativo?: boolean
+          banco?: string | null
+          categoria: string
+          conta?: string | null
+          created_at?: string
+          descricao: string
+          dia_vencimento?: number
+          forma_pagamento?: string | null
+          fornecedor_documento?: string | null
+          fornecedor_nome: string
+          frequencia?: string
+          id?: string
+          observacao?: string | null
+          pix_chave?: string | null
+          proximo_lancamento?: string | null
+          subcategoria?: string | null
+          ultimo_lancamento?: string | null
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          agencia?: string | null
+          ativo?: boolean
+          banco?: string | null
+          categoria?: string
+          conta?: string | null
+          created_at?: string
+          descricao?: string
+          dia_vencimento?: number
+          forma_pagamento?: string | null
+          fornecedor_documento?: string | null
+          fornecedor_nome?: string
+          frequencia?: string
+          id?: string
+          observacao?: string | null
+          pix_chave?: string | null
+          proximo_lancamento?: string | null
+          subcategoria?: string | null
+          ultimo_lancamento?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: []
+      }
       disparos_comunicacao: {
         Row: {
           aberto_em: string | null
