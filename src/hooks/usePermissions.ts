@@ -163,7 +163,7 @@ export function usePermissions() {
     !isAdminMaster;
 
   // Perfis que devem ver "Perfil" ao invés de "Configurações"
-  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly || isVistoriadorBaseOnly || isReguladorOnly || isAnalistaEventosOnly;
+  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly || isVistoriadorBaseOnly || isReguladorOnly;
 
   // Verificações de grupo para cotações
   const isVendedorCotacao = hasRole('vendedor_clt') || hasRole('vendedor_externo');
@@ -266,7 +266,7 @@ export function usePermissions() {
     canAccessApp: profile?.tipo === 'associado',
     canManageCadastro: hasRole('analista_cadastro') || isGerencia() || isDesenvolvedor,
     canManageOficinas: hasRole('analista_cadastro') || isGerencia() || isDesenvolvedor,
-    canManageSinistros: hasRole('analista_cadastro') || isGerencia() || isDesenvolvedor,
+    canManageSinistros: hasRole('analista_cadastro') || isAnalistaEventos || isGerencia() || isDesenvolvedor,
     canApproveOS: isGerencia() || isDesenvolvedor,
     canManageContabilidade: isDiretor || hasRole('gerente_comercial') || isDesenvolvedor,
     canManageJuridico: isDiretor || hasRole('gerente_comercial') || hasRole('analista_juridico') || hasRoleByName('advogado') || isDesenvolvedor,
