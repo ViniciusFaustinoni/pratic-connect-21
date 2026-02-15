@@ -1,19 +1,59 @@
 
-# Correção: Links de chamados de assistência apontando para rota inexistente
+# Adicionar botão de Excluir Sinistro na listagem (para Diretores)
 
 ## Problema
 
-Ao clicar em um chamado de assistência, o sistema redireciona para uma página 404. Isso acontece porque os links na listagem e no dashboard estão usando a URL `/assistencia/{id}`, mas a rota correta registrada no App.tsx é `/assistencia/chamados/{id}`.
+O botão de excluir sinistro existe apenas dentro da pagina de detalhe (`SinistroDetalhe.tsx`). Na listagem (`SinistrosList.tsx`), a coluna "Acoes" mostra apenas os botoes de Analisar, Enviar para Oficina e Visualizar -- sem opcao de exclusao para diretores.
 
-## Arquivos com o bug
+## Solucao
 
-| Arquivo | Linha(s) | URL errada | URL correta |
-|---------|----------|-----------|-------------|
-| `src/pages/assistencia/ChamadosList.tsx` | 384, 419 | `/assistencia/${chamado.id}` | `/assistencia/chamados/${chamado.id}` |
-| `src/pages/assistencia/AssistenciaDashboard.tsx` | 331 | `/assistencia/${chamado.id}` | `/assistencia/chamados/${chamado.id}` |
+Adicionar um botao de exclusao (icone de lixeira vermelha) na coluna de Acoes da listagem, visivel apenas para diretores. Ao clicar, abre o `ConfirmacaoExclusaoDialog` ja existente, que exige motivo e confirmacao antes de chamar a edge function `delete-sinistro`.
 
-## Correção
+## Arquivo a modificar
 
-Alterar as 3 ocorrencias de `navigate(\`/assistencia/${chamado.id}\`)` para `navigate(\`/assistencia/chamados/${chamado.id}\`)` nos dois arquivos acima.
+**`src/pages/eventos/SinistrosList.tsx`**
 
-Nenhum arquivo novo precisa ser criado. Nenhuma migração é necessária.
+1. Importar `Trash2` do lucide-react
+2. Importar `ConfirmacaoExclusaoDialog` e `useDeleteSinistro`
+3. Adicionar estados para controlar o modal de exclusao (`sinistroParaExcluir`, `modalExcluirOpen`)
+4. Adicionar o botao de lixeira na coluna de Acoes, condicional a `isDiretor`
+5. Renderizar o `ConfirmacaoExclusaoDialog` com callback de exclusao que invalida a query apos sucesso
+
+### Mudancas na coluna de Acoes (apos o botao Eye, linha ~467)
+
+```typescript
+{isDiretor && (
+  <Button
+    variant="ghost"
+    size="icon"
+    className="h-8 w-8 text-destructive hover:text-destructive"
+    onClick={() => {
+      setSinistroParaExcluir(sinistro);
+      setModalExcluirOpen(true);
+    }}
+    title="Excluir Sinistro"
+  >
+    <Trash2 className="h-4 w-4" />
+  </Button>
+)}
+```
+
+### Modal no final do JSX
+
+```typescript
+{isDiretor && sinistroParaExcluir && (
+  <ConfirmacaoExclusaoDialog
+    open={modalExcluirOpen}
+    onOpenChange={setModalExcluirOpen}
+    protocolo={sinistroParaExcluir.protocolo}
+    onConfirm={async (motivo) => {
+      await deleteSinistro({
+        sinistroId: sinistroParaExcluir.id,
+        motivo
+      });
+    }}
+  />
+)}
+```
+
+Nenhum arquivo novo precisa ser criado. O dialog e o hook de exclusao ja existem e serao reutilizados.
