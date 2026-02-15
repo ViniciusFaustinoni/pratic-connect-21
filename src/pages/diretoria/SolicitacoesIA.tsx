@@ -229,8 +229,13 @@ export default function SolicitacoesIA() {
 
                 return (
                   <Card key={solicitacao.id} className={cn(
-                    "transition-all",
-                    solicitacao.status === 'pendente' && "border-l-4 border-l-amber-400"
+                    "transition-all border-l-4",
+                    ({
+                      sinistro: 'border-l-red-500 bg-red-50/30 dark:bg-red-950/10',
+                      assistencia: 'border-l-blue-500 bg-blue-50/30 dark:bg-blue-950/10',
+                      cancelamento: 'border-l-orange-500 bg-orange-50/30 dark:bg-orange-950/10',
+                      troca_titularidade: 'border-l-purple-500 bg-purple-50/30 dark:bg-purple-950/10',
+                    } as Record<string, string>)[solicitacao.tipo] || 'border-l-amber-400'
                   )}>
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
