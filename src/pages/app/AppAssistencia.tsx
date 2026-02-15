@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMyChamados } from '@/hooks/useMyData';
+import { useConfig0800 } from '@/hooks/useConfig0800';
 import type { Tables } from '@/integrations/supabase/types';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,7 @@ type Chamado = Tables<'chamados_assistencia'>;
 export default function AppAssistencia() {
   const { data: chamados, isLoading } = useMyChamados();
   const navigate = useNavigate();
+  const { telefone0800, telefone0800Link } = useConfig0800();
 
   const servicos = [
     { icon: Truck, label: 'Guincho', description: 'Reboque do veículo', tipo: 'guincho' },
@@ -145,10 +147,10 @@ export default function AppAssistencia() {
           <Button 
             className="w-full bg-white text-destructive hover:bg-white/90"
             size="lg"
-            onClick={() => window.open('tel:08009800001')}
+            onClick={() => window.open(`tel:${telefone0800Link}`)}
           >
             <Phone className="mr-2 h-5 w-5" />
-            Ligar Agora - 0800 980 0001
+            Ligar Agora - {telefone0800}
           </Button>
           <p className="mt-2 text-center text-sm opacity-90">
             Atendimento 24 horas, 7 dias por semana
@@ -240,7 +242,7 @@ export default function AppAssistencia() {
       {/* FAB Emergency Button */}
       <Button
         className="fixed bottom-24 right-4 h-14 w-14 rounded-full shadow-lg bg-destructive hover:bg-destructive/90 z-50"
-        onClick={() => window.open('tel:08009800001')}
+        onClick={() => window.open(`tel:${telefone0800Link}`)}
       >
         <AlertTriangle className="h-6 w-6" />
         <span className="sr-only">Emergência</span>

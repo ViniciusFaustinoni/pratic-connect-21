@@ -2033,7 +2033,9 @@ async function processarReagendamento(
     .single();
 
   if (!servicoOriginal) {
-    const msg = "Desculpe, não encontrei os dados do seu agendamento. Por favor, entre em contato com nossa central 0800 980 0001.";
+    const { data: cfgTel } = await supabase.from("configuracoes").select("valor").eq("chave", "assistencia_telefone_central").maybeSingle();
+    const tel0800 = cfgTel?.valor || "0800 980 0001";
+    const msg = `Desculpe, não encontrei os dados do seu agendamento. Por favor, entre em contato com nossa central ${tel0800}.`;
     await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, msg);
     return new Response(JSON.stringify({ ok: false, error: 'servico_nao_encontrado' }), { headers: corsHeaders });
   }
@@ -2230,7 +2232,9 @@ Responda *1*, *2* ou *3*.`;
 
     if (erroNovoServico) {
       console.error('[whatsapp-webhook] Erro ao criar novo serviço:', erroNovoServico);
-      const msg = "Ocorreu um erro ao reagendar. Por favor, entre em contato com nossa central 0800 980 0001.";
+      const { data: cfgTel2 } = await supabase.from("configuracoes").select("valor").eq("chave", "assistencia_telefone_central").maybeSingle();
+      const tel0800b = cfgTel2?.valor || "0800 980 0001";
+      const msg = `Ocorreu um erro ao reagendar. Por favor, entre em contato com nossa central ${tel0800b}.`;
       await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, msg);
       await saveWhatsAppLog(supabase, instancia.id, confirmacao.telefone, msg, "saida");
       return new Response(JSON.stringify({ ok: false, error: erroNovoServico.message }), { headers: corsHeaders });

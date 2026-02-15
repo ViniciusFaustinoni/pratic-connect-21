@@ -27,6 +27,7 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useMyAssociado } from '@/hooks/useMyData';
+import { useConfig0800 } from '@/hooks/useConfig0800';
 import { LucideIcon } from 'lucide-react';
 
 interface BeneficioExpandido {
@@ -129,6 +130,7 @@ const mockHistoricoPagamentos = [
 export default function AppPlano() {
   const navigate = useNavigate();
   const { data: associado, isLoading } = useMyAssociado();
+  const { telefone0800, telefone0800Link } = useConfig0800();
 
   const plano = associado?.planos;
   const contrato = associado?.contratos?.find(c => c.status === 'ativo') || associado?.contratos?.[0];
@@ -171,7 +173,7 @@ export default function AppPlano() {
             <p className="text-sm text-muted-foreground mb-4">
               Entre em contato conosco para conhecer nossos planos de proteção.
             </p>
-            <Button onClick={() => window.open('tel:08009800001')}>
+            <Button onClick={() => window.open(`tel:${telefone0800Link}`)}>
               <Phone className="h-4 w-4 mr-2" />
               Ligar Agora
             </Button>
@@ -285,7 +287,9 @@ export default function AppPlano() {
                   <p className="font-medium text-foreground">{beneficio.titulo}</p>
                   <p className="text-sm text-muted-foreground">{beneficio.descricao}</p>
                   {beneficio.detalhes && (
-                    <p className="text-xs text-primary mt-1">{beneficio.detalhes}</p>
+                    <p className="text-xs text-primary mt-1">
+                      {beneficio.detalhes === '0800 980 0001' ? telefone0800 : beneficio.detalhes}
+                    </p>
                   )}
                 </div>
               </div>
@@ -382,12 +386,12 @@ export default function AppPlano() {
             <Phone className="h-5 w-5 text-primary" />
             <div>
               <p className="text-sm font-medium text-foreground">Fale Conosco</p>
-              <p className="text-sm text-muted-foreground">0800 980 0001</p>
+              <p className="text-sm text-muted-foreground">{telefone0800}</p>
             </div>
           </div>
           <Button 
             className="w-full"
-            onClick={() => window.open('tel:08009800001')}
+            onClick={() => window.open(`tel:${telefone0800Link}`)}
           >
             <Phone className="h-4 w-4 mr-2" />
             Ligar Agora

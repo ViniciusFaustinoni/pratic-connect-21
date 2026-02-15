@@ -29,6 +29,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useConfig0800 } from '@/hooks/useConfig0800';
 
 // Fix Leaflet default icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -68,6 +69,7 @@ export default function SolicitarAssistencia() {
   const { data: associado } = useMyAssociado();
   const { data: veiculos } = useMyVehicles();
   const solicitarAssistencia = useSolicitarAssistencia();
+  const { telefone0800, telefone0800Link } = useConfig0800();
 
   // Form state
   const [tipoSelecionado, setTipoSelecionado] = useState<TipoAssistencia | null>(null);
@@ -355,7 +357,7 @@ export default function SolicitarAssistencia() {
         </div>
 
         {/* Direct call card */}
-        <a href="tel:08009800001" className="block">
+        <a href={`tel:${telefone0800Link}`} className="block">
           <Card className="bg-accent/50 border-accent hover:bg-accent/70 transition-colors">
             <CardContent className="p-4">
               <div className="flex items-center gap-4">
@@ -364,7 +366,7 @@ export default function SolicitarAssistencia() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground">Prefere ligar?</p>
-                  <p className="text-lg font-semibold">0800 980 0001</p>
+                  <p className="text-lg font-semibold">{telefone0800}</p>
                   <p className="text-xs text-muted-foreground">Atendimento 24h</p>
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
