@@ -54,7 +54,7 @@ serve(async (req) => {
       );
     }
 
-    if (link.status !== "ativo") {
+    if (link.status !== "ativo" && link.status !== "completado") {
       return new Response(
         JSON.stringify({ valid: false, reason: link.status }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
