@@ -1,197 +1,194 @@
 import { useState } from 'react';
-import { Lock, Unlock, CheckCircle, Clock, AlertCircle, Check, X } from 'lucide-react';
+import { Lock, Unlock, CheckCircle, Clock, AlertCircle, Check, X, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useFechamentos, useCriarFechamento } from '@/hooks/useContabilidade';
+import { useFechamentos, useCriarFechamento, useReabrirFechamento } from '@/hooks/useContabilidade';
+import { ChecklistFechamento, type ChecklistItem } from '@/components/contabilidade';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
-const meses = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+const CHECKLIST_TEMPLATE: Omit<ChecklistItem, 'verificado' | 'carregando'>[] = [
+  { id: 'lanc_classif', label: 'Todos os lançamentos automáticos classificados' },
+  { id: 'conciliacao', label: 'Conciliação bancária concluída' },
+  { id: 'depreciacao', label: 'Depreciação mensal registrada' },
+  { id: 'pdd', label: 'Provisão para devedores duvidosos atualizada' },
+  { id: 'ferias_13', label: 'Provisão de férias e 13º atualizada' },
+  { id: 'prov_sinistros', label: 'Provisão para sinistros atualizada' },
+  { id: 'impostos', label: 'Impostos do período apurados e registrados' },
+  { id: 'balancete', label: 'Balancete de verificação confere (diferença = 0)', autoVerificado: true },
+  { id: 'revisao', label: 'Receitas e despesas do período revisadas' },
+  { id: 'sem_pendentes', label: 'Nenhum lançamento pendente de aprovação', autoVerificado: true },
 ];
 
 export default function Fechamentos() {
   const now = new Date();
   const [ano, setAno] = useState(now.getFullYear());
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; mes: number } | null>(null);
+  const [reabrirDialog, setReabrirDialog] = useState<{ open: boolean; id: string; mes: number } | null>(null);
+  const [motivoReabertura, setMotivoReabertura] = useState('');
+  const [checklistState, setChecklistState] = useState<Record<string, boolean>>({});
 
   const { data: fechamentos, isLoading } = useFechamentos(ano);
   const criarFechamento = useCriarFechamento();
+  const reabrirFechamento = useReabrirFechamento();
 
-  // Query de verificação do período selecionado
-  const { data: verificacao, isLoading: isLoadingVerificacao } = useQuery({
+  // Verificação automática
+  const { data: verificacao, isLoading: isLoadingVerif } = useQuery({
     queryKey: ['verificacao-fechamento', confirmDialog?.mes, ano],
     queryFn: async () => {
       if (!confirmDialog?.mes) return null;
-      
-      const mes = confirmDialog.mes;
-      const dataInicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
-      const dataFim = mes === 12 
-        ? `${ano + 1}-01-01`
-        : `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
-      
-      // Contar lançamentos
+      const m = confirmDialog.mes;
+      const dataInicio = `${ano}-${String(m).padStart(2, '0')}-01`;
+      const dataFim = m === 12 ? `${ano + 1}-01-01` : `${ano}-${String(m + 1).padStart(2, '0')}-01`;
+
       const { count } = await supabase
         .from('lancamentos_contabeis')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'ativo')
         .gte('data_competencia', dataInicio)
         .lt('data_competencia', dataFim);
-      
-      // Buscar partidas para verificar balanço
+
       const { data: partidas } = await supabase
         .from('lancamentos_partidas')
-        .select(`
-          tipo, valor,
-          lancamento:lancamentos_contabeis!inner(data_competencia, status)
-        `)
+        .select('tipo, valor, lancamento:lancamentos_contabeis!inner(data_competencia, status)')
         .eq('lancamento.status', 'ativo')
         .gte('lancamento.data_competencia', dataInicio)
         .lt('lancamento.data_competencia', dataFim);
-      
-      const totalDebito = partidas?.filter((p: any) => p.tipo === 'debito')
-        .reduce((acc: number, p: any) => acc + Number(p.valor), 0) || 0;
-      const totalCredito = partidas?.filter((p: any) => p.tipo === 'credito')
-        .reduce((acc: number, p: any) => acc + Number(p.valor), 0) || 0;
-      
+
+      const totalD = partidas?.filter((p: any) => p.tipo === 'debito').reduce((a: number, p: any) => a + Number(p.valor), 0) || 0;
+      const totalC = partidas?.filter((p: any) => p.tipo === 'credito').reduce((a: number, p: any) => a + Number(p.valor), 0) || 0;
+
+      const { count: pendentes } = await supabase
+        .from('lancamentos_contabeis')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'rascunho')
+        .gte('data_competencia', dataInicio)
+        .lt('data_competencia', dataFim);
+
       return {
         qtdLancamentos: count || 0,
-        totalDebito,
-        totalCredito,
-        balanceado: Math.abs(totalDebito - totalCredito) < 0.01
+        totalDebito: totalD,
+        totalCredito: totalC,
+        balanceado: Math.abs(totalD - totalC) < 0.01,
+        semPendentes: (pendentes || 0) === 0,
       };
     },
-    enabled: !!confirmDialog?.mes && confirmDialog.open
+    enabled: !!confirmDialog?.mes && confirmDialog.open,
   });
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
+  const checklistItems: ChecklistItem[] = CHECKLIST_TEMPLATE.map(t => ({
+    ...t,
+    verificado: t.autoVerificado
+      ? (t.id === 'balancete' ? verificacao?.balanceado || false : verificacao?.semPendentes || false)
+      : checklistState[t.id] || false,
+    carregando: t.autoVerificado ? isLoadingVerif : false,
+  }));
 
-  const getFechamento = (mes: number) => {
-    return fechamentos?.find(f => f.mes === mes);
-  };
+  const todosVerificados = checklistItems.every(i => i.verificado);
 
-  const getStatus = (mes: number) => {
-    const fechamento = getFechamento(mes);
-    if (!fechamento) return 'aberto';
-    return fechamento.status;
-  };
+  const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+  const getFechamento = (mes: number) => fechamentos?.find(f => f.mes === mes);
+  const getStatus = (mes: number) => getFechamento(mes)?.status || 'aberto';
 
   const handleFechar = async (mes: number) => {
     try {
       await criarFechamento.mutateAsync({ mes, ano });
       setConfirmDialog(null);
-    } catch (error) {
-      // Error handled by mutation
-    }
+      setChecklistState({});
+    } catch {}
   };
 
+  const handleReabrir = async () => {
+    if (!reabrirDialog) return;
+    try {
+      await reabrirFechamento.mutateAsync({ id: reabrirDialog.id, motivo: motivoReabertura });
+      setReabrirDialog(null);
+      setMotivoReabertura('');
+    } catch {}
+  };
+
+  // Verificar se todos os meses estão fechados (para fechamento anual)
+  const todosMesesFechados = Array.from({ length: 12 }, (_, i) => i + 1).every(m => getStatus(m) === 'fechado');
+
   const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
-    aberto: {
-      icon: Clock,
-      color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      label: 'Aberto',
-    },
-    em_fechamento: {
-      icon: AlertCircle,
-      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-      label: 'Em Fechamento',
-    },
-    fechado: {
-      icon: CheckCircle,
-      color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      label: 'Fechado',
-    },
-    reaberto: {
-      icon: Unlock,
-      color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-      label: 'Reaberto',
-    },
+    aberto: { icon: Clock, color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', label: 'Aberto' },
+    em_fechamento: { icon: AlertCircle, color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', label: 'Em Fechamento' },
+    fechado: { icon: CheckCircle, color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', label: 'Fechado' },
+    reaberto: { icon: Unlock, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', label: 'Reaberto' },
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Fechamentos</h1>
-          <p className="text-muted-foreground">
-            Controle de fechamento contábil mensal
-          </p>
+          <p className="text-muted-foreground">Controle de fechamento contábil mensal e anual</p>
         </div>
-
-        <Select value={String(ano)} onValueChange={(v) => setAno(parseInt(v))}>
-          <SelectTrigger className="w-[120px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: 5 }, (_, i) => (
-              <SelectItem key={i} value={String(now.getFullYear() - 2 + i)}>
-                {now.getFullYear() - 2 + i}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={String(ano)} onValueChange={(v) => setAno(parseInt(v))}>
+            <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 5 }, (_, i) => (
+                <SelectItem key={i} value={String(now.getFullYear() - 2 + i)}>{now.getFullYear() - 2 + i}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* Calendar Grid */}
+      {/* Fechamento Anual */}
+      {todosMesesFechados && (
+        <Alert className="border-green-500 bg-green-50 dark:bg-green-950/20">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="flex items-center justify-between">
+            <span className="text-green-800 dark:text-green-200">
+              Todos os 12 meses de {ano} estão fechados. O exercício pode ser encerrado.
+            </span>
+            <Button variant="outline" size="sm" className="border-green-500 text-green-700"
+              onClick={() => { /* TODO: implementar fechamento anual completo */ }}>
+              <Lock className="h-4 w-4 mr-2" /> Fechar Exercício {ano}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Grid de Meses */}
       {isLoading ? (
-        <div className="text-center py-8 text-muted-foreground">
-          Carregando fechamentos...
-        </div>
+        <div className="text-center py-8 text-muted-foreground">Carregando...</div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {meses.map((nomeMes, index) => {
+          {MESES.map((nomeMes, index) => {
             const mes = index + 1;
             const status = getStatus(mes);
             const fechamento = getFechamento(mes);
             const config = statusConfig[status];
             const Icon = config.icon;
-            const isFuturo = ano > now.getFullYear() || 
-                            (ano === now.getFullYear() && mes > now.getMonth() + 1);
+            const isFuturo = ano > now.getFullYear() || (ano === now.getFullYear() && mes > now.getMonth() + 1);
 
             return (
-              <Card
-                key={mes}
-                className={cn(
-                  'relative overflow-hidden',
-                  status === 'fechado' && 'border-green-200 dark:border-green-900/50'
-                )}
-              >
+              <Card key={mes} className={cn('relative', status === 'fechado' && 'border-green-200 dark:border-green-900/50')}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{nomeMes}</CardTitle>
-                    <Badge className={config.color}>
-                      <Icon className="h-3 w-3 mr-1" />
-                      {config.label}
-                    </Badge>
+                    <Badge className={config.color}><Icon className="h-3 w-3 mr-1" />{config.label}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -207,36 +204,34 @@ export default function Fechamentos() {
                       </div>
                       <div className="flex justify-between font-medium">
                         <span>Resultado:</span>
-                        <span className={cn(
-                          Number(fechamento.resultado_periodo) >= 0
-                            ? 'text-green-600'
-                            : 'text-red-600'
-                        )}>
+                        <span className={cn(Number(fechamento.resultado_periodo) >= 0 ? 'text-green-600' : 'text-red-600')}>
                           {formatCurrency(Number(fechamento.resultado_periodo))}
                         </span>
                       </div>
                       {fechamento.data_fechamento && (
-                        <p className="text-xs text-muted-foreground pt-2">
+                        <p className="text-xs text-muted-foreground pt-1">
                           Fechado em: {format(new Date(fechamento.data_fechamento), 'dd/MM/yyyy HH:mm')}
                         </p>
+                      )}
+                      {fechamento.motivo_reabertura && (
+                        <p className="text-xs text-yellow-600 pt-1">Reaberto: {fechamento.motivo_reabertura}</p>
+                      )}
+                      {status === 'fechado' && (
+                        <Button variant="ghost" size="sm" className="w-full mt-2 text-muted-foreground"
+                          onClick={() => setReabrirDialog({ open: true, id: fechamento.id, mes })}>
+                          <RotateCcw className="h-3 w-3 mr-1" /> Reabrir
+                        </Button>
                       )}
                     </div>
                   ) : (
                     <div className="space-y-4">
                       <p className="text-sm text-muted-foreground">
-                        {isFuturo 
-                          ? 'Período futuro'
-                          : 'Período ainda não fechado'
-                        }
+                        {isFuturo ? 'Período futuro' : 'Período não fechado'}
                       </p>
                       {!isFuturo && (
-                        <Button
-                          className="w-full"
-                          size="sm"
-                          onClick={() => setConfirmDialog({ open: true, mes })}
-                        >
-                          <Lock className="h-4 w-4 mr-2" />
-                          Fechar Período
+                        <Button className="w-full" size="sm"
+                          onClick={() => { setChecklistState({}); setConfirmDialog({ open: true, mes }); }}>
+                          <Lock className="h-4 w-4 mr-2" /> Fechar Período
                         </Button>
                       )}
                     </div>
@@ -254,84 +249,35 @@ export default function Fechamentos() {
           <div className="flex flex-wrap gap-4">
             {Object.entries(statusConfig).map(([key, value]) => {
               const Icon = value.icon;
-              return (
-                <div key={key} className="flex items-center gap-2">
-                  <Badge className={value.color}>
-                    <Icon className="h-3 w-3 mr-1" />
-                    {value.label}
-                  </Badge>
-                </div>
-              );
+              return <Badge key={key} className={value.color}><Icon className="h-3 w-3 mr-1" />{value.label}</Badge>;
             })}
           </div>
         </CardContent>
       </Card>
 
-      {/* Confirm Dialog with Verification Checklist */}
-      <AlertDialog
-        open={confirmDialog?.open}
-        onOpenChange={(open) => !open && setConfirmDialog(null)}
-      >
-        <AlertDialogContent className="max-w-lg">
+      {/* Dialog de Fechamento com Checklist */}
+      <AlertDialog open={confirmDialog?.open} onOpenChange={(open) => !open && setConfirmDialog(null)}>
+        <AlertDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
-            <AlertDialogTitle>Verificação do Período</AlertDialogTitle>
+            <AlertDialogTitle>Fechamento de Período</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4 text-left">
-                <p>
-                  Período: <strong>
-                    {confirmDialog && meses[confirmDialog.mes - 1]} de {ano}
-                  </strong>
-                </p>
-                
-                {isLoadingVerificacao ? (
-                  <p className="text-muted-foreground">Verificando período...</p>
-                ) : verificacao && (
-                  <div className="space-y-3 p-4 bg-muted rounded-lg">
-                    {/* Checklist de Verificação */}
-                    <div className="flex items-center gap-2">
-                      {verificacao.qtdLancamentos > 0 ? (
-                        <Check className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <X className="h-5 w-5 text-red-600" />
-                      )}
-                      <span>Lançamentos encontrados: <strong>{verificacao.qtdLancamentos}</strong></span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Check className="h-5 w-5 text-green-600" />
-                      <span>Débitos: <strong>{formatCurrency(verificacao.totalDebito)}</strong></span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Check className="h-5 w-5 text-green-600" />
-                      <span>Créditos: <strong>{formatCurrency(verificacao.totalCredito)}</strong></span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      {verificacao.balanceado ? (
-                        <Check className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <X className="h-5 w-5 text-red-600" />
-                      )}
-                      <span>
-                        Balanceamento: <strong className={verificacao.balanceado ? 'text-green-600' : 'text-red-600'}>
-                          {verificacao.balanceado ? 'OK' : 'Desbalanceado'}
-                        </strong>
-                      </span>
-                    </div>
-                  </div>
-                )}
-                
+                <p>Período: <strong>{confirmDialog && MESES[confirmDialog.mes - 1]} de {ano}</strong></p>
+
+                <ChecklistFechamento
+                  items={checklistItems}
+                  onChange={(id, checked) => setChecklistState(prev => ({ ...prev, [id]: checked }))}
+                  todosVerificados={todosVerificados}
+                />
+
                 {verificacao && !verificacao.balanceado && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      O período está desbalanceado e não pode ser fechado. Verifique os lançamentos.
-                    </AlertDescription>
+                    <AlertDescription>Período desbalanceado. Verifique os lançamentos.</AlertDescription>
                   </Alert>
                 )}
-                
-                {verificacao && verificacao.balanceado && (
+
+                {todosVerificados && (
                   <p className="text-sm text-muted-foreground">
                     Após o fechamento, novos lançamentos não poderão ser feitos neste período.
                   </p>
@@ -343,13 +289,43 @@ export default function Fechamentos() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => confirmDialog && handleFechar(confirmDialog.mes)}
-              disabled={criarFechamento.isPending || !verificacao?.balanceado}
+              disabled={criarFechamento.isPending || !todosVerificados}
             >
               {criarFechamento.isPending ? 'Fechando...' : 'Confirmar Fechamento'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog de Reabertura */}
+      <Dialog open={reabrirDialog?.open} onOpenChange={(open) => !open && setReabrirDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reabrir Período</DialogTitle>
+            <DialogDescription>
+              Reabrir <strong>{reabrirDialog && MESES[reabrirDialog.mes - 1]} de {ano}</strong>. 
+              Informe o motivo da reabertura.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Motivo da reabertura *</Label>
+              <Textarea
+                value={motivoReabertura}
+                onChange={(e) => setMotivoReabertura(e.target.value)}
+                placeholder="Descreva o motivo..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReabrirDialog(null)}>Cancelar</Button>
+            <Button onClick={handleReabrir} disabled={!motivoReabertura.trim() || reabrirFechamento.isPending}>
+              {reabrirFechamento.isPending ? 'Reabrindo...' : 'Confirmar Reabertura'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

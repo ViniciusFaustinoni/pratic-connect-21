@@ -6,3 +6,8 @@ export { PartidasEditor } from './PartidasEditor';
 export type { Partida } from './PartidasEditor';
 export { PlanoContasTree } from './PlanoContasTree';
 export { SeletorConta } from './SeletorConta';
+export { AlertasContabeis } from './AlertasContabeis';
+export type { AlertaContabil } from './AlertasContabeis';
+export { ChecklistFechamento } from './ChecklistFechamento';
+export type { ChecklistItem } from './ChecklistFechamento';
+export { IndicadoresDRE } from './IndicadoresDRE';
