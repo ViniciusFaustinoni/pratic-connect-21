@@ -1,126 +1,154 @@
 
 
-# Aba Recorrentes em Contas a Pagar + Cron Job
+# Corrigir 4 Gaps de Alta Gravidade no Fluxo de Sinistros
 
-## Resumo
+## Resumo dos 4 Gaps
 
-Adicionar uma aba "Recorrentes" na tela de Contas a Pagar para cadastrar despesas fixas que se repetem (aluguel, salarios, sistemas, etc.). Criar uma edge function cron que roda diariamente e gera automaticamente as contas a pagar quando a data configurada chega.
+1. **Vidros sem validacao de carencia/limite** -- Nao verifica 120 dias de carencia nem limite de 1 uso por peca a cada 12 meses
+2. **Inadimplencia bloqueia sinistro** -- Hoje retorna erro 400 e impede a criacao; deveria registrar alerta e permitir
+3. **Vidros sem fluxo simplificado** -- O `CardVidrosDetalhe.tsx` existe mas nao ha automacao de etapas (2 passos, sem oficina, sem vistoria)
+4. **Roubo exige chaves indevidamente** -- O tipo `roubo` lista `chaves` como obrigatorio; chaves so se aplica a `furto`
 
-## Etapa 1 -- Criar tabela `despesas_recorrentes`
+---
 
-Nova tabela no banco de dados com os campos:
+## Gap 1: Validacao de Carencia 120d e Limite 12 Meses para Vidros
 
-| Campo | Tipo | Descricao |
-|-------|------|-----------|
-| id | uuid (PK) | Identificador |
-| fornecedor_nome | text | Nome do fornecedor |
-| fornecedor_documento | text | CPF/CNPJ |
-| categoria | text | Mesmas categorias de contas_pagar |
-| subcategoria | text | Opcional |
-| descricao | text | Ex: "Aluguel sede", "Lovable mensal" |
-| valor | numeric | Valor fixo da despesa |
-| frequencia | text | mensal, quinzenal, semanal, anual |
-| dia_vencimento | integer | Dia do mes para gerar (1-28) |
-| forma_pagamento | text | PIX, transferencia, boleto |
-| banco | text | Dados bancarios opcionais |
-| agencia | text | |
-| conta | text | |
-| pix_chave | text | |
-| observacao | text | |
-| ativo | boolean | Se esta ativo ou pausado |
-| ultimo_lancamento | date | Data do ultimo lancamento gerado |
-| proximo_lancamento | date | Proximo vencimento calculado |
-| created_at | timestamptz | |
-| updated_at | timestamptz | |
+**Arquivo:** `supabase/functions/criar-sinistro/index.ts`
 
-RLS: habilitar com policy para usuarios autenticados (perfis financeiro e diretor).
+Apos a validacao de cobertura (secao 4.2, ~linha 345), adicionar bloco especifico para `tipo_sinistro === 'vidros'`:
 
-## Etapa 2 -- Componente `DespesaRecorrenteModal`
+1. **Carencia 120 dias**: Buscar `contratos.data_ativacao` do associado. Se `hoje - data_ativacao < 120 dias`, retornar erro:
+   - `"Beneficio de vidros possui carencia de 120 dias. Disponivel a partir de DD/MM/YYYY."`
 
-Novo arquivo: `src/components/financeiro/DespesaRecorrenteModal.tsx`
+2. **Limite 1 uso por peca a cada 12 meses**: Buscar sinistros anteriores do mesmo veiculo com `tipo = 'vidros'` nos ultimos 12 meses. Se existir sinistro com a mesma `peca_danificada` (campo do payload), retornar erro:
+   - `"Ja existe um sinistro de vidros para [peca] nos ultimos 12 meses (protocolo SIN-XXXX). Limite: 1 utilizacao por peca a cada 12 meses."`
 
-Modal para criar/editar despesas recorrentes com campos:
-- Fornecedor (nome + documento)
-- Categoria (select, mesmas opcoes de contas_pagar)
-- Descricao
-- Valor (R$)
-- Frequencia (mensal, quinzenal, semanal, anual)
-- Dia do vencimento (1-28)
-- Forma de pagamento + dados bancarios/PIX
-- Observacao
+**Dados necessarios:**
+- Buscar contrato ativo do associado: `contratos` onde `associado_id` e `status = 'ativo'`, campo `data_ativacao`
+- Buscar sinistros de vidro anteriores: `sinistros` onde `veiculo_id`, `tipo = 'vidros'`, `created_at > 12 meses atras`, `status NOT IN ('cancelado', 'negado')`
 
-Segue o mesmo padrao visual do `NovaContaPagarModal.tsx`.
+**Adicionar campo ao payload:** `peca_danificada` (opcional, string) na interface `CriarSinistroRequest`
 
-## Etapa 3 -- Adicionar aba "Recorrentes" em `ContasPagar.tsx`
+---
 
-Modificar `src/pages/financeiro/ContasPagar.tsx`:
+## Gap 2: Inadimplencia Registra Alerta em Vez de Bloquear
 
-- Mover as tabs existentes (Todas, Pendentes, Vencidas, Pagas, Canceladas) para ficarem dentro de uma aba "Contas"
-- Adicionar nova aba de nivel superior: **Contas** | **Recorrentes**
-- Na aba "Recorrentes":
-  - Botao "+ Nova Despesa Recorrente"
-  - Tabela com colunas: Descricao, Fornecedor, Categoria, Valor, Frequencia, Proximo Vencimento, Status (ativo/inativo), Acoes
-  - Acoes: Editar, Pausar/Ativar, Gerar agora (cria conta imediatamente), Excluir
-  - Query em `despesas_recorrentes` ordenada por `proximo_lancamento`
+**Arquivo:** `supabase/functions/criar-sinistro/index.ts`
 
-## Etapa 4 -- Edge Function `cron-gerar-despesas-recorrentes`
+Na secao 4.3 (linhas 382-392), onde verifica `statusData.dados?.adimplente === false`:
 
-Novo arquivo: `supabase/functions/cron-gerar-despesas-recorrentes/index.ts`
-
-Logica:
-1. Buscar todas as despesas recorrentes onde `ativo = true` e `proximo_lancamento <= hoje`
-2. Para cada uma, inserir em `contas_pagar`:
-   - Copiar fornecedor, categoria, valor, forma de pagamento
-   - `data_vencimento` = `proximo_lancamento`
-   - `referencia_tipo` = `despesa_recorrente`
-   - `referencia_id` = id da despesa recorrente
-   - `observacao` = descricao + " (recorrente)"
-   - `status` = `pendente`
-3. Atualizar `despesas_recorrentes`:
-   - `ultimo_lancamento` = hoje
-   - `proximo_lancamento` = calcular proximo baseado na frequencia (mensal: +1 mes, quinzenal: +15 dias, semanal: +7 dias, anual: +1 ano)
-4. Retornar contagem de contas geradas
-
-Adicionar ao `supabase/config.toml`:
+**Antes (bloqueia):**
 ```
-[functions.cron-gerar-despesas-recorrentes]
-verify_jwt = false
+if (statusData.dados?.adimplente === false) {
+  return new Response(... error 400 ...)
+}
 ```
 
-## Etapa 5 -- Agendar Cron Job
-
-Executar SQL para agendar a edge function diariamente as 6h (usando `pg_cron` + `pg_net`):
-
-```sql
-select cron.schedule(
-  'gerar-despesas-recorrentes-diario',
-  '0 6 * * *',
-  $$
-  select net.http_post(
-    url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-gerar-despesas-recorrentes',
-    headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}'::jsonb,
-    body:='{}'::jsonb
-  ) as request_id;
-  $$
-);
+**Depois (registra alerta, continua):**
+```
+let alertaInadimplente = false;
+if (statusData.dados?.adimplente === false) {
+  alertaInadimplente = true;
+  console.warn('[criar-sinistro] Cliente inadimplente - sinistro sera criado com alerta');
+}
 ```
 
-## Arquivos Criados/Modificados
+Propagar `alertaInadimplente` para:
+- Campo `alerta_inadimplente: true` no INSERT do sinistro (novo campo, precisa migration)
+- Texto no historico: `"⚠️ ALERTA: Associado com pendencias financeiras no momento da comunicacao"`
+- Notificacao para analistas incluir aviso de inadimplencia
+- Email com destaque amarelo sobre a situacao financeira
 
-| Arquivo | Acao |
-|---------|------|
-| Migracao SQL (tabela `despesas_recorrentes`) | Criar |
-| `src/components/financeiro/DespesaRecorrenteModal.tsx` | Criar |
-| `src/pages/financeiro/ContasPagar.tsx` | Modificar (adicionar aba) |
-| `supabase/functions/cron-gerar-despesas-recorrentes/index.ts` | Criar |
-| `supabase/config.toml` | Modificar (adicionar funcao) |
-| SQL insert para `cron.schedule` | Executar |
+**Migracao necessaria:**
+- `ALTER TABLE sinistros ADD COLUMN alerta_inadimplente boolean DEFAULT false;`
+
+---
+
+## Gap 3: Fluxo Simplificado de Vidros (2 Etapas, sem Oficina)
+
+**Arquivo:** `supabase/functions/criar-sinistro/index.ts`
+
+Apos criar o sinistro (secao 6), adicionar logica especifica para vidros:
+
+```
+if (payload.tipo_sinistro === 'vidros') {
+  // Vidros pula direto para "em_analise" (nao precisa vistoria presencial)
+  await supabaseAdmin.from('sinistros').update({ 
+    status: 'em_analise',
+    fluxo_simplificado: true 
+  }).eq('id', sinistro.id);
+}
+```
+
+**Novo campo na migration:** `fluxo_simplificado boolean DEFAULT false`
+
+**Arquivo:** `src/components/sinistros/CardVidrosDetalhe.tsx`
+
+Expandir o componente para incluir as 2 etapas do fluxo:
+
+- **Etapa 1 -- Analise da peca** (status: `em_analise`):
+  - Selecionar peca danificada (se nao veio no payload)
+  - Escolher opcao: "Via Auto Center Credenciado" ou "Reembolso"
+  - Se B.O. necessario (tentativa furto/roubo), marcar obrigatoriedade
+  - Botao "Aprovar Reparo" que muda status para `aprovado`
+
+- **Etapa 2 -- Conclusao** (status: `aprovado`):
+  - Via Auto Center: registrar valor total, calcular 60% Pratic / 40% Associado, gerar conta a pagar para auto center
+  - Reembolso: upload da NF, calcular 60%, gerar conta a pagar para associado
+  - Botao "Concluir Sinistro" que muda status para `concluido`
+
+**Arquivo:** `src/pages/eventos/SinistroDetalhe.tsx`
+
+Ajustar a pagina de detalhe para, quando `tipo === 'vidros'`, esconder secoes irrelevantes (oficina, vistoria presencial, cotacao de pecas) e mostrar apenas o `CardVidrosDetalhe` com o fluxo de 2 etapas.
+
+---
+
+## Gap 4: Diferenciar Documentos de Roubo vs Furto
+
+**Arquivo:** `supabase/functions/criar-sinistro/index.ts`
+
+Na constante `DOCUMENTOS_OBRIGATORIOS` (linhas 30-41):
+
+**Roubo (remover chaves):**
+```
+roubo: [
+  { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+  { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+  { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+  // REMOVIDO: chaves -- roubo nao exige declaracao de chaves
+],
+```
+
+**Furto (manter chaves):**
+```
+furto: [
+  { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
+  { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
+  { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
+  { tipo: 'chaves', nome: 'Declaração das Chaves', obrigatorio: true },
+],
+```
+
+Justificativa: No roubo, o condutor estava presente e entregou as chaves sob coacao; no furto, o veiculo foi levado sem presenca do condutor, entao precisa comprovar a posse das chaves.
+
+---
+
+## Arquivos Modificados
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| Migracao SQL | Adicionar `alerta_inadimplente` e `fluxo_simplificado` na tabela `sinistros` |
+| `supabase/functions/criar-sinistro/index.ts` | Gaps 1, 2, 3 e 4 |
+| `src/components/sinistros/CardVidrosDetalhe.tsx` | Gap 3: fluxo de 2 etapas com automacao |
+| `src/pages/eventos/SinistroDetalhe.tsx` | Gap 3: esconder secoes irrelevantes para vidros |
+| `src/integrations/supabase/types.ts` | Novos campos do sinistro |
 
 ## Detalhes Tecnicos
 
-- A tabela `despesas_recorrentes` e separada de `contas_pagar` porque sao conceitos diferentes: uma e o template, outra e o lancamento real
-- O campo `dia_vencimento` e limitado a 28 para evitar problemas com meses de 28/29/30/31 dias
-- O cron roda diariamente mas so gera se `proximo_lancamento <= hoje`, entao nao duplica
-- A acao "Gerar agora" na UI permite forcar a geracao fora do horario do cron
-- Despesas pausadas (`ativo = false`) sao ignoradas pelo cron
+- A validacao de carencia usa `contratos.data_ativacao` (ja existente) comparada com `new Date()`
+- O limite de 12 meses busca `sinistros` com `tipo = 'vidros'` e `peca_danificada` igual, excluindo status `cancelado`/`negado`
+- O campo `peca_danificada` ja existe na tabela `sinistros` (usado pelo `CardVidrosDetalhe`)
+- A flag `alerta_inadimplente` e gravada no sinistro para rastreabilidade; a decisao de negar/aprovar fica com o analista
+- O fluxo simplificado nao gera OS de oficina nem vistoria presencial -- tudo e resolvido via auto center de vidros ou reembolso
+- Deploy necessario da edge function `criar-sinistro` apos alteracoes
 
