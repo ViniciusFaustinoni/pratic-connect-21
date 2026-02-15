@@ -582,19 +582,29 @@ export default function SinistroAnalise() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {/* Fotos - Etapa 1 */}
-                      {linkEvento.dados_etapa1?.fotos_urls?.length > 0 && (
+                      {linkEvento.dados_etapa1?.arquivos_urls?.length > 0 && (
                         <div>
-                          <p className="text-sm font-medium mb-2">Fotos do Veículo ({linkEvento.dados_etapa1.fotos_urls.length})</p>
+                          <p className="text-sm font-medium mb-2">Fotos do Veículo ({linkEvento.dados_etapa1.arquivos_urls.length})</p>
                           <div className="grid grid-cols-3 gap-2">
-                            {linkEvento.dados_etapa1.fotos_urls.map((url: string, idx: number) => (
-                              <img
-                                key={idx}
-                                src={resolverUrl(url)}
-                                alt={`Foto ${idx + 1}`}
-                                className="h-24 w-full rounded-md object-cover cursor-pointer hover:opacity-80 transition-opacity border"
-                                onClick={() => setPreviewDoc({ arquivo_url: url, nome_arquivo: `Foto ${idx + 1}` })}
-                              />
-                            ))}
+                            {linkEvento.dados_etapa1.arquivos_urls.map((url: string, idx: number) => {
+                              const isVideo = /\.(mp4|webm|mov)$/i.test(url);
+                              return isVideo ? (
+                                <video
+                                  key={idx}
+                                  src={resolverUrl(url)}
+                                  controls
+                                  className="h-24 w-full rounded-md object-cover border"
+                                />
+                              ) : (
+                                <img
+                                  key={idx}
+                                  src={resolverUrl(url)}
+                                  alt={`Foto ${idx + 1}`}
+                                  className="h-24 w-full rounded-md object-cover cursor-pointer hover:opacity-80 transition-opacity border"
+                                  onClick={() => setPreviewDoc({ arquivo_url: url, nome_arquivo: `Foto ${idx + 1}` })}
+                                />
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -608,12 +618,12 @@ export default function SinistroAnalise() {
                             {linkEvento.dados_etapa2.numero_bo && (
                               <span className="text-sm">Nº {linkEvento.dados_etapa2.numero_bo}</span>
                             )}
-                            {linkEvento.dados_etapa2.arquivo_url && (
+                            {linkEvento.dados_etapa2.arquivos_urls?.[0] && (
                               <Button
                                 variant="outline"
                                 size="sm"
                                 className="h-7 text-xs"
-                                onClick={() => window.open(resolverUrl(linkEvento.dados_etapa2.arquivo_url), '_blank')}
+                                onClick={() => window.open(resolverUrl(linkEvento.dados_etapa2.arquivos_urls[0]), '_blank')}
                               >
                                 <FileText className="h-3 w-3 mr-1" />
                                 Ver arquivo
@@ -628,16 +638,19 @@ export default function SinistroAnalise() {
                         <div>
                           <Separator className="my-2" />
                           <p className="text-sm font-medium mb-1">Relato do Associado</p>
-                          {linkEvento.dados_etapa3.texto && (
+                          {linkEvento.dados_etapa3.relato_texto && (
                             <p className="text-sm text-muted-foreground bg-muted p-3 rounded-md">
-                              {linkEvento.dados_etapa3.texto}
+                              {linkEvento.dados_etapa3.relato_texto}
                             </p>
                           )}
-                          {linkEvento.dados_etapa3.audio_url && (
-                            <audio controls className="w-full mt-1">
-                              <source src={resolverUrl(linkEvento.dados_etapa3.audio_url)} />
-                            </audio>
-                          )}
+                          {(() => {
+                            const audioUrl = linkEvento.dados_etapa3.arquivos_urls?.find((u: string) => /\.(webm|ogg|mp3|m4a|wav)$/i.test(u));
+                            return audioUrl ? (
+                              <audio controls className="w-full mt-1">
+                                <source src={resolverUrl(audioUrl)} />
+                              </audio>
+                            ) : null;
+                          })()}
                         </div>
                       )}
 
