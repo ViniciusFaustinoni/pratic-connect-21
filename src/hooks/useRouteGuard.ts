@@ -9,18 +9,9 @@ import { usePermissions } from './usePermissions';
 export function useRouteGuard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isAnalistaEventosOnly } = usePermissions();
+  const { isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly } = usePermissions();
 
   useEffect(() => {
-    // Analista de Eventos só pode acessar /analista-eventos/*
-    if (isAnalistaEventosOnly) {
-      const isInAnalistaEventosArea = location.pathname.startsWith('/analista-eventos');
-      if (!isInAnalistaEventosArea) {
-        navigate('/analista-eventos', { replace: true });
-        return;
-      }
-    }
-
     // Regulador só pode acessar /regulador/*
     if (isReguladorOnly) {
       const isInReguladorArea = location.pathname.startsWith('/regulador');
@@ -66,5 +57,5 @@ export function useRouteGuard() {
         navigate('/dashboard', { replace: true });
       }
     }
-  }, [location.pathname, isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isAnalistaEventosOnly, navigate]);
+  }, [location.pathname, isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, navigate]);
 }
