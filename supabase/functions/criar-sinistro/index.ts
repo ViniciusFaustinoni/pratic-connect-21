@@ -27,12 +27,13 @@ const DOCUMENTOS_OBRIGATORIOS: Record<string, Array<{tipo: string; nome: string;
     { tipo: 'foto_local', nome: 'Fotos do Local', obrigatorio: false },
     { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: false },
   ],
+  // GAP 4: Roubo NÃO exige declaração de chaves (condutor estava presente)
   roubo: [
     { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
     { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
     { tipo: 'bo', nome: 'Boletim de Ocorrência', obrigatorio: true },
-    { tipo: 'chaves', nome: 'Declaração das Chaves', obrigatorio: true },
   ],
+  // Furto EXIGE declaração de chaves (veículo levado sem presença do condutor)
   furto: [
     { tipo: 'cnh', nome: 'CNH do Condutor', obrigatorio: true },
     { tipo: 'crlv', nome: 'CRLV do Veículo', obrigatorio: true },
@@ -100,6 +101,7 @@ interface CriarSinistroRequest {
   fotos?: string[];
   envolveu_terceiros?: boolean;
   necessita_reboque?: boolean;
+  peca_danificada?: string; // GAP 1: peça danificada para sinistros de vidros
 }
 
 // Gerar protocolo único
@@ -308,19 +310,15 @@ Deno.serve(async (req) => {
     
     // Lógica de validação baseada em cobertura
     if (veiculo.status === 'ativo' && temCoberturaTotal) {
-      // Cobertura total ativa: pode criar qualquer tipo de sinistro
       console.log('[criar-sinistro] ✓ Veículo ativo com cobertura total - permitido qualquer sinistro');
     } else if (temCoberturaRouboFurto && isRouboOuFurto) {
-      // Cobertura parcial (apenas roubo/furto): pode criar sinistro de roubo ou furto
       console.log('[criar-sinistro] ✓ Cobertura roubo/furto ativa - permitido sinistro de', payload.tipo_sinistro);
       
-      // Se rastreador não está instalado, ativar flag de alerta
       if (veiculo.status === 'instalacao_pendente' || !temCoberturaTotal) {
         alertaRecemAtivado = true;
         console.log('[criar-sinistro] ⚠️ Sinistro de roubo/furto SEM rastreador instalado - alerta ativado');
       }
     } else if (veiculo.status !== 'ativo') {
-      // Veículo não está ativo e não tem cobertura parcial adequada
       const statusLabel = statusLabels[veiculo.status] || veiculo.status;
       console.error('[criar-sinistro] Veículo não está ativo:', veiculo.status);
       
@@ -332,7 +330,6 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else if (!isRouboOuFurto && !temCoberturaTotal) {
-      // Tentando criar sinistro que requer cobertura total, mas só tem parcial
       console.error('[criar-sinistro] Cobertura insuficiente para tipo:', payload.tipo_sinistro);
       
       return new Response(
@@ -345,8 +342,75 @@ Deno.serve(async (req) => {
     }
 
     // ============================================
+    // 4.2.1 GAP 1: VALIDAÇÃO CARÊNCIA 120d E LIMITE 12 MESES PARA VIDROS
+    // ============================================
+    if (payload.tipo_sinistro === 'vidros') {
+      // Buscar contrato ativo do associado para verificar carência
+      const { data: contrato } = await supabaseAdmin
+        .from('contratos')
+        .select('data_ativacao')
+        .eq('associado_id', associado.id)
+        .eq('status', 'ativo')
+        .maybeSingle();
+
+      if (contrato?.data_ativacao) {
+        const dataAtivacao = new Date(contrato.data_ativacao);
+        const hoje = new Date();
+        const diffMs = hoje.getTime() - dataAtivacao.getTime();
+        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDias < 120) {
+          const dataDisponivel = new Date(dataAtivacao);
+          dataDisponivel.setDate(dataDisponivel.getDate() + 120);
+          const dataFormatada = dataDisponivel.toLocaleDateString('pt-BR');
+
+          console.warn('[criar-sinistro] Carência de vidros não cumprida:', diffDias, 'dias');
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `Benefício de vidros possui carência de 120 dias. Disponível a partir de ${dataFormatada}.`,
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
+      // Verificar limite de 1 uso por peça a cada 12 meses
+      if (payload.peca_danificada) {
+        const dozeMesesAtras = new Date();
+        dozeMesesAtras.setMonth(dozeMesesAtras.getMonth() - 12);
+
+        const { data: sinistrosVidro } = await supabaseAdmin
+          .from('sinistros')
+          .select('id, protocolo, peca_danificada, created_at')
+          .eq('veiculo_id', payload.veiculo_id)
+          .eq('tipo', 'vidros')
+          .eq('peca_danificada', payload.peca_danificada)
+          .gte('created_at', dozeMesesAtras.toISOString())
+          .not('status', 'in', '("cancelado","negado")');
+
+        if (sinistrosVidro && sinistrosVidro.length > 0) {
+          const sinistroAnterior = sinistrosVidro[0];
+          console.warn('[criar-sinistro] Limite de vidros atingido para peça:', payload.peca_danificada);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `Já existe um sinistro de vidros para ${payload.peca_danificada} nos últimos 12 meses (protocolo ${sinistroAnterior.protocolo}). Limite: 1 utilização por peça a cada 12 meses.`,
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
+      console.log('[criar-sinistro] ✓ Validações de vidros OK');
+    }
+
+    // ============================================
     // 4.3 VERIFICAR STATUS E ADIMPLÊNCIA NA PLATAFORMA REDE VEÍCULOS
     // ============================================
+    // GAP 2: Inadimplência registra alerta em vez de bloquear
+    let alertaInadimplente = false;
+
     if (rastreador?.plataforma === 'rede_veiculos') {
       try {
         console.log('[criar-sinistro] Verificando status na plataforma Rede Veículos...');
@@ -379,26 +443,18 @@ Deno.serve(async (req) => {
             );
           }
           
-          // Verificar adimplência
+          // GAP 2: Inadimplência NÃO bloqueia mais - registra alerta
           if (statusData.dados?.adimplente === false) {
-            console.warn('[criar-sinistro] Cliente inadimplente na plataforma');
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: 'Existem pendências financeiras que precisam ser regularizadas antes de comunicar o sinistro.',
-              }),
-              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            alertaInadimplente = true;
+            console.warn('[criar-sinistro] ⚠️ Cliente inadimplente - sinistro será criado com alerta');
           }
           
           console.log('[criar-sinistro] Status plataforma OK:', statusData.dados?.statusPlataforma);
         } else {
           console.warn('[criar-sinistro] Não foi possível verificar status na plataforma:', statusData.erro);
-          // Não bloqueia se API falhar - continua com status local
         }
       } catch (err) {
         console.warn('[criar-sinistro] Erro ao verificar status na plataforma (não bloqueante):', err);
-        // Não bloqueia se API falhar - continua com status local
       }
     }
 
@@ -440,7 +496,6 @@ Deno.serve(async (req) => {
     // Formatar data/hora do evento
     let dataHoraOcorrencia = payload.data_evento;
     if (payload.hora_evento) {
-      // Se tem hora, combinar com data
       const [ano, mes, dia] = payload.data_evento.split('-');
       dataHoraOcorrencia = `${ano}-${mes}-${dia}T${payload.hora_evento}:00`;
     }
@@ -461,8 +516,11 @@ Deno.serve(async (req) => {
         status: 'comunicado',
         canal: 'app',
         necessita_reboque: payload.necessita_reboque || false,
+        peca_danificada: payload.peca_danificada || null,
         // ===== FLAG DE ALERTA RECÉM-ATIVADO =====
         alerta_recem_ativado: alertaRecemAtivado,
+        // ===== GAP 2: FLAG DE INADIMPLÊNCIA =====
+        alerta_inadimplente: alertaInadimplente,
         // ===== CAMPOS DE POSIÇÃO (EVIDÊNCIA - TEMPO REAL QUANDO POSSÍVEL) =====
         latitude_informada: payload.latitude || null,
         longitude_informada: payload.longitude || null,
@@ -478,6 +536,7 @@ Deno.serve(async (req) => {
       rastreador: rastreadorLatMomento ? `${rastreadorLatMomento}, ${rastreadorLngMomento}` : 'N/A',
       tempo_real: rastreador ? (rastreador.plataforma === 'softruck' || rastreador.plataforma === 'rede_veiculos') : false,
       alerta_recem_ativado: alertaRecemAtivado,
+      alerta_inadimplente: alertaInadimplente,
     });
 
     if (insertError) {
@@ -488,14 +547,39 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('[criar-sinistro] Sinistro criado:', sinistro.id, protocolo, alertaRecemAtivado ? '⚠️ ALERTA RECÉM-ATIVADO' : '');
+    console.log('[criar-sinistro] Sinistro criado:', sinistro.id, protocolo, alertaRecemAtivado ? '⚠️ ALERTA RECÉM-ATIVADO' : '', alertaInadimplente ? '⚠️ ALERTA INADIMPLENTE' : '');
+
+    // ============================================
+    // 6.1 GAP 3: FLUXO SIMPLIFICADO PARA VIDROS
+    // ============================================
+    if (payload.tipo_sinistro === 'vidros') {
+      // Vidros pula direto para "em_analise" (não precisa vistoria presencial)
+      const { error: updateError } = await supabaseAdmin
+        .from('sinistros')
+        .update({
+          status: 'em_analise',
+          fluxo_simplificado: true,
+        })
+        .eq('id', sinistro.id);
+
+      if (updateError) {
+        console.error('[criar-sinistro] Erro ao ativar fluxo simplificado:', updateError);
+      } else {
+        console.log('[criar-sinistro] ✓ Fluxo simplificado de vidros ativado - status: em_analise');
+      }
+    }
 
     // ============================================
     // 7. REGISTRAR NO HISTÓRICO
     // ============================================
-    const observacaoHistorico = alertaRecemAtivado 
-      ? `Sinistro comunicado via app - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro} - ⚠️ ALERTA: Associado recém-ativado (sem rastreador)`
-      : `Sinistro comunicado via app - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro}`;
+    const alertas: string[] = [];
+    if (alertaRecemAtivado) alertas.push('⚠️ ALERTA: Associado recém-ativado (sem rastreador)');
+    if (alertaInadimplente) alertas.push('⚠️ ALERTA: Associado com pendências financeiras no momento da comunicação');
+
+    const observacaoHistorico = [
+      `Sinistro comunicado via app - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro}`,
+      ...alertas,
+    ].join('\n');
     
     await supabaseAdmin.from('sinistro_historico').insert({
       sinistro_id: sinistro.id,
@@ -503,6 +587,16 @@ Deno.serve(async (req) => {
       usuario_id: user.id,
       observacao: observacaoHistorico,
     });
+
+    // Se vidros, registrar transição para em_analise também
+    if (payload.tipo_sinistro === 'vidros') {
+      await supabaseAdmin.from('sinistro_historico').insert({
+        sinistro_id: sinistro.id,
+        status_anterior: 'comunicado',
+        status_novo: 'em_analise',
+        observacao: 'Fluxo simplificado de vidros - encaminhado automaticamente para análise',
+      });
+    }
 
     console.log('[criar-sinistro] Histórico registrado');
 
@@ -543,7 +637,6 @@ Deno.serve(async (req) => {
           chamadoReboqueId = chamadoReboque.id;
           chamadoReboqueProtocolo = chamadoReboque.protocolo;
 
-          // Vincular chamado ao sinistro
           await supabaseAdmin
             .from('sinistros')
             .update({ chamado_assistencia_id: chamadoReboque.id })
@@ -578,13 +671,11 @@ Deno.serve(async (req) => {
     // 9. NOTIFICAR ANALISTAS DE SINISTROS
     // ============================================
     try {
-      // Buscar usuários com role de analista de sinistros
       const { data: analistas } = await supabaseAdmin
         .from('user_roles')
         .select('user_id')
         .eq('role', 'analista_sinistros');
 
-      // Se não encontrar analistas específicos, buscar diretores
       let destinatarios = analistas || [];
       if (destinatarios.length === 0) {
         const { data: diretores } = await supabaseAdmin
@@ -594,17 +685,17 @@ Deno.serve(async (req) => {
         destinatarios = diretores || [];
       }
 
-      // Título com alerta especial se necessário
-      const tituloNotificacao = alertaRecemAtivado 
-        ? '🆕⚠️ Sinistro Recém-Ativado (sem rastreador)'
-        : '🆕 Novo Sinistro Registrado';
+      // Título com alertas especiais
+      let tituloNotificacao = '🆕 Novo Sinistro Registrado';
+      if (alertaRecemAtivado) tituloNotificacao = '🆕⚠️ Sinistro Recém-Ativado (sem rastreador)';
+      if (alertaInadimplente) tituloNotificacao = '🆕⚠️ Sinistro com Pendência Financeira';
+      if (alertaRecemAtivado && alertaInadimplente) tituloNotificacao = '🆕⚠️⚠️ Sinistro com Alertas Múltiplos';
 
-      // Criar notificação para cada analista/diretor
       for (const dest of destinatarios) {
         await supabaseAdmin.from('notificacoes').insert({
           user_id: dest.user_id,
           titulo: tituloNotificacao,
-          mensagem: `Sinistro ${protocolo} - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro} - Veículo ${veiculo.placa}`,
+          mensagem: `Sinistro ${protocolo} - ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro} - Veículo ${veiculo.placa}${alertaInadimplente ? ' ⚠️ INADIMPLENTE' : ''}`,
           tipo: 'alerta',
           categoria: 'sinistros',
           referencia_tipo: 'sinistro',
@@ -620,12 +711,15 @@ Deno.serve(async (req) => {
       await supabaseAdmin.functions.invoke('send-email', {
         body: {
           to: 'sinistros@praticprotect.com.br',
-          subject: alertaRecemAtivado 
-            ? `⚠️ Sinistro Recém-Ativado: ${protocolo} - ${veiculo.placa}`
-            : `Novo Sinistro: ${protocolo} - ${veiculo.placa}`,
+          subject: alertaInadimplente
+            ? `⚠️ Sinistro INADIMPLENTE: ${protocolo} - ${veiculo.placa}`
+            : alertaRecemAtivado 
+              ? `⚠️ Sinistro Recém-Ativado: ${protocolo} - ${veiculo.placa}`
+              : `Novo Sinistro: ${protocolo} - ${veiculo.placa}`,
           html: `
-            <h2>${alertaRecemAtivado ? '⚠️ Sinistro de Associado Recém-Ativado' : 'Novo Sinistro Registrado'}</h2>
+            <h2>${alertaRecemAtivado ? '⚠️ Sinistro de Associado Recém-Ativado' : alertaInadimplente ? '⚠️ Sinistro com Pendência Financeira' : 'Novo Sinistro Registrado'}</h2>
             ${alertaRecemAtivado ? '<p style="color: #d97706; font-weight: bold;">ATENÇÃO: Este sinistro foi aberto por associado que ainda não possui rastreador instalado. Requer análise especial.</p>' : ''}
+            ${alertaInadimplente ? '<p style="background: #fef3c7; color: #92400e; padding: 8px 12px; border-radius: 4px; font-weight: bold;">⚠️ ATENÇÃO: Associado com pendências financeiras no momento da comunicação do sinistro. A decisão de aprovação/negação fica a critério do analista.</p>' : ''}
             <p><strong>Protocolo:</strong> ${protocolo}</p>
             <p><strong>Tipo:</strong> ${TIPO_LABELS[payload.tipo_sinistro] || payload.tipo_sinistro}</p>
             <p><strong>Associado:</strong> ${associado.nome}</p>
@@ -642,7 +736,6 @@ Deno.serve(async (req) => {
       console.log('[criar-sinistro] Email enviado para equipe');
     } catch (notifError) {
       console.error('[criar-sinistro] Erro ao enviar notificações (não bloqueante):', notifError);
-      // Não bloqueia o fluxo - sinistro foi criado
     }
 
     // ============================================
@@ -667,7 +760,7 @@ Deno.serve(async (req) => {
       await supabaseAdmin.functions.invoke('notificar-sinistro', {
         body: {
           sinistro_id: sinistro.id,
-          status: 'comunicado',
+          status: payload.tipo_sinistro === 'vidros' ? 'em_analise' : 'comunicado',
         }
       });
     } catch (e) {
@@ -697,7 +790,7 @@ Deno.serve(async (req) => {
         success: true,
         sinistro_id: sinistro.id,
         numero_sinistro: protocolo,
-        status: 'comunicado',
+        status: payload.tipo_sinistro === 'vidros' ? 'em_analise' : 'comunicado',
         documentos_pendentes: documentosPendentes,
         analista_responsavel: null,
         mensagem_confirmacao: chamadoReboqueProtocolo
@@ -709,6 +802,8 @@ Deno.serve(async (req) => {
         },
         data_criacao: dataCriacao,
         alerta_recem_ativado: alertaRecemAtivado,
+        alerta_inadimplente: alertaInadimplente,
+        fluxo_simplificado: payload.tipo_sinistro === 'vidros',
         chamado_reboque_id: chamadoReboqueId,
         chamado_reboque_protocolo: chamadoReboqueProtocolo,
       }),
