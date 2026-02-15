@@ -278,6 +278,31 @@ export function useCriarVistoriaAgendada() {
         descricao: `Vistoria agendada para ${dataAgendada} às ${horarioAgendado}`,
         dados: { vistoria_id: vistoria.id, data: dataAgendada, horario: horarioAgendado },
       });
+
+      // Notificar coordenadores/reguladores sobre nova vistoria agendada
+      try {
+        const { data: coordenadores } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('role', ['coordenador_monitoramento', 'regulador'] as any[]);
+
+        if (coordenadores?.length) {
+          const notificacoes = coordenadores.map((c) => ({
+            user_id: c.user_id,
+            titulo: 'Nova Vistoria Agendada',
+            mensagem: `Vistoria agendada para ${dataAgendada} às ${horarioAgendado}`,
+            tipo: 'sistema',
+            subtipo: 'vistoria_agendada',
+            link: '/monitoramento/vistorias',
+            prioridade: 'normal',
+            lida: false,
+            canal_sistema: true,
+          }));
+          await supabase.from('notificacoes').insert(notificacoes);
+        }
+      } catch (err) {
+        console.error('[useCriarVistoriaAgendada] Erro ao notificar coordenadores:', err);
+      }
       
       return vistoria;
     },
