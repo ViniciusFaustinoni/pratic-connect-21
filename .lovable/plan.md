@@ -1,42 +1,82 @@
 
-# Exibir botao de analise para eventos aguardando analise
+# Exibir dados da vistoria do regulador na pagina de analise
 
 ## Problema
 
-Quando o regulador conclui a vistoria, o status do sinistro muda para `aguardando_analise`. Porem, na listagem de sinistros (`SinistrosList.tsx`):
-
-1. O status `aguardando_analise` nao esta no mapa de configuracao de status, entao o badge exibe "Comunicado" (fallback) em vez de "Aguard. Analise"
-2. O botao de "Analisar" (icone ClipboardCheck) so aparece para status `comunicado` ou `em_analise`, ignorando `aguardando_analise`
-3. Os contadores (KPI cards) nao contam sinistros com status `aguardando_analise`
+A pagina de analise do sinistro (`SinistroAnalise.tsx`) nao busca nem exibe os dados da vistoria realizada pelo regulador (tabela `vistorias_evento`). O card "Documentos" mostra apenas documentos do associado. Quando o regulador conclui a vistoria (fotos, orcamento, parecer), o analista nao consegue ver essas informacoes.
 
 ## Alteracoes
 
-### Arquivo: `src/pages/eventos/SinistrosList.tsx`
+### 1. `src/hooks/useSinistroAnalise.ts`
 
-**1. Adicionar `aguardando_analise` ao `statusConfig` (linha ~68)**
+Adicionar uma nova query para buscar a vistoria de evento concluida do sinistro:
 
-Incluir a entrada:
-```
-aguardando_analise: { label: 'Aguard. Analise', class: 'bg-blue-100 text-blue-800' },
-```
-
-**2. Expandir condicao do botao "Analisar" (linha ~445)**
-
-Alterar de:
 ```typescript
-sinistro.status === 'comunicado' || sinistro.status === 'em_analise'
+const { data: vistoriaEvento } = useQuery({
+  queryKey: ['sinistro-analise-vistoria-evento', sinistroId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('vistorias_evento')
+      .select('*')
+      .eq('sinistro_id', sinistroId!)
+      .order('concluida_em', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data;
+  },
+  enabled: !!sinistroId,
+});
 ```
-Para:
+
+Retornar `vistoriaEvento` no objeto de retorno do hook.
+
+### 2. `src/pages/eventos/SinistroAnalise.tsx`
+
+**a) Receber `vistoriaEvento` do hook:**
 ```typescript
-sinistro.status === 'comunicado' || sinistro.status === 'em_analise' || sinistro.status === 'aguardando_analise'
+const { sinistro, documentos, ..., vistoriaEvento } = useSinistroAnalise(id);
 ```
 
-**3. Adicionar contador de `aguardando_analise` nos KPI cards (linha ~130-143)**
+**b) Renomear card "Documentos" para "Anexos do Regulador":**
+- Alterar titulo de `Documentos ({count})` para `Anexos do Regulador ({count})`
+- Manter toda a logica de exibicao de documentos/fotos/audios/videos existente
 
-Incluir contagem de `aguardando_analise` no objeto de contadores e somar ao card "Em Analise" (ja que sao sinistros prontos para analise do analista).
+**c) Adicionar ao final do card "Anexos do Regulador" os dados de texto da vistoria:**
+Apos a lista de documentos, renderizar os dados do `vistoriaEvento.dados_vistoria` em sub-secoes:
+
+- **Diagnostico**: tipo de dano (parcial/total), descricao tecnica
+- **Etapas de Reparo**: lista de etapas selecionadas (badges)
+- **Itens do Orcamento**: tabela com descricao, tipo, quantidade de cada item (sem valores, conforme regra de negocio - valores sao preenchidos pelo analista)
+- **Parecer do Regulador**: parecer tecnico (texto) e recomendacao (aprovar/analise detalhada)
+- **Observacoes Perda Total**: se tipo_dano === 'total', exibir justificativa
+
+Cada sub-secao tera um `Separator` e titulo em negrito. Os dados serao exibidos somente se `vistoriaEvento?.dados_vistoria` existir.
+
+**d) Adicionar fotos e video do regulador ao card:**
+Se `dados_vistoria.fotos_urls` existir, exibir galeria de thumbnails clicaveis (reaproveitando o mesmo padrao de imagens ja usado no card de auto-vistoria).
+Se `dados_vistoria.video_url` existir, exibir botao para assistir.
+
+### Dados disponiveis em `dados_vistoria` (JSON):
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| tipo_dano | string | "parcial" ou "total" |
+| descricao_tecnica | string | Descricao tecnica dos danos |
+| etapas_reparo | array | [{id, nome, selecionada, status}] |
+| itens_orcamento | array | [{descricao, tipo, quantidade, tipo_peca, veiculo_marca, ...}] |
+| valor_total_orcamento | number | Total de servicos/mao de obra |
+| parecer_tecnico | string | Texto do parecer |
+| recomendacao | string | "aprovar" ou "analise_detalhada" |
+| observacoes_perda_total | string | Justificativa se perda total |
+| fotos_urls | string[] | URLs das fotos do regulador |
+| video_url | string | URL do video do regulador |
 
 ### Resultado esperado
 
-- O analista de eventos vera o badge correto "Aguard. Analise" para sinistros onde o regulador ja concluiu a vistoria
-- O botao de "Analisar" aparecera para esses sinistros, levando a pagina `/eventos/sinistros/:id/analisar` com todas as informacoes e arquivos do regulador
-- O icone de visualizacao (olho) continuara funcionando normalmente, mostrando os mesmos dados mas sem acoes de aprovar/reprovar (pagina `SinistroDetalhe`)
+O analista de eventos vera no card "Anexos do Regulador":
+1. Todas as fotos e video capturados pelo regulador (galeria)
+2. Documentos do associado (existente)
+3. Diagnostico com tipo de dano e descricao tecnica
+4. Etapas de reparo selecionadas
+5. Lista de itens do orcamento (pecas e servicos)
+6. Parecer tecnico e recomendacao do regulador
