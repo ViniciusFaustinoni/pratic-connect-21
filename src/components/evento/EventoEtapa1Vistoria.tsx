@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Camera, X, Loader2 } from 'lucide-react';
+import { Camera, X, Loader2, Video, CheckCircle2 } from 'lucide-react';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
@@ -20,8 +20,11 @@ interface FotoItem {
 
 export default function EventoEtapa1Vistoria({ token, onComplete }: Props) {
   const [fotos, setFotos] = useState<FotoItem[]>([]);
+  const [video, setVideo] = useState<File | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   const addFoto = useCallback(async (file: File) => {
     if (fotos.length >= MAX_FOTOS) {
@@ -49,8 +52,23 @@ export default function EventoEtapa1Vistoria({ token, onComplete }: Props) {
     e.target.value = '';
   }, [addFoto]);
 
+  const handleVideoChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    setVideo(file);
+    setVideoPreviewUrl(URL.createObjectURL(file));
+    e.target.value = '';
+  }, [videoPreviewUrl]);
+
+  const removeVideo = useCallback(() => {
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    setVideo(null);
+    setVideoPreviewUrl(null);
+  }, [videoPreviewUrl]);
+
   const handleSubmit = async () => {
-    if (fotos.length < MIN_FOTOS) return;
+    if (fotos.length < MIN_FOTOS || !video) return;
     setSaving(true);
     try {
       const formData = new FormData();
@@ -58,6 +76,7 @@ export default function EventoEtapa1Vistoria({ token, onComplete }: Props) {
       formData.append('etapa', '1');
       formData.append('dados', JSON.stringify({}));
       fotos.forEach((f, i) => formData.append(`arquivo${i}`, f.file));
+      formData.append(`arquivo${fotos.length}`, video);
 
       const { data, error } = await publicSupabase.functions.invoke('salvar-etapa-evento', {
         body: formData,
@@ -66,10 +85,10 @@ export default function EventoEtapa1Vistoria({ token, onComplete }: Props) {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      toast.success('Fotos enviadas com sucesso!');
+      toast.success('Fotos e vídeo enviados com sucesso!');
       onComplete();
     } catch (err: any) {
-      toast.error(err.message || 'Erro ao enviar fotos');
+      toast.error(err.message || 'Erro ao enviar');
     } finally {
       setSaving(false);
     }
@@ -128,16 +147,65 @@ export default function EventoEtapa1Vistoria({ token, onComplete }: Props) {
         className="hidden"
       />
 
+      {/* Video section */}
+      <div className="pt-2 border-t">
+        <h2 className="text-lg font-semibold">Vídeo do Veículo</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Grave um vídeo curto (até 2 minutos) mostrando os danos no veículo.
+        </p>
+
+        {videoPreviewUrl ? (
+          <div className="mt-3 space-y-2">
+            <div className="relative rounded-lg overflow-hidden border bg-muted">
+              <video
+                src={videoPreviewUrl}
+                controls
+                className="w-full max-h-48 object-contain"
+              />
+              <button
+                type="button"
+                onClick={removeVideo}
+                className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-green-600">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>Vídeo adicionado</span>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => videoInputRef.current?.click()}
+            className="mt-3 w-full py-6 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          >
+            <Video className="h-8 w-8" />
+            <span className="text-sm font-medium">Gravar / Selecionar Vídeo</span>
+          </button>
+        )}
+
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept="video/*"
+          capture="environment"
+          onChange={handleVideoChange}
+          className="hidden"
+        />
+      </div>
+
       <Button
         onClick={handleSubmit}
-        disabled={fotos.length < MIN_FOTOS || saving}
+        disabled={fotos.length < MIN_FOTOS || !video || saving}
         className="w-full"
         size="lg"
       >
         {saving ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            Enviando fotos...
+            Enviando fotos e vídeo...
           </>
         ) : (
           'Próxima Etapa'
