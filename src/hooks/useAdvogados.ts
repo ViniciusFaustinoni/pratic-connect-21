@@ -40,6 +40,19 @@ export function useAdvogados(filters?: { ativo?: boolean; tipo?: string }) {
       tipo_contrato?: string;
       valor_fixo?: number;
       percentual_exito?: number;
+      cep?: string;
+      logradouro?: string;
+      numero?: string;
+      complemento?: string;
+      bairro?: string;
+      cidade?: string;
+      estado?: string;
+      banco?: string;
+      agencia?: string;
+      conta?: string;
+      pix_chave?: string;
+      pix_tipo?: string;
+      ativo?: boolean;
     }) => {
       const { data, error } = await supabase
         .from('advogados')

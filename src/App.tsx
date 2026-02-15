@@ -163,6 +163,8 @@ import ProcessoForm from "./pages/juridico/ProcessoForm";
 import PrazosControl from "./pages/juridico/PrazosControl";
 import AudienciasAgenda from "./pages/juridico/AudienciasAgenda";
 import AdvogadosList from "./pages/juridico/AdvogadosList";
+import AdvogadoForm from "./pages/juridico/AdvogadoForm";
+import AdvogadoDetalhe from "./pages/juridico/AdvogadoDetalhe";
 import ConsultasJuridicas from "./pages/juridico/ConsultasJuridicas";
 import CasosJuridicosList from "./pages/juridico/CasosJuridicosList";
 import CasoJuridicoDetalhe from "./pages/juridico/CasoJuridicoDetalhe";
@@ -485,6 +487,9 @@ const App = () => (
               <Route path="/juridico/prazos" element={<PrazosControl />} />
               <Route path="/juridico/audiencias" element={<AudienciasAgenda />} />
               <Route path="/juridico/advogados" element={<AdvogadosList />} />
+              <Route path="/juridico/advogados/novo" element={<AdvogadoForm />} />
+              <Route path="/juridico/advogados/:id" element={<AdvogadoDetalhe />} />
+              <Route path="/juridico/advogados/:id/editar" element={<AdvogadoForm />} />
               <Route path="/juridico/consultas" element={<ConsultasJuridicas />} />
               
               {/* RH */}

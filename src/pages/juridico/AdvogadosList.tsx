@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
   User, Briefcase, Building2, Plus, Phone, Mail, 
-  Edit, Eye, Scale, Search 
+  Edit, Eye, Scale, Search, Users, BarChart3, Clock
 } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, differenceInDays } from 'date-fns';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,13 +20,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAdvogados } from '@/hooks/useAdvogados';
 import { 
   TIPO_ADVOGADO_LABELS, 
-  ESPECIALIDADE_LABELS, 
+  ESPECIALIDADE_LABELS,
+  ESPECIALIDADES_ADVOGADO,
   TipoAdvogado 
 } from '@/types/juridico';
 
 interface AdvogadosFilters {
   busca: string;
   tipo: 'todos' | TipoAdvogado;
+  especialidade: string;
   apenasAtivos: boolean;
 }
 
@@ -34,6 +37,7 @@ export default function AdvogadosList() {
   const [filters, setFilters] = useState<AdvogadosFilters>({
     busca: '',
     tipo: 'todos',
+    especialidade: 'todos',
     apenasAtivos: true,
   });
 
@@ -60,16 +64,91 @@ export default function AdvogadosList() {
     }
   });
 
+  // Pareceres do mês por advogado
+  const { data: pareceresMap = {} } = useQuery({
+    queryKey: ['advogados-pareceres-mes'],
+    queryFn: async () => {
+      const inicioMes = startOfMonth(new Date()).toISOString();
+      const fimMes = endOfMonth(new Date()).toISOString();
+      const { data } = await supabase
+        .from('consultas_juridicas')
+        .select('respondido_por')
+        .gte('respondido_em', inicioMes)
+        .lte('respondido_em', fimMes)
+        .not('respondido_por', 'is', null);
+      const map: Record<string, number> = {};
+      data?.forEach(c => {
+        if (c.respondido_por) map[c.respondido_por] = (map[c.respondido_por] || 0) + 1;
+      });
+      return map;
+    }
+  });
+
+  // Próximo prazo por advogado
+  const { data: proximoPrazoMap = {} } = useQuery({
+    queryKey: ['advogados-proximo-prazo'],
+    queryFn: async () => {
+      const { data: processosData } = await supabase
+        .from('processos')
+        .select('id, advogado_id')
+        .eq('status', 'ativo')
+        .not('advogado_id', 'is', null);
+      
+      if (!processosData?.length) return {};
+
+      const advProcessos: Record<string, string[]> = {};
+      processosData.forEach(p => {
+        if (p.advogado_id) {
+          if (!advProcessos[p.advogado_id]) advProcessos[p.advogado_id] = [];
+          advProcessos[p.advogado_id].push(p.id);
+        }
+      });
+
+      const allIds = processosData.map(p => p.id);
+      const { data: prazosData } = await supabase
+        .from('processos_prazos')
+        .select('processo_id, data_fim')
+        .in('processo_id', allIds)
+        .eq('status', 'pendente')
+        .gte('data_fim', new Date().toISOString())
+        .order('data_fim', { ascending: true });
+
+      const map: Record<string, string> = {};
+      Object.entries(advProcessos).forEach(([advId, pIds]) => {
+        const prazo = prazosData?.find(pr => pIds.includes(pr.processo_id));
+        if (prazo) map[advId] = prazo.data_fim;
+      });
+      return map;
+    }
+  });
+
   const advogadosFiltrados = useMemo(() => {
-    if (!filters.busca) return advogados;
+    let filtered = advogados;
     
-    const termo = filters.busca.toLowerCase();
-    return advogados.filter(adv => 
-      adv.nome.toLowerCase().includes(termo) ||
-      adv.oab?.toLowerCase().includes(termo) ||
-      adv.email?.toLowerCase().includes(termo)
-    );
-  }, [advogados, filters.busca]);
+    if (filters.busca) {
+      const termo = filters.busca.toLowerCase();
+      filtered = filtered.filter(adv => 
+        adv.nome.toLowerCase().includes(termo) ||
+        adv.oab?.toLowerCase().includes(termo) ||
+        adv.email?.toLowerCase().includes(termo)
+      );
+    }
+
+    if (filters.especialidade !== 'todos') {
+      filtered = filtered.filter(adv => 
+        adv.especialidades?.includes(filters.especialidade)
+      );
+    }
+    
+    return filtered;
+  }, [advogados, filters.busca, filters.especialidade]);
+
+  // KPI calculations
+  const totalAtivos = advogados.filter(a => a.ativo).length;
+  const internos = advogados.filter(a => a.tipo === 'interno' && a.ativo).length;
+  const terceirizados = advogados.filter(a => (a.tipo === 'externo' || a.tipo === 'escritorio') && a.ativo).length;
+  const totalProcessosAtivos = Object.values(contagemProcessos).reduce((s, v) => s + v, 0);
+  const cargaMedia = totalAtivos > 0 ? (totalProcessosAtivos / totalAtivos).toFixed(1) : '0';
 
   const getTipoBadge = (tipo: TipoAdvogado) => {
     const colors: Record<TipoAdvogado, string> = {
@@ -96,10 +175,8 @@ export default function AdvogadosList() {
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-10 w-40" />
         </div>
-        <div className="flex gap-4">
-          <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-10 w-40" />
-          <Skeleton className="h-10 w-32" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-24" />)}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
@@ -126,6 +203,54 @@ export default function AdvogadosList() {
         </Button>
       </div>
 
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Users className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{totalAtivos}</p>
+              <p className="text-xs text-muted-foreground">Total Ativos</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-100">
+              <User className="h-5 w-5 text-green-700" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{internos}</p>
+              <p className="text-xs text-muted-foreground">Internos</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-100">
+              <Building2 className="h-5 w-5 text-purple-700" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{terceirizados}</p>
+              <p className="text-xs text-muted-foreground">Terceirizados</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-orange-100">
+              <BarChart3 className="h-5 w-5 text-orange-700" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{cargaMedia}</p>
+              <p className="text-xs text-muted-foreground">Carga Média</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="relative flex-1 min-w-[250px] max-w-md">
@@ -149,6 +274,21 @@ export default function AdvogadosList() {
             <SelectItem value="todos">Todos os tipos</SelectItem>
             {Object.entries(TIPO_ADVOGADO_LABELS).map(([key, label]) => (
               <SelectItem key={key} value={key}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.especialidade}
+          onValueChange={(v) => setFilters(f => ({ ...f, especialidade: v }))}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Especialidade" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas especialidades</SelectItem>
+            {ESPECIALIDADES_ADVOGADO.map((esp) => (
+              <SelectItem key={esp} value={esp}>{ESPECIALIDADE_LABELS[esp]}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -182,6 +322,9 @@ export default function AdvogadosList() {
             const qtdProcessos = contagemProcessos[advogado.id] || 0;
             const especialidades = advogado.especialidades || [];
             const tipo = advogado.tipo as TipoAdvogado;
+            const pareceresMes = pareceresMap[advogado.id] || 0;
+            const proximoPrazo = proximoPrazoMap[advogado.id];
+            const diasProximoPrazo = proximoPrazo ? differenceInDays(new Date(proximoPrazo), new Date()) : null;
 
             return (
               <Card key={advogado.id} className="hover:shadow-md transition-shadow">
@@ -227,10 +370,31 @@ export default function AdvogadosList() {
                     </div>
                   )}
 
-                  {/* Processos Ativos */}
-                  <div className="bg-muted/50 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold">{qtdProcessos}</p>
-                    <p className="text-sm text-muted-foreground">Processos ativos</p>
+                  {/* Stats */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-muted/50 rounded-lg p-2 text-center">
+                      <p className={`text-lg font-bold ${qtdProcessos > 15 ? 'text-destructive' : ''}`}>{qtdProcessos}</p>
+                      <p className="text-xs text-muted-foreground">Processos</p>
+                    </div>
+                    <div className="bg-muted/50 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold">{pareceresMes}</p>
+                      <p className="text-xs text-muted-foreground">Pareceres</p>
+                    </div>
+                    <div className="bg-muted/50 rounded-lg p-2 text-center">
+                      {proximoPrazo ? (
+                        <>
+                          <p className={`text-lg font-bold ${diasProximoPrazo !== null && diasProximoPrazo <= 3 ? 'text-destructive' : ''}`}>
+                            {diasProximoPrazo}d
+                          </p>
+                          <p className="text-xs text-muted-foreground">Prazo</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-lg font-bold">-</p>
+                          <p className="text-xs text-muted-foreground">Prazo</p>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Contato */}
