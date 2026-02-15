@@ -1,57 +1,51 @@
 
-# Corrigir status exibido para sinistros em analise
+
+# Incluir documentos necessarios na mensagem do link de auto vistoria
 
 ## Problema
 
-Quando o analista de eventos envia o link de auto vistoria, o sinistro muda para status `em_analise`. Porem, a pagina de analise exibe **"Sinistro aprovado -- aguardando encaminhamento para oficina"**, o que e incorreto. O status correto a exibir e **"Aguardando auto vistoria"**.
+A mensagem WhatsApp enviada ao associado com o link de auto vistoria nao detalha os documentos que ele precisa providenciar. O associado precisa saber exatamente o que enviar em cada etapa.
 
 ## Solucao
 
-### Arquivo: `src/pages/eventos/SinistroAnalise.tsx` (linhas 788-805)
+### Arquivo: `src/pages/eventos/SinistroAnalise.tsx` (linha 319)
 
-Separar o tratamento dos status `em_analise` e `aprovado`:
+Atualizar a mensagem WhatsApp para incluir a lista de documentos necessarios em cada etapa:
 
-**Status `em_analise`** (link de auto vistoria enviado):
-- Exibir banner amarelo/amber: "Aguardando auto vistoria -- link enviado ao associado"
-- Nao exibir botao "Enviar para Oficina"
-- Opcionalmente exibir botao para reenviar o link
+```
+Ola [nome]!
 
-**Status `aprovado`** (sinistro ja aprovado apos vistoria):
-- Manter o banner verde atual: "Sinistro aprovado -- aguardando encaminhamento para oficina"
-- Manter o botao "Enviar para Oficina"
+Seu sinistro [protocolo] foi registrado com sucesso.
 
-### Codigo
+Para dar andamento ao processo, acesse o link abaixo e envie os documentos necessarios:
 
-```typescript
-// Status em_analise: aguardando auto vistoria do associado
-if (sinistro.status === 'em_analise') {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-        <Clock className="h-4 w-4 flex-shrink-0" />
-        <span><strong>Aguardando auto vistoria</strong> -- link enviado ao associado.</span>
-      </div>
-    </div>
-  );
-}
+[link]
 
-// Sinistro aprovado (pos-vistoria)
-if (sinistro.status === 'aprovado') {
-  return (
-    <>
-      <div className="flex items-center gap-2 p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
-        <CheckCircle className="h-4 w-4 flex-shrink-0" />
-        <span><strong>Sinistro aprovado</strong> -- aguardando encaminhamento para oficina.</span>
-      </div>
-      <Button className="w-full" onClick={() => setShowEnviarOficina(true)}>
-        <Wrench className="h-4 w-4 mr-2" />
-        Enviar para Oficina
-      </Button>
-    </>
-  );
-}
+*DOCUMENTOS NECESSARIOS:*
+
+📸 *Etapa 1 - Auto Vistoria (fotos do veiculo)*
+- Frente, traseira, laterais e teto
+- Detalhes dos danos
+- Painel/hodometro
+- Minimo de 5 fotos
+
+📋 *Etapa 2 - Boletim de Ocorrencia*
+- Numero do B.O.
+- Foto ou PDF do documento
+
+📝 *Etapa 3 - Relato do ocorrido*
+- Descricao detalhada do que aconteceu
+- Audio ou texto
+- Localizacao do evento
+
+⚠️ *Importante:* Voce sera informado sobre a cota de coparticipacao aplicavel.
+
+O link e valido por 72 horas.
+
+ABP PraticCar
 ```
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/pages/eventos/SinistroAnalise.tsx` | Separar `em_analise` (banner amarelo "Aguardando auto vistoria") de `aprovado` (banner verde com botao oficina) |
+| `src/pages/eventos/SinistroAnalise.tsx` | Atualizar mensagem WhatsApp (linha 319) para incluir lista detalhada de documentos necessarios por etapa |
+
