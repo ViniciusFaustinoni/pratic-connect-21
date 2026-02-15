@@ -167,6 +167,7 @@ import AdvogadosList from "./pages/juridico/AdvogadosList";
 import AdvogadoForm from "./pages/juridico/AdvogadoForm";
 import AdvogadoDetalhe from "./pages/juridico/AdvogadoDetalhe";
 import ConsultasJuridicas from "./pages/juridico/ConsultasJuridicas";
+import ConsultasUnificadas from "./pages/juridico/ConsultasUnificadas";
 import CasosJuridicosList from "./pages/juridico/CasosJuridicosList";
 import CasoJuridicoDetalhe from "./pages/juridico/CasoJuridicoDetalhe";
 
@@ -492,7 +493,8 @@ const App = () => (
               <Route path="/juridico/advogados/novo" element={<AdvogadoForm />} />
               <Route path="/juridico/advogados/:id" element={<AdvogadoDetalhe />} />
               <Route path="/juridico/advogados/:id/editar" element={<AdvogadoForm />} />
-              <Route path="/juridico/consultas" element={<ConsultasJuridicas />} />
+              <Route path="/juridico/consultas" element={<ConsultasUnificadas />} />
+              <Route path="/juridico/pareceres" element={<ConsultasJuridicas />} />
               
               {/* RH */}
               <Route path="/rh" element={<RHDashboard />} />

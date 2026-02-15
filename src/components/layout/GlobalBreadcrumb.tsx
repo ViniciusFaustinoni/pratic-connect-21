@@ -83,7 +83,8 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/juridico/prazos': { label: 'Prazos' },
   '/juridico/audiencias': { label: 'Audiências' },
   '/juridico/advogados': { label: 'Advogados' },
-  '/juridico/consultas': { label: 'Consultas' },
+  '/juridico/consultas': { label: 'Consultas 360' },
+  '/juridico/pareceres': { label: 'Pareceres Jurídicos' },
   
   // RH
   '/rh': { label: 'RH' },
