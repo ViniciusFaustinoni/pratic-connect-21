@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SetorElogioModal } from "@/components/ouvidoria/SetorElogioModal";
+import { useConfig0800 } from "@/hooks/useConfig0800";
 
 interface TipoItem {
   id: string;
@@ -45,6 +46,7 @@ const colorClasses: Record<string, { bg: string; border: string; text: string; i
 export default function OuvidoriaMenu() {
   const navigate = useNavigate();
   const [showSetorModal, setShowSetorModal] = useState(false);
+  const { telefone0800, telefone0800Link } = useConfig0800();
 
   const handleTipoClick = (tipoId: string) => {
     if (tipoId === 'elogio') {
@@ -134,13 +136,13 @@ export default function OuvidoriaMenu() {
       {/* Card 0800 */}
       <Card className="bg-muted/50">
         <CardContent className="p-4">
-          <a href="tel:08009800001" className="flex items-center gap-3">
+          <a href={`tel:${telefone0800Link}`} className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <Phone className="h-5 w-5 text-primary" />
             </div>
             <div>
               <p className="font-medium">Central de Atendimento</p>
-              <p className="text-primary font-semibold">0800 980 0001</p>
+              <p className="text-primary font-semibold">{telefone0800}</p>
             </div>
           </a>
         </CardContent>
