@@ -200,7 +200,7 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
                 </>
               )}
 
-              {(statusFinal === 'expirado' || statusFinal === 'invalidado' || statusFinal === 'completado') && (
+              {(statusFinal === 'expirado' || statusFinal === 'invalidado') && (
                 <Button
                   size="sm"
                   className="w-full"
