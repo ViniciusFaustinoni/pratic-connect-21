@@ -1,46 +1,24 @@
 
-# Correção: Analista de Eventos não vê Solicitações IA pendentes
+# Adicionar EventoLinkCard na tela de Analise de Sinistro
 
-## Problema Identificado
+## Problema
 
-O Analista de Eventos clica no botão "Revisar Solicitações" na listagem de sinistros e é redirecionado para `/diretoria/solicitacoes-ia`. A página carrega corretamente, mas mostra "Nenhuma solicitação pendentes" apesar de existirem 2 solicitações pendentes no banco de dados.
+O analista de eventos precisa voltar a tela de detalhe do sinistro para gerar e enviar o link de auto-vistoria. Isso quebra o fluxo de trabalho.
 
-**Causa raiz:** A tabela `chat_solicitacoes_ia` possui RLS (Row Level Security) com políticas SELECT apenas para:
-- Associados (veem as próprias)
-- Diretores (veem todas)
+## Solucao
 
-O papel `analista_eventos` **não possui política SELECT**, então o RLS bloqueia o acesso.
+Adicionar o componente `EventoLinkCard` (ja existente) na coluna direita da pagina `SinistroAnalise.tsx`, logo abaixo do card de Acoes. O componente ja recebe todas as props necessarias e o hook `useSinistroAnalise` ja retorna os dados do associado e do sinistro.
 
-## Dados no banco confirmando o problema
+## Arquivo a modificar
 
-Existem 2 solicitações pendentes:
-- 1 sinistro (colisão) criado em 15/02/2026
-- 1 assistência (guincho) criado em 15/02/2026
+**`src/pages/eventos/SinistroAnalise.tsx`**
 
-## Solução
+1. Importar `EventoLinkCard` de `@/components/eventos/EventoLinkCard`
+2. Adicionar o componente na coluna direita (apos o card de Acoes, ~linha 680-681), passando as props:
+   - `sinistroId={id!}`
+   - `sinistroProtocolo={sinistro.protocolo}`
+   - `associadoWhatsapp={associado?.whatsapp || associado?.telefone}`
+   - `associadoNome={associado?.nome}`
+   - `sinistroTipo={sinistro.tipo}`
 
-### 1. Criar política RLS para analista_eventos
-
-Adicionar uma migração SQL que permita ao analista de eventos visualizar todas as solicitações IA (SELECT) e também atualizá-las (UPDATE) para poder aprovar/rejeitar.
-
-```sql
--- Analistas de eventos podem ver todas as solicitações
-CREATE POLICY "Analistas de eventos podem ver solicitacoes"
-  ON public.chat_solicitacoes_ia FOR SELECT
-  TO authenticated
-  USING (has_role(auth.uid(), 'analista_eventos'));
-
--- Analistas de eventos podem atualizar solicitações (aprovar/rejeitar)
-CREATE POLICY "Analistas de eventos podem atualizar solicitacoes"
-  ON public.chat_solicitacoes_ia FOR UPDATE
-  TO authenticated
-  USING (has_role(auth.uid(), 'analista_eventos'));
-```
-
-### 2. Arquivo a criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `supabase/migrations/XXXX_add_analista_eventos_solicitacoes_ia_policy.sql` | Migração com as 2 novas políticas RLS |
-
-Nenhum arquivo de código precisa ser alterado -- a página `SolicitacoesIA.tsx` já funciona corretamente, o problema é exclusivamente de permissão no banco de dados.
+Nenhum arquivo novo precisa ser criado. O componente e os hooks ja existem.
