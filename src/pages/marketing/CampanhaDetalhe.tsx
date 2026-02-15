@@ -18,7 +18,7 @@ import {
 import { 
   ArrowLeft, Calendar, Target, DollarSign, Users,
   TrendingUp, Percent, Edit, Pause, Play, Copy, ExternalLink,
-  ChevronDown, CheckCircle, BarChart3, Link, Image
+  ChevronDown, CheckCircle, BarChart3, Link, Image, FileDown, Loader2
 } from 'lucide-react';
 import { useCampanha, useCampanhaMetricas, useUpdateCampanha } from '@/hooks/useMarketing';
 import { useQuery } from '@tanstack/react-query';
@@ -26,6 +26,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { useState } from 'react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   rascunho: { label: 'Rascunho', className: 'bg-gray-100 text-gray-800' },
@@ -59,6 +62,7 @@ const etapaLabels: Record<string, string> = {
 export default function CampanhaDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   
   const { data: campanha, isLoading } = useCampanha(id!);
   const { data: metricas, isLoading: loadingMetricas } = useCampanhaMetricas(id!);
@@ -104,6 +108,108 @@ export default function CampanhaDetalhe() {
   const taxaConversao = totais.leads > 0 ? ((totais.conversoes / totais.leads) * 100).toFixed(1) : '0';
   const cpl = totais.leads > 0 ? (totais.valor_gasto / totais.leads).toFixed(2) : '0.00';
   const cpa = totais.conversoes > 0 ? (totais.valor_gasto / totais.conversoes).toFixed(2) : '0.00';
+
+  const handleExportarPdf = async () => {
+    if (!campanha) return;
+    setIsGeneratingPdf(true);
+    try {
+      const doc = new jsPDF();
+      
+      // Título
+      doc.setFontSize(18);
+      doc.text(`Campanha: ${campanha.nome}`, 14, 22);
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(`Código: ${campanha.codigo || '-'}`, 14, 30);
+      doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, 14, 36);
+      
+      // Info geral
+      doc.setTextColor(0);
+      doc.setFontSize(12);
+      doc.text('Informações Gerais', 14, 48);
+      
+      autoTable(doc, {
+        startY: 52,
+        head: [['Campo', 'Valor']],
+        body: [
+          ['Tipo', tipoConfig[campanha.tipo]?.label || campanha.tipo],
+          ['Status', statusConfig[campanha.status]?.label || campanha.status],
+          ['Período', `${format(new Date(campanha.data_inicio), 'dd/MM/yyyy')}${campanha.data_fim ? ` - ${format(new Date(campanha.data_fim), 'dd/MM/yyyy')}` : ''}`],
+          ['Orçamento', `R$ ${(campanha.orcamento_total || 0).toLocaleString('pt-BR')}`],
+          ['Gasto', `R$ ${totais.valor_gasto.toLocaleString('pt-BR')}`],
+        ],
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [59, 130, 246] },
+      });
+      
+      // Performance
+      let y = (doc as any).lastAutoTable.finalY + 12;
+      doc.text('Performance', 14, y);
+      
+      autoTable(doc, {
+        startY: y + 4,
+        head: [['Métrica', 'Valor']],
+        body: [
+          ['Total Leads', totais.leads.toString()],
+          ['Conversões', totais.conversoes.toString()],
+          ['Taxa Conversão', `${taxaConversao}%`],
+          ['CPL', `R$ ${cpl}`],
+          ['CAC', `R$ ${cpa}`],
+          ['ROI', totais.valor_gasto > 0 ? `${((totais.conversoes * 500 - totais.valor_gasto) / totais.valor_gasto * 100).toFixed(1)}%` : '-'],
+        ],
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [34, 197, 94] },
+      });
+      
+      // Leads
+      if (leads && leads.length > 0) {
+        y = (doc as any).lastAutoTable.finalY + 12;
+        doc.text('Leads da Campanha', 14, y);
+        
+        autoTable(doc, {
+          startY: y + 4,
+          head: [['Nome', 'Telefone', 'Etapa', 'Data']],
+          body: leads.map((l: any) => [
+            l.nome || '-',
+            l.telefone || '-',
+            etapaLabels[l.etapa] || l.etapa,
+            format(new Date(l.created_at), 'dd/MM/yyyy'),
+          ]),
+          styles: { fontSize: 8 },
+          headStyles: { fillColor: [147, 51, 234] },
+        });
+      }
+      
+      // UTMs
+      if (utms && utms.length > 0) {
+        y = (doc as any).lastAutoTable.finalY + 12;
+        if (y > 260) { doc.addPage(); y = 20; }
+        doc.text('UTMs Vinculadas', 14, y);
+        
+        autoTable(doc, {
+          startY: y + 4,
+          head: [['Source', 'Medium', 'Campaign', 'Cliques', 'Leads']],
+          body: utms.map((u: any) => [
+            u.utm_source || '-',
+            u.utm_medium || '-',
+            u.utm_campaign || '-',
+            (u.cliques || 0).toString(),
+            (u.leads_gerados || 0).toString(),
+          ]),
+          styles: { fontSize: 8 },
+          headStyles: { fillColor: [249, 115, 22] },
+        });
+      }
+      
+      doc.save(`campanha-${campanha.codigo || campanha.id}.pdf`);
+      toast.success('PDF da campanha exportado!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
 
   const handleToggleStatus = () => {
     if (!campanha) return;
@@ -171,6 +277,11 @@ export default function CampanhaDetalhe() {
             <p className="text-muted-foreground">{campanha.codigo}</p>
           </div>
         </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportarPdf} disabled={isGeneratingPdf}>
+            {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+            {isGeneratingPdf ? 'Gerando...' : 'Exportar PDF'}
+          </Button>
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -211,6 +322,7 @@ export default function CampanhaDetalhe() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
 
       {/* KPIs */}
