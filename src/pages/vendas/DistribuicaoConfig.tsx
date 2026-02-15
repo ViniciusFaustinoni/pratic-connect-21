@@ -344,6 +344,27 @@ export default function DistribuicaoConfig() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
+                <Label>Método de distribuição</Label>
+                <Select
+                  value={(config as any)?.metodo || 'rodizio'}
+                  onValueChange={(v) => atualizarConfig.mutate({ metodo: v } as any)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="rodizio">Rodízio Simples</SelectItem>
+                    <SelectItem value="performance">Por Performance</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {(config as any)?.metodo === 'performance' 
+                    ? 'Consultores com maior conversão recebem mais leads' 
+                    : 'Leads distribuídos igualmente em sequência'}
+                </p>
+              </div>
+              
+              <div className="space-y-2">
                 <Label>Limite diário padrão</Label>
                 <Input
                   type="number"

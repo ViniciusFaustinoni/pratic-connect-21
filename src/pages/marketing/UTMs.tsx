@@ -343,6 +343,75 @@ export default function UTMs() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Análise de UTMs */}
+      <UTMAnalysis utms={utms} />
     </div>
+  );
+}
+
+function UTMAnalysis({ utms }: { utms: any[] | undefined }) {
+  const [groupBy, setGroupBy] = useState<string>('utm_source');
+
+  const grouped = useMemo(() => {
+    if (!utms?.length) return [];
+    const map: Record<string, { label: string; leads: number; cliques: number }> = {};
+    utms.forEach(u => {
+      const key = (u as any)[groupBy] || 'Não definido';
+      if (!map[key]) map[key] = { label: key, leads: 0, cliques: 0 };
+      map[key].leads += u.leads_gerados || 0;
+      map[key].cliques += u.cliques || 0;
+    });
+    return Object.values(map).sort((a, b) => b.leads - a.leads);
+  }, [utms, groupBy]);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Análise de UTMs</CardTitle>
+        <Select value={groupBy} onValueChange={setGroupBy}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="utm_source">Source</SelectItem>
+            <SelectItem value="utm_medium">Medium</SelectItem>
+            <SelectItem value="utm_campaign">Campaign</SelectItem>
+            <SelectItem value="utm_content">Content</SelectItem>
+            <SelectItem value="utm_term">Term</SelectItem>
+          </SelectContent>
+        </Select>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{groupBy.replace('utm_', '').charAt(0).toUpperCase() + groupBy.replace('utm_', '').slice(1)}</TableHead>
+              <TableHead className="text-center">Cliques</TableHead>
+              <TableHead className="text-center">Leads</TableHead>
+              <TableHead className="text-center">Taxa</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {grouped.length > 0 ? grouped.map(item => (
+              <TableRow key={item.label}>
+                <TableCell className="font-medium">{item.label}</TableCell>
+                <TableCell className="text-center">{item.cliques}</TableCell>
+                <TableCell className="text-center">{item.leads}</TableCell>
+                <TableCell className="text-center">
+                  {item.cliques > 0 ? ((item.leads / item.cliques) * 100).toFixed(1) : '0'}%
+                </TableCell>
+              </TableRow>
+            )) : (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                  Sem dados para análise
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }

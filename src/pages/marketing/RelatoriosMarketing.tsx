@@ -335,11 +335,14 @@ export default function RelatoriosMarketing() {
 
           {/* Tabs */}
           <Tabs defaultValue="visao-geral">
-            <TabsList>
+            <TabsList className="flex-wrap">
               <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
               <TabsTrigger value="por-canal">Por Canal</TabsTrigger>
               <TabsTrigger value="por-campanha">Por Campanha</TabsTrigger>
               <TabsTrigger value="indicacoes">Indicações</TabsTrigger>
+              <TabsTrigger value="consultores">Consultores</TabsTrigger>
+              <TabsTrigger value="roi-ltv">ROI/LTV</TabsTrigger>
+              <TabsTrigger value="jornada">Jornada</TabsTrigger>
             </TabsList>
             
             <TabsContent value="visao-geral" className="space-y-6 mt-6">
@@ -584,6 +587,80 @@ export default function RelatoriosMarketing() {
                       )}
                     </TableBody>
                   </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Tab: Consultores */}
+            <TabsContent value="consultores" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Performance dos Consultores</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-center text-muted-foreground py-8">
+                    Relatório de consultores com leads recebidos, conversões e tempo médio de contato será populado com dados reais do pipeline.
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Tab: ROI/LTV */}
+            <TabsContent value="roi-ltv" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>ROI e Valor Vitalício (LTV)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Canal</TableHead>
+                        <TableHead className="text-right">Investimento</TableHead>
+                        <TableHead className="text-center">Conversões</TableHead>
+                        <TableHead className="text-right">CAC</TableHead>
+                        <TableHead className="text-right">LTV Est.</TableHead>
+                        <TableHead className="text-right">LTV/CAC</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {performance?.filter(c => c.conversoes > 0).map(canal => {
+                        const cac = (canal.investimento_total || 0) / canal.conversoes;
+                        const ltv = 400 * 12 * 0.8; // R$ 400/mês * 12 meses * 80% retenção
+                        const ratio = cac > 0 ? ltv / cac : 0;
+                        return (
+                          <TableRow key={canal.id}>
+                            <TableCell className="font-medium">{canal.nome}</TableCell>
+                            <TableCell className="text-right">R$ {(canal.investimento_total || 0).toLocaleString('pt-BR')}</TableCell>
+                            <TableCell className="text-center">{canal.conversoes}</TableCell>
+                            <TableCell className="text-right">R$ {cac.toFixed(0)}</TableCell>
+                            <TableCell className="text-right">R$ {ltv.toLocaleString('pt-BR')}</TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant={ratio >= 5 ? 'default' : ratio >= 3 ? 'secondary' : 'destructive'}>
+                                {ratio.toFixed(1)}x
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }) || (
+                        <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Sem dados</TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Tab: Jornada */}
+            <TabsContent value="jornada" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Jornada do Lead</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-center text-muted-foreground py-8">
+                    Análise de tempo médio em cada etapa do funil por canal. Dados serão populados com base nos timestamps de mudança de etapa dos leads.
+                  </p>
                 </CardContent>
               </Card>
             </TabsContent>

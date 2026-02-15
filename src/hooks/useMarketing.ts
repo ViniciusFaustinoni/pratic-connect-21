@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { subMonths, startOfMonth, endOfMonth, subDays, format } from 'date-fns';
 
 // Types
 export interface CanalMarketing {
@@ -295,6 +296,43 @@ export function useUpdateCampanha() {
   });
 }
 
+// ========== DUPLICAR CAMPANHA ==========
+export function useDuplicarCampanha() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (campanhaId: string) => {
+      // Buscar campanha original
+      const { data: original, error: fetchError } = await supabase
+        .from('campanhas')
+        .select('*')
+        .eq('id', campanhaId)
+        .single();
+      if (fetchError) throw fetchError;
+      
+      const { id, codigo, created_at, updated_at, ...rest } = original;
+      const { data, error } = await supabase
+        .from('campanhas')
+        .insert({
+          ...rest,
+          nome: `${rest.nome} (cópia)`,
+          status: 'rascunho',
+          valor_gasto: 0,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campanhas'] });
+      toast.success('Campanha duplicada com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error('Erro ao duplicar: ' + error.message);
+    },
+  });
+}
+
 // ========== INDICAÇÕES ==========
 export function useIndicacoes(filters?: { status?: string }) {
   return useQuery({
@@ -503,7 +541,6 @@ export function useGerarUTM() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (utm: { url_destino: string; utm_source: string; utm_medium?: string; utm_campaign?: string; utm_content?: string; utm_term?: string; campanha_id?: string }) => {
-      // Gerar URL completa
       const params = new URLSearchParams();
       if (utm.utm_source) params.append('utm_source', utm.utm_source);
       if (utm.utm_medium) params.append('utm_medium', utm.utm_medium);
@@ -566,42 +603,43 @@ export function useMarketingStats() {
   return useQuery({
     queryKey: ['marketing-stats'],
     queryFn: async () => {
-      // Campanhas ativas
-      const { count: campanhasAtivas } = await supabase
+      const campanhasAtivas$ = supabase
         .from('campanhas')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'ativa');
 
-      // Total de indicações do mês
       const inicioMes = new Date();
       inicioMes.setDate(1);
       inicioMes.setHours(0, 0, 0, 0);
       
-      const { count: indicacoesMes } = await supabase
+      const indicacoesMes$ = supabase
         .from('indicacoes')
         .select('*', { count: 'exact', head: true })
         .gte('data_indicacao', inicioMes.toISOString());
 
-      const { count: indicacoesConvertidas } = await supabase
+      const indicacoesConvertidas$ = supabase
         .from('indicacoes')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'convertido')
         .gte('data_indicacao', inicioMes.toISOString());
 
-      // Investimento total do mês
-      const { data: metricas } = await supabase
+      const metricas$ = supabase
         .from('campanhas_metricas')
         .select('valor_gasto, leads, conversoes')
         .gte('data', inicioMes.toISOString().split('T')[0]);
 
-      const investimentoMes = metricas?.reduce((sum, m) => sum + (m.valor_gasto || 0), 0) || 0;
-      const leadsMes = metricas?.reduce((sum, m) => sum + (m.leads || 0), 0) || 0;
-      const conversoesMes = metricas?.reduce((sum, m) => sum + (m.conversoes || 0), 0) || 0;
+      const [campanhasAtivas, indicacoesMes, indicacoesConvertidas, metricas] = await Promise.all([
+        campanhasAtivas$, indicacoesMes$, indicacoesConvertidas$, metricas$
+      ]);
+
+      const investimentoMes = metricas.data?.reduce((sum, m) => sum + (m.valor_gasto || 0), 0) || 0;
+      const leadsMes = metricas.data?.reduce((sum, m) => sum + (m.leads || 0), 0) || 0;
+      const conversoesMes = metricas.data?.reduce((sum, m) => sum + (m.conversoes || 0), 0) || 0;
 
       return {
-        campanhasAtivas: campanhasAtivas || 0,
-        indicacoesMes: indicacoesMes || 0,
-        indicacoesConvertidas: indicacoesConvertidas || 0,
+        campanhasAtivas: campanhasAtivas.count || 0,
+        indicacoesMes: indicacoesMes.count || 0,
+        indicacoesConvertidas: indicacoesConvertidas.count || 0,
         investimentoMes,
         leadsMes,
         conversoesMes,
@@ -637,11 +675,89 @@ export function usePerformanceCanais() {
   });
 }
 
+// ========== LEADS POR CANAL (6 MESES) ==========
+export function useLeadsPorCanal6Meses() {
+  return useQuery({
+    queryKey: ['leads-por-canal-6-meses'],
+    queryFn: async () => {
+      const hoje = new Date();
+      const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      
+      const inicio6m = startOfMonth(subMonths(hoje, 5));
+      const { data } = await supabase
+        .from('leads')
+        .select('origem, created_at')
+        .gte('created_at', inicio6m.toISOString());
+      
+      // Agrupar por mês e origem
+      const resultado: Record<string, Record<string, number>> = {};
+      for (let i = 5; i >= 0; i--) {
+        const d = subMonths(hoje, i);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        resultado[key] = {};
+      }
+      
+      const origensSet = new Set<string>();
+      data?.forEach(lead => {
+        const d = new Date(lead.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const origem = lead.origem || 'outro';
+        origensSet.add(origem);
+        if (resultado[key]) {
+          resultado[key][origem] = (resultado[key][origem] || 0) + 1;
+        }
+      });
+      
+      return Object.entries(resultado).map(([key, origens]) => {
+        const [ano, mes] = key.split('-');
+        return {
+          mesLabel: meses[parseInt(mes) - 1],
+          ...origens,
+        };
+      });
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+// ========== LEADS POR DIA (30 DIAS) ==========
+export function useLeadsPorDia() {
+  return useQuery({
+    queryKey: ['leads-por-dia-30'],
+    queryFn: async () => {
+      const hoje = new Date();
+      const inicio = subDays(hoje, 29);
+      
+      const { data } = await supabase
+        .from('leads')
+        .select('created_at')
+        .gte('created_at', inicio.toISOString());
+      
+      // Agrupar por dia
+      const porDia: Record<string, number> = {};
+      for (let i = 0; i < 30; i++) {
+        const d = subDays(hoje, 29 - i);
+        porDia[format(d, 'yyyy-MM-dd')] = 0;
+      }
+      
+      data?.forEach(lead => {
+        const dia = format(new Date(lead.created_at), 'yyyy-MM-dd');
+        if (porDia[dia] !== undefined) porDia[dia]++;
+      });
+      
+      return Object.entries(porDia).map(([dia, total]) => ({
+        dia: format(new Date(dia), 'dd/MM'),
+        total,
+      }));
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 // ========== HOOK CONSOLIDADO ==========
 export function useMarketing() {
   const queryClient = useQueryClient();
 
-  // Estatísticas do mês
   const statsQuery = useQuery({
     queryKey: ['marketing-stats-consolidated'],
     queryFn: async () => {
@@ -670,7 +786,6 @@ export function useMarketing() {
     }
   });
 
-  // Criar campanha
   const criarCampanhaMutation = useMutation({
     mutationFn: async (dados: any) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -692,7 +807,6 @@ export function useMarketing() {
     }
   });
 
-  // Alterar status da campanha
   const alterarStatusCampanhaMutation = useMutation({
     mutationFn: async ({ campanhaId, novoStatus }: { campanhaId: string; novoStatus: string }) => {
       const { error } = await supabase
@@ -708,7 +822,6 @@ export function useMarketing() {
     }
   });
 
-  // Registrar indicação
   const registrarIndicacaoMutation = useMutation({
     mutationFn: async (dados: {
       indicador_id?: string;
@@ -744,7 +857,6 @@ export function useMarketing() {
     }
   });
 
-  // Pagar recompensa de indicação
   const pagarRecompensaMutation = useMutation({
     mutationFn: async (indicacaoId: string) => {
       const { error } = await supabase
@@ -765,7 +877,6 @@ export function useMarketing() {
     }
   });
 
-  // Registrar métricas de campanha
   const registrarMetricasMutation = useMutation({
     mutationFn: async (dados: {
       campanha_id: string;
@@ -818,7 +929,6 @@ export function useEvolucaoLeads() {
       const hoje = new Date();
       const resultado: EvolucaoLeads[] = [];
       
-      // Gerar últimos 12 meses
       for (let i = 11; i >= 0; i--) {
         const data = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
         const mesInicio = data.toISOString();
@@ -846,7 +956,7 @@ export function useEvolucaoLeads() {
       
       return resultado;
     },
-    staleTime: 1000 * 60 * 5, // 5 minutos cache
+    staleTime: 1000 * 60 * 5,
   });
 }
 
@@ -864,7 +974,6 @@ export function useFunilConversao() {
     queryFn: async () => {
       const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
       
-      // Buscar leads do mês por etapa
       const { data } = await supabase
         .from('leads')
         .select('etapa')

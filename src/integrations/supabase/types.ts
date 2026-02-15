@@ -8528,6 +8528,7 @@ export type Database = {
           fallback_usuario_id: string | null
           id: string
           limite_diario_padrao: number | null
+          metodo: string | null
           resetar_contadores_hora: number | null
           updated_at: string | null
         }
@@ -8538,6 +8539,7 @@ export type Database = {
           fallback_usuario_id?: string | null
           id?: string
           limite_diario_padrao?: number | null
+          metodo?: string | null
           resetar_contadores_hora?: number | null
           updated_at?: string | null
         }
@@ -8548,6 +8550,7 @@ export type Database = {
           fallback_usuario_id?: string | null
           id?: string
           limite_diario_padrao?: number | null
+          metodo?: string | null
           resetar_contadores_hora?: number | null
           updated_at?: string | null
         }

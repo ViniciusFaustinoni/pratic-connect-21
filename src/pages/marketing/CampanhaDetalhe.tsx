@@ -193,7 +193,20 @@ export default function CampanhaDetalhe() {
             <DropdownMenuItem onClick={handleFinalizar}>
               <CheckCircle className="mr-2 h-4 w-4" /> Finalizar
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => toast.info('Função em desenvolvimento')}>
+            <DropdownMenuItem onClick={() => {
+              import('@/hooks/useMarketing').then(mod => {
+                // Use inline mutation
+                supabase.from('campanhas').select('*').eq('id', id).single().then(({ data: original }) => {
+                  if (!original) return;
+                  const { id: _id, codigo, created_at, updated_at, ...rest } = original;
+                  supabase.from('campanhas').insert({ ...rest, nome: `${rest.nome} (cópia)`, status: 'rascunho', valor_gasto: 0 }).select().single().then(({ data, error }) => {
+                    if (error) { toast.error('Erro ao duplicar'); return; }
+                    toast.success('Campanha duplicada!');
+                    navigate(`/marketing/campanhas/${data.id}`);
+                  });
+                });
+              });
+            }}>
               <Copy className="mr-2 h-4 w-4" /> Duplicar
             </DropdownMenuItem>
           </DropdownMenuContent>

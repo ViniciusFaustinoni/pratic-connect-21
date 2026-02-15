@@ -9,7 +9,7 @@ import {
   Users, TrendingUp, Target, DollarSign, Calculator, UserPlus,
   Plus, Link, BarChart3, ChevronRight, Megaphone, Percent, Activity
 } from 'lucide-react';
-import { useMarketingStats, useEvolucaoLeads, useFunilConversao } from '@/hooks/useMarketing';
+import { useMarketingStats, useEvolucaoLeads, useFunilConversao, usePerformanceCanais, useLeadsPorCanal6Meses, useLeadsPorDia } from '@/hooks/useMarketing';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +28,14 @@ export default function MarketingDashboard() {
   const { data: stats, isLoading: loadingStats } = useMarketingStats();
   const { data: evolucaoLeads, isLoading: loadingEvolucao } = useEvolucaoLeads();
   const { data: funilData, isLoading: loadingFunil } = useFunilConversao();
+  const { data: performanceCanais } = usePerformanceCanais();
+  const { data: leadsPorCanal6m } = useLeadsPorCanal6Meses();
+  const { data: leadsPorDia } = useLeadsPorDia();
+
+  // Calcular CAC e Melhor Canal
+  const cacMes = stats?.conversoesMes && stats.conversoesMes > 0 ? (stats.investimentoMes / stats.conversoesMes) : 0;
+  const melhorCanal = performanceCanais?.filter(c => c.total_leads >= 5 && c.conversoes > 0)
+    .sort((a, b) => ((a.investimento_total || 0) / a.conversoes) - ((b.investimento_total || 0) / b.conversoes))[0];
 
   // Query: Leads por origem (do mês)
   const { data: leadsPorOrigem, isLoading: loadingOrigem } = useQuery({
@@ -261,12 +269,12 @@ export default function MarketingDashboard() {
           </CardContent>
         </Card>
 
-        {/* Card 7: Indicações */}
-        <Card className="bg-pink-50 border-pink-200 dark:bg-pink-950/30 dark:border-pink-800">
+        {/* Card 7: CAC */}
+        <Card className="bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-pink-700 dark:text-pink-300">Indicações</CardTitle>
-              <UserPlus className="h-4 w-4 text-pink-600 dark:text-pink-400" />
+              <CardTitle className="text-sm font-medium text-red-700 dark:text-red-300">CAC</CardTitle>
+              <Target className="h-4 w-4 text-red-600 dark:text-red-400" />
             </div>
           </CardHeader>
           <CardContent>
@@ -274,18 +282,20 @@ export default function MarketingDashboard() {
               <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <div className="text-2xl font-bold text-pink-900 dark:text-pink-100">{stats?.indicacoesMes || 0}</div>
-                <p className="text-xs text-pink-600 dark:text-pink-400">Este mês</p>
+                <div className="text-2xl font-bold text-red-900 dark:text-red-100">
+                  {cacMes > 0 ? `R$ ${cacMes.toFixed(0)}` : '—'}
+                </div>
+                <p className="text-xs text-red-600 dark:text-red-400">Custo por associado</p>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Card 8: Campanhas Ativas */}
+        {/* Card 8: Melhor Canal */}
         <Card className="bg-cyan-50 border-cyan-200 dark:bg-cyan-950/30 dark:border-cyan-800">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-cyan-700 dark:text-cyan-300">Campanhas</CardTitle>
+              <CardTitle className="text-sm font-medium text-cyan-700 dark:text-cyan-300">Melhor Canal</CardTitle>
               <Megaphone className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
             </div>
           </CardHeader>
@@ -294,8 +304,12 @@ export default function MarketingDashboard() {
               <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <div className="text-2xl font-bold text-cyan-900 dark:text-cyan-100">{stats?.campanhasAtivas || 0}</div>
-                <p className="text-xs text-cyan-600 dark:text-cyan-400">Ativas</p>
+                <div className="text-lg font-bold text-cyan-900 dark:text-cyan-100 truncate">
+                  {melhorCanal?.nome || '—'}
+                </div>
+                <p className="text-xs text-cyan-600 dark:text-cyan-400">
+                  {melhorCanal ? `CAC: R$ ${((melhorCanal.investimento_total || 0) / melhorCanal.conversoes).toFixed(0)}` : 'Sem dados'}
+                </p>
               </>
             )}
           </CardContent>
@@ -391,6 +405,74 @@ export default function MarketingDashboard() {
                 </BarChart>
               </ResponsiveContainer>
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Novos Gráficos */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* CAC por Canal */}
+        <Card>
+          <CardHeader>
+            <CardTitle>CAC por Canal</CardTitle>
+            <CardDescription>Custo de aquisição por associado</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {performanceCanais?.filter(c => c.conversoes > 0).length ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={performanceCanais.filter(c => c.conversoes > 0).map(c => ({ nome: c.nome, cac: (c.investimento_total || 0) / c.conversoes })).sort((a, b) => a.cac - b.cac)} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis type="number" />
+                  <YAxis dataKey="nome" type="category" width={100} className="text-xs" />
+                  <Tooltip formatter={(v: number) => [`R$ ${v.toFixed(2)}`, 'CAC']} contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
+                  <Bar dataKey="cac" name="CAC" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-center text-muted-foreground py-12">Sem dados</p>}
+          </CardContent>
+        </Card>
+
+        {/* Leads por Dia */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Leads por Dia (30 dias)</CardTitle>
+            <CardDescription>Volume diário de leads</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {leadsPorDia?.length ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={leadsPorDia}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="dia" className="text-xs" interval={4} />
+                  <YAxis className="text-xs" />
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
+                  <Line type="monotone" dataKey="total" name="Leads" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <p className="text-center text-muted-foreground py-12">Sem dados</p>}
+          </CardContent>
+        </Card>
+
+        {/* Investimento vs Retorno */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Investimento vs Retorno por Canal</CardTitle>
+            <CardDescription>Comparativo de investimento e receita estimada</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {performanceCanais?.length ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={performanceCanais.map(c => ({ nome: c.nome, investimento: c.investimento_total || 0, retorno: (c.conversoes || 0) * 500 }))}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="nome" className="text-xs" />
+                  <YAxis className="text-xs" />
+                  <Tooltip formatter={(v: number) => [`R$ ${v.toLocaleString('pt-BR')}`, '']} contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
+                  <Legend />
+                  <Bar dataKey="investimento" name="Investimento" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="retorno" name="Retorno Est." fill="#22c55e" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-center text-muted-foreground py-12">Sem dados</p>}
           </CardContent>
         </Card>
       </div>
