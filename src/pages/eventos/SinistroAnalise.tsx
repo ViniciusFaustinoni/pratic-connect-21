@@ -62,6 +62,7 @@ import { SolicitarOrcamentoDialog } from '@/components/sinistros/SolicitarOrcame
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAutoCenters, useCreatePeca } from '@/hooks/useAutoCenters';
+import { useCotacoesEvento } from '@/hooks/useCotacoesEvento';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
@@ -248,6 +249,12 @@ export default function SinistroAnalise() {
   const veiculo_ = sinistro?.veiculo as any;
   const { data: autoCenters } = useAutoCenters({ marca: veiculo_?.marca || undefined });
   const createPeca = useCreatePeca();
+
+  // Cotações da IA - buscar cotação aprovada para prioridade sobre valores manuais
+  const { cotacoes } = useCotacoesEvento(sinistro?.id);
+  const cotacaoAprovada = useMemo(() => cotacoes.find(c => c.aprovada), [cotacoes]);
+  const cotacoesRespondidas = useMemo(() => cotacoes.filter(c => c.status === 'respondido' && !c.aprovada), [cotacoes]);
+  const temCotacaoAprovada = !!cotacaoAprovada;
 
   // Polling automático para detectar assinatura do termo
   useEffect(() => {
@@ -920,7 +927,18 @@ export default function SinistroAnalise() {
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {itens.map((item: any, i: number) => (
+                                          {itens.map((item: any, i: number) => {
+                                            // Prioridade IA: buscar valor da cotação aprovada para esta peça
+                                            const iaItem = temCotacaoAprovada && item.tipo === 'peca'
+                                              ? (cotacaoAprovada?.resposta as any)?.itens?.[i]
+                                              : null;
+                                            const iaValor = iaItem?.valor_unitario;
+                                            const iaFornecedor = temCotacaoAprovada
+                                              ? cotacaoAprovada?.auto_center?.nome_fantasia || cotacaoAprovada?.auto_center?.nome
+                                              : null;
+                                            const pecaViaIA = item.tipo === 'peca' && iaValor != null;
+
+                                            return (
                                             <tr key={i} className="border-t">
                                               <td className="p-2">{item.descricao}</td>
                                               <td className="p-2">
@@ -931,7 +949,12 @@ export default function SinistroAnalise() {
                                               <td className="p-2 text-center">{item.quantidade}</td>
                                               <td className="p-2">
                                                 {item.tipo === 'peca' ? (
-                                                  item.fornecedor_nome && !fornecedoresPecas[i] ? (
+                                                  pecaViaIA ? (
+                                                    <span className="text-xs font-medium flex items-center gap-1">
+                                                      {iaFornecedor}
+                                                      <Badge className="text-[10px] px-1 py-0 bg-blue-100 text-blue-800 border-blue-300">IA</Badge>
+                                                    </span>
+                                                  ) : item.fornecedor_nome && !fornecedoresPecas[i] ? (
                                                     <span className="text-xs font-medium">{item.fornecedor_nome}</span>
                                                   ) : (
                                                     <Select
@@ -961,18 +984,25 @@ export default function SinistroAnalise() {
                                               </td>
                                               <td className="p-2 text-right">
                                                 {item.tipo === 'peca' ? (
-                                                  <Input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    placeholder="R$ 0,00"
-                                                    className="w-28 ml-auto text-right h-8"
-                                                    value={valoresPecas[i] ?? item.valor_unitario ?? ''}
-                                                    onChange={(e) => {
-                                                      const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
-                                                      setValoresPecas((prev) => ({ ...prev, [i]: val as any }));
-                                                    }}
-                                                  />
+                                                  pecaViaIA ? (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                      <span className="font-medium">{formatCurrency(iaValor)}</span>
+                                                      <Badge className="text-[10px] px-1 py-0 bg-blue-100 text-blue-800 border-blue-300">Via Cotação</Badge>
+                                                    </div>
+                                                  ) : (
+                                                    <Input
+                                                      type="number"
+                                                      step="0.01"
+                                                      min="0"
+                                                      placeholder="R$ 0,00"
+                                                      className="w-28 ml-auto text-right h-8"
+                                                      value={valoresPecas[i] ?? item.valor_unitario ?? ''}
+                                                      onChange={(e) => {
+                                                        const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                                        setValoresPecas((prev) => ({ ...prev, [i]: val as any }));
+                                                      }}
+                                                    />
+                                                  )
                                                 ) : (
                                                   <span className="text-muted-foreground">
                                                     {item.valor_unitario != null ? formatCurrency(item.valor_unitario) : '---'}
@@ -980,7 +1010,8 @@ export default function SinistroAnalise() {
                                                 )}
                                               </td>
                                             </tr>
-                                          ))}
+                                            );
+                                          })}
                                         </tbody>
                                       </table>
                                     </div>
@@ -989,8 +1020,19 @@ export default function SinistroAnalise() {
                                         Custo médio estimado de mão de obra: <strong>{formatCurrency(dados.valor_total_orcamento)}</strong>
                                       </p>
                                     )}
+                                    {/* Aviso de cotações pendentes */}
+                                    {!temCotacaoAprovada && cotacoesRespondidas.length > 0 && (
+                                      <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
+                                        ⚠️ Há {cotacoesRespondidas.length} cotação(ões) respondida(s) aguardando aprovação. Valores da IA prevalecerão após aprovação.
+                                      </p>
+                                    )}
+                                    {temCotacaoAprovada && (
+                                      <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-2 py-1 mt-2">
+                                        ✅ Cotação aprovada — valores de peças preenchidos automaticamente pela IA ({cotacaoAprovada?.auto_center?.nome_fantasia || cotacaoAprovada?.auto_center?.nome}).
+                                      </p>
+                                    )}
                                     <div className="flex gap-2 mt-3">
-                                      {itens.some((item: any) => item.tipo === 'peca') && (
+                                      {itens.some((item: any) => item.tipo === 'peca') && !temCotacaoAprovada && (
                                         <Button
                                           size="sm"
                                           variant="outline"
