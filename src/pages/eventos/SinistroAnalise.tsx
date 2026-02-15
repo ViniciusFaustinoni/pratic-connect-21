@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -60,6 +60,8 @@ import { EncaminharJuridicoEventoModal } from '@/components/sinistros/Encaminhar
 import { SuspenderEventoModal } from '@/components/sinistros/SuspenderEventoModal';
 import { SolicitarOrcamentoDialog } from '@/components/sinistros/SolicitarOrcamentoDialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAutoCenters, useCreatePeca } from '@/hooks/useAutoCenters';
 import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
@@ -222,6 +224,7 @@ export default function SinistroAnalise() {
   const [fotoViewer, setFotoViewer] = useState({ open: false, index: 0 });
   const [showSolicitarOrcamento, setShowSolicitarOrcamento] = useState(false);
   const [valoresPecas, setValoresPecas] = useState<Record<number, number>>({});
+  const [fornecedoresPecas, setFornecedoresPecas] = useState<Record<number, { id: string; nome: string }>>({});
   const [salvandoValores, setSalvandoValores] = useState(false);
 
   const {
@@ -240,6 +243,11 @@ export default function SinistroAnalise() {
 
   const queryClient = useQueryClient();
   const { data: pendentes } = useSinistrosPendentes();
+
+  // Auto Centers para seleção de fornecedor por peça
+  const veiculo_ = sinistro?.veiculo as any;
+  const { data: autoCenters } = useAutoCenters({ marca: veiculo_?.marca || undefined });
+  const createPeca = useCreatePeca();
 
   // Polling automático para detectar assinatura do termo
   useEffect(() => {
@@ -907,6 +915,7 @@ export default function SinistroAnalise() {
                                             <th className="text-left p-2 font-medium">Descrição</th>
                                             <th className="text-left p-2 font-medium">Tipo</th>
                                             <th className="text-center p-2 font-medium">Qtd</th>
+                                            <th className="text-left p-2 font-medium">Fornecedor</th>
                                             <th className="text-right p-2 font-medium">Valor Unit.</th>
                                           </tr>
                                         </thead>
@@ -920,6 +929,36 @@ export default function SinistroAnalise() {
                                                 </Badge>
                                               </td>
                                               <td className="p-2 text-center">{item.quantidade}</td>
+                                              <td className="p-2">
+                                                {item.tipo === 'peca' ? (
+                                                  item.fornecedor_nome && !fornecedoresPecas[i] ? (
+                                                    <span className="text-xs font-medium">{item.fornecedor_nome}</span>
+                                                  ) : (
+                                                    <Select
+                                                      value={fornecedoresPecas[i]?.id || item.fornecedor_id || ''}
+                                                      onValueChange={(val) => {
+                                                        const ac = autoCenters?.find((a) => a.id === val);
+                                                        if (ac) {
+                                                          setFornecedoresPecas((prev) => ({ ...prev, [i]: { id: ac.id, nome: ac.nome } }));
+                                                        }
+                                                      }}
+                                                    >
+                                                      <SelectTrigger className="h-8 w-44 text-xs">
+                                                        <SelectValue placeholder="Selecionar..." />
+                                                      </SelectTrigger>
+                                                      <SelectContent>
+                                                        {autoCenters?.map((ac) => (
+                                                          <SelectItem key={ac.id} value={ac.id}>
+                                                            <span className="text-xs">{ac.nome} <span className="text-muted-foreground">({ac.tipo})</span></span>
+                                                          </SelectItem>
+                                                        ))}
+                                                      </SelectContent>
+                                                    </Select>
+                                                  )
+                                                ) : (
+                                                  <span className="text-muted-foreground text-xs">—</span>
+                                                )}
+                                              </td>
                                               <td className="p-2 text-right">
                                                 {item.tipo === 'peca' ? (
                                                   <Input
@@ -951,24 +990,25 @@ export default function SinistroAnalise() {
                                       </p>
                                     )}
                                     <div className="flex gap-2 mt-3">
-                                      {Object.keys(valoresPecas).length > 0 && (
+                                      {itens.some((item: any) => item.tipo === 'peca') && (
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          disabled={salvandoValores}
+                                          disabled={salvandoValores || (Object.keys(valoresPecas).length === 0 && Object.keys(fornecedoresPecas).length === 0)}
                                           onClick={async () => {
                                             if (!vistoriaEvento) return;
                                             setSalvandoValores(true);
                                             try {
                                               const updatedItens = itens.map((item: any, i: number) => {
-                                                if (item.tipo === 'peca' && valoresPecas[i] !== undefined) {
-                                                  return {
-                                                    ...item,
-                                                    valor_unitario: valoresPecas[i],
-                                                    valor_total: (valoresPecas[i] || 0) * (item.quantidade || 1),
-                                                  };
-                                                }
-                                                return item;
+                                                if (item.tipo !== 'peca') return item;
+                                                const newVal = valoresPecas[i] !== undefined ? valoresPecas[i] : item.valor_unitario;
+                                                const fornecedor = fornecedoresPecas[i] || (item.fornecedor_id ? { id: item.fornecedor_id, nome: item.fornecedor_nome } : null);
+                                                return {
+                                                  ...item,
+                                                  valor_unitario: newVal,
+                                                  valor_total: (newVal || 0) * (item.quantidade || 1),
+                                                  ...(fornecedor ? { fornecedor_id: fornecedor.id, fornecedor_nome: fornecedor.nome } : {}),
+                                                };
                                               });
                                               const updatedDados = {
                                                 ...dados,
@@ -979,9 +1019,32 @@ export default function SinistroAnalise() {
                                                 .update({ dados_vistoria: updatedDados })
                                                 .eq('id', (vistoriaEvento as any).id);
                                               if (error) throw error;
-                                              toast.success('Valores das peças salvos!');
+
+                                              // Salvar peças no catálogo do estabelecimento
+                                              for (const item of updatedItens) {
+                                                if (item.tipo === 'peca' && item.fornecedor_id && item.valor_unitario) {
+                                                  try {
+                                                    await createPeca.mutateAsync({
+                                                      auto_center_id: item.fornecedor_id,
+                                                      nome: item.descricao,
+                                                      valor: item.valor_unitario,
+                                                      condicao: item.tipo_peca || 'nova',
+                                                      tipo_peca: item.tipo_peca || null,
+                                                      veiculo_marca: veiculo_?.marca || null,
+                                                      veiculo_modelo: veiculo_?.modelo || null,
+                                                      veiculo_ano: veiculo_?.ano_modelo?.toString() || null,
+                                                    });
+                                                  } catch (pecaErr) {
+                                                    console.error('Erro ao salvar peça no catálogo:', pecaErr);
+                                                  }
+                                                }
+                                              }
+
+                                              toast.success('Valores e fornecedores salvos!');
                                               setValoresPecas({});
+                                              setFornecedoresPecas({});
                                               queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+                                              queryClient.invalidateQueries({ queryKey: ['sinistro-analise-vistoria-evento', id] });
                                             } catch (err: any) {
                                               toast.error('Erro ao salvar valores: ' + err.message);
                                             } finally {
