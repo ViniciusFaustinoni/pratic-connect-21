@@ -65,6 +65,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
   encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
   cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
+  aguardando_analise: { label: 'Aguard. Análise', class: 'bg-blue-100 text-blue-800' },
 };
 
 // Tipo configuration
@@ -135,7 +136,7 @@ export default function SinistrosList() {
 
       return {
         comunicado: data.filter((s) => s.status === 'comunicado').length,
-        em_analise: data.filter((s) => s.status === 'em_analise').length,
+        em_analise: data.filter((s) => s.status === 'em_analise' || s.status === 'aguardando_analise').length,
         aguardando_vistoria: data.filter((s) => s.status === 'aguardando_vistoria').length,
         aprovado: data.filter((s) => s.status === 'aprovado').length,
         negado: data.filter((s) => s.status === 'negado').length,
@@ -442,7 +443,7 @@ export default function SinistrosList() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {(isDiretor || isAnalistaEventos) && (sinistro.status === 'comunicado' || sinistro.status === 'em_analise') && (
+                          {(isDiretor || isAnalistaEventos) && (sinistro.status === 'comunicado' || sinistro.status === 'em_analise' || sinistro.status === 'aguardando_analise') && (
                             <Button
                               variant="default"
                               size="icon"
