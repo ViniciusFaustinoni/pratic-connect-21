@@ -313,10 +313,45 @@ export default function SinistroAnalise() {
         throw new Error(linkData?.error || linkError?.message || 'Erro ao gerar link');
       }
 
-      // 2. Montar e enviar mensagem WhatsApp
+      // 2. Buscar dados para calcular coparticipação
       const link = `https://pratic-connect-21.lovable.app/evento/${linkData.token}`;
       const nome = associado.nome?.split(' ')[0] || 'Associado';
-      const mensagem = `Olá ${nome}!\n\nSeu sinistro ${sinistro.protocolo} foi registrado com sucesso.\n\nPara dar andamento ao processo, acesse o link abaixo e envie os documentos necessários:\n\n${link}\n\n*DOCUMENTOS NECESSÁRIOS:*\n\n📸 *Etapa 1 - Auto Vistoria (fotos do veículo)*\n- Frente, traseira, laterais e teto\n- Detalhes dos danos\n- Painel/hodômetro\n- Mínimo de 5 fotos\n\n📋 *Etapa 2 - Boletim de Ocorrência*\n- Número do B.O.\n- Foto ou PDF do documento\n\n📝 *Etapa 3 - Relato do ocorrido*\n- Descrição detalhada do que aconteceu\n- Áudio ou texto\n- Localização do evento\n\n⚠️ *Importante:* Você será informado sobre a cota de coparticipação aplicável.\n\nO link é válido por 72 horas.\n\nABP PraticCar`;
+
+      let cotaTexto = "";
+      try {
+        const veiculo = sinistro.veiculo;
+        const planoId = associado.plano?.id;
+        if (planoId && veiculo?.valor_fipe) {
+          const { data: planoData } = await supabase
+            .from('planos')
+            .select('nome, cota_participacao, cota_minima, cota_app_percent, cota_app_min')
+            .eq('id', planoId)
+            .single();
+
+          if (planoData) {
+            let percentual = planoData.cota_participacao;
+            let minimo = planoData.cota_minima;
+            // Check uso_aplicativo from veiculos table
+            const { data: veiculoFull } = await supabase
+              .from('veiculos')
+              .select('uso_aplicativo')
+              .eq('id', veiculo.id)
+              .single();
+            if (veiculoFull?.uso_aplicativo && planoData.cota_app_percent) {
+              percentual = planoData.cota_app_percent;
+              minimo = planoData.cota_app_min;
+            }
+            const valorFipe = veiculo.valor_fipe;
+            const valorCota = Math.max(valorFipe * (percentual || 0) / 100, minimo || 0);
+            const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            cotaTexto = `\n💰 *Cota de coparticipação:*\nSeu plano: ${planoData.nome} (${percentual}% da FIPE)\nValor FIPE do veículo: ${fmtBRL(valorFipe)}\nSua cota: *${fmtBRL(valorCota)}*\n`;
+          }
+        }
+      } catch (cotaErr) {
+        console.error('Erro ao calcular cota:', cotaErr);
+      }
+
+      const mensagem = `Olá ${nome}!\n\nSeu sinistro ${sinistro.protocolo} foi registrado com sucesso.\n\nPara dar andamento ao processo, acesse o link abaixo e envie os documentos necessários:\n\n${link}\n\n*DOCUMENTOS NECESSÁRIOS:*\n\n📸 *Etapa 1 - Auto Vistoria (fotos do veículo)*\n- Frente, traseira, laterais e teto\n- Detalhes dos danos\n- Painel/hodômetro\n- Mínimo de 5 fotos\n\n📋 *Etapa 2 - Boletim de Ocorrência*\n- Número do B.O.\n- Foto ou PDF do documento\n\n📝 *Etapa 3 - Relato do ocorrido*\n- Descrição detalhada do que aconteceu\n- Áudio ou texto\n- Localização do evento\n${cotaTexto}\n⏰ O link é válido por 72 horas.\n\nABP PraticCar`;
 
       const { error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
         body: { telefone, mensagem },
