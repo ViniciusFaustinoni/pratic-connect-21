@@ -1,76 +1,45 @@
 
-# Automatizar Pos-Aprovacao de Sinistro
+# Analista de Eventos: Acesso a Sinistros e Botoes de Acao
 
 ## Problema
 
-Quando o diretor aprova um sinistro na tela "Solicitacoes IA", o sistema apenas cria o registro na tabela `sinistros` com status `comunicado` e para ali. Nao gera link de auto-vistoria, nao notifica o associado, e nao agenda vistoria do regulador.
+1. Na tela de listagem de sinistros (`SinistrosList.tsx`), o botao "Analisar" so aparece para `isDiretor` (linha 439). O analista de eventos ve a tabela mas sem botao de acao.
+2. Na tela de detalhe/analise (`SinistroAnalise.tsx`), existem botoes "Aprovar Sinistro" e "Reprovar Sinistro" que nao deveriam existir para o analista — ele deve apenas poder analisar, ja que existe um fluxo completo de pre-aprovacao.
 
-## O que sera feito
+## Mudancas
 
-Adicionar 4 acoes automaticas no bloco de sinistro da edge function `aprovar-solicitacao-ia`, logo apos a criacao do sinistro (depois da linha 258):
+### 1. SinistrosList.tsx — Mostrar botao "Analisar" para o analista de eventos
 
-### 1. Gerar link de auto-vistoria de eventos
+Na coluna de Acoes (linha 439), trocar `isDiretor` por `isDiretor || isAnalistaEventos` para que o botao de analisar apareca tambem para o analista. Importar `isAnalistaEventos` do hook `usePermissions`.
 
-Chamar internamente a edge function `gerar-link-evento` passando o `sinistro_id` recem-criado. Isso cria o registro em `sinistro_evento_links` com token unico e validade de 72h.
+Tambem aplicar a mesma logica no botao "Enviar para Oficina" (linha 450) — manter apenas para `isDiretor`, ja que o analista nao deve ter essa acao.
 
-### 2. Enviar link via WhatsApp ao associado
+### 2. SinistroAnalise.tsx — Remover Aprovar/Recusar para analista
 
-Buscar dados do associado (nome, whatsapp/telefone) e enviar mensagem explicando as 3 etapas:
-- Etapa 1: Enviar no minimo 5 fotos do veiculo danificado
-- Etapa 2: Enviar Boletim de Ocorrencia e numero do B.O.
-- Etapa 3: Relato escrito ou em audio sobre o ocorrido
+Na pagina de analise do sinistro, o bloco de acoes (linhas 650-686) mostra "Aprovar Sinistro" e "Reprovar Sinistro". Para o analista de eventos:
 
-A mensagem incluira o link publico de auto-vistoria (formato: `https://{preview_url}/evento/{token}`).
+- Remover os botoes "Aprovar Sinistro" e "Reprovar Sinistro"
+- Manter apenas acoes de analise/pre-aprovacao: "Solicitar Documentos", "Abrir Sindicancia"
+- O analista pode ver todas as informacoes do sinistro, adicionar observacoes e encaminhar para a diretoria, mas NAO pode aprovar ou reprovar diretamente
 
-### 3. Agendar vistoria do regulador
+A logica sera: os botoes "Aprovar" e "Reprovar" so aparecem quando `isDiretor` for true. Para o analista, exibir uma mensagem informativa como "Analise o sinistro e encaminhe para aprovacao da diretoria".
 
-Inserir na tabela `servicos` com:
-- `tipo`: `vistoria_sinistro`
-- `tipo_servico`: `vistoria_sinistro`
-- `status`: `pendente`
-- `data_agendada`: 3 dias uteis a partir de hoje
-- `sinistro_id`: o sinistro recem-criado
-- `associado_id` e `veiculo_id`: do sinistro
-- `origem`: `sinistro_ia`
-- `observacoes`: referencia ao protocolo
+### 3. SinistrosList.tsx — Botao "Analisar" como acao principal para sinistros novos
 
-### 4. Atualizar status do sinistro para `em_analise`
-
-Apos todas as acoes, atualizar o sinistro de `comunicado` para `em_analise` e registrar no historico.
+Para sinistros com status `comunicado` ou `em_analise`, o botao principal na tabela sera "Analisar" (icone ClipboardCheck) apontando para a rota `/eventos/sinistros/:id/analisar`. Isso ja funciona assim para o diretor, basta estender para o analista.
 
 ---
 
-## Arquivo a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/aprovar-solicitacao-ia/index.ts` | Adicionar bloco pos-criacao no case `sinistro` (linhas 258+) |
+| `src/pages/eventos/SinistrosList.tsx` | Adicionar `isAnalistaEventos` na condicao do botao "Analisar" (linha 439) |
+| `src/pages/eventos/SinistroAnalise.tsx` | Condicionar botoes Aprovar/Reprovar a `isDiretor` apenas; para analista, mostrar acoes de analise |
 
-## Detalhes Tecnicos
+## Resultado
 
-**Calculo de 3 dias uteis:**
-```typescript
-function addBusinessDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  let added = 0;
-  while (added < days) {
-    result.setDate(result.getDate() + 1);
-    const dow = result.getDay();
-    if (dow !== 0 && dow !== 6) added++;
-  }
-  return result;
-}
-```
-
-**Fluxo apos criar sinistro (linhas 258+):**
-```
-1. Gerar link evento via fetch para gerar-link-evento
-2. Buscar associado (nome, whatsapp, telefone)
-3. Montar URL do link: {SITE_URL}/evento/{token}
-4. Enviar WhatsApp com instrucoes e link
-5. Inserir servico tipo vistoria_sinistro (data_agendada = +3 dias uteis)
-6. Atualizar sinistro status -> em_analise
-7. Registrar historico da mudanca de status
-```
-
-Todas as acoes pos-criacao serao envolvidas em try/catch individual para nao bloquear a aprovacao caso alguma falhe.
+- O analista de eventos ve o botao "Analisar" na listagem de sinistros
+- Ao clicar, acessa a tela de analise completa com todas as informacoes
+- Na analise, pode solicitar documentos, abrir sindicancia, mas NAO pode aprovar ou reprovar
+- Apenas o diretor mantem os botoes de Aprovar e Reprovar
