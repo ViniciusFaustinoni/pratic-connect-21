@@ -1206,7 +1206,7 @@ export default function SinistroAnalise() {
         {/* Coluna Direita - 1/3 */}
         <div className="space-y-6">
           {/* Ações */}
-          <Card className="sticky top-4">
+          <Card>
             <CardHeader>
               <CardTitle>🎬 Ações</CardTitle>
               <CardDescription>Decisão sobre o sinistro</CardDescription>
