@@ -14,7 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useFechamentos, useCriarFechamento, useReabrirFechamento } from '@/hooks/useContabilidade';
+import { useFechamentos, useCriarFechamento, useReabrirFechamento, useFechamentoAnual } from '@/hooks/useContabilidade';
 import { ChecklistFechamento, type ChecklistItem } from '@/components/contabilidade';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,9 +45,30 @@ export default function Fechamentos() {
   const [motivoReabertura, setMotivoReabertura] = useState('');
   const [checklistState, setChecklistState] = useState<Record<string, boolean>>({});
 
+  const [fechamentoAnualDialog, setFechamentoAnualDialog] = useState(false);
+  const [resumoAnual, setResumoAnual] = useState<{ totalReceitas: number; totalDespesas: number; resultado: number } | null>(null);
+  const [loadingResumo, setLoadingResumo] = useState(false);
+
   const { data: fechamentos, isLoading } = useFechamentos(ano);
   const criarFechamento = useCriarFechamento();
   const reabrirFechamento = useReabrirFechamento();
+  const { calcularResumo, executarFechamento } = useFechamentoAnual();
+
+  const handleAbrirFechamentoAnual = async () => {
+    setFechamentoAnualDialog(true);
+    setLoadingResumo(true);
+    try {
+      const resumo = await calcularResumo(ano);
+      setResumoAnual(resumo);
+    } catch { setResumoAnual(null); }
+    setLoadingResumo(false);
+  };
+
+  const handleExecutarFechamentoAnual = async () => {
+    await executarFechamento.mutateAsync(ano);
+    setFechamentoAnualDialog(false);
+    setResumoAnual(null);
+  };
 
   // Verificação automática
   const { data: verificacao, isLoading: isLoadingVerif } = useQuery({
@@ -163,7 +184,7 @@ export default function Fechamentos() {
               Todos os 12 meses de {ano} estão fechados. O exercício pode ser encerrado.
             </span>
             <Button variant="outline" size="sm" className="border-green-500 text-green-700"
-              onClick={() => { /* TODO: implementar fechamento anual completo */ }}>
+              onClick={handleAbrirFechamentoAnual}>
               <Lock className="h-4 w-4 mr-2" /> Fechar Exercício {ano}
             </Button>
           </AlertDescription>
@@ -322,6 +343,57 @@ export default function Fechamentos() {
             <Button variant="outline" onClick={() => setReabrirDialog(null)}>Cancelar</Button>
             <Button onClick={handleReabrir} disabled={!motivoReabertura.trim() || reabrirFechamento.isPending}>
               {reabrirFechamento.isPending ? 'Reabrindo...' : 'Confirmar Reabertura'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Fechamento Anual */}
+      <Dialog open={fechamentoAnualDialog} onOpenChange={setFechamentoAnualDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Fechamento do Exercício {ano}</DialogTitle>
+            <DialogDescription>
+              Apuração do resultado e transferência para Patrimônio Social.
+            </DialogDescription>
+          </DialogHeader>
+          {loadingResumo ? (
+            <div className="text-center py-8 text-muted-foreground">Calculando resumo do exercício...</div>
+          ) : resumoAnual ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Total Receitas</p>
+                  <p className="text-lg font-bold text-green-700">{formatCurrency(resumoAnual.totalReceitas)}</p>
+                </div>
+                <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Total Despesas</p>
+                  <p className="text-lg font-bold text-red-700">{formatCurrency(resumoAnual.totalDespesas)}</p>
+                </div>
+              </div>
+              <div className={cn('p-4 rounded-lg text-center', resumoAnual.resultado >= 0 ? 'bg-green-100 dark:bg-green-950/30' : 'bg-red-100 dark:bg-red-950/30')}>
+                <p className="text-sm text-muted-foreground">{resumoAnual.resultado >= 0 ? 'Superávit' : 'Déficit'} do Exercício</p>
+                <p className={cn('text-2xl font-bold', resumoAnual.resultado >= 0 ? 'text-green-700' : 'text-red-700')}>
+                  {formatCurrency(Math.abs(resumoAnual.resultado))}
+                </p>
+              </div>
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  O sistema irá zerar todas as contas de receita e despesa e transferir o resultado para{' '}
+                  <strong>{resumoAnual.resultado >= 0 ? 'Superávits Acumulados' : 'Déficits Acumulados'}</strong>.
+                  Esta ação não pode ser desfeita.
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">Erro ao calcular resumo.</div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFechamentoAnualDialog(false)}>Cancelar</Button>
+            <Button onClick={handleExecutarFechamentoAnual}
+              disabled={!resumoAnual || executarFechamento.isPending}>
+              {executarFechamento.isPending ? 'Processando...' : 'Confirmar Fechamento Anual'}
             </Button>
           </DialogFooter>
         </DialogContent>

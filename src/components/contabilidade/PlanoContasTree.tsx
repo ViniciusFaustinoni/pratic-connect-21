@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, FolderOpen, FileText, Plus, Edit } from 'lucide-react';
+import { ChevronRight, ChevronDown, FolderOpen, FileText, Plus, Edit, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,14 +9,15 @@ interface PlanoContasTreeProps {
   contas: PlanoContas[];
   onEdit?: (conta: PlanoContas) => void;
   onAddChild?: (contaPai: PlanoContas) => void;
+  onDeactivate?: (conta: PlanoContas) => void;
 }
 
 const tipoColors: Record<string, string> = {
   ativo: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  passivo: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-  patrimonio_liquido: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  receita: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-  despesa: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  passivo: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  patrimonio_liquido: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
+  receita: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  despesa: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
 };
 
 const tipoLabels: Record<string, string> = {
@@ -32,9 +33,10 @@ interface TreeNodeProps {
   level: number;
   onEdit?: (conta: PlanoContas) => void;
   onAddChild?: (contaPai: PlanoContas) => void;
+  onDeactivate?: (conta: PlanoContas) => void;
 }
 
-function TreeNode({ conta, level, onEdit, onAddChild }: TreeNodeProps) {
+function TreeNode({ conta, level, onEdit, onAddChild, onDeactivate }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(level < 2);
   const hasChildren = conta.children && conta.children.length > 0;
 
@@ -124,6 +126,20 @@ function TreeNode({ conta, level, onEdit, onAddChild }: TreeNodeProps) {
               <Edit className="h-3.5 w-3.5" />
             </Button>
           )}
+          {onDeactivate && conta.ativa && !conta.sintetica && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeactivate(conta);
+              }}
+              title="Desativar conta"
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -137,6 +153,7 @@ function TreeNode({ conta, level, onEdit, onAddChild }: TreeNodeProps) {
               level={level + 1}
               onEdit={onEdit}
               onAddChild={onAddChild}
+              onDeactivate={onDeactivate}
             />
           ))}
         </div>
@@ -145,7 +162,7 @@ function TreeNode({ conta, level, onEdit, onAddChild }: TreeNodeProps) {
   );
 }
 
-export function PlanoContasTree({ contas, onEdit, onAddChild }: PlanoContasTreeProps) {
+export function PlanoContasTree({ contas, onEdit, onAddChild, onDeactivate }: PlanoContasTreeProps) {
   if (contas.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -163,6 +180,7 @@ export function PlanoContasTree({ contas, onEdit, onAddChild }: PlanoContasTreeP
           level={0}
           onEdit={onEdit}
           onAddChild={onAddChild}
+          onDeactivate={onDeactivate}
         />
       ))}
     </div>

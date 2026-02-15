@@ -966,6 +966,121 @@ export function useBalanceteCompleto(mes: number, ano: number) {
   });
 }
 
+// Fechamento Anual
+export function useFechamentoAnual() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const criarLancamento = useCriarLancamento();
+
+  const calcularResumo = async (ano: number) => {
+    const inicioAno = `${ano}-01-01`;
+    const fimAno = `${ano}-12-31`;
+
+    const { data: partidas } = await supabase
+      .from('lancamentos_partidas')
+      .select(`
+        tipo, valor, conta_id,
+        conta:plano_contas!inner(codigo, descricao, tipo),
+        lancamento:lancamento_id!inner(data_competencia, status)
+      `)
+      .gte('lancamento.data_competencia', inicioAno)
+      .lte('lancamento.data_competencia', fimAno)
+      .eq('lancamento.status', 'ativo');
+
+    let totalReceitas = 0;
+    let totalDespesas = 0;
+    const contasReceita: { conta_id: string; codigo: string; descricao: string; saldo: number }[] = [];
+    const contasDespesa: { conta_id: string; codigo: string; descricao: string; saldo: number }[] = [];
+
+    const saldosPorConta = new Map<string, { conta_id: string; codigo: string; descricao: string; tipo: string; saldo: number }>();
+
+    (partidas as any[] || []).forEach((p: any) => {
+      const key = p.conta_id;
+      const existing = saldosPorConta.get(key) || { conta_id: p.conta_id, codigo: p.conta.codigo, descricao: p.conta.descricao, tipo: p.conta.tipo, saldo: 0 };
+      const valor = Number(p.valor);
+      if (p.conta.tipo === 'receita') {
+        existing.saldo += p.tipo === 'credito' ? valor : -valor;
+      } else if (p.conta.tipo === 'despesa') {
+        existing.saldo += p.tipo === 'debito' ? valor : -valor;
+      }
+      saldosPorConta.set(key, existing);
+    });
+
+    saldosPorConta.forEach((v) => {
+      if (v.tipo === 'receita' && Math.abs(v.saldo) > 0.01) {
+        totalReceitas += v.saldo;
+        contasReceita.push(v);
+      } else if (v.tipo === 'despesa' && Math.abs(v.saldo) > 0.01) {
+        totalDespesas += v.saldo;
+        contasDespesa.push(v);
+      }
+    });
+
+    const resultado = totalReceitas - totalDespesas;
+    return { totalReceitas, totalDespesas, resultado, contasReceita, contasDespesa };
+  };
+
+  const executarFechamento = useMutation({
+    mutationFn: async (ano: number) => {
+      const { CONTAS_PADRAO } = await import('@/lib/contabilidade-config');
+      const resumo = await calcularResumo(ano);
+      const dataFechamento = `${ano}-12-31`;
+      const partidas: Array<{ conta_id: string; tipo: 'debito' | 'credito'; valor: number }> = [];
+
+      // Zero receitas: D receita / C resultado
+      resumo.contasReceita.forEach(c => {
+        if (c.saldo > 0) {
+          partidas.push({ conta_id: c.conta_id, tipo: 'debito', valor: c.saldo });
+          partidas.push({ conta_id: CONTAS_PADRAO.RESULTADO_EXERCICIO, tipo: 'credito', valor: c.saldo });
+        }
+      });
+
+      // Zero despesas: D resultado / C despesa
+      resumo.contasDespesa.forEach(c => {
+        if (c.saldo > 0) {
+          partidas.push({ conta_id: CONTAS_PADRAO.RESULTADO_EXERCICIO, tipo: 'debito', valor: c.saldo });
+          partidas.push({ conta_id: c.conta_id, tipo: 'credito', valor: c.saldo });
+        }
+      });
+
+      // Transfer resultado to superávits/déficits
+      const contaDestino = resumo.resultado >= 0
+        ? CONTAS_PADRAO.SUPERAVITS_ACUMULADOS
+        : CONTAS_PADRAO.DEFICITS_ACUMULADOS;
+      const absResultado = Math.abs(resumo.resultado);
+
+      if (absResultado > 0.01) {
+        partidas.push({ conta_id: CONTAS_PADRAO.RESULTADO_EXERCICIO, tipo: resumo.resultado >= 0 ? 'debito' : 'credito', valor: absResultado });
+        partidas.push({ conta_id: contaDestino, tipo: resumo.resultado >= 0 ? 'credito' : 'debito', valor: absResultado });
+      }
+
+      if (partidas.length > 0) {
+        await criarLancamento.mutateAsync({
+          data_lancamento: new Date().toISOString().split('T')[0],
+          data_competencia: dataFechamento,
+          historico: `Apuração do resultado do exercício ${ano} — ${resumo.resultado >= 0 ? 'Superávit' : 'Déficit'} de R$ ${Math.abs(resumo.resultado).toFixed(2)}`,
+          origem: 'fechamento',
+          status: 'ativo',
+          partidas,
+        });
+      }
+
+      return resumo;
+    },
+    onSuccess: (_, ano) => {
+      queryClient.invalidateQueries({ queryKey: ['fechamentos'] });
+      queryClient.invalidateQueries({ queryKey: ['lancamentos'] });
+      queryClient.invalidateQueries({ queryKey: ['saldos-acumulados'] });
+      toast({ title: 'Exercício encerrado', description: `Fechamento anual de ${ano} realizado com sucesso.` });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro no fechamento anual', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  return { calcularResumo, executarFechamento };
+}
+
 // Reabrir fechamento
 export function useReabrirFechamento() {
   const queryClient = useQueryClient();

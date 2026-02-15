@@ -114,7 +114,38 @@ export default function DRE() {
             <Label htmlFor="comparar" className="text-sm">Comparar</Label>
           </div>
           <Button variant="outline" size="icon" onClick={imprimirRelatorio}><Printer className="h-4 w-4" /></Button>
-          <Button variant="outline" size="icon" onClick={() => toast.info('Exportação PDF em breve')}><Download className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" onClick={() => {
+            if (!dre) return toast.error('Gere o DRE primeiro');
+            const periodo = `${format(new Date(ano, mes - 1), 'MMMM_yyyy', { locale: ptBR })}`;
+            const dados: Array<Record<string, any>> = [];
+            const addSecao = (s: DRESecao, neg?: boolean) => {
+              dados.push({ descricao: s.titulo, valor: '' });
+              s.contas.forEach(c => dados.push({ descricao: `  ${c.codigo} ${c.descricao}`, valor: neg ? -c.valorAtual : c.valorAtual }));
+              dados.push({ descricao: `TOTAL ${s.titulo}`, valor: neg ? -s.totalAtual : s.totalAtual });
+            };
+            addSecao(dre.receitasOperacionais);
+            addSecao(dre.despBeneficios, true);
+            dados.push({ descricao: 'RESULTADO OPERACIONAL BRUTO', valor: dre.resultadoBrutoAtual });
+            addSecao(dre.despAdministrativas, true);
+            dados.push({ descricao: 'RESULTADO OPERACIONAL LÍQUIDO', valor: dre.resultadoOpAtual });
+            if (dre.receitasFinanceiras?.contas.length) addSecao(dre.receitasFinanceiras);
+            addSecao(dre.despFinanceiras, true);
+            if (dre.outrasReceitas.contas.length) addSecao(dre.outrasReceitas);
+            dados.push({ descricao: 'RESULTADO ANTES DOS TRIBUTOS', valor: dre.resultadoAntesTributosAtual });
+            if (dre.despTributos?.contas.length) addSecao(dre.despTributos, true);
+            dados.push({ descricao: dre.resultadoFinalAtual >= 0 ? 'SUPERÁVIT DO EXERCÍCIO' : 'DÉFICIT DO EXERCÍCIO', valor: dre.resultadoFinalAtual });
+            exportarRelatorioPDF({
+              titulo: 'Demonstração do Superávit/Déficit',
+              subtitulo: 'Associação de Proteção Veicular',
+              periodo,
+              dados,
+              colunas: [
+                { header: 'Descrição', key: 'descricao', align: 'left' },
+                { header: 'Valor (R$)', key: 'valor', align: 'right' },
+              ],
+            });
+            toast.success('PDF gerado com sucesso');
+          }}><Download className="h-4 w-4" /></Button>
         </div>
       </div>
 
