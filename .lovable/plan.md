@@ -1,27 +1,55 @@
 
+# Corrigir acesso do Analista de Eventos aos dados da vistoria do regulador
 
-# Adicionar etapa de Agendamento na Timeline
+## Problema identificado
 
-## Problema
+A tabela `vistorias_evento` possui uma politica RLS (Row Level Security) que nao inclui o perfil `analista_eventos` na lista de roles com permissao de SELECT. Os roles permitidos atualmente sao:
 
-A timeline (`TimelineEventoTab.tsx`) busca os links de evento mas so exibe "Link enviado". Nao exibe quando cada etapa foi completada pelo associado, em especial a etapa 4 (Agendamento).
+- regulador
+- diretor
+- gerente_comercial
+- analista_cadastro
+- coordenador_monitoramento
 
-## Alteracao
+O `analista_eventos` precisa ler esses dados para realizar a analise final do sinistro (orcamento, parecer, observacoes do regulador).
 
-### Arquivo: `src/components/sinistros/TimelineEventoTab.tsx`
+## Evidencia
 
-Na secao 3 (links do evento), expandir o `select` para incluir os campos de conclusao de cada etapa:
+A query HTTP para `vistorias_evento?sinistro_id=eq.cc55af17...` retorna `[]` (array vazio) quando logado como analista de eventos, mesmo existindo um registro concluido para esse sinistro no banco.
 
-```typescript
-.select('id, created_at, tipo, status, etapa_atual, etapa1_completada_em, etapa2_completada_em, etapa3_completada_em, etapa4_completada_em')
+## Alteracao necessaria
+
+### Migration SQL
+
+Atualizar a politica RLS de SELECT na tabela `vistorias_evento` para incluir o role `analista_eventos`:
+
+```sql
+DROP POLICY "Reguladores e gestores podem ver vistorias" ON vistorias_evento;
+
+CREATE POLICY "Reguladores gestores e analistas podem ver vistorias"
+ON vistorias_evento
+FOR SELECT
+TO authenticated
+USING (
+  has_role(auth.uid(), 'regulador'::app_role)
+  OR has_role(auth.uid(), 'diretor'::app_role)
+  OR has_role(auth.uid(), 'gerente_comercial'::app_role)
+  OR has_role(auth.uid(), 'analista_cadastro'::app_role)
+  OR has_role(auth.uid(), 'coordenador_monitoramento'::app_role)
+  OR has_role(auth.uid(), 'analista_eventos'::app_role)
+);
 ```
 
-Apos o push do "Link enviado", adicionar entradas na timeline para cada etapa completada:
+Nenhuma alteracao de codigo e necessaria -- o frontend ja possui toda a logica de exibicao dos dados da vistoria (diagnostico, etapas de reparo, itens do orcamento, parecer do regulador e observacoes de perda total). O problema e exclusivamente de permissao de acesso ao banco.
 
-- **etapa1_completada_em**: "Auto Vistoria concluída pelo associado" (icone Car)
-- **etapa2_completada_em**: "B.O. enviado pelo associado" (icone FileText)
-- **etapa3_completada_em**: "Relato enviado pelo associado" (icone MessageSquare)
-- **etapa4_completada_em**: "Agendamento realizado pelo associado" (icone Calendar, badge verde "Agendado")
+## Resultado esperado
 
-Cada entrada so sera adicionada se o respectivo campo nao for null, e usara a data/hora do campo como timestamp.
+Apos a alteracao da politica RLS, o analista de eventos vera no card "Anexos do Regulador":
 
+1. Fotos do regulador (galeria)
+2. Video do regulador (se existir)
+3. Diagnostico com tipo de dano e descricao tecnica
+4. Etapas de reparo selecionadas
+5. Itens do orcamento (pecas e servicos)
+6. Parecer tecnico e recomendacao
+7. Observacoes de perda total (se aplicavel)
