@@ -210,14 +210,24 @@ export function AlertasWidget({ limite = 10, mostrarTodos = false }: AlertasWidg
               </Badge>
             )}
           </CardTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => window.location.href = "/monitoramento/alertas"}
+            >
+              Ver todos
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </div>
 
         {/* Contadores de severidade */}

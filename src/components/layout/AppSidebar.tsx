@@ -61,6 +61,7 @@ import {
   RefreshCw,
   Store,
   Bot,
+  Bell,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -198,6 +199,11 @@ const menuConfig: {
           url: '/monitoramento/mapa', 
           icon: Map,
           permission: 'canManageRastreadores',
+        },
+        {
+          title: 'Alertas',
+          url: '/monitoramento/alertas',
+          icon: Bell,
         },
       ],
     },

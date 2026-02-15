@@ -16584,44 +16584,53 @@ export type Database = {
         Row: {
           created_at: string | null
           dados: Json | null
+          dados_extras: Json | null
           id: string
           mensagem: string
           observacao_tratamento: string | null
-          rastreador_id: string
+          rastreador_id: string | null
           severidade: string
           status: string | null
           tipo: string
+          titulo: string | null
           tratado_em: string | null
           tratado_por: string | null
           updated_at: string | null
+          veiculo_id: string | null
         }
         Insert: {
           created_at?: string | null
           dados?: Json | null
+          dados_extras?: Json | null
           id?: string
           mensagem: string
           observacao_tratamento?: string | null
-          rastreador_id: string
+          rastreador_id?: string | null
           severidade: string
           status?: string | null
           tipo: string
+          titulo?: string | null
           tratado_em?: string | null
           tratado_por?: string | null
           updated_at?: string | null
+          veiculo_id?: string | null
         }
         Update: {
           created_at?: string | null
           dados?: Json | null
+          dados_extras?: Json | null
           id?: string
           mensagem?: string
           observacao_tratamento?: string | null
-          rastreador_id?: string
+          rastreador_id?: string | null
           severidade?: string
           status?: string | null
           tipo?: string
+          titulo?: string | null
           tratado_em?: string | null
           tratado_por?: string | null
           updated_at?: string | null
+          veiculo_id?: string | null
         }
         Relationships: [
           {
@@ -16658,6 +16667,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "rastreador_alertas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreador_alertas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "rastreador_alertas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "rastreador_alertas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "rastreador_alertas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
           },
         ]
       }
