@@ -4772,6 +4772,106 @@ export type Database = {
           },
         ]
       }
+      cobranca_eventos: {
+        Row: {
+          associado_id: string
+          automatico: boolean | null
+          created_at: string | null
+          criado_por: string | null
+          dados: Json | null
+          descricao: string
+          id: string
+          subtipo: string | null
+          tipo: string
+        }
+        Insert: {
+          associado_id: string
+          automatico?: boolean | null
+          created_at?: string | null
+          criado_por?: string | null
+          dados?: Json | null
+          descricao: string
+          id?: string
+          subtipo?: string | null
+          tipo: string
+        }
+        Update: {
+          associado_id?: string
+          automatico?: boolean | null
+          created_at?: string | null
+          criado_por?: string | null
+          dados?: Json | null
+          descricao?: string
+          id?: string
+          subtipo?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_eventos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_eventos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_eventos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_eventos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_eventos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_eventos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_eventos_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_eventos_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "cobranca_eventos_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       cobranca_fila: {
         Row: {
           associado_id: string
