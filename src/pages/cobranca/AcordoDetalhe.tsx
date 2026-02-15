@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Handshake, User, FileText, DollarSign, Calendar, CheckCircle, XCircle, Clock, Ban } from 'lucide-react';
+import { ArrowLeft, Handshake, User, FileText, DollarSign, Calendar, CheckCircle, XCircle, Clock, Ban, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useAcordo, useAcordos } from '@/hooks/useAcordos';
+import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { RegistrarPagamentoParcelaModal } from '@/components/cobranca/RegistrarPagamentoParcelaModal';
 import { CancelarAcordoModal } from '@/components/cobranca/CancelarAcordoModal';
@@ -25,6 +26,7 @@ const getStatusBadge = (status: string) => {
   const map: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     'ativo': { label: 'Ativo', variant: 'default' },
     'pendente': { label: 'Aguardando Entrada', variant: 'secondary' },
+    'aguardando_aprovacao': { label: 'Aguardando Aprovação', variant: 'secondary' },
     'quitado': { label: 'Quitado', variant: 'outline' },
     'quebrado': { label: 'Quebrado', variant: 'destructive' },
     'cancelado': { label: 'Cancelado', variant: 'secondary' }
@@ -45,7 +47,8 @@ const AcordoDetalhe = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: acordo, isLoading } = useAcordo(id);
-  const { registrarPagamentoParcela, cancelarAcordo, confirmarEntrada } = useAcordos();
+  const { registrarPagamentoParcela, cancelarAcordo, confirmarEntrada, aprovarAcordo } = useAcordos();
+  const { hasRole } = useAuth();
 
   const [parcelaSelecionada, setParcelaSelecionada] = useState<any>(null);
   const [cancelarModalOpen, setCancelarModalOpen] = useState(false);
@@ -127,6 +130,38 @@ const AcordoDetalhe = () => {
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Confirmar Entrada
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Alerta Aguardando Aprovação */}
+      {acordo.status === 'aguardando_aprovacao' && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="h-5 w-5 text-yellow-600" />
+                <div>
+                  <p className="font-medium text-yellow-800">Aguardando Aprovação</p>
+                  <p className="text-sm text-yellow-700">
+                    Este acordo possui desconto que requer aprovação da diretoria.
+                    {acordo.valor_desconto > 0 && ` Desconto: ${formatCurrency(acordo.valor_desconto)}`}
+                  </p>
+                </div>
+              </div>
+              {hasRole('diretor') && (
+                <div className="flex gap-2">
+                  <Button variant="default" onClick={() => aprovarAcordo(acordo.id)}>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Aprovar
+                  </Button>
+                  <Button variant="destructive" onClick={() => setCancelarModalOpen(true)}>
+                    <Ban className="h-4 w-4 mr-2" />
+                    Rejeitar
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

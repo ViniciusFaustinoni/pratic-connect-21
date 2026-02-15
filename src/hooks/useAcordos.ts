@@ -48,15 +48,25 @@ export function useAcordos(filters?: AcordoFilters) {
       dia_vencimento: number;
       primeira_parcela_data: string;
       valor_entrada?: number;
+      status_override?: string;
     }) => {
       const user = await supabase.auth.getUser();
+      const { status_override, ...dadosInsert } = dados;
+
+      // Determinar status inicial
+      let status = 'ativo';
+      if (status_override === 'aguardando_aprovacao') {
+        status = 'aguardando_aprovacao';
+      } else if (dados.valor_entrada && dados.valor_entrada > 0) {
+        status = 'pendente';
+      }
 
       // Criar acordo
       const { data: acordo, error: acordoError } = await supabase
         .from('acordos')
         .insert({
-          ...dados,
-          status: dados.valor_entrada && dados.valor_entrada > 0 ? 'pendente' : 'ativo',
+          ...dadosInsert,
+          status,
           criado_por: user.data.user?.id
         })
         .select()
@@ -186,6 +196,28 @@ export function useAcordos(filters?: AcordoFilters) {
     }
   });
 
+  const aprovarAcordoMutation = useMutation({
+    mutationFn: async (acordoId: string) => {
+      const user = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('acordos')
+        .update({
+          status: 'ativo',
+          aprovado_por: user.data.user?.id,
+          aprovado_em: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', acordoId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Acordo aprovado!');
+      queryClient.invalidateQueries({ queryKey: ['acordos'] });
+      queryClient.invalidateQueries({ queryKey: ['acordo'] });
+    }
+  });
+
   return {
     acordos: acordosQuery.data || [],
     isLoading: acordosQuery.isLoading,
@@ -193,7 +225,8 @@ export function useAcordos(filters?: AcordoFilters) {
     isCriando: criarAcordoMutation.isPending,
     registrarPagamentoParcela: registrarPagamentoParcelaMutation.mutate,
     cancelarAcordo: cancelarAcordoMutation.mutate,
-    confirmarEntrada: confirmarEntradaMutation.mutate
+    confirmarEntrada: confirmarEntradaMutation.mutate,
+    aprovarAcordo: aprovarAcordoMutation.mutate
   };
 }
 
