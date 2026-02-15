@@ -13,6 +13,7 @@ import {
   Car,
   MapPin,
   Calendar,
+  CalendarCheck,
   DollarSign,
   AlertTriangle,
   Phone,
@@ -25,7 +26,10 @@ import {
   Navigation,
   Wrench,
   Search,
+  Send,
+  Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -167,6 +171,7 @@ export default function SinistroAnalise() {
   const [showAnaliseInterna, setShowAnaliseInterna] = useState(false);
   const [showJuridico, setShowJuridico] = useState(false);
   const [showSuspender, setShowSuspender] = useState(false);
+  const [enviandoLinkAgendamento, setEnviandoLinkAgendamento] = useState(false);
 
   const {
     sinistro,
@@ -258,6 +263,37 @@ export default function SinistroAnalise() {
 
   const associado = sinistro.associado as any;
   const veiculo = sinistro.veiculo as any;
+
+  // Condições para botão de agendamento de vistoria
+  const canSendScheduling = linkEvento &&
+    (linkEvento as any).etapa_atual >= 3 &&
+    !(linkEvento as any).etapa4_completada_em;
+  const schedulingDone = linkEvento && (linkEvento as any).etapa4_completada_em;
+
+  const handleEnviarLinkAgendamento = async () => {
+    if (!associado || !linkEvento) return;
+    const telefone = associado.whatsapp || associado.telefone;
+    if (!telefone) {
+      toast.error('Associado não possui telefone cadastrado.');
+      return;
+    }
+    setEnviandoLinkAgendamento(true);
+    try {
+      const link = `https://pratic-connect-21.lovable.app/evento/${(linkEvento as any).token}`;
+      const nome = associado.nome?.split(' ')[0] || 'Associado';
+      const mensagem = `Olá ${nome}!\n\nAs informações do seu sinistro ${sinistro.protocolo} foram recebidas com sucesso!\n\nAgora, para darmos andamento ao processo de reparo, você precisa agendar a vistoria presencial do regulador.\n\nAcesse o link abaixo para escolher a data e horário:\n${link}\n\nO regulador irá até o endereço que você informar para avaliar os danos.\n\nABP PraticCar`;
+      const { error } = await supabase.functions.invoke('whatsapp-send-text', {
+        body: { telefone, mensagem },
+      });
+      if (error) throw error;
+      toast.success('Link de agendamento enviado via WhatsApp!');
+    } catch (err: any) {
+      console.error('Erro ao enviar link agendamento:', err);
+      toast.error('Erro ao enviar link: ' + (err.message || 'Tente novamente'));
+    } finally {
+      setEnviandoLinkAgendamento(false);
+    }
+  };
   const TipoIcon = tipoConfig[sinistro.tipo]?.icon || FileText;
   const statusInfo = statusConfig[sinistro.status] || { label: sinistro.status, class: '' };
 
@@ -873,6 +909,38 @@ export default function SinistroAnalise() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Botão Enviar Link de Agendamento de Vistoria */}
+          {canSendScheduling && (
+            <Card className="border-blue-200 bg-blue-50/50">
+              <CardContent className="pt-4 space-y-2">
+                <p className="text-sm text-blue-800">
+                  <CalendarCheck className="h-4 w-4 inline mr-1" />
+                  As 3 etapas foram concluídas. Envie o link para o associado agendar a vistoria do regulador.
+                </p>
+                <Button
+                  className="w-full"
+                  onClick={handleEnviarLinkAgendamento}
+                  disabled={enviandoLinkAgendamento}
+                >
+                  {enviandoLinkAgendamento ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4 mr-2" />
+                  )}
+                  Enviar Link de Agendamento
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          {schedulingDone && (
+            <Card className="border-green-200 bg-green-50/50">
+              <CardContent className="flex items-center gap-2 pt-4">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="text-sm text-green-800 font-medium">Agendamento de vistoria realizado</span>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Histórico do Sinistro */}
           <Card>
