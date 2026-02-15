@@ -15614,57 +15614,124 @@ export type Database = {
       }
       processos_audiencias: {
         Row: {
+          advogado_id: string | null
           advogado_presente: boolean | null
           created_at: string | null
           data_hora: string
+          documentos_necessarios: Json | null
+          endereco_completo: string | null
+          forum: string | null
           id: string
+          juiz_orgao: string | null
           link_videoconferencia: string | null
           local: string | null
+          modalidade: string | null
           observacoes: string | null
           parte_presente: boolean | null
           pauta: string | null
+          prazo_automatico_criado: boolean | null
           processo_id: string
+          registrado_em: string | null
+          registrado_por: string | null
           resultado: string | null
+          resultado_condicoes: string | null
+          resultado_motivo_adiamento: string | null
+          resultado_nova_data: string | null
+          resultado_prazo_pagamento: string | null
+          resultado_prazo_recurso: string | null
+          resultado_resumo: string | null
+          resultado_tipo: string | null
+          resultado_valor: number | null
+          sala: string | null
           status: string | null
           testemunhas: string | null
+          testemunhas_lista: Json | null
           tipo: string
           updated_at: string | null
+          vara: string | null
         }
         Insert: {
+          advogado_id?: string | null
           advogado_presente?: boolean | null
           created_at?: string | null
           data_hora: string
+          documentos_necessarios?: Json | null
+          endereco_completo?: string | null
+          forum?: string | null
           id?: string
+          juiz_orgao?: string | null
           link_videoconferencia?: string | null
           local?: string | null
+          modalidade?: string | null
           observacoes?: string | null
           parte_presente?: boolean | null
           pauta?: string | null
+          prazo_automatico_criado?: boolean | null
           processo_id: string
+          registrado_em?: string | null
+          registrado_por?: string | null
           resultado?: string | null
+          resultado_condicoes?: string | null
+          resultado_motivo_adiamento?: string | null
+          resultado_nova_data?: string | null
+          resultado_prazo_pagamento?: string | null
+          resultado_prazo_recurso?: string | null
+          resultado_resumo?: string | null
+          resultado_tipo?: string | null
+          resultado_valor?: number | null
+          sala?: string | null
           status?: string | null
           testemunhas?: string | null
+          testemunhas_lista?: Json | null
           tipo: string
           updated_at?: string | null
+          vara?: string | null
         }
         Update: {
+          advogado_id?: string | null
           advogado_presente?: boolean | null
           created_at?: string | null
           data_hora?: string
+          documentos_necessarios?: Json | null
+          endereco_completo?: string | null
+          forum?: string | null
           id?: string
+          juiz_orgao?: string | null
           link_videoconferencia?: string | null
           local?: string | null
+          modalidade?: string | null
           observacoes?: string | null
           parte_presente?: boolean | null
           pauta?: string | null
+          prazo_automatico_criado?: boolean | null
           processo_id?: string
+          registrado_em?: string | null
+          registrado_por?: string | null
           resultado?: string | null
+          resultado_condicoes?: string | null
+          resultado_motivo_adiamento?: string | null
+          resultado_nova_data?: string | null
+          resultado_prazo_pagamento?: string | null
+          resultado_prazo_recurso?: string | null
+          resultado_resumo?: string | null
+          resultado_tipo?: string | null
+          resultado_valor?: number | null
+          sala?: string | null
           status?: string | null
           testemunhas?: string | null
+          testemunhas_lista?: Json | null
           tipo?: string
           updated_at?: string | null
+          vara?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "processos_audiencias_advogado_id_fkey"
+            columns: ["advogado_id"]
+            isOneToOne: false
+            referencedRelation: "advogados"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "processos_audiencias_processo_id_fkey"
             columns: ["processo_id"]
