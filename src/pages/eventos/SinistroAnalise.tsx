@@ -46,6 +46,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { useQueryClient } from '@tanstack/react-query';
+import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
 import { useSinistroAnalise, useSinistrosPendentes } from '@/hooks/useSinistroAnalise';
 import { usePermissions } from '@/hooks/usePermissions';
 import { AprovarSinistroDialog } from '@/components/sinistros/AprovarSinistroDialog';
@@ -174,6 +175,7 @@ export default function SinistroAnalise() {
   const [showSuspender, setShowSuspender] = useState(false);
   const [enviandoLinkAgendamento, setEnviandoLinkAgendamento] = useState(false);
   const [enviandoLinkAutoVistoria, setEnviandoLinkAutoVistoria] = useState(false);
+  const [fotoViewer, setFotoViewer] = useState({ open: false, index: 0 });
 
   const {
     sinistro,
@@ -601,7 +603,11 @@ export default function SinistroAnalise() {
                                   src={resolverUrl(url)}
                                   alt={`Foto ${idx + 1}`}
                                   className="h-24 w-full rounded-md object-cover cursor-pointer hover:opacity-80 transition-opacity border"
-                                  onClick={() => setPreviewDoc({ arquivo_url: url, nome_arquivo: `Foto ${idx + 1}` })}
+                                  onClick={() => {
+                                    const imageUrls = linkEvento.dados_etapa1.arquivos_urls.filter((u: string) => !/\.(mp4|webm|mov)$/i.test(u));
+                                    const imageIndex = imageUrls.indexOf(url);
+                                    setFotoViewer({ open: true, index: imageIndex >= 0 ? imageIndex : 0 });
+                                  }}
                                 />
                               );
                             })}
@@ -1237,6 +1243,23 @@ export default function SinistroAnalise() {
           })()}
         </DialogContent>
       </Dialog>
+      {/* Lightbox de fotos da auto-vistoria */}
+      {(() => {
+        const allUrls: string[] = (linkEvento as any)?.dados_etapa1?.arquivos_urls || [];
+        const imageUrls = allUrls.filter((u: string) => !/\.(mp4|webm|mov)$/i.test(u));
+        const fotos = imageUrls.map((url: string, i: number) => ({
+          url: resolverUrl(url),
+          label: `Foto ${i + 1}`,
+        }));
+        return (
+          <VisualizadorFoto
+            fotos={fotos}
+            indexInicial={fotoViewer.index}
+            open={fotoViewer.open}
+            onClose={() => setFotoViewer({ open: false, index: 0 })}
+          />
+        );
+      })()}
     </div>
   );
 }
