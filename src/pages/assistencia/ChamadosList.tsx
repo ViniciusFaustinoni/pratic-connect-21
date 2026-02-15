@@ -381,7 +381,7 @@ export default function ChamadosList() {
                     <TableRow
                       key={chamado.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate(`/assistencia/${chamado.id}`)}
+                      onClick={() => navigate(`/assistencia/chamados/${chamado.id}`)}
                     >
                       <TableCell className="font-mono font-medium">
                         {chamado.protocolo}
@@ -416,7 +416,7 @@ export default function ChamadosList() {
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/assistencia/${chamado.id}`);
+                            navigate(`/assistencia/chamados/${chamado.id}`);
                           }}
                         >
                           <Eye className="h-4 w-4" />

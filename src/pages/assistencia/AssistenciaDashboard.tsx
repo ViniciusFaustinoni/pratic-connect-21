@@ -328,7 +328,7 @@ export default function AssistenciaDashboard() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => navigate(`/assistencia/${chamado.id}`)}
+                              onClick={() => navigate(`/assistencia/chamados/${chamado.id}`)}
                             >
                               {chamado.status === 'aberto' ? 'Atender' : 'Ver'}
                             </Button>
