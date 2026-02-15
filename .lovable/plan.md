@@ -1,77 +1,67 @@
 
-# Correção do Salvamento de Valores e Atribuição de Estabelecimento por Peça
 
-## Problemas Identificados
+# Prioridade da IA sobre Valores Manuais nas Pecas
 
-1. **Valores não aparecem após salvar**: O código invalida a query `sinistro-analise` (linha 984), mas os dados da vistoria vêm da query `sinistro-analise-vistoria-evento`. O cache antigo continua sendo exibido.
-2. **Botão "Salvar Valores" desaparece**: Após salvar, `setValoresPecas({})` esvazia o estado e a condição `Object.keys(valoresPecas).length > 0` esconde o botão. Isso impede edições futuras.
-3. **Sem seleção de estabelecimento**: Não existe campo para o analista indicar qual Auto Center, Ferro Velho ou Montadora informou o valor da peça.
+## Contexto
+
+O analista de eventos tem dois fluxos para preencher valores de pecas:
+
+1. **Manual**: preenche valores e fornecedores diretamente na tabela de itens do orcamento (salva em `vistorias_evento.dados_vistoria.itens_orcamento`)
+2. **Automatizado (IA)**: solicita orcamentos via WhatsApp, a IA coleta respostas e armazena em `evento_cotacoes_pecas` (com `resposta.itens[].valor_unitario`)
+
+Regra: se ambos os fluxos preencherem valores, **o da IA deve sempre prevalecer**.
 
 ---
 
-## Alterações
+## Alteracoes
 
-### 1. Corrigir invalidação de cache
+### 1. Na tabela de itens do orcamento, exibir valores da IA quando existirem
 
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx` (linha 984)
+**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
 
-Após salvar, invalidar também a query correta:
-- `sinistro-analise-vistoria-evento` (que alimenta `vistoriaEvento`)
+Na renderizacao da tabela de itens do orcamento (pecas), verificar se existe uma cotacao aprovada (`evento_cotacoes_pecas` com `aprovada = true`). Se existir:
 
-### 2. Manter botão "Salvar Valores" sempre visível para peças
+- Para cada peca, usar o valor da cotacao aprovada (`resposta.itens[index].valor_unitario`) em vez do valor manual salvo no JSONB
+- Mostrar o nome do Auto Center da cotacao aprovada como fornecedor
+- Tornar os campos de valor e fornecedor **somente leitura** com indicador visual de que o valor veio da IA (badge "Via Cotacao")
+- Desabilitar o botao "Salvar Valores" (pois a IA prevalece)
 
-Trocar a condição de exibição do botão. Em vez de esconder quando `valoresPecas` está vazio, exibir sempre que existam itens do tipo `peca` na lista. Desabilitar o botão quando não houver alterações pendentes.
+Se nao existir cotacao aprovada mas existirem cotacoes respondidas, manter campos editaveis mas exibir aviso de que ha cotacoes pendentes de aprovacao.
 
-### 3. Adicionar seletor de estabelecimento por peça
+### 2. Buscar cotacao aprovada no hook existente
 
-Para cada linha de peça na tabela, adicionar um `Select` (dropdown) ao lado do campo de valor, permitindo ao analista escolher de qual estabelecimento veio aquele preço.
+**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
 
-- Usar o hook `useAutoCenters({ marca })` já existente para listar estabelecimentos compatíveis
-- Armazenar em estado local `fornecedoresPecas: Record<number, { id: string, nome: string }>` (indexado pelo índice do item)
-- O dropdown exibe nome e tipo (Auto Center / Ferro Velho / Montadora)
+Adicionar uso do hook `useCotacoesEvento(sinistro.id)` na pagina para obter a lista de cotacoes. Identificar a cotacao aprovada (`cotacoes.find(c => c.aprovada)`) e usar seus dados para sobrescrever os valores manuais na tabela.
 
-### 4. Salvar estabelecimento junto com o valor no JSONB
-
-Ao salvar, incluir `fornecedor_id` e `fornecedor_nome` em cada item de peça no array `itens_orcamento`:
+### 3. Logica de prioridade
 
 ```text
-{
-  descricao: "Para-choque...",
-  tipo: "peca",
-  quantidade: 1,
-  valor_unitario: 350,
-  valor_total: 350,
-  fornecedor_id: "uuid-do-auto-center",
-  fornecedor_nome: "Auto Peças XYZ"
-}
+Para cada peca na tabela:
+  1. Se existe cotacao aprovada com valor para esta peca -> exibir valor da IA (somente leitura)
+  2. Senao, se existe valor manual (JSONB) -> exibir valor manual (editavel)
+  3. Senao -> campo vazio editavel
 ```
-
-### 5. Exibir estabelecimento na tabela
-
-Adicionar uma coluna "Fornecedor" na tabela de itens do orçamento. Para peças com `fornecedor_nome` já salvo, exibir o nome. Para peças sem fornecedor, exibir o dropdown de seleção.
-
-### 6. Salvar peça no catálogo do estabelecimento
-
-Ao salvar valores, para cada peça com fornecedor selecionado, criar/atualizar um registro na tabela `auto_center_pecas` com:
-- `auto_center_id`: o fornecedor selecionado
-- `nome`: descrição da peça
-- `valor`: valor unitário informado
-- `condicao`: tipo da peça (nova, usada, etc.)
-- `veiculo_marca`, `veiculo_modelo`, `veiculo_ano`: dados do veículo do sinistro
 
 ---
 
 ## Arquivos afetados
 
-| Arquivo | Alteração |
+| Arquivo | Alteracao |
 |---|---|
-| `src/pages/eventos/SinistroAnalise.tsx` | Corrigir invalidação de cache; manter botão visível; adicionar coluna e seletor de fornecedor; salvar fornecedor no JSONB e em `auto_center_pecas` |
+| `src/pages/eventos/SinistroAnalise.tsx` | Importar `useCotacoesEvento`; na tabela de itens, verificar cotacao aprovada e sobrescrever valores manuais; desabilitar edicao quando IA preencheu |
 
-## Layout da tabela após alteração
+## Layout da tabela apos alteracao
 
 ```text
-| Descrição | Tipo | Qtd | Fornecedor        | Valor Unit. |
-|-----------|------|-----|-------------------|-------------|
-| Para-ch...| Peça |  1  | [Select dropdown] | [Input R$]  |
-| Troca ... | MO   |  1  | ---               | R$ 150,00   |
+| Descricao      | Tipo | Qtd | Fornecedor              | Valor Unit.            |
+|----------------|------|-----|-------------------------|------------------------|
+| Para-choque... | Peca |  1  | Auto Pecas XYZ [IA]     | R$ 350,00 [Via Cotacao]|
+| Troca ...      | MO   |  1  | ---                     | R$ 150,00              |
 ```
+
+Quando valores vem da IA:
+- Campo de valor mostra o valor com fundo diferenciado e badge "Via Cotacao"
+- Dropdown de fornecedor mostra o Auto Center da cotacao aprovada (nao editavel)
+- Botao "Salvar Valores" fica desabilitado com tooltip explicativo
+
