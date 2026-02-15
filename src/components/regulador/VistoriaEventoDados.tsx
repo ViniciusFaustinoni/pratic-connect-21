@@ -122,10 +122,10 @@ export function VistoriaEventoDados({ associado, veiculo, sinistro, linkEvento }
               ⏱ O associado comunicou o evento <strong>{tempoEntre}</strong>
             </div>
           )}
-          {sinistro?.relato && (
+          {sinistro?.descricao && (
             <div className="mt-2">
               <p className="text-xs text-muted-foreground mb-1">Relato do associado:</p>
-              <p className="text-sm bg-muted/50 rounded p-2">{sinistro.relato}</p>
+              <p className="text-sm bg-muted/50 rounded p-2">{sinistro.descricao}</p>
             </div>
           )}
           {dadosEtapa3?.audio_url && (
@@ -134,16 +134,16 @@ export function VistoriaEventoDados({ associado, veiculo, sinistro, linkEvento }
               <audio controls src={dadosEtapa3.audio_url} className="w-full h-10" />
             </div>
           )}
-          {sinistro?.local_evento && (
-            <InfoRow label="Local" value={`${sinistro.local_evento}${sinistro.local_numero ? `, ${sinistro.local_numero}` : ''} — ${sinistro.local_bairro || ''}, ${sinistro.local_cidade || ''}`} />
+          {sinistro?.local_descricao && (
+            <InfoRow label="Local" value={`${sinistro.local_descricao}${sinistro.cidade_ocorrencia ? ` — ${sinistro.cidade_ocorrencia}` : ''}${sinistro.estado_ocorrencia ? `/${sinistro.estado_ocorrencia}` : ''}`} />
           )}
-          {sinistro?.terceiro_envolvido && (
+          {dadosEtapa3?.terceiro_envolvido && (
             <div className="mt-2 border-t pt-2">
               <p className="text-xs font-semibold mb-1">Terceiro envolvido:</p>
-              <InfoRow label="Nome" value={sinistro.terceiro_nome} />
-              <InfoRow label="Placa" value={sinistro.terceiro_placa} />
-              <InfoRow label="Telefone" value={sinistro.terceiro_telefone} />
-              <InfoRow label="Seguradora" value={sinistro.terceiro_seguradora} />
+              <InfoRow label="Nome" value={dadosEtapa3.terceiro_nome} />
+              <InfoRow label="Placa" value={dadosEtapa3.terceiro_placa} />
+              <InfoRow label="Telefone" value={dadosEtapa3.terceiro_telefone} />
+              <InfoRow label="Seguradora" value={dadosEtapa3.terceiro_seguradora} />
             </div>
           )}
         </SectionCollapsible>

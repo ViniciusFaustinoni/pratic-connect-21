@@ -13,9 +13,9 @@ export function useVistoriaEventoDetalhe(vistoriaId: string | undefined) {
         .select(`
           *,
           sinistro:sinistros!vistorias_evento_sinistro_id_fkey(
-            id, protocolo, tipo, status, data_ocorrencia, created_at, relato,
-            local_evento, local_numero, local_bairro, local_cidade, local_uf,
-            terceiro_envolvido, terceiro_nome, terceiro_placa, terceiro_telefone, terceiro_seguradora,
+            id, protocolo, tipo, status, data_ocorrencia, created_at, descricao,
+            local_descricao, local_ocorrencia, cidade_ocorrencia, estado_ocorrencia,
+            condutor_nome, condutor_cnh, condutor_relacao,
             associado:associados!sinistros_associado_id_fkey(
               id, nome, cpf, telefone, email, plano_id, whatsapp
             ),
