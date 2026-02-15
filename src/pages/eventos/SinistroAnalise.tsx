@@ -118,6 +118,47 @@ function maskCPF(cpf: string | null): string {
   return `***.${clean.slice(3, 6)}.***-${clean.slice(9)}`;
 }
 
+function extrairDocumentosDoLink(linkEvento: any): any[] {
+  if (!linkEvento) return [];
+  const docs: any[] = [];
+
+  linkEvento.dados_etapa1?.arquivos_urls?.forEach((url: string, i: number) => {
+    const isVideo = /\.(mp4|webm|mov)$/i.test(url);
+    docs.push({
+      id: `link-etapa1-${i}`,
+      tipo: isVideo ? 'video_veiculo' : 'foto_veiculo',
+      nome_arquivo: isVideo ? `Vídeo ${i + 1}` : `Foto ${i + 1}`,
+      arquivo_url: url,
+      status: 'enviado',
+      origem: 'link_evento',
+    });
+  });
+
+  linkEvento.dados_etapa2?.arquivos_urls?.forEach((url: string, i: number) => {
+    docs.push({
+      id: `link-etapa2-${i}`,
+      tipo: 'boletim_ocorrencia',
+      nome_arquivo: `B.O.${linkEvento.dados_etapa2?.numero_bo ? ' Nº ' + linkEvento.dados_etapa2.numero_bo : ''}`,
+      arquivo_url: url,
+      status: 'enviado',
+      origem: 'link_evento',
+    });
+  });
+
+  linkEvento.dados_etapa3?.arquivos_urls?.forEach((url: string, i: number) => {
+    docs.push({
+      id: `link-etapa3-${i}`,
+      tipo: 'relato_audio',
+      nome_arquivo: `Relato do Associado (Áudio)`,
+      arquivo_url: url,
+      status: 'enviado',
+      origem: 'link_evento',
+    });
+  });
+
+  return docs;
+}
+
 function resolverUrl(url: string | null): string {
   if (!url) return '';
   if (url.startsWith('http')) return url;
@@ -671,64 +712,93 @@ export default function SinistroAnalise() {
                 )}
 
                 {/* Documentos */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileCheck className="h-5 w-5" />
-                      Documentos ({documentos.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {documentos.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-4">
-                        Nenhum documento anexado
-                      </p>
-                    ) : (
-                      <div className="grid gap-2">
-                        {documentos.map((doc) => {
-                          const docUrl = resolverUrl(doc.arquivo_url);
-                          const isEnviado = doc.status === 'enviado' && docUrl;
-                          const isImage = docUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(docUrl);
-                          return (
-                            <div
-                              key={doc.id}
-                              className="flex items-center gap-3 p-3 rounded-md bg-muted"
-                            >
-                              {isEnviado && isImage ? (
-                                <img
-                                  src={docUrl}
-                                  alt={doc.nome_arquivo || doc.tipo}
-                                  className="h-14 w-14 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity border"
-                                  onClick={() => setPreviewDoc(doc)}
-                                />
-                              ) : (
-                                <div className="h-14 w-14 rounded-md bg-background border flex items-center justify-center flex-shrink-0">
-                                  <FileText className="h-6 w-6 text-muted-foreground" />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm font-medium truncate block">{doc.nome_arquivo || doc.tipo}</span>
-                                <Badge variant={doc.status === 'enviado' ? 'default' : 'outline'} className="mt-1 text-xs">
-                                  {doc.status}
-                                </Badge>
-                              </div>
-                              {isEnviado && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 px-3 text-xs flex-shrink-0"
-                                  onClick={() => setPreviewDoc(doc)}
+                {(() => {
+                  const todosDocumentos = [...documentos, ...extrairDocumentosDoLink(linkEvento)];
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <FileCheck className="h-5 w-5" />
+                          Documentos ({todosDocumentos.length})
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {todosDocumentos.length === 0 ? (
+                          <p className="text-muted-foreground text-center py-4">
+                            Nenhum documento anexado
+                          </p>
+                        ) : (
+                          <div className="grid gap-2">
+                            {todosDocumentos.map((doc) => {
+                              const docUrl = resolverUrl(doc.arquivo_url);
+                              const isEnviado = doc.status === 'enviado' && docUrl;
+                              const isImage = docUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(docUrl);
+                              const isAudio = docUrl && /\.(mp3|webm|ogg|wav|m4a)$/i.test(docUrl);
+                              const isVideo = docUrl && /\.(mp4|mov)$/i.test(docUrl);
+                              return (
+                                <div
+                                  key={doc.id}
+                                  className="flex items-center gap-3 p-3 rounded-md bg-muted"
                                 >
-                                  Ampliar
-                                </Button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                                  {isEnviado && isImage ? (
+                                    <img
+                                      src={docUrl}
+                                      alt={doc.nome_arquivo || doc.tipo}
+                                      className="h-14 w-14 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity border"
+                                      onClick={() => setPreviewDoc(doc)}
+                                    />
+                                  ) : isEnviado && isAudio ? (
+                                    <div className="flex-shrink-0 w-14 h-14 rounded-md bg-background border flex items-center justify-center">
+                                      🎙️
+                                    </div>
+                                  ) : isEnviado && isVideo ? (
+                                    <div className="flex-shrink-0 w-14 h-14 rounded-md bg-background border flex items-center justify-center">
+                                      🎬
+                                    </div>
+                                  ) : (
+                                    <div className="h-14 w-14 rounded-md bg-background border flex items-center justify-center flex-shrink-0">
+                                      <FileText className="h-6 w-6 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-medium truncate block">{doc.nome_arquivo || doc.tipo}</span>
+                                    {doc.origem === 'link_evento' && (
+                                      <span className="text-xs text-muted-foreground">Via auto-vistoria</span>
+                                    )}
+                                    {isEnviado && isAudio && (
+                                      <audio src={docUrl} controls className="mt-1 h-8 w-full max-w-[220px]" preload="metadata" />
+                                    )}
+                                    {!isAudio && (
+                                      <Badge variant={doc.status === 'enviado' ? 'default' : 'outline'} className="mt-1 text-xs">
+                                        {doc.status}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {isEnviado && !isAudio && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 px-3 text-xs flex-shrink-0"
+                                      onClick={() => {
+                                        if (isVideo) {
+                                          window.open(docUrl, '_blank');
+                                        } else {
+                                          setPreviewDoc(doc);
+                                        }
+                                      }}
+                                    >
+                                      {isVideo ? 'Assistir' : 'Ampliar'}
+                                    </Button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
 
                 {/* Sinistros Anteriores */}
                 {sinistrosAnteriores.length > 0 && (
@@ -1036,7 +1106,7 @@ export default function SinistroAnalise() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "h-4 w-4 rounded-full",
-                  documentos.length > 0 ? "bg-green-500" : "bg-muted"
+                  (documentos.length + extrairDocumentosDoLink(linkEvento).length) > 0 ? "bg-green-500" : "bg-muted"
                 )} />
                 <span className="text-sm">Documentos anexados</span>
               </div>
