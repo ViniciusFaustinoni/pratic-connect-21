@@ -824,10 +824,17 @@ export default function SinistroAnalise() {
                 if (sinistro.status === 'em_analise') {
                   return (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-                        <Clock className="h-4 w-4 flex-shrink-0" />
-                        <span><strong>Aguardando auto vistoria</strong> — link enviado ao associado.</span>
-                      </div>
+                      {linkEvento?.status === 'completado' ? (
+                        <div className="flex items-center gap-2 p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
+                          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                          <span><strong>Documentação recebida</strong> — pronto para análise.</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                          <Clock className="h-4 w-4 flex-shrink-0" />
+                          <span><strong>Aguardando auto vistoria</strong> — link enviado ao associado.</span>
+                        </div>
+                      )}
                     </div>
                   );
                 }
