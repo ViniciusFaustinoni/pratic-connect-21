@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { PlanoContasTree, ContaFormDialog } from '@/components/contabilidade';
-import { usePlanoContasTree, PlanoContas as PlanoContasType } from '@/hooks/useContabilidade';
+import { usePlanoContasTree, PlanoContas as PlanoContasType, useAtualizarConta } from '@/hooks/useContabilidade';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function PlanoContas() {
   const { data: tree, contas, isLoading } = usePlanoContasTree();
@@ -20,6 +24,8 @@ export default function PlanoContas() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [contaSelecionada, setContaSelecionada] = useState<PlanoContasType | null>(null);
   const [contaPai, setContaPai] = useState<PlanoContasType | null>(null);
+  const [desativarConta, setDesativarConta] = useState<PlanoContasType | null>(null);
+  const atualizarConta = useAtualizarConta();
 
   const handleEdit = (conta: PlanoContasType) => {
     setContaSelecionada(conta);
@@ -68,10 +74,24 @@ export default function PlanoContas() {
             Gerencie a estrutura do plano de contas contábil
           </p>
         </div>
-        <Button onClick={handleNovaConta}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Conta
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => {
+            if (!contas?.length) return;
+            const BOM = '\uFEFF';
+            const header = 'Código;Descrição;Tipo;Natureza;Sintética;Ativa';
+            const rows = contas.map(c => `${c.codigo};${c.descricao};${c.tipo};${c.natureza};${c.sintetica ? 'Sim' : 'Não'};${c.ativa ? 'Sim' : 'Não'}`).join('\n');
+            const blob = new Blob([BOM + header + '\n' + rows], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'plano_contas.csv'; a.click();
+            URL.revokeObjectURL(url);
+          }}>
+            <Download className="h-4 w-4 mr-2" />Exportar CSV
+          </Button>
+          <Button onClick={handleNovaConta}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Conta
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -125,6 +145,7 @@ export default function PlanoContas() {
               contas={filteredTree}
               onEdit={handleEdit}
               onAddChild={handleAddChild}
+              onDeactivate={(conta) => setDesativarConta(conta)}
             />
           )}
         </CardContent>
@@ -137,6 +158,28 @@ export default function PlanoContas() {
         conta={contaSelecionada}
         contaPai={contaPai}
       />
+
+      {/* Desativar Conta Dialog */}
+      <AlertDialog open={!!desativarConta} onOpenChange={(open) => !open && setDesativarConta(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar Conta</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja desativar a conta <strong>{desativarConta?.codigo} - {desativarConta?.descricao}</strong>?
+              Ela não será excluída, apenas não aparecerá em seleções futuras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => {
+              if (desativarConta) {
+                await atualizarConta.mutateAsync({ id: desativarConta.id, ativa: false } as any);
+                setDesativarConta(null);
+              }
+            }}>Desativar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

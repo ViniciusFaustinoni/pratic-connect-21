@@ -196,7 +196,7 @@ export function ContaFormDialog({
                       <SelectContent>
                         <SelectItem value="ativo">Ativo</SelectItem>
                         <SelectItem value="passivo">Passivo</SelectItem>
-                        <SelectItem value="patrimonio_liquido">Patrimônio Líquido</SelectItem>
+                        <SelectItem value="patrimonio_liquido">Patrimônio Social</SelectItem>
                         <SelectItem value="receita">Receita</SelectItem>
                         <SelectItem value="despesa">Despesa</SelectItem>
                       </SelectContent>

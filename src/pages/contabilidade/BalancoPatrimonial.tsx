@@ -159,7 +159,40 @@ export default function BalancoPatrimonial() {
             <Switch id="analise" checked={showAnalise} onCheckedChange={setShowAnalise} />
             <Label htmlFor="analise" className="text-sm">Análise V/H</Label>
           </div>
-          <Button variant="outline" size="sm" onClick={() => toast.info('PDF em breve')}>
+          <Button variant="outline" size="sm" onClick={() => {
+            if (!atual) return toast.error('Gere o balanço primeiro');
+            const periodo = `${meses.find(m => m.value === mes)?.label}_${ano}`;
+            const dados: Array<Record<string, any>> = [];
+            dados.push({ descricao: 'ATIVO CIRCULANTE', valor: '' });
+            atual.ativoCirculante.contas.forEach(c => { if (Math.abs(c.saldoAtual) > 0.01) dados.push({ descricao: `  ${c.codigo} - ${c.descricao}`, valor: c.saldoAtual }); });
+            dados.push({ descricao: 'Subtotal Ativo Circulante', valor: atual.ativoCirculante.total });
+            dados.push({ descricao: 'ATIVO NÃO CIRCULANTE', valor: '' });
+            atual.ativoNaoCirculante.contas.forEach(c => { if (Math.abs(c.saldoAtual) > 0.01) dados.push({ descricao: `  ${c.codigo} - ${c.descricao}`, valor: c.saldoAtual }); });
+            dados.push({ descricao: 'Subtotal Ativo Não Circulante', valor: atual.ativoNaoCirculante.total });
+            dados.push({ descricao: 'TOTAL DO ATIVO', valor: atual.totalAtivo });
+            dados.push({ descricao: '', valor: '' });
+            dados.push({ descricao: 'PASSIVO CIRCULANTE', valor: '' });
+            atual.passivoCirculante.contas.forEach(c => { if (Math.abs(c.saldoAtual) > 0.01) dados.push({ descricao: `  ${c.codigo} - ${c.descricao}`, valor: -c.saldoAtual }); });
+            dados.push({ descricao: 'Subtotal Passivo Circulante', valor: atual.passivoCirculante.total });
+            dados.push({ descricao: 'PASSIVO NÃO CIRCULANTE', valor: '' });
+            atual.passivoNaoCirculante.contas.forEach(c => { if (Math.abs(c.saldoAtual) > 0.01) dados.push({ descricao: `  ${c.codigo} - ${c.descricao}`, valor: -c.saldoAtual }); });
+            dados.push({ descricao: 'Subtotal Passivo Não Circulante', valor: atual.passivoNaoCirculante.total });
+            dados.push({ descricao: 'PATRIMÔNIO SOCIAL', valor: '' });
+            atual.patrimonioSocial.contas.forEach(c => { if (Math.abs(c.saldoAtual) > 0.01) dados.push({ descricao: `  ${c.codigo} - ${c.descricao}`, valor: -c.saldoAtual }); });
+            dados.push({ descricao: 'Subtotal Patrimônio Social', valor: atual.patrimonioSocial.total });
+            dados.push({ descricao: 'TOTAL PASSIVO + PATRIMÔNIO SOCIAL', valor: atual.totalPassivoPL });
+            exportarRelatorioPDF({
+              titulo: 'Balanço Patrimonial',
+              subtitulo: 'Associação de Proteção Veicular',
+              periodo,
+              dados,
+              colunas: [
+                { header: 'Descrição', key: 'descricao', align: 'left' },
+                { header: 'Valor (R$)', key: 'valor', align: 'right' },
+              ],
+            });
+            toast.success('PDF gerado com sucesso');
+          }}>
             <Download className="h-4 w-4 mr-2" />PDF
           </Button>
         </div>
