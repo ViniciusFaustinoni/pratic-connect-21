@@ -1,50 +1,75 @@
 
-# Analista de Eventos nao ve sinistros gerados pela IA
+# Botao "Enviar Link de Agendamento de Vistoria" na Tela de Analise
 
-## Problema
+## Contexto
 
-O sinistro gerado pela IA fica como solicitacao pendente na tabela `chat_solicitacoes_ia` (status `pendente`). Ele so aparece na tabela `sinistros` apos ser aprovado via a pagina `/diretoria/solicitacoes-ia`.
+Atualmente, apos o associado completar as 3 etapas da auto-vistoria (fotos, B.O., relato), ele precisa agendar a vistoria presencial do regulador (Etapa 4). O componente `EventoAgendamento` ja existe e funciona via link publico (`/evento/:token`). Porem, o analista de eventos nao tem um botao na tela de analise para enviar esse link de agendamento via WhatsApp ao associado.
 
-O Analista de Eventos:
-- Ve o alerta "1 sinistro aguardando aprovacao via IA" na listagem
-- Mas o botao "Revisar Solicitacoes" aponta para `/diretoria/solicitacoes-ia`
-- Essa rota esta **bloqueada** pelo route guard (so permite `/dashboard`, `/eventos`, `/perfil`, `/notificacoes`)
-- Resultado: o analista nao consegue acessar, aprovar, nem ver o sinistro
+## O que sera feito
 
-## Solucao
+### 1. Botao na tela de analise (`SinistroAnalise.tsx`)
 
-Permitir que o Analista de Eventos acesse a pagina de solicitacoes IA para aprovar/rejeitar sinistros.
+Adicionar um botao **"Enviar Link de Agendamento"** no card de Acoes, visivel quando:
+- O `linkEvento` existe
+- As 3 etapas foram completadas (`etapa_atual >= 3` ou `etapa3_completada_em` preenchido)
+- A etapa 4 (agendamento) ainda NAO foi completada (`etapa4_completada_em` nulo)
 
-### Mudanca 1 — Liberar rota no route guard
+O botao ficara no bloco de acoes do analista, com icone de calendario.
 
-**Arquivo:** `src/hooks/useRouteGuard.ts`
+### 2. Acao do botao — Enviar WhatsApp com link de agendamento
 
-Adicionar `/diretoria/solicitacoes-ia` na lista de `allowedPaths` do bloco `isAnalistaEventosOnly`:
+Ao clicar, o sistema:
+1. Busca o telefone do associado (ja disponivel em `sinistro.associado`)
+2. Monta a mensagem com saudacao e explicacao do agendamento
+3. Inclui o link `{SITE_URL}/evento/{token}` (que ja leva a Etapa 4 automaticamente quando as 3 anteriores estao completas)
+4. Envia via `whatsapp-send-text` edge function
+5. Mostra toast de sucesso/erro
+
+A mensagem enviada sera algo como:
 
 ```
-const allowedPaths = [
-  '/dashboard',
-  '/eventos',
-  '/perfil',
-  '/notificacoes',
-  '/diretoria/solicitacoes-ia',
-];
+Ola {nome}!
+
+As informacoes do seu sinistro {protocolo} foram recebidas com sucesso!
+
+Agora, para darmos andamento ao processo de reparo, voce precisa agendar a vistoria presencial do regulador.
+
+Acesse o link abaixo para escolher a data e horario:
+{link}
+
+O regulador ira ate o endereco que voce informar para avaliar os danos.
+
+ABP PraticCar
 ```
 
-### Mudanca 2 — Sidebar (se necessario)
+### 3. Tela do regulador — Atualizacao automatica
 
-Verificar se o item "Solicitacoes IA" aparece na sidebar para o analista de eventos. Se nao aparece, garantir que o link no alerta da SinistrosList ja funciona (ja aponta para `/diretoria/solicitacoes-ia`).
-
----
+A tela do regulador (`ReguladorHome.tsx`) ja busca dados da tabela `vistorias_evento` via `useVistoriasEvento`. Quando o associado completa o agendamento (Etapa 4), o `agendar-vistoria-evento` edge function ja insere um registro em `vistorias_evento` e notifica reguladores via tabela `notificacoes`. Portanto, **a tela do regulador ja se atualiza automaticamente** — nenhuma mudanca necessaria la.
 
 ## Arquivos a Modificar
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/hooks/useRouteGuard.ts` | Adicionar `/diretoria/solicitacoes-ia` ao array `allowedPaths` do `isAnalistaEventosOnly` |
+| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar botao "Enviar Link de Agendamento" no card de Acoes + estado de loading + handler que chama `whatsapp-send-text` |
+
+## Detalhes Tecnicos
+
+No `SinistroAnalise.tsx`:
+
+1. Adicionar estado `const [enviandoLinkAgendamento, setEnviandoLinkAgendamento] = useState(false)`
+2. Criar funcao `handleEnviarLinkAgendamento` que:
+   - Busca telefone de `associado.whatsapp || associado.telefone`
+   - Monta mensagem com `linkEvento.token` usando SITE_URL `https://pratic-connect-21.lovable.app`
+   - Chama `supabase.functions.invoke('whatsapp-send-text', { body: { telefone, mensagem } })`
+   - Exibe toast de sucesso/erro
+3. Renderizar o botao no card de acoes, apos o bloco de checklist do analista, condicionado a:
+   - `linkEvento` existir
+   - `linkEvento.etapa_atual >= 3` (3 etapas concluidas)
+   - `!linkEvento.etapa4_completada_em` (agendamento ainda nao feito)
+4. Se `linkEvento.etapa4_completada_em` existir, mostrar badge "Agendamento realizado" em vez do botao
 
 ## Resultado
 
-- O Analista de Eventos clica em "Revisar Solicitacoes" no alerta amarelo
-- Acessa a pagina de solicitacoes IA e pode aprovar/rejeitar sinistros pendentes
-- Apos aprovacao, o sinistro aparece na listagem de sinistros com status "comunicado"
+- Analista ve botao claro para enviar link de agendamento ao associado
+- Associado recebe WhatsApp com saudacao e link para agendar vistoria
+- Apos agendamento, a vistoria aparece automaticamente no dashboard do regulador
