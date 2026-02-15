@@ -1,110 +1,137 @@
 
 
-# Corrigir IA WhatsApp: Distinguir Eventos Novos de Finalizados
+# Corrigir Fluxo de Assistencia 24h via WhatsApp
 
 ## Problema
 
-Quando o associado reporta um novo sinistro pelo WhatsApp apos o anterior ter sido finalizado, a IA confunde com o evento anterior. Isso acontece por 3 causas:
+Quando o associado pede reboque pelo WhatsApp, a IA tem 3 falhas:
 
-1. **Historico de conversa carrega contexto antigo**: A funcao `getConversationHistory` busca as ultimas 10 mensagens sem filtro de tempo. Se as 10 ultimas mensagens sao sobre o sinistro anterior (colisao na Estrada do Rio Grande), a IA interpreta a nova mensagem "Bati de carro" como continuacao daquela conversa.
-
-2. **Query de sinistros no contexto inclui status intermediarios**: O filtro `.not("status", "in", "(finalizado,encerrado,cancelado)")` exclui apenas 3 status terminais. Mas status como `aprovado`, `reprovado`, `indenizado`, `aguardando_analise`, `em_oficina`, `em_reparo`, `aguardando_pagamento` sao todos intermediarios que NAO devem aparecer como "em andamento" para efeito de "posso abrir um novo?".
-
-3. **System prompt nao orienta sobre distinguir eventos novos vs existentes**: A IA nao recebe instrucao para verificar se o associado esta falando de um evento novo ou se e continuacao de um existente.
+1. **Nao pergunta endereco detalhado de retirada** (proximo a qual numero, ponto de referencia)
+2. **Nao pergunta o destino** (para onde o veiculo sera levado — oficina, residencia, etc.)
+3. **Nao cria o chamado na fila** — registra apenas uma "solicitacao pendente de aprovacao" na tabela `chat_solicitacoes_ia`, ao inves de criar o chamado diretamente na tabela `chamados_assistencia` (que e a fila real vista na tela "Assistencia 24h > Chamados")
 
 ## Solucao
 
-### Mudanca 1 — Limitar historico por tempo (WhatsApp)
+### Mudanca 1 — Atualizar System Prompt (coleta de dados para assistencia)
 
-Adicionar filtro de tempo no `getConversationHistory` para buscar apenas mensagens das ultimas 2 horas. Se o associado volta no dia seguinte, a conversa comeca "limpa" sem contexto de sinistros anteriores.
+No `WHATSAPP_SYSTEM_PROMPT`, a secao "Coleta de Dados para ASSISTENCIA 24H" sera expandida de 4 para 6 itens:
 
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts` (funcao `getConversationHistory`, linha ~1517)
+**Antes:**
+1. Tipo do servico
+2. Localizacao atual
+3. Descricao do problema
+4. Tipo de veiculo
 
-### Mudanca 2 — Expandir status terminais no contexto
+**Depois:**
+1. Tipo do servico (guincho, chaveiro, troca de pneu, pane seca, pane eletrica)
+2. Localizacao de retirada — endereco completo com numero ou ponto de referencia proximo. Perguntar: "Proximo a qual numero ou ponto de referencia voce esta?"
+3. Destino — para onde o veiculo sera levado. Perguntar: "Para onde o veiculo deve ser levado? (oficina, residencia, outro endereco)"
+4. Descricao do problema
+5. Tipo de veiculo (carro ou moto)
+6. Se for guincho vinculado a sinistro, o local do sinistro ja serve como origem
 
-Separar sinistros em 2 categorias no contexto:
-- **Em andamento** (status: comunicado, em_analise, documentacao_pendente, em_regulacao, aguardando_analise)
-- **Ja finalizados** (todos os outros: aprovado, reprovado, encerrado, finalizado, cancelado, indenizado, em_oficina, etc.)
+### Mudanca 2 — Atualizar tool `criar_solicitacao_assistencia` (parametros)
 
-Alterar a query para mostrar apenas sinistros REALMENTE em andamento. Adicionar informacao sobre sinistros recentes finalizados para referencia.
-
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts` (funcao `getAssociadoContext`, linha ~1421)
-
-### Mudanca 3 — Adicionar instrucao no System Prompt
-
-Adicionar ao `WHATSAPP_SYSTEM_PROMPT` uma regra clara:
+Adicionar campos `destino` e `endereco_numero` ao schema da tool:
 
 ```
-## EVENTOS NOVOS vs EXISTENTES
-- Se o contexto mostra "Nenhum sinistro em aberto" e o associado relata um novo acidente, TRATE COMO NOVO SINISTRO
-- NAO assuma que e continuacao de um evento anterior ja finalizado
-- Se houver sinistro em andamento E o associado relatar novo evento, pergunte: "Vi que voce ja tem um sinistro em andamento (protocolo X). Esse e um novo evento ou e sobre o mesmo?"
-- Eventos com status finalizado/encerrado/aprovado/indenizado JA FORAM RESOLVIDOS — ignore-os para novas solicitacoes
+properties: {
+  tipo_servico: { type: "string", enum: [...] },
+  localizacao: { type: "string", description: "Endereco completo de retirada com numero ou referencia" },
+  destino: { type: "string", description: "Endereco de destino (oficina, residencia, etc.)" },
+  descricao: { type: "string" },
+}
+required: ["tipo_servico", "localizacao", "destino", "descricao"]
 ```
 
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts` (constante `WHATSAPP_SYSTEM_PROMPT`, linha ~258)
+### Mudanca 3 — Criar chamado diretamente na fila (principal)
 
-### Mudanca 4 — Verificacao de duplicata na tool criar_solicitacao_sinistro
+Alterar o case `criar_solicitacao_assistencia` para inserir diretamente na tabela `chamados_assistencia` (ao inves de `chat_solicitacoes_ia`). O fluxo sera:
 
-Adicionar verificacao antes de criar nova solicitacao: se ja existe solicitacao pendente (status='pendente') para o mesmo associado, avisar. Se a ultima solicitacao ja foi aprovada/rejeitada, permitir criar nova.
+1. Verificar cobertura total (ja existe)
+2. Verificar se ja tem chamado em aberto (novo)
+3. Buscar veiculo ativo do associado
+4. Inserir na `chamados_assistencia` com:
+   - `protocolo`: gerado no formato `ASS-YYYYMMDD-XXXX`
+   - `associado_id`: do contexto
+   - `veiculo_id`: do veiculo ativo
+   - `tipo_servico`: guincho, chaveiro, etc.
+   - `origem_endereco`: localizacao informada
+   - `destino_endereco`: destino informado
+   - `descricao`: descricao do problema
+   - `canal`: 'whatsapp'
+   - `status`: 'aberto'
+5. Inserir historico em `chamados_assistencia_historico`
+6. Retornar protocolo ao associado
 
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts` (case `criar_solicitacao_sinistro`, linha ~757)
+Isso faz o chamado aparecer imediatamente na fila de "Assistencia 24h > Chamados" com status "Aberto".
 
-### Mudanca 5 — Aplicar mesma correcao no assistente do App
+### Mudanca 4 — Aplicar mesma correcao no assistente do App
 
-O `assistente-chat/index.ts` tem o mesmo problema na query de sinistros (linha 748-753). Aplicar a mesma expansao de status terminais.
-
-**Arquivo**: `supabase/functions/assistente-chat/index.ts` (linha ~748)
+O `assistente-chat/index.ts` tambem tem uma tool `criar_solicitacao_assistencia` que salva em `chat_solicitacoes_ia`. Aplicar a mesma mudanca para criar diretamente em `chamados_assistencia`.
 
 ---
 
-## Arquivos a Modificar
+## Arquivo a Modificar
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Historico com filtro de tempo, contexto com status refinado, system prompt com regra de eventos novos, verificacao de duplicata na tool |
-| `supabase/functions/assistente-chat/index.ts` | Query de sinistros com status terminais expandidos |
+| `supabase/functions/whatsapp-webhook/index.ts` | System prompt (coleta assistencia), tool schema (destino), case handler (inserir em chamados_assistencia) |
+| `supabase/functions/assistente-chat/index.ts` | Mesma mudanca no handler de criar_solicitacao_assistencia |
 
 ---
 
 ## Detalhes Tecnicos
 
-**Historico com filtro de tempo:**
+**Geracao de protocolo no webhook:**
 ```typescript
-// Antes: sem filtro de tempo
-.limit(10);
-
-// Depois: ultimas 2 horas apenas
-const duasHorasAtras = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-.gte("created_at", duasHorasAtras)
-.limit(10);
+const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,'');
+const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+const protocolo = `ASS-${dateStr}-${random}`;
 ```
 
-**Status terminais expandidos:**
+**Insert em chamados_assistencia:**
 ```typescript
-// Antes:
-.not("status", "in", "(finalizado,encerrado,cancelado)")
-
-// Depois - status REALMENTE em andamento:
-.in("status", ["comunicado", "em_analise", "documentacao_pendente", "em_regulacao", "aguardando_analise"])
+const { data: chamado, error } = await supabase
+  .from("chamados_assistencia")
+  .insert({
+    protocolo,
+    associado_id: associadoId,
+    veiculo_id: veiculo.id,
+    tipo_servico: args.tipo_servico,
+    descricao: args.descricao,
+    origem_endereco: args.localizacao,
+    destino_endereco: args.destino,
+    canal: 'whatsapp',
+    status: 'aberto',
+    data_abertura: new Date().toISOString(),
+  })
+  .select("id, protocolo")
+  .single();
 ```
 
-**Verificacao de duplicata na tool:**
+**Historico:**
 ```typescript
-// Verificar se ja existe solicitacao pendente
-const { data: solicitacaoPendente } = await supabase
-  .from("chat_solicitacoes_ia")
-  .select("id, created_at")
+await supabase.from("chamados_assistencia_historico").insert({
+  chamado_id: chamado.id,
+  status_novo: 'aberto',
+  observacao: `Chamado aberto via WhatsApp - ${args.tipo_servico}`,
+});
+```
+
+**Verificacao de chamado duplicado:**
+```typescript
+const { data: chamadoExistente } = await supabase
+  .from("chamados_assistencia")
+  .select("id, protocolo, status")
   .eq("associado_id", associadoId)
-  .eq("tipo", "sinistro")
-  .eq("status", "pendente")
-  .limit(1)
+  .in("status", ['aberto', 'aguardando_prestador', 'prestador_despachado', 'prestador_a_caminho', 'em_atendimento'])
   .maybeSingle();
 
-if (solicitacaoPendente) {
+if (chamadoExistente) {
   return JSON.stringify({
     sucesso: false,
-    message: "Voce ja tem uma solicitacao de sinistro pendente de analise. Aguarde a resposta da diretoria."
+    message: `Voce ja tem um chamado em aberto (${chamadoExistente.protocolo}). Aguarde a conclusao antes de abrir outro.`
   });
 }
 ```
