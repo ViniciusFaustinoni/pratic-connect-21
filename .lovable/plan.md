@@ -1,61 +1,43 @@
 
-# Posicao do Veiculo na Hora do Evento para o Analista
+# Esconder botao "Gerar Novo Link" quando a auto-vistoria foi completada
 
-## Contexto
+## Problema
 
-A API Softruck ja esta integrada via edge function `rastreador-historico`, que consulta `/v2/vehicles/{id}/trajectories/` com filtros de data. Isso permite buscar posicoes retroativas sob demanda, sem depender do polling de 10 em 10 minutos.
+Quando o associado completa a auto-vistoria de evento (status "Completado"), o botao "Gerar Novo Link" continua aparecendo no card "Link do Evento". Para o analista de eventos, nao faz sentido gerar um novo link se a etapa ja foi concluida.
 
-O componente `TrajetoSinistroCard` ja usa essa edge function para exibir o trajeto das 24h anteriores ao evento -- porem so aparece nas telas `SinistroAnalise.tsx` e `SinistroDetalhe.tsx`. A tela do analista de eventos (`EventoAnaliseDetalhe.tsx`) nao possui nenhum componente de mapa ou trajeto.
+## Solucao
 
-## Sobre o polling de 10 em 10 minutos
+Adicionar uma prop opcional `hideGerarNovoLink` ao componente `EventoLinkCard`. Quando `true`, o botao "Gerar Novo Link" nao sera exibido.
 
-O `sync-rastreadores` (cron) grava posicoes no banco a cada 10 minutos. Isso e util para o monitoramento geral, mas para analise de eventos **nao e necessario** -- a API de trajetos da Softruck retorna o historico completo com granularidade muito maior (pontos a cada poucos segundos). Portanto, para o caso de uso de analise, a consulta sob demanda ja resolve sem depender do cron.
+Nas paginas onde o analista de eventos acessa (`SinistroAnalise.tsx` e `SinistroDetalhe.tsx`), passar essa prop como `true` quando o status do link for `completado`.
 
 ## Alteracoes
 
-### 1. Adicionar secao de Mapa/Trajeto na tela do Analista de Eventos
+### 1. `src/components/eventos/EventoLinkCard.tsx`
 
-**Arquivo:** `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
+- Adicionar prop `hideGerarNovoLink?: boolean` na interface
+- Na condicao que renderiza o botao (linha 203), adicionar `&& !hideGerarNovoLink` para esconde-lo quando a prop for true
 
-- Importar `TrajetoSinistroCard` (componente ja existente e funcional)
-- Adicionar uma nova secao no Accordion (entre "Cronologia" e "Relato") com o card de trajeto
-- Passar `veiculoId`, `dataOcorrencia`, `localOcorrencia`, `sinistroId` e dados do veiculo como props
-- Condicionar a exibicao a existencia de `sinistro.veiculo_id`
+### 2. `src/pages/eventos/SinistroAnalise.tsx`
 
-### 2. Verificar RLS da tabela `rastreadores`
+- Passar `hideGerarNovoLink` ao `EventoLinkCard` quando o link estiver completado (a logica sera dentro do proprio componente, entao basta passar a prop estaticamente como `true` para o perfil analista, ou alternativamente, esconder apenas quando completado)
 
-A tela do analista precisa consultar a tabela `rastreadores` (via `TrajetoSinistroCard` internamente) para descobrir o ID do rastreador do veiculo. Verificar se o role `analista_eventos` tem permissao SELECT nessa tabela. Se nao tiver, criar migration para adicionar.
+### 3. `src/pages/eventos/SinistroDetalhe.tsx`
 
-## Resultado esperado
+- Mesma alteracao: passar a prop para esconder o botao quando completado
 
-O analista de eventos vera, na tela de analise do sinistro:
+## Abordagem escolhida
 
-1. Mapa com o trajeto das 24h anteriores ao evento (dados vindos diretamente da API Softruck)
-2. Marcador no local do sinistro (ultima posicao antes do horario do evento)
-3. Paradas identificadas ao longo do trajeto
-4. Badge indicando se os dados vieram da API ou do banco local
-5. Opcao de expandir o mapa em tela cheia
+A forma mais simples: esconder o botao "Gerar Novo Link" **sempre que o status for `completado`**, independente do perfil. Se a vistoria ja foi completada com sucesso, nao ha motivo para gerar outro link. Isso sera feito diretamente no componente `EventoLinkCard.tsx`, alterando a condicao da linha 203 de:
 
-Tudo isso sem depender do polling de 10 em 10 minutos -- a consulta e feita sob demanda usando o endpoint de trajetos da Softruck.
-
-## Secao tecnica
-
-```text
-EventoAnaliseDetalhe.tsx
-  |
-  +-- AccordionItem "trajeto-veiculo" (novo)
-  |     |
-  |     +-- TrajetoSinistroCard (componente existente)
-  |           |
-  |           +-- useQuery -> rastreadores (busca rastreador do veiculo)
-  |           +-- useQuery -> supabase.functions.invoke('rastreador-historico')
-  |                 |
-  |                 +-- Edge Function rastreador-historico
-  |                       |
-  |                       +-- Softruck API: /v2/vehicles/{id}/trajectories/
-  |                             (filtros: 24h antes da data_ocorrencia)
+```
+(statusFinal === 'expirado' || statusFinal === 'invalidado' || statusFinal === 'completado')
 ```
 
-Nenhuma nova edge function ou tabela sera criada. Apenas:
-- 1 alteracao de arquivo (EventoAnaliseDetalhe.tsx)
-- 1 possivel migration RLS (se necessario para tabela rastreadores)
+Para:
+
+```
+(statusFinal === 'expirado' || statusFinal === 'invalidado')
+```
+
+Assim o botao so aparece quando o link expirou ou foi invalidado, nunca quando ja foi completado. Apenas 1 arquivo precisa ser alterado.
