@@ -172,6 +172,9 @@ export default function DRE() {
                 valorAnterior={dre.resultadoOpAnterior} showAnterior={compararAnterior} resultado />
 
               {/* Resultado Financeiro */}
+              {dre.receitasFinanceiras && dre.receitasFinanceiras.contas.length > 0 && (
+                <SecaoDRE secao={dre.receitasFinanceiras} showAnterior={compararAnterior} />
+              )}
               <SecaoDRE secao={dre.despFinanceiras} showAnterior={compararAnterior} negativo />
 
               {/* Outras Receitas */}
@@ -182,6 +185,15 @@ export default function DRE() {
               {/* Outras Despesas */}
               {dre.outrasDespesas.contas.length > 0 && (
                 <SecaoDRE secao={dre.outrasDespesas} showAnterior={compararAnterior} negativo />
+              )}
+
+              {/* Resultado Antes dos Tributos */}
+              <Linha label="RESULTADO ANTES DOS TRIBUTOS" valorAtual={dre.resultadoAntesTributosAtual}
+                valorAnterior={dre.resultadoAntesTributosAnterior} showAnterior={compararAnterior} resultado />
+
+              {/* Tributos */}
+              {dre.despTributos && dre.despTributos.contas.length > 0 && (
+                <SecaoDRE secao={dre.despTributos} showAnterior={compararAnterior} negativo />
               )}
 
               {/* Resultado Final */}

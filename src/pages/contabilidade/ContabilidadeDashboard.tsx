@@ -59,10 +59,15 @@ export default function ContabilidadeDashboard() {
       (partidas as any[] || []).forEach((p: any) => {
         const codigo = p.conta.codigo;
         let grupo = 'Outras';
-        if (codigo.startsWith('5.1.01') || codigo.startsWith('5.1.02')) grupo = 'Benefícios/Sinistros';
+        if (codigo.startsWith('5.1.01') || codigo.startsWith('5.1.02') || codigo.startsWith('5.8') || codigo.startsWith('5.9')) grupo = 'Benefícios/Sinistros';
         else if (codigo.startsWith('5.1.03')) grupo = 'Pessoal';
-        else if (codigo.startsWith('5.1.04')) grupo = 'Administrativas';
+        else if (codigo.startsWith('5.1.04') || codigo.startsWith('5.2')) grupo = 'Administrativas/Tecnologia';
         else if (codigo.startsWith('5.1.05')) grupo = 'Financeiras';
+        else if (codigo.startsWith('5.3')) grupo = 'Jurídicas';
+        else if (codigo.startsWith('5.4')) grupo = 'Marketing';
+        else if (codigo.startsWith('5.5')) grupo = 'Tributárias';
+        else if (codigo.startsWith('5.6')) grupo = 'Depreciação';
+        else if (codigo.startsWith('5.7')) grupo = 'Provisões';
         grupos[grupo] = (grupos[grupo] || 0) + Number(p.valor);
       });
 
