@@ -35,6 +35,10 @@ import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 import { NovaContaPagarModal } from '@/components/financeiro/NovaContaPagarModal';
 import { SaldoContasModal } from '@/components/financeiro/SaldoContasModal';
 import { FluxoCaixaChart } from '@/components/financeiro/FluxoCaixaChart';
+import { ReceitaDespesa12MesesChart } from '@/components/financeiro/ReceitaDespesa12MesesChart';
+import { ComposicaoReceitaDespesaChart } from '@/components/financeiro/ComposicaoReceitaDespesaChart';
+import { InadimplenciaIdadeChart } from '@/components/financeiro/InadimplenciaIdadeChart';
+import { ResumoMesTable } from '@/components/financeiro/ResumoMesTable';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -528,6 +532,14 @@ export default function FinanceiroDashboard() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Novos Gráficos e Tabela - Full Width */}
+      <div className="space-y-6">
+        <ReceitaDespesa12MesesChart />
+        <ComposicaoReceitaDespesaChart />
+        <InadimplenciaIdadeChart />
+        <ResumoMesTable />
       </div>
 
       {/* Modais */}
