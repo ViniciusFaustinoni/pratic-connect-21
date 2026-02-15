@@ -820,16 +820,19 @@ export function useDREEstruturado(mes: number, ano: number, compararAnterior: bo
       };
 
       const receitasOperacionais = criarSecao('RECEITAS OPERACIONAIS', ['4.1'], 'receita');
-      const outrasReceitas = criarSecao('OUTRAS RECEITAS', ['4.2', '4.3'], 'receita');
-      const despBeneficios = criarSecao('DESPESAS COM BENEFÍCIOS MUTUALISTAS', ['5.1.01', '5.1.02'], 'despesa');
-      const despAdministrativas = criarSecao('DESPESAS ADMINISTRATIVAS', ['5.1.03', '5.1.04'], 'despesa');
+      const outrasReceitas = criarSecao('OUTRAS RECEITAS OPERACIONAIS', ['4.2'], 'receita');
+      const receitasFinanceiras = criarSecao('RECEITAS FINANCEIRAS', ['4.3'], 'receita');
+      const despBeneficios = criarSecao('DESPESAS COM BENEFÍCIOS MUTUALISTAS', ['5.1.01', '5.1.02', '5.8', '5.9'], 'despesa');
+      const despAdministrativas = criarSecao('DESPESAS ADMINISTRATIVAS', ['5.1.03', '5.1.04', '5.2', '5.3', '5.4', '5.6', '5.7'], 'despesa');
       const despFinanceiras = criarSecao('DESPESAS FINANCEIRAS', ['5.1.05'], 'despesa');
+      const despTributos = criarSecao('TRIBUTOS', ['5.5'], 'despesa');
 
       // Catch-all for uncategorized despesas
       const categorizadas = new Set([
         ...despBeneficios.contas.map(c => c.codigo),
         ...despAdministrativas.contas.map(c => c.codigo),
         ...despFinanceiras.contas.map(c => c.codigo),
+        ...despTributos.contas.map(c => c.codigo),
       ]);
       const outrasDesp: DRESecao['contas'] = [];
       let outrosDespTotal = 0;
@@ -843,24 +846,35 @@ export function useDREEstruturado(mes: number, ano: number, compararAnterior: bo
         }
       });
 
-      const totalReceitasAtual = receitasOperacionais.totalAtual + outrasReceitas.totalAtual;
-      const totalReceitasAnterior = receitasOperacionais.totalAnterior + outrasReceitas.totalAnterior;
-      const totalDespesasAtual = despBeneficios.totalAtual + despAdministrativas.totalAtual + despFinanceiras.totalAtual + outrosDespTotal;
-      const totalDespesasAnterior = despBeneficios.totalAnterior + despAdministrativas.totalAnterior + despFinanceiras.totalAnterior + outrosDespAnterior;
+      const totalReceitasAtual = receitasOperacionais.totalAtual + outrasReceitas.totalAtual + receitasFinanceiras.totalAtual;
+      const totalReceitasAnterior = receitasOperacionais.totalAnterior + outrasReceitas.totalAnterior + receitasFinanceiras.totalAnterior;
+      const totalDespesasAtual = despBeneficios.totalAtual + despAdministrativas.totalAtual + despFinanceiras.totalAtual + despTributos.totalAtual + outrosDespTotal;
+      const totalDespesasAnterior = despBeneficios.totalAnterior + despAdministrativas.totalAnterior + despFinanceiras.totalAnterior + despTributos.totalAnterior + outrosDespAnterior;
 
       const resultadoBrutoAtual = receitasOperacionais.totalAtual - despBeneficios.totalAtual;
       const resultadoBrutoAnterior = receitasOperacionais.totalAnterior - despBeneficios.totalAnterior;
       const resultadoOpAtual = resultadoBrutoAtual - despAdministrativas.totalAtual;
       const resultadoOpAnterior = resultadoBrutoAnterior - despAdministrativas.totalAnterior;
-      const resultadoFinalAtual = totalReceitasAtual - totalDespesasAtual;
-      const resultadoFinalAnterior = totalReceitasAnterior - totalDespesasAnterior;
+
+      // Resultado Financeiro
+      const resultadoFinanceiroAtual = receitasFinanceiras.totalAtual - despFinanceiras.totalAtual;
+      const resultadoFinanceiroAnterior = receitasFinanceiras.totalAnterior - despFinanceiras.totalAnterior;
+
+      // Resultado antes dos tributos
+      const resultadoAntesTributosAtual = resultadoOpAtual + resultadoFinanceiroAtual + outrasReceitas.totalAtual - outrosDespTotal;
+      const resultadoAntesTributosAnterior = resultadoOpAnterior + resultadoFinanceiroAnterior + outrasReceitas.totalAnterior - outrosDespAnterior;
+
+      const resultadoFinalAtual = resultadoAntesTributosAtual - despTributos.totalAtual;
+      const resultadoFinalAnterior = resultadoAntesTributosAnterior - despTributos.totalAnterior;
 
       return {
         receitasOperacionais,
         outrasReceitas,
+        receitasFinanceiras,
         despBeneficios,
         despAdministrativas,
         despFinanceiras,
+        despTributos,
         outrasDespesas: { titulo: 'OUTRAS DESPESAS', contas: outrasDesp, totalAtual: outrosDespTotal, totalAnterior: outrosDespAnterior },
         totalReceitasAtual,
         totalReceitasAnterior,
@@ -870,12 +884,16 @@ export function useDREEstruturado(mes: number, ano: number, compararAnterior: bo
         resultadoBrutoAnterior,
         resultadoOpAtual,
         resultadoOpAnterior,
+        resultadoFinanceiroAtual,
+        resultadoFinanceiroAnterior,
+        resultadoAntesTributosAtual,
+        resultadoAntesTributosAnterior,
         resultadoFinalAtual,
         resultadoFinalAnterior,
         indicadores: {
-          sinistralidade: totalReceitasAtual > 0 ? (despBeneficios.totalAtual / totalReceitasAtual) * 100 : 0,
-          custoAdmin: totalReceitasAtual > 0 ? (despAdministrativas.totalAtual / totalReceitasAtual) * 100 : 0,
-          margemOperacional: totalReceitasAtual > 0 ? (resultadoOpAtual / totalReceitasAtual) * 100 : 0,
+          sinistralidade: receitasOperacionais.totalAtual > 0 ? (despBeneficios.totalAtual / receitasOperacionais.totalAtual) * 100 : 0,
+          custoAdmin: receitasOperacionais.totalAtual > 0 ? (despAdministrativas.totalAtual / receitasOperacionais.totalAtual) * 100 : 0,
+          margemOperacional: receitasOperacionais.totalAtual > 0 ? (resultadoOpAtual / receitasOperacionais.totalAtual) * 100 : 0,
           margemFinal: totalReceitasAtual > 0 ? (resultadoFinalAtual / totalReceitasAtual) * 100 : 0,
         },
       };
