@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, CheckCircle, XCircle, AlertTriangle, Clock, User, Car, FileText, Camera, Video, Image } from 'lucide-react';
+import { ArrowLeft, Loader2, CheckCircle, XCircle, AlertTriangle, Clock, User, Car, FileText, Camera, Video, Image, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useEventoAnaliseDetalhe } from '@/hooks/useEventoAnaliseDetalhe';
 import { useFotosVistoriaPorVeiculo } from '@/hooks/useVeiculoDetalhes';
+import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format, differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
@@ -248,6 +249,27 @@ export default function EventoAnaliseDetalhe() {
               )}
             </AccordionContent>
           </AccordionItem>
+
+          {/* Seção 3.5 - Trajeto do Veículo */}
+          {sinistro.veiculo_id && (
+            <AccordionItem value="trajeto-veiculo" className="border rounded-lg px-3">
+              <AccordionTrigger className="text-sm font-semibold">
+                <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Posição do Veículo na Hora do Evento</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <TrajetoSinistroCard
+                  veiculoId={sinistro.veiculo_id}
+                  dataOcorrencia={sinistro.data_ocorrencia}
+                  localOcorrencia={sinistro.local_ocorrencia}
+                  sinistroId={sinistroId}
+                  veiculo={sinistro.veiculo ? { placa: sinistro.veiculo.placa, marca: sinistro.veiculo.marca, modelo: sinistro.veiculo.modelo } : null}
+                  associado={sinistro.associado ? { nome: sinistro.associado.nome } : null}
+                  latitudeInformada={sinistro.latitude_informada}
+                  longitudeInformada={sinistro.longitude_informada}
+                />
+              </AccordionContent>
+            </AccordionItem>
+          )}
 
           {/* Seção 4 - Relato do Associado */}
           <AccordionItem value="relato" className="border rounded-lg px-3">
