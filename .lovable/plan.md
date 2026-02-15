@@ -1,46 +1,51 @@
 
 
-# Corrigir query do hook useVistoriaEventoDetalhe
+# Pre-preencher Marca, Modelo e Ano no Orcamento
 
 ## Problema
 
-A query no hook `useVistoriaEventoDetalhe` referencia colunas que nao existem na tabela `sinistros`:
-- `relato` (nao existe -- o campo correto eh `descricao`)
-- `local_evento`, `local_numero`, `local_bairro`, `local_cidade`, `local_uf` (nao existem -- so existem `local_descricao` e `local_ocorrencia`)
-- `terceiro_envolvido`, `terceiro_nome`, `terceiro_placa`, `terceiro_telefone`, `terceiro_seguradora` (nao existem)
-
-Isso causa o erro HTTP 400: `column sinistros_1.relato does not exist`, impedindo o regulador de carregar qualquer vistoria.
+Quando o regulador abre o modal de orcamento e adiciona um item do tipo "Peca", os campos Marca, Modelo e Ano aparecem vazios, embora o veiculo do sinistro ja tenha essas informacoes. O regulador precisa selecionar manualmente cada campo toda vez.
 
 ## Solucao
 
-**Arquivo: `src/hooks/useVistoriaEventoDetalhe.ts`**
+Passar os dados do veiculo (marca, modelo, ano) para o componente de orcamento e usá-los para pré-selecionar automaticamente os campos FIPE no `PecaSelectFields`.
 
-Atualizar o select da query para usar apenas colunas que realmente existem na tabela `sinistros`:
+## Alteracoes
 
-```typescript
-sinistro:sinistros!vistorias_evento_sinistro_id_fkey(
-  id, protocolo, tipo, status, data_ocorrencia, created_at, descricao,
-  local_descricao, local_ocorrencia, cidade_ocorrencia, estado_ocorrencia,
-  condutor_nome, condutor_cnh, condutor_relacao,
-  associado:associados!sinistros_associado_id_fkey(
-    id, nome, cpf, telefone, email, plano_id, whatsapp
-  ),
-  veiculo:veiculos!sinistros_veiculo_id_fkey(
-    id, placa, marca, modelo, ano_modelo, cor, chassi, valor_fipe
-  )
-)
+### 1. `src/pages/regulador/ExecutarVistoriaEvento.tsx`
+- Passar prop `veiculo` para `VistoriaEventoOrcamento` (ja disponivel no `data.veiculo`)
+
+### 2. `src/components/regulador/VistoriaEventoOrcamento.tsx`
+- Receber nova prop `veiculo` com `{ marca, modelo, ano_modelo }`
+- Passar `veiculo` para `PecaSelectFields` via nova prop `initialVeiculo`
+- Ao criar novos itens do tipo "peca", ja incluir os dados do veiculo nos `pecaValuesMap` defaults
+
+### 3. `src/components/oficinas/PecaSelectFields.tsx`
+- Adicionar prop opcional `initialVeiculo?: { marca: string; modelo: string; ano_modelo: string | number }`
+- Quando as marcas carregarem da FIPE, buscar automaticamente a marca que corresponde ao nome do veiculo (match case-insensitive/parcial)
+- Ao encontrar a marca, disparar o carregamento dos modelos e selecionar o modelo correspondente
+- Ao encontrar o modelo, carregar os anos e selecionar o ano correspondente
+- Usar um `useRef` para garantir que o auto-match so aconteca uma vez (na primeira carga)
+
+### Fluxo do auto-preenchimento
+
+```text
+Marcas carregam via FIPE API
+  -> Busca marca cujo nome inclui "Chevrolet" (do veiculo)
+  -> Seleciona automaticamente (codigo + nome)
+  -> Modelos carregam via FIPE API
+    -> Busca modelo cujo nome inclui "Onix" (do veiculo)
+    -> Seleciona automaticamente
+    -> Anos carregam via FIPE API
+      -> Busca ano que contem "2022" (do veiculo)
+      -> Seleciona automaticamente
 ```
 
-Remover as colunas inexistentes (`relato`, `local_evento`, `local_numero`, `local_bairro`, `local_cidade`, `local_uf`, `terceiro_envolvido`, `terceiro_nome`, `terceiro_placa`, `terceiro_telefone`, `terceiro_seguradora`) e substituir pelos nomes corretos.
+O regulador ainda podera alterar qualquer campo manualmente caso necessario, mas na maioria dos casos os campos ja estarao corretos ao abrir.
 
-Os dados de terceiro e relato detalhado ficam no campo JSON `dados_etapa3` da tabela `sinistro_evento_links`, que ja eh buscado separadamente pelo hook (variavel `linkEvento`).
+## Detalhes tecnicos
 
-**Arquivo: `src/components/regulador/VistoriaEventoDados.tsx`** (se necessario)
-
-Verificar se este componente referencia os campos antigos e ajustar para usar os nomes corretos ou extrair dos dados do `linkEvento`.
-
-## Impacto
-
-- Corrige o erro 400 que impede o regulador de carregar vistorias
-- Nenhuma alteracao de banco de dados necessaria
-- Alteracao apenas nos nomes de colunas na query do hook
+- O match de marca sera feito com `nome.toLowerCase().includes(veiculo.marca.toLowerCase())` para lidar com variantes (ex: "CHEVROLET" vs "Chevrolet")
+- O match de modelo usara a mesma logica parcial
+- O match de ano usara `nome.includes(String(ano_modelo))`
+- Um `useRef(false)` chamado `autoMatchedRef` impedira que o auto-match se repita ao reabrir popovers ou ao trocar de item
