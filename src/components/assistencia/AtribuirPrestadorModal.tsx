@@ -51,11 +51,21 @@ interface AtribuirPrestadorModalProps {
 
 const TIPOS_SERVICO_LABELS: Record<string, string> = {
   reboque: 'Reboque/Guincho',
+  guincho: 'Reboque/Guincho',
   chaveiro: 'Chaveiro',
   troca_pneu: 'Troca de Pneu',
   pane_seca: 'Pane Seca',
   bateria: 'Bateria',
   outro: 'Outros',
+};
+
+const TIPOS_EQUIVALENTES: Record<string, string[]> = {
+  guincho: ['guincho', 'reboque'],
+  reboque: ['reboque', 'guincho'],
+};
+
+const expandirTipoServico = (tipo: string): string[] => {
+  return TIPOS_EQUIVALENTES[tipo] || [tipo];
 };
 
 const formatPhone = (phone: string) => {
@@ -81,7 +91,7 @@ export function AtribuirPrestadorModal({ open, onClose, chamado }: AtribuirPrest
         .select('id, razao_social, nome_fantasia, telefone, whatsapp, cidade, estado, tipos_servico, nota_media, total_atendimentos, disponivel')
         .eq('status', 'ativo')
         .eq('disponivel', true)
-        .contains('tipos_servico', [chamado!.tipo_servico])
+        .overlaps('tipos_servico', expandirTipoServico(chamado!.tipo_servico))
         .order('nota_media', { ascending: false });
 
       if (error) throw error;
