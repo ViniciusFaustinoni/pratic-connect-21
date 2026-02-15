@@ -413,7 +413,7 @@ export default function EventoAnaliseDetalhe() {
                       </tbody>
                       <tfoot className="bg-muted font-bold">
                         <tr>
-                          <td colSpan={2} className="p-2">Total</td>
+                          <td colSpan={2} className="p-2">Custo médio est. mão de obra</td>
                           <td className="p-2 text-right">R$ {Number(dadosVistoria.valor_total_orcamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         </tr>
                       </tfoot>
@@ -527,7 +527,7 @@ export default function EventoAnaliseDetalhe() {
                 </p>
               )}
               {dadosVistoria?.valor_total_orcamento && (
-                <p><span className="text-muted-foreground">Valor Orçamento:</span> R$ {Number(dadosVistoria.valor_total_orcamento).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p><span className="text-muted-foreground">Custo médio est. mão de obra:</span> R$ {Number(dadosVistoria.valor_total_orcamento).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               )}
             </div>
             <div>

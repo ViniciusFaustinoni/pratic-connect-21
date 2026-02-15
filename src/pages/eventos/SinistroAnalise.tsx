@@ -921,7 +921,7 @@ export default function SinistroAnalise() {
                                     </div>
                                     {dados.valor_total_orcamento != null && (
                                       <p className="text-sm text-muted-foreground mt-2">
-                                        Valor total estimado: <strong>{formatCurrency(dados.valor_total_orcamento)}</strong>
+                                        Custo médio estimado de mão de obra: <strong>{formatCurrency(dados.valor_total_orcamento)}</strong>
                                       </p>
                                     )}
                                   </div>
