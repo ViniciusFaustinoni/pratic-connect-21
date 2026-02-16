@@ -1,99 +1,82 @@
 
 
-# Corrigir Inconsistencias no Calculo da Cota de Coparticipacao
+# Adicionar Endereco com Auto-Complete na Etapa 2 (B.O.) do Link do Evento
 
-## Situacao Atual
+## O que sera feito
 
-A cota de coparticipacao e calculada em 4 locais diferentes no sistema, com inconsistencias entre eles. Para o caso atual (plano SELECT EXCLUSIVE, veiculo normal), o calculo esta correto e o valor enviado ao Asaas esta correto. Porem, existem falhas que afetarao veiculos de aplicativo.
+Adicionar campos de endereco do evento na tela do Boletim de Ocorrencia (Etapa 2), com auto-complete de rua usando a API gratuita OpenStreetMap Nominatim. Ao digitar o nome da rua, o sistema mostra sugestoes e preenche automaticamente bairro e cidade. O associado precisa informar apenas o numero e ponto de referencia.
 
-## Problemas Identificados
+## Fluxo do usuario
 
-### 1. Falta suporte a veiculos de aplicativo em 2 funcoes
+1. Associado comeca a digitar o nome da rua (minimo 4 caracteres)
+2. Sistema mostra lista de sugestoes de enderecos (Nominatim)
+3. Associado seleciona o endereco correto
+4. Campos Bairro e Cidade/UF sao preenchidos automaticamente (somente leitura)
+5. Associado preenche apenas Numero e Ponto de Referencia
+6. Endereco e salvo junto com os dados do B.O.
 
-As funcoes `processar-termo-evento` e `validar-link-evento` NAO buscam os campos `cota_app_percent`, `cota_app_min` e `uso_aplicativo`. Planos como "SELECT ONE" tem 6% normal e 8% para app -- se o veiculo for de aplicativo, o calculo estara errado nesses locais.
+## Alteracoes
 
-### 2. `processar-termo-evento` nao persiste o valor
+### Arquivo 1: `src/components/evento/EventoEtapa2BO.tsx`
 
-A funcao calcula a cota corretamente mas nao salva em `sinistros.valor_cota_participacao`, causando divergencia entre o valor exibido e o armazenado.
+- Adicionar estados: `rua`, `numero`, `pontoReferencia`, `bairro`, `cidadeUf`, `sugestoes`, `buscando`
+- Campo de rua com debounce de 500ms: ao digitar >= 4 caracteres, busca no Nominatim (`/search?q=RUA,Brasil&format=json&addressdetails=1&limit=5`)
+- Dropdown de sugestoes abaixo do campo de rua
+- Ao selecionar uma sugestao: preenche rua, bairro, cidade/UF automaticamente
+- Campos Numero e Ponto de Referencia manuais
+- Incluir endereco no JSON enviado para `salvar-etapa-evento` (campo `dados`)
 
-### 3. Origem do plano inconsistente
+### Arquivo 2: `supabase/functions/salvar-etapa-evento/index.ts`
 
-`processar-termo-evento` busca via tabela `contratos`, enquanto as demais usam `associados.plano_id`. A busca via contratos e mais correta (plano ativo do contrato).
+- Ao salvar etapa 2, atualizar `sinistros.local_ocorrencia` e `sinistros.cidade_ocorrencia` / `sinistros.estado_ocorrencia` com os dados de endereco informados pelo associado
 
-## Solucao
+## Detalhes tecnicos
 
-### Arquivo 1: `supabase/functions/processar-termo-evento/index.ts`
+### Busca Nominatim (direto do frontend, sem edge function)
 
-- Adicionar `cota_app_percent`, `cota_app_min` na query do plano (linha 95)
-- Buscar `uso_aplicativo` do veiculo (ja disponivel no select, linha 61)
-- Aplicar logica de app: se `veiculo.uso_aplicativo && plano.cota_app_percent`, usar percentual e minimo diferenciados
-- Persistir valor calculado em `sinistros.valor_cota_participacao` quando diferente
+A busca sera feita diretamente do componente React usando `fetch` para evitar overhead de edge function. Nominatim e gratuito e nao requer API key.
 
-### Arquivo 2: `supabase/functions/validar-link-evento/index.ts`
+```
+GET https://nominatim.openstreetmap.org/search?
+  q={texto digitado}, Brasil
+  &format=json
+  &addressdetails=1
+  &limit=5
+  &accept-language=pt-BR
+```
 
-- Adicionar `cota_app_percent`, `cota_app_min` na query do plano (linha 88)
-- Buscar `uso_aplicativo` do veiculo (ja disponivel na query de sinistro)
-- Aplicar mesma logica de calculo diferenciado para app
+### Debounce
 
-## Alteracoes Detalhadas
+Usar `setTimeout` com 500ms de delay para evitar excesso de requisicoes (rate limit do Nominatim: 1 req/segundo).
 
-### `processar-termo-evento/index.ts`
+### Dados enviados no submit
 
-```typescript
-// Linha 93-96: Adicionar campos do plano
-const { data: plano } = await supabase
-  .from("planos")
-  .select("nome, cota_participacao, cota_minima, cota_app_percent, cota_app_min")
-  .eq("id", planoId)
-  .single();
-
-// Linha 102-106: Calculo com suporte a app
-const valorFipe = veiculo?.valor_fipe || 0;
-let percentual = planoInfo?.cota_participacao || 0;
-let cotaMinima = planoInfo?.cota_minima || 0;
-
-if (veiculo?.uso_aplicativo && planoInfo?.cota_app_percent) {
-  percentual = planoInfo.cota_app_percent;
-  cotaMinima = planoInfo.cota_app_min || cotaMinima;
-}
-
-valorCota = Math.max(valorFipe * percentual / 100, cotaMinima);
-
-// Apos calcular: persistir no banco
-if (valorCota > 0) {
-  await supabase
-    .from("sinistros")
-    .update({ valor_cota_participacao: valorCota })
-    .eq("id", sinistro.id);
+```json
+{
+  "numero_bo": "123456/2026",
+  "resumo_bo": "...",
+  "endereco_rua": "Rua das Flores, 123",
+  "endereco_bairro": "Centro",
+  "endereco_cidade": "Rio de Janeiro",
+  "endereco_uf": "RJ",
+  "endereco_numero": "456",
+  "endereco_ponto_referencia": "Proximo ao mercado"
 }
 ```
 
-### `validar-link-evento/index.ts`
+### Persistencia no sinistro
+
+Na edge function `salvar-etapa-evento`, ao processar etapa 2, atualizar o sinistro:
 
 ```typescript
-// Linha 88: Adicionar campos do plano
-const { data: plano } = await supabase
-  .from("planos")
-  .select("nome, cota_participacao, cota_minima, cota_app_percent, cota_app_min")
-  .eq("id", associado.plano_id)
-  .single();
-
-// Calculo com suporte a app
-if (veiculo?.uso_aplicativo && plano?.cota_app_percent) {
-  percentual = plano.cota_app_percent;
-  cotaMinima = plano.cota_app_min || cotaMinima;
-}
+await supabase.from("sinistros").update({
+  local_ocorrencia: `${dados.endereco_rua}, ${dados.endereco_numero}`,
+  cidade_ocorrencia: dados.endereco_cidade,
+  estado_ocorrencia: dados.endereco_uf,
+}).eq("id", link.sinistro_id);
 ```
-
-## Resultado Esperado
-
-- Veiculos normais: calculo permanece identico (6% FIPE ou minimo)
-- Veiculos de aplicativo: calculo usa percentual/minimo diferenciado do plano (ex: 8% / R$ 3.000)
-- Valor sempre persistido no banco para consistencia
-- Cobranca Asaas sempre reflete o valor correto
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/processar-termo-evento/index.ts` | Adicionar suporte a `cota_app_percent`/`cota_app_min`, buscar `uso_aplicativo`, persistir valor no banco |
-| `supabase/functions/validar-link-evento/index.ts` | Adicionar suporte a `cota_app_percent`/`cota_app_min`, buscar `uso_aplicativo` |
-
+| `src/components/evento/EventoEtapa2BO.tsx` | Adicionar campos de endereco com auto-complete Nominatim, numero e ponto de referencia |
+| `supabase/functions/salvar-etapa-evento/index.ts` | Persistir endereco no sinistro ao salvar etapa 2 |
