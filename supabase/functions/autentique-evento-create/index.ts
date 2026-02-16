@@ -11,6 +11,7 @@ import {
   generateHeader,
   generateFooter,
   markdownParaHTML,
+  buscarEGerarAditivos,
 } from "../_shared/template-utils.ts";
 import { buscarConfiguracoesEmpresa, formatCPF, formatPhone, formatCEP, formatCurrency, formatDate, formatDateExtended } from "../_shared/termo-afiliacao-utils.ts";
 
@@ -375,6 +376,19 @@ serve(async (req) => {
   </div>
 </body>
 </html>`;
+    }
+
+    // 5.1 Buscar e injetar aditivos aplicáveis
+    const aditivosHtml = await buscarEGerarAditivos(
+      supabase,
+      veiculo || {},
+      variaveis,
+      { tipo_evento: sinistro.tipo }
+    );
+
+    if (aditivosHtml) {
+      console.log(`[autentique-evento-create] Aditivos injetados no documento`);
+      htmlContent = htmlContent.replace('</body>', `${aditivosHtml}\n</body>`);
     }
 
     console.log(`[autentique-evento-create] HTML gerado: ${htmlContent.length} bytes, template: ${templateNome}`);

@@ -29,6 +29,10 @@ function avaliarRegra(regra: RegraAditivo, veiculo: VeiculoParaAvaliacao, fipeLi
     case 'fipe_acima_de':
       return (veiculo.valorFipe || 0) >= fipeLimite;
     
+    case 'evento_vidros':
+      // Avaliação real é feita no backend (edge function)
+      return false;
+    
     default:
       return false;
   }
