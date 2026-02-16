@@ -1,103 +1,65 @@
 
-# Fluxo Pos-Aprovacao Completo: Cotacao, Pecas e Oficina
 
-## Visao Geral do Fluxo Desejado
+# Corrigir Valor da Cota de Coparticipacao na Cobranca
+
+## Problema
+
+A cobranca da cota de coparticipacao esta sendo gerada com R$ 750,00 (valor padrao fixo) em vez do valor correto calculado com base na FIPE e no plano do associado.
+
+## Causa Raiz
+
+A Edge Function `aprovar-sinistro` calcula a cota dinamicamente (% da FIPE ou minimo do plano), porem a query de busca do sinistro na linha 38-43 nao inclui os campos necessarios para o calculo:
 
 ```text
-1. Aprovacao -> WhatsApp + Termo no email (ja funciona)
-2. Assinatura do Termo -> Gerar cobranca + enviar link pagamento (ja funciona)
-3. Pagamento confirmado -> Status "pecas_em_cotacao" + notificar associado
-4. Analista marca "pecas chegaram" no orcamento -> notificar associado
-5. Somente apos pecas chegarem -> botao "Enviar para Oficina" aparece
-6. Envio para oficina -> atribui veiculo + notifica associado + regulador acompanha
+SELECT: id, protocolo, status, tipo
+JOIN veiculo: placa, marca, modelo  <-- FALTA "id"
 ```
 
-## O que ja funciona
+Como o campo `id` do veiculo nao e selecionado, a variavel `veiculoId` fica `undefined`. A busca separada por `valor_fipe` nunca retorna dados e o calculo falha silenciosamente. Resultado: `valorCotaCalculado` permanece `null` e o campo `valor_cota_participacao` nunca e atualizado na aprovacao.
 
-- Etapa 1: `aprovar-sinistro` envia WhatsApp e cria termo Autentique
-- Etapa 2: `autentique-webhook` detecta assinatura, gera cobranca Asaas e envia link via WhatsApp
-- Etapa 3 parcial: `asaas-webhook` detecta pagamento, atualiza `cota_paga=true` e muda status para `pagamento_confirmado`
+Quando o `autentique-webhook` detecta a assinatura do termo e gera a cobranca no Asaas, ele usa o valor armazenado `sinistro.valor_cota_participacao` que esta com o valor padrao de R$ 750,00 ou zerado.
 
-## O que precisa mudar
+## Solucao
 
-### 1. Novo status "pecas_em_cotacao" + mensagem ao associado
+### 1. Corrigir select na `aprovar-sinistro`
 
-**Arquivo:** `src/types/sinistros.ts`
-- Adicionar `'pecas_em_cotacao'` ao tipo `StatusSinistro`
-- Adicionar label: `'Pecas em Cotacao'`
-- Adicionar cor: `'bg-amber-100 text-amber-800'`
-- Adicionar ao workflow: `pagamento_confirmado: ['pecas_em_cotacao']`
+**Arquivo:** `supabase/functions/aprovar-sinistro/index.ts`
 
-**Arquivo:** `src/types/app-associado.ts`
-- Adicionar `'pecas_em_cotacao'` ao tipo `StatusSinistro` e seus labels/cores
+Adicionar `id` ao join de veiculos na query:
+- De: `veiculo:veiculos!sinistros_veiculo_id_fkey(placa, marca, modelo)`
+- Para: `veiculo:veiculos!sinistros_veiculo_id_fkey(id, placa, marca, modelo)`
 
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
-- Adicionar `pecas_em_cotacao` ao `statusConfig`
+Isso garante que `(sinistro.veiculo as any)?.id` retorne o ID correto, permitindo a busca de `valor_fipe` e o calculo dinamico da cota.
 
-**Arquivo:** `supabase/functions/asaas-webhook/index.ts`
-- Na secao de cota_participacao (linha ~674), mudar status de `pagamento_confirmado` para `pecas_em_cotacao`
-- Alterar mensagem WhatsApp para informar que as pecas estao sendo cotadas
+### 2. Adicionar log de fallback quando calculo falha
 
-### 2. Novo campo "pecas_chegaram" no sinistro
+**Arquivo:** `supabase/functions/aprovar-sinistro/index.ts`
 
-**Migracao SQL:**
-```sql
-ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS pecas_chegaram boolean DEFAULT false;
-ALTER TABLE sinistros ADD COLUMN IF NOT EXISTS pecas_chegaram_em timestamptz;
-```
+Adicionar log de aviso caso `valorCotaCalculado` fique `null` apos a tentativa de calculo, para facilitar diagnostico futuro.
 
-### 3. Botao "Pecas Chegaram" na tela do Analista
+### 3. Garantir que `autentique-webhook` tambem recalcule (defesa em profundidade)
 
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
+**Arquivo:** `supabase/functions/autentique-webhook/index.ts`
 
-Na secao de acoes, quando `sinistro.status === 'pecas_em_cotacao'`:
-- Exibir banner informativo "Pecas em processo de cotacao"
-- Exibir botao "Marcar Pecas como Recebidas"
-- Ao clicar, atualizar `sinistro.pecas_chegaram = true`, `pecas_chegaram_em = now()` e status para `pronto_para_oficina`
-- Enviar WhatsApp ao associado informando que as pecas chegaram e o veiculo sera encaminhado para a oficina
-- Registrar historico
+Na secao de geracao de cobranca (linha 472-550), antes de usar `sinistroDoc.valor_cota_participacao`, adicionar uma validacao:
+- Se `valor_cota_participacao` for 0 ou igual ao valor padrao (750), recalcular a cota dinamicamente buscando o plano e o valor FIPE
+- Usar o valor recalculado para a cobranca
+- Atualizar o campo no sinistro com o valor correto
 
-### 4. Condicao do botao "Enviar para Oficina"
-
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
-
-Alterar a condicao de exibicao do botao "Enviar para Oficina":
-- Atualmente: `sinistro.status === 'aprovado' && sinistro.cota_paga`
-- Novo: `sinistro.status === 'pronto_para_oficina'` (que so acontece apos pecas chegarem)
-
-O bloco de `pronto_para_oficina` ja existe (linhas 1322-1340), ele mostra "Atribuir Fornecedores". Vamos ajustar para mostrar "Enviar para Oficina" com selecao de oficina.
-
-### 5. Notificacao WhatsApp ao enviar para oficina
-
-**Arquivo:** `src/components/sinistros/EnviarParaOficinaDialog.tsx`
-
-Apos criar a OS e atualizar o sinistro para `em_reparo`:
-- Enviar WhatsApp ao associado informando que o veiculo foi encaminhado para a oficina
-- Incluir nome da oficina na mensagem
-
-### 6. Mensagem WhatsApp no pagamento (asaas-webhook)
-
-**Arquivo:** `supabase/functions/asaas-webhook/index.ts`
-
-Alterar a mensagem atual (linha ~710) de "O reparo sera agendado em breve" para:
-"As pecas do seu veiculo estao sendo cotadas junto aos nossos fornecedores. Voce sera notificado sobre cada etapa!"
+Isso funciona como fallback caso a aprovacao nao tenha calculado corretamente.
 
 ## Detalhes Tecnicos
 
-### Fluxo de Status Atualizado
+### Calculo esperado para o caso reportado
 
 ```text
-aprovado -> (assinatura termo) -> (pagamento cota) -> pecas_em_cotacao -> pronto_para_oficina -> em_reparo
+Veiculo: valor_fipe = R$ 70.008,00
+Plano: cota_participacao = 6%, cota_minima = R$ 1.200,00
+Calculo: max(70008 * 6 / 100, 1200) = max(4200.48, 1200) = R$ 4.200,48
+Valor cobrado (errado): R$ 750,00
 ```
-
-### Resumo de Arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/types/sinistros.ts` | Adicionar status `pecas_em_cotacao`, labels, cores e workflow |
-| `src/types/app-associado.ts` | Adicionar status `pecas_em_cotacao` |
-| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar status no config, bloco de acoes para `pecas_em_cotacao` com botao "Pecas Chegaram", ajustar condicao do botao "Enviar para Oficina" |
-| `supabase/functions/asaas-webhook/index.ts` | Mudar status pos-pagamento para `pecas_em_cotacao` + nova mensagem WhatsApp |
-| `src/components/sinistros/EnviarParaOficinaDialog.tsx` | Enviar WhatsApp ao associado apos criar OS |
-| Migracao SQL | Adicionar colunas `pecas_chegaram` e `pecas_chegaram_em` na tabela `sinistros` |
-| `src/hooks/useEventosDashboard.ts` | Incluir `pecas_em_cotacao` no grupo de funil adequado |
+| `supabase/functions/aprovar-sinistro/index.ts` | Adicionar `id` ao select de veiculos + log de fallback |
+| `supabase/functions/autentique-webhook/index.ts` | Recalcular cota se valor armazenado for inconsistente |
