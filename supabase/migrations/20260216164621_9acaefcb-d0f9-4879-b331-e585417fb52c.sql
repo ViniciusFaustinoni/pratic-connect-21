@@ -1,0 +1,1 @@
+UPDATE sinistros SET valor_cota_participacao = 4200.48 WHERE protocolo = 'SIN-20260216-0007';
