@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     const dadosRaw = formData.get("dados") as string;
     const dados = dadosRaw ? JSON.parse(dadosRaw) : {};
 
-    if (!token || ![1, 2, 3].includes(etapa)) {
+    if (!token || ![1, 2].includes(etapa)) {
       return new Response(
         JSON.stringify({ error: "Token e etapa (1-3) são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -82,12 +82,6 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (etapa === 3 && !dados.relato_texto && !arquivos.some((f) => f.type.startsWith("audio/"))) {
-      return new Response(
-        JSON.stringify({ error: "Etapa 3 requer relato escrito ou áudio" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     // Upload files to storage
     const uploadedUrls: string[] = [];
@@ -128,7 +122,7 @@ Deno.serve(async (req) => {
       etapa_atual: etapa,
     };
 
-    if (etapa === 3) {
+    if (etapa === 2) {
       updatePayload.status = "completado";
     }
 
@@ -145,43 +139,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // If step 3, update sinistro status
-    if (etapa === 3) {
+    // If step 2, update sinistro status
+    if (etapa === 2) {
       await supabase
         .from("sinistros")
         .update({ status: "documentacao_enviada" })
         .eq("id", link.sinistro_id);
-
-      // Geocodificar endereco informado
-      if (dados.local_rua) {
-        const enderecoCompleto = dados.local_numero
-          ? `${dados.local_rua}, ${dados.local_numero}`
-          : dados.local_rua;
-
-        try {
-          const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoCompleto + ', Brasil')}&limit=1`;
-          const geoRes = await fetch(geoUrl, {
-            headers: { 'User-Agent': 'PraticConnect/1.0' }
-          });
-          const geoData = await geoRes.json();
-
-          if (geoData.length > 0) {
-            await supabase
-              .from('sinistros')
-              .update({
-                latitude_informada: parseFloat(geoData[0].lat),
-                longitude_informada: parseFloat(geoData[0].lon),
-                local_ocorrencia: enderecoCompleto,
-              })
-              .eq('id', link.sinistro_id);
-            console.log(`Geocodificado: ${enderecoCompleto} -> ${geoData[0].lat}, ${geoData[0].lon}`);
-          } else {
-            console.log(`Geocodificacao sem resultado para: ${enderecoCompleto}`);
-          }
-        } catch (geoError) {
-          console.error('Erro na geocodificacao:', geoError);
-        }
-      }
     }
 
     return new Response(

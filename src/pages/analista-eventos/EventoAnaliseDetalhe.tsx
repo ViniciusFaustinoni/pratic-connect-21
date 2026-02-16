@@ -291,10 +291,10 @@ export default function EventoAnaliseDetalhe() {
               <span className="flex items-center gap-2"><FileText className="h-4 w-4" /> Relato do Associado</span>
             </AccordionTrigger>
             <AccordionContent className="space-y-3 text-sm">
-              {dadosEtapa3?.relato_texto && (
+              {(sinistro?.descricao || dadosEtapa3?.relato_texto) && (
                 <div>
-                  <p className="text-muted-foreground text-xs mb-1">Relato Escrito</p>
-                  <p className="bg-muted p-3 rounded-lg whitespace-pre-wrap">{dadosEtapa3.relato_texto}</p>
+                  <p className="text-muted-foreground text-xs mb-1">Relato {sinistro?.descricao ? '(IA)' : '(Link)'}</p>
+                  <p className="bg-muted p-3 rounded-lg whitespace-pre-wrap">{sinistro?.descricao || dadosEtapa3?.relato_texto}</p>
                 </div>
               )}
               {(() => {
