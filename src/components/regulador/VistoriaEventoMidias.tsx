@@ -133,6 +133,7 @@ export function VistoriaEventoMidias({
           <p className="text-sm font-medium mb-2">Vídeo (1 obrigatório)</p>
           <VideoCapture
             onCapture={handleVideoCapture}
+            onReset={() => onVideoChange(null)}
             videoUrl={videoUrl || undefined}
             uploading={uploadingVideo}
             maxDuration={120}

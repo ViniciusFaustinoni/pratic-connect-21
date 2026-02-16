@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 
 interface VideoCaptureProps {
   onCapture: (file: File) => void;
+  onReset?: () => void;
   videoUrl?: string;
   uploading?: boolean;
   maxDuration?: number; // em segundos
@@ -13,6 +14,7 @@ interface VideoCaptureProps {
 
 export function VideoCapture({
   onCapture,
+  onReset,
   videoUrl,
   uploading = false,
   maxDuration = 120, // 2 minutos padrão
@@ -153,6 +155,7 @@ export function VideoCapture({
     setPreviewUrl(null);
     setRecordingTime(0);
     setError(null);
+    onReset?.();
   };
 
   const formatTime = (seconds: number) => {
