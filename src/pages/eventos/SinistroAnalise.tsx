@@ -1387,13 +1387,15 @@ export default function SinistroAnalise() {
                           </Button>
                         </div>
                       )}
-                      <Button
-                        className="w-full"
-                        onClick={() => setShowEnviarOficina(true)}
-                      >
-                        <Wrench className="h-4 w-4 mr-2" />
-                        Enviar para Oficina
-                      </Button>
+                      {sinistro.cota_paga && (
+                        <Button
+                          className="w-full"
+                          onClick={() => setShowEnviarOficina(true)}
+                        >
+                          <Wrench className="h-4 w-4 mr-2" />
+                          Enviar para Oficina
+                        </Button>
+                      )}
                     </>
                   );
                 }
@@ -1561,15 +1563,27 @@ export default function SinistroAnalise() {
                         <Shield className="h-3.5 w-3.5 mr-1.5" />
                         Jurídico
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-muted-foreground/30 text-muted-foreground hover:bg-muted"
-                        onClick={() => setShowSuspender(true)}
-                      >
-                        <Clock className="h-3.5 w-3.5 mr-1.5" />
-                        Suspender
-                      </Button>
+                      {sinistro.status === 'aprovado' && sinistro.cota_paga ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-teal-300 text-teal-700 hover:bg-teal-50"
+                          onClick={() => setShowEnviarOficina(true)}
+                        >
+                          <Wrench className="h-3.5 w-3.5 mr-1.5" />
+                          Enviar para Oficina
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-muted-foreground/30 text-muted-foreground hover:bg-muted"
+                          onClick={() => setShowSuspender(true)}
+                        >
+                          <Clock className="h-3.5 w-3.5 mr-1.5" />
+                          Suspender
+                        </Button>
+                      )}
                     </div>
                   </>
                 );

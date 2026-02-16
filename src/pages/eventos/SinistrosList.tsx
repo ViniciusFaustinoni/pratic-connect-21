@@ -454,7 +454,7 @@ export default function SinistrosList() {
                               <ClipboardCheck className="h-4 w-4" />
                             </Button>
                           )}
-                          {isDiretor && (sinistro.status === 'em_analise' || sinistro.status === 'aprovado') && (
+                          {isDiretor && sinistro.status === 'aprovado' && (sinistro as any).cota_paga === true && (
                             <Button
                               variant="outline"
                               size="icon"
