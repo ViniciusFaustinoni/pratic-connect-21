@@ -29,7 +29,7 @@ Você pode ajudar os associados com:
 - Ao criar sinistros ou assistências, SEMPRE colete todos os dados necessários antes de executar
 - Para sinistro: tipo, data/hora, local, descrição detalhada
 - Para assistência: tipo de serviço, localização atual, descrição do problema
-- Informe que solicitações passam por análise antes de serem executadas
+- Informe que sinistros são registrados diretamente no sistema com protocolo SIN-XXXX
 - NUNCA invente informações - use apenas os dados disponíveis nas tools
 
 ## ⚠️ REGRAS DE COBERTURA (MUITO IMPORTANTE - VERIFICAR SEMPRE!)
@@ -197,7 +197,7 @@ const tools = [
     type: "function",
     function: {
       name: "criar_solicitacao_sinistro",
-      description: "Cria uma solicitação de sinistro que será analisada por um diretor. Use APENAS após coletar TODOS os dados necessários: tipo, data, local, descrição, e opcionalmente B.O. e fotos.",
+      description: "Registra sinistro diretamente no sistema com protocolo SIN-XXXX. A equipe será notificada automaticamente. Use APENAS após coletar TODOS os dados necessários: tipo, data, local, descrição, e opcionalmente B.O. e fotos.",
       parameters: {
         type: "object",
         properties: {
@@ -482,45 +482,245 @@ async function executeTool(
       }
 
       case "criar_solicitacao_sinistro": {
-        // Buscar veículo se não informado
-        let veiculoId = args.veiculo_id;
-        if (!veiculoId) {
-          const { data: veiculos } = await supabase
+        // Mapeamento de tipos IA -> tipos do sistema
+        const tipoMapChat: Record<string, string> = {
+          roubo_furto: "roubo",
+          fenomenos_naturais: "fenomeno_natural",
+          danos_terceiros: "terceiros",
+          colisao: "colisao",
+          incendio: "incendio",
+          outros: "outro",
+        };
+        const tipoSistemaChat = tipoMapChat[args.tipo] || args.tipo;
+
+        const tipoLabelsChat: Record<string, string> = {
+          colisao: "Colisão", roubo: "Roubo", furto: "Furto", incendio: "Incêndio",
+          fenomeno_natural: "Fenômeno Natural", terceiros: "Terceiros", vidros: "Vidros",
+          vandalismo: "Vandalismo", outro: "Outro",
+        };
+
+        // Documentos obrigatórios por tipo
+        const docsObrigatoriosChat: Record<string, Array<{tipo: string; nome: string; obrigatorio: boolean}>> = {
+          colisao: [
+            { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+            { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+            { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+            { tipo: "foto_local", nome: "Fotos do Local", obrigatorio: false },
+            { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: false },
+          ],
+          roubo: [
+            { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+            { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+            { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: true },
+          ],
+          furto: [
+            { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+            { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+            { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: true },
+            { tipo: "chaves", nome: "Declaração das Chaves", obrigatorio: true },
+          ],
+          incendio: [
+            { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+            { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+            { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: true },
+            { tipo: "laudo_bombeiros", nome: "Laudo dos Bombeiros", obrigatorio: true },
+            { tipo: "foto_dano", nome: "Fotos do Veículo", obrigatorio: true },
+          ],
+          fenomeno_natural: [
+            { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+            { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+            { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+            { tipo: "comprovante_evento", nome: "Comprovante do Evento", obrigatorio: false },
+          ],
+          vandalismo: [
+            { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+            { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+            { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: true },
+            { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+          ],
+          terceiros: [
+            { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+            { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+            { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+            { tipo: "dados_terceiro", nome: "Dados do Terceiro", obrigatorio: true },
+          ],
+          vidros: [
+            { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+            { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+            { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+          ],
+          outro: [
+            { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+            { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+            { tipo: "foto_dano", nome: "Fotos do Ocorrido", obrigatorio: false },
+          ],
+        };
+
+        const statusAbertosChat = ["comunicado", "em_analise", "documentacao_pendente", "em_regulacao"];
+
+        // 1. Buscar veículo ativo
+        let veiculoIdChat = args.veiculo_id;
+        let veiculoChat: any = null;
+        if (!veiculoIdChat) {
+          const { data: veiculosChat } = await supabase
             .from("veiculos")
-            .select("id")
+            .select("id, placa, marca, modelo, cobertura_total, cobertura_roubo_furto")
             .eq("associado_id", associadoId)
             .eq("status", "ativo")
             .limit(1);
-
-          veiculoId = veiculos?.[0]?.id;
+          veiculoChat = veiculosChat?.[0];
+          veiculoIdChat = veiculoChat?.id;
+        } else {
+          const { data: vChat } = await supabase
+            .from("veiculos")
+            .select("id, placa, marca, modelo, cobertura_total, cobertura_roubo_furto")
+            .eq("id", veiculoIdChat)
+            .single();
+          veiculoChat = vChat;
         }
 
-        const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
-          associado_id: associadoId,
-          tipo: "sinistro",
-          dados: {
-            veiculo_id: veiculoId,
-            tipo: args.tipo,
-            data_ocorrencia: args.data_ocorrencia,
-            local: args.local,
+        if (!veiculoChat) {
+          return JSON.stringify({ sucesso: false, message: "Nenhum veículo ativo encontrado." });
+        }
+
+        // 2. Validar cobertura
+        if (!veiculoChat.cobertura_total) {
+          const isRouboFurtoChat = ["roubo", "furto"].includes(tipoSistemaChat) || args.tipo === "roubo_furto";
+          if (!isRouboFurtoChat) {
+            return JSON.stringify({
+              sucesso: false,
+              bloqueado: true,
+              message: "Sua cobertura atual é apenas para roubo/furto. Para sinistros de colisão, incêndio ou outros, é necessário ter cobertura total.",
+            });
+          }
+        }
+
+        // 3. Verificar duplicatas
+        const { data: sinExistenteChat } = await supabase
+          .from("sinistros")
+          .select("id, protocolo, status")
+          .eq("veiculo_id", veiculoChat.id)
+          .in("status", statusAbertosChat)
+          .limit(1)
+          .maybeSingle();
+
+        if (sinExistenteChat) {
+          return JSON.stringify({
+            sucesso: false,
+            message: `Já existe um sinistro em aberto para este veículo (protocolo ${sinExistenteChat.protocolo}). Aguarde a conclusão antes de abrir outro.`,
+          });
+        }
+
+        // 4. Gerar protocolo
+        const nowChat = new Date();
+        const yearChat = nowChat.getFullYear();
+        const monthChat = String(nowChat.getMonth() + 1).padStart(2, "0");
+        const dayChat = String(nowChat.getDate()).padStart(2, "0");
+        const randomChat = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
+        const protocoloChat = `SIN-${yearChat}${monthChat}${dayChat}-${randomChat}`;
+
+        // 5. INSERT sinistro
+        const { data: sinistroChat, error: sinErrorChat } = await supabase
+          .from("sinistros")
+          .insert({
+            associado_id: associadoId,
+            veiculo_id: veiculoChat.id,
+            protocolo: protocoloChat,
+            tipo: tipoSistemaChat,
+            data_ocorrencia: args.data_ocorrencia || null,
+            local_ocorrencia: args.local || "",
             descricao: args.descricao,
-            bo_path: args.bo_path || null,
-            fotos_paths: args.fotos_paths || [],
-          },
+            status: "comunicado",
+            canal: "ia",
+          })
+          .select("id")
+          .single();
+
+        if (sinErrorChat) {
+          console.error("[assistente-chat] Erro ao criar sinistro:", sinErrorChat);
+          throw sinErrorChat;
+        }
+
+        console.log(`[assistente-chat] Sinistro criado: ${protocoloChat} (${sinistroChat.id})`);
+
+        // 6. Histórico
+        await supabase.from("sinistro_historico").insert({
+          sinistro_id: sinistroChat.id,
+          status_novo: "comunicado",
+          observacao: `Sinistro comunicado via App (IA) - ${tipoLabelsChat[tipoSistemaChat] || tipoSistemaChat}`,
+        });
+
+        // 7. Documentos obrigatórios
+        const docsListChat = docsObrigatoriosChat[tipoSistemaChat] || docsObrigatoriosChat.outro;
+        const docsInsertChat = docsListChat.map((d) => ({
+          sinistro_id: sinistroChat.id,
+          tipo: d.tipo,
+          nome: d.nome,
+          obrigatorio: d.obrigatorio,
           status: "pendente",
-        }).select("id").single();
+        }));
+        await supabase.from("sinistro_documentos").upsert(docsInsertChat, { onConflict: "sinistro_id,tipo", ignoreDuplicates: true });
 
-        if (error) throw error;
+        // 8. Notificações internas
+        try {
+          const { data: analistasChat } = await supabase.from("user_roles").select("user_id").eq("role", "analista_sinistros");
+          let destChat = analistasChat || [];
+          if (destChat.length === 0) {
+            const { data: diretoresChat } = await supabase.from("user_roles").select("user_id").eq("role", "diretor");
+            destChat = diretoresChat || [];
+          }
+          for (const dest of destChat) {
+            await supabase.from("notificacoes").insert({
+              user_id: dest.user_id,
+              titulo: "🆕 Novo Sinistro via App",
+              mensagem: `Sinistro ${protocoloChat} - ${tipoLabelsChat[tipoSistemaChat] || tipoSistemaChat} - Veículo ${veiculoChat.placa}`,
+              tipo: "alerta",
+              categoria: "sinistros",
+              referencia_tipo: "sinistro",
+              referencia_id: sinistroChat.id,
+              link: `/sinistros/${sinistroChat.id}`,
+              lida: false,
+            });
+          }
+          await supabase.functions.invoke("send-email", {
+            body: {
+              to: "sinistros@praticprotect.com.br",
+              subject: `Novo Sinistro via App: ${protocoloChat} - ${veiculoChat.placa}`,
+              html: `<h2>Novo Sinistro Registrado via App</h2>
+                <p><strong>Protocolo:</strong> ${protocoloChat}</p>
+                <p><strong>Tipo:</strong> ${tipoLabelsChat[tipoSistemaChat] || tipoSistemaChat}</p>
+                <p><strong>Veículo:</strong> ${veiculoChat.placa} - ${veiculoChat.marca} ${veiculoChat.modelo}</p>
+                <p><strong>Descrição:</strong> ${args.descricao}</p>`,
+            },
+          });
+        } catch (notifErrChat) {
+          console.error("[assistente-chat] Erro notificações (não bloqueante):", notifErrChat);
+        }
 
-        const temArquivos = args.bo_path || (args.fotos_paths && args.fotos_paths.length > 0);
-        const arquivosInfo = temArquivos 
-          ? ` Arquivos anexados: ${args.bo_path ? 'B.O.' : ''}${args.bo_path && args.fotos_paths?.length ? ' + ' : ''}${args.fotos_paths?.length ? `${args.fotos_paths.length} foto(s)` : ''}`
-          : '';
+        // 9. Notificar sinistro
+        try {
+          await supabase.functions.invoke("notificar-sinistro", { body: { sinistro_id: sinistroChat.id, status: "comunicado" } });
+        } catch (e) {
+          console.log("[assistente-chat] notificar-sinistro não enviado:", e);
+        }
+
+        // 10. Agendar contato D+1
+        try {
+          await supabase.functions.invoke("agendar-contato-sinistro", { body: { sinistro_id: sinistroChat.id } });
+        } catch (e) {
+          console.error("[assistente-chat] Erro agendar contato (não bloqueante):", e);
+        }
+
+        const temArquivosChat = args.bo_path || (args.fotos_paths && args.fotos_paths.length > 0);
+        const arquivosInfoChat = temArquivosChat
+          ? ` Arquivos anexados: ${args.bo_path ? "B.O." : ""}${args.bo_path && args.fotos_paths?.length ? " + " : ""}${args.fotos_paths?.length ? `${args.fotos_paths.length} foto(s)` : ""}`
+          : "";
 
         return JSON.stringify({
           sucesso: true,
-          message: `Solicitação de sinistro registrada com sucesso!${arquivosInfo} Um diretor irá analisar em breve.`,
-          id: data.id,
+          protocolo: protocoloChat,
+          message: `Sinistro registrado com sucesso! Protocolo: **${protocoloChat}**.${arquivosInfoChat} Nossa equipe já foi notificada e iniciará a análise em breve.`,
+          id: sinistroChat.id,
         });
       }
 

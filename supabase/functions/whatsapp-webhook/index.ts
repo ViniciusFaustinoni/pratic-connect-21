@@ -331,7 +331,7 @@ IMPORTANTE: Se for guincho vinculado a sinistro que acabou de ser reportado, o l
 ## Regras Gerais
 - Use a DATA ATUAL fornecida para datas relativas
 - Confirme TODOS os dados antes de criar solicitações
-- Informe que solicitações passam por aprovação de um diretor
+- Sinistros são registrados diretamente no sistema com protocolo SIN-XXXX. Informe o protocolo ao associado
 - NUNCA invente informações - use APENAS os dados do contexto
 - Se o associado enviar foto/documento, será vinculado automaticamente
 
@@ -529,7 +529,7 @@ const tools = [
     type: "function",
     function: {
       name: "criar_solicitacao_sinistro",
-      description: "Cria solicitação de sinistro para aprovação. IMPORTANTE: Verificar cobertura do veículo antes de usar.",
+      description: "Registra sinistro diretamente no sistema com protocolo SIN-XXXX. O sinistro será criado e a equipe será notificada automaticamente. IMPORTANTE: Verificar cobertura do veículo antes de usar.",
       parameters: {
         type: "object",
         properties: {
@@ -765,63 +765,235 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     }
 
     case "criar_solicitacao_sinistro": {
-      // Verificar se já existe solicitação pendente
-      const { data: solicitacaoPendente } = await supabase
-        .from("chat_solicitacoes_ia")
-        .select("id, created_at")
-        .eq("associado_id", associadoId)
-        .eq("tipo", "sinistro")
-        .eq("status", "pendente")
-        .limit(1)
-        .maybeSingle();
+      // Mapeamento de tipos IA -> tipos do sistema
+      const tipoMap: Record<string, string> = {
+        roubo_furto: "roubo",
+        fenomenos_naturais: "fenomeno_natural",
+        danos_terceiros: "terceiros",
+        colisao: "colisao",
+        incendio: "incendio",
+        outros: "outro",
+      };
+      const tipoSistema = tipoMap[args.tipo] || args.tipo;
 
-      if (solicitacaoPendente) {
-        return JSON.stringify({
-          sucesso: false,
-          message: "Você já tem uma solicitação de sinistro pendente de análise. Aguarde a resposta da diretoria antes de abrir uma nova.",
-        });
-      }
+      // Labels para tipo
+      const tipoLabels: Record<string, string> = {
+        colisao: "Colisão", roubo: "Roubo", furto: "Furto", incendio: "Incêndio",
+        fenomeno_natural: "Fenômeno Natural", terceiros: "Terceiros", vidros: "Vidros",
+        vandalismo: "Vandalismo", outro: "Outro",
+      };
 
-      const { data: veiculos } = await supabase
+      // Documentos obrigatórios por tipo
+      const docsObrigatorios: Record<string, Array<{tipo: string; nome: string; obrigatorio: boolean}>> = {
+        colisao: [
+          { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+          { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+          { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+          { tipo: "foto_local", nome: "Fotos do Local", obrigatorio: false },
+          { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: false },
+        ],
+        roubo: [
+          { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+          { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+          { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: true },
+        ],
+        furto: [
+          { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+          { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+          { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: true },
+          { tipo: "chaves", nome: "Declaração das Chaves", obrigatorio: true },
+        ],
+        incendio: [
+          { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+          { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+          { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: true },
+          { tipo: "laudo_bombeiros", nome: "Laudo dos Bombeiros", obrigatorio: true },
+          { tipo: "foto_dano", nome: "Fotos do Veículo", obrigatorio: true },
+        ],
+        fenomeno_natural: [
+          { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+          { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+          { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+          { tipo: "comprovante_evento", nome: "Comprovante do Evento", obrigatorio: false },
+        ],
+        vandalismo: [
+          { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+          { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+          { tipo: "bo", nome: "Boletim de Ocorrência", obrigatorio: true },
+          { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+        ],
+        terceiros: [
+          { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+          { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+          { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+          { tipo: "dados_terceiro", nome: "Dados do Terceiro", obrigatorio: true },
+        ],
+        vidros: [
+          { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+          { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+          { tipo: "foto_dano", nome: "Fotos dos Danos", obrigatorio: true },
+        ],
+        outro: [
+          { tipo: "cnh", nome: "CNH do Condutor", obrigatorio: true },
+          { tipo: "crlv", nome: "CRLV do Veículo", obrigatorio: true },
+          { tipo: "foto_dano", nome: "Fotos do Ocorrido", obrigatorio: false },
+        ],
+      };
+
+      // Status considerados como sinistro em aberto
+      const statusAbertos = ["comunicado", "em_analise", "documentacao_pendente", "em_regulacao"];
+
+      // 1. Buscar veículo ativo
+      const { data: veiculosSin } = await supabase
         .from("veiculos")
-        .select("id, cobertura_total, cobertura_roubo_furto")
+        .select("id, placa, marca, modelo, cobertura_total, cobertura_roubo_furto")
         .eq("associado_id", associadoId)
         .eq("status", "ativo")
         .limit(1);
 
-      const veiculo = veiculos?.[0];
-      
-      // Verificar cobertura antes de criar sinistro
-      if (veiculo && !veiculo.cobertura_total) {
-        // Só permite roubo/furto se não tem cobertura total
-        if (args.tipo !== "roubo_furto") {
+      const veiculoSin = veiculosSin?.[0];
+      if (!veiculoSin) {
+        return JSON.stringify({ sucesso: false, message: "Nenhum veículo ativo encontrado." });
+      }
+
+      // 2. Validar cobertura
+      if (!veiculoSin.cobertura_total) {
+        const isRouboFurto = ["roubo", "furto"].includes(tipoSistema) || args.tipo === "roubo_furto";
+        if (!isRouboFurto) {
           return JSON.stringify({
             sucesso: false,
             bloqueado: true,
-            message: "Sua cobertura atual é apenas para roubo/furto. Para sinistros de colisão, incêndio ou outros, é necessário ter cobertura total. Entre em contato com a associação para mais informações.",
+            message: "Sua cobertura atual é apenas para roubo/furto. Para sinistros de colisão, incêndio ou outros, é necessário ter cobertura total.",
           });
         }
       }
 
-      const { data, error } = await supabase.from("chat_solicitacoes_ia").insert({
-        associado_id: associadoId,
-        tipo: "sinistro",
-        dados: {
-          veiculo_id: veiculo?.id,
-          tipo: args.tipo,
-          data_ocorrencia: args.data_ocorrencia,
-          local: args.local,
-          descricao: args.descricao,
-          origem: "whatsapp",
-        },
-        status: "pendente",
-      }).select("id").single();
+      // 3. Verificar duplicatas
+      const { data: sinExistente } = await supabase
+        .from("sinistros")
+        .select("id, protocolo, status")
+        .eq("veiculo_id", veiculoSin.id)
+        .in("status", statusAbertos)
+        .limit(1)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (sinExistente) {
+        return JSON.stringify({
+          sucesso: false,
+          message: `Já existe um sinistro em aberto para este veículo (protocolo ${sinExistente.protocolo}). Aguarde a conclusão antes de abrir outro.`,
+        });
+      }
+
+      // 4. Gerar protocolo
+      const nowSin = new Date();
+      const yearSin = nowSin.getFullYear();
+      const monthSin = String(nowSin.getMonth() + 1).padStart(2, "0");
+      const daySin = String(nowSin.getDate()).padStart(2, "0");
+      const randomSin = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
+      const protocoloSin = `SIN-${yearSin}${monthSin}${daySin}-${randomSin}`;
+
+      // 5. INSERT sinistro
+      const { data: sinistroNovo, error: sinError } = await supabase
+        .from("sinistros")
+        .insert({
+          associado_id: associadoId,
+          veiculo_id: veiculoSin.id,
+          protocolo: protocoloSin,
+          tipo: tipoSistema,
+          data_ocorrencia: args.data_ocorrencia || null,
+          local_ocorrencia: args.local || "",
+          descricao: args.descricao,
+          status: "comunicado",
+          canal: "whatsapp",
+        })
+        .select("id")
+        .single();
+
+      if (sinError) {
+        console.error("[whatsapp-webhook] Erro ao criar sinistro:", sinError);
+        throw sinError;
+      }
+
+      console.log(`[whatsapp-webhook] Sinistro criado: ${protocoloSin} (${sinistroNovo.id})`);
+
+      // 6. Histórico
+      await supabase.from("sinistro_historico").insert({
+        sinistro_id: sinistroNovo.id,
+        status_novo: "comunicado",
+        observacao: `Sinistro comunicado via WhatsApp - ${tipoLabels[tipoSistema] || tipoSistema}`,
+      });
+
+      // 7. Documentos obrigatórios
+      const docsList = docsObrigatorios[tipoSistema] || docsObrigatorios.outro;
+      const docsToInsert = docsList.map((d) => ({
+        sinistro_id: sinistroNovo.id,
+        tipo: d.tipo,
+        nome: d.nome,
+        obrigatorio: d.obrigatorio,
+        status: "pendente",
+      }));
+      await supabase.from("sinistro_documentos").upsert(docsToInsert, { onConflict: "sinistro_id,tipo", ignoreDuplicates: true });
+
+      // 8. Notificações internas (analistas/diretores)
+      try {
+        const { data: analistas } = await supabase.from("user_roles").select("user_id").eq("role", "analista_sinistros");
+        let destinatarios = analistas || [];
+        if (destinatarios.length === 0) {
+          const { data: diretores } = await supabase.from("user_roles").select("user_id").eq("role", "diretor");
+          destinatarios = diretores || [];
+        }
+        for (const dest of destinatarios) {
+          await supabase.from("notificacoes").insert({
+            user_id: dest.user_id,
+            titulo: "🆕 Novo Sinistro via WhatsApp",
+            mensagem: `Sinistro ${protocoloSin} - ${tipoLabels[tipoSistema] || tipoSistema} - Veículo ${veiculoSin.placa}`,
+            tipo: "alerta",
+            categoria: "sinistros",
+            referencia_tipo: "sinistro",
+            referencia_id: sinistroNovo.id,
+            link: `/sinistros/${sinistroNovo.id}`,
+            lida: false,
+          });
+        }
+        // Email
+        await supabase.functions.invoke("send-email", {
+          body: {
+            to: "sinistros@praticprotect.com.br",
+            subject: `Novo Sinistro via WhatsApp: ${protocoloSin} - ${veiculoSin.placa}`,
+            html: `<h2>Novo Sinistro Registrado via WhatsApp</h2>
+              <p><strong>Protocolo:</strong> ${protocoloSin}</p>
+              <p><strong>Tipo:</strong> ${tipoLabels[tipoSistema] || tipoSistema}</p>
+              <p><strong>Veículo:</strong> ${veiculoSin.placa} - ${veiculoSin.marca} ${veiculoSin.modelo}</p>
+              <p><strong>Local:</strong> ${args.local || "Não informado"}</p>
+              <p><strong>Descrição:</strong> ${args.descricao}</p>`,
+          },
+        });
+      } catch (notifErr) {
+        console.error("[whatsapp-webhook] Erro notificações (não bloqueante):", notifErr);
+      }
+
+      // 9. Notificar sinistro
+      try {
+        await supabase.functions.invoke("notificar-sinistro", {
+          body: { sinistro_id: sinistroNovo.id, status: "comunicado" },
+        });
+      } catch (e) {
+        console.log("[whatsapp-webhook] notificar-sinistro não enviado:", e);
+      }
+
+      // 10. Agendar contato D+1
+      try {
+        await supabase.functions.invoke("agendar-contato-sinistro", {
+          body: { sinistro_id: sinistroNovo.id },
+        });
+      } catch (e) {
+        console.error("[whatsapp-webhook] Erro agendar contato (não bloqueante):", e);
+      }
 
       return JSON.stringify({
         sucesso: true,
-        message: "Solicitação de sinistro registrada! Um diretor irá analisar.",
+        protocolo: protocoloSin,
+        message: `Sinistro registrado com sucesso! Protocolo: *${protocoloSin}*. Nossa equipe já foi notificada e iniciará a análise em breve.`,
       });
     }
 
