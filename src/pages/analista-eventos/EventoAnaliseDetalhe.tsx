@@ -338,6 +338,25 @@ export default function EventoAnaliseDetalhe() {
                   <p className="bg-muted p-3 rounded-lg">{dadosEtapa2.resumo_bo}</p>
                 </div>
               )}
+              {dadosEtapa2?.endereco_rua && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/60 border border-border">
+                  <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <div className="space-y-0.5 text-sm">
+                    <p className="font-medium">
+                      {dadosEtapa2.endereco_rua}{dadosEtapa2.endereco_numero ? `, ${dadosEtapa2.endereco_numero}` : ''}
+                    </p>
+                    {dadosEtapa2.endereco_bairro && <p className="text-muted-foreground">{dadosEtapa2.endereco_bairro}</p>}
+                    {(dadosEtapa2.endereco_cidade || dadosEtapa2.endereco_uf) && (
+                      <p className="text-muted-foreground">
+                        {dadosEtapa2.endereco_cidade}{dadosEtapa2.endereco_uf ? ` - ${dadosEtapa2.endereco_uf}` : ''}
+                      </p>
+                    )}
+                    {dadosEtapa2.endereco_ponto_referencia && (
+                      <p className="text-xs text-muted-foreground italic">Ref: {dadosEtapa2.endereco_ponto_referencia}</p>
+                    )}
+                  </div>
+                </div>
+              )}
               {dadosEtapa2?.arquivos_urls?.[0] && (
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Documento</p>
