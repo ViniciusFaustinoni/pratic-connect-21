@@ -1,44 +1,56 @@
 
-# Corrigir Erro 400 no Agendamento de Vistoria de Evento
+# Corrigir Exibicao da Cota de Coparticipacao
 
 ## Problema
 
-O agendamento de vistoria de evento retorna **400 Bad Request** porque a Edge Function `agendar-vistoria-evento` exige que `etapa_atual >= 3`, porem o fluxo de etapas (`salvar-etapa-evento`) so vai ate a **etapa 2**:
+A Edge Function `validar-link-evento` busca os dados do plano usando nomes de colunas **inexistentes**:
 
-- Etapa 1: Fotos e videos do veiculo
-- Etapa 2: Boletim de Ocorrencia
-- Agendamento: e o proximo passo (nao e uma "etapa" salva)
+| Coluna buscada (errada) | Coluna real na tabela `planos` |
+|---|---|
+| `percentual_cota_participacao` | `cota_participacao` |
+| `cota_participacao_minima` | `cota_minima` |
 
-Quando a etapa 2 e concluida, `etapa_atual` fica como **2** e o status muda para **"completado"**. Ao tentar agendar, a validacao `if (link.etapa_atual < 3)` sempre falha.
+Como as colunas nao existem, o Supabase retorna `null` silenciosamente, e o fallback `|| 0` faz o percentual e a cota minima aparecerem como **0%** e **R$ 0,00** na tela de pagamento, mesmo que o plano tenha 6% e R$ 1.200,00 configurados.
+
+O valor final (R$ 750,00) esta correto porque foi calculado pela `aprovar-sinistro` (que usa os nomes corretos) e esta salvo no sinistro. O problema e apenas na **exibicao** dos detalhes do calculo.
 
 ## Solucao
 
-### Arquivo: `supabase/functions/agendar-vistoria-evento/index.ts`
+### Arquivo: `supabase/functions/validar-link-evento/index.ts`
 
-Alterar a validacao de `etapa_atual < 3` para `etapa_atual < 2`, pois o agendamento so requer que as etapas 1 e 2 estejam concluidas.
-
-```text
-// ANTES (linha 98):
-if (link.etapa_atual < 3)
-
-// DEPOIS:
-if (link.etapa_atual < 2)
-```
-
-Tambem atualizar a mensagem de erro para refletir corretamente:
+Corrigir os nomes das colunas no select do plano (linha ~87):
 
 ```text
 // ANTES:
-"As 3 etapas devem ser completadas antes do agendamento"
+.select("nome, percentual_cota_participacao, cota_participacao_minima")
 
 // DEPOIS:
-"As etapas 1 e 2 devem ser completadas antes do agendamento"
+.select("nome, cota_participacao, cota_minima")
+```
+
+E ajustar as referencias logo abaixo (linhas ~93-94):
+
+```text
+// ANTES:
+percentual = plano.percentual_cota_participacao || 0;
+cotaMinima = plano.cota_participacao_minima || 0;
+
+// DEPOIS:
+percentual = plano.cota_participacao || 0;
+cotaMinima = plano.cota_minima || 0;
 ```
 
 ### Deploy
 
-Redeployar a Edge Function `agendar-vistoria-evento` apos a alteracao.
+Redeployar a Edge Function `validar-link-evento`.
+
+## Resultado Esperado
+
+A tela de pagamento passara a exibir corretamente:
+- Percentual do plano: **6%** (em vez de 0%)
+- Cota minima: **R$ 1.200,00** (em vez de R$ 0,00)
+- Valor da cota: **R$ 750,00** (ja estava correto - nao muda)
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/agendar-vistoria-evento/index.ts` | Corrigir validacao de `etapa_atual` de `< 3` para `< 2` |
+| `supabase/functions/validar-link-evento/index.ts` | Corrigir nomes de 2 colunas no select e nas referencias |
