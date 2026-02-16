@@ -129,7 +129,17 @@ Deno.serve(async (req) => {
       console.error("[delete-chamado-assistencia] Erro ao excluir histórico:", histError);
     }
 
-    // 3. Desvincular sinistros relacionados
+    // 3. Excluir gastos de benefícios vinculados ao chamado
+    const { error: gastosError } = await supabaseAdmin
+      .from("gastos_beneficios")
+      .delete()
+      .eq("chamado_id", chamadoId);
+
+    if (gastosError) {
+      console.error("[delete-chamado-assistencia] Erro ao excluir gastos_beneficios:", gastosError);
+    }
+
+    // 4. Desvincular sinistros relacionados
     const { error: sinistrosError } = await supabaseAdmin
       .from("sinistros")
       .update({ chamado_origem_id: null, chamado_assistencia_id: null })
