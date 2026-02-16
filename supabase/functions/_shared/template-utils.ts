@@ -670,7 +670,7 @@ interface TermoAditivo {
   ordem: number;
 }
 
-function avaliarRegraEdge(regra: RegraAditivo, veiculo: any, fipeLimite: number): boolean {
+function avaliarRegraEdge(regra: RegraAditivo, veiculo: any, fipeLimite: number, contexto?: { tipo_evento?: string }): boolean {
   if (!regra.ativo) return false;
 
   switch (regra.tipo) {
@@ -685,6 +685,9 @@ function avaliarRegraEdge(regra: RegraAditivo, veiculo: any, fipeLimite: number)
     case 'fipe_acima_de':
       return (veiculo.valor_fipe || 0) >= fipeLimite;
     
+    case 'evento_vidros':
+      return contexto?.tipo_evento?.toLowerCase().includes('vidros') === true;
+    
     default:
       return false;
   }
@@ -697,7 +700,8 @@ function avaliarRegraEdge(regra: RegraAditivo, veiculo: any, fipeLimite: number)
 export async function buscarEGerarAditivos(
   supabase: any,
   dadosVeiculo: any,
-  dadosTemplate: any
+  dadosTemplate: any,
+  contexto?: { tipo_evento?: string }
 ): Promise<string> {
   // 1. Buscar aditivos ativos ordenados
   const { data: aditivos, error: aditivosError } = await supabase
@@ -729,7 +733,7 @@ export async function buscarEGerarAditivos(
     // Se não tem regras, não anexa automaticamente
     if (regras.length === 0) continue;
     
-    const algumaRegraBate = regras.some(r => avaliarRegraEdge(r, dadosVeiculo, fipeLimite));
+    const algumaRegraBate = regras.some(r => avaliarRegraEdge(r, dadosVeiculo, fipeLimite, contexto));
     if (algumaRegraBate) {
       aditivosAplicaveis.push(aditivo);
     }
