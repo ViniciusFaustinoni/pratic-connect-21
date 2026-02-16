@@ -169,47 +169,25 @@ export function AtribuirFornecedoresDialog({
         .eq('user_id', user?.id)
         .maybeSingle();
 
-      // 1. Criar OS
-      const { data: os, error: osError } = await supabase
-        .from('ordens_servico')
-        .insert({
-          numero: '',
-          sinistro_id: sinistro.id,
-          oficina_id: oficinaId,
-          veiculo_id: sinistro.veiculo_id,
-          associado_id: sinistro.associado_id,
-          data_entrada: format(new Date(), 'yyyy-MM-dd'),
-          observacoes: etapasReparo.length
-            ? `Etapas de reparo: ${etapasReparo.join(', ')}`
-            : null,
-          status: 'aguardando_orcamento' as any,
-          criado_por: profile?.id,
-        })
-        .select()
-        .single();
-
-      if (osError) throw osError;
-
-      // 2. Atualizar sinistro para em_reparo
-      await supabase
+      // 1. Salvar oficina_id no sinistro e mudar status para pecas_em_cotacao
+      const nomeOficina = oficinasCompativeis?.find((o) => o.id === oficinaId)?.nome_fantasia || oficinasCompativeis?.find((o) => o.id === oficinaId)?.razao_social || 'N/A';
+      
+      const { error: updateError } = await supabase
         .from('sinistros')
-        .update({ status: 'em_reparo' as any })
+        .update({
+          oficina_id: oficinaId,
+          status: 'pecas_em_cotacao' as any,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', sinistro.id);
+      if (updateError) throw updateError;
 
-      // 3. Registrar histórico do sinistro
+      // 2. Registrar histórico
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistro.id,
         status_anterior: sinistro.status,
-        status_novo: 'em_reparo',
-        observacao: `Fornecedores atribuídos. OS criada: ${os.numero || os.id}`,
-        usuario_id: profile?.id,
-      });
-
-      // 4. Registrar histórico da OS
-      await supabase.from('ordens_servico_historico').insert({
-        ordem_servico_id: os.id,
-        status_novo: 'aguardando_orcamento',
-        observacao: `OS criada a partir do sinistro ${sinistro.protocolo}`,
+        status_novo: 'pecas_em_cotacao',
+        observacao: `Fornecedores atribuídos. Oficina: ${nomeOficina}. Peças em cotação.`,
         usuario_id: profile?.id,
       });
 
