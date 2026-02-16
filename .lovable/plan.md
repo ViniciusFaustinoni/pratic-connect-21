@@ -1,91 +1,73 @@
 
 
-# Exibir Fotos da Vistoria de Instalacao do Rastreador na Tela de Analise
+# Agendar Mensagem 15min Apos Aprovacao do Sinistro — Pecas em Cotacao
 
 ## O que sera feito
 
-Adicionar uma nova secao na tela de analise do sinistro que exibe as fotos tiradas durante a instalacao do rastreador no veiculo. Isso permite ao analista comparar o estado do veiculo no momento da instalacao com o estado atual (pos-sinistro).
+Adicionar no Edge Function `aprovar-sinistro` o agendamento de uma mensagem WhatsApp para 15 minutos apos a aprovacao, informando ao associado que as pecas necessarias ja estao em fase de cotacao com os auto centers parceiros. A mensagem sera processada automaticamente pelo cron `cron-contato-sinistro` que ja existe.
 
-## Fluxo de dados
+## Mecanismo
 
-```text
-sinistro.veiculo_id
-       |
-       v
-instalacoes (veiculo_id, status='concluida')
-       |
-       v
-instalacao_fotos (instalacao_id)
-       |
-       v
-Exibir fotos na tela de analise com lightbox
+O sistema ja possui a infraestrutura de mensagens agendadas:
+- Tabela `sinistro_contatos_agendados` armazena mensagens com horario futuro
+- O cron `cron-contato-sinistro` roda a cada minuto e envia as mensagens cujo `agendado_para` ja passou
+- O mesmo padrao ja e usado em `gerar-os-cotacao-aprovada` (mensagem 15min apos OS criada)
+
+## Alteracao
+
+### Arquivo: `supabase/functions/aprovar-sinistro/index.ts`
+
+**Adicionar insert na tabela `sinistro_contatos_agendados` apos o envio do WhatsApp de aprovacao (apos linha 190):**
+
+- Tipo: `pos_aprovacao_cotacao`
+- Agendado para: `now() + 15 minutos`
+- Mensagem com tom acolhedor informando que:
+  - As pecas necessarias para o reparo ja estao sendo cotadas
+  - A equipe esta em contato com auto centers parceiros
+  - O associado sera informado sobre cada etapa
+
+Mensagem proposta:
+
 ```
+{nome}, aqui e a equipe Pratic Car novamente!
 
-## Alteracoes
+Enquanto aguardamos a assinatura do termo e o pagamento da cota, ja estamos adiantando o processo.
 
-### Arquivo 1: `src/hooks/useSinistroAnalise.ts`
+As pecas necessarias para o reparo do seu veiculo {placa} ja estao em fase de cotacao com nossos auto centers parceiros.
 
-**Adicionar query para buscar fotos da instalacao do rastreador:**
+Nosso objetivo e agilizar ao maximo para que, assim que tudo estiver regularizado, o reparo comece o mais rapido possivel!
 
-- Nova query `instalacaoFotos` que:
-  1. Busca a instalacao concluida mais recente do veiculo (`instalacoes` com `veiculo_id` e `status = 'concluida'`)
-  2. Busca todas as fotos dessa instalacao na tabela `instalacao_fotos`
-- Retornar `instalacaoFotos` no objeto de retorno do hook
+Voce sera informado sobre cada etapa. Qualquer duvida, estamos aqui!
 
-### Arquivo 2: `src/pages/eventos/SinistroAnalise.tsx`
-
-**Adicionar secao "Fotos da Vistoria de Instalacao":**
-
-- Posicionar logo abaixo da secao "Fotos da Auto-Vistoria" (apos o card do linkEvento, por volta da linha 700)
-- Novo card com:
-  - Titulo: "Fotos da Vistoria de Instalacao" com icone Camera
-  - Subtitulo: "Fotos registradas durante a instalacao do rastreador"
-  - Grid de fotos (3 colunas) com label de cada tipo (Frente, Traseira, Placa, Local Rastreador, etc.)
-  - Clique na foto abre o `VisualizadorFoto` (lightbox) ja existente no projeto
-- Usar os labels de `FOTOS_INSTALACAO` do hook `useInstalacaoFotos.ts` para mapear tipo -> nome legivel
-- Se nao houver fotos de instalacao, nao exibir a secao (condicional)
+ABP PraticCar
+```
 
 ## Detalhes tecnicos
 
-### Nova query no hook
-
 ```typescript
-const { data: instalacaoFotos = [] } = useQuery({
-  queryKey: ['sinistro-analise-instalacao-fotos', sinistro?.veiculo_id],
-  queryFn: async () => {
-    // Buscar instalacao concluida mais recente do veiculo
-    const { data: instalacao } = await supabase
-      .from('instalacoes')
-      .select('id')
-      .eq('veiculo_id', sinistro!.veiculo_id)
-      .eq('status', 'concluida')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+// Apos o envio do WhatsApp de aprovacao (linha ~190)
+if (telefone) {
+  const primeiroNome = (sinistro.associado as any)?.nome?.split(' ')[0] || 'Associado';
+  const placa = (sinistro.veiculo as any)?.placa || '';
+  const agendadoPara = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const mensagem15 = `${primeiroNome}, aqui é a equipe Pratic Car novamente! 😊\n\nEnquanto aguardamos a assinatura do termo e o pagamento da cota, já estamos adiantando o processo! 🚀\n\n🔧 As peças necessárias para o reparo do seu veículo ${placa} já estão em *fase de cotação* com nossos auto centers parceiros.\n\nNosso objetivo é agilizar ao máximo para que, assim que tudo estiver regularizado, o reparo comece o mais rápido possível! ⚡\n\nVocê será informado sobre cada etapa. Qualquer dúvida, estamos aqui! 💙\n\nABP PraticCar`;
 
-    if (!instalacao) return [];
-
-    // Buscar fotos dessa instalacao
-    const { data: fotos } = await supabase
-      .from('instalacao_fotos')
-      .select('*')
-      .eq('instalacao_id', instalacao.id)
-      .order('created_at', { ascending: true });
-
-    return fotos || [];
-  },
-  enabled: !!sinistro?.veiculo_id,
-});
+  try {
+    await supabase.from('sinistro_contatos_agendados').insert({
+      sinistro_id,
+      tipo: 'pos_aprovacao_cotacao',
+      telefone: telefone.replace(/\D/g, ''),
+      agendado_para: agendadoPara,
+      mensagem_enviada: mensagem15,
+      status: 'agendado',
+    });
+  } catch (e) {
+    console.error('[aprovar-sinistro] Erro ao agendar mensagem 15min:', e);
+  }
+}
 ```
-
-### Exibicao no componente
-
-- Usar mapeamento de tipos existente em `FOTOS_INSTALACAO` para labels
-- Integrar com `VisualizadorFoto` (estado separado `fotoViewerInstalacao`)
-- Grid responsivo com thumbnails e labels sobrepostos (mesmo padrao visual das fotos de auto-vistoria)
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/hooks/useSinistroAnalise.ts` | Adicionar query para buscar instalacao concluida + fotos da instalacao_fotos |
-| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar card com grid de fotos da instalacao e lightbox integrado |
+| `supabase/functions/aprovar-sinistro/index.ts` | Adicionar agendamento de mensagem 15min apos aprovacao informando sobre cotacao de pecas |
 
