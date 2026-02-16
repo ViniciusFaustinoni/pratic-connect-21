@@ -1,43 +1,45 @@
 
-# Melhorar Geocodificacao do Local Informado pela IA
 
-## Diagnostico
+# Corrigir Geocodificacao dos Sinistros Existentes
 
-O sinistro `d710629f` foi criado **antes** do deploy do codigo de geocodificacao, por isso `latitude_informada` e `longitude_informada` estao nulos. Alem disso, a query atual envia apenas `"Rua Bacairis proximo ao numero 465, Brasil"` para o Nominatim -- sem cidade/UF, o que pode falhar para enderecos parciais.
+## Situacao
+
+Apenas **1 sinistro** precisa de correcao:
+
+| Sinistro | Local | Associado Cidade/UF |
+|---|---|---|
+| `d710629f` | Rua Bacairis proximo ao numero 465 | RIO DE JANEIRO, RJ |
 
 ## Solucao
 
-### 1. Incluir cidade/UF do associado na query de geocodificacao
+Criar uma edge function temporaria `fix-geocode-sinistros` que:
 
-**Arquivo:** `supabase/functions/whatsapp-webhook/index.ts` (linha ~998-1014)
+1. Busca todos os sinistros com `local_ocorrencia` preenchido mas `latitude_informada` nula
+2. Para cada um, busca a cidade/UF do associado
+3. Monta a query: `"Rua Bacairis proximo ao numero 465, RIO DE JANEIRO, RJ, Brasil"`
+4. Chama o Nominatim para obter coordenadas
+5. Atualiza `latitude_informada` e `longitude_informada` no sinistro
 
-Melhorar a query Nominatim usando a cidade e UF do associado (que ja estao disponiveis no contexto):
+A function sera chamada uma unica vez via curl para corrigir os dados e pode ser removida depois.
+
+## Detalhe Tecnico
+
+**Arquivo:** `supabase/functions/fix-geocode-sinistros/index.ts`
 
 ```text
-// Antes:
-args.local + ', Brasil'
-
-// Depois:
-args.local + ', ' + (associado?.cidade || '') + ', ' + (associado?.uf || '') + ', Brasil'
+1. SELECT sinistros com local_ocorrencia NOT NULL e latitude_informada IS NULL
+2. JOIN associados para obter cidade/uf
+3. Para cada sinistro:
+   - Montar query: local_ocorrencia + cidade + uf + Brasil
+   - Chamar Nominatim
+   - UPDATE sinistros SET latitude_informada, longitude_informada
+4. Retornar resumo dos resultados
 ```
 
-Isso transforma "Rua Bacairis proximo ao numero 465, Brasil" em "Rua Bacairis proximo ao numero 465, RIO DE JANEIRO, RJ, Brasil" -- muito mais preciso.
-
-### 2. Adicionar log antes da geocodificacao
-
-Para facilitar debug futuro, adicionar um `console.log` antes da chamada ao Nominatim.
-
-### 3. Mesma melhoria no `assistente-chat`
-
-**Arquivo:** `supabase/functions/assistente-chat/index.ts`
-
-Aplicar a mesma melhoria na geocodificacao do assistente do App, incluindo cidade/UF do associado na query.
-
-## Resumo de Arquivos
+## Resumo
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/whatsapp-webhook/index.ts` | Incluir cidade/UF do associado na query Nominatim + log |
-| `supabase/functions/assistente-chat/index.ts` | Mesma melhoria na geocodificacao |
+| `supabase/functions/fix-geocode-sinistros/index.ts` | Nova edge function temporaria para corrigir coordenadas |
 
-Nenhuma migration necessaria. O sinistro atual (`d710629f`) foi criado antes do deploy anterior, por isso nao foi geocodificado. Novos sinistros ja serao geocodificados com o codigo atualizado.
+Apos execucao bem-sucedida, a function pode ser deletada.
