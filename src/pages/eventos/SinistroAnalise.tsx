@@ -278,6 +278,17 @@ export default function SinistroAnalise() {
   const currentIndex = pendentes?.findIndex((p) => p.id === id) ?? -1;
   const nextSinistro = currentIndex >= 0 && pendentes ? pendentes[currentIndex + 1] : null;
 
+  // Bloquear analista de acessar sinistros pré-vistoria
+  const statusPreVistoria = ['comunicado', 'documentacao_pendente', 'aguardando_vistoria', 'pendente_vistoria_regulador'];
+  const bloqueadoParaAnalista = isAnalistaEventos && !isDiretor && !!sinistro && statusPreVistoria.includes(sinistro?.status);
+  
+  useEffect(() => {
+    if (bloqueadoParaAnalista) {
+      toast.error('Este evento ainda não está disponível para análise.');
+      navigate('/eventos/sinistros');
+    }
+  }, [bloqueadoParaAnalista, navigate]);
+
   const handleActionSuccess = () => {
     if (nextSinistro) {
       navigate(`/eventos/sinistros/${nextSinistro.id}/analisar`);
@@ -333,6 +344,8 @@ export default function SinistroAnalise() {
       </div>
     );
   }
+
+  if (bloqueadoParaAnalista) return null;
 
   const associado = sinistro.associado as any;
   const veiculo = sinistro.veiculo as any;

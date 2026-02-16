@@ -132,6 +132,17 @@ export default function SinistrosList() {
         `)
         .order('created_at', { ascending: false });
 
+      // Analista de eventos só vê sinistros pós-vistoria
+      if (isAnalistaEventos && !isDiretor) {
+        query = query.in('status', [
+          'aguardando_analise', 'aprovado', 'negado', 'reprovado',
+          'em_reparo', 'em_recuperacao', 'aguardando_pagamento',
+          'pago', 'encerrado', 'cancelado',
+          'em_sindicancia', 'aguardando_diretoria',
+          'pecas_em_cotacao', 'pronto_para_oficina', 'pagamento_confirmado'
+        ] as any);
+      }
+
       if (filters.status && filters.status !== 'todos') {
         query = query.eq('status', filters.status as any);
       }
@@ -152,7 +163,20 @@ export default function SinistrosList() {
   const { data: contadores } = useQuery({
     queryKey: ['sinistros-contadores'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('sinistros').select('status');
+      let query = supabase.from('sinistros').select('status');
+      
+      // Analista de eventos só vê contadores pós-vistoria
+      if (isAnalistaEventos && !isDiretor) {
+        query = query.in('status', [
+          'aguardando_analise', 'aprovado', 'negado', 'reprovado',
+          'em_reparo', 'em_recuperacao', 'aguardando_pagamento',
+          'pago', 'encerrado', 'cancelado',
+          'em_sindicancia', 'aguardando_diretoria',
+          'pecas_em_cotacao', 'pronto_para_oficina', 'pagamento_confirmado'
+        ] as any);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
       return {
@@ -364,10 +388,15 @@ export default function SinistrosList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os status</SelectItem>
-                <SelectItem value="comunicado">Comunicado</SelectItem>
-                <SelectItem value="em_analise">Em Análise</SelectItem>
-                <SelectItem value="documentacao_pendente">Doc. Pendente</SelectItem>
-                <SelectItem value="aguardando_vistoria">Aguard. Vistoria</SelectItem>
+                {(!isAnalistaEventos || isDiretor) && (
+                  <>
+                    <SelectItem value="comunicado">Comunicado</SelectItem>
+                    <SelectItem value="em_analise">Em Análise</SelectItem>
+                    <SelectItem value="documentacao_pendente">Doc. Pendente</SelectItem>
+                    <SelectItem value="aguardando_vistoria">Aguard. Vistoria</SelectItem>
+                  </>
+                )}
+                <SelectItem value="aguardando_analise">Aguard. Análise Final</SelectItem>
                 <SelectItem value="aprovado">Aprovado</SelectItem>
                 <SelectItem value="negado">Negado</SelectItem>
                 <SelectItem value="em_recuperacao">Em Recuperação</SelectItem>
