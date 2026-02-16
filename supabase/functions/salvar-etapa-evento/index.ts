@@ -139,11 +139,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // If step 2, update sinistro status
+    // If step 2, update sinistro status and address
     if (etapa === 2) {
+      const sinistroUpdate: Record<string, unknown> = { status: "documentacao_enviada" };
+
+      if (dados.endereco_rua) {
+        const endNumero = dados.endereco_numero ? `, ${dados.endereco_numero}` : "";
+        sinistroUpdate.local_ocorrencia = `${dados.endereco_rua}${endNumero}`;
+      }
+      if (dados.endereco_cidade) sinistroUpdate.cidade_ocorrencia = dados.endereco_cidade;
+      if (dados.endereco_uf) sinistroUpdate.estado_ocorrencia = dados.endereco_uf;
+
       await supabase
         .from("sinistros")
-        .update({ status: "documentacao_enviada" })
+        .update(sinistroUpdate)
         .eq("id", link.sinistro_id);
     }
 
