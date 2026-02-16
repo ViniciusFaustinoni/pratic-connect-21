@@ -1,67 +1,49 @@
 
-
-# Capturar Posicao do Rastreador no Momento do Registro (WhatsApp) + Corrigir Exibicao
+# Realtime para Fila de Chamados de Assistencia
 
 ## Problema
 
-1. **WhatsApp webhook**: Quando o associado registra um sinistro via WhatsApp, o sistema NAO captura a posicao do rastreador naquele momento. Os campos `rastreador_lat_momento`, `rastreador_lng_momento` e `rastreador_posicao_capturada_em` ficam nulos.
-2. **Tela de Analise** (`SinistroAnalise.tsx`): Usa a posicao ATUAL do rastreador (`rastreador?.ultima_posicao_lat`) em vez da posicao salva no momento do registro (`sinistro.rastreador_lat_momento`).
-
-O `SinistroDetalhe.tsx` ja usa os campos corretos. O `criar-sinistro` (usado pelo App) ja captura corretamente.
+Quando um novo chamado e criado (via WhatsApp, App ou painel), a lista de chamados em `/assistencia/chamados` nao atualiza automaticamente. O operador precisa recarregar a pagina manualmente para ver novos chamados.
 
 ## Solucao
 
-### 1. WhatsApp webhook: Capturar posicao do rastreador ao criar sinistro
+Criar um hook `useChamadosRealtime` que escuta mudancas na tabela `chamados_assistencia` via Supabase Realtime e invalida as queries relevantes automaticamente.
 
-**Arquivo:** `supabase/functions/whatsapp-webhook/index.ts`
+## Alteracoes
 
-Antes do INSERT do sinistro (linha ~900), buscar a posicao atual do rastreador do veiculo e incluir no INSERT:
+### 1. Criar hook `src/hooks/useChamadosRealtime.ts`
 
-```text
-// Buscar posicao do rastreador do veiculo
-const { data: rastreadorSin } = await supabase
-  .from("rastreadores")
-  .select("ultima_posicao_lat, ultima_posicao_lng, ultima_comunicacao")
-  .eq("veiculo_id", veiculoSin.id)
-  .eq("status", "instalado")
-  .maybeSingle();
+Hook que escuta eventos `INSERT`, `UPDATE` e `DELETE` na tabela `chamados_assistencia` e invalida as queries:
+- `chamados-assistencia`
+- `chamados-contadores`
+- `chamados-ativos`
+- `assistencia-estatisticas`
 
-// No INSERT, adicionar:
-rastreador_lat_momento: rastreadorSin?.ultima_posicao_lat || null,
-rastreador_lng_momento: rastreadorSin?.ultima_posicao_lng || null,
-rastreador_posicao_capturada_em: rastreadorSin?.ultima_comunicacao || null,
-```
+Seguira o mesmo padrao ja usado em `useFilasRealtime.ts` e `useContratosRealtime.ts`.
 
-### 2. Tela de Analise: Usar posicao do momento do registro
+Tambem exibira um toast informativo quando um novo chamado for inserido ("Novo chamado na fila").
 
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx` (linhas 680-687)
+### 2. Usar o hook em `src/pages/assistencia/ChamadosList.tsx`
 
-Trocar de:
+Adicionar `useChamadosRealtime()` no componente da lista de chamados para que a fila atualize em tempo real.
 
-```text
-rastreadorLat={rastreador?.ultima_posicao_lat}
-rastreadorLng={rastreador?.ultima_posicao_lng}
-rastreadorCapturadoEm={rastreador?.ultima_comunicacao}
-```
+### 3. Usar o hook em `src/pages/assistencia/AssistenciaDashboard.tsx`
 
-Para:
+Tambem ativar no dashboard de assistencia para que os contadores e chamados ativos atualizem automaticamente.
+
+## Detalhes Tecnicos
 
 ```text
-rastreadorLat={sinistro.rastreador_lat_momento}
-rastreadorLng={sinistro.rastreador_lng_momento}
-rastreadorCapturadoEm={sinistro.rastreador_posicao_capturada_em}
+// useChamadosRealtime.ts
+- Canal: 'chamados-assistencia-realtime'
+- Tabela: 'chamados_assistencia'
+- Eventos: * (INSERT, UPDATE, DELETE)
+- Ao receber evento: invalidar queries ['chamados-assistencia'], ['chamados-contadores'], ['chamados-ativos'], ['assistencia-estatisticas']
+- Em INSERT: toast.info("Novo chamado de assistencia na fila")
 ```
-
-### 3. Corrigir sinistro existente (d710629f)
-
-Executar edge function temporaria para buscar a posicao do rastreador mais proxima da data de criacao do sinistro na tabela `rastreador_posicoes` e atualizar os campos `rastreador_lat_momento` e `rastreador_lng_momento`.
-
-## Resumo de Arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/whatsapp-webhook/index.ts` | Buscar e salvar posicao do rastreador ao criar sinistro |
-| `src/pages/eventos/SinistroAnalise.tsx` | Usar `sinistro.rastreador_lat_momento` em vez de `rastreador?.ultima_posicao_lat` |
-| `supabase/functions/fix-rastreador-momento/index.ts` | Edge function temporaria para corrigir sinistro existente |
-
-Nenhuma migration necessaria.
+| `src/hooks/useChamadosRealtime.ts` | Novo hook de realtime para chamados |
+| `src/pages/assistencia/ChamadosList.tsx` | Importar e usar `useChamadosRealtime()` |
+| `src/pages/assistencia/AssistenciaDashboard.tsx` | Importar e usar `useChamadosRealtime()` |
