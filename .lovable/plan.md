@@ -1,79 +1,91 @@
 
 
-# Atualizar Mensagem da IA sobre Passo a Passo do Sinistro
+# Exibir Fotos da Vistoria de Instalacao do Rastreador na Tela de Analise
 
 ## O que sera feito
 
-Reescrever a mensagem WhatsApp enviada ao associado quando o sinistro e aprovado pela IA, para incluir:
+Adicionar uma nova secao na tela de analise do sinistro que exibe as fotos tiradas durante a instalacao do rastreador no veiculo. Isso permite ao analista comparar o estado do veiculo no momento da instalacao com o estado atual (pos-sinistro).
 
-- Explicacao sobre a auto vistoria (fotos do veiculo)
-- Orientacao sobre enviar mais detalhes do ocorrido (B.O.)
-- Informacao sobre o prazo de 30 dias para dar entrada
-- Tom acolhedor, mostrando que a equipe auxiliara em tudo
+## Fluxo de dados
 
-## Arquivo a alterar
-
-`supabase/functions/aprovar-solicitacao-ia/index.ts` (linhas 344-356)
-
-## Mensagem atual
-
-```
-Ola {nome}!
-
-Seu sinistro {protocolo} foi registrado com sucesso.
-
-Para dar andamento ao processo, acesse o link abaixo e envie os documentos necessarios:
-
-{link}
-
-DOCUMENTOS NECESSARIOS:
-Etapa 1 - Auto Vistoria (fotos do veiculo)
-Etapa 2 - Boletim de Ocorrencia
-Etapa 3 - Relato do ocorrido
-
-O link e valido por 72 horas.
+```text
+sinistro.veiculo_id
+       |
+       v
+instalacoes (veiculo_id, status='concluida')
+       |
+       v
+instalacao_fotos (instalacao_id)
+       |
+       v
+Exibir fotos na tela de analise com lightbox
 ```
 
-## Nova mensagem proposta
+## Alteracoes
 
-```
-Ola {nome}!
+### Arquivo 1: `src/hooks/useSinistroAnalise.ts`
 
-Seu evento {protocolo} foi registrado com sucesso.
-Estamos aqui para te ajudar em cada etapa!
+**Adicionar query para buscar fotos da instalacao do rastreador:**
 
-IMPORTANTE: A partir da comunicacao do evento, temos um prazo de *30 dias* para concluir toda a documentacao. Como o prazo ja esta correndo, vamos agilizar juntos!
+- Nova query `instalacaoFotos` que:
+  1. Busca a instalacao concluida mais recente do veiculo (`instalacoes` com `veiculo_id` e `status = 'concluida'`)
+  2. Busca todas as fotos dessa instalacao na tabela `instalacao_fotos`
+- Retornar `instalacaoFotos` no objeto de retorno do hook
 
-Acesse o link abaixo para iniciar o processo:
+### Arquivo 2: `src/pages/eventos/SinistroAnalise.tsx`
 
-{link}
+**Adicionar secao "Fotos da Vistoria de Instalacao":**
 
-O QUE VOCE PRECISARA FAZER:
-
-1. *Auto Vistoria* - Voce fara fotos do seu veiculo pelo celular (frente, traseira, laterais, teto e detalhes dos danos). Sao no minimo 5 fotos para registrarmos o estado atual.
-
-2. *Boletim de Ocorrencia* - Envie o numero e foto/PDF do seu B.O. com os detalhes do ocorrido (endereco, data e circunstancias).
-
-3. *Agendamento da Vistoria* - Apos as etapas acima, voce agendara a vistoria presencial.
-
-4. *Cota de Coparticipacao* - Pagamento da cota conforme seu plano.
-
-{cota se aplicavel}
-
-O link e valido por 72 horas. Qualquer duvida, estamos a disposicao!
-
-ABP PraticCar
-```
+- Posicionar logo abaixo da secao "Fotos da Auto-Vistoria" (apos o card do linkEvento, por volta da linha 700)
+- Novo card com:
+  - Titulo: "Fotos da Vistoria de Instalacao" com icone Camera
+  - Subtitulo: "Fotos registradas durante a instalacao do rastreador"
+  - Grid de fotos (3 colunas) com label de cada tipo (Frente, Traseira, Placa, Local Rastreador, etc.)
+  - Clique na foto abre o `VisualizadorFoto` (lightbox) ja existente no projeto
+- Usar os labels de `FOTOS_INSTALACAO` do hook `useInstalacaoFotos.ts` para mapear tipo -> nome legivel
+- Se nao houver fotos de instalacao, nao exibir a secao (condicional)
 
 ## Detalhes tecnicos
 
-- Remover a "Etapa 3 - Relato do ocorrido" (ja removida do link conforme memoria do projeto)
-- Adicionar as etapas 3 (Agendamento) e 4 (Cota) na explicacao
-- Incluir o texto sobre prazo de 30 dias
-- Manter formatacao WhatsApp nativa (*negrito*)
-- Manter a logica de cota condicional (`cotaTexto`)
+### Nova query no hook
+
+```typescript
+const { data: instalacaoFotos = [] } = useQuery({
+  queryKey: ['sinistro-analise-instalacao-fotos', sinistro?.veiculo_id],
+  queryFn: async () => {
+    // Buscar instalacao concluida mais recente do veiculo
+    const { data: instalacao } = await supabase
+      .from('instalacoes')
+      .select('id')
+      .eq('veiculo_id', sinistro!.veiculo_id)
+      .eq('status', 'concluida')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!instalacao) return [];
+
+    // Buscar fotos dessa instalacao
+    const { data: fotos } = await supabase
+      .from('instalacao_fotos')
+      .select('*')
+      .eq('instalacao_id', instalacao.id)
+      .order('created_at', { ascending: true });
+
+    return fotos || [];
+  },
+  enabled: !!sinistro?.veiculo_id,
+});
+```
+
+### Exibicao no componente
+
+- Usar mapeamento de tipos existente em `FOTOS_INSTALACAO` para labels
+- Integrar com `VisualizadorFoto` (estado separado `fotoViewerInstalacao`)
+- Grid responsivo com thumbnails e labels sobrepostos (mesmo padrao visual das fotos de auto-vistoria)
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/aprovar-solicitacao-ia/index.ts` | Reescrever mensagem WhatsApp (linhas 344-356) com novo texto explicativo incluindo prazo de 30 dias, descricao das 4 etapas e tom acolhedor |
+| `src/hooks/useSinistroAnalise.ts` | Adicionar query para buscar instalacao concluida + fotos da instalacao_fotos |
+| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar card com grid de fotos da instalacao e lightbox integrado |
 
