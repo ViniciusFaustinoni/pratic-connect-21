@@ -60,7 +60,8 @@ serve(async (req) => {
 REGRAS IMPORTANTES:
 1. Seja amigável e profissional
 2. Use emojis de forma moderada (não exagere)
-3. Formate para WhatsApp (use *negrito* para destaques)
+3. Formate para WhatsApp: use *negrito* (UM asterisco) para destaques
+4. NUNCA use formatação Markdown como **duplo asterisco**, ## títulos ou [links](url)
 4. Liste TODOS os benefícios de cada plano fornecidos - não omita nenhum
 5. Quando houver múltiplos planos, apresente-os de forma comparativa com separadores visuais
 6. Inclua o link da cotação se fornecido
