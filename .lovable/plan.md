@@ -1,42 +1,47 @@
 
-# Corrigir Valores Zerando Apos Salvar
+# Adicionar Limpeza de Posicoes Antigas na sync-rastreadores
 
-## Causa Raiz
+## Objetivo
 
-Mesmo com `await queryClient.invalidateQueries(...)`, o React ainda nao re-renderizou o componente com os dados atualizados do servidor quando `setValoresPecas({})` executa. Isso faz o input mostrar `undefined ?? item.valor_unitario` onde `item.valor_unitario` ainda e o valor antigo (pre-save) do render anterior, resultando em valor zero ou vazio.
-
-## Solucao
-
-Remover a limpeza dos estados locais `valoresPecas` e `fornecedoresPecas` apos salvar. Os valores no estado local ja correspondem exatamente ao que foi salvo no banco. Quando o usuario recarregar a pagina ou navegar de volta, o estado local comeca vazio e os valores do banco sao usados normalmente via `item.valor_unitario`.
+Apos cada sincronizacao, a edge function deve excluir registros da tabela `rastreador_posicoes` com mais de 7 dias, mantendo apenas uma janela rolante de dados recentes.
 
 ## Alteracao
 
-### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
+### Arquivo: `supabase/functions/sync-rastreadores/index.ts`
 
-Remover as linhas 1184-1185:
-
-```typescript
-// REMOVER estas duas linhas:
-setValoresPecas({});
-setFornecedoresPecas({});
-```
-
-O bloco final do save ficara:
+Adicionar um passo de limpeza **apos** a insercao das posicoes (depois da linha 543), antes do calculo de totais:
 
 ```typescript
-toast.success('Valores e fornecedores salvos!');
-await queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
-await queryClient.invalidateQueries({ queryKey: ['sinistro-analise-vistoria-evento', id] });
-// NÃO limpar estados locais - os valores já correspondem ao que foi salvo
+// Limpar posicoes com mais de 7 dias
+const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+const { count: deletados, error: errDelete } = await supabase
+  .from("rastreador_posicoes")
+  .delete({ count: 'exact' })
+  .lt("data_posicao", seteDiasAtras);
+
+if (errDelete) {
+  console.error("[sync-rastreadores] Erro ao limpar posicoes antigas:", errDelete);
+} else {
+  console.log(`[sync-rastreadores] ${deletados || 0} posicoes antigas removidas (>7 dias)`);
+}
 ```
 
-Isso garante que:
-1. Os valores permanecem visiveis na interface imediatamente apos salvar
-2. Ao recarregar a pagina, os valores vem do banco de dados
-3. O calculo do custo total continua correto (usa `valoresPecas[i] ?? item.valor_unitario`)
+Tambem incluir `posicoes_removidas` no JSON de resposta para monitoramento.
 
-## Resumo
+## Fluxo Final
+
+1. Buscar rastreadores instalados
+2. Consultar posicao atual em cada plataforma (Softruck / Rede Veiculos)
+3. Inserir posicoes novas na tabela `rastreador_posicoes`
+4. **Excluir registros com `data_posicao` anterior a 7 dias**
+5. Retornar resultado com contagem de inseridos e removidos
+
+## Impacto
+
+- A limpeza roda em segundo plano junto com o cron, sem impactar o uso do sistema
+- Mantém a tabela leve com no maximo ~1.008 registros por rastreador (7 dias x 144 syncs/dia)
+- A politica de retencao anterior de 90 dias sera substituida por esta de 7 dias conforme solicitado
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/eventos/SinistroAnalise.tsx` | Remover `setValoresPecas({})` e `setFornecedoresPecas({})` apos salvar |
+| `supabase/functions/sync-rastreadores/index.ts` | Adicionar DELETE de posicoes com mais de 7 dias apos insercao + incluir contagem no response |
