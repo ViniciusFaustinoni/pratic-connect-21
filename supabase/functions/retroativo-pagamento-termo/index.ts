@@ -154,7 +154,7 @@ serve(async (req) => {
             .from("sinistro_evento_links")
             .select("token")
             .eq("sinistro_id", sinistro.id)
-            .eq("status", "ativo")
+            .in("status", ["ativo", "completado"])
             .order("created_at", { ascending: false })
             .limit(1)
             .single();
