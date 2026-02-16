@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useChamadosRealtime } from '@/hooks/useChamadosRealtime';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -95,6 +96,7 @@ const STATUS_CANCELADOS: StatusChamado[] = ['cancelado_associado', 'cancelado_si
 
 export default function ChamadosList() {
   const navigate = useNavigate();
+  useChamadosRealtime();
   const queryClient = useQueryClient();
   const { isDiretor } = usePermissions();
   const perPage = 20;
