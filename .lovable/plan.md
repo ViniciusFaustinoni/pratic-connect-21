@@ -1,78 +1,108 @@
 
-# Adicionar Controle de Recebimento de Pecas e Bloqueio de Envio para Oficina
+# Criar OS Automaticamente ao Marcar Pecas como Recebidas
 
 ## Situacao Atual
 
-Apos o pagamento da cota, o status muda para `pecas_em_cotacao`. Uma cotacao e aprovada e gera uma OS automaticamente, mas NAO existe nenhum botao ou acao para o analista confirmar que as pecas chegaram fisicamente. O botao "Enviar para Oficina" aparece com base em `aprovado && cota_paga`, ignorando completamente a etapa de pecas.
+Quando o analista atribui fornecedores (oficina + auto centers), o sistema cria a OS imediatamente e muda o status para `em_reparo`. Porem, com o fluxo de pecas, a OS nao deveria ser criada nesse momento -- as pecas ainda nao chegaram.
 
-## Novo Fluxo Proposto
+## Novo Fluxo
 
 ```text
-Pagamento confirmado
+Evento aprovado + cota paga
        |
        v
-pecas_em_cotacao (cotacao sendo feita com auto centers)
+Atribuir Fornecedores (escolhe oficina + auto centers)
+  -> Salva oficina_id no sinistro
+  -> Envia cotacoes aos auto centers
+  -> Status: pecas_em_cotacao (NAO cria OS)
        |
        v
-Cotacao aprovada (analista aprova a melhor cotacao)
+Cotacao aprovada pelo analista
        |
        v
 Analista clica "Marcar Pecas como Recebidas"
-       |
-       v
-pronto_para_oficina (desbloqueado para enviar a oficina)
-       |
-  [WhatsApp ao associado: pecas chegaram, veiculo sera enviado]
-       |
-       v
-Enviar para Oficina (cria OS)
+  -> Chama edge function gerar-os-cotacao-aprovada
+  -> OS criada automaticamente para a oficina ja atribuida
+  -> Status: em_reparo
+  -> WhatsApp ao associado
 ```
 
 ## Alteracoes
 
-### Arquivo 1: `src/pages/eventos/SinistroAnalise.tsx`
+### Arquivo 1: `src/components/sinistros/AtribuirFornecedoresDialog.tsx`
 
-**Acoes para status `pecas_em_cotacao`** (atualmente nao existe nenhum bloco de acoes para este status):
+**Remover criacao de OS** (linhas 172-214):
+- Remover insert em `ordens_servico`, historico de OS e historico de sinistro com status `em_reparo`
+- Substituir por: update do sinistro com `oficina_id` e status `pecas_em_cotacao`
+- Registrar historico: "Fornecedores atribuidos. Oficina: {nome}. Aguardando cotacao de pecas."
+- Manter toda a logica de envio de cotacoes e WhatsApp para auto centers e oficina
 
-- Adicionar bloco no painel de acoes (entre `pagamento_confirmado` e `em_analise`):
-  - Mensagem informativa: "Pecas em cotacao - aguardando recebimento"
-  - Se existe cotacao aprovada: exibir botao **"Marcar Pecas como Recebidas"**
-  - Ao clicar: atualizar sinistro para `pronto_para_oficina`, registrar historico, disparar WhatsApp ao associado
+### Arquivo 2: `src/pages/eventos/SinistroAnalise.tsx`
 
-**Ajustar guarda do botao "Enviar para Oficina"** (linha 1571):
+**Alterar botao "Marcar Pecas como Recebidas"** (linhas 1376-1413):
+- Apos atualizar status para `em_reparo` (em vez de `pronto_para_oficina`)
+- Chamar a edge function `gerar-os-cotacao-aprovada` passando `sinistro_id` e `cotacao_id` da cotacao aprovada
+- A edge function ja cria a OS com a `oficina_id` do sinistro, insere itens (pecas da cotacao + servicos da vistoria), registra historico e envia WhatsApp
+- Exibir toast de sucesso com numero da OS
 
-- Trocar condicao de `sinistro.status === 'aprovado' && sinistro.cota_paga` para `sinistro.status === 'pronto_para_oficina'`
+**Remover bloco "Pronto para oficina"** (linhas 1424-1441):
+- Esse bloco intermediario com botao "Enviar para Oficina" nao e mais necessario, pois a OS e criada automaticamente ao marcar pecas recebidas
 
-**Incluir `pecas_em_cotacao` na lista de status que mostram a aba Cotacoes** (linha 606):
+**Ajustar botao extra na toolbar** (linha 1654):
+- Remover o botao "Enviar para Oficina" da toolbar inferior, pois o fluxo agora e automatico
 
-- Adicionar `pecas_em_cotacao` ao array `showCotacoesTab`
+### Arquivo 3: `supabase/functions/gerar-os-cotacao-aprovada/index.ts`
 
-**Excluir `pecas_em_cotacao` dos status que bloqueiam acoes adicionais** (linha 1538):
+**Garantir que oficina_id do sinistro e usado**:
+- A edge function ja busca `sinistro.oficina_id` e usa na criacao da OS -- apenas verificar se nao esta nulo e retornar erro claro caso esteja
 
-- Adicionar `pecas_em_cotacao` a lista de status que escondem botoes de sindicancia/juridico etc
+## Detalhes tecnicos
 
-### Arquivo 2: `src/hooks/useCotacoesEvento.ts`
+### AtribuirFornecedoresDialog - Nova logica de submit
 
-**Remover geracao automatica de OS ao aprovar cotacao** (linhas 119-132):
+Em vez de criar OS, apenas salvar oficina e mudar status:
 
-- A OS nao deve ser gerada ao aprovar cotacao, pois as pecas ainda nao chegaram
-- A OS sera gerada apenas quando o analista enviar para oficina (fluxo existente via `EnviarParaOficinaDialog`)
+```typescript
+// Salvar oficina_id e mudar status para pecas_em_cotacao
+await supabase
+  .from('sinistros')
+  .update({
+    oficina_id: oficinaId,
+    status: 'pecas_em_cotacao',
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', sinistro.id);
 
-### Arquivo 3: Notificacao WhatsApp
-
-Ao marcar pecas como recebidas, enviar mensagem via `whatsapp-send-text`:
-
-```text
-Ola {nome},
-
-As pecas para o reparo do seu veiculo foram recebidas!
-Em breve seu veiculo sera encaminhado para a oficina parceira.
-Acompanhe o andamento pelo nosso canal.
+// Registrar historico
+await supabase.from('sinistro_historico').insert({
+  sinistro_id: sinistro.id,
+  status_anterior: sinistro.status,
+  status_novo: 'pecas_em_cotacao',
+  observacao: `Fornecedores atribuidos. Oficina: ${nomeOficina}. Pecas em cotacao.`,
+  usuario_id: profile?.id,
+});
 ```
 
-## Resumo das alteracoes
+### Marcar Pecas como Recebidas - Criacao automatica de OS
+
+```typescript
+// Chamar edge function para criar OS
+const { data: osData, error: osErr } = await supabase.functions.invoke(
+  'gerar-os-cotacao-aprovada',
+  { body: { sinistro_id: sinistro.id, cotacao_id: cotacaoAprovada.id } }
+);
+if (osErr) throw osErr;
+
+// Atualizar status para em_reparo
+await supabase.from('sinistros')
+  .update({ status: 'em_reparo', updated_at: new Date().toISOString() })
+  .eq('id', sinistro.id);
+
+toast.success(`Pecas recebidas! OS ${osData?.os_numero || ''} criada automaticamente.`);
+```
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/eventos/SinistroAnalise.tsx` | Adicionar bloco de acoes para `pecas_em_cotacao` com botao "Marcar Pecas como Recebidas", ajustar guarda do "Enviar para Oficina" para `pronto_para_oficina`, incluir `pecas_em_cotacao` na aba cotacoes |
-| `src/hooks/useCotacoesEvento.ts` | Remover geracao automatica de OS na aprovacao de cotacao (OS sera criada apenas ao enviar para oficina) |
+| `src/components/sinistros/AtribuirFornecedoresDialog.tsx` | Remover criacao de OS; salvar oficina_id no sinistro e status pecas_em_cotacao |
+| `src/pages/eventos/SinistroAnalise.tsx` | Marcar pecas recebidas agora chama gerar-os-cotacao-aprovada e vai direto para em_reparo; remover bloco intermediario pronto_para_oficina e botao extra Enviar para Oficina |
+| `supabase/functions/gerar-os-cotacao-aprovada/index.ts` | Adicionar validacao se oficina_id esta presente no sinistro |
