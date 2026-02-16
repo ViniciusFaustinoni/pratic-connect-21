@@ -22,6 +22,7 @@ import { Plus, Trash2, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { PecaSelectFields, PecaSelectValues } from '@/components/oficinas/PecaSelectFields';
 
 const ETAPAS_REPARO = [
@@ -68,6 +69,7 @@ export function VistoriaEventoOrcamento({
   veiculo,
 }: VistoriaEventoOrcamentoProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
 
   // Diagnóstico
@@ -229,6 +231,8 @@ export function VistoriaEventoOrcamento({
       }
 
       toast.success('Vistoria finalizada com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['vistorias-evento'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-evento-contadores'] });
       navigate('/regulador/vistorias');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao finalizar vistoria');
