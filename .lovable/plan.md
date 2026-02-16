@@ -1,89 +1,121 @@
 
-# Geocodificar Endereco do Evento e Mostrar Pino no Mapa
+# Geocodificar Local na IA + Pre-preencher Link do Evento
 
 ## Problema Atual
 
-Quando o associado preenche "Rua" e "Numero" na Etapa 3 do link do evento, esses dados sao salvos apenas como texto (`local_rua`, `local_numero`) no campo `dados_etapa3` da tabela `sinistro_evento_links`. Nenhuma geocodificacao acontece, entao `sinistros.latitude_informada` e `sinistros.longitude_informada` ficam nulos.
-
-O componente `ComparacaoPosicoes` (mapa de evidencia) ja suporta mostrar dois pinos (rastreador em verde, informada em azul) -- mas como as coordenadas informadas estao nulas, so aparece o pino do rastreador.
+1. Quando a IA (WhatsApp ou App) cria um sinistro, o campo `local` e salvo apenas como texto em `sinistros.local_ocorrencia` -- sem geocodificacao (sem lat/lng)
+2. Quando o link do evento e gerado para o associado, o campo "Rua" e "Numero" na Etapa 3 vem vazio, mesmo que o associado ja tenha informado o local na conversa com a IA
+3. O mapa de evidencia so mostra o pino do local informado se `latitude_informada` e `longitude_informada` existirem no sinistro
 
 ## Solucao
 
-### 1. Geocodificar o endereco na edge function `salvar-etapa-evento`
+### 1. Geocodificar o local ao criar sinistro via IA
 
-Quando a etapa 3 for salva e conter `local_rua` (e opcionalmente `local_numero`), a edge function fara uma chamada a API gratuita do Nominatim (OpenStreetMap) para converter o endereco em coordenadas.
+**Arquivos:** `supabase/functions/whatsapp-webhook/index.ts` e `supabase/functions/assistente-chat/index.ts`
 
-As coordenadas resultantes serao salvas em `sinistros.latitude_informada` e `sinistros.longitude_informada`, alem de atualizar `sinistros.local_ocorrencia` com o endereco formatado.
-
-**Arquivo:** `supabase/functions/salvar-etapa-evento/index.ts`
-
-Apos a linha que atualiza o status do sinistro para `documentacao_enviada` (etapa 3, linha ~149), adicionar:
+Apos o INSERT do sinistro (onde `local_ocorrencia: args.local`), adicionar geocodificacao via Nominatim:
 
 ```typescript
-// Geocodificar endereco informado
-if (dados.local_rua) {
-  const enderecoCompleto = dados.local_numero 
-    ? `${dados.local_rua}, ${dados.local_numero}` 
-    : dados.local_rua;
-  
+// Apos criar sinistro com sucesso
+if (args.local) {
   try {
-    const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoCompleto + ', Brasil')}&limit=1`;
-    const geoRes = await fetch(geoUrl, {
-      headers: { 'User-Agent': 'PraticConnect/1.0' }
-    });
+    const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(args.local + ', Brasil')}&limit=1`;
+    const geoRes = await fetch(geoUrl, { headers: { 'User-Agent': 'PraticConnect/1.0' } });
     const geoData = await geoRes.json();
-    
     if (geoData.length > 0) {
-      await supabase
-        .from('sinistros')
-        .update({
-          latitude_informada: parseFloat(geoData[0].lat),
-          longitude_informada: parseFloat(geoData[0].lon),
-          local_ocorrencia: enderecoCompleto,
-        })
-        .eq('id', link.sinistro_id);
+      await supabase.from('sinistros').update({
+        latitude_informada: parseFloat(geoData[0].lat),
+        longitude_informada: parseFloat(geoData[0].lon),
+      }).eq('id', sinistroNovo.id);
     }
-  } catch (geoError) {
-    console.error('Erro na geocodificacao:', geoError);
-    // Nao bloqueia o fluxo se geocodificacao falhar
-  }
+  } catch (e) { console.error('Geo error:', e); }
 }
 ```
 
-### 2. Nenhuma alteracao necessaria no frontend
+Isso garante que sinistros criados via IA ja tenham coordenadas para o mapa de evidencia.
 
-O componente `ComparacaoPosicoes` ja:
-- Aceita `latitudeInformada` e `longitudeInformada` como props
-- Mostra marcador azul para posicao informada quando as coordenadas existem
-- Mostra linha tracejada entre os dois pontos
-- Calcula e exibe a distancia entre posicoes
-- Mostra legenda "Rastreador" (verde) e "Informada" (azul)
+### 2. Incluir `local_ocorrencia` na resposta do `validar-link-evento`
 
-As paginas `EventoAnaliseDetalhe.tsx` e `SinistroAnalise.tsx` ja passam `sinistro.latitude_informada` e `sinistro.longitude_informada` para o componente.
+**Arquivo:** `supabase/functions/validar-link-evento/index.ts`
 
-## Detalhes Tecnicos
+Adicionar `local_ocorrencia` no SELECT do sinistro para que o frontend tenha acesso ao endereco ja informado:
 
-### API Nominatim (OpenStreetMap)
-- Gratuita, sem necessidade de API key
-- Rate limit: 1 req/segundo (suficiente para uso pontual)
-- Adicionar `', Brasil'` ao endereco para melhorar precisao
-- Header `User-Agent` obrigatorio pela politica de uso
+```typescript
+// Linha 68: adicionar local_ocorrencia ao select
+.select(`
+  id, protocolo, tipo, data_ocorrencia, descricao, local_ocorrencia,
+  associado:associados(id, nome, telefone, whatsapp, email),
+  veiculo:veiculos(id, placa, marca, modelo, ano_modelo, cor, valor_fipe)
+`)
+```
 
-### Fluxo de dados
+E incluir na resposta:
 
-1. Associado preenche rua + numero na Etapa 3
-2. Edge function `salvar-etapa-evento` geocodifica o endereco via Nominatim
-3. Coordenadas salvas em `sinistros.latitude_informada` / `longitude_informada`
-4. Analista abre o evento e ve o mapa com dois pinos: rastreador (verde) + local informado (azul)
+```typescript
+sinistro: sinistro ? {
+  ...
+  local_ocorrencia: sinistro.local_ocorrencia,
+} : null,
+```
 
-### Tratamento de erros
-- Se a geocodificacao falhar (sem resultado ou erro de rede), o fluxo continua normalmente
-- O mapa continuara mostrando apenas o pino do rastreador nesse caso
+### 3. Pre-preencher Rua/Numero na Etapa 3 do link
+
+**Arquivo:** `src/pages/public/EventoColisao.tsx`
+
+Passar `sinistro.local_ocorrencia` para o componente `EventoEtapa3Relato`:
+
+```typescript
+<EventoEtapa3Relato 
+  token={token!} 
+  onComplete={handleStepComplete}
+  localPadrao={sinistro?.local_ocorrencia}
+/>
+```
+
+**Arquivo:** `src/components/evento/EventoEtapa3Relato.tsx`
+
+Aceitar a prop `localPadrao` e usar como valor inicial do campo "Rua":
+
+```typescript
+interface Props {
+  token: string;
+  onComplete: () => void;
+  localPadrao?: string;
+}
+
+// No componente:
+const [rua, setRua] = useState(localPadrao || '');
+```
+
+## Fluxo Resultante
+
+```text
+Associado informa local na IA (WhatsApp/App)
+    |
+    v
+IA cria sinistro com local_ocorrencia + geocodifica (lat/lng)
+    |
+    v
+Link do evento e gerado e enviado ao associado
+    |
+    v
+Etapa 3 do link abre com campo "Rua" ja preenchido
+    |
+    v
+Associado pode corrigir ou confirmar e enviar
+    |
+    v
+Mapa de evidencia mostra pino do local informado (azul) + rastreador (verde)
+```
 
 ## Resumo de Arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/salvar-etapa-evento/index.ts` | Adicionar geocodificacao via Nominatim na etapa 3, salvando lat/lng no sinistro |
+| `supabase/functions/whatsapp-webhook/index.ts` | Geocodificar `args.local` apos criar sinistro |
+| `supabase/functions/assistente-chat/index.ts` | Geocodificar `args.local` apos criar sinistro |
+| `supabase/functions/validar-link-evento/index.ts` | Incluir `local_ocorrencia` no retorno |
+| `src/pages/public/EventoColisao.tsx` | Passar `local_ocorrencia` para Etapa 3 |
+| `src/components/evento/EventoEtapa3Relato.tsx` | Aceitar `localPadrao` e pre-preencher campo Rua |
 
-Nenhuma migration necessaria -- os campos `latitude_informada` e `longitude_informada` ja existem na tabela `sinistros`.
+Nenhuma migration necessaria -- todos os campos ja existem no banco.
