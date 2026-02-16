@@ -19665,6 +19665,8 @@ export type Database = {
           ordem_servico_id: string | null
           parecer: string | null
           peca_danificada: string | null
+          pecas_chegaram: boolean | null
+          pecas_chegaram_em: string | null
           percentual_fipe: number | null
           perito_id: string | null
           prazo_comunicado_dias: number | null
@@ -19765,6 +19767,8 @@ export type Database = {
           ordem_servico_id?: string | null
           parecer?: string | null
           peca_danificada?: string | null
+          pecas_chegaram?: boolean | null
+          pecas_chegaram_em?: string | null
           percentual_fipe?: number | null
           perito_id?: string | null
           prazo_comunicado_dias?: number | null
@@ -19865,6 +19869,8 @@ export type Database = {
           ordem_servico_id?: string | null
           parecer?: string | null
           peca_danificada?: string | null
+          pecas_chegaram?: boolean | null
+          pecas_chegaram_em?: string | null
           percentual_fipe?: number | null
           perito_id?: string | null
           prazo_comunicado_dias?: number | null

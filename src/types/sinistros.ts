@@ -59,7 +59,8 @@ export type StatusSinistro =
   | 'finalizado'
   | 'encerrado'
   | 'cancelado'
-  | 'aguardando_analise';
+  | 'aguardando_analise'
+  | 'pecas_em_cotacao';
 
 export type CanalAbertura = 'app' | 'whatsapp' | 'telefone' | 'presencial';
 
@@ -189,6 +190,7 @@ export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
   encerrado: 'Encerrado',
   cancelado: 'Cancelado',
   aguardando_analise: 'Aguard. Análise',
+  pecas_em_cotacao: 'Peças em Cotação',
 };
 
 export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
@@ -229,6 +231,7 @@ export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
   encerrado: 'bg-gray-100 text-gray-800',
   cancelado: 'bg-gray-100 text-gray-500',
   aguardando_analise: 'bg-blue-100 text-blue-800',
+  pecas_em_cotacao: 'bg-amber-100 text-amber-800',
 };
 
 export const CANAL_LABELS: Record<CanalAbertura, string> = {
@@ -310,7 +313,8 @@ export const WORKFLOW_SINISTRO: Record<StatusSinistro, StatusSinistro[]> = {
   em_finalizacao: ['concluido', 'entregue'],
   em_recuperacao: ['em_regulacao', 'aguardando_pagamento', 'encerrado'],
   aguardando_pagamento: ['pago', 'indenizado', 'pagamento_confirmado'],
-  pagamento_confirmado: ['encerrado'],
+  pagamento_confirmado: ['pecas_em_cotacao', 'encerrado'],
+  pecas_em_cotacao: ['pronto_para_oficina'],
   pago: ['encerrado'],
   indenizado: ['encerrado'],
   aguardando_indenizacao: ['indenizado', 'encerrado'],
