@@ -1,47 +1,73 @@
 
-# Adicionar Limpeza de Posicoes Antigas na sync-rastreadores
 
-## Objetivo
+# Trajeto do Veiculo no Mapa de Monitoramento e na Analise de Eventos
 
-Apos cada sincronizacao, a edge function deve excluir registros da tabela `rastreador_posicoes` com mais de 7 dias, mantendo apenas uma janela rolante de dados recentes.
+## 1. Mapa de Monitoramento - Botao "Ver Trajeto" no Popup do Veiculo
 
-## Alteracao
+### O que muda
 
-### Arquivo: `supabase/functions/sync-rastreadores/index.ts`
+Ao clicar no marcador de um veiculo no mapa (`src/pages/monitoramento/Mapa.tsx`), o popup atual ja mostra info do veiculo, WhatsApp e Google Maps. Sera adicionado um botao **"Ver Trajeto"** que, ao ser clicado:
 
-Adicionar um passo de limpeza **apos** a insercao das posicoes (depois da linha 543), antes do calculo de totais:
+1. Busca as posicoes das ultimas 4 horas da tabela `rastreador_posicoes` (dados ja salvos pelo cron)
+2. Renderiza uma `Polyline` no mapa conectando os pontos
+3. Mostra badges com total de pontos e velocidade media
+4. Permite fechar/limpar o trajeto clicando novamente
 
-```typescript
-// Limpar posicoes com mais de 7 dias
-const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-const { count: deletados, error: errDelete } = await supabase
-  .from("rastreador_posicoes")
-  .delete({ count: 'exact' })
-  .lt("data_posicao", seteDiasAtras);
+### Implementacao
 
-if (errDelete) {
-  console.error("[sync-rastreadores] Erro ao limpar posicoes antigas:", errDelete);
-} else {
-  console.log(`[sync-rastreadores] ${deletados || 0} posicoes antigas removidas (>7 dias)`);
-}
+**Novo estado no componente `Mapa`:**
+- `trajetoAtivo: string | null` (rastreador_id do veiculo cujo trajeto esta visivel)
+- `pontosTrajetoAtivo: Array<{ latitude, longitude, velocidade, data_posicao }>` (pontos carregados)
+
+**Query sob demanda:** Ao clicar "Ver Trajeto", faz uma query direta ao banco:
+```sql
+SELECT latitude, longitude, velocidade, data_posicao
+FROM rastreador_posicoes
+WHERE rastreador_id = :id
+  AND data_posicao >= NOW() - INTERVAL '4 hours'
+ORDER BY data_posicao ASC
 ```
 
-Tambem incluir `posicoes_removidas` no JSON de resposta para monitoramento.
+**Renderizacao:** Adicionar `<Polyline>` e `<CircleMarker>` (inicio/fim) dentro do `MapContainer` existente, condicionado a `trajetoAtivo`.
 
-## Fluxo Final
-
-1. Buscar rastreadores instalados
-2. Consultar posicao atual em cada plataforma (Softruck / Rede Veiculos)
-3. Inserir posicoes novas na tabela `rastreador_posicoes`
-4. **Excluir registros com `data_posicao` anterior a 7 dias**
-5. Retornar resultado com contagem de inseridos e removidos
-
-## Impacto
-
-- A limpeza roda em segundo plano junto com o cron, sem impactar o uso do sistema
-- Mantém a tabela leve com no maximo ~1.008 registros por rastreador (7 dias x 144 syncs/dia)
-- A politica de retencao anterior de 90 dias sera substituida por esta de 7 dias conforme solicitado
-
+### Arquivo alterado
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/sync-rastreadores/index.ts` | Adicionar DELETE de posicoes com mais de 7 dias apos insercao + incluir contagem no response |
+| `src/pages/monitoramento/Mapa.tsx` | Adicionar estado de trajeto, botao no popup, query sob demanda, Polyline + marcadores de inicio/fim, badge de velocidade media |
+
+---
+
+## 2. Analise de Eventos (Analista) - Trajeto de 4h com Velocidade Media
+
+### O que muda
+
+O `TrajetoSinistroCard` atualmente mostra 24h de historico. Para o analista de eventos, o card na pagina `EventoAnaliseDetalhe.tsx` passara a usar **4 horas** antes da ocorrencia (em vez de 24h) e exibira a **velocidade media** calculada a partir dos pontos.
+
+### Implementacao
+
+**Adicionar prop `horasAnteriores` ao `TrajetoSinistroCard`:**
+- Default: 24 (manter comportamento atual em `SinistroDetalhe` e `SinistroAnalise`)
+- Na chamada em `EventoAnaliseDetalhe.tsx`: passar `horasAnteriores={4}`
+
+**Calcular velocidade media:** A partir do array `trajeto`, calcular a media das velocidades dos pontos onde `velocidade > 0` (para excluir paradas). Exibir como badge: `"Vel. media: XX km/h"`.
+
+**Atualizar titulo:** Quando `horasAnteriores={4}`, o titulo muda para "Trajeto - 4h Antes do Evento".
+
+### Arquivos alterados
+| Arquivo | Alteracao |
+|---|---|
+| `src/components/sinistros/TrajetoSinistroCard.tsx` | Adicionar prop `horasAnteriores` (default 24), usar no `subHours`, calcular e exibir velocidade media, ajustar titulo dinamicamente |
+| `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx` | Passar `horasAnteriores={4}` ao `TrajetoSinistroCard` |
+
+---
+
+## Resumo de Alteracoes
+
+| Arquivo | Descricao |
+|---|---|
+| `src/pages/monitoramento/Mapa.tsx` | Botao "Ver Trajeto" no popup, query ao `rastreador_posicoes` (4h), renderizar Polyline com velocidade media |
+| `src/components/sinistros/TrajetoSinistroCard.tsx` | Nova prop `horasAnteriores`, calculo de velocidade media, titulo dinamico |
+| `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx` | Passar `horasAnteriores={4}` |
+
+Nenhuma migration necessaria - os dados ja estao na tabela `rastreador_posicoes` alimentada pelo cron job.
+
