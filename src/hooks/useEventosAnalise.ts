@@ -57,7 +57,7 @@ export function useEventosContadores() {
         supabase.from('sinistros').select('id', { count: 'exact', head: true }).eq('status', 'reprovado').gte('updated_at', hojeISO),
         supabase.from('sinistros').select('id', { count: 'exact', head: true }).eq('status', 'aprovado').gte('updated_at', inicioMesISO),
         supabase.from('sinistros').select('id', { count: 'exact', head: true }).eq('status', 'reprovado').gte('updated_at', inicioMesISO),
-        supabase.from('sinistros').select('id', { count: 'exact', head: true }).in('status', ['comunicado', 'em_analise', 'documentacao_pendente', 'aguardando_vistoria'] as any),
+        supabase.from('sinistros').select('id', { count: 'exact', head: true }).in('status', ['comunicado', 'documentacao_pendente', 'aguardando_vistoria'] as any),
       ]);
 
       return {
