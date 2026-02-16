@@ -1,50 +1,31 @@
 
-# Adicionar Regra "Evento Vidros e Farois" aos Aditivos
+
+# Adicionar "Vidros e Farois" nas Etapas de Reparo do Regulador
 
 ## Problema
-O aditivo de Vidros e Farois existe no banco, mas nao e anexado automaticamente ao Termo de Entrada de Evento porque:
-1. Nao existe um tipo de regra para avaliar se o sinistro e do tipo "vidros"
-2. A Edge Function `autentique-evento-create` nao chama `buscarEGerarAditivos`
+
+No formulario de orcamento do regulador (`VistoriaEventoOrcamento`), as etapas de reparo disponiveis sao: Lanternagem, Pintura, Mecanica, Eletrica, Polimento e Lavagem. Nao existe a opcao "Vidros e Farois", impossibilitando o regulador de identificar esse tipo de servico no orcamento.
 
 ## Solucao
 
-### 1. Novo tipo de regra: `evento_vidros`
+### Arquivo: `src/components/regulador/VistoriaEventoOrcamento.tsx`
 
-**Arquivo:** `src/hooks/useAditivos.ts`
-- Adicionar `'evento_vidros'` ao union type de `RegraAditivo.tipo`
+Adicionar uma nova entrada no array `ETAPAS_REPARO`:
 
-**Arquivo:** `src/pages/documentos/AditivoForm.tsx`
-- Adicionar nova entrada no array `TIPOS_REGRA` com label "Evento Vidros e Farois", descricao "Anexado quando o evento/sinistro contiver vidros e farois", e icone adequado (ex: `Shield` ou outro)
-- Adicionar `evento_vidros: false` ao estado inicial de regras
+```text
+{ id: 'vidros_farois', nome: 'Vidros e Faróis', descricao: 'Troca ou reparo de para-brisa, vidros laterais, traseiro e faróis' }
+```
 
-**Arquivo:** `src/hooks/useAvaliarAditivos.ts`
-- Adicionar case `evento_vidros` no switch (retorna false no frontend pois a avaliacao real e feita no backend)
+A nova etapa sera inserida apos "eletrica" e antes de "polimento", pois segue a sequencia logica do reparo (eletrica cuida de farois eletricos, vidros e farois cuida da parte fisica/estrutural).
 
-### 2. Backend: avaliar regra no Edge Function
+### Resultado
 
-**Arquivo:** `supabase/functions/_shared/template-utils.ts`
-- Adicionar case `evento_vidros` na funcao `avaliarRegraEdge`
-- Atualizar assinatura de `buscarEGerarAditivos` para aceitar parametro opcional `contexto` com `tipo_evento`
-- No case `evento_vidros`: verificar se `contexto?.tipo_evento === 'vidros'`
-
-### 3. Injetar aditivos no Termo de Evento
-
-**Arquivo:** `supabase/functions/autentique-evento-create/index.ts`
-- Importar `buscarEGerarAditivos` de `template-utils.ts`
-- Apos gerar o `htmlContent`, chamar `buscarEGerarAditivos` passando dados do veiculo e contexto `{ tipo_evento: sinistro.tipo }`
-- Injetar o HTML dos aditivos antes do `</body>` no documento
-
-### 4. Atualizar regras do aditivo no banco
-
-- Executar SQL para definir a regra `evento_vidros` no aditivo "ADITIVO DE VIDROS E FAROIS" (ID: `74d170ba-4a2a-4b1a-aedc-175370ddb4ed`)
-
-## Resumo de arquivos
+O regulador podera selecionar "Vidros e Farois" como etapa de reparo, e essa informacao sera salva no `dados_vistoria.etapas_reparo`, permitindo:
+- Identificacao automatica de que o evento envolve vidros e farois
+- Filtragem de oficinas com especialidade compativel (ja funciona via `AtribuirFornecedoresDialog`)
+- Visibilidade para o Analista de Eventos na tela de analise
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/hooks/useAditivos.ts` | Adicionar `evento_vidros` ao tipo |
-| `src/pages/documentos/AditivoForm.tsx` | Nova opcao na UI de regras |
-| `src/hooks/useAvaliarAditivos.ts` | Case `evento_vidros` no switch |
-| `supabase/functions/_shared/template-utils.ts` | Regra + parametro contexto |
-| `supabase/functions/autentique-evento-create/index.ts` | Chamar `buscarEGerarAditivos` |
-| SQL (dados) | Atualizar regras do aditivo no banco |
+| `src/components/regulador/VistoriaEventoOrcamento.tsx` | Adicionar `vidros_farois` ao array `ETAPAS_REPARO` |
+
