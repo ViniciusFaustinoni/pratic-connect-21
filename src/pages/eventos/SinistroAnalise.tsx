@@ -1181,8 +1181,7 @@ export default function SinistroAnalise() {
                                               toast.success('Valores e fornecedores salvos!');
                                               await queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
                                               await queryClient.invalidateQueries({ queryKey: ['sinistro-analise-vistoria-evento', id] });
-                                              setValoresPecas({});
-                                              setFornecedoresPecas({});
+                                               // Não limpar estados locais - os valores já correspondem ao que foi salvo
                                             } catch (err: any) {
                                               toast.error('Erro ao salvar valores: ' + err.message);
                                             } finally {
