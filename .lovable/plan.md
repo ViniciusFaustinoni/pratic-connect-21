@@ -1,56 +1,46 @@
 
-# Corrigir Exibicao da Cota de Coparticipacao
+# Corrigir Duplicacao de Fotos nos Anexos do Regulador
 
 ## Problema
 
-A Edge Function `validar-link-evento` busca os dados do plano usando nomes de colunas **inexistentes**:
+A secao "Anexos do Regulador" esta exibindo as fotos da auto-vistoria do associado junto com os documentos reais do regulador. Isso acontece porque na linha 810 do arquivo, os documentos sao combinados:
 
-| Coluna buscada (errada) | Coluna real na tabela `planos` |
-|---|---|
-| `percentual_cota_participacao` | `cota_participacao` |
-| `cota_participacao_minima` | `cota_minima` |
+```
+const todosDocumentos = [...documentos, ...extrairDocumentosDoLink(linkEvento)];
+```
 
-Como as colunas nao existem, o Supabase retorna `null` silenciosamente, e o fallback `|| 0` faz o percentual e a cota minima aparecerem como **0%** e **R$ 0,00** na tela de pagamento, mesmo que o plano tenha 6% e R$ 1.200,00 configurados.
-
-O valor final (R$ 750,00) esta correto porque foi calculado pela `aprovar-sinistro` (que usa os nomes corretos) e esta salvo no sinistro. O problema e apenas na **exibicao** dos detalhes do calculo.
+Porem, as fotos da auto-vistoria ja sao exibidas corretamente na secao "Fotos da Auto-Vistoria" logo acima. A funcao `extrairDocumentosDoLink` extrai fotos, B.O. e relatos do link do associado e os duplica na secao do regulador.
 
 ## Solucao
 
-### Arquivo: `supabase/functions/validar-link-evento/index.ts`
+### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
 
-Corrigir os nomes das colunas no select do plano (linha ~87):
-
-```text
-// ANTES:
-.select("nome, percentual_cota_participacao, cota_participacao_minima")
-
-// DEPOIS:
-.select("nome, cota_participacao, cota_minima")
-```
-
-E ajustar as referencias logo abaixo (linhas ~93-94):
+1. Na secao "Anexos do Regulador" (linha 810), remover a chamada a `extrairDocumentosDoLink` para mostrar apenas os documentos reais do regulador (`sinistro_documentos`):
 
 ```text
-// ANTES:
-percentual = plano.percentual_cota_participacao || 0;
-cotaMinima = plano.cota_participacao_minima || 0;
+// ANTES (linha 810):
+const todosDocumentos = [...documentos, ...extrairDocumentosDoLink(linkEvento)];
 
 // DEPOIS:
-percentual = plano.cota_participacao || 0;
-cotaMinima = plano.cota_minima || 0;
+const todosDocumentos = documentos;
 ```
 
-### Deploy
+2. No indicador de progresso da timeline (linha 1617), tambem ajustar para refletir apenas documentos do regulador:
 
-Redeployar a Edge Function `validar-link-evento`.
+```text
+// ANTES (linha 1617):
+(documentos.length + extrairDocumentosDoLink(linkEvento).length) > 0
+
+// DEPOIS:
+documentos.length > 0
+```
 
 ## Resultado Esperado
 
-A tela de pagamento passara a exibir corretamente:
-- Percentual do plano: **6%** (em vez de 0%)
-- Cota minima: **R$ 1.200,00** (em vez de R$ 0,00)
-- Valor da cota: **R$ 750,00** (ja estava correto - nao muda)
+- "Fotos da Auto-Vistoria": continua mostrando fotos, B.O. e relatos enviados pelo associado (sem alteracao)
+- "Anexos do Regulador": mostra apenas documentos da tabela `sinistro_documentos` (documentos reais do regulador/analista)
+- Sem duplicacao de fotos entre as secoes
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/validar-link-evento/index.ts` | Corrigir nomes de 2 colunas no select e nas referencias |
+| `src/pages/eventos/SinistroAnalise.tsx` | Remover `extrairDocumentosDoLink` da secao "Anexos do Regulador" e do indicador de progresso |
