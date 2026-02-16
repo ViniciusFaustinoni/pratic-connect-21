@@ -1,49 +1,89 @@
 
-# Atualizar Lista de Sinistros em Tempo Real
+# Corrigir Calculo Dinamico da Cota de Coparticipacao
 
-## Problema
+## Problema Raiz
 
-A pagina `SinistrosList.tsx` (lista de eventos para o analista) usa apenas `useQuery` para buscar sinistros. Nao existe nenhuma subscription realtime, entao quando a IA cria um novo sinistro, a lista so atualiza ao recarregar a pagina manualmente.
+A coluna `valor_cota_participacao` na tabela `sinistros` tem um **DEFAULT de 750.00** (definido na migracao original). Esse valor aparece na tela de pagamento antes do sinistro ser aprovado, pois a funcao `validar-link-evento` apenas le o valor armazenado sem recalcular.
 
-## Solucao
+O calculo correto (6% de R$ 70.008,00 = R$ 4.200,48) so acontece quando `aprovar-sinistro` e executado, mas a tela de pagamento pode ser acessada antes disso.
 
-Adicionar uma subscription Supabase Realtime na pagina `SinistrosList.tsx` que escuta INSERTs, UPDATEs e DELETEs na tabela `sinistros` e invalida a query automaticamente.
+A funcao `autentique-webhook` ja tem um fallback que detecta o valor 750 e recalcula -- confirmando que esse problema ja era conhecido.
 
-### Arquivo: `src/pages/eventos/SinistrosList.tsx`
+## Solucao (2 partes)
 
-Adicionar um `useEffect` com subscription realtime que:
-- Escuta eventos `INSERT`, `UPDATE` e `DELETE` na tabela `sinistros`
-- Invalida a queryKey `['sinistros-list']` (ou a key usada no componente) ao receber qualquer mudanca
-- Remove o canal ao desmontar o componente
+### 1. Calcular cota dinamicamente em `validar-link-evento`
 
-```typescript
-// Adicionar no componente principal de SinistrosList:
-useEffect(() => {
-  const channel = supabase
-    .channel('sinistros-list-realtime')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'sinistros' },
-      () => {
-        queryClient.invalidateQueries({ queryKey: ['sinistros-list'] });
-      }
-    )
-    .subscribe();
+**Arquivo:** `supabase/functions/validar-link-evento/index.ts`
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, [queryClient]);
+Em vez de apenas ler `sinistro.valor_cota_participacao`, calcular dinamicamente usando a mesma logica de `aprovar-sinistro`:
+
+```
+valor_cota = max(valor_fipe * percentual / 100, cota_minima)
 ```
 
-Sera necessario verificar a queryKey exata usada no fetch de sinistros dentro do componente e usar a mesma key na invalidacao.
+Se o valor calculado for diferente do armazenado, atualizar o registro no banco. Isso garante que mesmo antes da aprovacao, o valor exibido sera correto.
+
+Logica a adicionar na secao de cotaInfo (apos buscar o plano):
+
+```typescript
+// Calcular valor correto
+let valorCotaCalculado = sinistro.valor_cota_participacao;
+if (veiculo?.valor_fipe && percentual > 0) {
+  valorCotaCalculado = Math.max(
+    veiculo.valor_fipe * percentual / 100,
+    cotaMinima
+  );
+
+  // Atualizar no banco se diferente
+  if (valorCotaCalculado !== sinistro.valor_cota_participacao) {
+    await supabase
+      .from("sinistros")
+      .update({ valor_cota_participacao: valorCotaCalculado })
+      .eq("id", sinistro.id);
+  }
+}
+
+cotaInfo = {
+  valor_fipe: veiculo?.valor_fipe || 0,
+  percentual,
+  cota_minima: cotaMinima,
+  valor_cota: valorCotaCalculado,  // Usar valor calculado
+  plano_nome: planoNome,
+};
+```
+
+### 2. Alterar DEFAULT da coluna para NULL
+
+**Migracao SQL:**
+
+```sql
+ALTER TABLE sinistros ALTER COLUMN valor_cota_participacao SET DEFAULT NULL;
+```
+
+Isso evita que novos sinistros recebam 750.00 automaticamente. O valor so sera preenchido quando efetivamente calculado.
+
+### 3. Corrigir o sinistro atual
+
+**Operacao de dados (INSERT tool):**
+
+```sql
+UPDATE sinistros SET valor_cota_participacao = 4200.48
+WHERE protocolo = 'SIN-20260216-0007';
+```
+
+## Deploy
+
+Redeployar a Edge Function `validar-link-evento`.
 
 ## Resultado Esperado
 
-- Quando a IA criar um novo sinistro, ele aparecera automaticamente na lista sem necessidade de atualizar a pagina
-- Mudancas de status tambem serao refletidas em tempo real
-- Exclusoes tambem serao refletidas
+- Valor da cota exibido corretamente: **R$ 4.200,48** (em vez de R$ 750,00)
+- Percentual: **6%** (ja corrigido na versao anterior)
+- Cota minima: **R$ 1.200,00** (ja corrigido na versao anterior)
+- Novos sinistros nao terao mais o default de 750
 
-| Arquivo | Alteracao |
+| Arquivo / Recurso | Alteracao |
 |---|---|
-| `src/pages/eventos/SinistrosList.tsx` | Adicionar subscription realtime para tabela `sinistros` com invalidacao automatica de cache |
+| `supabase/functions/validar-link-evento/index.ts` | Adicionar calculo dinamico da cota e atualizacao automatica no banco |
+| Migracao SQL | Alterar DEFAULT de 750.00 para NULL |
+| Dados | Atualizar sinistro SIN-20260216-0007 para 4200.48 |
