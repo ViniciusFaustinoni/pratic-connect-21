@@ -88,7 +88,10 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
 
     const tipoKey = sinistroTipo && etapasWhatsApp[sinistroTipo] ? sinistroTipo : 'default';
     const { etapas: etapasMsg, descricoes } = etapasWhatsApp[tipoKey];
-    const etapasTexto = etapasMsg.map((e, i) => `${i + 1}. *${e}* - ${descricoes[i]}`).join('\n');
+    // Adicionar etapas fixas: Agendamento e Cota de Coparticipação
+    const finalEtapas = [...etapasMsg, 'Agendamento', 'Cota de Coparticipação'];
+    const finalDescricoes = [...descricoes, 'Agende a vistoria presencial', 'Pagamento da cota conforme seu plano'];
+    const etapasTexto = finalEtapas.map((e, i) => `${i + 1}. *${e}* - ${finalDescricoes[i]}`).join('\n');
 
     const mensagem = `Olá ${associadoNome || ''}! Somos da *ABP PraticCar* e estamos aqui para te ajudar nesse momento.\n\nSeu evento *${sinistroProtocolo || ''}* foi registrado e precisamos que você complete algumas etapas pelo link abaixo:\n\n${etapasTexto}\n\nAcesse aqui: ${linkUrl}\n\nO link é válido por *72 horas*.\n\nApós a conclusão, nossa equipe analisará seu caso. Lembrando que, conforme seu plano, será aplicada a *cota de coparticipação* sobre o valor de referência do veículo.\n\nQualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
 
