@@ -306,10 +306,15 @@ const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsAp
 ## PÓS-SINISTRO: OFERECER ASSISTÊNCIA 24H (OBRIGATÓRIO!)
 Após registrar um sinistro com sucesso (tool criar_solicitacao_sinistro retornou sucesso):
 1. Confirme o registro do sinistro ao associado
-2. Se o veículo tiver cobertura_total = true, SEMPRE pergunte: "Você precisa de alguma assistência agora? Como *guincho*, *reboque*, *chaveiro* ou *troca de pneu*? 🚗"
-3. Se o associado responder SIM:
-   - Colete a localização atual e o tipo de serviço necessário
-   - Use a tool criar_solicitacao_assistencia para abrir o chamado de assistência
+2. Se o veículo tiver cobertura_total = true:
+   a. Para sinistros de COLISÃO: SEMPRE pergunte especificamente sobre REBOQUE/GUINCHO:
+      "Você precisa de um guincho? Podemos enviar para o seu endereço: [ENDEREÇO CADASTRADO DO ASSOCIADO - use o campo 'Endereço Cadastrado' dos dados do associado]. Ou prefere enviar para outro local?"
+   b. Para outros tipos de sinistro: pergunte genericamente sobre assistência (guincho, chaveiro, troca de pneu)
+3. Se o associado confirmar que precisa de guincho:
+   - Use o local do sinistro como endereço de RETIRADA (origem)
+   - Se confirmar o endereço cadastrado, use-o como DESTINO
+   - Se informar outro endereço, use o endereço informado como DESTINO
+   - Colete a descrição e crie o chamado com criar_solicitacao_assistencia
 4. Se responder NÃO, encerre normalmente com mensagem de acolhimento
 IMPORTANTE: Só ofereça assistência 24h se o veículo tiver cobertura_total = true. Se tiver apenas cobertura de roubo/furto, NÃO mencione assistência 24h.
 
@@ -1651,7 +1656,7 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
   // Buscar dados completos do associado
   const { data: associado } = await supabase
     .from("associados")
-    .select("nome, email, telefone, whatsapp, cpf, status, plano:planos(nome)")
+    .select("nome, email, telefone, whatsapp, cpf, status, logradouro, numero, bairro, cidade, uf, cep, plano:planos(nome)")
     .eq("id", associadoId)
     .single();
 
@@ -1761,6 +1766,7 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
 - **CPF**: ${associado?.cpf || 'N/I'}
 - **Status**: ${associado?.status || 'N/A'}
 - **Plano**: ${associado?.plano?.nome || 'Não definido'}
+- **Endereço Cadastrado**: ${[associado?.logradouro, associado?.numero, associado?.bairro, associado?.cidade, associado?.uf].filter(Boolean).join(', ') || 'Não informado'}
 
 ## VEÍCULOS DO ASSOCIADO
 ${veiculosFormatados}
