@@ -1,47 +1,42 @@
 
-# Corrigir Formatacao das Mensagens da IA para WhatsApp
+# Enviar Link do Evento Diretamente via API do WhatsApp
 
 ## Problema
 
-A IA gera mensagens com formatacao Markdown (ex: `**negrito**`, `## titulo`, `- lista`) em vez de usar a formatacao nativa do WhatsApp (`*negrito*`, `_italico_`, `~tachado~`). Isso faz com que os asteriscos duplos e outros caracteres Markdown aparecam como texto cru no WhatsApp.
-
-## Causa Raiz
-
-Os system prompts das edge functions que geram mensagens para WhatsApp nao proibem explicitamente o uso de Markdown. O modelo de IA tende naturalmente a usar Markdown (`**bold**`) em vez do formato WhatsApp (`*bold*`).
+O botao "Enviar via WhatsApp" no card do link do evento (`EventoLinkCard.tsx`) abre o WhatsApp Web (`wa.me/...`) para o operador copiar e enviar manualmente. O correto e que a IA/sistema envie a mensagem diretamente pela Evolution API, sem abrir nenhuma conversa.
 
 ## Solucao
 
-Adicionar instrucoes explicitas nos prompts das duas edge functions que geram texto para WhatsApp via IA.
+Alterar a funcao `handleWhatsApp` no componente `EventoLinkCard.tsx` para chamar a edge function `whatsapp-send-text` diretamente, seguindo o mesmo padrao ja usado em dezenas de outros locais do sistema (ex: `SinistroAnalise.tsx`, `EnviarLinkPrestadorButton.tsx`, etc).
 
-### 1. `supabase/functions/whatsapp-webhook/index.ts`
+## Alteracoes
 
-No `WHATSAPP_SYSTEM_PROMPT` (linha 267-269), reforcar a regra de formatacao:
+### `src/components/eventos/EventoLinkCard.tsx`
 
+1. Importar `supabase` e adicionar estado `enviando` para controle de loading
+2. Substituir `handleWhatsApp` de `window.open(wa.me/...)` para `supabase.functions.invoke('whatsapp-send-text', { body: { telefone, mensagem } })`
+3. Adicionar feedback visual: botao com loading spinner enquanto envia, toast de sucesso/erro
+4. Formatar telefone corretamente (remover caracteres nao numericos)
+
+### Detalhes Tecnicos
+
+Funcao atual (abre WhatsApp Web):
 ```text
-## Regras do WhatsApp
-- Seja CONCISO (mensagens curtas)
-- Use formatação do WhatsApp: *negrito* (um asterisco), _itálico_ (underline), ~tachado~ (til)
-- NUNCA use formatação Markdown: **duplo asterisco**, ## títulos, [links](url), ```código```
-- NÃO use marcadores especiais como [BOTAO_LOCALIZACAO] ou [UPLOAD_*]
+window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
 ```
 
-### 2. `supabase/functions/gerar-mensagem-whatsapp/index.ts`
-
-No `systemPrompt` (linhas 60-63), adicionar regra explicita:
-
+Nova funcao (envia direto pela API):
 ```text
-REGRAS IMPORTANTES:
-1. Seja amigável e profissional
-2. Use emojis de forma moderada (não exagere)
-3. Formate para WhatsApp: use *negrito* (UM asterisco) para destaques
-4. NUNCA use formatação Markdown como **duplo asterisco**, ## títulos ou [links](url)
+const { error } = await supabase.functions.invoke('whatsapp-send-text', {
+  body: {
+    telefone: phone,  // apenas numeros
+    mensagem: `Olá ${associadoNome}! Segue o link para completar as etapas do seu evento (${sinistroProtocolo}):\n\n${linkUrl}\n\nO link é válido por 72 horas.\n\nABP PraticCar`
+  }
+});
 ```
 
-## Resumo de Arquivos
+O botao mostrara um Loader2 durante o envio e ficara desabilitado para evitar duplo clique.
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar proibicao explicita de Markdown no WHATSAPP_SYSTEM_PROMPT |
-| `supabase/functions/gerar-mensagem-whatsapp/index.ts` | Adicionar proibicao explicita de Markdown no systemPrompt |
-
-Nenhuma outra edge function e afetada - as mensagens hardcoded (autentique-webhook, retroativo, notificar-sinistro, etc.) ja usam o formato correto `*negrito*`.
+| `src/components/eventos/EventoLinkCard.tsx` | Trocar `window.open(wa.me)` por chamada direta a `whatsapp-send-text` |
