@@ -1,73 +1,64 @@
 
+# Fluxo de Pre-Analise e Restricao de Acesso do Analista de Eventos
 
-# Agendar Mensagem 15min Apos Aprovacao do Sinistro — Pecas em Cotacao
+## Resumo
 
-## O que sera feito
+Implementar duas mudancas:
 
-Adicionar no Edge Function `aprovar-sinistro` o agendamento de uma mensagem WhatsApp para 15 minutos apos a aprovacao, informando ao associado que as pecas necessarias ja estao em fase de cotacao com os auto centers parceiros. A mensagem sera processada automaticamente pelo cron `cron-contato-sinistro` que ja existe.
+1. **Analista de eventos NAO ve eventos antes da vistoria do regulador ser concluida** -- a fila e o detalhe continuam filtrando apenas `aguardando_analise` (ja funciona assim). No dashboard, adicionar apenas um contador informativo "Pendente Vistoria" (numero, sem acesso).
 
-## Mecanismo
+2. **Nova area "Eventos > Pre-Analise" no menu lateral, visivel apenas para Diretor** -- uma pagina que lista sinistros nos status pre-vistoria (`comunicado`, `em_analise`, `documentacao_pendente`, `pendente_vistoria_regulador`) para que o diretor acompanhe o pipeline antes do analista ser acionado.
 
-O sistema ja possui a infraestrutura de mensagens agendadas:
-- Tabela `sinistro_contatos_agendados` armazena mensagens com horario futuro
-- O cron `cron-contato-sinistro` roda a cada minuto e envia as mensagens cujo `agendado_para` ja passou
-- O mesmo padrao ja e usado em `gerar-os-cotacao-aprovada` (mensagem 15min apos OS criada)
+## Alteracoes
 
-## Alteracao
+### 1. Hook de contadores — `src/hooks/useEventosAnalise.ts`
 
-### Arquivo: `supabase/functions/aprovar-sinistro/index.ts`
-
-**Adicionar insert na tabela `sinistro_contatos_agendados` apos o envio do WhatsApp de aprovacao (apos linha 190):**
-
-- Tipo: `pos_aprovacao_cotacao`
-- Agendado para: `now() + 15 minutos`
-- Mensagem com tom acolhedor informando que:
-  - As pecas necessarias para o reparo ja estao sendo cotadas
-  - A equipe esta em contato com auto centers parceiros
-  - O associado sera informado sobre cada etapa
-
-Mensagem proposta:
-
-```
-{nome}, aqui e a equipe Pratic Car novamente!
-
-Enquanto aguardamos a assinatura do termo e o pagamento da cota, ja estamos adiantando o processo.
-
-As pecas necessarias para o reparo do seu veiculo {placa} ja estao em fase de cotacao com nossos auto centers parceiros.
-
-Nosso objetivo e agilizar ao maximo para que, assim que tudo estiver regularizado, o reparo comece o mais rapido possivel!
-
-Voce sera informado sobre cada etapa. Qualquer duvida, estamos aqui!
-
-ABP PraticCar
-```
-
-## Detalhes tecnicos
+Adicionar query para contar sinistros com `status` IN (`comunicado`, `em_analise`, `documentacao_pendente`, `pendente_vistoria_regulador`):
 
 ```typescript
-// Apos o envio do WhatsApp de aprovacao (linha ~190)
-if (telefone) {
-  const primeiroNome = (sinistro.associado as any)?.nome?.split(' ')[0] || 'Associado';
-  const placa = (sinistro.veiculo as any)?.placa || '';
-  const agendadoPara = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-  const mensagem15 = `${primeiroNome}, aqui é a equipe Pratic Car novamente! 😊\n\nEnquanto aguardamos a assinatura do termo e o pagamento da cota, já estamos adiantando o processo! 🚀\n\n🔧 As peças necessárias para o reparo do seu veículo ${placa} já estão em *fase de cotação* com nossos auto centers parceiros.\n\nNosso objetivo é agilizar ao máximo para que, assim que tudo estiver regularizado, o reparo comece o mais rápido possível! ⚡\n\nVocê será informado sobre cada etapa. Qualquer dúvida, estamos aqui! 💙\n\nABP PraticCar`;
-
-  try {
-    await supabase.from('sinistro_contatos_agendados').insert({
-      sinistro_id,
-      tipo: 'pos_aprovacao_cotacao',
-      telefone: telefone.replace(/\D/g, ''),
-      agendado_para: agendadoPara,
-      mensagem_enviada: mensagem15,
-      status: 'agendado',
-    });
-  } catch (e) {
-    console.error('[aprovar-sinistro] Erro ao agendar mensagem 15min:', e);
-  }
-}
+const pendentesVistoria = await supabase
+  .from('sinistros')
+  .select('id', { count: 'exact', head: true })
+  .in('status', ['comunicado', 'em_analise', 'documentacao_pendente', 'pendente_vistoria_regulador']);
 ```
+
+Retornar `pendentesVistoria: pendentesVistoria.count || 0` no objeto de contadores.
+
+### 2. Dashboard do Analista — `src/pages/analista-eventos/AnalistaEventosHome.tsx`
+
+Adicionar card informativo "Pendente Vistoria":
+- Icone: `Eye` (lucide-react)
+- Cor: roxo (`text-purple-600 bg-purple-100`)
+- Posicionar como primeiro card no grid
+- Apenas informativo, sem link ou clique
+
+### 3. Nova pagina "Pre-Analise" — `src/pages/eventos/EventosPreAnalise.tsx`
+
+Pagina acessivel apenas pelo Diretor que lista sinistros em fase pre-vistoria:
+- Buscar sinistros com status IN (`comunicado`, `em_analise`, `documentacao_pendente`, `pendente_vistoria_regulador`)
+- Exibir tabela com: protocolo, tipo, associado, veiculo, placa, status, data de criacao
+- Badges coloridas por sub-status (comunicado = amarelo, pendente_vistoria = roxo, etc.)
+- Clicar no sinistro navega para `/eventos/sinistros/:id` (detalhe existente do diretor)
+- Filtros por status e tipo
+
+### 4. Rota e menu — `src/App.tsx` e `src/components/layout/AppSidebar.tsx`
+
+**App.tsx**: Adicionar rota `/eventos/pre-analise` apontando para `EventosPreAnalise`.
+
+**AppSidebar.tsx**: Adicionar item "Pre-Analise" no grupo "Eventos" do menu lateral, com permissao `isDiretor` para que apenas diretores vejam.
+
+## O que NAO muda
+
+- A fila do analista (`AnalistaEventosFila.tsx`) continua mostrando APENAS `aguardando_analise`
+- A tela de detalhe do analista (`EventoAnaliseDetalhe.tsx`) continua sem alteracoes -- acoes ja bloqueadas para status diferente de `aguardando_analise`
+- Todos os dados existentes na analise (fotos, GPS, orcamento, documentos, vistoria do regulador) continuam sendo exibidos normalmente apos a vistoria ser concluida
+
+## Resumo de arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/aprovar-sinistro/index.ts` | Adicionar agendamento de mensagem 15min apos aprovacao informando sobre cotacao de pecas |
-
+| `src/hooks/useEventosAnalise.ts` | Adicionar contador `pendentesVistoria` |
+| `src/pages/analista-eventos/AnalistaEventosHome.tsx` | Novo card informativo "Pendente Vistoria" |
+| `src/pages/eventos/EventosPreAnalise.tsx` | Nova pagina com lista de eventos pre-vistoria (apenas diretor) |
+| `src/App.tsx` | Nova rota `/eventos/pre-analise` |
+| `src/components/layout/AppSidebar.tsx` | Novo item "Pre-Analise" no menu Eventos (apenas diretor) |
