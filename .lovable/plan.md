@@ -1,42 +1,43 @@
 
-# Enviar Link do Evento Diretamente via API do WhatsApp
+# Corrigir Header Content-Type na Resposta do whatsapp-send-text
 
 ## Problema
 
-O botao "Enviar via WhatsApp" no card do link do evento (`EventoLinkCard.tsx`) abre o WhatsApp Web (`wa.me/...`) para o operador copiar e enviar manualmente. O correto e que a IA/sistema envie a mensagem diretamente pela Evolution API, sem abrir nenhuma conversa.
+A mensagem e enviada com sucesso (status 200), mas o componente exibe "Erro ao enviar" porque:
+
+1. A edge function `whatsapp-send-text` retorna o JSON de sucesso sem o header `Content-Type: application/json`
+2. O SDK `supabase.functions.invoke` nao reconhece a resposta como JSON e retorna `data` como string
+3. `data.success` resulta em `undefined` (pois `data` e uma string, nao um objeto)
+4. A condicao `!data.success` e `true`, e o codigo lanca o erro
 
 ## Solucao
 
-Alterar a funcao `handleWhatsApp` no componente `EventoLinkCard.tsx` para chamar a edge function `whatsapp-send-text` diretamente, seguindo o mesmo padrao ja usado em dezenas de outros locais do sistema (ex: `SinistroAnalise.tsx`, `EnviarLinkPrestadorButton.tsx`, etc).
+Adicionar `"Content-Type": "application/json"` ao header da resposta de sucesso na edge function `whatsapp-send-text/index.ts`.
 
-## Alteracoes
+## Alteracao
 
-### `src/components/eventos/EventoLinkCard.tsx`
+### `supabase/functions/whatsapp-send-text/index.ts`
 
-1. Importar `supabase` e adicionar estado `enviando` para controle de loading
-2. Substituir `handleWhatsApp` de `window.open(wa.me/...)` para `supabase.functions.invoke('whatsapp-send-text', { body: { telefone, mensagem } })`
-3. Adicionar feedback visual: botao com loading spinner enquanto envia, toast de sucesso/erro
-4. Formatar telefone corretamente (remover caracteres nao numericos)
+Na resposta de sucesso (final do arquivo), trocar:
 
-### Detalhes Tecnicos
-
-Funcao atual (abre WhatsApp Web):
 ```text
-window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
+return new Response(
+  JSON.stringify({ success: true, message_id: result.key?.id, telefone: telefoneFormatado }),
+  { headers: corsHeaders }
+);
 ```
 
-Nova funcao (envia direto pela API):
+Por:
+
 ```text
-const { error } = await supabase.functions.invoke('whatsapp-send-text', {
-  body: {
-    telefone: phone,  // apenas numeros
-    mensagem: `Olá ${associadoNome}! Segue o link para completar as etapas do seu evento (${sinistroProtocolo}):\n\n${linkUrl}\n\nO link é válido por 72 horas.\n\nABP PraticCar`
-  }
-});
+return new Response(
+  JSON.stringify({ success: true, message_id: result.key?.id, telefone: telefoneFormatado }),
+  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+);
 ```
 
-O botao mostrara um Loader2 durante o envio e ficara desabilitado para evitar duplo clique.
+Isso garante que o SDK parse a resposta corretamente como JSON e `data.success` seja `true`.
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/eventos/EventoLinkCard.tsx` | Trocar `window.open(wa.me)` por chamada direta a `whatsapp-send-text` |
+| `supabase/functions/whatsapp-send-text/index.ts` | Adicionar Content-Type: application/json na resposta de sucesso |
