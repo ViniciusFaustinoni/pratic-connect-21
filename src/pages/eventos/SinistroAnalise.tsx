@@ -63,7 +63,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAutoCenters, useCreatePeca } from '@/hooks/useAutoCenters';
 import { useCotacoesEvento } from '@/hooks/useCotacoesEvento';
-import { TrajetoSinistroCard } from '@/components/sinistros/TrajetoSinistroCard';
+import { TrajetoLocalCard } from '@/components/sinistros/TrajetoLocalCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
 import { CotacoesRecebidasTab } from '@/components/sinistros/CotacoesRecebidasTab';
@@ -658,21 +658,22 @@ export default function SinistroAnalise() {
                   </CardContent>
                 </Card>
 
-                {/* Trajeto 24h */}
-                {temRastreadorAtivo && (
-                  <TrajetoSinistroCard
-                    veiculoId={sinistro.veiculo_id}
-                    dataOcorrencia={sinistro.data_ocorrencia}
-                    localOcorrencia={sinistro.local_ocorrencia}
-                    sinistroId={sinistro.id}
-                    protocolo={sinistro.protocolo}
-                    veiculo={veiculo}
-                    associado={associado}
-                    latitudeInformada={sinistro.latitude_informada}
-                    longitudeInformada={sinistro.longitude_informada}
-                    rastreadorLat={rastreador?.ultima_posicao_lat}
-                    rastreadorLng={rastreador?.ultima_posicao_lng}
-                  />
+                {/* Trajeto (dados locais do cron) */}
+                {temRastreadorAtivo && sinistro.veiculo_id && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <MapPin className="h-5 w-5" /> Trajeto do Veículo (4h antes)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <TrajetoLocalCard
+                        veiculoId={sinistro.veiculo_id}
+                        dataOcorrencia={sinistro.data_ocorrencia}
+                        horasAnteriores={4}
+                      />
+                    </CardContent>
+                  </Card>
                 )}
 
                 {/* Comparação GPS */}
