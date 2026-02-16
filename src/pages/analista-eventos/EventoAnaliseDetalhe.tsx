@@ -266,6 +266,7 @@ export default function EventoAnaliseDetalhe() {
                   associado={sinistro.associado ? { nome: sinistro.associado.nome } : null}
                   latitudeInformada={sinistro.latitude_informada}
                   longitudeInformada={sinistro.longitude_informada}
+                  horasAnteriores={4}
                 />
               </AccordionContent>
             </AccordionItem>
