@@ -64,7 +64,8 @@ export type StatusSinistro =
   | 'aguardando_cota'
   | 'em_garantia'
   | 'em_recuperacao'
-  | 'aguardando_pagamento';
+  | 'aguardando_pagamento'
+  | 'pecas_em_cotacao';
 
 export type TipoSinistro = 
   | 'roubo' 
@@ -189,6 +190,7 @@ export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
   em_garantia: 'Em Garantia',
   em_recuperacao: 'Em Análise',
   aguardando_pagamento: 'Aguardando Pagamento',
+  pecas_em_cotacao: 'Peças em Cotação',
 };
 
 export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
@@ -229,6 +231,7 @@ export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
   em_garantia: 'bg-emerald-100 text-emerald-800',
   em_recuperacao: 'bg-indigo-100 text-indigo-800',
   aguardando_pagamento: 'bg-cyan-100 text-cyan-800',
+  pecas_em_cotacao: 'bg-amber-100 text-amber-800',
 };
 
 export const TIPO_SINISTRO_LABELS: Record<TipoSinistro, string> = {

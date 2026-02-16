@@ -671,7 +671,7 @@ serve(async (req) => {
                 .update({
                   cota_paga: true,
                   cota_paga_em: new Date().toISOString(),
-                  status: 'pagamento_confirmado',
+                  status: 'pecas_em_cotacao',
                 })
                 .eq('cobranca_cota_id', cobranca.id)
                 .select('id, protocolo, associado_id')
@@ -689,8 +689,8 @@ serve(async (req) => {
                 await supabase.from('sinistro_historico').insert({
                   sinistro_id: sinistroAtualizado.id,
                   status_anterior: 'aguardando_cota',
-                  status_novo: 'pagamento_confirmado',
-                  observacao: `Pagamento da cota de coparticipação confirmado - R$ ${payment.value.toFixed(2)} via ${payment.billingType}`,
+                  status_novo: 'pecas_em_cotacao',
+                  observacao: `Pagamento da cota de coparticipação confirmado - R$ ${payment.value.toFixed(2)} via ${payment.billingType}. Peças em processo de cotação.`,
                 });
               }
 
@@ -707,7 +707,7 @@ serve(async (req) => {
                   await supabase.functions.invoke('whatsapp-send-text', {
                     body: {
                       phone: tel,
-                      message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${assocData?.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${payment.value.toFixed(2)} foi confirmado!\n\nO reparo do seu veículo será agendado em breve. Você receberá atualizações pelo WhatsApp.`,
+                      message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${assocData?.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${payment.value.toFixed(2)} foi confirmado!\n\nAs peças do seu veículo estão sendo cotadas junto aos nossos fornecedores. Você será notificado sobre cada etapa do processo! 🔧`,
                     },
                   });
                 }

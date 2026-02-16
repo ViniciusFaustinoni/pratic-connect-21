@@ -86,6 +86,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   reprovado: { label: 'Reprovado', class: 'bg-red-100 text-red-800 border-red-300' },
   negado: { label: 'Negado', class: 'bg-destructive/20 text-destructive border-destructive' },
   aguardando_analise: { label: 'Aguardando Análise Final', class: 'bg-blue-100 text-blue-800 border-blue-300' },
+  pecas_em_cotacao: { label: 'Peças em Cotação', class: 'bg-amber-100 text-amber-800 border-amber-300' },
 };
 
 const tipoConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -1339,26 +1340,17 @@ export default function SinistroAnalise() {
                   );
                 }
 
-                // Pagamento confirmado — aguardando termo
+              // Pagamento confirmado — peças em cotação em breve
                 if ((sinistro.status as string) === 'pagamento_confirmado') {
                   return (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 p-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
                         <CheckCircle className="h-4 w-4 flex-shrink-0" />
-                        <span><strong>Pagamento confirmado</strong> — aguardando assinatura do termo.</span>
+                        <span><strong>Pagamento confirmado</strong> — peças serão cotadas em breve.</span>
                       </div>
                       {(sinistro as any).cota_paga_em && (
                         <p className="text-xs text-muted-foreground">
                           Pago em {formatDateTime((sinistro as any).cota_paga_em)}
-                        </p>
-                      )}
-                      {(sinistro as any).cota && (
-                        <p className="text-xs text-muted-foreground">
-                          Valor: {formatCurrency(
-                            typeof (sinistro as any).cota === 'object'
-                              ? (sinistro as any).cota.valor_cota
-                              : (sinistro as any).cota
-                          )}
                         </p>
                       )}
                     </div>
@@ -1408,15 +1400,6 @@ export default function SinistroAnalise() {
                             Reenviar Link de Pagamento
                           </Button>
                         </div>
-                      )}
-                      {sinistro.cota_paga && (
-                        <Button
-                          className="w-full"
-                          onClick={() => setShowEnviarOficina(true)}
-                        >
-                          <Wrench className="h-4 w-4 mr-2" />
-                          Enviar para Oficina
-                        </Button>
                       )}
                     </>
                   );

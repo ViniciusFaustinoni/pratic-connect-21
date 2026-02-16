@@ -109,6 +109,34 @@ export function EnviarParaOficinaDialog({
         usuario_id: profile?.id,
       });
 
+      // 5. WhatsApp ao associado
+      try {
+        const { data: assocData } = await supabase
+          .from('associados')
+          .select('nome, whatsapp, telefone')
+          .eq('id', sinistro.associado_id)
+          .single();
+        
+        const { data: oficinaData } = await supabase
+          .from('oficinas')
+          .select('nome_fantasia, razao_social')
+          .eq('id', oficinaId)
+          .single();
+
+        const tel = assocData?.whatsapp || assocData?.telefone;
+        const nomeOficina = oficinaData?.nome_fantasia || oficinaData?.razao_social || 'oficina parceira';
+        if (tel) {
+          await supabase.functions.invoke('whatsapp-send-text', {
+            body: {
+              phone: tel,
+              message: `🔧 *PRATIC - Veículo Encaminhado*\n\nOlá ${assocData?.nome},\n\nSeu veículo foi encaminhado para a oficina *${nomeOficina}*.\n\nAcompanhe o progresso do reparo pelo nosso canal. Qualquer dúvida, estamos à disposição! 🚗`,
+            },
+          });
+        }
+      } catch (e) {
+        console.error('Erro WhatsApp envio oficina:', e);
+      }
+
       toast.success('Ordem de serviço criada com sucesso!');
       onOpenChange(false);
       onSuccess?.();
