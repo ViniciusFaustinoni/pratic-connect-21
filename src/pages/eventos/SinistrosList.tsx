@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NovoSinistroModal } from '@/components/eventos/NovoSinistroModal';
 import { PainelNaoRecuperados } from '@/components/sinistros/PainelNaoRecuperados';
 import { ConfirmacaoExclusaoDialog } from '@/components/sinistros/ConfirmacaoExclusaoDialog';
@@ -87,6 +87,7 @@ interface Filters {
 
 export default function SinistrosList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isDiretor, isAnalistaEventos } = usePermissions();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [sinistroParaExcluir, setSinistroParaExcluir] = useState<any>(null);
@@ -97,6 +98,26 @@ export default function SinistrosList() {
     status: 'todos',
     tipo: 'todos',
   });
+
+  // Realtime subscription para atualizar lista automaticamente
+  useEffect(() => {
+    const channel = supabase
+      .channel('sinistros-list-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sinistros' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['sinistros'] });
+          queryClient.invalidateQueries({ queryKey: ['sinistros-contadores'] });
+          queryClient.invalidateQueries({ queryKey: ['sinistros-pendencias-ia'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   // Query principal
   const { data: sinistros, isLoading } = useQuery({
