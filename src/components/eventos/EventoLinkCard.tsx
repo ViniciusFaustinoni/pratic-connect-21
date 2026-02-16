@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEventoLink } from '@/hooks/useEventoLink';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ const statusConfig: Record<string, { label: string; icon: any; className: string
 export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsapp, associadoNome, sinistroTipo }: EventoLinkCardProps) {
   const { linkAtivo, isLoading, contato, gerarNovoLink } = useEventoLink(sinistroId);
   const [copied, setCopied] = useState(false);
+  const [enviando, setEnviando] = useState(false);
 
   if (isLoading) {
     return (
@@ -57,13 +59,27 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleWhatsApp = () => {
+  const handleWhatsApp = async () => {
     if (!associadoWhatsapp || !linkUrl) return;
     const phone = associadoWhatsapp.replace(/\D/g, '');
-    const msg = encodeURIComponent(
-      `Olá ${associadoNome || ''}! Segue o link para completar as etapas do seu evento (${sinistroProtocolo || ''}):\n\n${linkUrl}\n\nO link é válido por 72 horas.`
-    );
-    window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
+    const mensagem = `Olá ${associadoNome || ''}! Segue o link para completar as etapas do seu evento (${sinistroProtocolo || ''}):\n\n${linkUrl}\n\nO link é válido por 72 horas.\n\nABP PraticCar`;
+
+    try {
+      setEnviando(true);
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+        body: { telefone: phone, mensagem }
+      });
+
+      if (error) throw error;
+      if (data && !data.success) throw new Error(data.error || 'Erro ao enviar');
+
+      toast.success('Link enviado via WhatsApp!');
+    } catch (err: any) {
+      console.error('Erro ao enviar WhatsApp:', err);
+      toast.error(`Erro ao enviar: ${err.message}`);
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const isRouboFurto = sinistroTipo === 'roubo' || sinistroTipo === 'furto';
@@ -183,9 +199,9 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
                     {copied ? 'Copiado!' : 'Copiar Link'}
                   </Button>
                   {associadoWhatsapp && (
-                    <Button variant="outline" size="sm" className="w-full" onClick={handleWhatsApp}>
-                      <Send className="h-4 w-4 mr-2" />
-                      Enviar via WhatsApp
+                    <Button variant="outline" size="sm" className="w-full" onClick={handleWhatsApp} disabled={enviando}>
+                      {enviando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                      {enviando ? 'Enviando...' : 'Enviar via WhatsApp'}
                     </Button>
                   )}
                   <Button
