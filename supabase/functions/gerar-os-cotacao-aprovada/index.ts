@@ -29,6 +29,7 @@ serve(async (req) => {
       .eq("id", sinistro_id)
       .single();
     if (errSinistro || !sinistro) throw new Error("Sinistro não encontrado");
+    if (!sinistro.oficina_id) throw new Error("Oficina não atribuída ao sinistro. Atribua fornecedores antes de gerar a OS.");
 
     // 1b. Buscar prestadores vinculados ao sinistro
     const { data: prestadoresVinculados } = await supabase

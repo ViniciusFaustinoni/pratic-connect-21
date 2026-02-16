@@ -1378,10 +1378,18 @@ export default function SinistroAnalise() {
                                 const { data: { user } } = await supabase.auth.getUser();
                                 if (!user) throw new Error('Não autenticado');
 
-                                // Atualizar status do sinistro
+                                // Chamar edge function para criar OS automaticamente
+                                const { data: osData, error: osErr } = await supabase.functions.invoke(
+                                  'gerar-os-cotacao-aprovada',
+                                  { body: { sinistro_id: sinistro.id, cotacao_id: cotacaoAprovada?.id } }
+                                );
+                                if (osErr) throw osErr;
+                                if (osData?.error) throw new Error(osData.error);
+
+                                // Atualizar status para em_reparo
                                 const { error: errUpdate } = await supabase
                                   .from('sinistros')
-                                  .update({ status: 'pronto_para_oficina', updated_at: new Date().toISOString() })
+                                  .update({ status: 'em_reparo' as any, updated_at: new Date().toISOString() })
                                   .eq('id', sinistro.id);
                                 if (errUpdate) throw errUpdate;
 
@@ -1389,22 +1397,12 @@ export default function SinistroAnalise() {
                                 await supabase.from('sinistro_historico').insert({
                                   sinistro_id: sinistro.id,
                                   status_anterior: 'pecas_em_cotacao',
-                                  status_novo: 'pronto_para_oficina',
-                                  observacao: 'Peças recebidas — veículo pronto para envio à oficina.',
+                                  status_novo: 'em_reparo',
+                                  observacao: `Peças recebidas. OS ${osData?.os_numero || ''} criada automaticamente.`,
                                   usuario_id: user.id,
                                 });
 
-                                // Enviar WhatsApp ao associado
-                                const telefone = associado?.whatsapp || associado?.telefone;
-                                if (telefone) {
-                                  const nome = associado?.nome?.split(' ')[0] || 'Associado';
-                                  const mensagem = `Olá ${nome}!\n\nAs peças para o reparo do seu veículo foram recebidas!\nEm breve seu veículo será encaminhado para a oficina parceira.\n\nAcompanhe o andamento pelo nosso canal.\n\nABP PraticCar`;
-                                  await supabase.functions.invoke('whatsapp-send-text', {
-                                    body: { telefone, mensagem },
-                                  });
-                                }
-
-                                toast.success('Peças marcadas como recebidas! Veículo pronto para oficina.');
+                                toast.success(`Peças recebidas! OS ${osData?.os_numero || ''} criada automaticamente.`);
                                 queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
                               } catch (err: any) {
                                 console.error('Erro ao marcar peças recebidas:', err);
@@ -1421,24 +1419,7 @@ export default function SinistroAnalise() {
                   );
                 }
 
-                // Pronto para oficina
-                if ((sinistro.status as string) === 'pronto_para_oficina') {
-                  return (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 p-3 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-sm">
-                        <CheckCircle className="h-4 w-4 flex-shrink-0" />
-                        <span><strong>Peças recebidas</strong> — pronto para enviar à oficina.</span>
-                      </div>
-                      <Button
-                        className="w-full bg-teal-600 hover:bg-teal-700 text-white"
-                        onClick={() => setShowEnviarOficina(true)}
-                      >
-                        <Wrench className="h-4 w-4 mr-2" />
-                        Enviar para Oficina
-                      </Button>
-                    </div>
-                  );
-                }
+                // Bloco pronto_para_oficina removido — OS é criada automaticamente ao marcar peças recebidas
 
                 // Status em_analise: aguardando auto vistoria do associado
                 if (sinistro.status === 'em_analise') {
@@ -1651,27 +1632,15 @@ export default function SinistroAnalise() {
                         <Shield className="h-3.5 w-3.5 mr-1.5" />
                         Jurídico
                       </Button>
-                      {sinistro.status === 'aprovado' && sinistro.cota_paga ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-teal-300 text-teal-700 hover:bg-teal-50"
-                          onClick={() => setShowEnviarOficina(true)}
-                        >
-                          <Wrench className="h-3.5 w-3.5 mr-1.5" />
-                          Enviar para Oficina
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-muted-foreground/30 text-muted-foreground hover:bg-muted"
-                          onClick={() => setShowSuspender(true)}
-                        >
-                          <Clock className="h-3.5 w-3.5 mr-1.5" />
-                          Suspender
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-muted-foreground/30 text-muted-foreground hover:bg-muted"
+                        onClick={() => setShowSuspender(true)}
+                      >
+                        <Clock className="h-3.5 w-3.5 mr-1.5" />
+                        Suspender
+                      </Button>
                     </div>
                   </>
                 );
