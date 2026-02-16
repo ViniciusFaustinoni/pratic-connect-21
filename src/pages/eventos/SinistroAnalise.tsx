@@ -1089,19 +1089,30 @@ export default function SinistroAnalise() {
                                       </table>
                                     </div>
                                     {(() => {
+                                      const pecasItens = itens.filter((it: any) => it.tipo === 'peca');
+                                      const totalPecas = pecasItens.reduce((s: number, it: any, idx: number) => {
+                                        const globalIdx = itens.indexOf(it);
+                                        const iaItem = temCotacaoAprovada
+                                          ? (cotacaoAprovada?.resposta as any)?.itens?.[globalIdx]
+                                          : null;
+                                        const valor = iaItem?.valor_unitario ?? valoresPecas[globalIdx] ?? it.valor_unitario;
+                                        if (valor == null) return s;
+                                        return s + Number(valor) * (it.quantidade || 1);
+                                      }, 0);
                                       const totalMaoObra = itens
                                         .filter((it: any) => it.tipo === 'mao_de_obra' && it.valor_unitario != null)
                                         .reduce((s: number, it: any) => s + (it.valor_unitario * (it.quantidade || 1)), 0);
                                       const totalServicos = itens
                                         .filter((it: any) => it.tipo === 'servico' && it.valor_unitario != null)
                                         .reduce((s: number, it: any) => s + (it.valor_unitario * (it.quantidade || 1)), 0);
-                                      const totalGeral = totalMaoObra + totalServicos;
+                                      const totalGeral = totalPecas + totalMaoObra + totalServicos;
                                       if (totalGeral === 0 && dados.valor_total_orcamento == null) return null;
                                       return (
                                         <div className="text-sm text-muted-foreground mt-2 space-y-0.5">
+                                          {totalPecas > 0 && <p>Peças: <strong>{formatCurrency(totalPecas)}</strong></p>}
                                           {totalMaoObra > 0 && <p>Mão de obra: <strong>{formatCurrency(totalMaoObra)}</strong></p>}
                                           {totalServicos > 0 && <p>Serviços: <strong>{formatCurrency(totalServicos)}</strong></p>}
-                                          <p>Custo médio estimado (mão de obra + serviços): <strong>{formatCurrency(totalGeral || dados.valor_total_orcamento || 0)}</strong></p>
+                                          <p>Custo total estimado (peças + mão de obra + serviços): <strong>{formatCurrency(totalGeral || dados.valor_total_orcamento || 0)}</strong></p>
                                         </div>
                                       );
                                     })()}
@@ -1168,10 +1179,10 @@ export default function SinistroAnalise() {
                                               }
 
                                               toast.success('Valores e fornecedores salvos!');
+                                              await queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+                                              await queryClient.invalidateQueries({ queryKey: ['sinistro-analise-vistoria-evento', id] });
                                               setValoresPecas({});
                                               setFornecedoresPecas({});
-                                              queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
-                                              queryClient.invalidateQueries({ queryKey: ['sinistro-analise-vistoria-evento', id] });
                                             } catch (err: any) {
                                               toast.error('Erro ao salvar valores: ' + err.message);
                                             } finally {
