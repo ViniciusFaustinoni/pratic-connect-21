@@ -84,14 +84,14 @@ serve(async (req) => {
       if (associado?.plano_id) {
         const { data: plano } = await supabase
           .from("planos")
-          .select("nome, percentual_cota_participacao, cota_participacao_minima")
+          .select("nome, cota_participacao, cota_minima")
           .eq("id", associado.plano_id)
           .single();
 
         if (plano) {
           planoNome = plano.nome || "Plano";
-          percentual = plano.percentual_cota_participacao || 0;
-          cotaMinima = plano.cota_participacao_minima || 0;
+          percentual = plano.cota_participacao || 0;
+          cotaMinima = plano.cota_minima || 0;
         }
       }
 
