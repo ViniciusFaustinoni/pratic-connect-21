@@ -67,7 +67,7 @@ serve(async (req) => {
         id, protocolo, tipo, data_ocorrencia, descricao, local_ocorrencia,
         valor_cota_participacao, cota_paga,
         associado:associados!sinistros_associado_id_fkey(id, nome, telefone, whatsapp, email, cpf, plano_id),
-        veiculo:veiculos!sinistros_veiculo_id_fkey(id, placa, marca, modelo, ano_modelo, cor, valor_fipe)
+        veiculo:veiculos!sinistros_veiculo_id_fkey(id, placa, marca, modelo, ano_modelo, cor, valor_fipe, uso_aplicativo)
       `)
       .eq("id", link.sinistro_id)
       .single();
@@ -84,7 +84,7 @@ serve(async (req) => {
       if (associado?.plano_id) {
         const { data: plano } = await supabase
           .from("planos")
-          .select("nome, cota_participacao, cota_minima")
+          .select("nome, cota_participacao, cota_minima, cota_app_percent, cota_app_min")
           .eq("id", associado.plano_id)
           .single();
 
@@ -92,6 +92,11 @@ serve(async (req) => {
           planoNome = plano.nome || "Plano";
           percentual = plano.cota_participacao || 0;
           cotaMinima = plano.cota_minima || 0;
+
+          if (veiculo?.uso_aplicativo && plano.cota_app_percent) {
+            percentual = plano.cota_app_percent;
+            cotaMinima = plano.cota_app_min || cotaMinima;
+          }
         }
       }
 
