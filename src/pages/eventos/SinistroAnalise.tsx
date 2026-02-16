@@ -603,7 +603,7 @@ export default function SinistroAnalise() {
         {/* Coluna Esquerda - 2/3 */}
         <div className="lg:col-span-2 space-y-6">
           {(() => {
-            const showCotacoesTab = ['aprovado', 'pronto_para_oficina', 'em_reparo'].includes(sinistro.status as string);
+            const showCotacoesTab = ['aprovado', 'pronto_para_oficina', 'em_reparo', 'pecas_em_cotacao'].includes(sinistro.status as string);
 
             const detalhesContent = (
               <div className="space-y-6">
@@ -1357,6 +1357,89 @@ export default function SinistroAnalise() {
                   );
                 }
 
+                // Peças em cotação — aguardando recebimento
+                if ((sinistro.status as string) === 'pecas_em_cotacao') {
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                        <Clock className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Peças em cotação</strong> — aguardando recebimento das peças.</span>
+                      </div>
+                      {temCotacaoAprovada && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">
+                            <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                            <span>Cotação aprovada — <strong>{cotacaoAprovada?.auto_center?.nome_fantasia || cotacaoAprovada?.auto_center?.nome}</strong> ({formatCurrency(cotacaoAprovada?.valor_total || 0)})</span>
+                          </div>
+                          <Button
+                            className="w-full bg-teal-600 hover:bg-teal-700 text-white"
+                            onClick={async () => {
+                              try {
+                                const { data: { user } } = await supabase.auth.getUser();
+                                if (!user) throw new Error('Não autenticado');
+
+                                // Atualizar status do sinistro
+                                const { error: errUpdate } = await supabase
+                                  .from('sinistros')
+                                  .update({ status: 'pronto_para_oficina', updated_at: new Date().toISOString() })
+                                  .eq('id', sinistro.id);
+                                if (errUpdate) throw errUpdate;
+
+                                // Registrar histórico
+                                await supabase.from('sinistro_historico').insert({
+                                  sinistro_id: sinistro.id,
+                                  status_anterior: 'pecas_em_cotacao',
+                                  status_novo: 'pronto_para_oficina',
+                                  observacao: 'Peças recebidas — veículo pronto para envio à oficina.',
+                                  usuario_id: user.id,
+                                });
+
+                                // Enviar WhatsApp ao associado
+                                const telefone = associado?.whatsapp || associado?.telefone;
+                                if (telefone) {
+                                  const nome = associado?.nome?.split(' ')[0] || 'Associado';
+                                  const mensagem = `Olá ${nome}!\n\nAs peças para o reparo do seu veículo foram recebidas!\nEm breve seu veículo será encaminhado para a oficina parceira.\n\nAcompanhe o andamento pelo nosso canal.\n\nABP PraticCar`;
+                                  await supabase.functions.invoke('whatsapp-send-text', {
+                                    body: { telefone, mensagem },
+                                  });
+                                }
+
+                                toast.success('Peças marcadas como recebidas! Veículo pronto para oficina.');
+                                queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+                              } catch (err: any) {
+                                console.error('Erro ao marcar peças recebidas:', err);
+                                toast.error('Erro: ' + (err.message || 'Tente novamente'));
+                              }
+                            }}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Marcar Peças como Recebidas
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Pronto para oficina
+                if ((sinistro.status as string) === 'pronto_para_oficina') {
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-sm">
+                        <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Peças recebidas</strong> — pronto para enviar à oficina.</span>
+                      </div>
+                      <Button
+                        className="w-full bg-teal-600 hover:bg-teal-700 text-white"
+                        onClick={() => setShowEnviarOficina(true)}
+                      >
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Enviar para Oficina
+                      </Button>
+                    </div>
+                  );
+                }
+
                 // Status em_analise: aguardando auto vistoria do associado
                 if (sinistro.status === 'em_analise') {
                   return (
@@ -1535,7 +1618,7 @@ export default function SinistroAnalise() {
               })()}
               {(() => {
                 // Mostrar botões adicionais apenas quando status permite
-                const statusPermiteAcoes = !['suspenso', 'negado', 'encerrado', 'reprovado', 'em_reparo', 'pronto_para_oficina', 'pagamento_confirmado'].includes(sinistro.status as string);
+                const statusPermiteAcoes = !['suspenso', 'negado', 'encerrado', 'reprovado', 'em_reparo', 'pronto_para_oficina', 'pagamento_confirmado', 'pecas_em_cotacao'].includes(sinistro.status as string);
                 if (!statusPermiteAcoes) return null;
                 return (
                   <>

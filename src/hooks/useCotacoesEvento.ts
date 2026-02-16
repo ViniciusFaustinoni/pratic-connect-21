@@ -116,24 +116,6 @@ export function useCotacoesEvento(sinistroId: string | undefined) {
       toast.success('Cotação aprovada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['cotacoes-evento', sinistroId] });
 
-      let osNumero: string | null = null;
-
-      // Gerar OS automaticamente via edge function
-      try {
-        const { data, error } = await supabase.functions.invoke('gerar-os-cotacao-aprovada', {
-          body: { sinistro_id: sinistroId, cotacao_id: cotacaoId },
-        });
-        if (error) throw error;
-        osNumero = data?.os_numero || null;
-        if (osNumero) {
-          toast.success(`OS ${osNumero} gerada automaticamente!`);
-        }
-        queryClient.invalidateQueries({ queryKey: ['ordens_servico'] });
-      } catch (e: any) {
-        console.error('Erro ao gerar OS:', e);
-        toast.error('Cotação aprovada, mas houve erro ao gerar a OS: ' + (e.message || 'erro desconhecido'));
-      }
-
       // Criar conta a pagar para o auto center
       try {
         const cotacao = query.data?.find(c => c.id === cotacaoId);
@@ -161,7 +143,7 @@ export function useCotacoesEvento(sinistroId: string | undefined) {
             data_vencimento: vencimento.toISOString().split('T')[0],
             referencia_tipo: 'cotacao_pecas',
             referencia_id: cotacaoId,
-            observacao: `Peças cotação aprovada${protocolo ? ` - Sinistro ${protocolo}` : ''}${osNumero ? ` - OS ${osNumero}` : ''}`,
+            observacao: `Peças cotação aprovada${protocolo ? ` - Sinistro ${protocolo}` : ''}`,
             status: 'pendente',
           });
 
