@@ -62,6 +62,7 @@ import PropostasPendentes from "./pages/cadastro/PropostasPendentes";
 import PropostaAnalise from "./pages/cadastro/PropostaAnalise";
 import VistoriaCompletaAnalise from "./pages/cadastro/VistoriaCompletaAnalise";
 import SinistrosList from "./pages/eventos/SinistrosList";
+import EventosPreAnalise from "./pages/eventos/EventosPreAnalise";
 import SinistroAnalise from "./pages/eventos/SinistroAnalise";
 import PlanosAdmin from "./pages/admin/PlanosAdmin";
 import SinistroDetalhe from "./pages/eventos/SinistroDetalhe";
@@ -442,6 +443,7 @@ const App = () => (
               <Route path="/eventos/sindicancias/:id" element={<SindicanciaDetalhe />} />
               <Route path="/eventos/sla" element={<EventosSLADashboard />} />
               <Route path="/eventos/solicitacoes-ia" element={<SolicitacoesIA />} />
+              <Route path="/eventos/pre-analise" element={<EventosPreAnalise />} />
               
               {/* Assistência 24h */}
               <Route path="/assistencia" element={<AssistenciaDashboard />} />
