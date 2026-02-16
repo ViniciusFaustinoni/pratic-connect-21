@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -224,6 +225,7 @@ export default function SinistroAnalise() {
   const [enviandoLinkAgendamento, setEnviandoLinkAgendamento] = useState(false);
   const [enviandoLinkAutoVistoria, setEnviandoLinkAutoVistoria] = useState(false);
   const [fotoViewer, setFotoViewer] = useState({ open: false, index: 0 });
+  const [fotoViewerInstalacao, setFotoViewerInstalacao] = useState({ open: false, index: 0 });
   const [showSolicitarOrcamento, setShowSolicitarOrcamento] = useState(false);
   const [valoresPecas, setValoresPecas] = useState<Record<number, number>>({});
   const [fornecedoresPecas, setFornecedoresPecas] = useState<Record<number, { id: string; nome: string }>>({});
@@ -242,6 +244,7 @@ export default function SinistroAnalise() {
     veiculoHistorico,
     linkEvento,
     vistoriaEvento,
+    instalacaoFotos,
     isLoading,
   } = useSinistroAnalise(id);
 
@@ -804,6 +807,54 @@ export default function SinistroAnalise() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Fotos da Vistoria de Instalação do Rastreador */}
+                {instalacaoFotos.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Image className="h-5 w-5" />
+                        Fotos da Vistoria de Instalação
+                      </CardTitle>
+                      <CardDescription>Fotos registradas durante a instalação do rastreador</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-3 gap-2">
+                        {instalacaoFotos.map((foto: any, idx: number) => {
+                          const labelObj = FOTOS_INSTALACAO.find(f => f.tipo === foto.tipo);
+                          const label = labelObj?.label || foto.tipo;
+                          return (
+                            <div
+                              key={foto.id}
+                              className="relative group cursor-pointer"
+                              onClick={() => setFotoViewerInstalacao({ open: true, index: idx })}
+                            >
+                              <img
+                                src={foto.arquivo_url}
+                                alt={label}
+                                className="h-24 w-full rounded-md object-cover border hover:opacity-80 transition-opacity"
+                              />
+                              <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-1 py-0.5 rounded-b-md truncate">
+                                {label}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Lightbox para fotos de instalação */}
+                <VisualizadorFoto
+                  fotos={instalacaoFotos.map((f: any) => ({
+                    url: f.arquivo_url,
+                    label: FOTOS_INSTALACAO.find(ft => ft.tipo === f.tipo)?.label || f.tipo,
+                  }))}
+                  indexInicial={fotoViewerInstalacao.index}
+                  open={fotoViewerInstalacao.open}
+                  onClose={() => setFotoViewerInstalacao({ open: false, index: 0 })}
+                />
 
                 {/* Documentos */}
                 {(() => {
