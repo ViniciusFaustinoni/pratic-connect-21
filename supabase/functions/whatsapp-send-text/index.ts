@@ -209,7 +209,7 @@ serve(async (req) => {
         message_id: result.key?.id,
         telefone: telefoneFormatado,
       }),
-      { headers: corsHeaders }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
     console.error("[whatsapp-send-text] Erro:", error);
