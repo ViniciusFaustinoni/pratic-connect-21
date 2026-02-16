@@ -42,7 +42,6 @@ serve(async (req) => {
 
     // Verificar se expirou
     if (link.status === "ativo" && new Date(link.expira_em) < new Date()) {
-      // Atualizar status para expirado
       await supabase
         .from("sinistro_evento_links")
         .update({ status: "expirado" })
@@ -61,16 +60,49 @@ serve(async (req) => {
       );
     }
 
-    // Buscar dados do sinistro
+    // Buscar dados do sinistro com campos adicionais para pagamento
     const { data: sinistro } = await supabase
       .from("sinistros")
       .select(`
         id, protocolo, tipo, data_ocorrencia, descricao, local_ocorrencia,
-        associado:associados(id, nome, telefone, whatsapp, email),
-        veiculo:veiculos(id, placa, marca, modelo, ano_modelo, cor, valor_fipe)
+        valor_cota_participacao, cota_paga,
+        associado:associados!sinistros_associado_id_fkey(id, nome, telefone, whatsapp, email, cpf, plano_id),
+        veiculo:veiculos!sinistros_veiculo_id_fkey(id, placa, marca, modelo, ano_modelo, cor, valor_fipe)
       `)
       .eq("id", link.sinistro_id)
       .single();
+
+    // Build cota info if applicable
+    let cotaInfo = null;
+    if (sinistro && sinistro.valor_cota_participacao && sinistro.valor_cota_participacao > 0) {
+      const associado = sinistro.associado as any;
+      const veiculo = sinistro.veiculo as any;
+      let planoNome = "Plano";
+      let percentual = 0;
+      let cotaMinima = 0;
+
+      if (associado?.plano_id) {
+        const { data: plano } = await supabase
+          .from("planos")
+          .select("nome, percentual_cota_participacao, cota_participacao_minima")
+          .eq("id", associado.plano_id)
+          .single();
+
+        if (plano) {
+          planoNome = plano.nome || "Plano";
+          percentual = plano.percentual_cota_participacao || 0;
+          cotaMinima = plano.cota_participacao_minima || 0;
+        }
+      }
+
+      cotaInfo = {
+        valor_fipe: veiculo?.valor_fipe || 0,
+        percentual,
+        cota_minima: cotaMinima,
+        valor_cota: sinistro.valor_cota_participacao,
+        plano_nome: planoNome,
+      };
+    }
 
     return new Response(
       JSON.stringify({
@@ -91,9 +123,15 @@ serve(async (req) => {
           data_ocorrencia: sinistro.data_ocorrencia,
           descricao: sinistro.descricao,
           local_ocorrencia: sinistro.local_ocorrencia,
-          associado: sinistro.associado,
+          valor_cota_participacao: sinistro.valor_cota_participacao,
+          cota_paga: sinistro.cota_paga,
+          associado: {
+            ...(sinistro.associado as any),
+            plano_id: undefined, // don't expose
+          },
           veiculo: sinistro.veiculo,
         } : null,
+        cota: cotaInfo,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -471,18 +471,29 @@ export default function SinistroAnalise() {
     if (!sinistro || !associado) return;
     const telefone = associado.whatsapp || associado.telefone;
     if (!telefone) { toast.error('Associado não possui telefone cadastrado.'); return; }
-    if (!sinistro.cobranca_cota_id) { toast.error('Nenhuma cobrança vinculada a este evento.'); return; }
     setReenviandoPagamento(true);
     try {
-      const { data: cobranca, error: cobErr } = await supabase
-        .from('asaas_cobrancas')
-        .select('asaas_id, valor')
-        .eq('id', sinistro.cobranca_cota_id)
+      // Buscar token do link ativo do sinistro
+      const { data: linkAtivo } = await supabase
+        .from('sinistro_evento_links')
+        .select('token')
+        .eq('sinistro_id', sinistro.id)
+        .eq('status', 'ativo')
+        .order('created_at', { ascending: false })
+        .limit(1)
         .single();
-      if (cobErr || !cobranca) throw new Error('Cobrança não encontrada');
+
+      const valorFmt = sinistro.valor_cota_participacao
+        ? sinistro.valor_cota_participacao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : 'valor a conferir';
+
+      const linkPag = linkAtivo?.token
+        ? `https://pratic-connect-21.lovable.app/evento/${linkAtivo.token}`
+        : null;
+
+      if (!linkPag) { toast.error('Link do evento não encontrado. Gere um novo link.'); setReenviandoPagamento(false); return; }
+
       const nome = associado.nome?.split(' ')[0] || 'Associado';
-      const valorFmt = cobranca.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      const linkPag = `https://www.asaas.com/c/${cobranca.asaas_id}`;
       const mensagem = `Olá ${nome}! Tudo bem?\n\nO Termo de Entrada do evento ${sinistro.protocolo} já foi assinado com sucesso!\n\nPara que seu veículo seja encaminhado à oficina, falta apenas o pagamento da cota de coparticipação:\n\n💰 Valor: ${valorFmt}\n📋 Link de pagamento: ${linkPag}\n\nApós a confirmação do pagamento, seu evento será encaminhado para reparo.\n\nEstamos à disposição!\n\nABP PraticCar`;
       const { error } = await supabase.functions.invoke('whatsapp-send-text', { body: { telefone, mensagem } });
       if (error) throw error;

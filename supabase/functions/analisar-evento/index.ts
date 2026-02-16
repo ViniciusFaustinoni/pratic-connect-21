@@ -170,7 +170,7 @@ serve(async (req) => {
         const telefone = (sinistro as any)?.associado?.whatsapp || (sinistro as any)?.associado?.telefone;
         if (telefone && novoLink) {
           const appUrl = Deno.env.get("APP_PUBLIC_URL") || "https://pratic-connect-21.lovable.app";
-          const linkUrl = `${appUrl}/evento-aprovado/${novoLink.token}`;
+          const linkUrl = `${appUrl}/evento/${novoLink.token}`;
           await supabase.functions.invoke("whatsapp-send-text", {
             body: {
               phone: telefone,

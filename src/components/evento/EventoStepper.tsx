@@ -1,4 +1,4 @@
-import { CheckCircle, Car, FileText, MessageCircle, Calendar } from 'lucide-react';
+import { CheckCircle, Car, FileText, MessageCircle, Calendar, CreditCard } from 'lucide-react';
 
 interface EventoStepperProps {
   etapaAtual: number;
@@ -9,6 +9,7 @@ const etapas = [
   { numero: 2, titulo: 'B.O.', icon: FileText },
   { numero: 3, titulo: 'Relato', icon: MessageCircle },
   { numero: 4, titulo: 'Agendamento', icon: Calendar },
+  { numero: 5, titulo: 'Pagamento', icon: CreditCard },
 ];
 
 export default function EventoStepper({ etapaAtual }: EventoStepperProps) {

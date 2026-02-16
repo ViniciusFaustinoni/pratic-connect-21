@@ -610,10 +610,24 @@ serve(async (req) => {
                 }
 
                 // === ENVIAR LINK DE PAGAMENTO VIA WHATSAPP ===
-                if (cobrancaAsaasId && (associado.whatsapp || associado.telefone)) {
+                if (associado.whatsapp || associado.telefone) {
                   const telefone = associado.whatsapp || associado.telefone;
                   const valorFormatado = valorCota.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-                  const linkPagamento = invoiceUrl || `https://www.asaas.com/c/${cobrancaAsaasId}`;
+
+                  // Buscar token do link ativo do sinistro
+                  const { data: linkAtivo } = await supabase
+                    .from("sinistro_evento_links")
+                    .select("token")
+                    .eq("sinistro_id", sinistroDoc.id)
+                    .eq("status", "ativo")
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .single();
+
+                  const appUrl = Deno.env.get("APP_PUBLIC_URL") || "https://pratic-connect-21.lovable.app";
+                  const linkPagamento = linkAtivo?.token
+                    ? `${appUrl}/evento/${linkAtivo.token}`
+                    : `https://www.asaas.com/c/${cobrancaAsaasId}`;
 
                   let mensagem = `💳 *PRATIC - Pagamento da Cota de Coparticipação*\n\n`;
                   mensagem += `Olá ${associado.nome},\n\n`;
@@ -621,9 +635,6 @@ serve(async (req) => {
                   mensagem += `Agora, efetue o pagamento da cota de coparticipação:\n\n`;
                   mensagem += `💰 *Valor:* R$ ${valorFormatado}\n`;
                   mensagem += `📋 *Link de pagamento:* ${linkPagamento}\n`;
-                  if (pixPayload) {
-                    mensagem += `\n📱 *PIX Copia e Cola:*\n${pixPayload}\n`;
-                  }
                   mensagem += `\nApós o pagamento, seu evento será encaminhado para a oficina.`;
 
                   try {
