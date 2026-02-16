@@ -1,75 +1,89 @@
 
-
-# Mapa no Card de Posicoes GPS + Trajeto via Cron Job
+# Geocodificar Endereco do Evento e Mostrar Pino no Mapa
 
 ## Problema Atual
 
-1. O card "Trajeto" chama a edge function `rastreador-historico` (API Softruck) em vez de usar os dados ja salvos pelo cron job na tabela `rastreador_posicoes`
-2. O card "Posicoes GPS - Evidencia" mostra apenas coordenadas em texto, sem mapa
+Quando o associado preenche "Rua" e "Numero" na Etapa 3 do link do evento, esses dados sao salvos apenas como texto (`local_rua`, `local_numero`) no campo `dados_etapa3` da tabela `sinistro_evento_links`. Nenhuma geocodificacao acontece, entao `sinistros.latitude_informada` e `sinistros.longitude_informada` ficam nulos.
 
-## Alteracoes
+O componente `ComparacaoPosicoes` (mapa de evidencia) ja suporta mostrar dois pinos (rastreador em verde, informada em azul) -- mas como as coordenadas informadas estao nulas, so aparece o pino do rastreador.
 
-### 1. Card de Trajeto - Usar dados do cron job (`rastreador_posicoes`)
+## Solucao
 
-**Arquivo:** `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
+### 1. Geocodificar o endereco na edge function `salvar-etapa-evento`
 
-Substituir o `TrajetoSinistroCard` (que chama edge function) por um novo componente inline ou dedicado que:
-- Busca o `rastreador_id` do veiculo via tabela `rastreadores`
-- Consulta `rastreador_posicoes` filtrando por `rastreador_id` e `data_posicao` nas ultimas 4h antes do evento
-- Renderiza `MapContainer` com `Polyline` dos pontos
-- Calcula e exibe velocidade media
-- Mostra marcadores de inicio (verde) e fim (vermelho)
+Quando a etapa 3 for salva e conter `local_rua` (e opcionalmente `local_numero`), a edge function fara uma chamada a API gratuita do Nominatim (OpenStreetMap) para converter o endereco em coordenadas.
 
-A query sera:
-```sql
-SELECT latitude, longitude, velocidade, data_posicao
-FROM rastreador_posicoes
-WHERE rastreador_id = :id
-  AND data_posicao BETWEEN :data_inicio AND :data_fim
-ORDER BY data_posicao ASC
+As coordenadas resultantes serao salvas em `sinistros.latitude_informada` e `sinistros.longitude_informada`, alem de atualizar `sinistros.local_ocorrencia` com o endereco formatado.
+
+**Arquivo:** `supabase/functions/salvar-etapa-evento/index.ts`
+
+Apos a linha que atualiza o status do sinistro para `documentacao_enviada` (etapa 3, linha ~149), adicionar:
+
+```typescript
+// Geocodificar endereco informado
+if (dados.local_rua) {
+  const enderecoCompleto = dados.local_numero 
+    ? `${dados.local_rua}, ${dados.local_numero}` 
+    : dados.local_rua;
+  
+  try {
+    const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoCompleto + ', Brasil')}&limit=1`;
+    const geoRes = await fetch(geoUrl, {
+      headers: { 'User-Agent': 'PraticConnect/1.0' }
+    });
+    const geoData = await geoRes.json();
+    
+    if (geoData.length > 0) {
+      await supabase
+        .from('sinistros')
+        .update({
+          latitude_informada: parseFloat(geoData[0].lat),
+          longitude_informada: parseFloat(geoData[0].lon),
+          local_ocorrencia: enderecoCompleto,
+        })
+        .eq('id', link.sinistro_id);
+    }
+  } catch (geoError) {
+    console.error('Erro na geocodificacao:', geoError);
+    // Nao bloqueia o fluxo se geocodificacao falhar
+  }
+}
 ```
 
-### 2. Card de Posicoes GPS - Adicionar Mapa
+### 2. Nenhuma alteracao necessaria no frontend
 
-**Arquivo:** `src/components/sinistros/ComparacaoPosicoes.tsx`
+O componente `ComparacaoPosicoes` ja:
+- Aceita `latitudeInformada` e `longitudeInformada` como props
+- Mostra marcador azul para posicao informada quando as coordenadas existem
+- Mostra linha tracejada entre os dois pontos
+- Calcula e exibe a distancia entre posicoes
+- Mostra legenda "Rastreador" (verde) e "Informada" (azul)
 
-Adicionar um mini-mapa Leaflet dentro do card existente que mostra:
-- Marcador da posicao do rastreador (verde) no horario do evento
-- Marcador da posicao informada pelo associado (azul), se disponivel
-- Linha conectando os dois pontos quando ambos existem
-- O mapa centralizado automaticamente nos pontos disponiveis
-
-### 3. Reorganizar a pagina do analista
-
-**Arquivo:** `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
-
-- O card de trajeto mostra o percurso (4h) usando dados locais do banco
-- O card de posicoes GPS (ComparacaoPosicoes) ganha o mini-mapa com a posicao na hora do evento
+As paginas `EventoAnaliseDetalhe.tsx` e `SinistroAnalise.tsx` ja passam `sinistro.latitude_informada` e `sinistro.longitude_informada` para o componente.
 
 ## Detalhes Tecnicos
 
-### Novo componente: `TrajetoLocalCard`
+### API Nominatim (OpenStreetMap)
+- Gratuita, sem necessidade de API key
+- Rate limit: 1 req/segundo (suficiente para uso pontual)
+- Adicionar `', Brasil'` ao endereco para melhorar precisao
+- Header `User-Agent` obrigatorio pela politica de uso
 
-Sera criado em `src/components/sinistros/TrajetoLocalCard.tsx` para separar a logica de buscar trajeto do banco local (cron) vs API (edge function).
+### Fluxo de dados
 
-Props:
-- `veiculoId: string`
-- `dataOcorrencia: string | null`
-- `horasAnteriores: number` (default 4)
+1. Associado preenche rua + numero na Etapa 3
+2. Edge function `salvar-etapa-evento` geocodifica o endereco via Nominatim
+3. Coordenadas salvas em `sinistros.latitude_informada` / `longitude_informada`
+4. Analista abre o evento e ve o mapa com dois pinos: rastreador (verde) + local informado (azul)
 
-Logica:
-1. Query `rastreadores` para obter `rastreador_id` do veiculo
-2. Query `rastreador_posicoes` com filtro de data
-3. Renderizar mapa com Polyline + badges de velocidade media e total de pontos
-
-### ComparacaoPosicoes com mapa
-
-Adicionar `MapContainer` de 200px de altura mostrando os marcadores das posicoes. Importar Leaflet apenas quando ha coordenadas disponiveis.
+### Tratamento de erros
+- Se a geocodificacao falhar (sem resultado ou erro de rede), o fluxo continua normalmente
+- O mapa continuara mostrando apenas o pino do rastreador nesse caso
 
 ## Resumo de Arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/sinistros/TrajetoLocalCard.tsx` | **Novo** - Card de trajeto usando dados locais do `rastreador_posicoes` |
-| `src/components/sinistros/ComparacaoPosicoes.tsx` | Adicionar mini-mapa Leaflet mostrando posicao do veiculo na hora do evento |
-| `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx` | Trocar `TrajetoSinistroCard` por `TrajetoLocalCard` e garantir que `ComparacaoPosicoes` esta presente com mapa |
+| `supabase/functions/salvar-etapa-evento/index.ts` | Adicionar geocodificacao via Nominatim na etapa 3, salvando lat/lng no sinistro |
+
+Nenhuma migration necessaria -- os campos `latitude_informada` e `longitude_informada` ja existem na tabela `sinistros`.
