@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -59,6 +59,32 @@ export function useEventoLink(sinistroId: string | undefined) {
     },
     enabled: !!sinistroId,
   });
+
+  // Realtime subscription para atualizar automaticamente
+  useEffect(() => {
+    if (!sinistroId) return;
+
+    const channel = supabase
+      .channel(`evento-link-realtime-${sinistroId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sinistro_evento_links',
+          filter: `sinistro_id=eq.${sinistroId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['evento-link', sinistroId] });
+          queryClient.invalidateQueries({ queryKey: ['evento-contato', sinistroId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sinistroId, queryClient]);
 
   return {
     linkAtivo,
