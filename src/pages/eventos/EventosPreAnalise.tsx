@@ -8,18 +8,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 
-const STATUS_PRE_ANALISE = ['comunicado', 'em_analise', 'documentacao_pendente', 'aguardando_vistoria'] as const;
+const STATUS_PRE_ANALISE = ['comunicado', 'documentacao_pendente', 'aguardando_vistoria'] as const;
 
 const STATUS_LABELS: Record<string, string> = {
   comunicado: 'Comunicado',
-  em_analise: 'Em Análise',
   documentacao_pendente: 'Doc. Pendente',
   aguardando_vistoria: 'Aguardando Vistoria',
 };
 
 const STATUS_COLORS: Record<string, string> = {
   comunicado: 'bg-amber-100 text-amber-800 border-amber-200',
-  em_analise: 'bg-blue-100 text-blue-800 border-blue-200',
   documentacao_pendente: 'bg-orange-100 text-orange-800 border-orange-200',
   aguardando_vistoria: 'bg-purple-100 text-purple-800 border-purple-200',
 };
