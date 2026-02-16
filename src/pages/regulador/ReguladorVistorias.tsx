@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Play } from 'lucide-react';
+import { Loader2, Play, Phone } from 'lucide-react';
 import { useVistoriasEvento } from '@/hooks/useVistoriasEvento';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -127,6 +127,17 @@ export default function ReguladorVistorias() {
                     {v.endereco_rua}{v.endereco_numero ? `, ${v.endereco_numero}` : ''} — {v.endereco_bairro}, {v.endereco_cidade}
                   </span>
                 </div>
+
+                {/* Contato do associado */}
+                {(v.sinistro?.associado?.whatsapp || v.sinistro?.associado?.telefone) && (
+                  <a
+                    href={`tel:${v.sinistro?.associado?.whatsapp || v.sinistro?.associado?.telefone}`}
+                    className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                    {v.sinistro?.associado?.whatsapp || v.sinistro?.associado?.telefone}
+                  </a>
+                )}
 
                 {/* Ações */}
                 {(v.status === 'agendada' || v.status === 'em_andamento') && (
