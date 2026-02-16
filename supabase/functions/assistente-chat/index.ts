@@ -711,10 +711,13 @@ async function executeTool(
           console.error("[assistente-chat] Erro agendar contato (não bloqueante):", e);
         }
 
-        // 11. Geocodificar local informado
+        // 11. Geocodificar local informado (com cidade/UF do associado para maior precisão)
         if (args.local) {
           try {
-            const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(args.local + ', Brasil')}&limit=1`;
+            const cidadeUf = [associado?.cidade, associado?.uf].filter(Boolean).join(', ');
+            const searchQuery = cidadeUf ? `${args.local}, ${cidadeUf}, Brasil` : `${args.local}, Brasil`;
+            console.log(`[assistente-chat] Geocodificando local informado: "${searchQuery}"`);
+            const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`;
             const geoRes = await fetch(geoUrl, { headers: { 'User-Agent': 'PraticConnect/1.0' } });
             const geoData = await geoRes.json();
             if (geoData.length > 0) {
@@ -995,7 +998,7 @@ serve(async (req) => {
       .from("associados")
       .select(`
         id, nome, cpf, email, telefone, whatsapp, status, 
-        data_adesao, dia_vencimento,
+        data_adesao, dia_vencimento, cidade, uf,
         plano:planos(nome, descricao)
       `)
       .eq("user_id", userId)
