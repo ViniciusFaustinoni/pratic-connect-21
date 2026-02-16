@@ -542,6 +542,21 @@ serve(async (req) => {
 
     console.log(`[sync-rastreadores] ${posicoesInseridas} posições inseridas`);
 
+    // Limpar posições com mais de 7 dias
+    let posicoesRemovidas = 0;
+    const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: deletados, error: errDelete } = await supabase
+      .from("rastreador_posicoes")
+      .delete({ count: 'exact' })
+      .lt("data_posicao", seteDiasAtras);
+
+    if (errDelete) {
+      console.error("[sync-rastreadores] Erro ao limpar posições antigas:", errDelete);
+    } else {
+      posicoesRemovidas = deletados || 0;
+      console.log(`[sync-rastreadores] ${posicoesRemovidas} posições antigas removidas (>7 dias)`);
+    }
+
     // Calcular totais
     const totalSucesso = resultados.reduce((sum, r) => sum + r.sucesso, 0);
     const totalFalhas = resultados.reduce((sum, r) => sum + r.falhas, 0);
@@ -558,6 +573,7 @@ serve(async (req) => {
         sincronizados: totalSucesso,
         falhas: totalFalhas,
         posicoes_inseridas: posicoesInseridas,
+        posicoes_removidas: posicoesRemovidas,
         duracao_ms: duracao,
         results: resultados,
       }),
