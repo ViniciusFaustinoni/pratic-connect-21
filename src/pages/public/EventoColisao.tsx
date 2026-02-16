@@ -32,6 +32,7 @@ interface EventoData {
     tipo: string;
     data_ocorrencia: string;
     descricao: string;
+    local_ocorrencia?: string;
     associado: { id: string; nome: string };
     veiculo: { placa: string; marca: string; modelo: string; ano_modelo: string; cor: string };
   };
@@ -169,7 +170,7 @@ export default function EventoColisao() {
             ) : etapaAtual === 1 ? (
               <EventoEtapa2BO token={token!} onComplete={handleStepComplete} />
             ) : etapaAtual === 2 ? (
-              <EventoEtapa3Relato token={token!} onComplete={handleStepComplete} />
+              <EventoEtapa3Relato token={token!} onComplete={handleStepComplete} localPadrao={sinistro?.local_ocorrencia} />
             ) : null}
           </CardContent>
         </Card>

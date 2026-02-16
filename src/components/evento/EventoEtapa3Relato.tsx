@@ -13,13 +13,14 @@ import { toast } from 'sonner';
 interface Props {
   token: string;
   onComplete: () => void;
+  localPadrao?: string;
 }
 
-export default function EventoEtapa3Relato({ token, onComplete }: Props) {
+export default function EventoEtapa3Relato({ token, onComplete, localPadrao }: Props) {
   const [relato, setRelato] = useState('');
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [dataEvento, setDataEvento] = useState('');
-  const [rua, setRua] = useState('');
+  const [rua, setRua] = useState(localPadrao || '');
   const [numero, setNumero] = useState('');
   const [houveTerceiro, setHouveTerceiro] = useState(false);
   const [terceiroNome, setTerceiroNome] = useState('');

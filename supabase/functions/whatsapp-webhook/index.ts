@@ -990,6 +990,24 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         console.error("[whatsapp-webhook] Erro agendar contato (não bloqueante):", e);
       }
 
+      // 11. Geocodificar local informado
+      if (args.local) {
+        try {
+          const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(args.local + ', Brasil')}&limit=1`;
+          const geoRes = await fetch(geoUrl, { headers: { 'User-Agent': 'PraticConnect/1.0' } });
+          const geoData = await geoRes.json();
+          if (geoData.length > 0) {
+            await supabase.from('sinistros').update({
+              latitude_informada: parseFloat(geoData[0].lat),
+              longitude_informada: parseFloat(geoData[0].lon),
+            }).eq('id', sinistroNovo.id);
+            console.log(`[whatsapp-webhook] Geocodificado: ${args.local} -> ${geoData[0].lat}, ${geoData[0].lon}`);
+          }
+        } catch (geoErr) {
+          console.error('[whatsapp-webhook] Erro geocodificação (não bloqueante):', geoErr);
+        }
+      }
+
       return JSON.stringify({
         sucesso: true,
         protocolo: protocoloSin,
