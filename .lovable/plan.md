@@ -1,75 +1,47 @@
 
 
-# Corrigir Persistencia de Valores de Pecas e Incluir no Custo Total
+# Criar Cron Job para sync-rastreadores (a cada 10 minutos)
 
-## Problemas Identificados
+## Objetivo
 
-### 1. Valores de pecas nao persistem na interface
-Ao salvar valores e fornecedores, o sistema atualiza o `dados_vistoria` no banco corretamente (o toast "Valores e fornecedores salvos!" aparece). Porem, apos o save, os estados locais `valoresPecas` e `fornecedoresPecas` sao limpos, e a query e invalidada para refetch. O problema e que o input de valor usa `valoresPecas[i] ?? item.valor_unitario ?? ''` -- se o refetch ainda nao completou quando o estado local e limpo, o campo mostra vazio momentaneamente. Alem disso, o campo do fornecedor usa `fornecedoresPecas[i]?.id || item.fornecedor_id || ''` e, se o `item.fornecedor_id` nao estiver no array original recarregado, ele volta a "Selecionar...".
+Agendar a execucao automatica da edge function `sync-rastreadores` a cada 10 minutos usando `pg_cron` e `pg_net`, para manter as posicoes GPS dos veiculos atualizadas.
 
-**Causa raiz**: Ao salvar, os estados locais sao limpos (linhas 1171-1172) antes do refetch completar. O `queryClient.invalidateQueries` e assincrono - os dados novos ainda nao chegaram quando o estado local ja foi resetado.
+## Pre-requisitos
 
-**Correcao**: Aguardar o refetch completar antes de limpar os estados locais, usando `await queryClient.invalidateQueries(...)` em sequencia, e o React ira usar os dados atualizados do servidor.
-
-### 2. Custo total nao inclui pecas
-O calculo do total (linhas 1091-1104) soma apenas itens do tipo `mao_de_obra` e `servico`. Pecas sao completamente ignoradas no calculo. O label diz "Custo medio estimado (mao de obra + servicos)" sem mencionar pecas.
-
-**Correcao**: Adicionar o calculo de pecas ao total, considerando tanto valores manuais (`valoresPecas`) quanto valores vindos de cotacao aprovada (IA), e atualizar o label.
+As extensoes `pg_cron` e `pg_net` precisam estar habilitadas no Supabase. Caso ainda nao estejam, serao ativadas via SQL.
 
 ## Alteracoes
 
-### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
+### SQL (via insert tool, nao migration)
 
-#### A. Garantir persistencia apos salvar (linhas 1170-1174)
+Executar o seguinte SQL para criar o cron job:
 
-Trocar a sequencia de limpeza para aguardar o refetch:
+```sql
+-- Habilitar extensoes necessarias (idempotente)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
 
-```typescript
-toast.success('Valores e fornecedores salvos!');
-// Primeiro invalidar e esperar refetch, DEPOIS limpar estados locais
-await queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
-await queryClient.invalidateQueries({ queryKey: ['sinistro-analise-vistoria-evento', id] });
-setValoresPecas({});
-setFornecedoresPecas({});
+-- Criar cron job a cada 10 minutos
+SELECT cron.schedule(
+  'sync-rastreadores-10min',
+  '*/10 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/sync-rastreadores',
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+    body := '{"source": "cron"}'::jsonb
+  ) AS request_id;
+  $$
+);
 ```
 
-#### B. Incluir pecas no custo total (linhas 1091-1107)
+Este SQL sera executado via ferramenta de insert (nao migration), pois contem dados especificos do projeto (URL e anon key).
 
-Adicionar calculo do total de pecas, usando a mesma logica de prioridade IA que ja existe na tabela:
+### Nenhuma alteracao de codigo
 
-```typescript
-const totalPecas = itens
-  .filter((it: any) => it.tipo === 'peca')
-  .reduce((s: number, it: any, i: number) => {
-    // Prioridade: cotacao aprovada > valor manual > valor salvo
-    const iaItem = temCotacaoAprovada
-      ? (cotacaoAprovada?.resposta as any)?.itens?.[i]
-      : null;
-    const valor = iaItem?.valor_unitario ?? valoresPecas[i] ?? it.valor_unitario;
-    if (valor == null) return s;
-    return s + valor * (it.quantidade || 1);
-  }, 0);
-const totalMaoObra = itens
-  .filter((it: any) => it.tipo === 'mao_de_obra' && it.valor_unitario != null)
-  .reduce((s: number, it: any) => s + (it.valor_unitario * (it.quantidade || 1)), 0);
-const totalServicos = itens
-  .filter((it: any) => it.tipo === 'servico' && it.valor_unitario != null)
-  .reduce((s: number, it: any) => s + (it.valor_unitario * (it.quantidade || 1)), 0);
-const totalGeral = totalPecas + totalMaoObra + totalServicos;
-```
+A edge function `sync-rastreadores` ja existe e esta configurada com `verify_jwt = false` no `config.toml`. Nenhuma modificacao de codigo e necessaria.
 
-E atualizar a exibicao para mostrar as tres categorias:
+## Verificacao
 
-```
-Pecas: R$ X.XXX,XX
-Mao de obra: R$ X.XXX,XX
-Servicos: R$ X.XXX,XX
-Custo total (pecas + mao de obra + servicos): R$ X.XXX,XX
-```
-
-## Resumo
-
-| Arquivo | Alteracao |
-|---|---|
-| `src/pages/eventos/SinistroAnalise.tsx` | Aguardar refetch antes de limpar estados locais + incluir pecas no calculo e exibicao do custo total |
+Apos criar o cron job, sera possivel confirmar que esta funcionando verificando os logs da edge function no dashboard do Supabase.
 
