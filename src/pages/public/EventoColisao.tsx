@@ -10,7 +10,6 @@ import { ptBR } from 'date-fns/locale';
 import EventoStepper from '@/components/evento/EventoStepper';
 import EventoEtapa1Vistoria from '@/components/evento/EventoEtapa1Vistoria';
 import EventoEtapa2BO from '@/components/evento/EventoEtapa2BO';
-import EventoEtapa3Relato from '@/components/evento/EventoEtapa3Relato';
 import EventoSucesso from '@/components/evento/EventoSucesso';
 import EventoAgendamento from '@/components/evento/EventoAgendamento';
 import EventoPagamentoCota from '@/components/evento/EventoPagamentoCota';
@@ -110,17 +109,17 @@ export default function EventoColisao() {
   }
 
   const { link, sinistro, cota } = data;
-  const isEtapas1a3Completas = etapaAtual >= 3;
+  const isEtapas1e2Completas = etapaAtual >= 2;
   const isAgendado = !!link?.etapa4_completada_em;
   const cotaPaga = sinistro?.cota_paga === true;
   const temCota = sinistro?.valor_cota_participacao && sinistro.valor_cota_participacao > 0;
 
-  // Calculate stepper position
+  // Calculate stepper position (now 4 steps: Vistoria, BO, Agendamento, Pagamento)
   const getStepperPosition = () => {
-    if (cotaPaga) return 5; // All done
-    if (isAgendado && temCota) return 4; // At payment step
-    if (isAgendado) return 5; // No payment needed, done
-    if (isEtapas1a3Completas) return 3; // At scheduling step (etapa 4 is index 3)
+    if (cotaPaga) return 4; // All done
+    if (isAgendado && temCota) return 3; // At payment step
+    if (isAgendado) return 4; // No payment needed, done
+    if (isEtapas1e2Completas) return 2; // At scheduling step (stepper position 3 = index 2)
     return etapaAtual;
   };
 
@@ -131,20 +130,19 @@ export default function EventoColisao() {
 
   // Determine what content to show
   const renderContent = () => {
-    // Steps 1-3
-    if (!isEtapas1a3Completas) {
+    // Steps 1-2
+    if (!isEtapas1e2Completas) {
       if (etapaAtual === 0) return <EventoEtapa1Vistoria token={token!} onComplete={handleStepComplete} />;
       if (etapaAtual === 1) return <EventoEtapa2BO token={token!} onComplete={handleStepComplete} />;
-      if (etapaAtual === 2) return <EventoEtapa3Relato token={token!} onComplete={handleStepComplete} localPadrao={sinistro?.local_ocorrencia} />;
       return null;
     }
 
-    // Step 4 - Agendamento
+    // Step 3 - Agendamento
     if (!isAgendado) {
       return <EventoAgendamento token={token!} onAgendado={validar} />;
     }
 
-    // Step 5 - Pagamento (if applicable)
+    // Step 4 - Pagamento (if applicable)
     if (temCota && !cotaPaga && cota && sinistro) {
       return (
         <EventoPagamentoCota

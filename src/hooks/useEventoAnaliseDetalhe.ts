@@ -44,12 +44,12 @@ export function useEventoAnaliseDetalhe(sinistroId: string | undefined) {
 
       if (completado) return completado as any;
 
-      // Fallback: link com etapa_atual >= 3
+      // Fallback: link com etapa_atual >= 2
       const { data: comDados } = await supabase
         .from('sinistro_evento_links' as any)
         .select('*')
         .eq('sinistro_id', sinistroId)
-        .gte('etapa_atual', 3)
+        .gte('etapa_atual', 2)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();

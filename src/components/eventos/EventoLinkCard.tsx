@@ -65,24 +65,24 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
     // Montar etapas e descrições por tipo de sinistro
     const etapasWhatsApp: Record<string, { etapas: string[]; descricoes: string[] }> = {
       vidros: {
-        etapas: ['Fotos do Dano', 'Relato Simples'],
-        descricoes: ['Envie fotos do vidro danificado', 'Descreva brevemente o ocorrido'],
+        etapas: ['Fotos do Dano'],
+        descricoes: ['Envie fotos do vidro danificado'],
       },
       fenomeno_natural: {
-        etapas: ['B.O. + Fotos do Dano', 'Comprovante + Fotos In Loco', 'Relato Completo'],
-        descricoes: ['Envie o B.O. e fotos dos danos', 'Envie comprovantes e fotos do local', 'Descreva como aconteceu o evento'],
+        etapas: ['B.O. + Fotos do Dano', 'Comprovante + Fotos In Loco'],
+        descricoes: ['Envie o B.O. e fotos dos danos', 'Envie comprovantes e fotos do local'],
       },
       roubo: {
-        etapas: ['Boletim de Ocorrência', 'Relato', 'Documentação'],
-        descricoes: ['Envie o B.O. registrado', 'Descreva como aconteceu', 'Envie os documentos solicitados'],
+        etapas: ['Boletim de Ocorrência', 'Documentação'],
+        descricoes: ['Envie o B.O. registrado', 'Envie os documentos solicitados'],
       },
       furto: {
-        etapas: ['Boletim de Ocorrência', 'Relato', 'Chaves + Documentos'],
-        descricoes: ['Envie o B.O. registrado', 'Descreva como aconteceu', 'Envie chaves e documentos'],
+        etapas: ['Boletim de Ocorrência', 'Chaves + Documentos'],
+        descricoes: ['Envie o B.O. registrado', 'Envie chaves e documentos'],
       },
       default: {
-        etapas: ['Auto Vistoria', 'Boletim de Ocorrência', 'Relato Completo'],
-        descricoes: ['Envie fotos do veículo conforme orientações', 'Envie o B.O. registrado', 'Descreva como aconteceu o evento'],
+        etapas: ['Auto Vistoria', 'Boletim de Ocorrência'],
+        descricoes: ['Envie fotos do veículo conforme orientações', 'Envie o B.O. registrado'],
       },
     };
 
