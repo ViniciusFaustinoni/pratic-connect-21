@@ -807,7 +807,7 @@ export default function SinistroAnalise() {
 
                 {/* Documentos */}
                 {(() => {
-                  const todosDocumentos = [...documentos, ...extrairDocumentosDoLink(linkEvento)];
+                  const todosDocumentos = documentos;
                   return (
                     <Card>
                       <CardHeader>
@@ -856,7 +856,7 @@ export default function SinistroAnalise() {
                                   )}
                                   <div className="flex-1 min-w-0">
                                     <span className="text-sm font-medium truncate block">{doc.nome_arquivo || doc.tipo}</span>
-                                    {doc.origem === 'link_evento' && (
+                                    {(doc as any).origem === 'link_evento' && (
                                       <span className="text-xs text-muted-foreground">Via auto-vistoria</span>
                                     )}
                                     {isEnviado && isAudio && (
@@ -1614,7 +1614,7 @@ export default function SinistroAnalise() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "h-4 w-4 rounded-full",
-                  (documentos.length + extrairDocumentosDoLink(linkEvento).length) > 0 ? "bg-green-500" : "bg-muted"
+                  documentos.length > 0 ? "bg-green-500" : "bg-muted"
                 )} />
                 <span className="text-sm">Documentos anexados</span>
               </div>
