@@ -1,89 +1,36 @@
 
-# Corrigir Calculo Dinamico da Cota de Coparticipacao
 
-## Problema Raiz
+# Preenchimento Automatico de Endereco por CEP no Link do Evento
 
-A coluna `valor_cota_participacao` na tabela `sinistros` tem um **DEFAULT de 750.00** (definido na migracao original). Esse valor aparece na tela de pagamento antes do sinistro ser aprovado, pois a funcao `validar-link-evento` apenas le o valor armazenado sem recalcular.
+## O que sera feito
 
-O calculo correto (6% de R$ 70.008,00 = R$ 4.200,48) so acontece quando `aprovar-sinistro` e executado, mas a tela de pagamento pode ser acessada antes disso.
+Adicionar um campo de CEP no formulario de endereco do agendamento de vistoria (link do associado). Ao digitar o CEP completo (8 digitos), o sistema buscara automaticamente na API ViaCEP e preenchera os campos de Rua, Bairro e Cidade.
 
-A funcao `autentique-webhook` ja tem um fallback que detecta o valor 750 e recalcula -- confirmando que esse problema ja era conhecido.
+## Detalhes
 
-## Solucao (2 partes)
+### Arquivo: `src/components/evento/EventoAgendamento.tsx`
 
-### 1. Calcular cota dinamicamente em `validar-link-evento`
+1. **Adicionar campo CEP** antes do campo "Rua / Avenida", com mascara de formatacao (00000-000)
+2. **Estado de loading** para indicar que o CEP esta sendo consultado
+3. **Auto-preenchimento**: ao digitar 8 digitos, chamar `buscarCep()` de `src/lib/cep.ts` (ja existe no projeto) e preencher automaticamente `rua`, `bairro` e `cidade`
+4. **Feedback visual**: mostrar indicador de carregamento durante a busca e mensagem de erro se o CEP nao for encontrado
 
-**Arquivo:** `supabase/functions/validar-link-evento/index.ts`
+### Fluxo do usuario
 
-Em vez de apenas ler `sinistro.valor_cota_participacao`, calcular dinamicamente usando a mesma logica de `aprovar-sinistro`:
+1. Usuario digita o CEP (ex: 22710-045)
+2. Sistema busca automaticamente na API ViaCEP
+3. Campos Rua, Bairro e Cidade sao preenchidos automaticamente
+4. Usuario preenche apenas Numero e Complemento (se necessario)
+5. Campos preenchidos automaticamente permanecem editaveis caso o usuario queira ajustar
 
-```
-valor_cota = max(valor_fipe * percentual / 100, cota_minima)
-```
+### Tecnico
 
-Se o valor calculado for diferente do armazenado, atualizar o registro no banco. Isso garante que mesmo antes da aprovacao, o valor exibido sera correto.
+- Reutilizar a funcao `buscarCep` de `src/lib/cep.ts` que ja existe no projeto
+- Adicionar estado `cep` e `buscandoCep` ao componente
+- Mascara de CEP: formatar para `00000-000` durante digitacao
+- Disparar busca automatica quando `cep.replace(/\D/g, '').length === 8`
 
-Logica a adicionar na secao de cotaInfo (apos buscar o plano):
-
-```typescript
-// Calcular valor correto
-let valorCotaCalculado = sinistro.valor_cota_participacao;
-if (veiculo?.valor_fipe && percentual > 0) {
-  valorCotaCalculado = Math.max(
-    veiculo.valor_fipe * percentual / 100,
-    cotaMinima
-  );
-
-  // Atualizar no banco se diferente
-  if (valorCotaCalculado !== sinistro.valor_cota_participacao) {
-    await supabase
-      .from("sinistros")
-      .update({ valor_cota_participacao: valorCotaCalculado })
-      .eq("id", sinistro.id);
-  }
-}
-
-cotaInfo = {
-  valor_fipe: veiculo?.valor_fipe || 0,
-  percentual,
-  cota_minima: cotaMinima,
-  valor_cota: valorCotaCalculado,  // Usar valor calculado
-  plano_nome: planoNome,
-};
-```
-
-### 2. Alterar DEFAULT da coluna para NULL
-
-**Migracao SQL:**
-
-```sql
-ALTER TABLE sinistros ALTER COLUMN valor_cota_participacao SET DEFAULT NULL;
-```
-
-Isso evita que novos sinistros recebam 750.00 automaticamente. O valor so sera preenchido quando efetivamente calculado.
-
-### 3. Corrigir o sinistro atual
-
-**Operacao de dados (INSERT tool):**
-
-```sql
-UPDATE sinistros SET valor_cota_participacao = 4200.48
-WHERE protocolo = 'SIN-20260216-0007';
-```
-
-## Deploy
-
-Redeployar a Edge Function `validar-link-evento`.
-
-## Resultado Esperado
-
-- Valor da cota exibido corretamente: **R$ 4.200,48** (em vez de R$ 750,00)
-- Percentual: **6%** (ja corrigido na versao anterior)
-- Cota minima: **R$ 1.200,00** (ja corrigido na versao anterior)
-- Novos sinistros nao terao mais o default de 750
-
-| Arquivo / Recurso | Alteracao |
+| Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/validar-link-evento/index.ts` | Adicionar calculo dinamico da cota e atualizacao automatica no banco |
-| Migracao SQL | Alterar DEFAULT de 750.00 para NULL |
-| Dados | Atualizar sinistro SIN-20260216-0007 para 4200.48 |
+| `src/components/evento/EventoAgendamento.tsx` | Adicionar campo CEP com busca automatica e preenchimento dos campos de endereco |
+
