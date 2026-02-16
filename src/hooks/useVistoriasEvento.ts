@@ -43,7 +43,9 @@ export function useVistoriasEvento(filtros: FiltrosVistoria = {}) {
       }
 
       // Filtro de status
-      if (status !== 'todas') {
+      if (status === 'todas') {
+        query = query.in('status', ['agendada', 'em_andamento']);
+      } else {
         query = query.eq('status', status);
       }
 
