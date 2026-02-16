@@ -1,82 +1,25 @@
 
 
-# Adicionar Endereco com Auto-Complete na Etapa 2 (B.O.) do Link do Evento
+# Exibir Endereco Completo do Evento na Tela de Analise
 
 ## O que sera feito
 
-Adicionar campos de endereco do evento na tela do Boletim de Ocorrencia (Etapa 2), com auto-complete de rua usando a API gratuita OpenStreetMap Nominatim. Ao digitar o nome da rua, o sistema mostra sugestoes e preenche automaticamente bairro e cidade. O associado precisa informar apenas o numero e ponto de referencia.
+Adicionar os campos de endereco preenchidos pelo associado (rua, numero, bairro, cidade, UF e ponto de referencia) na secao "Boletim de Ocorrencia" da tela de analise do evento (`EventoAnaliseDetalhe`). Esses dados ja existem em `dadosEtapa2` (preenchidos na etapa do B.O. via link do evento) -- apenas nao estao sendo exibidos.
 
-## Fluxo do usuario
+## Alteracao
 
-1. Associado comeca a digitar o nome da rua (minimo 4 caracteres)
-2. Sistema mostra lista de sugestoes de enderecos (Nominatim)
-3. Associado seleciona o endereco correto
-4. Campos Bairro e Cidade/UF sao preenchidos automaticamente (somente leitura)
-5. Associado preenche apenas Numero e Ponto de Referencia
-6. Endereco e salvo junto com os dados do B.O.
+### Arquivo: `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
 
-## Alteracoes
+Na secao do Boletim de Ocorrencia (apos o numero do B.O. e resumo, antes do documento), adicionar um bloco com o endereco completo:
 
-### Arquivo 1: `src/components/evento/EventoEtapa2BO.tsx`
+- **Rua e Numero**: `dadosEtapa2.endereco_rua`, `dadosEtapa2.endereco_numero`
+- **Bairro**: `dadosEtapa2.endereco_bairro`
+- **Cidade/UF**: `dadosEtapa2.endereco_cidade` - `dadosEtapa2.endereco_uf`
+- **Ponto de Referencia**: `dadosEtapa2.endereco_ponto_referencia`
 
-- Adicionar estados: `rua`, `numero`, `pontoReferencia`, `bairro`, `cidadeUf`, `sugestoes`, `buscando`
-- Campo de rua com debounce de 500ms: ao digitar >= 4 caracteres, busca no Nominatim (`/search?q=RUA,Brasil&format=json&addressdetails=1&limit=5`)
-- Dropdown de sugestoes abaixo do campo de rua
-- Ao selecionar uma sugestao: preenche rua, bairro, cidade/UF automaticamente
-- Campos Numero e Ponto de Referencia manuais
-- Incluir endereco no JSON enviado para `salvar-etapa-evento` (campo `dados`)
-
-### Arquivo 2: `supabase/functions/salvar-etapa-evento/index.ts`
-
-- Ao salvar etapa 2, atualizar `sinistros.local_ocorrencia` e `sinistros.cidade_ocorrencia` / `sinistros.estado_ocorrencia` com os dados de endereco informados pelo associado
-
-## Detalhes tecnicos
-
-### Busca Nominatim (direto do frontend, sem edge function)
-
-A busca sera feita diretamente do componente React usando `fetch` para evitar overhead de edge function. Nominatim e gratuito e nao requer API key.
-
-```
-GET https://nominatim.openstreetmap.org/search?
-  q={texto digitado}, Brasil
-  &format=json
-  &addressdetails=1
-  &limit=5
-  &accept-language=pt-BR
-```
-
-### Debounce
-
-Usar `setTimeout` com 500ms de delay para evitar excesso de requisicoes (rate limit do Nominatim: 1 req/segundo).
-
-### Dados enviados no submit
-
-```json
-{
-  "numero_bo": "123456/2026",
-  "resumo_bo": "...",
-  "endereco_rua": "Rua das Flores, 123",
-  "endereco_bairro": "Centro",
-  "endereco_cidade": "Rio de Janeiro",
-  "endereco_uf": "RJ",
-  "endereco_numero": "456",
-  "endereco_ponto_referencia": "Proximo ao mercado"
-}
-```
-
-### Persistencia no sinistro
-
-Na edge function `salvar-etapa-evento`, ao processar etapa 2, atualizar o sinistro:
-
-```typescript
-await supabase.from("sinistros").update({
-  local_ocorrencia: `${dados.endereco_rua}, ${dados.endereco_numero}`,
-  cidade_ocorrencia: dados.endereco_cidade,
-  estado_ocorrencia: dados.endereco_uf,
-}).eq("id", link.sinistro_id);
-```
+O bloco so aparece se ao menos a rua estiver preenchida. Sera exibido com icone de MapPin e fundo suave para destaque visual.
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/evento/EventoEtapa2BO.tsx` | Adicionar campos de endereco com auto-complete Nominatim, numero e ponto de referencia |
-| `supabase/functions/salvar-etapa-evento/index.ts` | Persistir endereco no sinistro ao salvar etapa 2 |
+| `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx` | Adicionar exibicao do endereco do evento (rua, bairro, cidade/UF, ponto de referencia) na secao B.O. |
+
