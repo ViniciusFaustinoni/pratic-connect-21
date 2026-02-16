@@ -470,10 +470,63 @@ serve(async (req) => {
 
           // ====== GERAR COBRANÇA ASAAS E ENVIAR LINK DE PAGAMENTO VIA WHATSAPP ======
           try {
-            const valorCota = sinistroDoc.valor_cota_participacao;
+            let valorCota = sinistroDoc.valor_cota_participacao;
             const cotaPaga = sinistroDoc.cota_paga;
             const cobrancaCotaId = sinistroDoc.cobranca_cota_id;
             const associado = sinistroDoc.associado;
+
+            // Fallback: recalcular cota se valor for 0, null ou o padrão 750
+            if ((!valorCota || valorCota <= 0 || valorCota === 750) && associado) {
+              console.warn(`[autentique-webhook] valor_cota_participacao (${valorCota}) parece incorreto. Recalculando...`);
+              try {
+                const assocId = associado.id;
+                const { data: assocData } = await supabase
+                  .from("associados")
+                  .select("plano_id")
+                  .eq("id", assocId)
+                  .single();
+
+                if (assocData?.plano_id && sinistroDoc.veiculo_id) {
+                  const [{ data: plano }, { data: veiculo }] = await Promise.all([
+                    supabase
+                      .from("planos")
+                      .select("cota_participacao, cota_minima, cota_app_percent, cota_app_min")
+                      .eq("id", assocData.plano_id)
+                      .single(),
+                    supabase
+                      .from("veiculos")
+                      .select("valor_fipe, uso_aplicativo")
+                      .eq("id", sinistroDoc.veiculo_id)
+                      .single(),
+                  ]);
+
+                  if (plano && veiculo?.valor_fipe) {
+                    let percentual = plano.cota_participacao || 6;
+                    let minimo = plano.cota_minima || 1200;
+
+                    if (veiculo.uso_aplicativo && plano.cota_app_percent) {
+                      percentual = plano.cota_app_percent;
+                      minimo = plano.cota_app_min || minimo;
+                    }
+
+                    const recalculado = Math.max(
+                      veiculo.valor_fipe * percentual / 100,
+                      minimo
+                    );
+                    console.log(`[autentique-webhook] Cota recalculada: R$ ${recalculado.toFixed(2)} (FIPE: ${veiculo.valor_fipe}, ${percentual}%, min: ${minimo})`);
+                    valorCota = recalculado;
+
+                    // Persistir valor correto no sinistro
+                    await supabase
+                      .from("sinistros")
+                      .update({ valor_cota_participacao: recalculado })
+                      .eq("id", sinistroDoc.id);
+                  }
+                }
+              } catch (recalcErr: any) {
+                console.error("[autentique-webhook] Erro ao recalcular cota:", recalcErr.message);
+              }
+            }
 
             if (valorCota && valorCota > 0 && !cotaPaga && associado) {
               const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");

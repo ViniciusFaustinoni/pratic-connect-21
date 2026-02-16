@@ -37,8 +37,8 @@ Deno.serve(async (req) => {
       .from('sinistros')
       .select(`
         id, protocolo, status, tipo,
-        associado:associados!sinistros_associado_id_fkey(id, nome, telefone, whatsapp),
-        veiculo:veiculos!sinistros_veiculo_id_fkey(placa, marca, modelo)
+        associado:associados!sinistros_associado_id_fkey(id, nome, telefone, whatsapp, email),
+        veiculo:veiculos!sinistros_veiculo_id_fkey(id, placa, marca, modelo)
       `)
       .eq('id', sinistro_id)
       .single();
@@ -105,6 +105,10 @@ Deno.serve(async (req) => {
       }
     } catch (cotaErr) {
       console.error('[aprovar-sinistro] Erro ao calcular cota:', cotaErr);
+    }
+
+    if (valorCotaCalculado === null) {
+      console.warn('[aprovar-sinistro] ⚠️ ATENÇÃO: valorCotaCalculado ficou null! O cálculo da cota falhou. Verifique se o veículo tem valor_fipe e o associado tem plano_id configurado.');
     }
 
     // Atualizar status para 'aprovado'
