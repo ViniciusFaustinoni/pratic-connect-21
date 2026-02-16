@@ -151,6 +151,37 @@ Deno.serve(async (req) => {
         .from("sinistros")
         .update({ status: "documentacao_enviada" })
         .eq("id", link.sinistro_id);
+
+      // Geocodificar endereco informado
+      if (dados.local_rua) {
+        const enderecoCompleto = dados.local_numero
+          ? `${dados.local_rua}, ${dados.local_numero}`
+          : dados.local_rua;
+
+        try {
+          const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoCompleto + ', Brasil')}&limit=1`;
+          const geoRes = await fetch(geoUrl, {
+            headers: { 'User-Agent': 'PraticConnect/1.0' }
+          });
+          const geoData = await geoRes.json();
+
+          if (geoData.length > 0) {
+            await supabase
+              .from('sinistros')
+              .update({
+                latitude_informada: parseFloat(geoData[0].lat),
+                longitude_informada: parseFloat(geoData[0].lon),
+                local_ocorrencia: enderecoCompleto,
+              })
+              .eq('id', link.sinistro_id);
+            console.log(`Geocodificado: ${enderecoCompleto} -> ${geoData[0].lat}, ${geoData[0].lon}`);
+          } else {
+            console.log(`Geocodificacao sem resultado para: ${enderecoCompleto}`);
+          }
+        } catch (geoError) {
+          console.error('Erro na geocodificacao:', geoError);
+        }
+      }
     }
 
     return new Response(
