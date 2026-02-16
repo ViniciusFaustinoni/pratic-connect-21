@@ -897,7 +897,15 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       const randomSin = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
       const protocoloSin = `SIN-${yearSin}${monthSin}${daySin}-${randomSin}`;
 
-      // 5. INSERT sinistro
+      // 5. Buscar posição do rastreador do veículo neste momento
+      const { data: rastreadorSin } = await supabase
+        .from("rastreadores")
+        .select("ultima_posicao_lat, ultima_posicao_lng, ultima_comunicacao")
+        .eq("veiculo_id", veiculoSin.id)
+        .eq("status", "instalado")
+        .maybeSingle();
+
+      // 6. INSERT sinistro
       const { data: sinistroNovo, error: sinError } = await supabase
         .from("sinistros")
         .insert({
@@ -910,6 +918,9 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
           descricao: args.descricao,
           status: "comunicado",
           canal: "whatsapp",
+          rastreador_lat_momento: rastreadorSin?.ultima_posicao_lat || null,
+          rastreador_lng_momento: rastreadorSin?.ultima_posicao_lng || null,
+          rastreador_posicao_capturada_em: rastreadorSin?.ultima_comunicacao || null,
         })
         .select("id")
         .single();
