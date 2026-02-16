@@ -30,6 +30,7 @@ const ETAPAS_REPARO = [
   { id: 'pintura', nome: 'Pintura', descricao: 'Aplicação de primer, tinta e verniz' },
   { id: 'mecanica', nome: 'Mecânica', descricao: 'Reparos no motor, câmbio, suspensão' },
   { id: 'eletrica', nome: 'Elétrica', descricao: 'Fiação, módulos, sensores, faróis' },
+  { id: 'vidros_farois', nome: 'Vidros e Faróis', descricao: 'Troca ou reparo de para-brisa, vidros laterais, traseiro e faróis' },
   { id: 'polimento', nome: 'Polimento', descricao: 'Acabamento final da pintura' },
   { id: 'lavagem', nome: 'Lavagem', descricao: 'Limpeza completa antes da entrega' },
 ] as const;
