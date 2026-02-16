@@ -58,7 +58,7 @@ serve(async (req) => {
           id, nome, cpf, email, telefone, whatsapp, plano_id
         ),
         veiculo:veiculos!sinistros_veiculo_id_fkey(
-          id, placa, marca, modelo, ano_modelo, cor, valor_fipe, chassi
+          id, placa, marca, modelo, ano_modelo, cor, valor_fipe, chassi, uso_aplicativo
         )
       `)
       .eq("id", link.sinistro_id)
@@ -92,7 +92,7 @@ serve(async (req) => {
       if (planoId) {
         const { data: plano } = await supabase
           .from("planos")
-          .select("nome, cota_participacao, cota_minima")
+          .select("nome, cota_participacao, cota_minima, cota_app_percent, cota_app_min")
           .eq("id", planoId)
           .single();
         planoInfo = plano;
@@ -100,10 +100,24 @@ serve(async (req) => {
     }
 
     const valorFipe = veiculo?.valor_fipe || 0;
-    const percentual = planoInfo?.cota_participacao || 0;
-    const cotaMinima = planoInfo?.cota_minima || 0;
+    let percentual = planoInfo?.cota_participacao || 0;
+    let cotaMinima = planoInfo?.cota_minima || 0;
+
+    if (veiculo?.uso_aplicativo && planoInfo?.cota_app_percent) {
+      percentual = planoInfo.cota_app_percent;
+      cotaMinima = planoInfo.cota_app_min || cotaMinima;
+    }
+
     const valorCalculado = valorFipe * percentual / 100;
     valorCota = Math.max(valorCalculado, cotaMinima);
+
+    // Persistir valor calculado no banco
+    if (valorCota > 0) {
+      await supabase
+        .from("sinistros")
+        .update({ valor_cota_participacao: valorCota })
+        .eq("id", sinistro.id);
+    }
 
     // Determine state
     const jaPagou = !!link.pagamento_confirmado_em || sinistro.cota_paga;
