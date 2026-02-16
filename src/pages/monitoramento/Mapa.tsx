@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, CircleMarker } from "react-leaflet";
 import L from "leaflet";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, subHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ import {
   Locate,
   ClipboardCheck,
   RefreshCw,
+  Route,
   List,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -139,6 +140,48 @@ export default function Mapa() {
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [veiculoSelecionado, setVeiculoSelecionado] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [trajetoAtivo, setTrajetoAtivo] = useState<string | null>(null);
+  const [pontosTrajetoAtivo, setPontosTrajetoAtivo] = useState<Array<{ latitude: number; longitude: number; velocidade: number; data_posicao: string }>>([]);
+  const [trajetoLoading, setTrajetoLoading] = useState(false);
+
+  // Carregar trajeto de um veículo (últimas 4h)
+  const carregarTrajeto = useCallback(async (rastreadorId: string) => {
+    if (trajetoAtivo === rastreadorId) {
+      // Toggle off
+      setTrajetoAtivo(null);
+      setPontosTrajetoAtivo([]);
+      return;
+    }
+    setTrajetoLoading(true);
+    try {
+      const quatroHorasAtras = subHours(new Date(), 4).toISOString();
+      const { data, error } = await supabase
+        .from('rastreador_posicoes')
+        .select('latitude, longitude, velocidade, data_posicao')
+        .eq('rastreador_id', rastreadorId)
+        .gte('data_posicao', quatroHorasAtras)
+        .order('data_posicao', { ascending: true });
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        toast.info('Nenhum ponto de trajeto nas últimas 4 horas');
+        return;
+      }
+      setPontosTrajetoAtivo(data);
+      setTrajetoAtivo(rastreadorId);
+    } catch (err: any) {
+      toast.error('Erro ao carregar trajeto: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setTrajetoLoading(false);
+    }
+  }, [trajetoAtivo]);
+
+  // Velocidade média do trajeto ativo
+  const velocidadeMediaTrajeto = useMemo(() => {
+    const emMovimento = pontosTrajetoAtivo.filter(p => p.velocidade > 0);
+    if (emMovimento.length === 0) return 0;
+    return Math.round(emMovimento.reduce((acc, p) => acc + p.velocidade, 0) / emMovimento.length);
+  }, [pontosTrajetoAtivo]);
 
   // Query para buscar veículos com posição
   const { data: veiculos, isLoading, refetch, isRefetching } = useQuery({
@@ -522,7 +565,7 @@ export default function Mapa() {
                   </p>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {v.associado_telefone && (
                     <button
                       onClick={() => abrirWhatsApp(v.associado_telefone)}
@@ -539,14 +582,85 @@ export default function Mapa() {
                     <Navigation className="h-3 w-3" />
                     Google Maps
                   </button>
+                  <button
+                    onClick={() => carregarTrajeto(v.rastreador_id)}
+                    disabled={trajetoLoading}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white ${
+                      trajetoAtivo === v.rastreador_id
+                        ? 'bg-amber-600 hover:bg-amber-700'
+                        : 'bg-purple-600 hover:bg-purple-700'
+                    }`}
+                  >
+                    <Route className="h-3 w-3" />
+                    {trajetoAtivo === v.rastreador_id ? 'Fechar Trajeto' : 'Ver Trajeto'}
+                  </button>
                 </div>
               </div>
             </Popup>
           </Marker>
         );
       })}
+
+      {/* Trajeto ativo - Polyline */}
+      {trajetoAtivo && pontosTrajetoAtivo.length > 1 && (
+        <>
+          <Polyline
+            positions={pontosTrajetoAtivo.map(p => [p.latitude, p.longitude] as [number, number])}
+            pathOptions={{ color: '#8b5cf6', weight: 4, opacity: 0.85 }}
+          />
+          {/* Início do trajeto */}
+          <CircleMarker
+            center={[pontosTrajetoAtivo[0].latitude, pontosTrajetoAtivo[0].longitude]}
+            radius={7}
+            pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 }}
+          >
+            <Popup>
+              <div className="text-xs">
+                <strong className="text-green-600">Início do trajeto</strong>
+                <p>{format(new Date(pontosTrajetoAtivo[0].data_posicao), "dd/MM HH:mm", { locale: ptBR })}</p>
+              </div>
+            </Popup>
+          </CircleMarker>
+          {/* Fim do trajeto */}
+          <CircleMarker
+            center={[pontosTrajetoAtivo[pontosTrajetoAtivo.length - 1].latitude, pontosTrajetoAtivo[pontosTrajetoAtivo.length - 1].longitude]}
+            radius={7}
+            pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 }}
+          >
+            <Popup>
+              <div className="text-xs">
+                <strong className="text-red-600">Fim do trajeto</strong>
+                <p>{format(new Date(pontosTrajetoAtivo[pontosTrajetoAtivo.length - 1].data_posicao), "dd/MM HH:mm", { locale: ptBR })}</p>
+              </div>
+            </Popup>
+          </CircleMarker>
+        </>
+      )}
     </MapContainer>
   );
+
+  // Badge de trajeto ativo
+  const renderTrajetoBadge = () => {
+    if (!trajetoAtivo || pontosTrajetoAtivo.length === 0) return null;
+    return (
+      <div className="absolute top-4 right-4 z-[400] bg-background/95 backdrop-blur-sm px-3 py-2 rounded-lg border shadow-sm text-xs space-y-1">
+        <div className="flex items-center gap-2 font-medium">
+          <Route className="h-3.5 w-3.5 text-purple-500" />
+          Trajeto (4h)
+        </div>
+        <div className="flex gap-2">
+          <Badge variant="outline" className="text-xs">{pontosTrajetoAtivo.length} pontos</Badge>
+          <Badge variant="secondary" className="text-xs">Vel. média: {velocidadeMediaTrajeto} km/h</Badge>
+        </div>
+        <button
+          onClick={() => { setTrajetoAtivo(null); setPontosTrajetoAtivo([]); }}
+          className="text-xs text-muted-foreground hover:text-foreground underline"
+        >
+          Fechar trajeto
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] p-2 md:p-4">
@@ -573,6 +687,7 @@ export default function Mapa() {
               {/* Mapa fullscreen */}
               <div className="flex-1 rounded-lg overflow-hidden relative">
                 {renderMapaVeiculos()}
+                {renderTrajetoBadge()}
 
                 {/* Badge flutuante no mapa */}
                 <div className="absolute bottom-4 left-4 z-[400] bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm flex items-center gap-2">
@@ -642,6 +757,7 @@ export default function Mapa() {
 
                 <CardContent className="flex-1 p-0 relative">
                   {renderMapaVeiculos()}
+                  {renderTrajetoBadge()}
 
                   <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-muted-foreground border shadow-sm flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />

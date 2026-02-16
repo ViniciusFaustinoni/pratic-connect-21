@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, CircleMarker } from 'react-leaflet';
@@ -34,6 +34,7 @@ interface TrajetoSinistroCardProps {
   longitudeInformada?: number | null;
   rastreadorLat?: number | null;
   rastreadorLng?: number | null;
+  horasAnteriores?: number;
 }
 
 interface PontoParada {
@@ -80,12 +81,13 @@ export function TrajetoSinistroCard({
   longitudeInformada,
   rastreadorLat,
   rastreadorLng,
+  horasAnteriores = 24,
 }: TrajetoSinistroCardProps) {
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
 
-  // Calcular período de 24h antes do sinistro
+  // Calcular período dinâmico antes do sinistro
   const dataFim = dataOcorrencia ? new Date(dataOcorrencia) : new Date();
-  const dataInicio = subHours(dataFim, 24);
+  const dataInicio = subHours(dataFim, horasAnteriores);
 
   // Buscar rastreador do veículo
   const { data: rastreador } = useQuery({
@@ -131,6 +133,17 @@ export function TrajetoSinistroCard({
   const trajeto = historico?.trajeto || [];
   const paradas: PontoParada[] = historico?.paradas || [];
   const polylinePositions = trajeto.map((p: any) => [p.latitude, p.longitude] as [number, number]);
+
+  // Velocidade média (excluindo paradas)
+  const velocidadeMedia = useMemo(() => {
+    const emMovimento = trajeto.filter((p: any) => p.velocidade > 0);
+    if (emMovimento.length === 0) return 0;
+    return Math.round(emMovimento.reduce((acc: number, p: any) => acc + p.velocidade, 0) / emMovimento.length);
+  }, [trajeto]);
+
+  const tituloTrajeto = horasAnteriores === 24
+    ? 'Trajeto - 24h Antes do Sinistro'
+    : `Trajeto - ${horasAnteriores}h Antes do Evento`;
 
   // Última posição conhecida (aproximação do local do sinistro)
   const ultimaPosicao = trajeto.length > 0 ? trajeto[trajeto.length - 1] : null;
@@ -200,7 +213,7 @@ export function TrajetoSinistroCard({
             >
               <Popup>
                 <div className="text-sm">
-                  <strong className="text-green-600">Início (24h antes)</strong>
+                  <strong className="text-green-600">Início ({horasAnteriores}h antes)</strong>
                   <p>{format(new Date(trajeto[0].data_posicao), "dd/MM HH:mm", { locale: ptBR })}</p>
                 </div>
               </Popup>
@@ -239,7 +252,7 @@ export function TrajetoSinistroCard({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Route className="h-4 w-4" />
-              Trajeto - 24h Antes do Sinistro
+              {tituloTrajeto}
             </CardTitle>
             {trajeto.length > 0 && (
               <Button variant="ghost" size="icon" onClick={() => setFullscreenOpen(true)}>
@@ -279,8 +292,11 @@ export function TrajetoSinistroCard({
               {renderMap('200px')}
               <div className="p-3 border-t space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <Badge variant="outline">{trajeto.length} pontos</Badge>
+                    {velocidadeMedia > 0 && (
+                      <Badge variant="secondary">Vel. média: {velocidadeMedia} km/h</Badge>
+                    )}
                     {paradas.length > 0 && (
                       <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                         {paradas.length} parada{paradas.length > 1 ? 's' : ''}
@@ -333,7 +349,7 @@ export function TrajetoSinistroCard({
           <DialogHeader className="p-4 pb-0">
             <DialogTitle className="flex items-center gap-2">
               <Route className="h-5 w-5" />
-              Trajeto Completo - 24h Antes do Sinistro
+              {tituloTrajeto} (Completo)
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 p-4">
