@@ -1,46 +1,49 @@
 
-# Corrigir Duplicacao de Fotos nos Anexos do Regulador
+# Atualizar Lista de Sinistros em Tempo Real
 
 ## Problema
 
-A secao "Anexos do Regulador" esta exibindo as fotos da auto-vistoria do associado junto com os documentos reais do regulador. Isso acontece porque na linha 810 do arquivo, os documentos sao combinados:
-
-```
-const todosDocumentos = [...documentos, ...extrairDocumentosDoLink(linkEvento)];
-```
-
-Porem, as fotos da auto-vistoria ja sao exibidas corretamente na secao "Fotos da Auto-Vistoria" logo acima. A funcao `extrairDocumentosDoLink` extrai fotos, B.O. e relatos do link do associado e os duplica na secao do regulador.
+A pagina `SinistrosList.tsx` (lista de eventos para o analista) usa apenas `useQuery` para buscar sinistros. Nao existe nenhuma subscription realtime, entao quando a IA cria um novo sinistro, a lista so atualiza ao recarregar a pagina manualmente.
 
 ## Solucao
 
-### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
+Adicionar uma subscription Supabase Realtime na pagina `SinistrosList.tsx` que escuta INSERTs, UPDATEs e DELETEs na tabela `sinistros` e invalida a query automaticamente.
 
-1. Na secao "Anexos do Regulador" (linha 810), remover a chamada a `extrairDocumentosDoLink` para mostrar apenas os documentos reais do regulador (`sinistro_documentos`):
+### Arquivo: `src/pages/eventos/SinistrosList.tsx`
 
-```text
-// ANTES (linha 810):
-const todosDocumentos = [...documentos, ...extrairDocumentosDoLink(linkEvento)];
+Adicionar um `useEffect` com subscription realtime que:
+- Escuta eventos `INSERT`, `UPDATE` e `DELETE` na tabela `sinistros`
+- Invalida a queryKey `['sinistros-list']` (ou a key usada no componente) ao receber qualquer mudanca
+- Remove o canal ao desmontar o componente
 
-// DEPOIS:
-const todosDocumentos = documentos;
+```typescript
+// Adicionar no componente principal de SinistrosList:
+useEffect(() => {
+  const channel = supabase
+    .channel('sinistros-list-realtime')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'sinistros' },
+      () => {
+        queryClient.invalidateQueries({ queryKey: ['sinistros-list'] });
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [queryClient]);
 ```
 
-2. No indicador de progresso da timeline (linha 1617), tambem ajustar para refletir apenas documentos do regulador:
-
-```text
-// ANTES (linha 1617):
-(documentos.length + extrairDocumentosDoLink(linkEvento).length) > 0
-
-// DEPOIS:
-documentos.length > 0
-```
+Sera necessario verificar a queryKey exata usada no fetch de sinistros dentro do componente e usar a mesma key na invalidacao.
 
 ## Resultado Esperado
 
-- "Fotos da Auto-Vistoria": continua mostrando fotos, B.O. e relatos enviados pelo associado (sem alteracao)
-- "Anexos do Regulador": mostra apenas documentos da tabela `sinistro_documentos` (documentos reais do regulador/analista)
-- Sem duplicacao de fotos entre as secoes
+- Quando a IA criar um novo sinistro, ele aparecera automaticamente na lista sem necessidade de atualizar a pagina
+- Mudancas de status tambem serao refletidas em tempo real
+- Exclusoes tambem serao refletidas
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/eventos/SinistroAnalise.tsx` | Remover `extrairDocumentosDoLink` da secao "Anexos do Regulador" e do indicador de progresso |
+| `src/pages/eventos/SinistrosList.tsx` | Adicionar subscription realtime para tabela `sinistros` com invalidacao automatica de cache |
