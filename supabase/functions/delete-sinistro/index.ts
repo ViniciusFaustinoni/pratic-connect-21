@@ -206,7 +206,17 @@ Deno.serve(async (req) => {
       console.error("[delete-sinistro] Erro ao desvincular processos:", processosError);
     }
 
-    // 9. Excluir sinistro principal
+    // 9. Limpar histórico de conversa da IA do associado
+    const { error: chatError } = await supabaseAdmin
+      .from("chat_mensagens_ia")
+      .delete()
+      .eq("associado_id", sinistro.associado_id);
+
+    if (chatError) {
+      console.error("[delete-sinistro] Erro ao limpar chat_mensagens_ia:", chatError);
+    }
+
+    // 10. Excluir sinistro principal
     const { error: deleteError } = await supabaseAdmin
       .from("sinistros")
       .delete()
