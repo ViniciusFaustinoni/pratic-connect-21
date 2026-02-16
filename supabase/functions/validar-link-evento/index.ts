@@ -95,11 +95,28 @@ serve(async (req) => {
         }
       }
 
+      // Calcular valor correto dinamicamente
+      let valorCotaCalculado = sinistro.valor_cota_participacao;
+      if (veiculo?.valor_fipe && percentual > 0) {
+        valorCotaCalculado = Math.max(
+          veiculo.valor_fipe * percentual / 100,
+          cotaMinima
+        );
+
+        // Atualizar no banco se diferente
+        if (valorCotaCalculado !== sinistro.valor_cota_participacao) {
+          await supabase
+            .from("sinistros")
+            .update({ valor_cota_participacao: valorCotaCalculado })
+            .eq("id", sinistro.id);
+        }
+      }
+
       cotaInfo = {
         valor_fipe: veiculo?.valor_fipe || 0,
         percentual,
         cota_minima: cotaMinima,
-        valor_cota: sinistro.valor_cota_participacao,
+        valor_cota: valorCotaCalculado,
         plano_nome: planoNome,
       };
     }

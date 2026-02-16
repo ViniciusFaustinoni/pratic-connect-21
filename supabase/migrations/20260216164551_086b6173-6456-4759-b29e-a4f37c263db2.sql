@@ -1,0 +1,1 @@
+ALTER TABLE sinistros ALTER COLUMN valor_cota_participacao SET DEFAULT NULL;
