@@ -1,36 +1,55 @@
 
+# Atualizar Card "Link do Evento" em Tempo Real
 
-# Preenchimento Automatico de Endereco por CEP no Link do Evento
+## Problema
 
-## O que sera feito
+O card "Link do Evento" usa o hook `useEventoLink` que faz apenas uma consulta inicial via `useQuery`. Quando o associado avanca nas etapas (auto vistoria, B.O., agendamento, pagamento), o card do analista nao atualiza -- so mostra o progresso novo apos recarregar a pagina.
 
-Adicionar um campo de CEP no formulario de endereco do agendamento de vistoria (link do associado). Ao digitar o CEP completo (8 digitos), o sistema buscara automaticamente na API ViaCEP e preenchera os campos de Rua, Bairro e Cidade.
+## Solucao
 
-## Detalhes
+Adicionar uma subscription Supabase Realtime no hook `useEventoLink` para escutar mudancas na tabela `sinistro_evento_links` filtradas pelo `sinistro_id`. Quando o associado completa uma etapa (e a edge function atualiza `etapa_atual`), o card reflete instantaneamente.
 
-### Arquivo: `src/components/evento/EventoAgendamento.tsx`
+### Arquivo: `src/hooks/useEventoLink.ts`
 
-1. **Adicionar campo CEP** antes do campo "Rua / Avenida", com mascara de formatacao (00000-000)
-2. **Estado de loading** para indicar que o CEP esta sendo consultado
-3. **Auto-preenchimento**: ao digitar 8 digitos, chamar `buscarCep()` de `src/lib/cep.ts` (ja existe no projeto) e preencher automaticamente `rua`, `bairro` e `cidade`
-4. **Feedback visual**: mostrar indicador de carregamento durante a busca e mensagem de erro se o CEP nao for encontrado
+1. Importar `useEffect` e `useQueryClient` (queryClient ja existe)
+2. Adicionar um `useEffect` com subscription realtime na tabela `sinistro_evento_links`, filtrando por `sinistro_id`
+3. Ao receber qualquer evento (INSERT/UPDATE), invalidar as queries `['evento-link', sinistroId]` e `['evento-contato', sinistroId]`
+4. Cleanup: remover o canal ao desmontar ou quando `sinistroId` mudar
 
-### Fluxo do usuario
+```typescript
+useEffect(() => {
+  if (!sinistroId) return;
 
-1. Usuario digita o CEP (ex: 22710-045)
-2. Sistema busca automaticamente na API ViaCEP
-3. Campos Rua, Bairro e Cidade sao preenchidos automaticamente
-4. Usuario preenche apenas Numero e Complemento (se necessario)
-5. Campos preenchidos automaticamente permanecem editaveis caso o usuario queira ajustar
+  const channel = supabase
+    .channel(`evento-link-realtime-${sinistroId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'sinistro_evento_links',
+        filter: `sinistro_id=eq.${sinistroId}`,
+      },
+      () => {
+        queryClient.invalidateQueries({ queryKey: ['evento-link', sinistroId] });
+        queryClient.invalidateQueries({ queryKey: ['evento-contato', sinistroId] });
+      }
+    )
+    .subscribe();
 
-### Tecnico
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [sinistroId, queryClient]);
+```
 
-- Reutilizar a funcao `buscarCep` de `src/lib/cep.ts` que ja existe no projeto
-- Adicionar estado `cep` e `buscandoCep` ao componente
-- Mascara de CEP: formatar para `00000-000` durante digitacao
-- Disparar busca automatica quando `cep.replace(/\D/g, '').length === 8`
+## Resultado Esperado
+
+- Quando o associado completa a Etapa 1 (Auto Vistoria), o card muda de "Etapa 0/3" para "Etapa 1/3" automaticamente
+- A barra de progresso e o label da etapa atualizam em tempo real
+- O status do link (ativo/completado) tambem reflete instantaneamente
+- Nenhuma necessidade de recarregar a pagina
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/evento/EventoAgendamento.tsx` | Adicionar campo CEP com busca automatica e preenchimento dos campos de endereco |
-
+| `src/hooks/useEventoLink.ts` | Adicionar subscription realtime para `sinistro_evento_links` com invalidacao automatica de cache |
