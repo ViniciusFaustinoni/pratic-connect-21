@@ -62,7 +62,35 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
   const handleWhatsApp = async () => {
     if (!associadoWhatsapp || !linkUrl) return;
     const phone = associadoWhatsapp.replace(/\D/g, '');
-    const mensagem = `Olá ${associadoNome || ''}! Segue o link para completar as etapas do seu evento (${sinistroProtocolo || ''}):\n\n${linkUrl}\n\nO link é válido por 72 horas.\n\nABP PraticCar`;
+    // Montar etapas e descrições por tipo de sinistro
+    const etapasWhatsApp: Record<string, { etapas: string[]; descricoes: string[] }> = {
+      vidros: {
+        etapas: ['Fotos do Dano', 'Relato Simples'],
+        descricoes: ['Envie fotos do vidro danificado', 'Descreva brevemente o ocorrido'],
+      },
+      fenomeno_natural: {
+        etapas: ['B.O. + Fotos do Dano', 'Comprovante + Fotos In Loco', 'Relato Completo'],
+        descricoes: ['Envie o B.O. e fotos dos danos', 'Envie comprovantes e fotos do local', 'Descreva como aconteceu o evento'],
+      },
+      roubo: {
+        etapas: ['Boletim de Ocorrência', 'Relato', 'Documentação'],
+        descricoes: ['Envie o B.O. registrado', 'Descreva como aconteceu', 'Envie os documentos solicitados'],
+      },
+      furto: {
+        etapas: ['Boletim de Ocorrência', 'Relato', 'Chaves + Documentos'],
+        descricoes: ['Envie o B.O. registrado', 'Descreva como aconteceu', 'Envie chaves e documentos'],
+      },
+      default: {
+        etapas: ['Auto Vistoria', 'Boletim de Ocorrência', 'Relato Completo'],
+        descricoes: ['Envie fotos do veículo conforme orientações', 'Envie o B.O. registrado', 'Descreva como aconteceu o evento'],
+      },
+    };
+
+    const tipoKey = sinistroTipo && etapasWhatsApp[sinistroTipo] ? sinistroTipo : 'default';
+    const { etapas: etapasMsg, descricoes } = etapasWhatsApp[tipoKey];
+    const etapasTexto = etapasMsg.map((e, i) => `${i + 1}. *${e}* - ${descricoes[i]}`).join('\n');
+
+    const mensagem = `Olá ${associadoNome || ''}! Somos da *ABP PraticCar* e estamos aqui para te ajudar nesse momento.\n\nSeu evento *${sinistroProtocolo || ''}* foi registrado e precisamos que você complete algumas etapas pelo link abaixo:\n\n${etapasTexto}\n\nAcesse aqui: ${linkUrl}\n\nO link é válido por *72 horas*.\n\nApós a conclusão, nossa equipe analisará seu caso. Lembrando que, conforme seu plano, será aplicada a *cota de coparticipação* sobre o valor de referência do veículo.\n\nQualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
 
     try {
       setEnviando(true);
