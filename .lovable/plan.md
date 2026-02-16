@@ -1,47 +1,42 @@
 
+# Corrigir Valores Zerando Apos Salvar
 
-# Criar Cron Job para sync-rastreadores (a cada 10 minutos)
+## Causa Raiz
 
-## Objetivo
+Mesmo com `await queryClient.invalidateQueries(...)`, o React ainda nao re-renderizou o componente com os dados atualizados do servidor quando `setValoresPecas({})` executa. Isso faz o input mostrar `undefined ?? item.valor_unitario` onde `item.valor_unitario` ainda e o valor antigo (pre-save) do render anterior, resultando em valor zero ou vazio.
 
-Agendar a execucao automatica da edge function `sync-rastreadores` a cada 10 minutos usando `pg_cron` e `pg_net`, para manter as posicoes GPS dos veiculos atualizadas.
+## Solucao
 
-## Pre-requisitos
+Remover a limpeza dos estados locais `valoresPecas` e `fornecedoresPecas` apos salvar. Os valores no estado local ja correspondem exatamente ao que foi salvo no banco. Quando o usuario recarregar a pagina ou navegar de volta, o estado local comeca vazio e os valores do banco sao usados normalmente via `item.valor_unitario`.
 
-As extensoes `pg_cron` e `pg_net` precisam estar habilitadas no Supabase. Caso ainda nao estejam, serao ativadas via SQL.
+## Alteracao
 
-## Alteracoes
+### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
 
-### SQL (via insert tool, nao migration)
+Remover as linhas 1184-1185:
 
-Executar o seguinte SQL para criar o cron job:
-
-```sql
--- Habilitar extensoes necessarias (idempotente)
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-CREATE EXTENSION IF NOT EXISTS pg_net;
-
--- Criar cron job a cada 10 minutos
-SELECT cron.schedule(
-  'sync-rastreadores-10min',
-  '*/10 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/sync-rastreadores',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
-    body := '{"source": "cron"}'::jsonb
-  ) AS request_id;
-  $$
-);
+```typescript
+// REMOVER estas duas linhas:
+setValoresPecas({});
+setFornecedoresPecas({});
 ```
 
-Este SQL sera executado via ferramenta de insert (nao migration), pois contem dados especificos do projeto (URL e anon key).
+O bloco final do save ficara:
 
-### Nenhuma alteracao de codigo
+```typescript
+toast.success('Valores e fornecedores salvos!');
+await queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+await queryClient.invalidateQueries({ queryKey: ['sinistro-analise-vistoria-evento', id] });
+// NÃO limpar estados locais - os valores já correspondem ao que foi salvo
+```
 
-A edge function `sync-rastreadores` ja existe e esta configurada com `verify_jwt = false` no `config.toml`. Nenhuma modificacao de codigo e necessaria.
+Isso garante que:
+1. Os valores permanecem visiveis na interface imediatamente apos salvar
+2. Ao recarregar a pagina, os valores vem do banco de dados
+3. O calculo do custo total continua correto (usa `valoresPecas[i] ?? item.valor_unitario`)
 
-## Verificacao
+## Resumo
 
-Apos criar o cron job, sera possivel confirmar que esta funcionando verificando os logs da edge function no dashboard do Supabase.
-
+| Arquivo | Alteracao |
+|---|---|
+| `src/pages/eventos/SinistroAnalise.tsx` | Remover `setValoresPecas({})` e `setFornecedoresPecas({})` apos salvar |
