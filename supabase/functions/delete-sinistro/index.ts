@@ -186,6 +186,66 @@ Deno.serve(async (req) => {
       console.error("[delete-sinistro] Erro ao excluir gastos:", gastosError);
     }
 
+    // 6b. Excluir histórico de vidros
+    const { error: vidrosHistError } = await supabaseAdmin
+      .from("sinistro_vidros_historico")
+      .delete()
+      .eq("sinistro_id", sinistroId);
+
+    if (vidrosHistError) {
+      console.error("[delete-sinistro] Erro ao excluir sinistro_vidros_historico:", vidrosHistError);
+    }
+
+    // 6c. Excluir prestadores do sinistro
+    const { error: prestadoresError } = await supabaseAdmin
+      .from("sinistro_prestadores")
+      .delete()
+      .eq("sinistro_id", sinistroId);
+
+    if (prestadoresError) {
+      console.error("[delete-sinistro] Erro ao excluir sinistro_prestadores:", prestadoresError);
+    }
+
+    // 6d. Desvincular consultas jurídicas
+    const { error: consultasError } = await supabaseAdmin
+      .from("consultas_juridicas")
+      .update({ sinistro_id: null })
+      .eq("sinistro_id", sinistroId);
+
+    if (consultasError) {
+      console.error("[delete-sinistro] Erro ao desvincular consultas_juridicas:", consultasError);
+    }
+
+    // 6e. Desvincular cotações de peças
+    const { error: cotacoesError } = await supabaseAdmin
+      .from("evento_cotacoes_pecas")
+      .update({ sinistro_id: null })
+      .eq("sinistro_id", sinistroId);
+
+    if (cotacoesError) {
+      console.error("[delete-sinistro] Erro ao desvincular evento_cotacoes_pecas:", cotacoesError);
+    }
+
+    // 6f. Desvincular vistorias
+    const { error: vistoriasError } = await supabaseAdmin
+      .from("vistorias")
+      .update({ sinistro_id: null })
+      .eq("sinistro_id", sinistroId);
+
+    if (vistoriasError) {
+      console.error("[delete-sinistro] Erro ao desvincular vistorias:", vistoriasError);
+    }
+
+    // 6g. Excluir prazos de processos vinculados
+    const { error: prazosError } = await supabaseAdmin
+      .from("processos_prazos")
+      .delete()
+      .eq("evento_id", sinistroId);
+
+    if (prazosError) {
+      console.error("[delete-sinistro] Erro ao excluir processos_prazos:", prazosError);
+    }
+
     // 7. Desvincular ordens de serviço
     const { error: osError } = await supabaseAdmin
       .from("ordens_servico")
