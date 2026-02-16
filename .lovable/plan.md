@@ -1,43 +1,77 @@
 
-# Corrigir Header Content-Type na Resposta do whatsapp-send-text
+
+# Mensagem WhatsApp Acolhedora com Explicacao das Etapas
 
 ## Problema
 
-A mensagem e enviada com sucesso (status 200), mas o componente exibe "Erro ao enviar" porque:
-
-1. A edge function `whatsapp-send-text` retorna o JSON de sucesso sem o header `Content-Type: application/json`
-2. O SDK `supabase.functions.invoke` nao reconhece a resposta como JSON e retorna `data` como string
-3. `data.success` resulta em `undefined` (pois `data` e uma string, nao um objeto)
-4. A condicao `!data.success` e `true`, e o codigo lanca o erro
+A mensagem enviada via WhatsApp ao associado e muito simples e direta, sem explicar o que ele precisa fazer, quais sao as etapas, nem mencionar a cota de coparticipacao. O associado recebe apenas o link sem contexto.
 
 ## Solucao
 
-Adicionar `"Content-Type": "application/json"` ao header da resposta de sucesso na edge function `whatsapp-send-text/index.ts`.
+Reescrever a mensagem no `handleWhatsApp` do componente `EventoLinkCard.tsx` (linha 65) para ser acolhedora e informativa, adaptada ao tipo de sinistro.
 
-## Alteracao
-
-### `supabase/functions/whatsapp-send-text/index.ts`
-
-Na resposta de sucesso (final do arquivo), trocar:
+### Mensagem Atual (linha 65)
 
 ```text
-return new Response(
-  JSON.stringify({ success: true, message_id: result.key?.id, telefone: telefoneFormatado }),
-  { headers: corsHeaders }
-);
+Olá {nome}! Segue o link para completar as etapas do seu evento ({protocolo}):
+{link}
+O link é válido por 72 horas.
+ABP PraticCar
 ```
 
-Por:
+### Nova Mensagem (adaptada por tipo de sinistro)
 
+A mensagem sera construida dinamicamente com base no `sinistroTipo`:
+
+**Para Colisao/PT (padrao):**
 ```text
-return new Response(
-  JSON.stringify({ success: true, message_id: result.key?.id, telefone: telefoneFormatado }),
-  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-);
+Olá {nome}! Somos da *ABP PraticCar* e estamos aqui para te ajudar nesse momento.
+
+Seu evento *{protocolo}* foi registrado e precisamos que voce complete algumas etapas pelo link abaixo:
+
+1. *Auto Vistoria* - Envie fotos do veiculo conforme orientacoes
+2. *Boletim de Ocorrencia* - Envie o B.O. registrado
+3. *Relato Completo* - Descreva como aconteceu o evento
+
+Acesse aqui: {link}
+
+O link e valido por *72 horas*.
+
+Apos a conclusao, nossa equipe analisara seu caso. Lembrando que, conforme seu plano, sera aplicada a *cota de coparticipacao* sobre o valor de referencia do veiculo.
+
+Qualquer duvida, estamos a disposicao!
+
+ABP PraticCar
 ```
 
-Isso garante que o SDK parse a resposta corretamente como JSON e `data.success` seja `true`.
+**Para Roubo/Furto:**
+Etapas adaptadas: B.O., Relato, Documentacao/Chaves
+
+**Para Vidros:**
+Etapas adaptadas: Fotos do Dano, Relato Simples (2 etapas)
+
+**Para Fenomeno Natural:**
+Etapas adaptadas: B.O. + Fotos, Comprovante + Fotos In Loco, Relato Completo
+
+## Detalhes Tecnicos
+
+### `src/components/eventos/EventoLinkCard.tsx`
+
+Substituir a construcao da `mensagem` na linha 65 por uma funcao que monta o texto dinamicamente com base no `sinistroTipo`, reutilizando a mesma logica de `etapaLabels` ja presente no componente (linhas 89-95).
+
+A funcao tera a seguinte estrutura:
+- Saudacao acolhedora com nome
+- Protocolo em destaque
+- Lista numerada das etapas especificas do tipo de sinistro
+- Link
+- Validade do link
+- Mencao a cota de coparticipacao
+- Mensagem de suporte
+- Assinatura
+
+Formatacao usando *negrito* do WhatsApp (um asterisco), conforme regra ja implementada.
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/whatsapp-send-text/index.ts` | Adicionar Content-Type: application/json na resposta de sucesso |
+| `src/components/eventos/EventoLinkCard.tsx` | Reescrever mensagem do handleWhatsApp com etapas, cota e tom acolhedor |
+
