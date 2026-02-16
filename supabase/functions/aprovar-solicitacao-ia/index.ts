@@ -341,19 +341,19 @@ serve(async (req) => {
               console.error("[aprovar-solicitacao-ia] Erro ao calcular cota (não bloqueante):", cotaErr);
             }
 
-            let mensagemSin = `Olá ${associadoSin.nome}!\n\nSeu sinistro *${protocolo}* foi registrado com sucesso.\n\nPara dar andamento ao processo, acesse o link abaixo e envie os documentos necessários:\n`;
+            let mensagemSin = `Olá ${associadoSin.nome}!\n\nSeu evento *${protocolo}* foi registrado com sucesso.\nEstamos aqui para te ajudar em cada etapa!\n\n⚠️ *IMPORTANTE:* A partir da comunicação do evento, temos um prazo de *30 dias* para concluir toda a documentação. Como o prazo já está correndo, vamos agilizar juntos!\n\nAcesse o link abaixo para iniciar o processo:\n`;
 
             if (linkUrl) {
               mensagemSin += `\n${linkUrl}\n`;
             }
 
-            mensagemSin += `\n*DOCUMENTOS NECESSÁRIOS:*\n\n📸 *Etapa 1 - Auto Vistoria (fotos do veículo)*\n- Frente, traseira, laterais e teto\n- Detalhes dos danos\n- Painel/hodômetro\n- Mínimo de 5 fotos\n\n📋 *Etapa 2 - Boletim de Ocorrência*\n- Número do B.O.\n- Foto ou PDF do documento\n\n📝 *Etapa 3 - Relato do ocorrido*\n- Descrição detalhada do que aconteceu\n- Áudio ou texto\n- Localização do evento\n`;
+            mensagemSin += `\n*O QUE VOCÊ PRECISARÁ FAZER:*\n\n📸 *1. Auto Vistoria* - Você fará fotos do seu veículo pelo celular (frente, traseira, laterais, teto e detalhes dos danos). São no mínimo 5 fotos para registrarmos o estado atual.\n\n📋 *2. Boletim de Ocorrência* - Envie o número e foto/PDF do seu B.O. com os detalhes do ocorrido (endereço, data e circunstâncias).\n\n📅 *3. Agendamento da Vistoria* - Após as etapas acima, você agendará a vistoria presencial.\n\n💳 *4. Cota de Coparticipação* - Pagamento da cota conforme seu plano.\n`;
 
             if (cotaTexto) {
               mensagemSin += cotaTexto;
             }
 
-            mensagemSin += `\n⏰ O link é válido por 72 horas.\n\nABP PraticCar`;
+            mensagemSin += `\n⏰ O link é válido por 72 horas. Qualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
 
             await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
               method: "POST",
