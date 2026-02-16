@@ -1,58 +1,75 @@
 
 
-# Corrigir Persistencia dos Valores de Pecas (Analista de Eventos)
+# Mapa no Card de Posicoes GPS + Trajeto via Cron Job
 
-## Causa Raiz
+## Problema Atual
 
-O problema nao e no codigo React -- e uma restricao de RLS (Row Level Security) no banco de dados.
+1. O card "Trajeto" chama a edge function `rastreador-historico` (API Softruck) em vez de usar os dados ja salvos pelo cron job na tabela `rastreador_posicoes`
+2. O card "Posicoes GPS - Evidencia" mostra apenas coordenadas em texto, sem mapa
 
-A politica de UPDATE da tabela `vistorias_evento` permite apenas as roles:
-- `regulador`
-- `diretor`
-- `gerente_comercial`
+## Alteracoes
 
-O usuario logado e um **analista_eventos**, que tem permissao de **leitura** (SELECT) mas **nao de escrita** (UPDATE). O Supabase nao retorna erro nesse caso -- simplesmente nao atualiza nenhuma linha, fazendo parecer que salvou com sucesso.
+### 1. Card de Trajeto - Usar dados do cron job (`rastreador_posicoes`)
 
-## Solucao
+**Arquivo:** `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
 
-Atualizar a politica de UPDATE da tabela `vistorias_evento` para incluir a role `analista_eventos`.
+Substituir o `TrajetoSinistroCard` (que chama edge function) por um novo componente inline ou dedicado que:
+- Busca o `rastreador_id` do veiculo via tabela `rastreadores`
+- Consulta `rastreador_posicoes` filtrando por `rastreador_id` e `data_posicao` nas ultimas 4h antes do evento
+- Renderiza `MapContainer` com `Polyline` dos pontos
+- Calcula e exibe velocidade media
+- Mostra marcadores de inicio (verde) e fim (vermelho)
 
-### Migracao SQL
-
+A query sera:
 ```sql
-DROP POLICY "Reguladores e gestores podem atualizar vistorias" ON vistorias_evento;
-
-CREATE POLICY "Reguladores gestores e analistas podem atualizar vistorias"
-  ON vistorias_evento FOR UPDATE
-  USING (
-    has_role(auth.uid(), 'regulador') OR
-    has_role(auth.uid(), 'diretor') OR
-    has_role(auth.uid(), 'gerente_comercial') OR
-    has_role(auth.uid(), 'analista_eventos')
-  );
+SELECT latitude, longitude, velocidade, data_posicao
+FROM rastreador_posicoes
+WHERE rastreador_id = :id
+  AND data_posicao BETWEEN :data_inicio AND :data_fim
+ORDER BY data_posicao ASC
 ```
 
-### Melhoria no Codigo (opcional mas recomendada)
+### 2. Card de Posicoes GPS - Adicionar Mapa
 
-No arquivo `src/pages/eventos/SinistroAnalise.tsx`, melhorar a deteccao de falha silenciosa do update verificando se a resposta do Supabase indica que nenhuma linha foi afetada:
+**Arquivo:** `src/components/sinistros/ComparacaoPosicoes.tsx`
 
-```typescript
-const { error, count } = await supabase
-  .from('vistorias_evento')
-  .update({ dados_vistoria: updatedDados })
-  .eq('id', (vistoriaEvento as any).id)
-  .select('id');
+Adicionar um mini-mapa Leaflet dentro do card existente que mostra:
+- Marcador da posicao do rastreador (verde) no horario do evento
+- Marcador da posicao informada pelo associado (azul), se disponivel
+- Linha conectando os dois pontos quando ambos existem
+- O mapa centralizado automaticamente nos pontos disponiveis
 
-if (error) throw error;
-if (!count && count !== undefined) {
-  throw new Error('Sem permissao para atualizar esta vistoria');
-}
-```
+### 3. Reorganizar a pagina do analista
 
-## Resumo
+**Arquivo:** `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
 
-| Item | Alteracao |
+- O card de trajeto mostra o percurso (4h) usando dados locais do banco
+- O card de posicoes GPS (ComparacaoPosicoes) ganha o mini-mapa com a posicao na hora do evento
+
+## Detalhes Tecnicos
+
+### Novo componente: `TrajetoLocalCard`
+
+Sera criado em `src/components/sinistros/TrajetoLocalCard.tsx` para separar a logica de buscar trajeto do banco local (cron) vs API (edge function).
+
+Props:
+- `veiculoId: string`
+- `dataOcorrencia: string | null`
+- `horasAnteriores: number` (default 4)
+
+Logica:
+1. Query `rastreadores` para obter `rastreador_id` do veiculo
+2. Query `rastreador_posicoes` com filtro de data
+3. Renderizar mapa com Polyline + badges de velocidade media e total de pontos
+
+### ComparacaoPosicoes com mapa
+
+Adicionar `MapContainer` de 200px de altura mostrando os marcadores das posicoes. Importar Leaflet apenas quando ha coordenadas disponiveis.
+
+## Resumo de Arquivos
+
+| Arquivo | Alteracao |
 |---|---|
-| Migracao SQL | Adicionar `analista_eventos` a politica de UPDATE de `vistorias_evento` |
-| `SinistroAnalise.tsx` (opcional) | Verificar retorno do update para detectar falhas silenciosas de RLS |
-
+| `src/components/sinistros/TrajetoLocalCard.tsx` | **Novo** - Card de trajeto usando dados locais do `rastreador_posicoes` |
+| `src/components/sinistros/ComparacaoPosicoes.tsx` | Adicionar mini-mapa Leaflet mostrando posicao do veiculo na hora do evento |
+| `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx` | Trocar `TrajetoSinistroCard` por `TrajetoLocalCard` e garantir que `ComparacaoPosicoes` esta presente com mapa |
