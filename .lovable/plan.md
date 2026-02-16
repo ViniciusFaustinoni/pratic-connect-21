@@ -1,44 +1,80 @@
 
 
-# Adicionar Etapas de Agendamento e Cota na Mensagem WhatsApp e no Stepper
+# Remover Etapa de Relato do Link e Mostrar Relato da IA ao Analista
 
-## Problema
+## Contexto
 
-A mensagem WhatsApp enviada ao associado lista apenas 3 etapas (Vistoria, B.O., Relato), sem mencionar as etapas 4 (Agendamento) e 5 (Cota de Coparticipacao). O associado precisa saber o passo a passo completo desde o inicio.
+O relato do evento ja e coletado pela IA (via App ou WhatsApp) e armazenado no campo `sinistros.descricao`. Nao faz sentido pedir novamente no link. O analista deve ver o relato da IA, nao o do link.
 
-Alem disso, o stepper na pagina publica do evento ja possui 5 etapas, mas a mensagem nao reflete isso.
+## Alteracoes
 
-## Solucao
+### 1. Stepper - Remover etapa "Relato"
 
-### 1. Mensagem WhatsApp completa com todas as etapas
+**Arquivo:** `src/components/evento/EventoStepper.tsx`
 
-No `EventoLinkCard.tsx`, adicionar as etapas 4 e 5 na mensagem:
+Reduzir de 5 para 4 etapas:
+1. Auto Vistoria
+2. B.O.
+3. Agendamento
+4. Pagamento
 
-```
-1. *Auto Vistoria* - Envie fotos do veiculo conforme orientacoes
-2. *Boletim de Ocorrencia* - Envie o B.O. registrado
-3. *Relato Completo* - Descreva como aconteceu o evento
-4. *Agendamento* - Agende a vistoria presencial
-5. *Cota de Coparticipacao* - Pagamento da cota conforme seu plano
-```
+### 2. Link Publico - Pular etapa 3
 
-Essas duas ultimas etapas serao fixas para todos os tipos de sinistro, adicionadas apos as etapas especificas do tipo.
+**Arquivo:** `src/pages/public/EventoColisao.tsx`
 
-### 2. Ajuste na construcao da mensagem
+- Remover import e renderizacao do `EventoEtapa3Relato`
+- Ajustar logica: apos etapa 2 (B.O.), ir direto para Agendamento
+- `isEtapas1a3Completas` passa a ser `isEtapas1e2Completas` (etapa_atual >= 2)
+- Ajustar `getStepperPosition()` para o novo stepper de 4 etapas
 
-As etapas 4 e 5 serao concatenadas automaticamente apos as etapas especificas do tipo, mantendo a numeracao correta.
+### 3. Edge Function - Marcar como completado na etapa 2
+
+**Arquivo:** `supabase/functions/salvar-etapa-evento/index.ts`
+
+- Na etapa 2, tambem marcar `status = 'completado'` e atualizar sinistro para `documentacao_enviada`
+- Remover validacao da etapa 3 (nao sera mais usada via link)
+- Manter etapa 3 aceita no array de etapas validas para retrocompatibilidade, mas o fluxo principal encerra na etapa 2
+
+### 4. Analista - Mostrar relato da IA
+
+**Arquivo:** `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
+
+Na secao "Relato do Associado" (linhas 288-326):
+- Substituir `dadosEtapa3.relato_texto` por `sinistro.descricao`
+- Manter exibicao de audio se houver (etapa3 antiga pode ter audio em links antigos)
+- Manter dados de terceiro e local se vindos de `dadosEtapa3` (retrocompatibilidade)
+
+### 5. Mensagem WhatsApp - Remover "Relato" das etapas
+
+**Arquivo:** `src/components/eventos/EventoLinkCard.tsx`
+
+Atualizar o objeto `etapasWhatsApp` para todos os tipos, removendo a etapa de relato. As etapas na mensagem passam a ser:
+1. Auto Vistoria
+2. Boletim de Ocorrencia
+3. Agendamento
+4. Cota de Coparticipacao
 
 ## Detalhes Tecnicos
 
-### `src/components/eventos/EventoLinkCard.tsx`
+### Fluxo Atualizado do Link Publico
 
-Na funcao `handleWhatsApp`, apos montar as etapas especificas do tipo (linhas 89-91), adicionar as etapas comuns de Agendamento e Cota antes de montar o texto final:
+```text
+Etapa 0: Auto Vistoria (fotos + video)
+Etapa 1: B.O. (upload + numero)
+  -> Ao completar etapa 2, marca link como "completado"
+  -> Atualiza sinistro para "documentacao_enviada"
+Etapa 2 (stepper 3): Agendamento
+Etapa 3 (stepper 4): Pagamento da Cota
+```
 
-- Adicionar ao array de etapas: `'Agendamento'` e `'Cota de Coparticipacao'`
-- Adicionar ao array de descricoes: `'Agende a vistoria presencial'` e `'Pagamento da cota conforme seu plano'`
-- Isso garantira que a numeracao fique correta (ex: 4. Agendamento, 5. Cota)
+### Retrocompatibilidade
+
+Links antigos que ja possuem `dados_etapa3` preenchida continuarao funcionando. O analista mostrara `sinistro.descricao` como fonte principal do relato, com fallback para `dadosEtapa3.relato_texto` caso o campo da IA esteja vazio.
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/eventos/EventoLinkCard.tsx` | Adicionar etapas 4 (Agendamento) e 5 (Cota de Coparticipacao) na mensagem WhatsApp |
-
+| `src/components/evento/EventoStepper.tsx` | Remover etapa "Relato", ficar com 4 etapas |
+| `src/pages/public/EventoColisao.tsx` | Pular etapa 3, ir de B.O. para Agendamento |
+| `supabase/functions/salvar-etapa-evento/index.ts` | Marcar completado na etapa 2 |
+| `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx` | Mostrar sinistro.descricao ao inves de dadosEtapa3.relato_texto |
+| `src/components/eventos/EventoLinkCard.tsx` | Remover "Relato" da mensagem WhatsApp |
