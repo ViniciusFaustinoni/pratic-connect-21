@@ -1,65 +1,44 @@
 
+# Corrigir Erro 400 no Agendamento de Vistoria de Evento
 
-# Corrigir Exclusao em Cascata de Sinistros e Chamados
+## Problema
 
-## Problema Identificado
+O agendamento de vistoria de evento retorna **400 Bad Request** porque a Edge Function `agendar-vistoria-evento` exige que `etapa_atual >= 3`, porem o fluxo de etapas (`salvar-etapa-evento`) so vai ate a **etapa 2**:
 
-A Edge Function `delete-sinistro` nao limpa todas as tabelas dependentes antes de excluir o sinistro. Varias tabelas possuem FK com `NO ACTION` (sem cascata), o que causa **falha na exclusao** quando existem registros vinculados. As tabelas problematicas sao:
+- Etapa 1: Fotos e videos do veiculo
+- Etapa 2: Boletim de Ocorrencia
+- Agendamento: e o proximo passo (nao e uma "etapa" salva)
 
-| Tabela | FK Delete Rule | Situacao |
-|---|---|---|
-| `sinistro_vidros_historico` | NO ACTION | **Bloqueia exclusao** - historico de vidros permanece |
-| `consultas_juridicas` | NO ACTION | **Bloqueia exclusao** |
-| `evento_cotacoes_pecas` | NO ACTION | **Bloqueia exclusao** |
-| `sinistro_prestadores` | NO ACTION | **Bloqueia exclusao** |
-| `vistorias` | NO ACTION | **Bloqueia exclusao** |
-| `processos_prazos` | NO ACTION | **Bloqueia exclusao** |
-
-Alem disso, a Edge Function `delete-chamado-assistencia` tambem nao limpa tabelas como `gastos_beneficios` vinculados ao chamado.
+Quando a etapa 2 e concluida, `etapa_atual` fica como **2** e o status muda para **"completado"**. Ao tentar agendar, a validacao `if (link.etapa_atual < 3)` sempre falha.
 
 ## Solucao
 
-### 1. Atualizar `delete-sinistro/index.ts`
+### Arquivo: `supabase/functions/agendar-vistoria-evento/index.ts`
 
-Adicionar limpeza das tabelas faltantes na exclusao em cascata, **antes** de excluir o sinistro principal:
-
-```text
-Ordem de exclusao completa:
- 1. sinistro_mensagens (ja existe)
- 2. sinistro_fotos + storage (ja existe)
- 3. sinistro_documentos (ja existe)
- 4. sinistro_historico (ja existe)
- 5. gastos_beneficios (ja existe)
- 6. sinistro_vidros_historico  ← NOVO
- 7. sinistro_prestadores       ← NOVO
- 8. consultas_juridicas        ← NOVO (desvincular: set sinistro_id = null)
- 9. evento_cotacoes_pecas      ← NOVO (desvincular: set sinistro_id = null)
-10. vistorias                  ← NOVO (desvincular: set sinistro_id = null)
-11. processos_prazos           ← NOVO (excluir onde evento_id = sinistroId)
-12. ordens_servico (ja existe - desvincular)
-13. processos (ja existe - desvincular)
-14. chat_mensagens_ia (ja existe)
-15. sinistros (exclusao principal)
-16. Log de auditoria
-```
-
-### 2. Atualizar `delete-chamado-assistencia/index.ts`
-
-Adicionar limpeza de tabelas faltantes vinculadas ao chamado:
+Alterar a validacao de `etapa_atual < 3` para `etapa_atual < 2`, pois o agendamento so requer que as etapas 1 e 2 estejam concluidas.
 
 ```text
-Adicionar antes da exclusao principal:
-- gastos_beneficios onde chamado_id = chamadoId (excluir)
+// ANTES (linha 98):
+if (link.etapa_atual < 3)
+
+// DEPOIS:
+if (link.etapa_atual < 2)
 ```
 
-### 3. Deploy das Edge Functions
+Tambem atualizar a mensagem de erro para refletir corretamente:
 
-Redeployar ambas as funcoes apos as alteracoes.
+```text
+// ANTES:
+"As 3 etapas devem ser completadas antes do agendamento"
 
-## Resumo de arquivos
+// DEPOIS:
+"As etapas 1 e 2 devem ser completadas antes do agendamento"
+```
+
+### Deploy
+
+Redeployar a Edge Function `agendar-vistoria-evento` apos a alteracao.
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/delete-sinistro/index.ts` | Adicionar limpeza de 6 tabelas faltantes |
-| `supabase/functions/delete-chamado-assistencia/index.ts` | Adicionar limpeza de gastos_beneficios |
-
+| `supabase/functions/agendar-vistoria-evento/index.ts` | Corrigir validacao de `etapa_atual` de `< 3` para `< 2` |
