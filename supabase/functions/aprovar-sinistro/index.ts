@@ -187,6 +187,26 @@ Qualquer dúvida, estamos à disposição! 💙`;
       } catch (whatsErr) {
         console.error('[aprovar-sinistro] Erro ao enviar WhatsApp:', whatsErr);
       }
+
+      // Agendar mensagem 15min após aprovação — peças em cotação
+      const primeiroNome = (sinistro.associado as any)?.nome?.split(' ')[0] || 'Associado';
+      const placa = (sinistro.veiculo as any)?.placa || '';
+      const agendadoPara = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const mensagem15 = `${primeiroNome}, aqui é a equipe Pratic Car novamente! 😊\n\nEnquanto aguardamos a assinatura do termo e o pagamento da cota, já estamos adiantando o processo! 🚀\n\n🔧 As peças necessárias para o reparo do seu veículo ${placa} já estão em *fase de cotação* com nossos auto centers parceiros.\n\nNosso objetivo é agilizar ao máximo para que, assim que tudo estiver regularizado, o reparo comece o mais rápido possível! ⚡\n\nVocê será informado sobre cada etapa. Qualquer dúvida, estamos aqui! 💙\n\nABP PraticCar`;
+
+      try {
+        await supabase.from('sinistro_contatos_agendados').insert({
+          sinistro_id,
+          tipo: 'pos_aprovacao_cotacao',
+          telefone: telefone.replace(/\D/g, ''),
+          agendado_para: agendadoPara,
+          mensagem_enviada: mensagem15,
+          status: 'agendado',
+        });
+        console.log('[aprovar-sinistro] Mensagem 15min agendada para:', agendadoPara);
+      } catch (e) {
+        console.error('[aprovar-sinistro] Erro ao agendar mensagem 15min:', e);
+      }
     }
 
     console.log('[aprovar-sinistro] Sinistro aprovado com sucesso');
