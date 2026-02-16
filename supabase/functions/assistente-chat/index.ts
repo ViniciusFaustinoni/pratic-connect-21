@@ -711,6 +711,24 @@ async function executeTool(
           console.error("[assistente-chat] Erro agendar contato (não bloqueante):", e);
         }
 
+        // 11. Geocodificar local informado
+        if (args.local) {
+          try {
+            const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(args.local + ', Brasil')}&limit=1`;
+            const geoRes = await fetch(geoUrl, { headers: { 'User-Agent': 'PraticConnect/1.0' } });
+            const geoData = await geoRes.json();
+            if (geoData.length > 0) {
+              await supabase.from('sinistros').update({
+                latitude_informada: parseFloat(geoData[0].lat),
+                longitude_informada: parseFloat(geoData[0].lon),
+              }).eq('id', sinistroChat.id);
+              console.log(`[assistente-chat] Geocodificado: ${args.local} -> ${geoData[0].lat}, ${geoData[0].lon}`);
+            }
+          } catch (geoErr) {
+            console.error('[assistente-chat] Erro geocodificação (não bloqueante):', geoErr);
+          }
+        }
+
         const temArquivosChat = args.bo_path || (args.fotos_paths && args.fotos_paths.length > 0);
         const arquivosInfoChat = temArquivosChat
           ? ` Arquivos anexados: ${args.bo_path ? "B.O." : ""}${args.bo_path && args.fotos_paths?.length ? " + " : ""}${args.fotos_paths?.length ? `${args.fotos_paths.length} foto(s)` : ""}`

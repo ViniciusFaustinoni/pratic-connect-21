@@ -65,7 +65,7 @@ serve(async (req) => {
     const { data: sinistro } = await supabase
       .from("sinistros")
       .select(`
-        id, protocolo, tipo, data_ocorrencia, descricao,
+        id, protocolo, tipo, data_ocorrencia, descricao, local_ocorrencia,
         associado:associados(id, nome, telefone, whatsapp, email),
         veiculo:veiculos(id, placa, marca, modelo, ano_modelo, cor, valor_fipe)
       `)
@@ -90,6 +90,7 @@ serve(async (req) => {
           tipo: sinistro.tipo,
           data_ocorrencia: sinistro.data_ocorrencia,
           descricao: sinistro.descricao,
+          local_ocorrencia: sinistro.local_ocorrencia,
           associado: sinistro.associado,
           veiculo: sinistro.veiculo,
         } : null,
