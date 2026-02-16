@@ -1,121 +1,62 @@
 
-# Geocodificar Local na IA + Pre-preencher Link do Evento
 
-## Problema Atual
+# Limpar Historico de Conversa da IA ao Excluir Sinistro
 
-1. Quando a IA (WhatsApp ou App) cria um sinistro, o campo `local` e salvo apenas como texto em `sinistros.local_ocorrencia` -- sem geocodificacao (sem lat/lng)
-2. Quando o link do evento e gerado para o associado, o campo "Rua" e "Numero" na Etapa 3 vem vazio, mesmo que o associado ja tenha informado o local na conversa com a IA
-3. O mapa de evidencia so mostra o pino do local informado se `latitude_informada` e `longitude_informada` existirem no sinistro
+## Problema
+
+Quando um sinistro e excluido pelo diretor, o contexto da IA (dados do banco) corretamente mostra "Nenhum sinistro em aberto". Porem, o **historico de conversa** (`chat_mensagens_ia`) ainda contem mensagens referenciando o sinistro excluido (ex: "ja abrimos o protocolo SIN-20260216-0004").
+
+A IA le esse historico e "lembra" do sinistro mesmo apos a exclusao, causando o comportamento reportado.
+
+## Causa Raiz
+
+- **WhatsApp** (`whatsapp-webhook`): Carrega as ultimas 2h de `chat_mensagens_ia` (linha 1791) como contexto de conversa
+- **App** (`assistente-chat`): Recebe `conversationHistory` do frontend (linha 1142)
+- Em ambos os casos, mensagens antigas mencionando o sinistro fazem a IA acreditar que ele ainda existe
 
 ## Solucao
 
-### 1. Geocodificar o local ao criar sinistro via IA
+### 1. Limpar `chat_mensagens_ia` ao excluir sinistro
 
-**Arquivos:** `supabase/functions/whatsapp-webhook/index.ts` e `supabase/functions/assistente-chat/index.ts`
+**Arquivo:** `supabase/functions/delete-sinistro/index.ts`
 
-Apos o INSERT do sinistro (onde `local_ocorrencia: args.local`), adicionar geocodificacao via Nominatim:
+Adicionar um passo na exclusao em cascata para deletar as mensagens de chat da IA do associado. Isso forca a IA a "esquecer" o contexto anterior.
 
-```typescript
-// Apos criar sinistro com sucesso
-if (args.local) {
-  try {
-    const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(args.local + ', Brasil')}&limit=1`;
-    const geoRes = await fetch(geoUrl, { headers: { 'User-Agent': 'PraticConnect/1.0' } });
-    const geoData = await geoRes.json();
-    if (geoData.length > 0) {
-      await supabase.from('sinistros').update({
-        latitude_informada: parseFloat(geoData[0].lat),
-        longitude_informada: parseFloat(geoData[0].lon),
-      }).eq('id', sinistroNovo.id);
-    }
-  } catch (e) { console.error('Geo error:', e); }
-}
-```
+O DELETE sera feito por `associado_id` para limpar todo o historico recente, garantindo que nenhuma referencia ao sinistro excluido sobreviva.
 
-Isso garante que sinistros criados via IA ja tenham coordenadas para o mapa de evidencia.
+### 2. Limpar `chat_mensagens_ia` ao excluir chamado de assistencia
 
-### 2. Incluir `local_ocorrencia` na resposta do `validar-link-evento`
+**Arquivo:** `supabase/functions/delete-chamado-assistencia/index.ts` (se existir)
 
-**Arquivo:** `supabase/functions/validar-link-evento/index.ts`
+Mesma logica: ao excluir um chamado de assistencia, limpar o historico de conversa do associado.
 
-Adicionar `local_ocorrencia` no SELECT do sinistro para que o frontend tenha acesso ao endereco ja informado:
+### 3. Limpar historico no frontend (App)
 
-```typescript
-// Linha 68: adicionar local_ocorrencia ao select
-.select(`
-  id, protocolo, tipo, data_ocorrencia, descricao, local_ocorrencia,
-  associado:associados(id, nome, telefone, whatsapp, email),
-  veiculo:veiculos(id, placa, marca, modelo, ano_modelo, cor, valor_fipe)
-`)
-```
+**Arquivo relacionado no frontend** (componente do chat do associado)
 
-E incluir na resposta:
+Quando a conversa do App envia `conversationHistory`, esses dados vem do estado local (React). O problema principal e o WhatsApp (que busca do banco), mas o App tambem pode manter historico em memoria. Nao e necessario alterar o frontend pois a proxima sessao do App vai iniciar sem historico antigo.
 
-```typescript
-sinistro: sinistro ? {
-  ...
-  local_ocorrencia: sinistro.local_ocorrencia,
-} : null,
-```
+## Detalhe Tecnico
 
-### 3. Pre-preencher Rua/Numero na Etapa 3 do link
-
-**Arquivo:** `src/pages/public/EventoColisao.tsx`
-
-Passar `sinistro.local_ocorrencia` para o componente `EventoEtapa3Relato`:
-
-```typescript
-<EventoEtapa3Relato 
-  token={token!} 
-  onComplete={handleStepComplete}
-  localPadrao={sinistro?.local_ocorrencia}
-/>
-```
-
-**Arquivo:** `src/components/evento/EventoEtapa3Relato.tsx`
-
-Aceitar a prop `localPadrao` e usar como valor inicial do campo "Rua":
-
-```typescript
-interface Props {
-  token: string;
-  onComplete: () => void;
-  localPadrao?: string;
-}
-
-// No componente:
-const [rua, setRua] = useState(localPadrao || '');
-```
-
-## Fluxo Resultante
+No `delete-sinistro/index.ts`, antes de excluir o sinistro principal (passo 9), adicionar:
 
 ```text
-Associado informa local na IA (WhatsApp/App)
-    |
-    v
-IA cria sinistro com local_ocorrencia + geocodifica (lat/lng)
-    |
-    v
-Link do evento e gerado e enviado ao associado
-    |
-    v
-Etapa 3 do link abre com campo "Rua" ja preenchido
-    |
-    v
-Associado pode corrigir ou confirmar e enviar
-    |
-    v
-Mapa de evidencia mostra pino do local informado (azul) + rastreador (verde)
+// Limpar historico de conversa da IA do associado
+// para que a IA "esqueca" referencias ao sinistro excluido
+await supabaseAdmin
+  .from("chat_mensagens_ia")
+  .delete()
+  .eq("associado_id", sinistro.associado_id);
 ```
+
+O mesmo sera feito no `delete-chamado-assistencia` se existir, usando o `associado_id` do chamado.
 
 ## Resumo de Arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/whatsapp-webhook/index.ts` | Geocodificar `args.local` apos criar sinistro |
-| `supabase/functions/assistente-chat/index.ts` | Geocodificar `args.local` apos criar sinistro |
-| `supabase/functions/validar-link-evento/index.ts` | Incluir `local_ocorrencia` no retorno |
-| `src/pages/public/EventoColisao.tsx` | Passar `local_ocorrencia` para Etapa 3 |
-| `src/components/evento/EventoEtapa3Relato.tsx` | Aceitar `localPadrao` e pre-preencher campo Rua |
+| `supabase/functions/delete-sinistro/index.ts` | Adicionar limpeza de `chat_mensagens_ia` por `associado_id` na exclusao em cascata |
+| `supabase/functions/delete-chamado-assistencia/index.ts` | Mesma limpeza (se o arquivo existir) |
 
-Nenhuma migration necessaria -- todos os campos ja existem no banco.
+Nenhuma migration necessaria.
+
