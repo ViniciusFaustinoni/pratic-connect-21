@@ -51,12 +51,13 @@ export function useEventosContadores() {
       const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
       const inicioMesISO = inicioMes.toISOString();
 
-      const [aguardando, aprovadosHoje, reprovadosHoje, aprovadosMes, reprovadosMes] = await Promise.all([
+      const [aguardando, aprovadosHoje, reprovadosHoje, aprovadosMes, reprovadosMes, pendentesVistoria] = await Promise.all([
         supabase.from('sinistros').select('id', { count: 'exact', head: true }).eq('status', 'aguardando_analise'),
         supabase.from('sinistros').select('id', { count: 'exact', head: true }).eq('status', 'aprovado').gte('updated_at', hojeISO),
         supabase.from('sinistros').select('id', { count: 'exact', head: true }).eq('status', 'reprovado').gte('updated_at', hojeISO),
         supabase.from('sinistros').select('id', { count: 'exact', head: true }).eq('status', 'aprovado').gte('updated_at', inicioMesISO),
         supabase.from('sinistros').select('id', { count: 'exact', head: true }).eq('status', 'reprovado').gte('updated_at', inicioMesISO),
+        supabase.from('sinistros').select('id', { count: 'exact', head: true }).in('status', ['comunicado', 'em_analise', 'documentacao_pendente', 'aguardando_vistoria'] as any),
       ]);
 
       return {
@@ -64,6 +65,7 @@ export function useEventosContadores() {
         analisadosHoje: (aprovadosHoje.count || 0) + (reprovadosHoje.count || 0),
         aprovadosMes: aprovadosMes.count || 0,
         reprovadosMes: reprovadosMes.count || 0,
+        pendentesVistoria: pendentesVistoria.count || 0,
       };
     },
   });

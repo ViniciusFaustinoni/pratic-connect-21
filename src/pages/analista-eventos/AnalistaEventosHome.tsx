@@ -1,5 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Clock, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
+import { Loader2, Clock, CheckCircle, XCircle, BarChart3, Eye } from 'lucide-react';
 import { useEventosContadores } from '@/hooks/useEventosAnalise';
 
 export default function AnalistaEventosHome() {
@@ -14,6 +14,12 @@ export default function AnalistaEventosHome() {
   }
 
   const cards = [
+    {
+      label: 'Pendente Vistoria',
+      value: contadores?.pendentesVistoria || 0,
+      icon: Eye,
+      color: 'text-purple-600 bg-purple-100',
+    },
     {
       label: 'Aguardando Análise',
       value: contadores?.aguardando || 0,
