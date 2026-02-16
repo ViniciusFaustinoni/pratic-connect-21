@@ -217,6 +217,34 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
     enabled: !!sinistroId,
   });
 
+  // Fotos da vistoria de instalação do rastreador
+  const { data: instalacaoFotos = [] } = useQuery({
+    queryKey: ['sinistro-analise-instalacao-fotos', sinistro?.veiculo_id],
+    queryFn: async () => {
+      // Buscar instalação concluída mais recente do veículo
+      const { data: instalacao } = await supabase
+        .from('instalacoes')
+        .select('id')
+        .eq('veiculo_id', sinistro!.veiculo_id)
+        .eq('status', 'concluida')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!instalacao) return [];
+
+      // Buscar fotos dessa instalação
+      const { data: fotos } = await supabase
+        .from('instalacao_fotos')
+        .select('*')
+        .eq('instalacao_id', instalacao.id)
+        .order('created_at', { ascending: true });
+
+      return fotos || [];
+    },
+    enabled: !!sinistro?.veiculo_id,
+  });
+
   return {
     sinistro,
     documentos,
@@ -228,6 +256,7 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
     veiculoHistorico,
     linkEvento,
     vistoriaEvento,
+    instalacaoFotos,
     isLoading: loadingSinistro,
   };
 }
