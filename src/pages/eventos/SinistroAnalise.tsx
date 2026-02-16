@@ -680,9 +680,9 @@ export default function SinistroAnalise() {
                 <ComparacaoPosicoes
                   latitudeInformada={sinistro.latitude_informada}
                   longitudeInformada={sinistro.longitude_informada}
-                  rastreadorLat={rastreador?.ultima_posicao_lat}
-                  rastreadorLng={rastreador?.ultima_posicao_lng}
-                  rastreadorCapturadoEm={rastreador?.ultima_comunicacao}
+                  rastreadorLat={sinistro.rastreador_lat_momento}
+                  rastreadorLng={sinistro.rastreador_lng_momento}
+                  rastreadorCapturadoEm={sinistro.rastreador_posicao_capturada_em}
                   localOcorrencia={sinistro.local_ocorrencia}
                 />
 
