@@ -95,9 +95,9 @@ serve(async (req) => {
     }
 
     // Verificar que etapa 3 foi completada
-    if (link.etapa_atual < 3) {
+    if (link.etapa_atual < 2) {
       return new Response(
-        JSON.stringify({ error: "As 3 etapas devem ser completadas antes do agendamento" }),
+        JSON.stringify({ error: "As etapas 1 e 2 devem ser completadas antes do agendamento" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
