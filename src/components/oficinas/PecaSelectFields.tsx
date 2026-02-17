@@ -104,9 +104,11 @@ interface PecaSelectFieldsProps {
   disabled?: boolean;
   active?: boolean;
   initialVeiculo?: { marca: string; modelo: string; ano_modelo: string | number };
+  /** When provided, hides marca/modelo/ano fields and uses these shared values instead */
+  sharedVeiculo?: { marcaCodigo: string; marcaNome: string; modeloCodigo: string; modeloNome: string; anoCodigo: string; anoNome: string };
 }
 
-export function PecaSelectFields({ values, onChange, disabled, active = true, initialVeiculo }: PecaSelectFieldsProps) {
+export function PecaSelectFields({ values, onChange, disabled, active = true, initialVeiculo, sharedVeiculo }: PecaSelectFieldsProps) {
   const [marcas, setMarcas] = useState<FipeItem[]>([]);
   const [modelos, setModelos] = useState<FipeItem[]>([]);
   const [anos, setAnos] = useState<FipeItem[]>([]);
@@ -127,13 +129,12 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  // Load marcas
+  // Load marcas - skip if shared vehicle is provided
   useEffect(() => {
-    if (!active) return;
+    if (!active || sharedVeiculo) return;
     setLoadingMarcas(true);
     fipeFetch('marcas').then((data) => {
       setMarcas(data);
-      // Auto-match marca from vehicle data
       if (initialVeiculo?.marca && !autoMatchMarcaRef.current && !valuesRef.current.marcaCodigo) {
         const needle = initialVeiculo.marca.toLowerCase();
         const match = data.find(m => m.nome.toLowerCase().includes(needle) || needle.includes(m.nome.toLowerCase()));
@@ -143,15 +144,36 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
         }
       }
     }).catch(() => setMarcas([])).finally(() => setLoadingMarcas(false));
-  }, [active]);
+  }, [active, sharedVeiculo]);
 
-  // Load modelos when marca changes
+  // Sync shared vehicle values into PecaSelectValues
   useEffect(() => {
+    if (!sharedVeiculo) return;
+    const current = valuesRef.current;
+    if (
+      current.marcaCodigo !== sharedVeiculo.marcaCodigo ||
+      current.modeloCodigo !== sharedVeiculo.modeloCodigo ||
+      current.anoCodigo !== sharedVeiculo.anoCodigo
+    ) {
+      onChangeRef.current({
+        ...current,
+        marcaCodigo: sharedVeiculo.marcaCodigo,
+        marcaNome: sharedVeiculo.marcaNome,
+        modeloCodigo: sharedVeiculo.modeloCodigo,
+        modeloNome: sharedVeiculo.modeloNome,
+        anoCodigo: sharedVeiculo.anoCodigo,
+        anoNome: sharedVeiculo.anoNome,
+      });
+    }
+  }, [sharedVeiculo]);
+
+  // Load modelos when marca changes - skip if shared
+  useEffect(() => {
+    if (sharedVeiculo) return;
     if (!values.marcaCodigo) { setModelos([]); return; }
     setLoadingModelos(true);
     fipeFetch('modelos', { marcaCodigo: values.marcaCodigo }).then((data) => {
       setModelos(data);
-      // Auto-match modelo
       if (initialVeiculo?.modelo && autoMatchMarcaRef.current && !autoMatchModeloRef.current && !valuesRef.current.modeloCodigo) {
         const needle = initialVeiculo.modelo.toLowerCase();
         const match = data.find(m => m.nome.toLowerCase().includes(needle) || needle.includes(m.nome.toLowerCase()));
@@ -161,15 +183,15 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
         }
       }
     }).catch(() => setModelos([])).finally(() => setLoadingModelos(false));
-  }, [values.marcaCodigo]);
+  }, [values.marcaCodigo, sharedVeiculo]);
 
-  // Load anos when modelo changes
+  // Load anos when modelo changes - skip if shared
   useEffect(() => {
+    if (sharedVeiculo) return;
     if (!values.marcaCodigo || !values.modeloCodigo) { setAnos([]); return; }
     setLoadingAnos(true);
     fipeFetch('anos', { marcaCodigo: values.marcaCodigo, modeloCodigo: values.modeloCodigo }).then((data) => {
       setAnos(data);
-      // Auto-match ano
       if (initialVeiculo?.ano_modelo && autoMatchModeloRef.current && !autoMatchAnoRef.current && !valuesRef.current.anoCodigo) {
         const anoStr = String(initialVeiculo.ano_modelo);
         const match = data.find(a => a.nome.includes(anoStr));
@@ -179,7 +201,7 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
         }
       }
     }).catch(() => setAnos([])).finally(() => setLoadingAnos(false));
-  }, [values.modeloCodigo]);
+  }, [values.modeloCodigo, sharedVeiculo]);
 
   const update = (partial: Partial<PecaSelectValues>) => {
     onChange({ ...values, ...partial });
@@ -199,101 +221,106 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
         />
       </div>
 
-      {/* Marca */}
-      <div className="space-y-1">
-        <Label className="text-xs">Marca do Veículo *</Label>
-        <Popover open={openMarca} onOpenChange={setOpenMarca}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" role="combobox" aria-expanded={openMarca} className="w-full justify-between font-normal" disabled={disabled || loadingMarcas}>
-              {loadingMarcas ? <Loader2 className="h-4 w-4 animate-spin" /> : (values.marcaNome || <span className="text-muted-foreground">Selecione a marca</span>)}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Buscar marca..." />
-              <CommandList>
-                <CommandEmpty>Nenhuma marca encontrada.</CommandEmpty>
-                <CommandGroup>
-                  {marcas.map(m => (
-                    <CommandItem key={m.codigo} value={m.nome} onSelect={() => {
-                      update({ marcaCodigo: m.codigo, marcaNome: m.nome, modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '' });
-                      setOpenMarca(false);
-                    }}>
-                      <Check className={cn('mr-2 h-4 w-4', values.marcaCodigo === m.codigo ? 'opacity-100' : 'opacity-0')} />
-                      {m.nome}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
+      {/* Marca / Modelo / Ano - hidden when shared */}
+      {!sharedVeiculo && (
+        <>
+          {/* Marca */}
+          <div className="space-y-1">
+            <Label className="text-xs">Marca do Veículo *</Label>
+            <Popover open={openMarca} onOpenChange={setOpenMarca}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={openMarca} className="w-full justify-between font-normal" disabled={disabled || loadingMarcas}>
+                  {loadingMarcas ? <Loader2 className="h-4 w-4 animate-spin" /> : (values.marcaNome || <span className="text-muted-foreground">Selecione a marca</span>)}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar marca..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhuma marca encontrada.</CommandEmpty>
+                    <CommandGroup>
+                      {marcas.map(m => (
+                        <CommandItem key={m.codigo} value={m.nome} onSelect={() => {
+                          update({ marcaCodigo: m.codigo, marcaNome: m.nome, modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '' });
+                          setOpenMarca(false);
+                        }}>
+                          <Check className={cn('mr-2 h-4 w-4', values.marcaCodigo === m.codigo ? 'opacity-100' : 'opacity-0')} />
+                          {m.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
 
-      {/* Modelo */}
-      <div className="space-y-1">
-        <Label className="text-xs">Modelo *</Label>
-        <Popover open={openModelo} onOpenChange={setOpenModelo}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" role="combobox" aria-expanded={openModelo} className="w-full justify-between font-normal" disabled={disabled || loadingModelos || !values.marcaCodigo}>
-              {loadingModelos ? <Loader2 className="h-4 w-4 animate-spin" /> : (values.modeloNome || <span className="text-muted-foreground">Selecione o modelo</span>)}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Buscar modelo..." />
-              <CommandList>
-                <CommandEmpty>Nenhum modelo encontrado.</CommandEmpty>
-                <CommandGroup>
-                  {modelos.map(m => (
-                    <CommandItem key={m.codigo} value={m.nome} onSelect={() => {
-                      update({ modeloCodigo: String(m.codigo), modeloNome: m.nome, anoCodigo: '', anoNome: '' });
-                      setOpenModelo(false);
-                    }}>
-                      <Check className={cn('mr-2 h-4 w-4', values.modeloCodigo === String(m.codigo) ? 'opacity-100' : 'opacity-0')} />
-                      {m.nome}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
+          {/* Modelo */}
+          <div className="space-y-1">
+            <Label className="text-xs">Modelo *</Label>
+            <Popover open={openModelo} onOpenChange={setOpenModelo}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={openModelo} className="w-full justify-between font-normal" disabled={disabled || loadingModelos || !values.marcaCodigo}>
+                  {loadingModelos ? <Loader2 className="h-4 w-4 animate-spin" /> : (values.modeloNome || <span className="text-muted-foreground">Selecione o modelo</span>)}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar modelo..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum modelo encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {modelos.map(m => (
+                        <CommandItem key={m.codigo} value={m.nome} onSelect={() => {
+                          update({ modeloCodigo: String(m.codigo), modeloNome: m.nome, anoCodigo: '', anoNome: '' });
+                          setOpenModelo(false);
+                        }}>
+                          <Check className={cn('mr-2 h-4 w-4', values.modeloCodigo === String(m.codigo) ? 'opacity-100' : 'opacity-0')} />
+                          {m.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
 
-      {/* Ano */}
-      <div className="space-y-1">
-        <Label className="text-xs">Ano *</Label>
-        <Popover open={openAno} onOpenChange={setOpenAno}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" role="combobox" aria-expanded={openAno} className="w-full justify-between font-normal" disabled={disabled || loadingAnos || !values.modeloCodigo}>
-              {loadingAnos ? <Loader2 className="h-4 w-4 animate-spin" /> : (values.anoNome || <span className="text-muted-foreground">Selecione o ano</span>)}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Buscar ano..." />
-              <CommandList>
-                <CommandEmpty>Nenhum ano encontrado.</CommandEmpty>
-                <CommandGroup>
-                  {anos.map(a => (
-                    <CommandItem key={a.codigo} value={a.nome} onSelect={() => {
-                      update({ anoCodigo: a.codigo, anoNome: a.nome });
-                      setOpenAno(false);
-                    }}>
-                      <Check className={cn('mr-2 h-4 w-4', values.anoCodigo === a.codigo ? 'opacity-100' : 'opacity-0')} />
-                      {a.nome}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
+          {/* Ano */}
+          <div className="space-y-1">
+            <Label className="text-xs">Ano *</Label>
+            <Popover open={openAno} onOpenChange={setOpenAno}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={openAno} className="w-full justify-between font-normal" disabled={disabled || loadingAnos || !values.modeloCodigo}>
+                  {loadingAnos ? <Loader2 className="h-4 w-4 animate-spin" /> : (values.anoNome || <span className="text-muted-foreground">Selecione o ano</span>)}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar ano..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum ano encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {anos.map(a => (
+                        <CommandItem key={a.codigo} value={a.nome} onSelect={() => {
+                          update({ anoCodigo: a.codigo, anoNome: a.nome });
+                          setOpenAno(false);
+                        }}>
+                          <Check className={cn('mr-2 h-4 w-4', values.anoCodigo === a.codigo ? 'opacity-100' : 'opacity-0')} />
+                          {a.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </>
+      )}
     </div>
   );
 }
