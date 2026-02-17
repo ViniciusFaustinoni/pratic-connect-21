@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { RefreshCw, Satellite, MapPin, Navigation, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { RefreshCw, Satellite, MapPin, Navigation, AlertCircle, Wifi, WifiOff, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RotaPolyline } from '@/components/mapa/RotaPolyline';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,17 @@ const origemIcon = new L.DivIcon({
   iconAnchor: [16, 32],
 });
 
+const oficinaIcon = new L.DivIcon({
+  html: `<div class="flex items-center justify-center w-10 h-10 bg-amber-500 rounded-full border-3 border-white shadow-lg">
+    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
+    </svg>
+  </div>`,
+  className: 'custom-marker',
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+});
+
 interface MapaChamadoProps {
   origemLat?: number | null;
   origemLng?: number | null;
@@ -56,6 +68,9 @@ interface MapaChamadoProps {
   onRefresh?: () => void;
   height?: string;
   showControls?: boolean;
+  oficinaLat?: number | null;
+  oficinaLng?: number | null;
+  oficinaNome?: string;
 }
 
 // Componente para recentrar o mapa
@@ -83,6 +98,9 @@ export function MapaChamado({
   onRefresh,
   height = 'h-64',
   showControls = true,
+  oficinaLat,
+  oficinaLng,
+  oficinaNome,
 }: MapaChamadoProps) {
   const [showRastreador, setShowRastreador] = useState(true);
 
@@ -217,6 +235,34 @@ export function MapaChamado({
                 </div>
               </Popup>
             </Marker>
+          )}
+
+          {/* Marcador da oficina destino */}
+          {oficinaLat && oficinaLng && (
+            <Marker position={[oficinaLat, oficinaLng]} icon={oficinaIcon}>
+              <Popup>
+                <div className="text-center min-w-[150px]">
+                  <p className="font-semibold text-amber-600 flex items-center justify-center gap-1">
+                    <Building2 className="h-4 w-4" />
+                    Oficina Destino
+                  </p>
+                  {oficinaNome && (
+                    <p className="text-xs text-muted-foreground mt-1">{oficinaNome}</p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          )}
+
+          {/* Rota veículo → oficina */}
+          {temRastreador && oficinaLat && oficinaLng && (
+            <RotaPolyline
+              origem={[rastreadorLat!, rastreadorLng!]}
+              destino={[oficinaLat, oficinaLng]}
+              cor="#F59E0B"
+              peso={5}
+              mostrarPopup={true}
+            />
           )}
 
           {/* Recentrar no marcador selecionado */}

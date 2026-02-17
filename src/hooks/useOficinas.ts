@@ -1,7 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Oficina, StatusOficina } from '@/types/database';
+import { atualizarCoordenadasOficina } from '@/services/geocodingService';
 
 export interface OficinaFilters {
   status?: StatusOficina;
@@ -13,38 +15,72 @@ export interface OficinaFilters {
 }
 
 export function useOficinas(filters?: OficinaFilters) {
-  return useQuery({
+  const geocodingDone = useRef(false);
+
+  const query = useQuery({
     queryKey: ['oficinas', filters],
     queryFn: async () => {
-      let query = supabase
+      let q = supabase
         .from('oficinas')
         .select('*')
         .order('razao_social');
 
       if (filters?.status) {
-        query = query.eq('status', filters.status);
+        q = q.eq('status', filters.status);
       }
       if (filters?.cidade) {
-        query = query.eq('cidade', filters.cidade);
+        q = q.eq('cidade', filters.cidade);
       }
       if (filters?.estado) {
-        query = query.eq('estado', filters.estado);
+        q = q.eq('estado', filters.estado);
       }
       if (filters?.search) {
-        query = query.or(`razao_social.ilike.%${filters.search}%,nome_fantasia.ilike.%${filters.search}%,cnpj.ilike.%${filters.search}%`);
+        q = q.or(`razao_social.ilike.%${filters.search}%,nome_fantasia.ilike.%${filters.search}%,cnpj.ilike.%${filters.search}%`);
       }
       if (filters?.especialidade) {
-        query = query.contains('especialidades', [filters.especialidade]);
+        q = q.contains('especialidades', [filters.especialidade]);
       }
       if (filters?.marca) {
-        query = query.or(`marcas_atendidas.cs.{${filters.marca}},marcas_atendidas.cs.{GLOBAL}`);
+        q = q.or(`marcas_atendidas.cs.{${filters.marca}},marcas_atendidas.cs.{GLOBAL}`);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await q;
       if (error) throw error;
       return data as Oficina[];
     },
   });
+
+  // Lazy geocoding: geocodificar oficinas existentes sem coordenadas
+  useEffect(() => {
+    if (!query.data || geocodingDone.current) return;
+    geocodingDone.current = true;
+
+    const semCoordenadas = query.data.filter(
+      (o: any) => o.logradouro && (o.latitude == null || o.longitude == null)
+    ).slice(0, 3);
+
+    if (semCoordenadas.length === 0) return;
+
+    // Geocodificar com delay de 1.2s entre cada para respeitar rate limit
+    semCoordenadas.forEach((oficina: any, index: number) => {
+      setTimeout(() => {
+        atualizarCoordenadasOficina(oficina.id, {
+          logradouro: oficina.logradouro,
+          numero: oficina.numero,
+          bairro: oficina.bairro,
+          cidade: oficina.cidade,
+          uf: oficina.estado,
+          cep: oficina.cep,
+        }).then((result) => {
+          if (result.success) {
+            console.log(`[Lazy Geocode] Oficina ${oficina.razao_social} geocodificada`);
+          }
+        });
+      }, index * 1200);
+    });
+  }, [query.data]);
+
+  return query;
 }
 
 export function useOficina(id: string | undefined) {
