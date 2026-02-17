@@ -1,102 +1,57 @@
 
-# Perguntar ao associado se quer iniciar o processo agora ou depois
+# Enviar Link do Evento com Detalhes de Cota via WhatsApp (Pre-Analise)
 
-## Resumo
+## Contexto
 
-Apos registrar o sinistro, a IA perguntara ao associado: "Quer dar entrada no processo agora ou prefere que a gente retorne amanha?". Dependendo da resposta, envia o link imediatamente ou deixa o cron D+1 cuidar.
+O diretor ja acessa a pagina de detalhe do sinistro clicando na lista de pre-analise. Nessa pagina, o componente `EventoLinkCard` exibe o link do evento e tem um botao "Enviar via WhatsApp". Porem, a mensagem enviada e generica -- nao inclui o valor da cota de coparticipacao nem detalhes financeiros.
+
+Ja existe uma funcao `handleEnviarLinkAutoVistoria` no `SinistroAnalise.tsx` que calcula a cota e envia uma mensagem completa, mas ela gera um link novo (nao reenvia o existente).
 
 ## Mudancas
 
-**Arquivo: `supabase/functions/whatsapp-webhook/index.ts`**
+### 1. Adicionar props de cota ao `EventoLinkCard`
 
-### 1. Capturar o token do link ao agendar contato (linhas 1001-1008)
+**Arquivo: `src/components/eventos/EventoLinkCard.tsx`**
 
-Alterar a chamada para `agendar-contato-sinistro` para guardar o token retornado:
+Adicionar props opcionais para dados financeiros:
+- `valorFipe?: number`
+- `cotaPercentual?: number`
+- `cotaValor?: number`
+- `planoNome?: string`
 
-```text
-// ANTES:
-await supabase.functions.invoke("agendar-contato-sinistro", { ... });
+### 2. Incluir cota na mensagem WhatsApp do `EventoLinkCard`
 
-// DEPOIS:
-const agendarResp = await supabase.functions.invoke("agendar-contato-sinistro", { ... });
-const linkToken = agendarResp?.data?.token || "";
-```
+**Arquivo: `src/components/eventos/EventoLinkCard.tsx`**
 
-### 2. Incluir link_evento na resposta da tool (linhas 1031-1035)
-
-Adicionar o link do evento na resposta JSON que a IA recebe, para que ela possa envia-lo se o associado quiser:
+Alterar a funcao `handleWhatsApp` (linha 62-113) para incluir um bloco de cota na mensagem quando os dados estiverem disponiveis:
 
 ```text
-// ANTES:
-return JSON.stringify({
-  sucesso: true,
-  protocolo: protocoloSin,
-  message: "Sinistro registrado com sucesso!...",
-});
-
-// DEPOIS:
-const siteUrl = Deno.env.get("SITE_URL") || "https://pratic-connect-21.lovable.app";
-const linkEvento = linkToken ? `${siteUrl}/evento/${linkToken}` : "";
-
-return JSON.stringify({
-  sucesso: true,
-  protocolo: protocoloSin,
-  link_evento: linkEvento,
-  message: `Sinistro registrado! Protocolo: *${protocoloSin}*...`,
-});
+💰 *Cota de coparticipação:*
+Seu plano: Essencial (4% da FIPE)
+Valor FIPE do veículo: R$ 85.000,00
+Sua cota: *R$ 3.400,00*
 ```
 
-### 3. Atualizar o system prompt -- secao POS-SINISTRO (linhas 307-319)
+### 3. Passar dados de cota ao renderizar o componente
 
-Adicionar instrucao para a IA perguntar se o associado quer iniciar o processo agora. A logica fica assim:
+**Arquivo: `src/pages/eventos/SinistroAnalise.tsx`**
 
-```text
-## POS-SINISTRO: PERGUNTAR SOBRE LINK DO EVENTO (OBRIGATORIO!)
-Apos registrar o sinistro com sucesso e o resultado conter "link_evento":
-1. Primeiro, pergunte ao associado:
-   "Quer dar entrada no processo do sinistro agora? Vou te enviar um link
-    para voce completar as etapas (auto vistoria, B.O., agendamento).
-    Ou prefere que a gente retorne amanha?"
-2. Se o associado disser AGORA / SIM / QUERO:
-   - Envie o link: "Aqui esta o link: [link_evento]. Valido por 72h."
-   - Explique brevemente as etapas
-3. Se disser DEPOIS / AMANHA / NAO AGORA:
-   - Responda: "Sem problemas! Amanha de manha enviaremos o link 
-     para voce dar continuidade."
-   - O cron D+1 cuidara do envio
-```
+Na renderizacao do `EventoLinkCard` (linha 1702-1708), passar as props de cota. Os dados do veiculo e plano ja estao disponiveis no contexto da pagina (variaveis `veiculo` e `sinistro`). 
 
-A pergunta sobre o link acontece ANTES da oferta de guincho. A ordem final do pos-sinistro sera:
-1. Confirmar registro e protocolo
-2. Perguntar: agora ou depois? (link do evento)
-3. Oferecer guincho (se cobertura total + colisao)
+Buscar os dados do plano (cota_participacao, cota_minima, cota_app_percent, cota_app_min) e calcular o valor da cota para passa-lo como prop. Pode-se usar os dados ja carregados ou fazer uma query adicional ao plano do associado.
 
-### 4. Ajustar a secao de oferta de guincho
+## Resultado
 
-Mover a instrucao de oferta de guincho para APOS a pergunta do link, deixando claro que sao dois momentos distintos da conversa.
-
-## Resultado esperado
-
-Conversa exemplo:
-
-```text
-Maya: Sinistro registrado! Protocolo: SIN-20260217-0008.
-      Quer dar entrada no processo agora? Envio um link para
-      completar as etapas. Ou prefere que retorne amanha?
-
-Associado: Agora!
-
-Maya: Aqui esta o link: https://pratic.../evento/abc123
-      Valido por 72h. Nele voce vai completar:
-      1. Auto Vistoria (fotos do veiculo)
-      2. Boletim de Ocorrencia
-      3. Agendamento da vistoria presencial
-      4. Pagamento da coparticipacao
-
-      Voce precisa de um guincho agora? Podemos enviar para
-      Estrada da Cafunda, 725...
-```
+- O diretor clica em um evento na Pre-Analise
+- Abre a pagina de detalhe do sinistro
+- No card "Link do Evento", clica em "Enviar via WhatsApp"
+- O associado recebe a mensagem com:
+  - Passo a passo das etapas
+  - Valor da cota de coparticipacao calculada
+  - Link valido por 72h
+- Nenhuma mudanca no fluxo existente -- apenas enriquecimento da mensagem
 
 ## Arquivos alterados
 
-1. `supabase/functions/whatsapp-webhook/index.ts` - capturar token, incluir na resposta, atualizar system prompt
+1. `src/components/eventos/EventoLinkCard.tsx` -- novas props + mensagem enriquecida
+2. `src/pages/eventos/SinistroAnalise.tsx` -- passar dados de cota ao componente
