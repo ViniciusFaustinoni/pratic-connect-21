@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { MapPin, Navigation, AlertTriangle, Check, Clock } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { MapPin, Navigation, AlertTriangle, Check, Clock, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -49,24 +50,51 @@ function classificarDistancia(distanciaKm: number) {
 export function ComparacaoPosicoes({
   latitudeInformada, longitudeInformada, rastreadorLat, rastreadorLng, rastreadorCapturadoEm, localOcorrencia,
 }: ComparacaoPosicoesProps) {
+  // Geocodificar endereço textual quando coordenadas informadas estão ausentes
+  const precisaGeocodificar = !latitudeInformada && !longitudeInformada && !!localOcorrencia;
+  
+  const { data: geocodificado, isLoading: geocodificando } = useQuery({
+    queryKey: ['geocode-nominatim', localOcorrencia],
+    queryFn: async () => {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(localOcorrencia + ', Brasil')}&limit=1`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'PraticConnect/1.0', 'Accept-Language': 'pt-BR' }
+      });
+      const data = await res.json();
+      if (data.length > 0) {
+        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      }
+      return null;
+    },
+    enabled: precisaGeocodificar,
+    staleTime: 1000 * 60 * 60 * 24,
+    gcTime: 1000 * 60 * 60 * 24,
+    retry: 1,
+  });
+
+  // Coordenadas efetivas: originais ou geocodificadas
+  const efLatInformada = latitudeInformada ?? geocodificado?.lat ?? null;
+  const efLngInformada = longitudeInformada ?? geocodificado?.lng ?? null;
+  const foiGeocodificado = !latitudeInformada && !longitudeInformada && !!geocodificado;
+
   const analise = useMemo(() => {
-    const temInformada = latitudeInformada != null && longitudeInformada != null;
+    const temInformada = efLatInformada != null && efLngInformada != null;
     const temRastreador = rastreadorLat != null && rastreadorLng != null;
 
     if (!temInformada && !temRastreador) return { tipo: 'sem_dados' as const };
-    if (!temRastreador) return { tipo: 'apenas_informada' as const, lat: latitudeInformada!, lng: longitudeInformada! };
+    if (!temRastreador) return { tipo: 'apenas_informada' as const, lat: efLatInformada!, lng: efLngInformada! };
     if (!temInformada) return { tipo: 'apenas_rastreador' as const, lat: rastreadorLat!, lng: rastreadorLng!, capturado: rastreadorCapturadoEm };
 
-    const distancia = calcularDistanciaKm(latitudeInformada!, longitudeInformada!, rastreadorLat!, rastreadorLng!);
+    const distancia = calcularDistanciaKm(efLatInformada!, efLngInformada!, rastreadorLat!, rastreadorLng!);
     return {
       tipo: 'comparacao' as const,
-      informada: { lat: latitudeInformada!, lng: longitudeInformada! },
+      informada: { lat: efLatInformada!, lng: efLngInformada! },
       rastreador: { lat: rastreadorLat!, lng: rastreadorLng! },
       capturado: rastreadorCapturadoEm,
       distanciaKm: distancia,
       classificacao: classificarDistancia(distancia),
     };
-  }, [latitudeInformada, longitudeInformada, rastreadorLat, rastreadorLng, rastreadorCapturadoEm]);
+  }, [efLatInformada, efLngInformada, rastreadorLat, rastreadorLng, rastreadorCapturadoEm]);
 
   const formatarCoordenada = (lat: number, lng: number) => `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 
@@ -98,7 +126,11 @@ export function ComparacaoPosicoes({
         <CardContent>
           <Alert>
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>Nenhuma posição GPS registrada para este sinistro</AlertDescription>
+            <AlertDescription>
+              {geocodificando 
+                ? 'Geocodificando endereço do local da ocorrência...'
+                : 'Nenhuma posição GPS registrada para este sinistro'}
+            </AlertDescription>
           </Alert>
         </CardContent>
       </Card>
@@ -168,7 +200,7 @@ export function ComparacaoPosicoes({
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Rastreador</span>
           )}
           {(analise.tipo === 'comparacao' || analise.tipo === 'apenas_informada') && (
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> Informada</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> Local do Evento {foiGeocodificado && <Search className="h-3 w-3" />}</span>
           )}
         </div>
 
@@ -177,7 +209,14 @@ export function ComparacaoPosicoes({
           <div className="flex items-center justify-between p-2 rounded-md bg-muted/50">
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-blue-500" />
-              <span className="text-sm font-medium">Informada pelo Usuário</span>
+              <div>
+                <span className="text-sm font-medium">Local do Evento</span>
+                {foiGeocodificado && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Search className="h-3 w-3" /> geocodificado do endereço
+                  </div>
+                )}
+              </div>
             </div>
             <code className="text-xs bg-background px-2 py-1 rounded">
               {formatarCoordenada(
