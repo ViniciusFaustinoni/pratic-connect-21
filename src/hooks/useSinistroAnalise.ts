@@ -245,6 +245,40 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
     enabled: !!sinistro?.veiculo_id,
   });
 
+  // Fotos da vistoria de adesão (via contratos -> vistorias -> vistoria_fotos)
+  const { data: fotosVistoriaAdesao = [] } = useQuery({
+    queryKey: ['sinistro-analise-fotos-vistoria', sinistro?.veiculo_id],
+    queryFn: async () => {
+      // 1. Buscar contratos do veículo
+      const { data: contratos } = await supabase
+        .from('contratos')
+        .select('id')
+        .eq('veiculo_id', sinistro!.veiculo_id);
+      if (!contratos || contratos.length === 0) return [];
+
+      // 2. Buscar vistorias desses contratos
+      const { data: vistorias } = await supabase
+        .from('vistorias')
+        .select('id, status, modalidade')
+        .in('contrato_id', contratos.map(c => c.id));
+      if (!vistorias || vistorias.length === 0) return [];
+
+      // 3. Buscar fotos das vistorias
+      const { data: fotos } = await supabase
+        .from('vistoria_fotos')
+        .select('id, tipo, arquivo_url, created_at, vistoria_id')
+        .in('vistoria_id', vistorias.map(v => v.id))
+        .order('created_at', { ascending: true });
+
+      return (fotos || []).map(foto => ({
+        ...foto,
+        vistoria_status: vistorias.find(v => v.id === foto.vistoria_id)?.status || null,
+        vistoria_modalidade: vistorias.find(v => v.id === foto.vistoria_id)?.modalidade || null,
+      }));
+    },
+    enabled: !!sinistro?.veiculo_id,
+  });
+
   return {
     sinistro,
     documentos,
@@ -257,6 +291,7 @@ export function useSinistroAnalise(sinistroId: string | undefined) {
     linkEvento,
     vistoriaEvento,
     instalacaoFotos,
+    fotosVistoriaAdesao,
     isLoading: loadingSinistro,
   };
 }
