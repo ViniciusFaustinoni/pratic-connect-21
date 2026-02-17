@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -19,6 +19,8 @@ import {
   LucideIcon,
   Edit,
   AlertTriangle,
+  Crosshair,
+  Navigation,
 } from 'lucide-react';
 import {
   Dialog,
@@ -42,6 +44,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TelefoneInput, PlacaInput } from '@/components/inputs/MaskedInputs';
+import { MapaChamado } from '@/components/assistencia/MapaChamado';
 
 interface Veiculo {
   id: string;
@@ -123,7 +126,18 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
     descricao: '',
     origem_endereco: '',
     destino_endereco: '',
+    origem_lat: null as number | null,
+    origem_lng: null as number | null,
+    destino_lat: null as number | null,
+    destino_lng: null as number | null,
   });
+
+  // Rastreador loading
+  const [buscandoRastreador, setBuscandoRastreador] = useState(false);
+  
+  // Geocode destino debounce
+  const destinoDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [geocodificandoDestino, setGeocodificandoDestino] = useState(false);
 
   const handleClose = () => {
     setEtapa('busca');
@@ -143,9 +157,80 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
       descricao: '',
       origem_endereco: '',
       destino_endereco: '',
+      origem_lat: null,
+      origem_lng: null,
+      destino_lat: null,
+      destino_lng: null,
     });
     onClose();
   };
+
+  // Buscar localização do rastreador
+  const buscarLocalizacaoRastreador = async () => {
+    if (!veiculoSelecionado) {
+      toast.error('Selecione um veículo primeiro');
+      return;
+    }
+    setBuscandoRastreador(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('posicao-veiculo', {
+        body: { veiculo_id: veiculoSelecionado },
+      });
+      if (error) throw error;
+      if (data?.latitude && data?.longitude) {
+        setFormData(prev => ({
+          ...prev,
+          origem_endereco: data.endereco || `${data.latitude}, ${data.longitude}`,
+          origem_lat: data.latitude,
+          origem_lng: data.longitude,
+        }));
+        toast.success('Localização do rastreador obtida');
+      } else {
+        toast.error('Não foi possível obter a localização do rastreador');
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao buscar localização do rastreador');
+    } finally {
+      setBuscandoRastreador(false);
+    }
+  };
+
+  // Geocodificar endereço de destino com debounce
+  useEffect(() => {
+    if (destinoDebounceRef.current) {
+      clearTimeout(destinoDebounceRef.current);
+    }
+    
+    if (!formData.destino_endereco || formData.destino_endereco.trim().length < 10) {
+      setFormData(prev => ({ ...prev, destino_lat: null, destino_lng: null }));
+      return;
+    }
+
+    destinoDebounceRef.current = setTimeout(async () => {
+      setGeocodificandoDestino(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('geocode-endereco', {
+          body: { endereco: formData.destino_endereco },
+        });
+        if (!error && data?.success) {
+          setFormData(prev => ({
+            ...prev,
+            destino_lat: data.latitude,
+            destino_lng: data.longitude,
+          }));
+        }
+      } catch (err) {
+        console.error('[Geocode destino]', err);
+      } finally {
+        setGeocodificandoDestino(false);
+      }
+    }, 1000);
+
+    return () => {
+      if (destinoDebounceRef.current) clearTimeout(destinoDebounceRef.current);
+    };
+  }, [formData.destino_endereco]);
 
   const buscarAssociado = async () => {
     if (termoBusca.length < 3) {
@@ -335,6 +420,10 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
           descricao: descricaoFinal || null,
           origem_endereco: formData.origem_endereco,
           destino_endereco: formData.destino_endereco || null,
+          origem_lat: formData.origem_lat,
+          origem_lng: formData.origem_lng,
+          destino_lat: formData.destino_lat,
+          destino_lng: formData.destino_lng,
           canal: 'telefone',
           atendente_id: user.data.user?.id,
           status: 'aberto' as const,
@@ -373,16 +462,18 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
 
   const isFormValid = () => {
     const baseValid = formData.tipo_servico && formData.origem_endereco.trim().length > 0;
+    const destinoValid = formData.tipo_servico !== 'reboque' || formData.destino_endereco.trim().length > 0;
 
     if (modoManual) {
       return (
         baseValid &&
+        destinoValid &&
         dadosManuais.nome_cliente.trim().length > 0 &&
         dadosManuais.telefone_cliente.trim().length >= 10
       );
     }
 
-    return baseValid && associadoSelecionado && veiculoSelecionado;
+    return baseValid && destinoValid && associadoSelecionado && veiculoSelecionado;
   };
 
   return (
@@ -676,12 +767,38 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
                   Endereço de Origem *
                 </div>
               </Label>
-              <Input
-                id="origem_endereco"
-                placeholder="Onde o veículo está localizado"
-                value={formData.origem_endereco}
-                onChange={(e) => setFormData({ ...formData, origem_endereco: e.target.value })}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="origem_endereco"
+                  placeholder="Onde o veículo está localizado"
+                  value={formData.origem_endereco}
+                  onChange={(e) => setFormData({ ...formData, origem_endereco: e.target.value, origem_lat: null, origem_lng: null })}
+                  className="flex-1"
+                />
+                {!modoManual && veiculoSelecionado && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={buscarLocalizacaoRastreador}
+                    disabled={buscandoRastreador}
+                    className="whitespace-nowrap"
+                  >
+                    {buscandoRastreador ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <Crosshair className="h-4 w-4 mr-1" />
+                    )}
+                    Rastreador
+                  </Button>
+                )}
+              </div>
+              {formData.origem_lat && formData.origem_lng && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Navigation className="h-3 w-3" />
+                  Coordenadas: {formData.origem_lat.toFixed(5)}, {formData.origem_lng.toFixed(5)}
+                </p>
+              )}
             </div>
 
             {/* Endereço de Destino */}
@@ -689,16 +806,44 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
               <Label htmlFor="destino_endereco">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
-                  Endereço de Destino (opcional)
+                  Endereço de Destino {formData.tipo_servico === 'reboque' ? '*' : '(opcional)'}
                 </div>
               </Label>
-              <Input
-                id="destino_endereco"
-                placeholder="Para onde levar o veículo (se reboque)"
-                value={formData.destino_endereco}
-                onChange={(e) => setFormData({ ...formData, destino_endereco: e.target.value })}
-              />
+              <div className="relative">
+                <Input
+                  id="destino_endereco"
+                  placeholder={formData.tipo_servico === 'reboque' ? 'Para onde levar o veículo *' : 'Para onde levar o veículo (se reboque)'}
+                  value={formData.destino_endereco}
+                  onChange={(e) => setFormData({ ...formData, destino_endereco: e.target.value })}
+                />
+                {geocodificandoDestino && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+              {formData.destino_lat && formData.destino_lng && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Navigation className="h-3 w-3" />
+                  Coordenadas: {formData.destino_lat.toFixed(5)}, {formData.destino_lng.toFixed(5)}
+                </p>
+              )}
             </div>
+
+            {/* Mapa preview para guincho */}
+            {formData.tipo_servico === 'reboque' && formData.origem_lat && formData.origem_lng && formData.destino_lat && formData.destino_lng && (
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Rota Prevista</Label>
+                <MapaChamado
+                  rastreadorLat={formData.origem_lat}
+                  rastreadorLng={formData.origem_lng}
+                  rastreadorEndereco={formData.origem_endereco}
+                  destinoLat={formData.destino_lat}
+                  destinoLng={formData.destino_lng}
+                  destinoEndereco={formData.destino_endereco}
+                  height="h-48"
+                  showControls={false}
+                />
+              </div>
+            )}
 
             <DialogFooter className="gap-2 sm:gap-0">
               <Button variant="outline" onClick={handleClose}>

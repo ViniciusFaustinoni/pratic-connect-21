@@ -52,6 +52,18 @@ const oficinaIcon = new L.DivIcon({
   iconAnchor: [20, 40],
 });
 
+// Destino genérico icon (azul)
+const destinoIcon = new L.DivIcon({
+  html: `<div class="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-full border-3 border-white shadow-lg">
+    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+    </svg>
+  </div>`,
+  className: 'custom-marker',
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+});
+
 interface MapaChamadoProps {
   origemLat?: number | null;
   origemLng?: number | null;
@@ -71,6 +83,9 @@ interface MapaChamadoProps {
   oficinaLat?: number | null;
   oficinaLng?: number | null;
   oficinaNome?: string;
+  destinoLat?: number | null;
+  destinoLng?: number | null;
+  destinoEndereco?: string;
 }
 
 // Componente para recentrar o mapa
@@ -101,6 +116,9 @@ export function MapaChamado({
   oficinaLat,
   oficinaLng,
   oficinaNome,
+  destinoLat,
+  destinoLng,
+  destinoEndereco,
 }: MapaChamadoProps) {
   const [showRastreador, setShowRastreador] = useState(true);
 
@@ -254,12 +272,40 @@ export function MapaChamado({
             </Marker>
           )}
 
+          {/* Marcador destino genérico (quando não tem oficina) */}
+          {!oficinaLat && !oficinaLng && destinoLat && destinoLng && (
+            <Marker position={[destinoLat, destinoLng]} icon={destinoIcon}>
+              <Popup>
+                <div className="text-center min-w-[150px]">
+                  <p className="font-semibold text-blue-600 flex items-center justify-center gap-1">
+                    <MapPin className="h-4 w-4" />
+                    Destino
+                  </p>
+                  {destinoEndereco && (
+                    <p className="text-xs text-muted-foreground mt-1">{destinoEndereco}</p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          )}
+
           {/* Rota veículo → oficina */}
           {temRastreador && oficinaLat && oficinaLng && (
             <RotaPolyline
               origem={[rastreadorLat!, rastreadorLng!]}
               destino={[oficinaLat, oficinaLng]}
               cor="#F59E0B"
+              peso={5}
+              mostrarPopup={true}
+            />
+          )}
+
+          {/* Rota veículo → destino genérico (quando não tem oficina) */}
+          {temRastreador && !oficinaLat && !oficinaLng && destinoLat && destinoLng && (
+            <RotaPolyline
+              origem={[rastreadorLat!, rastreadorLng!]}
+              destino={[destinoLat, destinoLng]}
+              cor="#3B82F6"
               peso={5}
               mostrarPopup={true}
             />
