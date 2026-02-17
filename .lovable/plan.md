@@ -1,33 +1,32 @@
 
-# Exibir Localização do Evento (e não do veículo) no Mapa
+# Corrigir Checklist "Documentos anexados" mostrando como não concluído
 
 ## Problema
 
-O mapa "Posições GPS - Evidência" na tela de análise do sinistro mostra apenas a posição do rastreador GPS (localização atual do veículo). O local do evento informado pelo associado ("Estrada do pau da fome, 1000") aparece apenas como texto, sem marcador no mapa, porque os campos `latitude_informada` e `longitude_informada` estão vazios (NULL) no banco de dados.
+O checklist de análise verifica apenas `documentos.length > 0`, onde `documentos` vem exclusivamente da tabela `sinistro_documentos`. Porém, os documentos enviados pelo associado via link do evento (fotos da auto vistoria, B.O., etc.) ficam armazenados nos campos JSON do `sinistro_evento_links` (`dados_etapa1`, `dados_etapa2`) e não são contados nessa verificação.
 
-## Causa Raiz
-
-Durante o registro do sinistro (B.O.), o endereço do local da ocorrência é salvo como texto em `local_ocorrencia`, mas as coordenadas (`latitude_informada`, `longitude_informada`) não são preenchidas. O componente `ComparacaoPosicoes` depende dessas coordenadas para plotar o marcador azul "Informada pelo Usuário" no mapa.
+Resultado: mesmo com o associado tendo enviado fotos e B.O. pelo link, o checklist mostra "Documentos anexados" como cinza (não concluído).
 
 ## Solução
 
-Quando `latitude_informada`/`longitude_informada` forem nulos e existir `local_ocorrencia` (endereço textual), geocodificar o endereço usando o Nominatim (OpenStreetMap) diretamente no componente para obter as coordenadas e exibir o marcador do **local do evento** no mapa.
+Alterar a condição do checklist para considerar também os documentos extraídos do link do evento. A função `extrairDocumentosDoLink` já existe no arquivo e faz exatamente essa extração.
 
-## Alterações
+## Alteração
 
-### Arquivo: `src/components/sinistros/ComparacaoPosicoes.tsx`
+### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
 
-1. Adicionar um `useQuery` que geocodifica `localOcorrencia` via Nominatim quando `latitudeInformada`/`longitudeInformada` são nulos
-2. Usar as coordenadas geocodificadas como fallback para `latitudeInformada`/`longitudeInformada` na lógica de análise existente
-3. Exibir indicador visual "(geocodificado)" quando as coordenadas vêm do endereço e não de GPS direto
+Na linha 1787, mudar a condição de:
 
-```text
-Fluxo:
-  latitudeInformada existe?
-    SIM -> usar diretamente (comportamento atual)
-    NAO -> localOcorrencia existe?
-      SIM -> geocodificar via Nominatim -> usar coordenadas resultantes
-      NAO -> sem marcador de posição informada
+```typescript
+documentos.length > 0 ? "bg-green-500" : "bg-muted"
 ```
 
-A mudança é localizada: apenas o componente `ComparacaoPosicoes` será alterado, sem afetar nenhuma outra tela.
+Para:
+
+```typescript
+(documentos.length > 0 || extrairDocumentosDoLink(linkEvento).length > 0) ? "bg-green-500" : "bg-muted"
+```
+
+Isso faz o checklist considerar como "concluído" quando existirem documentos em qualquer uma das fontes: tabela `sinistro_documentos` OU dados do link do evento.
+
+Alteração mínima, uma única linha, sem impacto em nenhum outro comportamento.
