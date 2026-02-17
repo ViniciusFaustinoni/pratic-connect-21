@@ -1,52 +1,102 @@
 
-# Renderizar HTML no Preview do Template
+# Perguntar ao associado se quer iniciar o processo agora ou depois
 
-## Problema
+## Resumo
 
-O modal de visualizacao do template (`ModalVisualizarTemplate.tsx`) exibe o conteudo HTML cru como texto. A funcao `renderizarConteudo()` trata o conteudo como texto simples, dividindo por `{{variaveis}}` e exibindo tudo literal -- incluindo tags `<p>`, `<table>`, `<strong>`, etc.
+Apos registrar o sinistro, a IA perguntara ao associado: "Quer dar entrada no processo agora ou prefere que a gente retorne amanha?". Dependendo da resposta, envia o link imediatamente ou deixa o cron D+1 cuidar.
 
-## Solucao
+## Mudancas
 
-Substituir a renderizacao de texto pela renderizacao de HTML real, mantendo o destaque visual das variaveis `{{...}}`.
+**Arquivo: `supabase/functions/whatsapp-webhook/index.ts`**
 
-**Arquivo: `src/components/documentos/ModalVisualizarTemplate.tsx`**
+### 1. Capturar o token do link ao agendar contato (linhas 1001-1008)
 
-1. **Alterar a funcao `renderizarConteudo`** para retornar HTML processado:
-   - Substituir as variaveis `{{...}}` por `<span>` estilizados (badges visuais) dentro do HTML
-   - Retornar uma string HTML pronta para `dangerouslySetInnerHTML`
+Alterar a chamada para `agendar-contato-sinistro` para guardar o token retornado:
 
-2. **Alterar o container de preview** (linhas 149-152):
-   - Remover `font-mono` e `whitespace-pre-wrap` (nao faz sentido para HTML renderizado)
-   - Usar `dangerouslySetInnerHTML` com classes `prose` para estilizacao adequada de tabelas, negrito, listas etc.
-   - Adicionar `prose-sm dark:prose-invert` para compatibilidade com tema escuro
+```text
+// ANTES:
+await supabase.functions.invoke("agendar-contato-sinistro", { ... });
 
-### Antes:
-```tsx
-<div className="bg-muted/50 p-4 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap font-mono">
-  {renderizarConteudo(template.conteudo)}
-</div>
+// DEPOIS:
+const agendarResp = await supabase.functions.invoke("agendar-contato-sinistro", { ... });
+const linkToken = agendarResp?.data?.token || "";
 ```
 
-### Depois:
-```tsx
-<div 
-  className="bg-muted/50 p-4 rounded-lg border text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none"
-  dangerouslySetInnerHTML={{ __html: renderizarConteudoHTML(template.conteudo) }}
-/>
+### 2. Incluir link_evento na resposta da tool (linhas 1031-1035)
+
+Adicionar o link do evento na resposta JSON que a IA recebe, para que ela possa envia-lo se o associado quiser:
+
+```text
+// ANTES:
+return JSON.stringify({
+  sucesso: true,
+  protocolo: protocoloSin,
+  message: "Sinistro registrado com sucesso!...",
+});
+
+// DEPOIS:
+const siteUrl = Deno.env.get("SITE_URL") || "https://pratic-connect-21.lovable.app";
+const linkEvento = linkToken ? `${siteUrl}/evento/${linkToken}` : "";
+
+return JSON.stringify({
+  sucesso: true,
+  protocolo: protocoloSin,
+  link_evento: linkEvento,
+  message: `Sinistro registrado! Protocolo: *${protocoloSin}*...`,
+});
 ```
 
-A nova funcao `renderizarConteudoHTML` fara um replace das variaveis por spans estilizados:
-```tsx
-function renderizarConteudoHTML(conteudo: string): string {
-  return conteudo.replace(
-    /\{\{([^}]+)\}\}/g,
-    '<span style="background:#3b82f6;color:white;padding:1px 6px;border-radius:4px;font-size:0.75rem;font-family:monospace">{{$1}}</span>'
-  );
-}
+### 3. Atualizar o system prompt -- secao POS-SINISTRO (linhas 307-319)
+
+Adicionar instrucao para a IA perguntar se o associado quer iniciar o processo agora. A logica fica assim:
+
+```text
+## POS-SINISTRO: PERGUNTAR SOBRE LINK DO EVENTO (OBRIGATORIO!)
+Apos registrar o sinistro com sucesso e o resultado conter "link_evento":
+1. Primeiro, pergunte ao associado:
+   "Quer dar entrada no processo do sinistro agora? Vou te enviar um link
+    para voce completar as etapas (auto vistoria, B.O., agendamento).
+    Ou prefere que a gente retorne amanha?"
+2. Se o associado disser AGORA / SIM / QUERO:
+   - Envie o link: "Aqui esta o link: [link_evento]. Valido por 72h."
+   - Explique brevemente as etapas
+3. Se disser DEPOIS / AMANHA / NAO AGORA:
+   - Responda: "Sem problemas! Amanha de manha enviaremos o link 
+     para voce dar continuidade."
+   - O cron D+1 cuidara do envio
 ```
 
-## Resultado
+A pergunta sobre o link acontece ANTES da oferta de guincho. A ordem final do pos-sinistro sera:
+1. Confirmar registro e protocolo
+2. Perguntar: agora ou depois? (link do evento)
+3. Oferecer guincho (se cobertura total + colisao)
 
-- Tabelas, negrito, listas e alinhamentos serao renderizados visualmente
-- Variaveis `{{associado.nome}}` continuarao destacadas como badges azuis
-- A secao de "Variaveis Utilizadas" abaixo permanece inalterada
+### 4. Ajustar a secao de oferta de guincho
+
+Mover a instrucao de oferta de guincho para APOS a pergunta do link, deixando claro que sao dois momentos distintos da conversa.
+
+## Resultado esperado
+
+Conversa exemplo:
+
+```text
+Maya: Sinistro registrado! Protocolo: SIN-20260217-0008.
+      Quer dar entrada no processo agora? Envio um link para
+      completar as etapas. Ou prefere que retorne amanha?
+
+Associado: Agora!
+
+Maya: Aqui esta o link: https://pratic.../evento/abc123
+      Valido por 72h. Nele voce vai completar:
+      1. Auto Vistoria (fotos do veiculo)
+      2. Boletim de Ocorrencia
+      3. Agendamento da vistoria presencial
+      4. Pagamento da coparticipacao
+
+      Voce precisa de um guincho agora? Podemos enviar para
+      Estrada da Cafunda, 725...
+```
+
+## Arquivos alterados
+
+1. `supabase/functions/whatsapp-webhook/index.ts` - capturar token, incluir na resposta, atualizar system prompt
