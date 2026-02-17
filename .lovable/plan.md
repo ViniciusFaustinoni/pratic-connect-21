@@ -1,102 +1,67 @@
 
-# Historico Visual de Atualizacoes Diarias no Card do Veiculo
+# Ajustes nos Perfis de Acesso por Etapa do Fluxo de Eventos
 
-## O que sera feito
+## Resumo das 3 mudancas solicitadas
 
-Adicionar uma secao colapsavel em cada card de veiculo na tela do regulador (`ReguladorOficina.tsx`) que exibe as ultimas atualizacoes diarias registradas, com fotos em miniatura, descricao e data.
+### 1. Remover "Triagem Inicial" - o Analista nao entra antes da vistoria
 
-## Alteracoes
+**Situacao atual:** Na listagem de sinistros (`SinistrosList.tsx`), o Analista de Eventos tem acesso ao botao "Analisar" quando o status e `comunicado` ou `em_analise`. Isso implica uma "triagem inicial" que nao deveria existir.
 
-### Arquivo: `src/pages/regulador/ReguladorOficina.tsx`
+**Mudanca:** O Analista de Eventos so deve ver/acessar eventos a partir do status `aguardando_analise` (pos-vistoria do regulador). Os status `comunicado`, `em_analise`, `documentacao_pendente` e `aguardando_vistoria` sao fases onde apenas o **associado** (via link) e o **regulador** (vistoria) atuam. O Diretor mantem acesso total.
 
-1. **Nova query para buscar atualizacoes de todos os veiculos listados**: Usar os IDs das ordens de servico visíveis para buscar as ultimas atualizacoes da tabela `os_atualizacoes_diarias`, ordenadas por `created_at desc`, limitadas a 3 por OS.
+**Alteracoes:**
+- `src/pages/eventos/SinistrosList.tsx` (linha 537): Mudar a condicao do botao "Analisar" para que o analista so veja quando status for `aguardando_analise` (e nao `comunicado` nem `em_analise`)
+- Revisar filtros de listagem para que o analista nao veja eventos em status de pre-analise na listagem principal (ja implementado parcialmente via `useEventosAnalise`)
 
-2. **Novo componente interno `HistoricoAtualizacoes`**: Recebe o array de atualizacoes de uma OS e renderiza:
-   - Data formatada (ex: "15/02 as 14:30")
-   - Descricao resumida (truncada se longa)
-   - Miniaturas das fotos (ate 4, clicaveis)
-   - Badge de etapa concluida se houver
-   - Indicador de problema se `tem_problema === true`
+### 2. Link unico de evento (sem "Link 1" e "Link 2")
 
-3. **Integrar no card do veiculo**: Adicionar um `Collapsible` (ja disponível via Radix) entre as etapas de progresso e os botoes de acao, com trigger "Ver historico (X atualizacoes)". Ao expandir, mostra as ultimas 3 atualizacoes.
+**Situacao atual:** O sistema ja utiliza um link unico `/evento/:token` com etapas progressivas. Porem, em alguns pontos da interface do analista, podem existir referencias a "gerar novo link" ou "Link 1/Link 2".
 
-### Detalhes tecnicos
+**Mudanca:** Garantir que toda a interface e comunicacao use apenas o conceito de um unico link de evento. A IA e qualquer outro canal envia sempre o mesmo link, que direciona o associado para a etapa pendente (auto-vistoria, B.O., agendamento ou pagamento).
 
-**Query de atualizacoes (agrupada por OS):**
+**Alteracoes:**
+- `src/components/eventos/EventoLinkCard.tsx`: Revisar se ha mencoes a "Link 1" ou "Link 2" e unificar para "Link do Evento"
+- Edge functions (`gerar-link-evento`, `validar-link-evento`): Ja trabalham com token unico - apenas confirmar que nao ha logica de links multiplos
+
+### 3. Adicionar "Enviar para Oficina" como etapa do Analista apos cotacao
+
+**Situacao atual:** O botao "Enviar para Oficina" na listagem (`SinistrosList.tsx`, linha 548) so aparece para **Diretores** quando o status e `aprovado` e cota paga. Apos `pecas_em_cotacao`, o analista ja tem o botao "Marcar Pecas como Recebidas" que transiciona para `em_reparo`.
+
+**Mudanca:** Permitir que o **Analista de Eventos** tambem tenha acesso ao botao "Enviar para Oficina" na listagem, alem do Diretor. Isso reconhece que o analista e responsavel por encaminhar o veiculo a oficina apos a cotacao.
+
+**Alteracoes:**
+- `src/pages/eventos/SinistrosList.tsx` (linha 548): Mudar `isDiretor` para `(isDiretor || isAnalistaEventos)` no botao "Enviar para Oficina"
+- Na tela de analise (`SinistroAnalise.tsx`): O analista ja tem acesso ao fluxo de atribuir fornecedores e marcar pecas recebidas, entao o fluxo pos-cotacao ja esta correto
+
+## Detalhes tecnicos
+
+### Arquivo: `src/pages/eventos/SinistrosList.tsx`
+
+**Mudanca 1 - Restringir acesso do analista (linha 537):**
 ```typescript
-const osIds = veiculos.map(v => v.id);
-const { data: atualizacoesRecentes } = useQuery({
-  queryKey: ['atualizacoes-recentes', osIds.join(',')],
-  queryFn: async () => {
-    if (osIds.length === 0) return [];
-    const { data } = await supabase
-      .from('os_atualizacoes_diarias')
-      .select('id, ordem_servico_id, created_at, descricao, etapa_concluida, tem_problema, tipo_problema, fotos_urls')
-      .in('ordem_servico_id', osIds)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    return data || [];
-  },
-  enabled: osIds.length > 0,
-});
+// DE:
+{(isDiretor || isAnalistaEventos) && (sinistro.status === 'comunicado' || sinistro.status === 'em_analise' || sinistro.status === 'aguardando_analise') && (
 
-// Agrupar por OS
-const atualizacoesPorOS = useMemo(() => {
-  const map: Record<string, any[]> = {};
-  (atualizacoesRecentes || []).forEach(a => {
-    if (!map[a.ordem_servico_id]) map[a.ordem_servico_id] = [];
-    if (map[a.ordem_servico_id].length < 3) map[a.ordem_servico_id].push(a);
-  });
-  return map;
-}, [atualizacoesRecentes]);
+// PARA:
+{(isDiretor || (isAnalistaEventos && sinistro.status === 'aguardando_analise')) && (
+```
+Isso garante que o analista so ve o botao "Analisar" quando a vistoria ja foi concluida. O diretor mantem acesso a todos os status.
+
+**Mudanca 3 - Analista pode enviar para oficina (linha 548):**
+```typescript
+// DE:
+{isDiretor && sinistro.status === 'aprovado' && (sinistro as any).cota_paga === true && (
+
+// PARA:
+{(isDiretor || isAnalistaEventos) && sinistro.status === 'aprovado' && (sinistro as any).cota_paga === true && (
 ```
 
-**Componente HistoricoAtualizacoes:**
-```tsx
-function HistoricoAtualizacoes({ atualizacoes }: { atualizacoes: any[] }) {
-  return (
-    <div className="space-y-2 border-t pt-2 mt-1">
-      {atualizacoes.map((a) => (
-        <div key={a.id} className="space-y-1">
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span>{format(new Date(a.created_at), "dd/MM 'as' HH:mm", { locale: ptBR })}</span>
-            {a.etapa_concluida && <Badge className="bg-emerald-100 text-emerald-700 text-[9px]">✓ {a.etapa_concluida}</Badge>}
-            {a.tem_problema && <Badge className="bg-red-100 text-red-700 text-[9px]">⚠ Problema</Badge>}
-          </div>
-          <p className="text-[11px] text-muted-foreground line-clamp-2">{a.descricao}</p>
-          {a.fotos_urls?.length > 0 && (
-            <div className="flex gap-1">
-              {(a.fotos_urls as string[]).slice(0, 4).map((url, i) => (
-                <img key={i} src={url} className="w-10 h-10 rounded object-cover" />
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-```
+### Arquivo: `src/components/eventos/EventoLinkCard.tsx`
 
-**Integracao no card (apos EtapasProgress, antes dos botoes):**
-```tsx
-{atualizacoesPorOS[v.id]?.length > 0 && (
-  <Collapsible>
-    <CollapsibleTrigger asChild>
-      <Button variant="ghost" size="sm" className="w-full h-7 text-[11px] text-muted-foreground">
-        Ver historico ({atualizacoesPorOS[v.id].length} atualizacoes)
-      </Button>
-    </CollapsibleTrigger>
-    <CollapsibleContent>
-      <HistoricoAtualizacoes atualizacoes={atualizacoesPorOS[v.id]} />
-    </CollapsibleContent>
-  </Collapsible>
-)}
-```
+**Mudanca 2:** Revisar textos e labels para garantir que nao ha referencia a "Link 1" ou "Link 2", apenas "Link do Evento".
 
-### Imports adicionais
-- `Collapsible, CollapsibleTrigger, CollapsibleContent` de `@/components/ui/collapsible`
+### Resultado
 
-### Resultado visual
-
-Cada card de veiculo tera, abaixo das etapas de progresso, um botao discreto "Ver historico (3 atualizacoes)". Ao clicar, expande mostrando as ultimas 3 atualizacoes com data, descricao, miniaturas de fotos, badges de etapa concluida e alertas de problemas.
+- O fluxo fica: **Associado comunica** -> **Sistema registra** -> **Associado preenche link (auto-vistoria, B.O., agendamento)** -> **Regulador faz vistoria** -> **Analista recebe para analise** -> **Decisao** -> **Oficina/Cotacao** -> **Resolucao**
+- Um unico link acompanha o associado durante todo o processo
+- O analista ganha autonomia para encaminhar veiculos a oficinas
