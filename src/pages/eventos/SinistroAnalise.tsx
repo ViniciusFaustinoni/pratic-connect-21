@@ -64,6 +64,7 @@ import { SolicitarOrcamentoDialog } from '@/components/sinistros/SolicitarOrcame
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAutoCenters, useCreatePeca } from '@/hooks/useAutoCenters';
+import { useOficinas } from '@/hooks/useOficinas';
 import { useCotacoesEvento } from '@/hooks/useCotacoesEvento';
 import { TrajetoLocalCard } from '@/components/sinistros/TrajetoLocalCard';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
@@ -230,6 +231,7 @@ export default function SinistroAnalise() {
   const [showSolicitarOrcamento, setShowSolicitarOrcamento] = useState(false);
   const [valoresPecas, setValoresPecas] = useState<Record<number, number>>({});
   const [fornecedoresPecas, setFornecedoresPecas] = useState<Record<number, { id: string; nome: string }>>({});
+  const [fornecedoresMO, setFornecedoresMO] = useState<Record<number, { id: string; nome: string }>>({});
   const [salvandoValores, setSalvandoValores] = useState(false);
   const [reenviandoAssinatura, setReenviandoAssinatura] = useState(false);
   const [reenviandoPagamento, setReenviandoPagamento] = useState(false);
@@ -258,6 +260,7 @@ export default function SinistroAnalise() {
   const veiculo_ = sinistro?.veiculo as any;
   const { data: autoCenters } = useAutoCenters({ marca: veiculo_?.marca || undefined });
   const createPeca = useCreatePeca();
+  const { data: oficinas } = useOficinas({ status: 'ativo' });
 
   // Cotações da IA - buscar cotação aprovada para prioridade sobre valores manuais
   const { cotacoes } = useCotacoesEvento(sinistro?.id);
@@ -1142,6 +1145,34 @@ export default function SinistroAnalise() {
                                                       </SelectContent>
                                                     </Select>
                                                   )
+                                                ) : (item.tipo === 'mao_de_obra' || item.tipo === 'servico' || item.tipo === 'servico_terceiro') ? (
+                                                  item.fornecedor_nome && !fornecedoresMO[i] ? (
+                                                    <span className="text-xs font-medium">{item.fornecedor_nome}</span>
+                                                  ) : (
+                                                    <Select
+                                                      value={fornecedoresMO[i]?.id || item.fornecedor_id || ''}
+                                                      onValueChange={(val) => {
+                                                        const of_ = oficinas?.find((o) => o.id === val);
+                                                        if (of_) {
+                                                          setFornecedoresMO((prev) => ({
+                                                            ...prev,
+                                                            [i]: { id: of_.id, nome: of_.nome_fantasia || of_.razao_social || '' }
+                                                          }));
+                                                        }
+                                                      }}
+                                                    >
+                                                      <SelectTrigger className="h-8 w-44 text-xs">
+                                                        <SelectValue placeholder="Selecionar oficina..." />
+                                                      </SelectTrigger>
+                                                      <SelectContent className="bg-background z-50">
+                                                        {oficinas?.map((of_) => (
+                                                          <SelectItem key={of_.id} value={of_.id}>
+                                                            <span className="text-xs">{of_.nome_fantasia || of_.razao_social}</span>
+                                                          </SelectItem>
+                                                        ))}
+                                                      </SelectContent>
+                                                    </Select>
+                                                  )
                                                 ) : (
                                                   <span className="text-muted-foreground text-xs">—</span>
                                                 )}
@@ -1232,16 +1263,23 @@ export default function SinistroAnalise() {
                                       </p>
                                     )}
                                     <div className="flex gap-2 mt-3">
-                                      {itens.some((item: any) => item.tipo === 'peca') && !temCotacaoAprovada && (
+                                      {(itens.some((item: any) => item.tipo === 'peca') && !temCotacaoAprovada || itens.some((item: any) => item.tipo === 'mao_de_obra' || item.tipo === 'servico' || item.tipo === 'servico_terceiro')) && (
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          disabled={salvandoValores || (Object.keys(valoresPecas).length === 0 && Object.keys(fornecedoresPecas).length === 0)}
+                                          disabled={salvandoValores || (Object.keys(valoresPecas).length === 0 && Object.keys(fornecedoresPecas).length === 0 && Object.keys(fornecedoresMO).length === 0)}
                                           onClick={async () => {
                                             if (!vistoriaEvento) return;
                                             setSalvandoValores(true);
                                             try {
                                               const updatedItens = itens.map((item: any, i: number) => {
+                                                if (item.tipo === 'mao_de_obra' || item.tipo === 'servico' || item.tipo === 'servico_terceiro') {
+                                                  const fornecedor = fornecedoresMO[i] || (item.fornecedor_id ? { id: item.fornecedor_id, nome: item.fornecedor_nome } : null);
+                                                  return {
+                                                    ...item,
+                                                    ...(fornecedor ? { fornecedor_id: fornecedor.id, fornecedor_nome: fornecedor.nome } : {}),
+                                                  };
+                                                }
                                                 if (item.tipo !== 'peca') return item;
                                                 const newVal = valoresPecas[i] !== undefined ? valoresPecas[i] : item.valor_unitario;
                                                 const fornecedor = fornecedoresPecas[i] || (item.fornecedor_id ? { id: item.fornecedor_id, nome: item.fornecedor_nome } : null);
