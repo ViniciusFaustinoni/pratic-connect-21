@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -83,6 +84,7 @@ interface Filters {
   busca: string;
   status: string;
   tipo: string;
+  parecer: string;
 }
 
 export default function SinistrosList() {
@@ -97,6 +99,7 @@ export default function SinistrosList() {
     busca: '',
     status: 'todos',
     tipo: 'todos',
+    parecer: 'todos',
   });
 
   // Realtime subscription para atualizar lista automaticamente
@@ -149,6 +152,22 @@ export default function SinistrosList() {
       }
       if (filters.busca) {
         query = query.or(`protocolo.ilike.%${filters.busca}%`);
+      }
+
+      // Filtro por parecer do regulador
+      if (filters.parecer && filters.parecer !== 'todos') {
+        const { data: vistoriasComParecer } = await supabase
+          .from('vistorias_evento')
+          .select('sinistro_id')
+          .eq('status', 'concluida')
+          .filter('dados_vistoria->>recomendacao', 'eq', filters.parecer);
+
+        const ids = (vistoriasComParecer || []).map((v: any) => v.sinistro_id);
+        if (ids.length > 0) {
+          query = query.in('id', ids);
+        } else {
+          query = query.eq('id', '00000000-0000-0000-0000-000000000000' as any);
+        }
       }
 
       const { data, error } = await query.limit(50);
@@ -346,61 +365,87 @@ export default function SinistrosList() {
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por protocolo..."
-                className="pl-9"
-                value={filters.busca}
-                onChange={(e) => setFilters({ ...filters, busca: e.target.value })}
-              />
+            <div className="flex-1 min-w-[200px] space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Protocolo</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por protocolo..."
+                  className="pl-9"
+                  value={filters.busca}
+                  onChange={(e) => setFilters({ ...filters, busca: e.target.value })}
+                />
+              </div>
             </div>
 
-            <Select
-              value={filters.tipo}
-              onValueChange={(value) => setFilters({ ...filters, tipo: value })}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os tipos</SelectItem>
-                <SelectItem value="colisao">Colisão</SelectItem>
-                <SelectItem value="roubo">Roubo</SelectItem>
-                <SelectItem value="furto">Furto</SelectItem>
-                <SelectItem value="incendio">Incêndio</SelectItem>
-                <SelectItem value="fenomeno_natural">Fenômeno Natural</SelectItem>
-                <SelectItem value="vidros">Vidros</SelectItem>
-                <SelectItem value="outro">Outro</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Tipo</Label>
+              <Select
+                value={filters.tipo}
+                onValueChange={(value) => setFilters({ ...filters, tipo: value })}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  <SelectItem value="colisao">Colisão</SelectItem>
+                  <SelectItem value="roubo">Roubo</SelectItem>
+                  <SelectItem value="furto">Furto</SelectItem>
+                  <SelectItem value="incendio">Incêndio</SelectItem>
+                  <SelectItem value="fenomeno_natural">Fenômeno Natural</SelectItem>
+                  <SelectItem value="vidros">Vidros</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select
-              value={filters.status}
-              onValueChange={(value) => setFilters({ ...filters, status: value })}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os status</SelectItem>
-                {(!isAnalistaEventos || isDiretor) && (
-                  <>
-                    <SelectItem value="comunicado">Comunicado</SelectItem>
-                    <SelectItem value="em_analise">Em Análise</SelectItem>
-                    <SelectItem value="documentacao_pendente">Doc. Pendente</SelectItem>
-                    <SelectItem value="aguardando_vistoria">Aguard. Vistoria</SelectItem>
-                  </>
-                )}
-                <SelectItem value="aguardando_analise">Aguard. Análise Final</SelectItem>
-                <SelectItem value="aprovado">Aprovado</SelectItem>
-                <SelectItem value="negado">Negado</SelectItem>
-                <SelectItem value="em_recuperacao">Em Recuperação</SelectItem>
-                <SelectItem value="aguardando_pagamento">Aguard. Pagamento</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
-                <SelectItem value="encerrado">Encerrado</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Status</Label>
+              <Select
+                value={filters.status}
+                onValueChange={(value) => setFilters({ ...filters, status: value })}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  {(!isAnalistaEventos || isDiretor) && (
+                    <>
+                      <SelectItem value="comunicado">Comunicado</SelectItem>
+                      <SelectItem value="em_analise">Em Análise</SelectItem>
+                      <SelectItem value="documentacao_pendente">Doc. Pendente</SelectItem>
+                      <SelectItem value="aguardando_vistoria">Aguard. Vistoria</SelectItem>
+                    </>
+                  )}
+                  <SelectItem value="aguardando_analise">Aguard. Análise Final</SelectItem>
+                  <SelectItem value="aprovado">Aprovado</SelectItem>
+                  <SelectItem value="negado">Negado</SelectItem>
+                  <SelectItem value="em_recuperacao">Em Recuperação</SelectItem>
+                  <SelectItem value="aguardando_pagamento">Aguard. Pagamento</SelectItem>
+                  <SelectItem value="pago">Pago</SelectItem>
+                  <SelectItem value="encerrado">Encerrado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Parecer do Regulador</Label>
+              <Select
+                value={filters.parecer}
+                onValueChange={(value) => setFilters({ ...filters, parecer: value })}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Parecer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os pareceres</SelectItem>
+                  <SelectItem value="aprovar">Aprovar</SelectItem>
+                  <SelectItem value="analise_detalhada">Análise Detalhada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
