@@ -1,92 +1,74 @@
 
 
-# Adicionar Seletor de Fornecedor (Oficina) para Mao de Obra e Servicos
+# Exibir Distancia GPS no Accordion do Analista de Eventos
 
-## Problema
+## Contexto
 
-Atualmente, na tabela "Itens do Orcamento" da tela do Analista de Eventos (`SinistroAnalise.tsx`), a coluna "Fornecedor" mostra apenas "---" para itens de mao de obra e servicos. O analista precisa poder selecionar uma oficina como fornecedor para esses tipos de itens.
+O componente `ComparacaoPosicoes` ja calcula e exibe a distancia entre o local informado do evento e a ultima posicao do rastreador GPS, com classificacao visual (verde/amarelo/vermelho). Porem, na tela do analista (`EventoAnaliseDetalhe.tsx`), essa informacao fica escondida dentro de um accordion que precisa ser expandido.
 
 ## Solucao
 
-Adicionar um dropdown com busca de oficinas na coluna "Fornecedor" para itens do tipo `mao_de_obra` e `servico`. Ao salvar, o fornecedor selecionado sera persistido junto com os demais dados no `dados_vistoria`.
+Calcular a distancia diretamente no `EventoAnaliseDetalhe.tsx` e exibi-la como um Badge no titulo do accordion "Posicao na Hora do Evento", para que o analista veja imediatamente a consistencia sem precisar expandir.
 
 ## Alteracoes
 
-### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
+### Arquivo: `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
 
-1. **Importar `useOficinas`** de `@/hooks/useOficinas` (ja existe no projeto)
+1. Adicionar uma funcao `calcularDistanciaKm` (Haversine) no componente (ou importar do `ComparacaoPosicoes` se exportada)
 
-2. **Adicionar query de oficinas** proximo das queries existentes (linha ~259):
-   - `useOficinas({ status: 'ativa' })` para buscar oficinas ativas
+2. Calcular a distancia quando ambas as coordenadas (informada/geocodificada e rastreador) estiverem disponiveis
 
-3. **Adicionar estado para fornecedores de mao de obra/servico** (linha ~232):
-   - `const [fornecedoresMO, setFornecedoresMO] = useState<Record<number, { id: string; nome: string }>>({});`
+3. No `AccordionTrigger` da secao "Posicao na Hora do Evento" (linha ~273-275), adicionar um Badge colorido ao lado do titulo mostrando a distancia e classificacao:
+   - Menos de 500m: Badge verde "Proximo (Xm)"
+   - Entre 500m e 2km: Badge amarelo "Divergencia (X.Xkm)"
+   - Mais de 2km: Badge vermelho "Divergencia (X.Xkm)"
 
-4. **Alterar a coluna "Fornecedor" na tabela** (linhas 1145-1147):
-   - Onde hoje mostra `<span>---</span>` para tipos que nao sao `peca`, adicionar um `Select` com as oficinas para itens `mao_de_obra` e `servico`/`servico_terceiro`
-   - Se o item ja tem `fornecedor_nome` salvo e nao foi alterado localmente, exibir o nome salvo
-   - Caso contrario, exibir o dropdown de oficinas
+**Exemplo visual do resultado:**
 
-5. **Atualizar a logica de "Salvar Valores"** (linhas 1239-1298):
-   - Incluir `fornecedoresMO` na condicao de disabled do botao (habilitar quando houver alteracoes em mao de obra tambem)
-   - Na funcao de salvamento, aplicar o fornecedor selecionado para itens de mao de obra e servico (similar ao que ja e feito para pecas)
-
-### Detalhes da alteracao na coluna Fornecedor
-
-O bloco que hoje e:
-```tsx
-) : (
-  <span className="text-muted-foreground text-xs">—</span>
-)}
+```
+[Accordion] Posicao na Hora do Evento    [Badge: 350m - verde]
+[Accordion] Posicao na Hora do Evento    [Badge: 1.2km - amarelo]
+[Accordion] Posicao na Hora do Evento    [Badge: 5.3km - vermelho]
 ```
 
-Sera expandido para:
-```tsx
-) : (item.tipo === 'mao_de_obra' || item.tipo === 'servico' || item.tipo === 'servico_terceiro') ? (
-  item.fornecedor_nome && !fornecedoresMO[i] ? (
-    <span className="text-xs font-medium">{item.fornecedor_nome}</span>
-  ) : (
-    <Select
-      value={fornecedoresMO[i]?.id || item.fornecedor_id || ''}
-      onValueChange={(val) => {
-        const of = oficinas?.find((o) => o.id === val);
-        if (of) {
-          setFornecedoresMO(prev => ({
-            ...prev,
-            [i]: { id: of.id, nome: of.nome_fantasia || of.razao_social }
-          }));
-        }
-      }}
-    >
-      <SelectTrigger className="h-8 w-44 text-xs">
-        <SelectValue placeholder="Selecionar oficina..." />
-      </SelectTrigger>
-      <SelectContent>
-        {oficinas?.map((of) => (
-          <SelectItem key={of.id} value={of.id}>
-            <span className="text-xs">{of.nome_fantasia || of.razao_social}</span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-) : (
-  <span className="text-muted-foreground text-xs">—</span>
-)
-```
+### Detalhes tecnicos
 
-### Detalhes da alteracao no Salvar
+```typescript
+// Funcao Haversine (mesma ja usada em ComparacaoPosicoes)
+function calcularDistanciaKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 
-- O botao "Salvar Valores" passara a considerar tambem `Object.keys(fornecedoresMO).length > 0` na condicao de habilitado
-- O mapeamento de `updatedItens` aplicara fornecedor para mao de obra/servico:
-  ```typescript
-  if (item.tipo === 'mao_de_obra' || item.tipo === 'servico' || item.tipo === 'servico_terceiro') {
-    const fornecedor = fornecedoresMO[i] || (item.fornecedor_id ? { id: item.fornecedor_id, nome: item.fornecedor_nome } : null);
-    return {
-      ...item,
-      ...(fornecedor ? { fornecedor_id: fornecedor.id, fornecedor_nome: fornecedor.nome } : {}),
-    };
+// No componente, calcular distancia
+const distanciaGps = useMemo(() => {
+  if (sinistro?.latitude_informada && sinistro?.rastreador_lat) {
+    return calcularDistanciaKm(
+      sinistro.latitude_informada, sinistro.longitude_informada,
+      sinistro.rastreador_lat, sinistro.rastreador_lng
+    );
   }
-  ```
-- O botao "Salvar Valores" sera exibido sempre que houver itens (nao apenas para pecas sem cotacao aprovada), pois agora mao de obra tambem precisa ser salva
+  return null;
+}, [sinistro]);
 
+// No AccordionTrigger
+<AccordionTrigger className="text-sm font-semibold">
+  <span className="flex items-center gap-2">
+    <Navigation className="h-4 w-4" /> Posicao na Hora do Evento
+    {distanciaGps != null && (
+      <Badge variant="outline" className={
+        distanciaGps < 0.5 ? 'bg-green-100 text-green-800 border-green-300'
+        : distanciaGps < 2 ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+        : 'bg-red-100 text-red-800 border-red-300'
+      }>
+        {distanciaGps < 1 ? `${Math.round(distanciaGps*1000)}m` : `${distanciaGps.toFixed(1)}km`}
+      </Badge>
+    )}
+  </span>
+</AccordionTrigger>
+```
+
+Isso permite que o analista veja de imediato se ha divergencia significativa entre o local informado e a posicao real do rastreador, sem precisar abrir o accordion.
