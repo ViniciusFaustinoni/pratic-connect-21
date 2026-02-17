@@ -39,14 +39,14 @@ export function TrajetoLocalCard({ veiculoId, dataOcorrencia, horasAnteriores = 
     queryKey: ['trajeto-local-rastreador', veiculoId],
     queryFn: async () => {
       const { data } = await supabase
-        .from('instalacoes')
-        .select('rastreador_id')
+        .from('rastreadores')
+        .select('id')
         .eq('veiculo_id', veiculoId)
-        .eq('status', 'concluida')
-        .order('created_at', { ascending: false })
+        .eq('status', 'instalado')
+        .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      return data?.rastreador_id as string | null;
+      return data?.id as string | null;
     },
     enabled: !!veiculoId,
   });
