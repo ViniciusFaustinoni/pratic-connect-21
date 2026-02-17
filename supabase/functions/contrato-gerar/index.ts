@@ -463,7 +463,7 @@ serve(async (req) => {
         plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
         status: 'pendente_vistoria',
         data_adesao: new Date().toISOString().split('T')[0],
-        dia_vencimento: 10,
+        dia_vencimento: cotacao.dia_vencimento || 10,
           // Campos de endereço da cotação
           logradouro: cotacao.cliente_logradouro || null,
           numero: cotacao.cliente_numero || null,
@@ -582,6 +582,7 @@ serve(async (req) => {
             // NOVO: token público da cotação para acesso anon via RLS
             cotacao_token_publico: cotacao.token_publico || null,
             
+            dia_vencimento: cotacao.dia_vencimento || 10,
             data_inicio: new Date().toISOString().split('T')[0],
             validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             created_by: vendedorIdFinal, // CORREÇÃO: Usar profile.id validado
