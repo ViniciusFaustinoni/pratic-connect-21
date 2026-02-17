@@ -65,7 +65,7 @@ serve(async (req) => {
           id, nome, status, data_adesao, created_at
         ),
         veiculo:veiculos!sinistros_veiculo_id_fkey(
-          id, valor_fipe, placa, marca, modelo, ano
+          id, valor_fipe, placa, marca, modelo, ano_modelo
         )
       `)
       .eq("id", sinistro_id)
@@ -181,7 +181,7 @@ DADOS DO SINISTRO:
 - Quantidade de pontos de rastreamento: ${posicoes.length}
 
 VEÍCULO:
-- ${(sinistro as any).veiculo?.marca || ""} ${(sinistro as any).veiculo?.modelo || ""} ${(sinistro as any).veiculo?.ano || ""}
+- ${(sinistro as any).veiculo?.marca || ""} ${(sinistro as any).veiculo?.modelo || ""} ${(sinistro as any).veiculo?.ano_modelo || ""}
 - Placa: ${(sinistro as any).veiculo?.placa || "N/A"}
 - Valor FIPE: ${valorFipe ? "R$ " + valorFipe.toLocaleString("pt-BR") : "N/A"}
 
