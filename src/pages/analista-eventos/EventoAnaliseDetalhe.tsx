@@ -389,9 +389,21 @@ export default function EventoAnaliseDetalhe() {
               {dadosVistoria?.fotos_urls && renderFotoGrid(dadosVistoria.fotos_urls, 'Regulador')}
               
               {dadosVistoria?.video_url && (
-                <div>
-                  <p className="text-muted-foreground text-xs mb-1 flex items-center gap-1"><Video className="h-3 w-3" /> Vídeo</p>
-                  <video controls className="w-full rounded-lg" src={dadosVistoria.video_url} />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold flex items-center gap-1">
+                    <Video className="h-4 w-4 text-purple-500" /> Vídeo do Regulador
+                  </p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-black">
+                    <video
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="w-full aspect-video object-contain"
+                      src={dadosVistoria.video_url}
+                    >
+                      Seu navegador não suporta a reprodução de vídeos.
+                    </video>
+                  </div>
                 </div>
               )}
 
