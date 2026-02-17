@@ -306,13 +306,10 @@ serve(async (req) => {
       }
     }
 
-    // Buscar rastreador do veículo com plataforma
+    // Buscar rastreador do veículo
     const { data: rastreador, error: rastError } = await supabaseAdmin
       .from('rastreadores')
-      .select(`
-        *,
-        plataforma:rastreadores_config_plataformas(*)
-      `)
+      .select('*')
       .eq('veiculo_id', veiculo_id)
       .single();
 
@@ -336,8 +333,19 @@ serve(async (req) => {
       );
     }
 
-    const plataforma = rastreador.plataforma;
-    const plataformaCodigo = plataforma?.codigo || rastreador.plataforma_id || 'softruck';
+    // Buscar config da plataforma separadamente (sem FK, campo texto)
+    let plataformaConfig = null;
+    if (rastreador.plataforma) {
+      const { data: config } = await supabaseAdmin
+        .from('rastreadores_config_plataformas')
+        .select('*')
+        .eq('plataforma', rastreador.plataforma)
+        .maybeSingle();
+      plataformaConfig = config;
+    }
+
+    const plataforma = plataformaConfig;
+    const plataformaCodigo = rastreador.plataforma || 'softruck';
 
     // Verificar se tem última posição conhecida para fallback
     const ultimaPosicaoConhecida = rastreador.ultima_posicao_lat && rastreador.ultima_posicao_lng
