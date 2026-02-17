@@ -899,90 +899,11 @@ export default function SinistroAnalise() {
                   );
                 })()}
 
-                {/* Documentos */}
+                {/* Dados da Vistoria do Regulador */}
                 {(() => {
-                  const todosDocumentos = documentos;
                   return (
                     <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <FileCheck className="h-5 w-5" />
-                          Anexos do Regulador ({todosDocumentos.length})
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {todosDocumentos.length === 0 ? (
-                          <p className="text-muted-foreground text-center py-4">
-                            Nenhum documento anexado
-                          </p>
-                        ) : (
-                          <div className="grid gap-2">
-                            {todosDocumentos.map((doc) => {
-                              const docUrl = resolverUrl(doc.arquivo_url);
-                              const isEnviado = doc.status === 'enviado' && docUrl;
-                              const isImage = docUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(docUrl);
-                              const isAudio = docUrl && /\.(mp3|webm|ogg|wav|m4a)$/i.test(docUrl);
-                              const isVideo = docUrl && /\.(mp4|mov)$/i.test(docUrl);
-                              return (
-                                <div
-                                  key={doc.id}
-                                  className="flex items-center gap-3 p-3 rounded-md bg-muted"
-                                >
-                                  {isEnviado && isImage ? (
-                                    <img
-                                      src={docUrl}
-                                      alt={doc.nome_arquivo || doc.tipo}
-                                      className="h-14 w-14 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity border"
-                                      onClick={() => setPreviewDoc(doc)}
-                                    />
-                                  ) : isEnviado && isAudio ? (
-                                    <div className="flex-shrink-0 w-14 h-14 rounded-md bg-background border flex items-center justify-center">
-                                      🎙️
-                                    </div>
-                                  ) : isEnviado && isVideo ? (
-                                    <div className="flex-shrink-0 w-14 h-14 rounded-md bg-background border flex items-center justify-center">
-                                      🎬
-                                    </div>
-                                  ) : (
-                                    <div className="h-14 w-14 rounded-md bg-background border flex items-center justify-center flex-shrink-0">
-                                      <FileText className="h-6 w-6 text-muted-foreground" />
-                                    </div>
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <span className="text-sm font-medium truncate block">{doc.nome_arquivo || doc.tipo}</span>
-                                    {(doc as any).origem === 'link_evento' && (
-                                      <span className="text-xs text-muted-foreground">Via auto-vistoria</span>
-                                    )}
-                                    {isEnviado && isAudio && (
-                                      <audio src={docUrl} controls className="mt-1 h-8 w-full max-w-[220px]" preload="metadata" />
-                                    )}
-                                    {!isAudio && (
-                                      <Badge variant={doc.status === 'enviado' ? 'default' : 'outline'} className="mt-1 text-xs">
-                                        {doc.status}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  {isEnviado && !isAudio && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 px-3 text-xs flex-shrink-0"
-                                      onClick={() => {
-                                        if (isVideo) {
-                                          window.open(docUrl, '_blank');
-                                        } else {
-                                          setPreviewDoc(doc);
-                                        }
-                                      }}
-                                    >
-                                      {isVideo ? 'Assistir' : 'Ampliar'}
-                                    </Button>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                      <CardContent className="space-y-4 pt-6">
 
                         {/* Dados da Vistoria do Regulador */}
                         {(() => {
