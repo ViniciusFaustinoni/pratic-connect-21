@@ -1,13 +1,25 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { MapContainer, TileLayer, Polyline, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { format, subHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertTriangle } from 'lucide-react';
+import { getRouteOSRMMultiWaypoint } from '@/services/routingService';
 import 'leaflet/dist/leaflet.css';
+
+function FitBounds({ positions }: { positions: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (positions.length >= 2) {
+      const bounds = L.latLngBounds(positions.map(p => L.latLng(p[0], p[1])));
+      map.fitBounds(bounds, { padding: [30, 30] });
+    }
+  }, [map, positions]);
+  return null;
+}
 
 interface TrajetoLocalCardProps {
   veiculoId: string;
@@ -89,6 +101,18 @@ export function TrajetoLocalCard({ veiculoId, dataOcorrencia, horasAnteriores = 
     [posicoes]
   );
 
+  // Buscar rota real pelas ruas
+  const rotaRealQuery = useQuery({
+    queryKey: ['trajeto-local-rota-real', polylinePoints.length, polylinePoints[0]?.[0], polylinePoints[polylinePoints.length-1]?.[0]],
+    queryFn: () => getRouteOSRMMultiWaypoint(polylinePoints),
+    enabled: polylinePoints.length >= 2,
+    staleTime: 60000,
+  });
+
+  const trajetoFinal = rotaRealQuery.data?.coordenadas || polylinePoints;
+  const isRotaReal = !!rotaRealQuery.data?.coordenadas && rotaRealQuery.data.coordenadas.length > polylinePoints.length;
+  const isLoadingRota = rotaRealQuery.isLoading;
+
   const isLoading = rastreadorQuery.isLoading || posicoesQuery.isLoading;
 
   if (isLoading) {
@@ -124,9 +148,15 @@ export function TrajetoLocalCard({ veiculoId, dataOcorrencia, horasAnteriores = 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        <Badge variant="outline">{stats?.totalPontos} pontos</Badge>
-        <Badge variant="outline">Vel. média: {stats?.velMedia.toFixed(0)} km/h</Badge>
-        <Badge variant="outline">Vel. máx: {stats?.velMax.toFixed(0)} km/h</Badge>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">{stats?.totalPontos} pontos GPS</Badge>
+          {rotaRealQuery.data?.distanciaKm ? (
+            <Badge variant="outline">Distância: {rotaRealQuery.data.distanciaKm.toFixed(1)} km</Badge>
+          ) : null}
+          <Badge variant="outline">Vel. média: {stats?.velMedia.toFixed(0)} km/h</Badge>
+          <Badge variant="outline">Vel. máx: {stats?.velMax.toFixed(0)} km/h</Badge>
+          {isRotaReal && <Badge variant="secondary" className="text-xs">Rota real</Badge>}
+        </div>
       </div>
 
       <div className="h-64 rounded-lg overflow-hidden border">
@@ -138,7 +168,17 @@ export function TrajetoLocalCard({ veiculoId, dataOcorrencia, horasAnteriores = 
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           
-          <Polyline positions={polylinePoints} pathOptions={{ color: '#3B82F6', weight: 3 }} />
+          <Polyline 
+            positions={trajetoFinal} 
+            pathOptions={{ 
+              color: '#3B82F6', 
+              weight: 3, 
+              dashArray: isLoadingRota ? '8, 8' : undefined,
+              opacity: isLoadingRota ? 0.5 : 0.8,
+            }} 
+          />
+
+          <FitBounds positions={trajetoFinal} />
           
           <Marker position={[primeiro.latitude, primeiro.longitude]} icon={startIcon}>
             <Popup>
