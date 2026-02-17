@@ -1,46 +1,29 @@
 
+# Exibir Fotos da Vistoria de Instalacao na Tela de Analise de Sinistros
 
-# Corrigir Sinistros Nao Aparecendo para o Analista de Eventos
+## Problema
 
-## Causa Raiz
+A tela de analise de sinistros (`SinistroAnalise.tsx`) tenta exibir fotos da tabela `instalacao_fotos`, mas nesse caso nao ha registros nessa tabela. As fotos da vistoria de instalacao/adesao estao armazenadas em outro caminho: `contratos -> vistorias -> vistoria_fotos`. O hook `useFotosVistoriaPorVeiculo` ja faz essa busca e funciona corretamente na tela do analista de eventos (`EventoAnaliseDetalhe.tsx`), mas nao esta sendo usado na tela principal de analise.
 
-Os logs do banco mostram o erro:
-```
-invalid input value for enum status_sinistro: "pecas_em_cotacao"
-```
+## Solucao
 
-No arquivo `SinistrosList.tsx`, as queries do analista de eventos incluem status inexistentes no enum `status_sinistro`:
-- `pecas_em_cotacao` (nao existe)
-- `pronto_para_oficina` (nao existe)
-- `pagamento_confirmado` (nao existe)
+Adicionar a busca de fotos de vistoria de adesao/instalacao na tela `SinistroAnalise.tsx` usando o hook existente `useFotosVistoriaPorVeiculo`, e exibir em um Card separado e sempre visivel (mesmo quando vazio, mostrando mensagem informativa).
 
-Como o filtro `.in()` recebe valores invalidos, o Supabase retorna erro e **nenhum sinistro e exibido** -- mesmo os que possuem status validos como `aguardando_analise`.
+## Alteracoes
 
-## Correcao
+### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
 
-### Arquivo: `src/pages/eventos/SinistrosList.tsx`
+1. **Importar o hook e helper existentes**:
+   - Adicionar import de `useFotosVistoriaPorVeiculo` e `formatarTipoFotoVeiculo` de `@/hooks/useVeiculoDetalhes`
 
-Remover os 3 status invalidos das duas listas de filtro do analista (query principal na linha 137 e contadores na linha 170):
+2. **Chamar o hook** apos os outros hooks existentes:
+   - `const { data: fotosVistoriaAdesao } = useFotosVistoriaPorVeiculo(sinistro?.veiculo?.id);`
 
-**Antes:**
-```typescript
-query = query.in('status', [
-  'aguardando_analise', 'aprovado', 'negado', 'reprovado',
-  'em_reparo', 'em_recuperacao', 'aguardando_pagamento',
-  'pago', 'encerrado', 'cancelado',
-  'em_sindicancia', 'aguardando_diretoria',
-  'pecas_em_cotacao', 'pronto_para_oficina', 'pagamento_confirmado'
-]);
-```
+3. **Adicionar novo Card** na area de documentos/fotos (proximo ao card de instalacao existente, por volta da linha 824):
+   - Titulo: "Fotos da Vistoria de Instalacao / Adesao"
+   - Subtitulo: "Estado do veiculo registrado na vistoria de adesao para comparacao"
+   - Grid 3 colunas com as fotos, exibindo o tipo formatado
+   - Se vazio, exibir mensagem "Nenhuma foto de vistoria de adesao encontrada"
+   - Lightbox para zoom ao clicar
 
-**Depois:**
-```typescript
-query = query.in('status', [
-  'aguardando_analise', 'aprovado', 'negado', 'reprovado',
-  'em_reparo', 'em_recuperacao', 'aguardando_pagamento',
-  'pago', 'encerrado', 'cancelado'
-]);
-```
-
-Essa mesma correcao sera aplicada nos dois locais do arquivo (query principal e query de contadores).
-
+4. **Manter o card existente** de `instalacaoFotos` (tabela `instalacao_fotos`) como esta, pois pode ter dados em outros sinistros. Os dois cards sao complementares.
