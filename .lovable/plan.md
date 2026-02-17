@@ -1,81 +1,52 @@
 
+# Renderizar HTML no Preview do Template
 
-# Fix: App do Associado nao mostra posicao do rastreador ativo
+## Problema
 
-## Causa raiz
-
-A edge function `posicao-veiculo` (linha 310-317) faz um join PostgREST entre `rastreadores` e `rastreadores_config_plataformas`:
-
-```typescript
-const { data: rastreador, error: rastError } = await supabaseAdmin
-  .from('rastreadores')
-  .select(`*, plataforma:rastreadores_config_plataformas(*)`)
-  .eq('veiculo_id', veiculo_id)
-  .single();
-```
-
-Porem, a tabela `rastreadores` **nao possui foreign key** para `rastreadores_config_plataformas`. O campo `plataforma` e apenas um texto ('softruck'). O PostgREST nao consegue resolver o join sem FK, causando erro na query. Como resultado, a funcao retorna erro, o hook `useVeiculoPosicao` recebe `offline: true` como fallback, e o app mostra "Rastreador offline".
-
-O rastreador esta online e funcionando (confirmado no painel de monitoramento: RAT-862667083494305, placa LTB4J74, ultima comunicacao ha 6 minutos).
+O modal de visualizacao do template (`ModalVisualizarTemplate.tsx`) exibe o conteudo HTML cru como texto. A funcao `renderizarConteudo()` trata o conteudo como texto simples, dividindo por `{{variaveis}}` e exibindo tudo literal -- incluindo tags `<p>`, `<table>`, `<strong>`, etc.
 
 ## Solucao
 
-Separar a query em duas: buscar o rastreador primeiro, depois buscar a configuracao da plataforma separadamente usando o campo texto `plataforma`.
+Substituir a renderizacao de texto pela renderizacao de HTML real, mantendo o destaque visual das variaveis `{{...}}`.
 
-**Arquivo: `supabase/functions/posicao-veiculo/index.ts`**
+**Arquivo: `src/components/documentos/ModalVisualizarTemplate.tsx`**
 
-Substituir o select com join (linhas 310-317):
+1. **Alterar a funcao `renderizarConteudo`** para retornar HTML processado:
+   - Substituir as variaveis `{{...}}` por `<span>` estilizados (badges visuais) dentro do HTML
+   - Retornar uma string HTML pronta para `dangerouslySetInnerHTML`
 
-```typescript
-// ANTES (falha por falta de FK):
-const { data: rastreador, error: rastError } = await supabaseAdmin
-  .from('rastreadores')
-  .select(`*, plataforma:rastreadores_config_plataformas(*)`)
-  .eq('veiculo_id', veiculo_id)
-  .single();
+2. **Alterar o container de preview** (linhas 149-152):
+   - Remover `font-mono` e `whitespace-pre-wrap` (nao faz sentido para HTML renderizado)
+   - Usar `dangerouslySetInnerHTML` com classes `prose` para estilizacao adequada de tabelas, negrito, listas etc.
+   - Adicionar `prose-sm dark:prose-invert` para compatibilidade com tema escuro
 
-// DEPOIS (duas queries separadas):
-const { data: rastreador, error: rastError } = await supabaseAdmin
-  .from('rastreadores')
-  .select('*')
-  .eq('veiculo_id', veiculo_id)
-  .single();
+### Antes:
+```tsx
+<div className="bg-muted/50 p-4 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap font-mono">
+  {renderizarConteudo(template.conteudo)}
+</div>
+```
 
-// Buscar config da plataforma separadamente
-let plataformaConfig = null;
-if (rastreador?.plataforma) {
-  const { data: config } = await supabaseAdmin
-    .from('rastreadores_config_plataformas')
-    .select('*')
-    .eq('plataforma', rastreador.plataforma)
-    .maybeSingle();
-  plataformaConfig = config;
+### Depois:
+```tsx
+<div 
+  className="bg-muted/50 p-4 rounded-lg border text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+  dangerouslySetInnerHTML={{ __html: renderizarConteudoHTML(template.conteudo) }}
+/>
+```
+
+A nova funcao `renderizarConteudoHTML` fara um replace das variaveis por spans estilizados:
+```tsx
+function renderizarConteudoHTML(conteudo: string): string {
+  return conteudo.replace(
+    /\{\{([^}]+)\}\}/g,
+    '<span style="background:#3b82f6;color:white;padding:1px 6px;border-radius:4px;font-size:0.75rem;font-family:monospace">{{$1}}</span>'
+  );
 }
 ```
 
-Depois, atualizar as referencias no restante da funcao:
-- `rastreador.plataforma` (o join overlay) vira `plataformaConfig`
-- `plataformaCodigo` usa `rastreador.plataforma` diretamente (ja e o texto 'softruck')
+## Resultado
 
-## Detalhes das mudancas no restante do arquivo
-
-Linha 339-340: atualizar para usar a variavel separada:
-```typescript
-// ANTES:
-const plataforma = rastreador.plataforma; // era o objeto do join
-const plataformaCodigo = plataforma?.codigo || rastreador.plataforma_id || 'softruck';
-
-// DEPOIS:
-const plataforma = plataformaConfig;
-const plataformaCodigo = rastreador.plataforma || 'softruck';
-```
-
-O resto do codigo ja referencia `plataforma` (agora `plataformaConfig`) para campos como `suporta_posicao_tempo_real`, `api_url_producao`, `ambiente_atual`, etc. Nenhuma outra mudanca necessaria.
-
-## Arquivos alterados
-
-1. `supabase/functions/posicao-veiculo/index.ts` - separar query do rastreador da config da plataforma
-
-## Validacao
-
-Apos deploy, a edge function vai conseguir buscar o rastreador + config corretamente, retornar `offline: false` e `status_rastreador: 'online'`, e o app mostrara o mapa com a posicao em tempo real.
+- Tabelas, negrito, listas e alinhamentos serao renderizados visualmente
+- Variaveis `{{associado.nome}}` continuarao destacadas como badges azuis
+- A secao de "Variaveis Utilizadas" abaixo permanece inalterada
