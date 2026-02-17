@@ -1,22 +1,81 @@
 
-# Correcao da mensagem de aprovacao quando instalacao ja concluida
 
-## Problema
+# Fix: App do Associado nao mostra posicao do rastreador ativo
 
-Quando o analista de cadastro aprova um associado que ja passou pela vistoria de instalacao (rastreador ja ativado), as mensagens exibidas ainda dizem "Aguardando ativacao do rastreador", o que e incorreto -- o rastreador ja foi ativado pelo vistoriador.
+## Causa raiz
 
-## Alteracao
+A edge function `posicao-veiculo` (linha 310-317) faz um join PostgREST entre `rastreadores` e `rastreadores_config_plataformas`:
 
-**Arquivo: `src/hooks/usePropostasPendentes.ts`**
+```typescript
+const { data: rastreador, error: rastError } = await supabaseAdmin
+  .from('rastreadores')
+  .select(`*, plataforma:rastreadores_config_plataformas(*)`)
+  .eq('veiculo_id', veiculo_id)
+  .single();
+```
 
-Corrigir 2 mensagens (linhas 1570 e 1691) para refletir que, quando a instalacao ja foi concluida, a cobertura total esta ativa:
+Porem, a tabela `rastreadores` **nao possui foreign key** para `rastreadores_config_plataformas`. O campo `plataforma` e apenas um texto ('softruck'). O PostgREST nao consegue resolver o join sem FK, causando erro na query. Como resultado, a funcao retorna erro, o hook `useVeiculoPosicao` recebe `offline: true` como fallback, e o app mostra "Rastreador offline".
 
-**Mensagem de historico (linha 1570):**
-- De: "Proposta aprovada pelo analista de cadastro. Instalacao ja concluida. Aguardando ativacao do rastreador para cobertura total."
-- Para: "Proposta aprovada pelo analista de cadastro. Instalacao ja concluida. Cobertura total ativada."
+O rastreador esta online e funcionando (confirmado no painel de monitoramento: RAT-862667083494305, placa LTB4J74, ultima comunicacao ha 6 minutos).
 
-**Mensagem de retorno/toast (linha 1691):**
-- De: "Proposta aprovada! Instalacao ja concluida. Aguardando ativacao do rastreador."
-- Para: "Proposta aprovada! Instalacao ja concluida. Cobertura total ativada."
+## Solucao
 
-Nenhuma outra alteracao necessaria -- apenas correcao de texto.
+Separar a query em duas: buscar o rastreador primeiro, depois buscar a configuracao da plataforma separadamente usando o campo texto `plataforma`.
+
+**Arquivo: `supabase/functions/posicao-veiculo/index.ts`**
+
+Substituir o select com join (linhas 310-317):
+
+```typescript
+// ANTES (falha por falta de FK):
+const { data: rastreador, error: rastError } = await supabaseAdmin
+  .from('rastreadores')
+  .select(`*, plataforma:rastreadores_config_plataformas(*)`)
+  .eq('veiculo_id', veiculo_id)
+  .single();
+
+// DEPOIS (duas queries separadas):
+const { data: rastreador, error: rastError } = await supabaseAdmin
+  .from('rastreadores')
+  .select('*')
+  .eq('veiculo_id', veiculo_id)
+  .single();
+
+// Buscar config da plataforma separadamente
+let plataformaConfig = null;
+if (rastreador?.plataforma) {
+  const { data: config } = await supabaseAdmin
+    .from('rastreadores_config_plataformas')
+    .select('*')
+    .eq('plataforma', rastreador.plataforma)
+    .maybeSingle();
+  plataformaConfig = config;
+}
+```
+
+Depois, atualizar as referencias no restante da funcao:
+- `rastreador.plataforma` (o join overlay) vira `plataformaConfig`
+- `plataformaCodigo` usa `rastreador.plataforma` diretamente (ja e o texto 'softruck')
+
+## Detalhes das mudancas no restante do arquivo
+
+Linha 339-340: atualizar para usar a variavel separada:
+```typescript
+// ANTES:
+const plataforma = rastreador.plataforma; // era o objeto do join
+const plataformaCodigo = plataforma?.codigo || rastreador.plataforma_id || 'softruck';
+
+// DEPOIS:
+const plataforma = plataformaConfig;
+const plataformaCodigo = rastreador.plataforma || 'softruck';
+```
+
+O resto do codigo ja referencia `plataforma` (agora `plataformaConfig`) para campos como `suporta_posicao_tempo_real`, `api_url_producao`, `ambiente_atual`, etc. Nenhuma outra mudanca necessaria.
+
+## Arquivos alterados
+
+1. `supabase/functions/posicao-veiculo/index.ts` - separar query do rastreador da config da plataforma
+
+## Validacao
+
+Apos deploy, a edge function vai conseguir buscar o rastreador + config corretamente, retornar `offline: false` e `status_rastreador: 'online'`, e o app mostrara o mapa com a posicao em tempo real.
