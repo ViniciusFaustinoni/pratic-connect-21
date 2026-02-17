@@ -1,72 +1,55 @@
 
-# Corrigir Fotos da Vistoria de Instalacao/Adesao nao carregando
+
+# Corrigir "Trajeto do Veiculo" para Analista de Eventos
 
 ## Problema
 
-A secao "Fotos da Vistoria de Instalacao / Adesao" mostra "Nenhuma foto de vistoria de adesao encontrada", apesar de existirem 33 fotos na tabela `vistoria_fotos` para o veiculo em questao.
+O componente `TrajetoLocalCard` busca o `rastreador_id` atraves da tabela `instalacoes`, mas a politica RLS dessa tabela NAO inclui a role `analista_eventos`. Resultado: a query retorna vazio e o sistema mostra "Nenhum rastreador instalado neste veiculo".
 
-A causa: o hook `useFotosVistoriaPorVeiculo` e chamado em `SinistroAnalise.tsx` separadamente usando `sinistro?.veiculo?.id` (do objeto aninhado do join). Este hook faz 3 queries encadeadas (contratos -> vistorias -> vistoria_fotos) e depende de timing correto do carregamento. Alem disso, a secao das fotos de instalacao (`instalacaoFotos` do `instalacao_fotos`) esta oculta porque essa tabela tem 0 fotos - as fotos estao em `vistoria_fotos`.
+A tabela `rastreadores` e `rastreador_posicoes` ja sao acessiveis para `analista_eventos`, entao o problema e apenas no passo 1 (busca do rastreador_id via `instalacoes`).
 
 ## Solucao
 
-Mover a busca das fotos de vistoria para dentro do hook `useSinistroAnalise`, usando `sinistro.veiculo_id` (campo direto do sinistro, mais confiavel que o objeto aninhado do join). Isso garante que:
-- A query usa a mesma dependencia das outras queries do hook (veiculo_id direto)
-- O gerenciamento de cache e invalidacao fica centralizado
-- Elimina problemas de timing entre hooks separados
+Alterar a query do `TrajetoLocalCard` para buscar o rastreador diretamente na tabela `rastreadores` (que ja tem RLS para `analista_eventos`) em vez da tabela `instalacoes`.
 
-## Alteracoes
+## Alteracao
 
-### 1. `src/hooks/useSinistroAnalise.ts`
+### Arquivo: `src/components/sinistros/TrajetoLocalCard.tsx`
 
-Adicionar nova query `fotosVistoriaAdesao` dentro do hook (apos a query `instalacaoFotos`, por volta da linha 246):
+Linhas 38-52 - Substituir a query que busca em `instalacoes` por uma que busca em `rastreadores`:
 
-```
-// Fotos da vistoria de adesao (via contratos -> vistorias -> vistoria_fotos)
-const { data: fotosVistoriaAdesao = [] } = useQuery({
-  queryKey: ['sinistro-analise-fotos-vistoria', sinistro?.veiculo_id],
-  queryFn: async () => {
-    // 1. Buscar contratos do veiculo
-    const { data: contratos } = await supabase
-      .from('contratos')
-      .select('id')
-      .eq('veiculo_id', sinistro!.veiculo_id);
-    if (!contratos || contratos.length === 0) return [];
-
-    // 2. Buscar vistorias desses contratos
-    const { data: vistorias } = await supabase
-      .from('vistorias')
-      .select('id, status, modalidade')
-      .in('contrato_id', contratos.map(c => c.id));
-    if (!vistorias || vistorias.length === 0) return [];
-
-    // 3. Buscar fotos das vistorias
-    const { data: fotos } = await supabase
-      .from('vistoria_fotos')
-      .select('id, tipo, arquivo_url, created_at, vistoria_id')
-      .in('vistoria_id', vistorias.map(v => v.id))
-      .order('created_at', { ascending: true });
-
-    return (fotos || []).map(foto => ({
-      ...foto,
-      vistoria_status: vistorias.find(v => v.id === foto.vistoria_id)?.status || null,
-      vistoria_modalidade: vistorias.find(v => v.id === foto.vistoria_id)?.modalidade || null,
-    }));
-  },
-  enabled: !!sinistro?.veiculo_id,
-});
+**De:**
+```typescript
+const { data } = await supabase
+  .from('instalacoes')
+  .select('rastreador_id')
+  .eq('veiculo_id', veiculoId)
+  .eq('status', 'concluida')
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+return data?.rastreador_id as string | null;
 ```
 
-Retornar `fotosVistoriaAdesao` no objeto de retorno do hook.
+**Para:**
+```typescript
+const { data } = await supabase
+  .from('rastreadores')
+  .select('id')
+  .eq('veiculo_id', veiculoId)
+  .eq('status', 'instalado')
+  .order('updated_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+return data?.id as string | null;
+```
 
-### 2. `src/pages/eventos/SinistroAnalise.tsx`
+Esta alteracao busca o rastreador diretamente pela tabela `rastreadores` (acessivel ao analista de eventos) filtrando por `veiculo_id` e `status = 'instalado'`, eliminando a dependencia da tabela `instalacoes`.
 
-- Remover a chamada separada `useFotosVistoriaPorVeiculo` (linha 253)
-- Usar `fotosVistoriaAdesao` que agora vem de `useSinistroAnalise`
-- Adicionar `fotosVistoriaAdesao` na desestruturacao do hook (linha 238-251)
+## Secao Tecnica
 
-### 3. Unificar as secoes de fotos
+- A tabela `rastreadores` tem policy `Analista eventos pode ver rastreadores` com `has_role(auth.uid(), 'analista_eventos'::app_role)`
+- A tabela `rastreador_posicoes` tem policy `Staff can view positions` com `is_funcionario(auth.uid())` - ja funciona
+- A tabela `instalacoes` NAO tem `analista_eventos` nas policies de leitura - causa raiz do bug
+- Alterar a fonte da query e mais seguro do que adicionar mais uma role na RLS de `instalacoes`, pois o analista de eventos nao precisa de acesso geral a instalacoes
 
-As duas secoes (linhas 828-862 para `instalacao_fotos` e linhas 876-913 para `vistoria_fotos`) devem ser consolidadas em uma unica secao "Fotos da Vistoria de Instalacao / Adesao" que:
-- Combina fotos de ambas as fontes (`instalacaoFotos` + `fotosVistoriaAdesao`)
-- Sempre e exibida (sem condicional `length > 0`)
-- Mostra "Nenhuma foto encontrada" apenas quando AMBAS as fontes estao vazias
