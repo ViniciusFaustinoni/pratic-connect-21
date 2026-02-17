@@ -137,9 +137,7 @@ export default function SinistrosList() {
         query = query.in('status', [
           'aguardando_analise', 'aprovado', 'negado', 'reprovado',
           'em_reparo', 'em_recuperacao', 'aguardando_pagamento',
-          'pago', 'encerrado', 'cancelado',
-          'em_sindicancia', 'aguardando_diretoria',
-          'pecas_em_cotacao', 'pronto_para_oficina', 'pagamento_confirmado'
+          'pago', 'encerrado', 'cancelado'
         ] as any);
       }
 
@@ -170,9 +168,7 @@ export default function SinistrosList() {
         query = query.in('status', [
           'aguardando_analise', 'aprovado', 'negado', 'reprovado',
           'em_reparo', 'em_recuperacao', 'aguardando_pagamento',
-          'pago', 'encerrado', 'cancelado',
-          'em_sindicancia', 'aguardando_diretoria',
-          'pecas_em_cotacao', 'pronto_para_oficina', 'pagamento_confirmado'
+          'pago', 'encerrado', 'cancelado'
         ] as any);
       }
 
