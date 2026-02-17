@@ -1,74 +1,92 @@
 
 
-# Trajeto do Veiculo Seguindo Ruas
+# Adicionar Seletor de Fornecedor (Oficina) para Mao de Obra e Servicos
 
 ## Problema
 
-O componente `TrajetoLocalCard` desenha uma Polyline simples ligando os pontos GPS em linha reta. O resultado e um tracado que corta por cima de morros e predios ao inves de seguir as ruas reais.
+Atualmente, na tabela "Itens do Orcamento" da tela do Analista de Eventos (`SinistroAnalise.tsx`), a coluna "Fornecedor" mostra apenas "---" para itens de mao de obra e servicos. O analista precisa poder selecionar uma oficina como fornecedor para esses tipos de itens.
 
 ## Solucao
 
-Usar o servico OSRM ja existente no projeto (`routingService.ts`) para buscar rotas reais entre os pontos GPS consecutivos. O OSRM suporta multiplos waypoints em uma unica chamada, entao podemos enviar todos os pontos de uma vez e receber o trajeto completo pelas ruas.
+Adicionar um dropdown com busca de oficinas na coluna "Fornecedor" para itens do tipo `mao_de_obra` e `servico`. Ao salvar, o fornecedor selecionado sera persistido junto com os demais dados no `dados_vistoria`.
 
 ## Alteracoes
 
-### 1. Arquivo: `src/services/routingService.ts`
+### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
 
-Adicionar uma nova funcao `getRouteOSRMMultiWaypoint` que aceita um array de coordenadas (todos os pontos GPS) e retorna a rota completa passando por todos eles. O OSRM suporta ate ~100 waypoints por chamada.
+1. **Importar `useOficinas`** de `@/hooks/useOficinas` (ja existe no projeto)
 
-- Recebe array de `[lat, lng][]`
-- Converte para formato OSRM `lng,lat` separados por `;`
-- Faz uma unica chamada a API
-- Retorna coordenadas da rota real, distancia e tempo
+2. **Adicionar query de oficinas** proximo das queries existentes (linha ~259):
+   - `useOficinas({ status: 'ativa' })` para buscar oficinas ativas
 
-### 2. Arquivo: `src/components/sinistros/TrajetoLocalCard.tsx`
+3. **Adicionar estado para fornecedores de mao de obra/servico** (linha ~232):
+   - `const [fornecedoresMO, setFornecedoresMO] = useState<Record<number, { id: string; nome: string }>>({});`
 
-- Adicionar uma query (`useQuery`) que chama `getRouteOSRMMultiWaypoint` com os pontos GPS apos carrega-los
-- Enquanto a rota real carrega, manter a polyline original (pontos GPS diretos) com estilo tracejado
-- Quando a rota real chegar, substituir pela polyline com coordenadas reais (estilo solido)
-- Adicionar `FitBounds` para ajustar zoom automaticamente (similar ao fix anterior)
+4. **Alterar a coluna "Fornecedor" na tabela** (linhas 1145-1147):
+   - Onde hoje mostra `<span>---</span>` para tipos que nao sao `peca`, adicionar um `Select` com as oficinas para itens `mao_de_obra` e `servico`/`servico_terceiro`
+   - Se o item ja tem `fornecedor_nome` salvo e nao foi alterado localmente, exibir o nome salvo
+   - Caso contrario, exibir o dropdown de oficinas
 
-### Detalhes tecnicos
+5. **Atualizar a logica de "Salvar Valores"** (linhas 1239-1298):
+   - Incluir `fornecedoresMO` na condicao de disabled do botao (habilitar quando houver alteracoes em mao de obra tambem)
+   - Na funcao de salvamento, aplicar o fornecedor selecionado para itens de mao de obra e servico (similar ao que ja e feito para pecas)
 
-**Nova funcao em `routingService.ts`:**
+### Detalhes da alteracao na coluna Fornecedor
 
-```typescript
-export async function getRouteOSRMMultiWaypoint(
-  pontos: [number, number][]
-): Promise<RotaResult> {
-  // Limitar a 25 waypoints para nao sobrecarregar a API publica
-  // Selecionar pontos uniformemente distribuidos se houver mais de 25
-  const pontosReduzidos = pontos.length > 25
-    ? selecionarPontosUniformes(pontos, 25)
-    : pontos;
-
-  // Converter para formato OSRM: lng,lat;lng,lat;...
-  const coords = pontosReduzidos
-    .map(([lat, lng]) => `${lng},${lat}`)
-    .join(';');
-
-  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`;
-
-  // Fetch, parse e converter coordenadas de [lng,lat] para [lat,lng]
-  // Com fallback para pontos originais em caso de erro
-}
+O bloco que hoje e:
+```tsx
+) : (
+  <span className="text-muted-foreground text-xs">—</span>
+)}
 ```
 
-**Alteracao no `TrajetoLocalCard.tsx`:**
-
-```typescript
-// Apos carregar posicoes, buscar rota real
-const rotaRealQuery = useQuery({
-  queryKey: ['trajeto-local-rota-real', polylinePoints],
-  queryFn: () => getRouteOSRMMultiWaypoint(polylinePoints),
-  enabled: polylinePoints.length >= 2,
-  staleTime: 60000, // cache de 1 minuto
-});
-
-// Usar rota real se disponivel, senao pontos GPS originais
-const trajetoFinal = rotaRealQuery.data?.coordenadas || polylinePoints;
-const isRotaReal = !!rotaRealQuery.data?.coordenadas;
+Sera expandido para:
+```tsx
+) : (item.tipo === 'mao_de_obra' || item.tipo === 'servico' || item.tipo === 'servico_terceiro') ? (
+  item.fornecedor_nome && !fornecedoresMO[i] ? (
+    <span className="text-xs font-medium">{item.fornecedor_nome}</span>
+  ) : (
+    <Select
+      value={fornecedoresMO[i]?.id || item.fornecedor_id || ''}
+      onValueChange={(val) => {
+        const of = oficinas?.find((o) => o.id === val);
+        if (of) {
+          setFornecedoresMO(prev => ({
+            ...prev,
+            [i]: { id: of.id, nome: of.nome_fantasia || of.razao_social }
+          }));
+        }
+      }}
+    >
+      <SelectTrigger className="h-8 w-44 text-xs">
+        <SelectValue placeholder="Selecionar oficina..." />
+      </SelectTrigger>
+      <SelectContent>
+        {oficinas?.map((of) => (
+          <SelectItem key={of.id} value={of.id}>
+            <span className="text-xs">{of.nome_fantasia || of.razao_social}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+) : (
+  <span className="text-muted-foreground text-xs">—</span>
+)
 ```
 
-A Polyline usara estilo tracejado enquanto carrega e solido quando a rota real estiver pronta. O mapa tambem tera `FitBounds` para garantir que todo o trajeto fique visivel.
+### Detalhes da alteracao no Salvar
+
+- O botao "Salvar Valores" passara a considerar tambem `Object.keys(fornecedoresMO).length > 0` na condicao de habilitado
+- O mapeamento de `updatedItens` aplicara fornecedor para mao de obra/servico:
+  ```typescript
+  if (item.tipo === 'mao_de_obra' || item.tipo === 'servico' || item.tipo === 'servico_terceiro') {
+    const fornecedor = fornecedoresMO[i] || (item.fornecedor_id ? { id: item.fornecedor_id, nome: item.fornecedor_nome } : null);
+    return {
+      ...item,
+      ...(fornecedor ? { fornecedor_id: fornecedor.id, fornecedor_nome: fornecedor.nome } : {}),
+    };
+  }
+  ```
+- O botao "Salvar Valores" sera exibido sempre que houver itens (nao apenas para pecas sem cotacao aprovada), pois agora mao de obra tambem precisa ser salva
 
