@@ -679,7 +679,8 @@ export default function SinistroAnalise() {
                     <InfoItem icon={TipoIcon} label="Tipo" value={tipoConfig[sinistro.tipo]?.label || sinistro.tipo} />
                     <InfoItem icon={Calendar} label="Data da Ocorrência" value={formatDateTime(sinistro.data_ocorrencia)} />
                     <InfoItem icon={MapPin} label="Local" value={sinistro.local_ocorrencia} />
-                    <InfoItem icon={MapPin} label="Cidade/UF" value={`${sinistro.cidade_ocorrencia || ''}/${sinistro.estado_ocorrencia || ''}`} />
+                    <InfoItem icon={MapPin} label="Cidade/UF" value={`${sinistro.cidade_ocorrencia || linkEvento?.dados_etapa2?.endereco_cidade || sinistro.associado?.cidade || ''}/${sinistro.estado_ocorrencia || linkEvento?.dados_etapa2?.endereco_uf || sinistro.associado?.uf || ''}`} />
+                    <InfoItem icon={MapPin} label="Bairro" value={linkEvento?.dados_etapa2?.endereco_bairro || sinistro.associado?.bairro || '---'} />
                     <InfoItem icon={FileText} label="Nº B.O." value={sinistro.bo_numero || linkEvento?.dados_etapa2?.numero_bo} />
                     <InfoItem icon={Clock} label="Comunicado em" value={formatDateTime(sinistro.created_at)} />
                     <div className="md:col-span-2">

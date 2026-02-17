@@ -231,6 +231,14 @@ const tools = [
             items: { type: "string" },
             description: "Lista de caminhos das fotos enviadas no storage",
           },
+          cidade: {
+            type: "string",
+            description: "Cidade onde ocorreu o sinistro",
+          },
+          estado: {
+            type: "string",
+            description: "UF/Estado onde ocorreu (sigla, ex: RJ, SP)",
+          },
         },
         required: ["tipo", "data_ocorrencia", "local", "descricao"],
       },
@@ -629,6 +637,8 @@ async function executeTool(
             tipo: tipoSistemaChat,
             data_ocorrencia: args.data_ocorrencia || null,
             local_ocorrencia: args.local || "",
+            cidade_ocorrencia: args.cidade || associado?.cidade || null,
+            estado_ocorrencia: args.estado || associado?.uf || null,
             descricao: args.descricao,
             status: "comunicado",
             canal: "ia",
