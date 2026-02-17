@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,16 +18,12 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Loader2, ArrowRight, Check } from 'lucide-react';
+import { Plus, Trash2, Loader2, ArrowRight, Car } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { PecaSelectFields, PecaSelectValues } from '@/components/oficinas/PecaSelectFields';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ChevronsUpDown, Car } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 const ETAPAS_REPARO = [
   { id: 'lanternagem', nome: 'Lanternagem', descricao: 'Chaparia e estrutura da carroceria' },
@@ -83,81 +79,12 @@ export function VistoriaEventoOrcamento({
   const [observacoesTotal, setObservacoesTotal] = useState('');
   const [etapasReparo, setEtapasReparo] = useState<string[]>([]);
 
-  // Shared vehicle (marca/modelo/ano) — filled once, used by all items
-  const FIPE_URL = 'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/fipe-lookup';
-  const [sharedMarcas, setSharedMarcas] = useState<{ codigo: string; nome: string }[]>([]);
-  const [sharedModelos, setSharedModelos] = useState<{ codigo: string; nome: string }[]>([]);
-  const [sharedAnos, setSharedAnos] = useState<{ codigo: string; nome: string }[]>([]);
-  const [sharedVeiculo, setSharedVeiculo] = useState({ marcaCodigo: '', marcaNome: '', modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '' });
-  const [loadingSharedMarcas, setLoadingSharedMarcas] = useState(false);
-  const [loadingSharedModelos, setLoadingSharedModelos] = useState(false);
-  const [loadingSharedAnos, setLoadingSharedAnos] = useState(false);
-  const [openSharedMarca, setOpenSharedMarca] = useState(false);
-  const [openSharedModelo, setOpenSharedModelo] = useState(false);
-  const [openSharedAno, setOpenSharedAno] = useState(false);
-  const autoMatchedRef = useRef({ marca: false, modelo: false, ano: false });
-
-  // Load shared marcas
-  useEffect(() => {
-    if (!open) return;
-    setLoadingSharedMarcas(true);
-    const params = new URLSearchParams({ action: 'marcas', tipo: 'carros' });
-    fetch(`${FIPE_URL}?${params}`).then(r => r.json()).then(json => {
-      if (json.success) {
-        setSharedMarcas(json.data);
-        // Auto-match from vehicle
-        if (veiculo?.marca && !autoMatchedRef.current.marca) {
-          const needle = veiculo.marca.toLowerCase();
-          const match = json.data.find((m: any) => m.nome.toLowerCase().includes(needle) || needle.includes(m.nome.toLowerCase()));
-          if (match) {
-            autoMatchedRef.current.marca = true;
-            setSharedVeiculo(prev => ({ ...prev, marcaCodigo: match.codigo, marcaNome: match.nome }));
-          }
-        }
-      }
-    }).catch(() => {}).finally(() => setLoadingSharedMarcas(false));
-  }, [open]);
-
-  // Load shared modelos
-  useEffect(() => {
-    if (!sharedVeiculo.marcaCodigo) { setSharedModelos([]); return; }
-    setLoadingSharedModelos(true);
-    const params = new URLSearchParams({ action: 'modelos', tipo: 'carros', marcaCodigo: sharedVeiculo.marcaCodigo });
-    fetch(`${FIPE_URL}?${params}`).then(r => r.json()).then(json => {
-      if (json.success) {
-        const data = json.data.modelos || json.data;
-        setSharedModelos(data);
-        if (veiculo?.modelo && autoMatchedRef.current.marca && !autoMatchedRef.current.modelo) {
-          const needle = veiculo.modelo.toLowerCase();
-          const match = data.find((m: any) => m.nome.toLowerCase().includes(needle) || needle.includes(m.nome.toLowerCase()));
-          if (match) {
-            autoMatchedRef.current.modelo = true;
-            setSharedVeiculo(prev => ({ ...prev, modeloCodigo: String(match.codigo), modeloNome: match.nome }));
-          }
-        }
-      }
-    }).catch(() => {}).finally(() => setLoadingSharedModelos(false));
-  }, [sharedVeiculo.marcaCodigo]);
-
-  // Load shared anos
-  useEffect(() => {
-    if (!sharedVeiculo.marcaCodigo || !sharedVeiculo.modeloCodigo) { setSharedAnos([]); return; }
-    setLoadingSharedAnos(true);
-    const params = new URLSearchParams({ action: 'anos', tipo: 'carros', marcaCodigo: sharedVeiculo.marcaCodigo, modeloCodigo: sharedVeiculo.modeloCodigo });
-    fetch(`${FIPE_URL}?${params}`).then(r => r.json()).then(json => {
-      if (json.success) {
-        setSharedAnos(json.data);
-        if (veiculo?.ano_modelo && autoMatchedRef.current.modelo && !autoMatchedRef.current.ano) {
-          const anoStr = String(veiculo.ano_modelo);
-          const match = json.data.find((a: any) => a.nome.includes(anoStr));
-          if (match) {
-            autoMatchedRef.current.ano = true;
-            setSharedVeiculo(prev => ({ ...prev, anoCodigo: match.codigo, anoNome: match.nome }));
-          }
-        }
-      }
-    }).catch(() => {}).finally(() => setLoadingSharedAnos(false));
-  }, [sharedVeiculo.modeloCodigo]);
+  // Shared vehicle — auto-filled from vehicle data (read-only)
+  const sharedVeiculo = {
+    marcaCodigo: '', marcaNome: veiculo?.marca || '',
+    modeloCodigo: '', modeloNome: veiculo?.modelo || '',
+    anoCodigo: '', anoNome: veiculo?.ano_modelo ? String(veiculo.ano_modelo) : '',
+  };
 
   // Orçamento
   const [itens, setItens] = useState<ItemOrcamento[]>([
@@ -427,7 +354,7 @@ export function VistoriaEventoOrcamento({
             </section>
           )}
 
-          {/* Veículo do Orçamento (preenchido uma vez) */}
+          {/* Veículo do Orçamento (preenchido automaticamente) */}
           {tipoDano === 'parcial' && (
             <section className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -439,99 +366,18 @@ export function VistoriaEventoOrcamento({
                   {[sharedVeiculo.marcaNome, sharedVeiculo.modeloNome, sharedVeiculo.anoNome].filter(Boolean).join(' — ')}
                 </p>
               )}
-              <div className="space-y-2">
-                {/* Marca */}
+              <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Marca *</Label>
-                  <Popover open={openSharedMarca} onOpenChange={setOpenSharedMarca}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" role="combobox" className="w-full justify-between font-normal" disabled={loadingSharedMarcas}>
-                        {loadingSharedMarcas ? <Loader2 className="h-4 w-4 animate-spin" /> : (sharedVeiculo.marcaNome || <span className="text-muted-foreground">Selecione a marca</span>)}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Buscar marca..." />
-                        <CommandList>
-                          <CommandEmpty>Nenhuma marca encontrada.</CommandEmpty>
-                          <CommandGroup>
-                            {sharedMarcas.map(m => (
-                              <CommandItem key={m.codigo} value={m.nome} onSelect={() => {
-                                setSharedVeiculo({ marcaCodigo: m.codigo, marcaNome: m.nome, modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '' });
-                                setOpenSharedMarca(false);
-                              }}>
-                                <Check className={cn('mr-2 h-4 w-4', sharedVeiculo.marcaCodigo === m.codigo ? 'opacity-100' : 'opacity-0')} />
-                                {m.nome}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  <Label className="text-xs">Marca</Label>
+                  <Input value={sharedVeiculo.marcaNome || '—'} disabled className="bg-muted" />
                 </div>
-                {/* Modelo */}
                 <div className="space-y-1">
-                  <Label className="text-xs">Modelo *</Label>
-                  <Popover open={openSharedModelo} onOpenChange={setOpenSharedModelo}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" role="combobox" className="w-full justify-between font-normal" disabled={loadingSharedModelos || !sharedVeiculo.marcaCodigo}>
-                        {loadingSharedModelos ? <Loader2 className="h-4 w-4 animate-spin" /> : (sharedVeiculo.modeloNome || <span className="text-muted-foreground">Selecione o modelo</span>)}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Buscar modelo..." />
-                        <CommandList>
-                          <CommandEmpty>Nenhum modelo encontrado.</CommandEmpty>
-                          <CommandGroup>
-                            {sharedModelos.map(m => (
-                              <CommandItem key={m.codigo} value={m.nome} onSelect={() => {
-                                setSharedVeiculo(prev => ({ ...prev, modeloCodigo: String(m.codigo), modeloNome: m.nome, anoCodigo: '', anoNome: '' }));
-                                setOpenSharedModelo(false);
-                              }}>
-                                <Check className={cn('mr-2 h-4 w-4', sharedVeiculo.modeloCodigo === String(m.codigo) ? 'opacity-100' : 'opacity-0')} />
-                                {m.nome}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  <Label className="text-xs">Modelo</Label>
+                  <Input value={sharedVeiculo.modeloNome || '—'} disabled className="bg-muted" />
                 </div>
-                {/* Ano */}
                 <div className="space-y-1">
-                  <Label className="text-xs">Ano *</Label>
-                  <Popover open={openSharedAno} onOpenChange={setOpenSharedAno}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" role="combobox" className="w-full justify-between font-normal" disabled={loadingSharedAnos || !sharedVeiculo.modeloCodigo}>
-                        {loadingSharedAnos ? <Loader2 className="h-4 w-4 animate-spin" /> : (sharedVeiculo.anoNome || <span className="text-muted-foreground">Selecione o ano</span>)}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Buscar ano..." />
-                        <CommandList>
-                          <CommandEmpty>Nenhum ano encontrado.</CommandEmpty>
-                          <CommandGroup>
-                            {sharedAnos.map(a => (
-                              <CommandItem key={a.codigo} value={a.nome} onSelect={() => {
-                                setSharedVeiculo(prev => ({ ...prev, anoCodigo: a.codigo, anoNome: a.nome }));
-                                setOpenSharedAno(false);
-                              }}>
-                                <Check className={cn('mr-2 h-4 w-4', sharedVeiculo.anoCodigo === a.codigo ? 'opacity-100' : 'opacity-0')} />
-                                {a.nome}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  <Label className="text-xs">Ano</Label>
+                  <Input value={sharedVeiculo.anoNome || '—'} disabled className="bg-muted" />
                 </div>
               </div>
             </section>
@@ -567,8 +413,8 @@ export function VistoriaEventoOrcamento({
                       values={pecaValuesMap[i] || defaultPecaValues}
                       onChange={(pv) => handlePecaValuesChange(i, pv)}
                       active={open}
-                      sharedVeiculo={sharedVeiculo.marcaCodigo ? sharedVeiculo : undefined}
-                      initialVeiculo={!sharedVeiculo.marcaCodigo && veiculo ? { marca: veiculo.marca || '', modelo: veiculo.modelo || '', ano_modelo: veiculo.ano_modelo || '' } : undefined}
+                      sharedVeiculo={sharedVeiculo.marcaNome ? sharedVeiculo : undefined}
+                      initialVeiculo={!sharedVeiculo.marcaNome && veiculo ? { marca: veiculo.marca || '', modelo: veiculo.modelo || '', ano_modelo: veiculo.ano_modelo || '' } : undefined}
                     />
                   ) : (
                     <>
