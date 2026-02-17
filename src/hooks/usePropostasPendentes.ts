@@ -1567,7 +1567,7 @@ export function useAprovarProposta() {
 
       // 7. Registrar histórico com mensagem apropriada
       const mensagemHistorico = jaTemInstalacaoConcluida
-        ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Aguardando ativação do rastreador para cobertura total.'
+        ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Cobertura total ativada.'
         : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.';
       
       await supabase
@@ -1688,7 +1688,7 @@ export function useAprovarProposta() {
       }
 
       const mensagemRetorno = jaTemInstalacaoConcluida
-        ? 'Proposta aprovada! Instalação já concluída. Aguardando ativação do rastreador.'
+        ? 'Proposta aprovada! Instalação já concluída. Cobertura total ativada.'
         : 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.';
 
       return {
