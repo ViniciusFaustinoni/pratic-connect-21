@@ -534,7 +534,7 @@ export default function SinistrosList() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {(isDiretor || isAnalistaEventos) && (sinistro.status === 'comunicado' || sinistro.status === 'em_analise' || sinistro.status === 'aguardando_analise') && (
+                          {(isDiretor || (isAnalistaEventos && sinistro.status === 'aguardando_analise')) && (
                             <Button
                               variant="default"
                               size="icon"
@@ -545,7 +545,7 @@ export default function SinistrosList() {
                               <ClipboardCheck className="h-4 w-4" />
                             </Button>
                           )}
-                          {isDiretor && sinistro.status === 'aprovado' && (sinistro as any).cota_paga === true && (
+                          {(isDiretor || isAnalistaEventos) && sinistro.status === 'aprovado' && (sinistro as any).cota_paga === true && (
                             <Button
                               variant="outline"
                               size="icon"
