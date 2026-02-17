@@ -1,11 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, Navigation, AlertTriangle, Check, Clock, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
+
+function FitBounds({ bounds }: { bounds: L.LatLngBounds }) {
+  const map = useMap();
+  useEffect(() => {
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+  }, [map, bounds]);
+  return null;
+}
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import 'leaflet/dist/leaflet.css';
@@ -150,13 +158,12 @@ export function ComparacaoPosicoes({
           <div className="h-52 rounded-lg overflow-hidden border">
             <MapContainer
               center={mapConfig.center}
-              zoom={mapConfig.bounds ? 13 : 15}
-              bounds={mapConfig.bounds || undefined}
-              boundsOptions={{ padding: [40, 40] }}
+              zoom={15}
               style={{ height: '100%', width: '100%' }}
               scrollWheelZoom={false}
             >
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              {mapConfig.bounds && <FitBounds bounds={mapConfig.bounds} />}
 
               {/* Marcador rastreador (verde) */}
               {(analise.tipo === 'comparacao' || analise.tipo === 'apenas_rastreador') && (
