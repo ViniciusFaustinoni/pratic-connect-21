@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, CheckCircle, XCircle, AlertTriangle, Clock, User, Car, FileText, Camera, Video, Image, MapPin, Navigation } from 'lucide-react';
+import { CardAnaliseRiscoIA } from '@/components/analista-eventos/CardAnaliseRiscoIA';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -180,7 +181,10 @@ export default function EventoAnaliseDetalhe() {
         </Badge>
       </div>
 
-      <div className="p-4">
+      <div className="p-4 space-y-4">
+        {sinistro.tipo?.toLowerCase().includes('colis') && (
+          <CardAnaliseRiscoIA sinistroId={sinistro.id} />
+        )}
         <Accordion type="multiple" defaultValue={['associado', 'cronologia']} className="space-y-2">
           {/* Seção 1 - Dados do Associado */}
           <AccordionItem value="associado" className="border rounded-lg px-3">

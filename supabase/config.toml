@@ -243,6 +243,9 @@ verify_jwt = false
 [functions.delete-cotacao]
 verify_jwt = false
 
+[functions.analise-risco-ia]
+verify_jwt = false
+
 [functions.aprovar-sinistro]
 verify_jwt = false
 
