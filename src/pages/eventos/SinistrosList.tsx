@@ -6,6 +6,7 @@ import { NovoSinistroModal } from '@/components/eventos/NovoSinistroModal';
 import { PainelNaoRecuperados } from '@/components/sinistros/PainelNaoRecuperados';
 import { ConfirmacaoExclusaoDialog } from '@/components/sinistros/ConfirmacaoExclusaoDialog';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDeleteSinistro } from '@/hooks/useSinistros';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -91,6 +92,7 @@ export default function SinistrosList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { isDiretor, isAnalistaEventos } = usePermissions();
+  const { profile } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [sinistroParaExcluir, setSinistroParaExcluir] = useState<any>(null);
   const [modalExcluirOpen, setModalExcluirOpen] = useState(false);
@@ -124,7 +126,8 @@ export default function SinistrosList() {
 
   // Query principal
   const { data: sinistros, isLoading } = useQuery({
-    queryKey: ['sinistros', filters],
+    queryKey: ['sinistros', filters, isAnalistaEventos, isDiretor],
+    enabled: !!profile,
     queryFn: async () => {
       let query = supabase
         .from('sinistros')
@@ -178,7 +181,8 @@ export default function SinistrosList() {
 
   // Query para contadores
   const { data: contadores } = useQuery({
-    queryKey: ['sinistros-contadores'],
+    queryKey: ['sinistros-contadores', isAnalistaEventos, isDiretor],
+    enabled: !!profile,
     queryFn: async () => {
       let query = supabase.from('sinistros').select('status');
       
