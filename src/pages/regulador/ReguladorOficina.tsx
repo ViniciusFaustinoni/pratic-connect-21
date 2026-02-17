@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useVeiculosOficina, useOficinasDisponiveis, type VeiculoOficina } from '@/hooks/useVeiculosOficina';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -125,6 +126,32 @@ export default function ReguladorOficina() {
       return (data || []).map((d: any) => d.ordem_servico_id);
     },
   });
+
+  // Query para histórico de atualizações recentes
+  const osIds = useMemo(() => veiculos.map(v => v.id), [veiculos]);
+  const { data: atualizacoesRecentes = [] } = useQuery({
+    queryKey: ['atualizacoes-recentes', osIds.join(',')],
+    queryFn: async () => {
+      if (osIds.length === 0) return [];
+      const { data } = await supabase
+        .from('os_atualizacoes_diarias')
+        .select('id, ordem_servico_id, created_at, descricao, etapa_concluida, tem_problema, tipo_problema, fotos_urls')
+        .in('ordem_servico_id', osIds)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      return data || [];
+    },
+    enabled: osIds.length > 0,
+  });
+
+  const atualizacoesPorOS = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    (atualizacoesRecentes || []).forEach((a: any) => {
+      if (!map[a.ordem_servico_id]) map[a.ordem_servico_id] = [];
+      if (map[a.ordem_servico_id].length < 3) map[a.ordem_servico_id].push(a);
+    });
+    return map;
+  }, [atualizacoesRecentes]);
 
   const { data: garantias = [] } = useQuery({
     queryKey: ['garantias-ativas'],
@@ -431,6 +458,39 @@ export default function ReguladorOficina() {
                   </div>
 
                   <EtapasProgress etapas={v.etapas_reparo || []} />
+
+                  {atualizacoesPorOS[v.id]?.length > 0 && (
+                    <Collapsible>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="w-full h-7 text-[11px] text-muted-foreground">
+                          Ver histórico ({atualizacoesPorOS[v.id].length} atualizações)
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="space-y-2 border-t pt-2 mt-1">
+                          {atualizacoesPorOS[v.id].map((a: any) => (
+                            <div key={a.id} className="space-y-1">
+                              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                <span>{format(new Date(a.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}</span>
+                                <div className="flex gap-1">
+                                  {a.etapa_concluida && <Badge className="bg-emerald-100 text-emerald-700 text-[9px]">✓ {a.etapa_concluida}</Badge>}
+                                  {a.tem_problema && <Badge className="bg-red-100 text-red-700 text-[9px]">⚠ Problema</Badge>}
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground line-clamp-2">{a.descricao}</p>
+                              {a.fotos_urls?.length > 0 && (
+                                <div className="flex gap-1">
+                                  {(a.fotos_urls as string[]).slice(0, 4).map((url: string, i: number) => (
+                                    <img key={i} src={url} className="w-10 h-10 rounded object-cover" alt="" />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
 
                   <div className="flex flex-wrap gap-2 pt-1">
                     {v.status === 'aguardando_entrada' && (
