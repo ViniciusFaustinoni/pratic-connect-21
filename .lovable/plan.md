@@ -1,67 +1,117 @@
 
-# Ajustes nos Perfis de Acesso por Etapa do Fluxo de Eventos
+# Geocodificacao de Oficinas e Rota Veiculo-Oficina no Chamado de Assistencia
 
-## Resumo das 3 mudancas solicitadas
+## Resumo
 
-### 1. Remover "Triagem Inicial" - o Analista nao entra antes da vistoria
+Adicionar coordenadas geograficas (latitude/longitude) a todas as oficinas para:
+1. Mostrar no mapa do chamado de assistencia (guincho) a rota do veiculo ate a oficina de destino
+2. Alertar oficinas sem endereco completo cadastrado
 
-**Situacao atual:** Na listagem de sinistros (`SinistrosList.tsx`), o Analista de Eventos tem acesso ao botao "Analisar" quando o status e `comunicado` ou `em_analise`. Isso implica uma "triagem inicial" que nao deveria existir.
+## Alteracoes
 
-**Mudanca:** O Analista de Eventos so deve ver/acessar eventos a partir do status `aguardando_analise` (pos-vistoria do regulador). Os status `comunicado`, `em_analise`, `documentacao_pendente` e `aguardando_vistoria` sao fases onde apenas o **associado** (via link) e o **regulador** (vistoria) atuam. O Diretor mantem acesso total.
+### 1. Migração de banco - adicionar colunas lat/lng na tabela `oficinas`
 
-**Alteracoes:**
-- `src/pages/eventos/SinistrosList.tsx` (linha 537): Mudar a condicao do botao "Analisar" para que o analista so veja quando status for `aguardando_analise` (e nao `comunicado` nem `em_analise`)
-- Revisar filtros de listagem para que o analista nao veja eventos em status de pre-analise na listagem principal (ja implementado parcialmente via `useEventosAnalise`)
+```sql
+ALTER TABLE oficinas ADD COLUMN latitude numeric;
+ALTER TABLE oficinas ADD COLUMN longitude numeric;
+```
 
-### 2. Link unico de evento (sem "Link 1" e "Link 2")
+### 2. Geocodificar oficinas existentes ao salvar/editar
 
-**Situacao atual:** O sistema ja utiliza um link unico `/evento/:token` com etapas progressivas. Porem, em alguns pontos da interface do analista, podem existir referencias a "gerar novo link" ou "Link 1/Link 2".
+**Arquivo: `src/components/oficinas/OficinaFormDialog.tsx`**
 
-**Mudanca:** Garantir que toda a interface e comunicacao use apenas o conceito de um unico link de evento. A IA e qualquer outro canal envia sempre o mesmo link, que direciona o associado para a etapa pendente (auto-vistoria, B.O., agendamento ou pagamento).
+No `onSubmit`, apos salvar a oficina com sucesso, disparar `geocodificarEmBackground` (do `geocodingService.ts`) usando os dados de endereco do formulario. Se for criacao, usar o ID retornado; se for edicao, usar `oficina.id`.
 
-**Alteracoes:**
-- `src/components/eventos/EventoLinkCard.tsx`: Revisar se ha mencoes a "Link 1" ou "Link 2" e unificar para "Link do Evento"
-- Edge functions (`gerar-link-evento`, `validar-link-evento`): Ja trabalham com token unico - apenas confirmar que nao ha logica de links multiplos
+Adicionar uma nova funcao `atualizarCoordenadasOficina` no `geocodingService.ts` que faz update em `oficinas.latitude` / `oficinas.longitude`.
 
-### 3. Adicionar "Enviar para Oficina" como etapa do Analista apos cotacao
+### 3. Geocodificar oficinas existentes (batch)
 
-**Situacao atual:** O botao "Enviar para Oficina" na listagem (`SinistrosList.tsx`, linha 548) so aparece para **Diretores** quando o status e `aprovado` e cota paga. Apos `pecas_em_cotacao`, o analista ja tem o botao "Marcar Pecas como Recebidas" que transiciona para `em_reparo`.
+**Arquivo: `src/components/oficinas/ImportarOficinasDialog.tsx`**
 
-**Mudanca:** Permitir que o **Analista de Eventos** tambem tenha acesso ao botao "Enviar para Oficina" na listagem, alem do Diretor. Isso reconhece que o analista e responsavel por encaminhar o veiculo a oficina apos a cotacao.
+Apos importar oficinas, disparar geocodificacao em background para cada oficina importada.
 
-**Alteracoes:**
-- `src/pages/eventos/SinistrosList.tsx` (linha 548): Mudar `isDiretor` para `(isDiretor || isAnalistaEventos)` no botao "Enviar para Oficina"
-- Na tela de analise (`SinistroAnalise.tsx`): O analista ja tem acesso ao fluxo de atribuir fornecedores e marcar pecas recebidas, entao o fluxo pos-cotacao ja esta correto
+**Acao manual complementar:** Executar um script SQL ou edge function para geocodificar as 16 oficinas existentes. Alternativa mais simples: ao abrir a tela de oficinas, verificar quais oficinas nao tem lat/lng e geocodificar em background (lazy geocoding).
+
+### 4. Badge "Cadastrar Endereco" nas oficinas sem endereco
+
+**Arquivo: `src/pages/oficinas/Oficinas.tsx`**
+
+No card de cada oficina, verificar se `logradouro` esta vazio/null. Se sim, exibir um Badge vermelho "Cadastrar Endereco" ao lado do status.
+
+### 5. Mapa com rota veiculo-oficina no chamado de assistencia (guincho)
+
+**Arquivo: `src/pages/assistencia/ChamadoDetalhe.tsx`**
+
+Quando o chamado for do tipo `reboque` e tiver um sinistro vinculado com `oficina_id`:
+- Buscar as coordenadas da oficina (`latitude`, `longitude`)
+- Exibir no `MapaChamado` um marcador adicional da oficina
+- Usar o componente `RotaPolyline` (ja existente) para desenhar a rota real entre a posicao do veiculo (rastreador) e a oficina
+- Mostrar a distancia em km calculada pela rota
+
+**Arquivo: `src/components/assistencia/MapaChamado.tsx`**
+
+Adicionar props opcionais para destino oficina (`oficinaLat`, `oficinaLng`, `oficinaNome`). Quando presentes:
+- Renderizar marcador da oficina com icone de predio/oficina
+- Renderizar `RotaPolyline` entre posicao do rastreador e oficina
+- Exibir badge com distancia em km
+
+### 6. Novo service helper
+
+**Arquivo: `src/services/geocodingService.ts`**
+
+Adicionar funcao:
+```typescript
+export async function atualizarCoordenadasOficina(
+  oficinaId: string,
+  endereco: EnderecoParaGeocodificar
+): Promise<{ latitude: number | null; longitude: number | null; success: boolean }>
+```
+
+---
 
 ## Detalhes tecnicos
 
-### Arquivo: `src/pages/eventos/SinistrosList.tsx`
+### Fluxo de geocodificacao na criacao/edicao de oficina
 
-**Mudanca 1 - Restringir acesso do analista (linha 537):**
-```typescript
-// DE:
-{(isDiretor || isAnalistaEventos) && (sinistro.status === 'comunicado' || sinistro.status === 'em_analise' || sinistro.status === 'aguardando_analise') && (
-
-// PARA:
-{(isDiretor || (isAnalistaEventos && sinistro.status === 'aguardando_analise')) && (
 ```
-Isso garante que o analista so ve o botao "Analisar" quando a vistoria ja foi concluida. O diretor mantem acesso a todos os status.
-
-**Mudanca 3 - Analista pode enviar para oficina (linha 548):**
-```typescript
-// DE:
-{isDiretor && sinistro.status === 'aprovado' && (sinistro as any).cota_paga === true && (
-
-// PARA:
-{(isDiretor || isAnalistaEventos) && sinistro.status === 'aprovado' && (sinistro as any).cota_paga === true && (
+OficinaFormDialog.onSubmit()
+  -> Salva oficina no Supabase
+  -> Dispara em background: atualizarCoordenadasOficina(id, { logradouro, numero, bairro, cidade, uf, cep })
+  -> Edge function geocode-endereco (Nominatim) retorna lat/lng
+  -> Atualiza oficinas.latitude / oficinas.longitude
 ```
 
-### Arquivo: `src/components/eventos/EventoLinkCard.tsx`
+### Fluxo do mapa no chamado de assistencia
 
-**Mudanca 2:** Revisar textos e labels para garantir que nao ha referencia a "Link 1" ou "Link 2", apenas "Link do Evento".
+```
+ChamadoDetalhe
+  -> Busca sinistro vinculado (ja existente)
+  -> Se sinistro tem oficina_id, busca oficina com lat/lng
+  -> Passa coordenadas da oficina para MapaChamado
+  -> MapaChamado renderiza marcador + RotaPolyline(rastreador -> oficina)
+  -> Distancia calculada via OSRM (useRotaReal, ja existente)
+```
 
-### Resultado
+### Badge de alerta no card da oficina
 
-- O fluxo fica: **Associado comunica** -> **Sistema registra** -> **Associado preenche link (auto-vistoria, B.O., agendamento)** -> **Regulador faz vistoria** -> **Analista recebe para analise** -> **Decisao** -> **Oficina/Cotacao** -> **Resolucao**
-- Um unico link acompanha o associado durante todo o processo
-- O analista ganha autonomia para encaminhar veiculos a oficinas
+```tsx
+{!oficina.logradouro && (
+  <Badge className="bg-red-100 text-red-700 text-xs">
+    Cadastrar Endereco
+  </Badge>
+)}
+```
+
+### Lazy geocoding para oficinas existentes
+
+No hook `useOficinas`, apos carregar as oficinas, verificar quais tem `logradouro` preenchido mas `latitude` nulo, e disparar geocodificacao em background (limite de 2-3 por vez para respeitar rate limit do Nominatim de 1req/s).
+
+## Arquivos alterados
+
+1. **Migracao SQL** - adicionar `latitude` e `longitude` na tabela `oficinas`
+2. **`src/services/geocodingService.ts`** - nova funcao `atualizarCoordenadasOficina`
+3. **`src/components/oficinas/OficinaFormDialog.tsx`** - geocodificar ao salvar
+4. **`src/pages/oficinas/Oficinas.tsx`** - badge "Cadastrar Endereco"
+5. **`src/components/assistencia/MapaChamado.tsx`** - props de oficina + marcador + rota
+6. **`src/pages/assistencia/ChamadoDetalhe.tsx`** - buscar oficina do sinistro e passar ao mapa
+7. **`src/hooks/useOficinas.ts`** - lazy geocoding das existentes sem coordenadas
