@@ -2,15 +2,41 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, User, Car, FileText, AlertTriangle, Play } from 'lucide-react';
+import { ChevronDown, User, Car, FileText, AlertTriangle, Play, ExternalLink, Image as ImageIcon, File } from 'lucide-react';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
 import { cn } from '@/lib/utils';
+
+const TIPO_DOC_LABELS: Record<string, string> = {
+  crlv: 'CRLV - Documento do Veículo',
+  laudo_vistoria: 'Laudo de Vistoria',
+  cnh: 'CNH',
+  comprovante_residencia: 'Comprovante de Residência',
+  selfie_documento: 'Selfie com Documento',
+  contrato_assinado: 'Contrato Assinado',
+  foto_veiculo_frente: 'Foto Frente',
+  foto_veiculo_traseira: 'Foto Traseira',
+  foto_veiculo_lateral_esquerda: 'Foto Lateral Esquerda',
+  foto_veiculo_lateral_direita: 'Foto Lateral Direita',
+  foto_hodometro: 'Hodômetro',
+  foto_chassi: 'Chassi',
+};
+
+const STATUS_DOC_COLORS: Record<string, string> = {
+  aprovado: 'bg-green-100 text-green-700',
+  pendente: 'bg-yellow-100 text-yellow-700',
+  reprovado: 'bg-red-100 text-red-700',
+};
+
+function isImageUrl(url: string) {
+  return /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url);
+}
 
 interface VistoriaEventoDadosProps {
   associado: any;
   veiculo: any;
   sinistro: any;
   linkEvento: any;
+  documentosVeiculo?: any[];
 }
 
 function calcularTempoEntre(dataEvento: string, dataComunicacao: string): string {
@@ -58,7 +84,7 @@ function SectionCollapsible({ title, icon: Icon, defaultOpen = false, children }
   );
 }
 
-export function VistoriaEventoDados({ associado, veiculo, sinistro, linkEvento }: VistoriaEventoDadosProps) {
+export function VistoriaEventoDados({ associado, veiculo, sinistro, linkEvento, documentosVeiculo = [] }: VistoriaEventoDadosProps) {
   const [fotoViewer, setFotoViewer] = useState<{ open: boolean; index: number }>({ open: false, index: 0 });
 
   const dadosEtapa1 = linkEvento?.dados_etapa1 as any;
@@ -188,6 +214,47 @@ export function VistoriaEventoDados({ associado, veiculo, sinistro, linkEvento }
               >
                 Visualizar B.O.
               </a>
+            </div>
+          )}
+
+          {/* Documentos do veículo/associado */}
+          {documentosVeiculo.length > 0 && (
+            <div className="mt-3 border-t pt-3">
+              <p className="text-xs text-muted-foreground mb-2">Documentos ({documentosVeiculo.length}):</p>
+              <div className="space-y-2">
+                {documentosVeiculo.map((doc: any) => {
+                  const label = TIPO_DOC_LABELS[doc.tipo] || doc.nome_arquivo || doc.tipo || 'Documento';
+                  const statusClass = STATUS_DOC_COLORS[doc.status] || 'bg-muted text-muted-foreground';
+                  const isImg = doc.arquivo_url && isImageUrl(doc.arquivo_url);
+
+                  return (
+                    <a
+                      key={doc.id}
+                      href={doc.arquivo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 rounded-lg border p-2 hover:bg-muted/50 transition"
+                    >
+                      {isImg ? (
+                        <img src={doc.arquivo_url} alt={label} className="h-10 w-10 rounded object-cover shrink-0" />
+                      ) : (
+                        <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
+                          <File className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{label}</p>
+                        {doc.status && (
+                          <Badge variant="secondary" className={cn('text-[10px] mt-0.5', statusClass)}>
+                            {doc.status}
+                          </Badge>
+                        )}
+                      </div>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </a>
+                  );
+                })}
+              </div>
             </div>
           )}
         </SectionCollapsible>
