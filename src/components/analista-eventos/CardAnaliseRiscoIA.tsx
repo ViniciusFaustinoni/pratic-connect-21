@@ -202,10 +202,10 @@ export function CardAnaliseRiscoIA({ sinistroId }: CardAnaliseRiscoIAProps) {
               <ImpactoIcon impacto={fator.impacto} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{fator.nome}</span>
-                  <span className="text-muted-foreground flex-shrink-0">{fator.valor}</span>
+                  <span className="font-medium text-gray-900">{fator.nome}</span>
+                  <span className="text-gray-700 flex-shrink-0">{fator.valor}</span>
                 </div>
-                <p className="text-muted-foreground mt-0.5">{fator.detalhe}</p>
+                <p className="text-gray-600 mt-0.5">{fator.detalhe}</p>
               </div>
             </div>
           ))}
