@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, CheckCircle, XCircle, AlertTriangle, Clock, User, Car, FileText, Camera, Video, Image, MapPin, Navigation } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,14 @@ const MOTIVOS_REPROVACAO = [
   'Fraude suspeita',
   'Outro',
 ];
+
+function calcularDistanciaKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function calcularTempoComunicacao(dataOcorrencia: string, dataComunicacao: string) {
   const inicio = new Date(dataOcorrencia);
@@ -80,6 +88,16 @@ export default function EventoAnaliseDetalhe() {
     },
   });
 
+  const distanciaGps = useMemo(() => {
+    if (sinistro?.latitude_informada && sinistro?.rastreador_lat) {
+      return calcularDistanciaKm(
+        sinistro.latitude_informada, sinistro.longitude_informada,
+        sinistro.rastreador_lat, sinistro.rastreador_lng
+      );
+    }
+    return null;
+  }, [sinistro]);
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -111,6 +129,7 @@ export default function EventoAnaliseDetalhe() {
     : 'N/A';
 
   const adimplente = adimplencia?.status === 'RECEIVED' || adimplencia?.status === 'CONFIRMED';
+
 
   const handleReprovar = () => {
     if (!motivoDetalhado.trim()) {
@@ -271,7 +290,18 @@ export default function EventoAnaliseDetalhe() {
           {/* Posições GPS - Evidência com mapa */}
           <AccordionItem value="posicoes-gps" className="border rounded-lg px-3">
             <AccordionTrigger className="text-sm font-semibold">
-              <span className="flex items-center gap-2"><Navigation className="h-4 w-4" /> Posição na Hora do Evento</span>
+              <span className="flex items-center gap-2">
+                <Navigation className="h-4 w-4" /> Posição na Hora do Evento
+                {distanciaGps != null && (
+                  <Badge variant="outline" className={
+                    distanciaGps < 0.5 ? 'bg-green-100 text-green-800 border-green-300'
+                    : distanciaGps < 2 ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                    : 'bg-red-100 text-red-800 border-red-300'
+                  }>
+                    {distanciaGps < 1 ? `${Math.round(distanciaGps * 1000)}m` : `${distanciaGps.toFixed(1)}km`}
+                  </Badge>
+                )}
+              </span>
             </AccordionTrigger>
             <AccordionContent>
               <ComparacaoPosicoes
