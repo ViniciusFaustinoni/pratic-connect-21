@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
-import { useFotosVistoriaPorVeiculo, formatarTipoFotoVeiculo } from '@/hooks/useVeiculoDetalhes';
+import { formatarTipoFotoVeiculo } from '@/hooks/useVeiculoDetalhes';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -226,7 +226,7 @@ export default function SinistroAnalise() {
   const [enviandoLinkAgendamento, setEnviandoLinkAgendamento] = useState(false);
   const [enviandoLinkAutoVistoria, setEnviandoLinkAutoVistoria] = useState(false);
   const [fotoViewer, setFotoViewer] = useState({ open: false, index: 0 });
-  const [fotoViewerInstalacao, setFotoViewerInstalacao] = useState({ open: false, index: 0 });
+  
   const [showSolicitarOrcamento, setShowSolicitarOrcamento] = useState(false);
   const [valoresPecas, setValoresPecas] = useState<Record<number, number>>({});
   const [fornecedoresPecas, setFornecedoresPecas] = useState<Record<number, { id: string; nome: string }>>({});
@@ -247,10 +247,10 @@ export default function SinistroAnalise() {
     linkEvento,
     vistoriaEvento,
     instalacaoFotos,
+    fotosVistoriaAdesao,
     isLoading,
   } = useSinistroAnalise(id);
 
-  const { data: fotosVistoriaAdesao } = useFotosVistoriaPorVeiculo(sinistro?.veiculo?.id);
   const queryClient = useQueryClient();
   const { data: pendentes } = useSinistrosPendentes();
 
@@ -825,104 +825,76 @@ export default function SinistroAnalise() {
                   </Card>
                 )}
 
-                {/* Fotos da Vistoria de Instalação do Rastreador */}
-                {instalacaoFotos.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Image className="h-5 w-5" />
-                        Fotos da Vistoria de Instalação
-                      </CardTitle>
-                      <CardDescription>Fotos registradas durante a instalação do rastreador</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-3 gap-2">
-                        {instalacaoFotos.map((foto: any, idx: number) => {
-                          const labelObj = FOTOS_INSTALACAO.find(f => f.tipo === foto.tipo);
-                          const label = labelObj?.label || foto.tipo;
-                          return (
-                            <div
-                              key={foto.id}
-                              className="relative group cursor-pointer"
-                              onClick={() => setFotoViewerInstalacao({ open: true, index: idx })}
-                            >
-                              <img
-                                src={foto.arquivo_url}
-                                alt={label}
-                                className="h-24 w-full rounded-md object-cover border hover:opacity-80 transition-opacity"
-                              />
-                              <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-1 py-0.5 rounded-b-md truncate">
-                                {label}
-                              </span>
+                {/* Fotos da Vistoria de Instalação / Adesão (unificado) */}
+                {(() => {
+                  const todasFotos = [
+                    ...instalacaoFotos.map((f: any) => ({
+                      id: f.id,
+                      tipo: f.tipo,
+                      arquivo_url: f.arquivo_url,
+                      origem: 'instalacao' as const,
+                      label: FOTOS_INSTALACAO.find(ft => ft.tipo === f.tipo)?.label || f.tipo,
+                    })),
+                    ...(fotosVistoriaAdesao || []).map((f: any) => ({
+                      id: f.id,
+                      tipo: f.tipo,
+                      arquivo_url: f.arquivo_url,
+                      origem: 'vistoria' as const,
+                      label: formatarTipoFotoVeiculo(f.tipo),
+                    })),
+                  ];
+
+                  return (
+                    <>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Image className="h-5 w-5" />
+                            Fotos da Vistoria de Instalação / Adesão ({todasFotos.length})
+                          </CardTitle>
+                          <CardDescription>Estado do veículo registrado na vistoria de adesão / instalação para comparação</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {todasFotos.length > 0 ? (
+                            <div className="grid grid-cols-3 gap-2">
+                              {todasFotos.map((foto, idx) => (
+                                <div
+                                  key={foto.id}
+                                  className="relative group cursor-pointer"
+                                  onClick={() => setFotoViewerVistoriaAdesao({ open: true, index: idx })}
+                                >
+                                  <img
+                                    src={foto.arquivo_url}
+                                    alt={foto.label}
+                                    className="h-24 w-full rounded-md object-cover border hover:opacity-80 transition-opacity"
+                                  />
+                                  <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-1 py-0.5 rounded-b-md truncate">
+                                    {foto.label}
+                                  </span>
+                                </div>
+                              ))}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                          ) : (
+                            <p className="text-muted-foreground text-center py-4">
+                              Nenhuma foto de vistoria encontrada
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
 
-                {/* Lightbox para fotos de instalação */}
-                <VisualizadorFoto
-                  fotos={instalacaoFotos.map((f: any) => ({
-                    url: f.arquivo_url,
-                    label: FOTOS_INSTALACAO.find(ft => ft.tipo === f.tipo)?.label || f.tipo,
-                  }))}
-                  indexInicial={fotoViewerInstalacao.index}
-                  open={fotoViewerInstalacao.open}
-                  onClose={() => setFotoViewerInstalacao({ open: false, index: 0 })}
-                />
-
-                {/* Fotos da Vistoria de Adesão / Instalação */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Image className="h-5 w-5" />
-                      Fotos da Vistoria de Instalação / Adesão
-                    </CardTitle>
-                    <CardDescription>Estado do veículo registrado na vistoria de adesão para comparação</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {fotosVistoriaAdesao && fotosVistoriaAdesao.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2">
-                        {fotosVistoriaAdesao.map((foto, idx) => {
-                          const label = formatarTipoFotoVeiculo(foto.tipo);
-                          return (
-                            <div
-                              key={foto.id}
-                              className="relative group cursor-pointer"
-                              onClick={() => setFotoViewerVistoriaAdesao({ open: true, index: idx })}
-                            >
-                              <img
-                                src={foto.arquivo_url}
-                                alt={label}
-                                className="h-24 w-full rounded-md object-cover border hover:opacity-80 transition-opacity"
-                              />
-                              <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-1 py-0.5 rounded-b-md truncate">
-                                {label}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-center py-4">
-                        Nenhuma foto de vistoria de adesão encontrada
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Lightbox para fotos de vistoria de adesão */}
-                <VisualizadorFoto
-                  fotos={(fotosVistoriaAdesao || []).map(f => ({
-                    url: f.arquivo_url,
-                    label: formatarTipoFotoVeiculo(f.tipo),
-                  }))}
-                  indexInicial={fotoViewerVistoriaAdesao.index}
-                  open={fotoViewerVistoriaAdesao.open}
-                  onClose={() => setFotoViewerVistoriaAdesao({ open: false, index: 0 })}
-                />
+                      {/* Lightbox para fotos unificadas */}
+                      <VisualizadorFoto
+                        fotos={todasFotos.map(f => ({
+                          url: f.arquivo_url,
+                          label: f.label,
+                        }))}
+                        indexInicial={fotoViewerVistoriaAdesao.index}
+                        open={fotoViewerVistoriaAdesao.open}
+                        onClose={() => setFotoViewerVistoriaAdesao({ open: false, index: 0 })}
+                      />
+                    </>
+                  );
+                })()}
 
                 {/* Documentos */}
                 {(() => {
