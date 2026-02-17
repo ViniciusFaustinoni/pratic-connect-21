@@ -465,6 +465,9 @@ export default function ChamadoDetalhe() {
                 oficinaLat={oficinaDestino?.latitude}
                 oficinaLng={oficinaDestino?.longitude}
                 oficinaNome={oficinaDestino?.nome_fantasia || oficinaDestino?.razao_social}
+                destinoLat={chamado.destino_lat}
+                destinoLng={chamado.destino_lng}
+                destinoEndereco={chamado.destino_logradouro || chamado.destino_endereco}
               />
             </CardContent>
           </Card>
