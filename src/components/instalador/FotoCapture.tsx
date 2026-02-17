@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Camera, X, RefreshCw, Loader2, CheckCircle } from 'lucide-react';
+import { Camera, X, RefreshCw, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
@@ -11,6 +11,7 @@ interface FotoCaptureProps {
   obrigatoria: boolean;
   fotoUrl?: string;
   uploading?: boolean;
+  hasError?: boolean;
   onCapture: (file: File) => void;
   onRemove?: () => void;
 }
@@ -21,6 +22,7 @@ export function FotoCapture({
   obrigatoria,
   fotoUrl,
   uploading,
+  hasError,
   onCapture,
   onRemove,
 }: FotoCaptureProps) {
@@ -104,6 +106,8 @@ export function FotoCapture({
           'relative flex aspect-square flex-col items-center justify-center rounded-lg border-2 border-dashed transition-all',
           hasPhoto
             ? 'border-transparent'
+            : hasError
+            ? 'border-red-500 bg-red-950/30 hover:border-red-400 animate-pulse'
             : obrigatoria
             ? 'border-red-500/50 bg-slate-800 hover:border-red-400'
             : 'border-slate-600 bg-slate-800 hover:border-slate-500',
@@ -156,11 +160,17 @@ export function FotoCapture({
           </>
         ) : (
           <>
-            <Camera className="h-8 w-8 text-slate-500" />
-            <span className="mt-1 text-center text-xs text-slate-500 px-2">{label}</span>
-            {obrigatoria && (
-              <span className="mt-1 text-[10px] text-red-400">Obrigatória</span>
+            {hasError ? (
+              <AlertCircle className="h-8 w-8 text-red-500" />
+            ) : (
+              <Camera className="h-8 w-8 text-slate-500" />
             )}
+            <span className={cn("mt-1 text-center text-xs px-2", hasError ? "text-red-400" : "text-slate-500")}>{label}</span>
+            {hasError ? (
+              <span className="mt-1 text-[10px] text-red-400 font-medium">Falhou! Toque para tentar</span>
+            ) : obrigatoria ? (
+              <span className="mt-1 text-[10px] text-red-400">Obrigatória</span>
+            ) : null}
           </>
         )}
       </div>

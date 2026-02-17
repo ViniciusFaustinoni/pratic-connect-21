@@ -26,6 +26,7 @@ export function VistoriaEventoMidias({
 }: VistoriaEventoMidiasProps) {
   const [uploadingFoto, setUploadingFoto] = useState<number | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [fotosComErro, setFotosComErro] = useState<Set<number>>(new Set());
 
   const fotosPreenchidas = fotosUrls.filter(Boolean).length;
   const todasMidias = fotosPreenchidas >= 10 && !!videoUrl;
@@ -77,13 +78,14 @@ export function VistoriaEventoMidias({
 
   const handleFotoCapture = useCallback(async (index: number, file: File) => {
     setUploadingFoto(index);
+    setFotosComErro(prev => { const n = new Set(prev); n.delete(index); return n; });
     try {
       const url = await uploadMidia(file, 'foto', index);
       const novasFotos = [...fotosUrls];
       novasFotos[index] = url;
       onFotosChange(novasFotos);
     } catch {
-      // toast already shown in uploadMidia
+      setFotosComErro(prev => new Set(prev).add(index));
     } finally {
       setUploadingFoto(null);
     }
@@ -122,6 +124,7 @@ export function VistoriaEventoMidias({
                 obrigatoria
                 fotoUrl={fotosUrls[i] || undefined}
                 uploading={uploadingFoto === i}
+                hasError={fotosComErro.has(i)}
                 onCapture={(file) => handleFotoCapture(i, file)}
               />
             ))}
