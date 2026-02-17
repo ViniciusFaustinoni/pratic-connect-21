@@ -1,55 +1,45 @@
 
 
-# Corrigir "Trajeto do Veiculo" para Analista de Eventos
+# Corrigir Fotos da Vistoria de Adesao - RLS na tabela `vistorias`
 
 ## Problema
 
-O componente `TrajetoLocalCard` busca o `rastreador_id` atraves da tabela `instalacoes`, mas a politica RLS dessa tabela NAO inclui a role `analista_eventos`. Resultado: a query retorna vazio e o sistema mostra "Nenhum rastreador instalado neste veiculo".
+A query de fotos faz 3 passos: `contratos` -> `vistorias` -> `vistoria_fotos`. O passo 2 falha porque a tabela `vistorias` tem uma politica SELECT que lista roles especificas e NAO inclui `analista_eventos`.
 
-A tabela `rastreadores` e `rastreador_posicoes` ja sao acessiveis para `analista_eventos`, entao o problema e apenas no passo 1 (busca do rastreador_id via `instalacoes`).
+Roles com acesso atual a `vistorias`: coordenador_monitoramento, diretor, admin_master, desenvolvedor, analista_cadastro, instalador_vistoriador.
+
+As tabelas `contratos` e `vistoria_fotos` ja funcionam (usam `is_funcionario` que retorna true para o analista).
 
 ## Solucao
 
-Alterar a query do `TrajetoLocalCard` para buscar o rastreador diretamente na tabela `rastreadores` (que ja tem RLS para `analista_eventos`) em vez da tabela `instalacoes`.
+Adicionar `analista_eventos` a politica SELECT existente na tabela `vistorias`. O analista precisa apenas de leitura para consultar as vistorias vinculadas aos veiculos dos sinistros.
 
 ## Alteracao
 
-### Arquivo: `src/components/sinistros/TrajetoLocalCard.tsx`
+### Politica RLS: `vistorias` - "Staff and own vistoriadores can view vistorias"
 
-Linhas 38-52 - Substituir a query que busca em `instalacoes` por uma que busca em `rastreadores`:
+Adicionar `has_role(auth.uid(), 'analista_eventos'::app_role)` como mais uma condicao OR na politica existente.
 
-**De:**
-```typescript
-const { data } = await supabase
-  .from('instalacoes')
-  .select('rastreador_id')
-  .eq('veiculo_id', veiculoId)
-  .eq('status', 'concluida')
-  .order('created_at', { ascending: false })
-  .limit(1)
-  .maybeSingle();
-return data?.rastreador_id as string | null;
+**SQL a executar:**
+
+```sql
+DROP POLICY "Staff and own vistoriadores can view vistorias" ON public.vistorias;
+
+CREATE POLICY "Staff and own vistoriadores can view vistorias"
+ON public.vistorias
+FOR SELECT
+TO authenticated
+USING (
+  has_role(auth.uid(), 'coordenador_monitoramento'::app_role)
+  OR has_role(auth.uid(), 'diretor'::app_role)
+  OR has_role(auth.uid(), 'admin_master'::app_role)
+  OR has_role(auth.uid(), 'desenvolvedor'::app_role)
+  OR has_role(auth.uid(), 'analista_cadastro'::app_role)
+  OR has_role(auth.uid(), 'analista_eventos'::app_role)
+  OR (has_role(auth.uid(), 'instalador_vistoriador'::app_role) AND (vistoriador_id = get_my_profile_id()))
+  OR (associado_id = get_my_associado_id(auth.uid()))
+);
 ```
 
-**Para:**
-```typescript
-const { data } = await supabase
-  .from('rastreadores')
-  .select('id')
-  .eq('veiculo_id', veiculoId)
-  .eq('status', 'instalado')
-  .order('updated_at', { ascending: false })
-  .limit(1)
-  .maybeSingle();
-return data?.id as string | null;
-```
-
-Esta alteracao busca o rastreador diretamente pela tabela `rastreadores` (acessivel ao analista de eventos) filtrando por `veiculo_id` e `status = 'instalado'`, eliminando a dependencia da tabela `instalacoes`.
-
-## Secao Tecnica
-
-- A tabela `rastreadores` tem policy `Analista eventos pode ver rastreadores` com `has_role(auth.uid(), 'analista_eventos'::app_role)`
-- A tabela `rastreador_posicoes` tem policy `Staff can view positions` com `is_funcionario(auth.uid())` - ja funciona
-- A tabela `instalacoes` NAO tem `analista_eventos` nas policies de leitura - causa raiz do bug
-- Alterar a fonte da query e mais seguro do que adicionar mais uma role na RLS de `instalacoes`, pois o analista de eventos nao precisa de acesso geral a instalacoes
+Nenhuma alteracao de codigo e necessaria. O hook `useSinistroAnalise` ja faz a query corretamente - o problema e exclusivamente de permissao RLS.
 
