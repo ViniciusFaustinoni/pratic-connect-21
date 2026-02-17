@@ -121,6 +121,11 @@ export default function Oficinas() {
                   <Badge className={STATUS_OFICINA_COLORS[oficina.status]}>
                     {STATUS_OFICINA_LABELS[oficina.status]}
                   </Badge>
+                  {!oficina.logradouro && (
+                    <Badge variant="destructive" className="text-xs">
+                      Cadastrar Endereço
+                    </Badge>
+                  )}
                 </div>
                 <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">

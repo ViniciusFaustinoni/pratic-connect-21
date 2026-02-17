@@ -161,13 +161,27 @@ export default function ChamadoDetalhe() {
     queryFn: async () => {
       const { data } = await supabase
         .from('sinistros')
-        .select('id, protocolo')
+        .select('id, protocolo, oficina_id')
         .or(`chamado_assistencia_id.eq.${id},chamado_origem_id.eq.${id}`)
         .limit(1)
         .maybeSingle();
       return data;
     },
     enabled: !!id,
+  });
+
+  // Query: Oficina vinculada ao sinistro (para rota no mapa)
+  const { data: oficinaDestino } = useQuery({
+    queryKey: ['chamado-oficina', sinistroVinculado?.oficina_id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('oficinas')
+        .select('id, razao_social, nome_fantasia, latitude, longitude')
+        .eq('id', sinistroVinculado!.oficina_id!)
+        .maybeSingle();
+      return data as any;
+    },
+    enabled: !!sinistroVinculado?.oficina_id,
   });
 
   // Query: Histórico do Chamado
@@ -448,6 +462,9 @@ export default function ChamadoDetalhe() {
                 onRefresh={refetchPosicao}
                 height="h-64"
                 showControls={true}
+                oficinaLat={oficinaDestino?.latitude}
+                oficinaLng={oficinaDestino?.longitude}
+                oficinaNome={oficinaDestino?.nome_fantasia || oficinaDestino?.razao_social}
               />
             </CardContent>
           </Card>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { geocodificarEmBackground } from '@/services/geocodingService';
 import {
   Dialog,
   DialogContent,
@@ -146,8 +147,18 @@ export function OficinaFormDialog({ open, onOpenChange, oficina }: Props) {
     };
     if (oficina) {
       await updateOficina.mutateAsync({ id: oficina.id, ...payload });
+      geocodificarEmBackground('oficina', oficina.id, {
+        logradouro: data.logradouro, numero: data.numero, bairro: data.bairro,
+        cidade: data.cidade, uf: data.estado, cep: data.cep,
+      });
     } else {
-      await createOficina.mutateAsync(payload);
+      const result = await createOficina.mutateAsync(payload);
+      if (result?.id) {
+        geocodificarEmBackground('oficina', result.id, {
+          logradouro: data.logradouro, numero: data.numero, bairro: data.bairro,
+          cidade: data.cidade, uf: data.estado, cep: data.cep,
+        });
+      }
     }
     onOpenChange(false);
     form.reset();

@@ -139,7 +139,7 @@ export async function obterCoordenadasEndereco(
  * Não espera resultado - ideal para usar após salvar registros
  */
 export function geocodificarEmBackground(
-  tipo: "vistoria" | "cotacao",
+  tipo: "vistoria" | "cotacao" | "oficina",
   id: string,
   endereco: EnderecoParaGeocodificar
 ): void {
@@ -150,11 +150,48 @@ export function geocodificarEmBackground(
         await atualizarCoordenadasVistoria(id, endereco);
       } else if (tipo === "cotacao") {
         await atualizarCoordenadasCotacao(id, endereco);
+      } else if (tipo === "oficina") {
+        await atualizarCoordenadasOficina(id, endereco);
       }
     } catch (error) {
       console.error("[Geocode Background] Erro:", error);
     }
   }, 100);
+}
+
+/**
+ * Atualiza as coordenadas de uma oficina
+ * Retorna as coordenadas obtidas para uso imediato
+ */
+export async function atualizarCoordenadasOficina(
+  oficinaId: string,
+  endereco: EnderecoParaGeocodificar
+): Promise<{ latitude: number | null; longitude: number | null; success: boolean }> {
+  const coords = await geocodificarEndereco(endereco);
+  
+  if (!coords.success) {
+    return { latitude: null, longitude: null, success: false };
+  }
+
+  const { error } = await supabase
+    .from("oficinas")
+    .update({
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+    } as any)
+    .eq("id", oficinaId);
+
+  if (error) {
+    console.error("[Geocode] Erro ao atualizar oficina:", error);
+    return { latitude: null, longitude: null, success: false };
+  }
+
+  console.log("[Geocode] Coordenadas da oficina atualizadas:", coords.latitude, coords.longitude);
+  return { 
+    latitude: coords.latitude, 
+    longitude: coords.longitude, 
+    success: true 
+  };
 }
 
 /**
