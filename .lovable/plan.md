@@ -1,74 +1,104 @@
 
+# Adicionar Titulos nos Filtros e Filtro de Parecer do Regulador
 
-# Exibir Distancia GPS no Accordion do Analista de Eventos
+## Problema
 
-## Contexto
-
-O componente `ComparacaoPosicoes` ja calcula e exibe a distancia entre o local informado do evento e a ultima posicao do rastreador GPS, com classificacao visual (verde/amarelo/vermelho). Porem, na tela do analista (`EventoAnaliseDetalhe.tsx`), essa informacao fica escondida dentro de um accordion que precisa ser expandido.
+Na tela de listagem de sinistros do Analista de Eventos, os filtros (busca, tipo, status) nao possuem titulos/labels. Alem disso, falta um filtro por "Parecer do Regulador" que permita filtrar entre sinistros cuja recomendacao na vistoria foi "Aprovar" ou "Analise Detalhada".
 
 ## Solucao
 
-Calcular a distancia diretamente no `EventoAnaliseDetalhe.tsx` e exibi-la como um Badge no titulo do accordion "Posicao na Hora do Evento", para que o analista veja imediatamente a consistencia sem precisar expandir.
+1. Adicionar labels acima de cada filtro existente (Busca, Tipo, Status)
+2. Adicionar um novo filtro "Parecer do Regulador" com opcoes: Todos, Aprovar, Analise Detalhada
+3. O parecer esta armazenado no campo `dados_vistoria->>'recomendacao'` da tabela `vistorias_evento`, com valores `aprovar` ou `analise_detalhada`
 
 ## Alteracoes
 
-### Arquivo: `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
+### Arquivo: `src/pages/eventos/SinistrosList.tsx`
 
-1. Adicionar uma funcao `calcularDistanciaKm` (Haversine) no componente (ou importar do `ComparacaoPosicoes` se exportada)
+1. **Expandir a interface `Filters`** para incluir `parecer: string`:
+   ```typescript
+   interface Filters {
+     busca: string;
+     status: string;
+     tipo: string;
+     parecer: string; // 'todos' | 'aprovar' | 'analise_detalhada'
+   }
+   ```
 
-2. Calcular a distancia quando ambas as coordenadas (informada/geocodificada e rastreador) estiverem disponiveis
+2. **Adicionar `parecer: 'todos'`** ao estado inicial dos filtros
 
-3. No `AccordionTrigger` da secao "Posicao na Hora do Evento" (linha ~273-275), adicionar um Badge colorido ao lado do titulo mostrando a distancia e classificacao:
-   - Menos de 500m: Badge verde "Proximo (Xm)"
-   - Entre 500m e 2km: Badge amarelo "Divergencia (X.Xkm)"
-   - Mais de 2km: Badge vermelho "Divergencia (X.Xkm)"
+3. **Adicionar labels nos filtros existentes**: Envolver cada filtro em um `<div>` com um `<Label>` acima (Protocolo, Tipo, Status)
 
-**Exemplo visual do resultado:**
+4. **Adicionar novo Select de "Parecer do Regulador"** com label e opcoes:
+   - Todos os pareceres
+   - Aprovar
+   - Analise Detalhada
 
-```
-[Accordion] Posicao na Hora do Evento    [Badge: 350m - verde]
-[Accordion] Posicao na Hora do Evento    [Badge: 1.2km - amarelo]
-[Accordion] Posicao na Hora do Evento    [Badge: 5.3km - vermelho]
-```
+5. **Alterar a query principal**: Quando `filters.parecer !== 'todos'`, fazer um join/subquery com `vistorias_evento` para filtrar pelo campo `dados_vistoria->>'recomendacao'`:
+   - Buscar IDs de sinistros que possuem vistoria concluida com a recomendacao selecionada
+   - Filtrar a query principal usando `.in('id', sinistroIds)`
 
 ### Detalhes tecnicos
 
+**Filtro por parecer na query:**
+
+Como o parecer esta em `dados_vistoria` (JSONB) da tabela `vistorias_evento`, sera necessario fazer uma query previa quando o filtro estiver ativo:
+
 ```typescript
-// Funcao Haversine (mesma ja usada em ComparacaoPosicoes)
-function calcularDistanciaKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
+if (filters.parecer && filters.parecer !== 'todos') {
+  // Buscar sinistro_ids com a recomendacao filtrada
+  const { data: vistoriasComParecer } = await supabase
+    .from('vistorias_evento')
+    .select('sinistro_id')
+    .eq('status', 'concluida')
+    .filter('dados_vistoria->>recomendacao', 'eq', filters.parecer);
 
-// No componente, calcular distancia
-const distanciaGps = useMemo(() => {
-  if (sinistro?.latitude_informada && sinistro?.rastreador_lat) {
-    return calcularDistanciaKm(
-      sinistro.latitude_informada, sinistro.longitude_informada,
-      sinistro.rastreador_lat, sinistro.rastreador_lng
-    );
+  const ids = (vistoriasComParecer || []).map((v: any) => v.sinistro_id);
+  if (ids.length > 0) {
+    query = query.in('id', ids);
+  } else {
+    // Nenhum resultado - forcar lista vazia
+    query = query.eq('id', '00000000-0000-0000-0000-000000000000');
   }
-  return null;
-}, [sinistro]);
-
-// No AccordionTrigger
-<AccordionTrigger className="text-sm font-semibold">
-  <span className="flex items-center gap-2">
-    <Navigation className="h-4 w-4" /> Posicao na Hora do Evento
-    {distanciaGps != null && (
-      <Badge variant="outline" className={
-        distanciaGps < 0.5 ? 'bg-green-100 text-green-800 border-green-300'
-        : distanciaGps < 2 ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-        : 'bg-red-100 text-red-800 border-red-300'
-      }>
-        {distanciaGps < 1 ? `${Math.round(distanciaGps*1000)}m` : `${distanciaGps.toFixed(1)}km`}
-      </Badge>
-    )}
-  </span>
-</AccordionTrigger>
+}
 ```
 
-Isso permite que o analista veja de imediato se ha divergencia significativa entre o local informado e a posicao real do rastreador, sem precisar abrir o accordion.
+**Layout dos filtros com labels:**
+
+```tsx
+<div className="flex flex-wrap gap-4">
+  <div className="flex-1 min-w-[200px] space-y-1.5">
+    <Label className="text-xs text-muted-foreground">Protocolo</Label>
+    <div className="relative">
+      <Search ... />
+      <Input ... />
+    </div>
+  </div>
+
+  <div className="space-y-1.5">
+    <Label className="text-xs text-muted-foreground">Tipo</Label>
+    <Select ... />
+  </div>
+
+  <div className="space-y-1.5">
+    <Label className="text-xs text-muted-foreground">Status</Label>
+    <Select ... />
+  </div>
+
+  <div className="space-y-1.5">
+    <Label className="text-xs text-muted-foreground">Parecer do Regulador</Label>
+    <Select value={filters.parecer} onValueChange={...}>
+      <SelectTrigger className="w-[200px]">
+        <SelectValue placeholder="Parecer" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="todos">Todos os pareceres</SelectItem>
+        <SelectItem value="aprovar">Aprovar</SelectItem>
+        <SelectItem value="analise_detalhada">Analise Detalhada</SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+</div>
+```
+
+Essas alteracoes afetam apenas o arquivo `SinistrosList.tsx`. O filtro de parecer e importado da `Label` (ja existente no projeto) e usa o Select padrao ja presente no componente.
