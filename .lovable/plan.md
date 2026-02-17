@@ -1,117 +1,139 @@
 
-# Geocodificacao de Oficinas e Rota Veiculo-Oficina no Chamado de Assistencia
+# Rota Veiculo-Destino no Mapa de Chamados Guincho
 
 ## Resumo
 
-Adicionar coordenadas geograficas (latitude/longitude) a todas as oficinas para:
-1. Mostrar no mapa do chamado de assistencia (guincho) a rota do veiculo ate a oficina de destino
-2. Alertar oficinas sem endereco completo cadastrado
+Quando um chamado de guincho e criado (via painel, IA, app ou telefone), o mapa deve mostrar a rota entre a posicao atual do veiculo (rastreador) e o endereco de destino informado no chamado. Para isso, sao necessarias 3 mudancas:
 
-## Alteracoes
+---
 
-### 1. Migração de banco - adicionar colunas lat/lng na tabela `oficinas`
+## 1. NovoChamadoModal - Botao "Usar localizacao atual do veiculo" na origem
 
-```sql
-ALTER TABLE oficinas ADD COLUMN latitude numeric;
-ALTER TABLE oficinas ADD COLUMN longitude numeric;
+**Arquivo: `src/components/assistencia/NovoChamadoModal.tsx`**
+
+Quando um veiculo e selecionado (modo normal), adicionar um botao "Usar localizacao do rastreador" ao lado do campo "Endereco de Origem". Ao clicar:
+- Chamar a edge function `posicao-veiculo` com o `veiculo_id` selecionado
+- Preencher `origem_endereco` com o endereco retornado pelo rastreador
+- Armazenar `origem_lat` e `origem_lng` no state para salvar no chamado
+
+**State adicional no formData:**
+```typescript
+const [formData, setFormData] = useState({
+  tipo_servico: '',
+  descricao: '',
+  origem_endereco: '',
+  destino_endereco: '',
+  origem_lat: null as number | null,
+  origem_lng: null as number | null,
+});
 ```
 
-### 2. Geocodificar oficinas existentes ao salvar/editar
+## 2. NovoChamadoModal - Destino obrigatorio para guincho + mapa preview
 
-**Arquivo: `src/components/oficinas/OficinaFormDialog.tsx`**
+**Arquivo: `src/components/assistencia/NovoChamadoModal.tsx`**
 
-No `onSubmit`, apos salvar a oficina com sucesso, disparar `geocodificarEmBackground` (do `geocodingService.ts`) usando os dados de endereco do formulario. Se for criacao, usar o ID retornado; se for edicao, usar `oficina.id`.
+- Quando `tipo_servico === 'reboque'`, tornar "Endereco de Destino" obrigatorio (remover "(opcional)" do label e incluir na validacao `isFormValid`)
+- Geocodificar o endereco de destino usando a edge function `geocode-endereco` (ja existente) para obter `destino_lat` e `destino_lng`
+- Salvar `destino_lat`, `destino_lng` junto com `destino_endereco` no insert do chamado
+- Apos preencher origem e destino (quando guincho), exibir um mini-mapa (`MapaChamado`) mostrando a rota prevista
 
-Adicionar uma nova funcao `atualizarCoordenadasOficina` no `geocodingService.ts` que faz update em `oficinas.latitude` / `oficinas.longitude`.
+**Validacao atualizada:**
+```typescript
+const isFormValid = () => {
+  const baseValid = formData.tipo_servico && formData.origem_endereco.trim().length > 0;
+  const destinoValid = formData.tipo_servico !== 'reboque' || formData.destino_endereco.trim().length > 0;
+  // ...resto da validacao
+  return baseValid && destinoValid && ...;
+};
+```
 
-### 3. Geocodificar oficinas existentes (batch)
-
-**Arquivo: `src/components/oficinas/ImportarOficinasDialog.tsx`**
-
-Apos importar oficinas, disparar geocodificacao em background para cada oficina importada.
-
-**Acao manual complementar:** Executar um script SQL ou edge function para geocodificar as 16 oficinas existentes. Alternativa mais simples: ao abrir a tela de oficinas, verificar quais oficinas nao tem lat/lng e geocodificar em background (lazy geocoding).
-
-### 4. Badge "Cadastrar Endereco" nas oficinas sem endereco
-
-**Arquivo: `src/pages/oficinas/Oficinas.tsx`**
-
-No card de cada oficina, verificar se `logradouro` esta vazio/null. Se sim, exibir um Badge vermelho "Cadastrar Endereco" ao lado do status.
-
-### 5. Mapa com rota veiculo-oficina no chamado de assistencia (guincho)
-
-**Arquivo: `src/pages/assistencia/ChamadoDetalhe.tsx`**
-
-Quando o chamado for do tipo `reboque` e tiver um sinistro vinculado com `oficina_id`:
-- Buscar as coordenadas da oficina (`latitude`, `longitude`)
-- Exibir no `MapaChamado` um marcador adicional da oficina
-- Usar o componente `RotaPolyline` (ja existente) para desenhar a rota real entre a posicao do veiculo (rastreador) e a oficina
-- Mostrar a distancia em km calculada pela rota
+## 3. MapaChamado + ChamadoDetalhe - Rota rastreador-destino para todos os chamados guincho
 
 **Arquivo: `src/components/assistencia/MapaChamado.tsx`**
 
-Adicionar props opcionais para destino oficina (`oficinaLat`, `oficinaLng`, `oficinaNome`). Quando presentes:
-- Renderizar marcador da oficina com icone de predio/oficina
-- Renderizar `RotaPolyline` entre posicao do rastreador e oficina
-- Exibir badge com distancia em km
-
-### 6. Novo service helper
-
-**Arquivo: `src/services/geocodingService.ts`**
-
-Adicionar funcao:
+Adicionar props para destino generico (alem da oficina):
 ```typescript
-export async function atualizarCoordenadasOficina(
-  oficinaId: string,
-  endereco: EnderecoParaGeocodificar
-): Promise<{ latitude: number | null; longitude: number | null; success: boolean }>
+interface MapaChamadoProps {
+  // ...props existentes...
+  destinoLat?: number | null;
+  destinoLng?: number | null;
+  destinoEndereco?: string;
+}
+```
+
+Logica de prioridade para marcador de destino e rota:
+1. Se tem `oficinaLat/oficinaLng` -> mostrar marcador oficina + rota (ja implementado)
+2. Senao, se tem `destinoLat/destinoLng` -> mostrar marcador destino + rota (novo)
+
+Adicionar marcador de destino (icone azul) e `RotaPolyline` entre rastreador e destino.
+
+**Arquivo: `src/pages/assistencia/ChamadoDetalhe.tsx`**
+
+Passar `destino_lat`, `destino_lng` e `destino_endereco` do chamado para o `MapaChamado`:
+```typescript
+<MapaChamado
+  // ...props existentes...
+  destinoLat={chamado.destino_lat}
+  destinoLng={chamado.destino_lng}
+  destinoEndereco={chamado.destino_logradouro || chamado.destino_endereco}
+/>
 ```
 
 ---
 
 ## Detalhes tecnicos
 
-### Fluxo de geocodificacao na criacao/edicao de oficina
+### Fluxo do botao "Usar localizacao do veiculo"
 
-```
-OficinaFormDialog.onSubmit()
-  -> Salva oficina no Supabase
-  -> Dispara em background: atualizarCoordenadasOficina(id, { logradouro, numero, bairro, cidade, uf, cep })
-  -> Edge function geocode-endereco (Nominatim) retorna lat/lng
-  -> Atualiza oficinas.latitude / oficinas.longitude
-```
-
-### Fluxo do mapa no chamado de assistencia
-
-```
-ChamadoDetalhe
-  -> Busca sinistro vinculado (ja existente)
-  -> Se sinistro tem oficina_id, busca oficina com lat/lng
-  -> Passa coordenadas da oficina para MapaChamado
-  -> MapaChamado renderiza marcador + RotaPolyline(rastreador -> oficina)
-  -> Distancia calculada via OSRM (useRotaReal, ja existente)
+```text
+Usuario seleciona veiculo
+  -> Clica "Usar localizacao do veiculo"
+  -> Chama edge function posicao-veiculo({ veiculo_id })
+  -> Retorna lat, lng, endereco
+  -> Preenche origem_endereco, origem_lat, origem_lng
+  -> Salva no insert do chamado
 ```
 
-### Badge de alerta no card da oficina
+### Geocodificacao do destino
 
-```tsx
-{!oficina.logradouro && (
-  <Badge className="bg-red-100 text-red-700 text-xs">
-    Cadastrar Endereco
-  </Badge>
-)}
+```text
+Usuario preenche destino_endereco
+  -> Debounce de 1s apos parar de digitar
+  -> Chama geocode-endereco (Nominatim)
+  -> Retorna lat, lng
+  -> Armazena destino_lat, destino_lng
+  -> MapaChamado preview renderiza rota
 ```
 
-### Lazy geocoding para oficinas existentes
+### Mapa preview no modal (apenas guincho)
 
-No hook `useOficinas`, apos carregar as oficinas, verificar quais tem `logradouro` preenchido mas `latitude` nulo, e disparar geocodificacao em background (limite de 2-3 por vez para respeitar rate limit do Nominatim de 1req/s).
+Exibido abaixo dos campos de endereco quando:
+- `tipo_servico === 'reboque'`
+- Tem coordenadas de origem (rastreador ou geocodificada)
+- Tem coordenadas de destino
+
+Usa o componente `MapaChamado` existente com `height="h-48"` e `showControls={false}`.
+
+### Insert do chamado atualizado
+
+```typescript
+await supabase.from('chamados_assistencia').insert({
+  // ...campos existentes...
+  origem_lat: formData.origem_lat,
+  origem_lng: formData.origem_lng,
+  destino_endereco: formData.destino_endereco || null,
+  destino_lat: formData.destino_lat,
+  destino_lng: formData.destino_lng,
+});
+```
 
 ## Arquivos alterados
 
-1. **Migracao SQL** - adicionar `latitude` e `longitude` na tabela `oficinas`
-2. **`src/services/geocodingService.ts`** - nova funcao `atualizarCoordenadasOficina`
-3. **`src/components/oficinas/OficinaFormDialog.tsx`** - geocodificar ao salvar
-4. **`src/pages/oficinas/Oficinas.tsx`** - badge "Cadastrar Endereco"
-5. **`src/components/assistencia/MapaChamado.tsx`** - props de oficina + marcador + rota
-6. **`src/pages/assistencia/ChamadoDetalhe.tsx`** - buscar oficina do sinistro e passar ao mapa
-7. **`src/hooks/useOficinas.ts`** - lazy geocoding das existentes sem coordenadas
+1. **`src/components/assistencia/NovoChamadoModal.tsx`** - botao rastreador, destino obrigatorio para guincho, geocodificacao, mapa preview
+2. **`src/components/assistencia/MapaChamado.tsx`** - props destino generico + marcador + rota
+3. **`src/pages/assistencia/ChamadoDetalhe.tsx`** - passar destino_lat/lng do chamado ao mapa
+
+## Observacoes sobre outros canais (IA, App)
+
+- **WhatsApp/Assistente IA**: Ja coletam endereco de destino via `criar_solicitacao_assistencia`. Basta garantir que a tool salve `destino_lat`/`destino_lng` (geocodificando o endereco de destino antes do insert) - verificar e ajustar as edge functions se necessario.
+- **App do Associado**: Ja tem campo `destino_endereco` no fluxo. Mesma logica de geocodificacao.
