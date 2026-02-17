@@ -122,6 +122,12 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
   const mapeamento = criarMapeamentoVariaveis(dados);
   let resultado = conteudo;
   
+  // Normalizar variáveis: remover caracteres unicode invisíveis inseridos pelo TipTap
+  resultado = resultado.replace(/\{\{([^}]*)\}\}/g, (_match, inner) => {
+    const cleaned = inner.replace(/[\u200B\u200C\u200D\uFEFF\u00A0]/g, '').trim();
+    return `{{${cleaned}}}`;
+  });
+  
   // Substituir todas as ocorrências de {{variavel}}
   for (const [chave, valor] of Object.entries(mapeamento)) {
     resultado = resultado.replace(
