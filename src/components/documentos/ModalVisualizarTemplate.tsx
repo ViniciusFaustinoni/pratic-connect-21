@@ -42,29 +42,12 @@ function agruparVariaveis(variaveis: string[]): Record<string, string[]> {
   }, {} as Record<string, string[]>);
 }
 
-// Renderizar conteúdo com destaque nas variáveis
-function renderizarConteudo(conteudo: string): React.ReactNode {
-  const partes = conteudo.split(/(\{\{[^}]+\}\})/g);
-  
-  return partes.map((parte, index) => {
-    if (parte.match(/^\{\{[^}]+\}\}$/)) {
-      return (
-        <code 
-          key={index} 
-          className="bg-primary/10 text-primary px-1 py-0.5 rounded text-sm font-mono"
-        >
-          {parte}
-        </code>
-      );
-    }
-    // Converter quebras de linha
-    return parte.split('\n').map((linha, i, arr) => (
-      <span key={`${index}-${i}`}>
-        {linha}
-        {i < arr.length - 1 && <br />}
-      </span>
-    ));
-  });
+// Renderizar conteúdo HTML com destaque nas variáveis
+function renderizarConteudoHTML(conteudo: string): string {
+  return conteudo.replace(
+    /\{\{([^}]+)\}\}/g,
+    '<span style="background:hsl(221.2 83.2% 53.3%);color:white;padding:1px 6px;border-radius:4px;font-size:0.75rem;font-family:monospace">{{\$1}}</span>'
+  );
 }
 
 export function ModalVisualizarTemplate({ 
@@ -147,9 +130,10 @@ export function ModalVisualizarTemplate({
               <div className="space-y-4">
                 <div>
                   <h4 className="text-sm font-medium mb-2">Preview do Conteúdo</h4>
-                  <div className="bg-muted/50 p-4 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap font-mono">
-                    {renderizarConteudo(template.conteudo)}
-                  </div>
+                  <div 
+                    className="bg-muted/50 p-4 rounded-lg border text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                    dangerouslySetInnerHTML={{ __html: renderizarConteudoHTML(template.conteudo) }}
+                  />
                 </div>
 
                 {/* Variáveis utilizadas */}
