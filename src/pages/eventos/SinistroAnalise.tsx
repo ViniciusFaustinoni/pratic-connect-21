@@ -1784,7 +1784,7 @@ export default function SinistroAnalise() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "h-4 w-4 rounded-full",
-                  documentos.length > 0 ? "bg-green-500" : "bg-muted"
+                  (documentos.length > 0 || extrairDocumentosDoLink(linkEvento).length > 0) ? "bg-green-500" : "bg-muted"
                 )} />
                 <span className="text-sm">Documentos anexados</span>
               </div>
