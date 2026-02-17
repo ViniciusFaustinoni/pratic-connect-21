@@ -1,29 +1,26 @@
 
-
-# Permitir Substituicao de Video pelo Regulador
+# Permitir Digitacao Livre no Campo "Tipo de Peca"
 
 ## Problema
 
-Quando o regulador ja enviou um video, o botao de reset do componente `VideoCapture` limpa apenas o estado local (`previewUrl`), mas o `videoUrl` vindo do servidor continua sendo exibido. Resultado: o regulador nao consegue substituir o video.
+O campo "Tipo de Peca" no componente `PecaSelectFields` usa um Combobox que so permite selecionar itens do catalogo predefinido (`CATALOGO_PECAS`). Se o regulador precisar informar uma peca que nao esta no catalogo, nao consegue.
 
 ## Solucao
 
-Adicionar uma prop `onReset` ao `VideoCapture` que notifica o componente pai para limpar o `videoUrl`, permitindo gravar/selecionar um novo video.
+Transformar o Combobox de "Tipo de Peca" para aceitar tanto selecao do catalogo quanto digitacao livre. Quando o texto digitado nao corresponder a nenhum item do catalogo, exibir uma opcao "Usar: [texto digitado]" que permite salvar o valor customizado.
 
-## Alteracoes
+## Alteracao
 
-### Arquivo 1: `src/components/instalador/VideoCapture.tsx`
+### Arquivo: `src/components/oficinas/PecaSelectFields.tsx`
 
-- Adicionar prop opcional `onReset?: () => void`
-- No metodo `handleReset`, chamar `onReset?.()` alem de limpar o estado local
+No bloco do Combobox de "Tipo de Peca" (linhas 126-152):
 
-### Arquivo 2: `src/components/regulador/VistoriaEventoMidias.tsx`
+- Adicionar estado local para rastrear o texto digitado no `CommandInput`
+- Quando o texto nao corresponder a nenhum item do `CATALOGO_PECAS`, substituir o `CommandEmpty` por um `CommandItem` clicavel com o texto "Usar: [valor digitado]"
+- Ao clicar nesse item, salvar o valor digitado como `tipoPeca` via `update({ tipoPeca: textoDigitado })`
 
-- Passar `onReset={() => onVideoChange(null)}` ao componente `VideoCapture`
-- Isso limpa o `videoUrl` no estado pai, permitindo que o regulador grave/selecione um novo video que sera enviado via upload normalmente
+Isso mantem a busca no catalogo funcionando normalmente, mas adiciona a opcao de valor livre quando nao ha correspondencia.
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/instalador/VideoCapture.tsx` | Adicionar prop `onReset` e chamar no `handleReset` |
-| `src/components/regulador/VistoriaEventoMidias.tsx` | Passar callback `onReset` ao `VideoCapture` |
-
+| `src/components/oficinas/PecaSelectFields.tsx` | Adicionar estado de busca no campo Tipo de Peca e opcao "Usar: [texto]" para digitacao livre |
