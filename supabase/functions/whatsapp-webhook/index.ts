@@ -304,19 +304,31 @@ const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsAp
 5. B.O. foi registrado? (se sim, pedir para enviar foto/PDF)
 6. Pedir fotos do veículo/danos (pode enviar direto aqui!)
 
-## PÓS-SINISTRO: OFERECER ASSISTÊNCIA 24H (OBRIGATÓRIO!)
-Após registrar um sinistro com sucesso (tool criar_solicitacao_sinistro retornou sucesso):
-1. Confirme o registro do sinistro ao associado
-2. Se o veículo tiver cobertura_total = true:
+## PÓS-SINISTRO: PERGUNTAR SOBRE LINK DO EVENTO (OBRIGATÓRIO!)
+Após registrar o sinistro com sucesso e o resultado conter "link_evento":
+1. Confirme o registro e o protocolo ao associado
+2. Pergunte ao associado:
+   "Quer dar entrada no processo do sinistro agora? Vou te enviar um link para você completar as etapas (auto vistoria, B.O., agendamento). Ou prefere que a gente retorne amanhã?"
+3. Se o associado disser AGORA / SIM / QUERO:
+   - Envie o link: "Aqui está o link: [link_evento]. Válido por 72h."
+   - Explique brevemente as etapas: Auto Vistoria, B.O., Agendamento da vistoria presencial, Pagamento da coparticipação
+4. Se disser DEPOIS / AMANHÃ / NÃO AGORA:
+   - Responda: "Sem problemas! Amanhã de manhã enviaremos o link para você dar continuidade."
+   - O cron D+1 cuidará do envio automático
+5. Se o resultado NÃO conter "link_evento", pule esta etapa
+
+## PÓS-SINISTRO: OFERECER ASSISTÊNCIA 24H (APÓS a pergunta do link!)
+Após a pergunta sobre o link do evento (ou imediatamente após o registro se não houver link_evento):
+1. Se o veículo tiver cobertura_total = true:
    a. Para sinistros de COLISÃO: SEMPRE pergunte especificamente sobre REBOQUE/GUINCHO:
       "Você precisa de um guincho? Podemos enviar para o seu endereço: [ENDEREÇO CADASTRADO DO ASSOCIADO - use o campo 'Endereço Cadastrado' dos dados do associado]. Ou prefere enviar para outro local?"
    b. Para outros tipos de sinistro: pergunte genericamente sobre assistência (guincho, chaveiro, troca de pneu)
-3. Se o associado confirmar que precisa de guincho:
+2. Se o associado confirmar que precisa de guincho:
    - Use o local do sinistro como endereço de RETIRADA (origem)
    - Se confirmar o endereço cadastrado, use-o como DESTINO
    - Se informar outro endereço, use o endereço informado como DESTINO
    - Colete a descrição e crie o chamado com criar_solicitacao_assistencia
-4. Se responder NÃO, encerre normalmente com mensagem de acolhimento
+3. Se responder NÃO, encerre normalmente com mensagem de acolhimento
 IMPORTANTE: Só ofereça assistência 24h se o veículo tiver cobertura_total = true. Se tiver apenas cobertura de roubo/furto, NÃO mencione assistência 24h.
 
 ## Coleta de Dados para ASSISTÊNCIA 24H (OBRIGATÓRIO COLETAR TODOS!)
@@ -998,11 +1010,14 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         console.log("[whatsapp-webhook] notificar-sinistro não enviado:", e);
       }
 
-      // 10. Agendar contato D+1
+      // 10. Agendar contato D+1 e capturar token do link
+      let linkToken = "";
       try {
-        await supabase.functions.invoke("agendar-contato-sinistro", {
+        const agendarResp = await supabase.functions.invoke("agendar-contato-sinistro", {
           body: { sinistro_id: sinistroNovo.id },
         });
+        linkToken = agendarResp?.data?.token || "";
+        console.log(`[whatsapp-webhook] Link token capturado: ${linkToken}`);
       } catch (e) {
         console.error("[whatsapp-webhook] Erro agendar contato (não bloqueante):", e);
       }
@@ -1028,9 +1043,13 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         }
       }
 
+      const siteUrl = Deno.env.get("SITE_URL") || "https://pratic-connect-21.lovable.app";
+      const linkEvento = linkToken ? `${siteUrl}/evento/${linkToken}` : "";
+
       return JSON.stringify({
         sucesso: true,
         protocolo: protocoloSin,
+        link_evento: linkEvento,
         message: `Sinistro registrado com sucesso! Protocolo: *${protocoloSin}*. Nossa equipe já foi notificada e iniciará a análise em breve.`,
       });
     }
