@@ -233,7 +233,7 @@ export function ComparacaoPosicoes({
             <div className="flex items-center gap-2">
               <Navigation className="h-4 w-4 text-green-500" />
               <div>
-                <span className="text-sm font-medium">Rastreador GPS</span>
+                <span className="text-sm font-medium">Rastreador GPS - No Momento do Evento</span>
                 {analise.capturado && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
