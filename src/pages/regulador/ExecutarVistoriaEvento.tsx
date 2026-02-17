@@ -92,7 +92,7 @@ export default function ExecutarVistoriaEvento() {
     );
   }
 
-  const { vistoria, sinistro, associado, veiculo, linkEvento } = data;
+  const { vistoria, sinistro, associado, veiculo, linkEvento, documentosVeiculo } = data;
   const status = vistoria.status as string;
   const isAgendada = status === 'agendada';
 
@@ -120,6 +120,7 @@ export default function ExecutarVistoriaEvento() {
         veiculo={veiculo}
         sinistro={sinistro}
         linkEvento={linkEvento}
+        documentosVeiculo={documentosVeiculo}
       />
 
       {/* Se agendada, mostrar botão iniciar */}

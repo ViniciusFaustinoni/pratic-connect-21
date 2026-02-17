@@ -68,12 +68,29 @@ export function useVistoriaEventoDetalhe(vistoriaId: string | undefined) {
         adimplente = !cobrancas?.length;
       }
 
+      // 5. Buscar documentos do veículo e associado
+      let documentosVeiculo: any[] = [];
+      const veiculoObj = sinistro?.veiculo;
+      if (veiculoObj?.id || associado?.id) {
+        const filters: string[] = [];
+        if (veiculoObj?.id) filters.push(`veiculo_id.eq.${veiculoObj.id}`);
+        if (associado?.id) filters.push(`associado_id.eq.${associado.id}`);
+
+        const { data: docs } = await supabase
+          .from('documentos')
+          .select('id, tipo, arquivo_url, status, nome_arquivo')
+          .or(filters.join(','))
+          .order('created_at', { ascending: false });
+        documentosVeiculo = docs || [];
+      }
+
       return {
         vistoria: vistoria as any,
         sinistro,
         associado: associado ? { ...associado, plano, adimplente } : null,
         veiculo: sinistro?.veiculo || null,
         linkEvento: linkEvento as any,
+        documentosVeiculo,
       };
     },
     enabled: !!vistoriaId,
