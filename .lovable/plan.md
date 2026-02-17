@@ -1,32 +1,56 @@
 
-# Corrigir Checklist "Documentos anexados" mostrando como não concluído
+# Corrigir Cidade/UF e Bairro vazios na Análise de Eventos
 
 ## Problema
 
-O checklist de análise verifica apenas `documentos.length > 0`, onde `documentos` vem exclusivamente da tabela `sinistro_documentos`. Porém, os documentos enviados pelo associado via link do evento (fotos da auto vistoria, B.O., etc.) ficam armazenados nos campos JSON do `sinistro_evento_links` (`dados_etapa1`, `dados_etapa2`) e não são contados nessa verificação.
+Quando o sinistro é criado via assistente de IA (chat), apenas o campo `local_ocorrencia` é preenchido (ex: "Estrada do pau da fome, 1000"). Os campos `cidade_ocorrencia` e `estado_ocorrencia` ficam NULL porque a function tool `comunicar_sinistro` no `assistente-chat` não tem parâmetros separados para cidade/estado e não os extrai do texto.
 
-Resultado: mesmo com o associado tendo enviado fotos e B.O. pelo link, o checklist mostra "Documentos anexados" como cinza (não concluído).
+Resultado: a tela de análise mostra "Cidade/UF: /" (vazio).
 
-## Solução
+## Solução em duas frentes
 
-Alterar a condição do checklist para considerar também os documentos extraídos do link do evento. A função `extrairDocumentosDoLink` já existe no arquivo e faz exatamente essa extração.
+### 1. Backend: Extrair cidade/estado na criação do sinistro
 
-## Alteração
+**Arquivo: `supabase/functions/assistente-chat/index.ts`**
 
-### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
+- Adicionar parâmetros `cidade` e `estado` na definição da function tool `comunicar_sinistro` (por volta da linha 217-235)
+- Na criação do sinistro (linha 625-635), incluir `cidade_ocorrencia: args.cidade` e `estado_ocorrencia: args.estado`
+- Como fallback, se a IA não fornecer cidade/estado, usar os dados do associado (`cidade`, `uf`) que já estão disponíveis no contexto
 
-Na linha 1787, mudar a condição de:
+### 2. Frontend: Fallback na exibição
 
-```typescript
-documentos.length > 0 ? "bg-green-500" : "bg-muted"
+**Arquivo: `src/pages/eventos/SinistroAnalise.tsx`**
+
+- Na linha que exibe Cidade/UF (linha 682), adicionar fallback para os dados do associado:
+  - Se `cidade_ocorrencia` está vazio, usar `sinistro.associado?.cidade`
+  - Se `estado_ocorrencia` está vazio, usar `sinistro.associado?.uf`
+- Adicionar exibição do bairro (extraído de `linkEvento?.dados_etapa2?.endereco_bairro` ou do endereço do associado) como campo adicional ou junto ao local
+
+## Detalhes técnicos
+
+### assistente-chat/index.ts - Tool definition (linha ~217)
+
+Adicionar ao schema de parâmetros:
+```text
+cidade: { type: "string", description: "Cidade onde ocorreu" }
+estado: { type: "string", description: "UF/Estado (sigla, ex: RJ, SP)" }
+```
+Estes NÃO serão obrigatórios (required continua apenas tipo, data, local, descricao).
+
+### assistente-chat/index.ts - Insert sinistro (linha ~625)
+
+Adicionar ao insert:
+```text
+cidade_ocorrencia: args.cidade || associado.cidade || null
+estado_ocorrencia: args.estado || associado.uf || null
 ```
 
-Para:
+### SinistroAnalise.tsx - Exibição (linha ~682)
 
-```typescript
-(documentos.length > 0 || extrairDocumentosDoLink(linkEvento).length > 0) ? "bg-green-500" : "bg-muted"
+Alterar a construção do valor de Cidade/UF para:
+```text
+cidade = sinistro.cidade_ocorrencia || linkEvento?.dados_etapa2?.endereco_cidade || sinistro.associado?.cidade || ''
+uf = sinistro.estado_ocorrencia || linkEvento?.dados_etapa2?.endereco_uf || sinistro.associado?.uf || ''
 ```
 
-Isso faz o checklist considerar como "concluído" quando existirem documentos em qualquer uma das fontes: tabela `sinistro_documentos` OU dados do link do evento.
-
-Alteração mínima, uma única linha, sem impacto em nenhum outro comportamento.
+Assim, mesmo sinistros antigos que já estão no banco sem cidade/UF vão exibir corretamente usando os dados disponíveis como fallback.
