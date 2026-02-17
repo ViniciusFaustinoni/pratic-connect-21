@@ -132,6 +132,71 @@ function calcularDistanciaHaversine(
 }
 
 /**
+ * Seleciona pontos uniformemente distribuídos de um array
+ */
+function selecionarPontosUniformes(pontos: [number, number][], max: number): [number, number][] {
+  if (pontos.length <= max) return pontos;
+  const result: [number, number][] = [pontos[0]];
+  const step = (pontos.length - 1) / (max - 1);
+  for (let i = 1; i < max - 1; i++) {
+    result.push(pontos[Math.round(i * step)]);
+  }
+  result.push(pontos[pontos.length - 1]);
+  return result;
+}
+
+/**
+ * Busca rota real usando OSRM com múltiplos waypoints
+ */
+export async function getRouteOSRMMultiWaypoint(
+  pontos: [number, number][]
+): Promise<RotaResult> {
+  if (pontos.length < 2) {
+    return { coordenadas: pontos, distanciaKm: 0, tempoMinutos: 0 };
+  }
+
+  const pontosReduzidos = selecionarPontosUniformes(pontos, 25);
+
+  const cacheKey = `multi:${pontosReduzidos.map(p => p.map(c => c.toFixed(4)).join(',')).join('|')}`;
+  const cached = routeCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+
+  const coords = pontosReduzidos.map(([lat, lng]) => `${lng},${lat}`).join(';');
+  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`;
+
+  try {
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!response.ok) throw new Error(`OSRM API error: ${response.status}`);
+
+    const data: OSRMResponse = await response.json();
+    if (data.code !== 'Ok' || !data.routes.length) throw new Error('No route found');
+
+    const route = data.routes[0];
+    const coordenadas = route.geometry.coordinates.map(
+      ([lng, lat]) => [lat, lng] as [number, number]
+    );
+
+    const result: RotaResult = {
+      coordenadas,
+      distanciaKm: route.distance / 1000,
+      tempoMinutos: Math.round(route.duration / 60),
+    };
+
+    routeCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return result;
+  } catch (error) {
+    console.error('[routingService] Erro OSRM multi-waypoint:', error);
+    return {
+      coordenadas: pontos,
+      distanciaKm: calcularDistanciaHaversine(pontos[0], pontos[pontos.length - 1]),
+      tempoMinutos: 0,
+    };
+  }
+}
+
+/**
  * Limpa cache expirado
  */
 export function clearExpiredCache(): void {
