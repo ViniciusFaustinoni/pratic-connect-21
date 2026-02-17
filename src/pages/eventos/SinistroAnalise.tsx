@@ -58,6 +58,7 @@ import { EnviarParaOficinaDialog } from '@/components/sinistros/EnviarParaOficin
 import { AtribuirFornecedoresDialog } from '@/components/sinistros/AtribuirFornecedoresDialog';
 import { EncaminharSindicanciaDialog } from '@/components/sinistros/EncaminharSindicanciaDialog';
 import { AnaliseInternaModal } from '@/components/sinistros/AnaliseInternaModal';
+import { CardAnaliseRiscoIA } from '@/components/analista-eventos/CardAnaliseRiscoIA';
 import { EncaminharJuridicoEventoModal } from '@/components/sinistros/EncaminharJuridicoEventoModal';
 import { SuspenderEventoModal } from '@/components/sinistros/SuspenderEventoModal';
 import { SolicitarOrcamentoDialog } from '@/components/sinistros/SolicitarOrcamentoDialog';
@@ -1405,6 +1406,11 @@ export default function SinistroAnalise() {
 
         {/* Coluna Direita - 1/3 */}
         <div className="space-y-6">
+          {/* Análise de Risco IA */}
+          {sinistro.tipo?.toLowerCase().includes('colis') && sinistro.status === 'aguardando_analise' && (
+            <CardAnaliseRiscoIA sinistroId={sinistro.id} />
+          )}
+
           {/* Ações */}
           <Card>
             <CardHeader>
