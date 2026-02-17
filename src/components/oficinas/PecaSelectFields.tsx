@@ -4,8 +4,73 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { CATALOGO_PECAS } from '@/lib/fornecedores-constants';
-import { Loader2, Check, ChevronsUpDown } from 'lucide-react';
+import { Loader2, Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useMemo, useCallback } from 'react';
+
+function PecaCombobox({ value, onSelect, open, onOpenChange, disabled }: {
+  value: string;
+  onSelect: (val: string) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  disabled?: boolean;
+}) {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!searchQuery) return [...CATALOGO_PECAS];
+    const q = searchQuery.toLowerCase();
+    return CATALOGO_PECAS.filter(p => p.toLowerCase().includes(q));
+  }, [searchQuery]);
+
+  const hasExactMatch = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return CATALOGO_PECAS.some(p => p.toLowerCase() === q);
+  }, [searchQuery]);
+
+  const handleSelect = useCallback((val: string) => {
+    onSelect(val);
+    setSearchQuery('');
+    onOpenChange(false);
+  }, [onSelect, onOpenChange]);
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) setSearchQuery(''); }}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal" disabled={disabled}>
+          {value || <span className="text-muted-foreground">Selecione a peça</span>}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Buscar ou digitar peça..." value={searchQuery} onValueChange={setSearchQuery} />
+          <CommandList>
+            {filtered.length === 0 && !searchQuery.trim() && (
+              <CommandEmpty>Nenhuma peça encontrada.</CommandEmpty>
+            )}
+            {searchQuery.trim() && !hasExactMatch && (
+              <CommandGroup heading="Valor personalizado">
+                <CommandItem onSelect={() => handleSelect(searchQuery.trim())}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Usar: "{searchQuery.trim()}"
+                </CommandItem>
+              </CommandGroup>
+            )}
+            <CommandGroup heading={searchQuery ? 'Catálogo' : undefined}>
+              {filtered.map(p => (
+                <CommandItem key={p} value={p} onSelect={() => handleSelect(p)}>
+                  <Check className={cn('mr-2 h-4 w-4', value === p ? 'opacity-100' : 'opacity-0')} />
+                  {p}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const SUPABASE_URL = 'https://iyxdgmukrrdkffraptsx.supabase.co';
 
@@ -125,30 +190,13 @@ export function PecaSelectFields({ values, onChange, disabled, active = true, in
       {/* Tipo de Peça */}
       <div className="space-y-1">
         <Label className="text-xs">Tipo de Peça *</Label>
-        <Popover open={openPeca} onOpenChange={setOpenPeca}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" role="combobox" aria-expanded={openPeca} className="w-full justify-between font-normal" disabled={disabled}>
-              {values.tipoPeca || <span className="text-muted-foreground">Selecione a peça</span>}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Buscar peça..." />
-              <CommandList>
-                <CommandEmpty>Nenhuma peça encontrada.</CommandEmpty>
-                <CommandGroup>
-                  {CATALOGO_PECAS.map(p => (
-                    <CommandItem key={p} value={p} onSelect={() => { update({ tipoPeca: p }); setOpenPeca(false); }}>
-                      <Check className={cn('mr-2 h-4 w-4', values.tipoPeca === p ? 'opacity-100' : 'opacity-0')} />
-                      {p}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+        <PecaCombobox
+          value={values.tipoPeca}
+          onSelect={(val) => { update({ tipoPeca: val }); }}
+          open={openPeca}
+          onOpenChange={setOpenPeca}
+          disabled={disabled}
+        />
       </div>
 
       {/* Marca */}
