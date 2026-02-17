@@ -19,6 +19,10 @@ interface EventoLinkCardProps {
   associadoWhatsapp?: string | null;
   associadoNome?: string | null;
   sinistroTipo?: string;
+  valorFipe?: number;
+  cotaPercentual?: number;
+  cotaValor?: number;
+  planoNome?: string;
 }
 
 const statusConfig: Record<string, { label: string; icon: any; className: string }> = {
@@ -28,7 +32,7 @@ const statusConfig: Record<string, { label: string; icon: any; className: string
   invalidado: { label: 'Invalidado', icon: XCircle, className: 'bg-gray-100 text-gray-800' },
 };
 
-export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsapp, associadoNome, sinistroTipo }: EventoLinkCardProps) {
+export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsapp, associadoNome, sinistroTipo, valorFipe, cotaPercentual, cotaValor, planoNome }: EventoLinkCardProps) {
   const { linkAtivo, isLoading, contato, gerarNovoLink } = useEventoLink(sinistroId);
   const [copied, setCopied] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -93,7 +97,14 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
     const finalDescricoes = [...descricoes, 'Agende a vistoria presencial', 'Pagamento da cota conforme seu plano'];
     const etapasTexto = finalEtapas.map((e, i) => `${i + 1}. *${e}* - ${finalDescricoes[i]}`).join('\n');
 
-    const mensagem = `Olá ${associadoNome || ''}! Somos da *ABP PraticCar* e estamos aqui para te ajudar nesse momento.\n\nSeu evento *${sinistroProtocolo || ''}* foi registrado e precisamos que você complete algumas etapas pelo link abaixo:\n\n${etapasTexto}\n\nAcesse aqui: ${linkUrl}\n\nO link é válido por *72 horas*.\n\nApós a conclusão, nossa equipe analisará seu caso. Lembrando que, conforme seu plano, será aplicada a *cota de coparticipação* sobre o valor de referência do veículo.\n\nQualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
+    // Bloco de cota de coparticipação (se dados disponíveis)
+    let cotaTexto = '';
+    if (cotaValor && valorFipe && cotaPercentual && planoNome) {
+      const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      cotaTexto = `\n💰 *Cota de coparticipação:*\nSeu plano: ${planoNome} (${cotaPercentual}% da FIPE)\nValor FIPE do veículo: ${fmtBRL(valorFipe)}\nSua cota: *${fmtBRL(cotaValor)}*\n`;
+    }
+
+    const mensagem = `Olá ${associadoNome || ''}! Somos da *ABP PraticCar* e estamos aqui para te ajudar nesse momento.\n\nSeu evento *${sinistroProtocolo || ''}* foi registrado e precisamos que você complete algumas etapas pelo link abaixo:\n\n${etapasTexto}\n\nAcesse aqui: ${linkUrl}\n${cotaTexto}\nO link é válido por *72 horas*.\n\nApós a conclusão, nossa equipe analisará seu caso.\n\nQualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
 
     try {
       setEnviando(true);

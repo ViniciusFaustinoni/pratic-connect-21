@@ -47,7 +47,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
 import { useSinistroAnalise, useSinistrosPendentes } from '@/hooks/useSinistroAnalise';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -267,6 +267,48 @@ export default function SinistroAnalise() {
   const cotacaoAprovada = useMemo(() => cotacoes.find(c => c.aprovada), [cotacoes]);
   const cotacoesRespondidas = useMemo(() => cotacoes.filter(c => c.status === 'respondido' && !c.aprovada), [cotacoes]);
   const temCotacaoAprovada = !!cotacaoAprovada;
+
+  // Dados de cota de coparticipação para o EventoLinkCard
+  const planoId = (sinistro?.associado as any)?.plano?.id;
+  const valorFipeVeiculo = (sinistro?.veiculo as any)?.valor_fipe;
+  const veiculoId = (sinistro?.veiculo as any)?.id;
+
+  const { data: cotaDados } = useQuery({
+    queryKey: ['cota-evento-link', planoId, veiculoId],
+    queryFn: async () => {
+      const { data: planoData } = await supabase
+        .from('planos')
+        .select('nome, cota_participacao, cota_minima, cota_app_percent, cota_app_min')
+        .eq('id', planoId)
+        .single();
+
+      if (!planoData) return null;
+
+      let percentual = planoData.cota_participacao;
+      let minimo = planoData.cota_minima;
+
+      const { data: veiculoFull } = await supabase
+        .from('veiculos')
+        .select('uso_aplicativo')
+        .eq('id', veiculoId)
+        .single();
+
+      if (veiculoFull?.uso_aplicativo && planoData.cota_app_percent) {
+        percentual = planoData.cota_app_percent;
+        minimo = planoData.cota_app_min;
+      }
+
+      const valorCota = Math.max(valorFipeVeiculo * (percentual || 0) / 100, minimo || 0);
+
+      return {
+        planoNome: planoData.nome,
+        cotaPercentual: percentual,
+        cotaValor: valorCota,
+      };
+    },
+    enabled: !!planoId && !!valorFipeVeiculo && !!veiculoId,
+    staleTime: 1000 * 60 * 10,
+  });
 
   // Polling automático para detectar assinatura do termo
   useEffect(() => {
@@ -1705,6 +1747,10 @@ export default function SinistroAnalise() {
             associadoWhatsapp={associado?.whatsapp || associado?.telefone}
             associadoNome={associado?.nome}
             sinistroTipo={sinistro.tipo}
+            valorFipe={valorFipeVeiculo}
+            cotaPercentual={cotaDados?.cotaPercentual}
+            cotaValor={cotaDados?.cotaValor}
+            planoNome={cotaDados?.planoNome}
           />
 
           {/* Checklist */}
