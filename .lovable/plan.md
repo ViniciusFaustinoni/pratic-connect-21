@@ -1,53 +1,45 @@
 
-
-# Exibir Documentos do Veiculo na Tela de Vistoria do Regulador
+# Auto-preencher Marca, Modelo e Ano do Veiculo no Orcamento
 
 ## Problema
 
-Na tela de vistoria do regulador (`/regulador/vistoria/:id`), a secao "Documentos" mostra apenas o B.O. (numero, resumo e link). Os documentos do veiculo (CRLV, laudo de vistoria, etc.) armazenados na tabela `documentos` nao sao exibidos, impedindo o regulador de consulta-los durante a vistoria.
+Os campos Marca, Modelo e Ano no formulario de orcamento do regulador ainda exigem preenchimento manual (via dropdowns), mesmo quando esses dados ja existem no cadastro do veiculo vinculado ao sinistro. Isso gera retrabalho desnecessario.
 
 ## Solucao
 
-Buscar os documentos do veiculo na tabela `documentos` e exibi-los na secao "Documentos" do componente `VistoriaEventoDados`, com links para visualizacao.
+Remover os dropdowns FIPE (Marca/Modelo/Ano) e substituir por campos somente leitura que sao preenchidos automaticamente a partir dos dados do veiculo do sinistro (`veiculo.marca`, `veiculo.modelo`, `veiculo.ano_modelo`). Isso elimina toda a logica de busca FIPE em cascata para o veiculo compartilhado, pois os dados ja estao disponiveis.
 
 ## Alteracoes
 
-### Arquivo 1: `src/hooks/useVistoriaEventoDetalhe.ts`
+### Arquivo: `src/components/regulador/VistoriaEventoOrcamento.tsx`
 
-- Adicionar query para buscar documentos do veiculo na tabela `documentos` (filtrado por `veiculo_id` e/ou `associado_id` do sinistro)
-- Retornar os documentos no objeto de retorno do hook
+1. **Remover estados e efeitos de busca FIPE compartilhada** (linhas 87-160):
+   - Remover `sharedMarcas`, `sharedModelos`, `sharedAnos`, `loadingShared*`, `openShared*`, `autoMatchedRef`
+   - Remover os 3 `useEffect` que fazem fetch na API FIPE para marcas/modelos/anos
 
-### Arquivo 2: `src/components/regulador/VistoriaEventoDados.tsx`
+2. **Inicializar `sharedVeiculo` diretamente dos dados do veiculo**:
+   - Usar `veiculo.marca` como `marcaNome`
+   - Usar `veiculo.modelo` como `modeloNome`  
+   - Usar `veiculo.ano_modelo` como `anoNome`
+   - Os campos `*Codigo` ficam vazios (nao sao necessarios para a funcionalidade do regulador)
 
-- Receber a nova prop `documentosVeiculo` (array de documentos)
-- Na secao "Documentos", apos o B.O., renderizar a lista de documentos do veiculo
-- Cada documento exibido como um card/link clicavel com:
-  - Icone de arquivo
-  - Nome do tipo (ex: "CRLV", "Laudo de Vistoria")
-  - Badge de status (aprovado, pendente, etc.)
-  - Link "Visualizar" que abre o arquivo em nova aba
-- Para imagens (jpg, png), exibir thumbnail clicavel
-- Para PDFs, exibir link para abrir em nova aba
+3. **Substituir os dropdowns por campos de texto somente leitura** (secao "Veiculo aplicado a todos os itens"):
+   - Em vez de Popovers/Comboboxes editaveis, exibir os valores como texto fixo ou `Input disabled`
+   - Manter o resumo visual "Toyota - Corolla XEi 2.0 - 2013 Flex"
 
-### Arquivo 3: `src/pages/regulador/ExecutarVistoriaEvento.tsx`
+4. **Remover imports nao utilizados**: `Popover`, `PopoverContent`, `PopoverTrigger`, `Command*`, `ChevronsUpDown` (se nao usados em outro lugar do arquivo)
 
-- Passar a prop `documentosVeiculo` ao componente `VistoriaEventoDados`
+### Resultado visual
 
-## Mapeamento de tipos de documento
+A secao "Veiculo (aplicado a todos os itens)" mostrara os dados preenchidos e travados:
 
-| Tipo no banco | Label exibido |
-|---|---|
-| crlv | CRLV - Documento do Veiculo |
-| laudo_vistoria | Laudo de Vistoria |
-| cnh | CNH |
-| comprovante_residencia | Comprovante de Residencia |
-| outros | Nome do arquivo original |
+```
+Veiculo (aplicado a todos os itens)
+Toyota — Corolla XEi 2.0 Flex 16V Aut. — 2013 Flex
 
-## Detalhes tecnicos
+Marca:   [Toyota]          (somente leitura)
+Modelo:  [Corolla XEi...]  (somente leitura)
+Ano:     [2013]            (somente leitura)
+```
 
-- A query busca em `documentos` filtrando por `veiculo_id` obtido do sinistro
-- Tambem inclui documentos do `associado_id` para capturar CNH e comprovantes
-- Os documentos sao exibidos abaixo do B.O. existente, agrupados visualmente
-- Arquivos de imagem serao identificados pela extensao da URL (jpg, png, webp) para exibir thumbnail
-- PDFs e outros formatos terao um botao "Visualizar" que abre em nova aba
-
+Sem necessidade de interacao do regulador - os dados vem direto do sistema.
