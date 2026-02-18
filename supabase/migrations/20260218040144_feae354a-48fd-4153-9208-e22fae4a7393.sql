@@ -1,0 +1,1 @@
+UPDATE sinistros SET cota_paga = true WHERE protocolo = 'SIN-20260217-0008';
