@@ -1,33 +1,34 @@
 
-
-# Mostrar Indice de Risco IA independente do status do sinistro
+# Corrigir exibicao dos Auto Centers no modal "Atribuir Fornecedores"
 
 ## Problema
 
-O card "Analise de Risco com IA" so aparece quando o sinistro esta com status `aguardando_analise`. Apos aprovacao (ou qualquer mudanca de status), o card desaparece.
+Os Auto Centers existem no banco de dados e sao retornados corretamente pela API, mas a secao "Auto Centers para Cotacao de Pecas" no modal fica cortada e nao e possivel rolar ate ela. O conteudo abaixo das oficinas nao aparece.
+
+## Causa raiz
+
+O componente `ScrollArea` (Radix) precisa de uma altura limitada para funcionar. Dentro de um `flex flex-col`, o elemento precisa de `min-h-0` para que o `flex-1` permita encolher e ativar o scroll interno do Radix. Sem `min-h-0`, o `ScrollArea` se expande alem do viewport e o conteudo fica cortado pelo `overflow-hidden` do DialogContent.
 
 ## Solucao
 
-Remover a condicao `sinistro.status === 'aguardando_analise'` da renderizacao do `CardAnaliseRiscoIA` no arquivo `src/pages/eventos/SinistroAnalise.tsx`.
+Adicionar `min-h-0` ao `ScrollArea` no arquivo `src/components/sinistros/AtribuirFornecedoresDialog.tsx` (linha 249).
 
-O card continuara restrito a sinistros do tipo colisao (`tipo` contendo "colis"), mas sera exibido em qualquer status (aprovado, negado, em analise, etc.).
+### Alteracao
 
-## Detalhe tecnico
+**Arquivo:** `src/components/sinistros/AtribuirFornecedoresDialog.tsx`
 
-**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx` (linha 1410)
-
-**De:**
+**Linha 249 - De:**
 ```
-{sinistro.tipo?.toLowerCase().includes('colis') && sinistro.status === 'aguardando_analise' && (
-  <CardAnaliseRiscoIA sinistroId={sinistro.id} />
-)}
+<ScrollArea className="flex-1 pr-4">
 ```
 
 **Para:**
 ```
-{sinistro.tipo?.toLowerCase().includes('colis') && (
-  <CardAnaliseRiscoIA sinistroId={sinistro.id} />
-)}
+<ScrollArea className="flex-1 min-h-0 pr-4">
 ```
 
-Nenhuma outra alteracao e necessaria. O componente `CardAnaliseRiscoIA` ja carrega a analise salva do banco (`sinistro_analises_ia`) e exibe corretamente, e o botao "Reanalisar" continuara disponivel caso o analista queira refazer.
+Isso permite que o flex item encolha abaixo do seu tamanho de conteudo, ativando o scroll interno do Radix ScrollArea e tornando toda a secao de Auto Centers visivel e rolavel.
+
+## Arquivo alterado
+
+- `src/components/sinistros/AtribuirFornecedoresDialog.tsx` (1 linha)
