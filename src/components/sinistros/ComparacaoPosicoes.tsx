@@ -1,11 +1,13 @@
 import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { MapPin, Navigation, AlertTriangle, Check, Clock, Search } from 'lucide-react';
+import { MapPin, Navigation, AlertTriangle, Check, Clock, Search, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { useRotaReal } from '@/hooks/useRotaReal';
+import { RotaPolyline } from '@/components/mapa/RotaPolyline';
 
 function FitBounds({ bounds }: { bounds: L.LatLngBounds }) {
   const map = useMap();
@@ -85,6 +87,13 @@ export function ComparacaoPosicoes({
   const efLngInformada = longitudeInformada ?? geocodificado?.lng ?? null;
   const foiGeocodificado = !latitudeInformada && !longitudeInformada && !!geocodificado;
 
+  // Coordenadas para rota real
+  const origemRota: [number, number] | null = (efLatInformada != null && efLngInformada != null) ? [efLatInformada, efLngInformada] : null;
+  const destinoRota: [number, number] | null = (rastreadorLat != null && rastreadorLng != null) ? [rastreadorLat, rastreadorLng] : null;
+
+  // Hook de rota real (OSRM) - deve ser chamado antes de qualquer return
+  const { distanciaKm: distanciaRota, isLoading: isLoadingRota } = useRotaReal(origemRota, destinoRota);
+
   const analise = useMemo(() => {
     const temInformada = efLatInformada != null && efLngInformada != null;
     const temRastreador = rastreadorLat != null && rastreadorLng != null;
@@ -93,7 +102,9 @@ export function ComparacaoPosicoes({
     if (!temRastreador) return { tipo: 'apenas_informada' as const, lat: efLatInformada!, lng: efLngInformada! };
     if (!temInformada) return { tipo: 'apenas_rastreador' as const, lat: rastreadorLat!, lng: rastreadorLng!, capturado: rastreadorCapturadoEm };
 
-    const distancia = calcularDistanciaKm(efLatInformada!, efLngInformada!, rastreadorLat!, rastreadorLng!);
+    const distanciaHaversine = calcularDistanciaKm(efLatInformada!, efLngInformada!, rastreadorLat!, rastreadorLng!);
+    // Usar distância da rota real quando disponível, senão fallback Haversine
+    const distancia = distanciaRota > 0 ? distanciaRota : distanciaHaversine;
     return {
       tipo: 'comparacao' as const,
       informada: { lat: efLatInformada!, lng: efLngInformada! },
@@ -102,7 +113,7 @@ export function ComparacaoPosicoes({
       distanciaKm: distancia,
       classificacao: classificarDistancia(distancia),
     };
-  }, [efLatInformada, efLngInformada, rastreadorLat, rastreadorLng, rastreadorCapturadoEm]);
+  }, [efLatInformada, efLngInformada, rastreadorLat, rastreadorLng, rastreadorCapturadoEm, distanciaRota]);
 
   const formatarCoordenada = (lat: number, lng: number) => `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 
@@ -189,12 +200,12 @@ export function ComparacaoPosicoes({
 
               {/* Linha entre os dois pontos */}
               {analise.tipo === 'comparacao' && (
-                <Polyline
-                  positions={[
-                    [analise.informada.lat, analise.informada.lng],
-                    [analise.rastreador.lat, analise.rastreador.lng],
-                  ]}
-                  pathOptions={{ color: '#EF4444', weight: 2, dashArray: '6, 6' }}
+                <RotaPolyline
+                  origem={[analise.informada.lat, analise.informada.lng]}
+                  destino={[analise.rastreador.lat, analise.rastreador.lng]}
+                  cor="#EF4444"
+                  peso={3}
+                  opacidade={0.8}
                 />
               )}
             </MapContainer>
@@ -278,10 +289,13 @@ export function ComparacaoPosicoes({
                 }`}>
                   {analise.classificacao.label}
                 </span>
-                <p className="text-xs text-muted-foreground">Distância entre posições</p>
+                <p className="text-xs text-muted-foreground">
+                  {isLoadingRota ? 'Calculando rota...' : distanciaRota > 0 ? 'Distância via rota' : 'Distância em linha reta'}
+                </p>
               </div>
             </div>
             <Badge className={analise.classificacao.cor}>
+              {isLoadingRota && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
               {analise.distanciaKm < 1 ? `${Math.round(analise.distanciaKm * 1000)}m` : `${analise.distanciaKm.toFixed(1)}km`}
             </Badge>
           </div>
