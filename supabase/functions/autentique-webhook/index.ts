@@ -555,6 +555,26 @@ serve(async (req) => {
                 let pixPayload: string | null = null;
 
                 if (!cobrancaCotaId) {
+                  // === VERIFICAR DUPLICATA antes de criar ===
+                  const { data: cobrancaDuplicata } = await supabase
+                    .from("asaas_cobrancas")
+                    .select("id, asaas_id, pix_copia_cola, status")
+                    .eq("associado_id", associado.id)
+                    .eq("tipo", "cota_participacao")
+                    .eq("referencia", sinistroDoc.protocolo)
+                    .neq("status", "CANCELLED")
+                    .maybeSingle();
+
+                  if (cobrancaDuplicata) {
+                    console.log(`[autentique-webhook] Cobrança já existe na tabela asaas_cobrancas (${cobrancaDuplicata.asaas_id}), vinculando ao sinistro`);
+                    await supabase
+                      .from("sinistros")
+                      .update({ cobranca_cota_id: cobrancaDuplicata.id })
+                      .eq("id", sinistroDoc.id);
+                    cobrancaAsaasId = cobrancaDuplicata.asaas_id;
+                    invoiceUrl = `https://www.asaas.com/c/${cobrancaDuplicata.asaas_id}`;
+                    pixPayload = cobrancaDuplicata.pix_copia_cola;
+                  } else {
                   // === CRIAR COBRANÇA ===
                   console.log(`[autentique-webhook] Criando cobrança Asaas para sinistro ${sinistroDoc.protocolo}, valor: ${valorCota}`);
 
@@ -646,6 +666,7 @@ serve(async (req) => {
                       .update({ cobranca_cota_id: cobrancaSalva.id })
                       .eq("id", sinistroDoc.id);
                   }
+                  } // fim do else (criar cobrança nova)
                 } else {
                   // === COBRANÇA JÁ EXISTE - buscar dados ===
                   console.log(`[autentique-webhook] Cobrança já existe (${cobrancaCotaId}), buscando dados para reenvio...`);

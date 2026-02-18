@@ -185,6 +185,30 @@ serve(async (req) => {
         }
       }
 
+      // === VERIFICAR DUPLICATA antes de criar ===
+      const { data: cobrancaDuplicataPix } = await supabase
+        .from("asaas_cobrancas")
+        .select("id, asaas_id, pix_qrcode, pix_copia_cola, status")
+        .eq("associado_id", associado.id)
+        .eq("tipo", "cota_participacao")
+        .ilike("referencia", `%${sinistro.protocolo}%`)
+        .neq("status", "CANCELLED")
+        .maybeSingle();
+
+      if (cobrancaDuplicataPix) {
+        console.log(`[processar-termo-evento] Cobrança PIX já existe (${cobrancaDuplicataPix.asaas_id}), reaproveitando`);
+        if (!sinistro.cobranca_cota_id) {
+          await supabase.from("sinistros").update({ cobranca_cota_id: cobrancaDuplicataPix.id }).eq("id", sinistro.id);
+        }
+        return new Response(JSON.stringify({
+          success: true,
+          cobranca_id: cobrancaDuplicataPix.id,
+          qr_code: cobrancaDuplicataPix.pix_qrcode,
+          copia_cola: cobrancaDuplicataPix.pix_copia_cola,
+          valor: valorCota,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       // Sync/find ASAAS customer
       let asaasCustomerId = "";
       const { data: asaasCliente } = await supabase
@@ -308,6 +332,26 @@ serve(async (req) => {
       if (!cartao || !cartao.numero || !cartao.nome || !cartao.validade || !cartao.cvv) {
         return new Response(JSON.stringify({ error: "Dados do cartão incompletos" }), {
           status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // === VERIFICAR DUPLICATA antes de criar (cartão) ===
+      const { data: cobrancaDuplicataCartao } = await supabase
+        .from("asaas_cobrancas")
+        .select("id, asaas_id, status")
+        .eq("associado_id", associado.id)
+        .eq("tipo", "cota_participacao")
+        .ilike("referencia", `%${sinistro.protocolo}%`)
+        .in("status", ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"])
+        .maybeSingle();
+
+      if (cobrancaDuplicataCartao) {
+        console.log(`[processar-termo-evento] Cobrança cartão já paga (${cobrancaDuplicataCartao.asaas_id}), reaproveitando`);
+        if (!sinistro.cobranca_cota_id) {
+          await supabase.from("sinistros").update({ cobranca_cota_id: cobrancaDuplicataCartao.id }).eq("id", sinistro.id);
+        }
+        return new Response(JSON.stringify({ success: true, status: "already_paid", cobranca_id: cobrancaDuplicataCartao.id }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
