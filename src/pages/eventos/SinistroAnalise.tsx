@@ -1407,7 +1407,7 @@ export default function SinistroAnalise() {
         {/* Coluna Direita - 1/3 */}
         <div className="space-y-6">
           {/* Análise de Risco IA */}
-          {sinistro.tipo?.toLowerCase().includes('colis') && sinistro.status === 'aguardando_analise' && (
+          {sinistro.tipo?.toLowerCase().includes('colis') && (
             <CardAnaliseRiscoIA sinistroId={sinistro.id} />
           )}
 
