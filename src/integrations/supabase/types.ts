@@ -141,6 +141,13 @@ export type Database = {
             foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -499,6 +506,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "acordos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "acordos_associado_id_fkey"
@@ -1057,6 +1071,13 @@ export type Database = {
             foreignKeyName: "asaas_clientes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asaas_clientes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -1251,6 +1272,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "asaas_cobrancas_associado_id_fkey"
@@ -1469,6 +1497,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "asaas_pagamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "asaas_pagamentos_associado_id_fkey"
@@ -1896,6 +1931,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "associados_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "associados_historico_associado_id_fkey"
@@ -2481,6 +2523,13 @@ export type Database = {
             foreignKeyName: "auth_tokens_app_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_app_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -2549,6 +2598,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
@@ -3218,6 +3274,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "blacklist_veiculos_associado_id_fkey"
@@ -4244,6 +4307,13 @@ export type Database = {
             foreignKeyName: "chamados_assistencia_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_assistencia_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -4524,6 +4594,13 @@ export type Database = {
             foreignKeyName: "chat_mensagens_ia_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_mensagens_ia_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -4628,6 +4705,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "chat_solicitacoes_ia_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "chat_solicitacoes_ia_associado_id_fkey"
@@ -4763,6 +4847,13 @@ export type Database = {
             foreignKeyName: "cobranca_contatos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_contatos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -4844,6 +4935,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_eventos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "cobranca_eventos_associado_id_fkey"
@@ -4953,6 +5051,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_fila_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "cobranca_fila_associado_id_fkey"
@@ -5108,6 +5213,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobrancas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "cobrancas_associado_id_fkey"
@@ -5485,6 +5597,13 @@ export type Database = {
             foreignKeyName: "comissoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -5850,6 +5969,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "comissoes_deducoes_associado_id_fkey"
@@ -6565,6 +6691,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "consultas_juridicas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "consultas_juridicas_associado_id_fkey"
@@ -7322,6 +7455,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "fk_contratos_associado"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "fk_contratos_associado"
@@ -8901,6 +9041,13 @@ export type Database = {
             foreignKeyName: "documento_gerados_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_gerados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -9179,6 +9326,13 @@ export type Database = {
             foreignKeyName: "documentos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -9303,6 +9457,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "documentos_solicitados_associado_id_fkey"
@@ -11217,6 +11378,13 @@ export type Database = {
             foreignKeyName: "gastos_beneficios_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -11386,6 +11554,13 @@ export type Database = {
             foreignKeyName: "indicacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -11423,6 +11598,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "indicacoes_indicador_id_fkey"
@@ -11730,6 +11912,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "instalacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "instalacoes_associado_id_fkey"
@@ -12470,6 +12659,13 @@ export type Database = {
             foreignKeyName: "leads_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -13155,6 +13351,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "negativacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "negativacoes_associado_id_fkey"
@@ -13865,6 +14068,13 @@ export type Database = {
             foreignKeyName: "ordens_servico_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -14555,6 +14765,13 @@ export type Database = {
             foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -14678,6 +14895,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
@@ -15743,6 +15967,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "processos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "processos_associado_id_fkey"
@@ -16996,6 +17227,13 @@ export type Database = {
             foreignKeyName: "rastreador_preferencias_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: true
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreador_preferencias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -17155,6 +17393,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "rastreadores_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "rastreadores_associado_id_fkey"
@@ -18089,6 +18334,13 @@ export type Database = {
             foreignKeyName: "regua_execucoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "regua_execucoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -18720,6 +18972,13 @@ export type Database = {
             foreignKeyName: "servicos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -18961,6 +19220,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_logs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "sga_sync_logs_associado_id_fkey"
@@ -19610,6 +19876,13 @@ export type Database = {
             foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -20026,6 +20299,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sinistros_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "sinistros_associado_id_fkey"
@@ -20490,6 +20770,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
@@ -21569,6 +21856,13 @@ export type Database = {
             foreignKeyName: "veiculos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -22020,6 +22314,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "vistorias_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vistorias_associado_id_fkey"
@@ -22626,6 +22927,54 @@ export type Database = {
         }
         Relationships: []
       }
+      view_associados_publico: {
+        Row: {
+          cidade: string | null
+          data_adesao: string | null
+          data_ativacao: string | null
+          id: string | null
+          nome: string | null
+          plano_id: string | null
+          status: Database["public"]["Enums"]["status_associado"] | null
+          uf: string | null
+        }
+        Insert: {
+          cidade?: string | null
+          data_adesao?: string | null
+          data_ativacao?: string | null
+          id?: string | null
+          nome?: string | null
+          plano_id?: string | null
+          status?: Database["public"]["Enums"]["status_associado"] | null
+          uf?: string | null
+        }
+        Update: {
+          cidade?: string | null
+          data_adesao?: string | null
+          data_ativacao?: string | null
+          id?: string | null
+          nome?: string | null
+          plano_id?: string | null
+          status?: Database["public"]["Enums"]["status_associado"] | null
+          uf?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "associados_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       view_dashboard_diretoria: {
         Row: {
           assistencias_mes: number | null
@@ -22846,6 +23195,13 @@ export type Database = {
             foreignKeyName: "indicacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
             referencedRelation: "view_inadimplentes"
             referencedColumns: ["associado_id"]
           },
@@ -22883,6 +23239,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "indicacoes_indicador_id_fkey"
@@ -23248,6 +23611,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_associado_financeiro"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "veiculos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "veiculos_associado_id_fkey"
