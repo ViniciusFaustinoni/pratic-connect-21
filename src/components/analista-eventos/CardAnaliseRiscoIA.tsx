@@ -263,9 +263,9 @@ export function CardAnaliseRiscoIA({ sinistroId }: CardAnaliseRiscoIAProps) {
         </div>
 
         {/* Resumo */}
-        <div className="p-3 rounded-md bg-muted/50 border">
-          <h4 className="text-xs font-semibold mb-1 text-gray-900">📝 Resumo</h4>
-          <p className="text-xs text-gray-700 leading-relaxed">{analise.resumo}</p>
+        <div className="p-3 rounded-md bg-gray-900 border-gray-700 border">
+          <h4 className="text-xs font-semibold mb-1 text-white">📝 Resumo</h4>
+          <p className="text-xs text-gray-200 leading-relaxed">{analise.resumo}</p>
         </div>
 
         {/* Recomendação */}
