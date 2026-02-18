@@ -246,7 +246,7 @@ export function AtribuirFornecedoresDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
+        <ScrollArea className="flex-1 min-h-0 pr-4">
           <div className="space-y-6 py-2">
             {/* Cabeçalho - Dados do Veículo */}
             <div className="flex items-center gap-4 p-3 rounded-lg bg-muted">
