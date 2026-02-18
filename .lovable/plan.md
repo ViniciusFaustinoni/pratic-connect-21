@@ -1,55 +1,45 @@
 
-# Corrigir Card de Valores do Sinistro
 
-## Problema
+# Corrigir persistencia de marcas e filtro de oficinas
 
-O card "Valores" exibe tracos (--) em todos os campos porque os dados estao sendo lidos de campos errados ou nulos na tabela `sinistros`:
+## Problema 1: Editar oficina como GLOBAL nao persiste
 
-| Campo no Card | Campo usado no codigo | Valor no banco | Correcao |
-|---|---|---|---|
-| Valor FIPE | `sinistro.valor_fipe` | NULL | Usar `sinistro.veiculo.valor_fipe` como fallback (veiculos tem R$ 70.008,00) |
-| Participacao | `sinistro.valor_participacao` | 0.00 | Usar `sinistro.valor_cota_participacao` que tem R$ 4.200,48 |
-| Valor Indenizacao | `sinistro.valor_indenizacao` | NULL | Manter (preenchido apos finalizacao, OK estar vazio agora) |
-| Valor Pago | `sinistro.valor_pago` | NULL | Manter (preenchido apos pagamento da oficina, OK estar vazio agora) |
+A interface `Oficina` em `src/types/database.ts` nao tem o campo `marcas_atendidas`. O hook `useUpdateOficina` usa `Partial<Oficina>`, entao o TypeScript silenciosamente descarta `marcas_atendidas` do payload. O campo e enviado no `OficinaFormDialog`, mas como nao faz parte do tipo, pode ser ignorado em certas operacoes tipadas.
 
-## Solucao
+Na pratica, o `OficinaFormDialog` faz spread do payload com `marcas_atendidas` direto no `mutateAsync`, entao o campo chega ao Supabase. Porem, ao verificar no banco, a oficina ABDALA NAJA MOTOPECAS ja tem `marcas_atendidas: [GLOBAL]`. Isso sugere que o save pode ter funcionado, mas o modal nao atualizou o estado local (o drawer/lista nao refletiu a mudanca).
 
-### 1. Corrigir exibicao no card de Valores (SinistroDetalhe.tsx, linhas 866-892)
+**Correcao**: Adicionar `marcas_atendidas` na interface `Oficina` e garantir que apos salvar, o cache do React Query seja invalidado e a lista/drawer atualize.
 
-**Valor FIPE**: Usar fallback para o valor do veiculo:
-```text
-sinistro.valor_fipe || sinistro.veiculo?.valor_fipe
-```
+## Problema 2: Nenhuma oficina compativel encontrada para Toyota
 
-**Participacao**: Usar o campo correto `valor_cota_participacao`:
-```text
-sinistro.valor_cota_participacao || sinistro.valor_participacao
-```
+O filtro `oficinasCompativeis` (linha 91-102 do `AtribuirFornecedoresDialog.tsx`) exige que a oficina tenha especialidades que correspondam as etapas de reparo. A oficina ABDALA tem `especialidades: []` (vazio), entao e filtrada fora mesmo tendo `marcas_atendidas: [GLOBAL]`.
 
-### 2. Corrigir o sinistro no banco (migration SQL)
+**Correcao**: Quando a oficina nao tem especialidades cadastradas (array vazio), considerar como "oficina generalista" e incluir na lista. O filtro so deve excluir oficinas que tenham especialidades cadastradas mas nenhuma compativel.
 
-Preencher `valor_fipe` no sinistro com o valor do veiculo para que o campo fique persistido:
+## Alteracoes
+
+### 1. `src/types/database.ts` (linha 828)
+
+Adicionar campo `marcas_atendidas` na interface `Oficina`:
 
 ```text
-UPDATE sinistros s
-SET valor_fipe = v.valor_fipe
-FROM veiculos v
-WHERE s.veiculo_id = v.id
-AND s.protocolo = 'SIN-20260217-0008'
-AND s.valor_fipe IS NULL;
+marcas_atendidas?: string[];
+especialidades: string[];
 ```
 
-Tambem copiar `valor_cota_participacao` para `valor_participacao` para manter consistencia:
+### 2. `src/components/sinistros/AtribuirFornecedoresDialog.tsx` (linhas 91-102)
+
+Alterar filtro para incluir oficinas sem especialidades cadastradas:
 
 ```text
-UPDATE sinistros
-SET valor_participacao = valor_cota_participacao
-WHERE protocolo = 'SIN-20260217-0008'
-AND (valor_participacao IS NULL OR valor_participacao = 0)
-AND valor_cota_participacao > 0;
+// Antes: exclui oficinas sem especialidades
+if (!o.especialidades?.length) return false;
+
+// Depois: inclui oficinas sem especialidades (generalistas)
+if (!o.especialidades?.length) return true;
 ```
 
-## Arquivo alterado
+### 3. `src/components/oficinas/OficinaDetailDrawer.tsx`
 
-1. **`src/pages/eventos/SinistroDetalhe.tsx`** -- fallback no card de Valores (linhas 870 e 876)
-2. **Migration SQL** -- preencher `valor_fipe` e `valor_participacao` do sinistro existente
+Garantir que o drawer exiba `marcas_atendidas` usando o tipo correto (sem cast `as any`).
+
