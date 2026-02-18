@@ -1,39 +1,33 @@
 
 
-# Usar rota real (OSRM) na comparacao de posicoes GPS
+# Mostrar Indice de Risco IA independente do status do sinistro
 
 ## Problema
 
-O componente `ComparacaoPosicoes` calcula a distancia entre o local do evento e o rastreador GPS usando a formula de Haversine (linha reta). A linha tracejada no mapa tambem e uma linha reta. O usuario quer que tanto a distancia exibida quanto a rota no mapa sigam as ruas reais.
+O card "Analise de Risco com IA" so aparece quando o sinistro esta com status `aguardando_analise`. Apos aprovacao (ou qualquer mudanca de status), o card desaparece.
 
 ## Solucao
 
-Substituir o calculo de linha reta pelo hook `useRotaReal` que ja existe no projeto e usa a API OSRM para tracar rotas pelas ruas.
+Remover a condicao `sinistro.status === 'aguardando_analise'` da renderizacao do `CardAnaliseRiscoIA` no arquivo `src/pages/eventos/SinistroAnalise.tsx`.
 
-## Alteracoes em `src/components/sinistros/ComparacaoPosicoes.tsx`
+O card continuara restrito a sinistros do tipo colisao (`tipo` contendo "colis"), mas sera exibido em qualquer status (aprovado, negado, em analise, etc.).
 
-### 1. Importar o hook e componente de rota real
+## Detalhe tecnico
 
-- Importar `useRotaReal` de `@/hooks/useRotaReal`
-- Importar `RotaPolyline` de `@/components/mapa/RotaPolyline`
+**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx` (linha 1410)
 
-### 2. Usar `useRotaReal` para obter distancia real
+**De:**
+```
+{sinistro.tipo?.toLowerCase().includes('colis') && sinistro.status === 'aguardando_analise' && (
+  <CardAnaliseRiscoIA sinistroId={sinistro.id} />
+)}
+```
 
-Chamar o hook com as coordenadas do local informado e do rastreador. A distancia retornada (`distanciaKm`) sera pela rota das ruas, nao em linha reta.
+**Para:**
+```
+{sinistro.tipo?.toLowerCase().includes('colis') && (
+  <CardAnaliseRiscoIA sinistroId={sinistro.id} />
+)}
+```
 
-### 3. Substituir Polyline por RotaPolyline no mapa
-
-Trocar a `Polyline` de linha reta (linhas 191-199) pelo componente `RotaPolyline` que desenha a rota seguindo as ruas.
-
-### 4. Usar distancia da rota na classificacao
-
-Quando a rota estiver carregada, usar `distanciaKm` do OSRM. Enquanto carrega, manter o calculo Haversine como fallback com indicador de "calculando".
-
-### 5. Manter fallback
-
-A funcao `calcularDistanciaKm` (Haversine) sera mantida como fallback caso a API OSRM falhe.
-
-## Arquivo alterado
-
-- `src/components/sinistros/ComparacaoPosicoes.tsx`
-
+Nenhuma outra alteracao e necessaria. O componente `CardAnaliseRiscoIA` ja carrega a analise salva do banco (`sinistro_analises_ia`) e exibe corretamente, e o botao "Reanalisar" continuara disponivel caso o analista queira refazer.
