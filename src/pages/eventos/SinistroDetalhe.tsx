@@ -282,7 +282,7 @@ export default function SinistroDetalhe() {
   const [modalJuridicoOpen, setModalJuridicoOpen] = useState(false);
   const [showAtribuirFornecedores, setShowAtribuirFornecedores] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const { isDiretor } = usePermissions();
+  const { isDiretor, isAnalistaEventosOnly } = usePermissions();
 
   const openModalSafely = (setter: (v: boolean) => void) => {
     setDropdownOpen(false);
@@ -597,6 +597,20 @@ export default function SinistroDetalhe() {
           const isAprovadoCotaPagaTermoAssinado = sinistro.status === 'aprovado' 
             && (sinistro as any).cota_paga === true 
             && sinistro.termo_anuencia_assinado === true;
+
+          // Analista de Eventos não vê menu de ações quando sinistro já foi aprovado
+          const isAprovado = ['aprovado', 'em_regulacao', 'em_reparo', 'em_oficina', 'aguardando_peca', 'finalizado', 'pago', 'negado'].includes(sinistro.status);
+          if (isAnalistaEventosOnly && isAprovado) {
+            if (isAprovadoCotaPagaTermoAssinado) {
+              return (
+                <Button onClick={() => setShowAtribuirFornecedores(true)}>
+                  <Package className="h-4 w-4 mr-2" />
+                  Fazer Pedidos das Peças
+                </Button>
+              );
+            }
+            return null;
+          }
 
           if (isAprovadoCotaPagaTermoAssinado) {
             // Menu simplificado: apenas "Fazer Pedidos das Peças"
