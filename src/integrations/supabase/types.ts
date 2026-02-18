@@ -19068,6 +19068,47 @@ export type Database = {
           },
         ]
       }
+      sinistro_analises_ia: {
+        Row: {
+          created_at: string | null
+          fatores: Json
+          id: string
+          nivel: string
+          pontuacao_risco: number
+          recomendacao: string
+          resumo: string
+          sinistro_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          fatores?: Json
+          id?: string
+          nivel: string
+          pontuacao_risco: number
+          recomendacao: string
+          resumo: string
+          sinistro_id: string
+        }
+        Update: {
+          created_at?: string | null
+          fatores?: Json
+          id?: string
+          nivel?: string
+          pontuacao_risco?: number
+          recomendacao?: string
+          resumo?: string
+          sinistro_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_analises_ia_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistro_contatos_agendados: {
         Row: {
           agendado_para: string
