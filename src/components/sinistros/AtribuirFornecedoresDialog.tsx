@@ -91,7 +91,7 @@ export function AtribuirFornecedoresDialog({
   const oficinasCompativeis = useMemo(() => {
     if (!oficinas || etapasReparo.length === 0) return oficinas || [];
     return oficinas.filter((o: any) => {
-      if (!o.especialidades?.length) return false;
+      if (!o.especialidades?.length) return true;
       return etapasReparo.some((etapa: string) =>
         o.especialidades.some((esp: string) =>
           esp.toLowerCase().includes(etapa.toLowerCase()) ||

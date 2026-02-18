@@ -153,17 +153,17 @@ export default function Oficinas() {
                     )}
                   </div>
                 )}
-                {(oficina as any).marcas_atendidas?.length > 0 && (
+                {oficina.marcas_atendidas && oficina.marcas_atendidas.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {(oficina as any).marcas_atendidas.includes('GLOBAL') ? (
+                    {oficina.marcas_atendidas.includes('GLOBAL') ? (
                       <Badge variant="secondary" className="text-xs">GLOBAL</Badge>
                     ) : (
                       <>
-                        {(oficina as any).marcas_atendidas.slice(0, 3).map((m: string) => (
+                        {oficina.marcas_atendidas.slice(0, 3).map((m) => (
                           <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>
                         ))}
-                        {(oficina as any).marcas_atendidas.length > 3 && (
-                          <Badge variant="secondary" className="text-xs">+{(oficina as any).marcas_atendidas.length - 3}</Badge>
+                        {oficina.marcas_atendidas.length > 3 && (
+                          <Badge variant="secondary" className="text-xs">+{oficina.marcas_atendidas.length - 3}</Badge>
                         )}
                       </>
                     )}

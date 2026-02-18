@@ -825,6 +825,7 @@ export interface Oficina {
   conta?: string;
   pix_chave?: string;
   pix_tipo?: TipoPix;
+  marcas_atendidas?: string[];
   especialidades: string[];
   nota_media: number;
   total_avaliacoes: number;
