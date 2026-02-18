@@ -1,30 +1,39 @@
 
-# Corrigir Card do Link do Evento para status "completado"
+
+# Usar rota real (OSRM) na comparacao de posicoes GPS
 
 ## Problema
 
-O banco de dados mostra `status = 'completado'` para o link do evento, mas `etapa_atual = 2`. O card exibe "Etapa 2/3" e a barra de progresso em 66% porque usa `linkAtivo.etapa_atual` sem verificar se o link ja foi concluido.
+O componente `ComparacaoPosicoes` calcula a distancia entre o local do evento e o rastreador GPS usando a formula de Haversine (linha reta). A linha tracejada no mapa tambem e uma linha reta. O usuario quer que tanto a distancia exibida quanto a rota no mapa sigam as ruas reais.
 
 ## Solucao
 
-No componente `src/components/eventos/EventoLinkCard.tsx`, quando o status for `completado`, forcar a exibicao como concluido independente do valor de `etapa_atual`.
+Substituir o calculo de linha reta pelo hook `useRotaReal` que ja existe no projeto e usa a API OSRM para tracar rotas pelas ruas.
 
-### Alteracoes em `src/components/eventos/EventoLinkCard.tsx`
+## Alteracoes em `src/components/sinistros/ComparacaoPosicoes.tsx`
 
-1. **Badge de etapa (linha 173-175)**: Quando `completado`, mostrar "Concluido" em vez de "Etapa X/Y"
+### 1. Importar o hook e componente de rota real
 
-2. **Barra de progresso (linhas 178-190)**: Quando `completado`, preencher 100% e mostrar label "Concluido"
+- Importar `useRotaReal` de `@/hooks/useRotaReal`
+- Importar `RotaPolyline` de `@/components/mapa/RotaPolyline`
 
-3. **Acoes (linhas 236-276)**: Quando `completado`, nao mostrar botoes de "Copiar Link" ou "Gerar Novo" -- o fluxo ja terminou
+### 2. Usar `useRotaReal` para obter distancia real
 
-### Logica
+Chamar o hook com as coordenadas do local informado e do rastreador. A distancia retornada (`distanciaKm`) sera pela rota das ruas, nao em linha reta.
 
-```text
-const isCompletado = linkAtivo?.status === 'completado';
-const etapaExibida = isCompletado ? totalEtapas : linkAtivo.etapa_atual;
-const progressoPct = isCompletado ? 100 : (linkAtivo.etapa_atual / totalEtapas) * 100;
-```
+### 3. Substituir Polyline por RotaPolyline no mapa
+
+Trocar a `Polyline` de linha reta (linhas 191-199) pelo componente `RotaPolyline` que desenha a rota seguindo as ruas.
+
+### 4. Usar distancia da rota na classificacao
+
+Quando a rota estiver carregada, usar `distanciaKm` do OSRM. Enquanto carrega, manter o calculo Haversine como fallback com indicador de "calculando".
+
+### 5. Manter fallback
+
+A funcao `calcularDistanciaKm` (Haversine) sera mantida como fallback caso a API OSRM falhe.
 
 ## Arquivo alterado
 
-- `src/components/eventos/EventoLinkCard.tsx`
+- `src/components/sinistros/ComparacaoPosicoes.tsx`
+
