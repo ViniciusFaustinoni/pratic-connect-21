@@ -855,9 +855,9 @@ export default function SinistroDetalhe() {
                       {sinistro.tipo_dano === 'perda_total' ? 'Perda Total' : sinistro.tipo_dano === 'parcial' ? 'Parcial' : 'Pendente'}
                     </Badge>
                   </div>
-                  {sinistro.valor_fipe && (
+                  {(sinistro.valor_fipe || (sinistro as any).veiculo?.valor_fipe) && (
                     <div className="mt-2 text-sm text-muted-foreground">
-                      Limite para Dano Parcial: {formatCurrency(sinistro.valor_fipe * 0.75)}
+                      Limite para Dano Parcial: {formatCurrency((sinistro.valor_fipe || (sinistro as any).veiculo?.valor_fipe) * 0.75)}
                     </div>
                   )}
                 </div>
@@ -867,13 +867,13 @@ export default function SinistroDetalhe() {
                 <div>
                   <p className="text-sm text-muted-foreground">Valor FIPE</p>
                   <p className="text-xl font-bold text-primary">
-                    {formatCurrency(sinistro.valor_fipe)}
+                    {formatCurrency(sinistro.valor_fipe || (sinistro as any).veiculo?.valor_fipe)}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Participação</p>
                   <p className="text-xl font-bold text-orange-600">
-                    {formatCurrency(sinistro.valor_participacao)}
+                    {formatCurrency((sinistro as any).valor_cota_participacao || sinistro.valor_participacao)}
                   </p>
                   <p className="text-xs text-muted-foreground">Dedutível do associado</p>
                 </div>
