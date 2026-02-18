@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOficinas } from '@/hooks/useOficinas';
-import { usePrestadoresEvento } from '@/hooks/usePrestadoresEvento';
+
 import { useAutoCenters } from '@/hooks/useAutoCenters';
 import { useVistoriaEvento, ItemOrcamento } from '@/hooks/useVistoriaEvento';
 import { toast } from 'sonner';
@@ -29,7 +29,7 @@ import {
   Package,
   MessageSquare,
   AlertTriangle,
-  Users,
+  
   Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -48,7 +48,7 @@ export function AtribuirFornecedoresDialog({
   onSuccess,
 }: AtribuirFornecedoresDialogProps) {
   const [oficinaId, setOficinaId] = useState('');
-  const [prestadoresSelecionados, setPrestadoresSelecionados] = useState<string[]>([]);
+  
   const [autoCentersSelecionados, setAutoCentersSelecionados] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -78,10 +78,6 @@ export function AtribuirFornecedoresDialog({
     marca: marcaVeiculo,
   });
 
-  const { data: prestadores, isLoading: loadingPrestadores } = usePrestadoresEvento({
-    status: 'ativo',
-    marca: marcaVeiculo,
-  });
 
   const { data: autoCenters, isLoading: loadingAutoCenters } = useAutoCenters({
     marca: marcaVeiculo,
@@ -139,12 +135,6 @@ export function AtribuirFornecedoresDialog({
     return `Olá [Nome]! Aqui é a Pratic Car.\nPrecisamos de uma cotação de peças para:\n\n🚗 Veículo: ${veiculo?.marca || ''} ${veiculo?.modelo || ''} ${veiculo?.ano_modelo || ''} — Placa: ${veiculo?.placa || ''}\n\n📋 Itens para cotação:\n${itensTexto}\n\n⏰ Prazo para resposta: 24 horas\n📎 Referência: Evento #${sinistro?.protocolo || ''}\n\nPor favor, responda com o valor de cada item e o prazo de entrega. Obrigado!`;
   }, [itensPecas, veiculo, sinistro]);
 
-  const handleTogglePrestador = (id: string) => {
-    setPrestadoresSelecionados((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
-    );
-  };
-
   const handleToggleAutoCenter = (id: string) => {
     setAutoCentersSelecionados((prev) =>
       prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
@@ -191,17 +181,7 @@ export function AtribuirFornecedoresDialog({
         usuario_id: profile?.id,
       });
 
-      // 5. Registrar prestadores selecionados
-      if (prestadoresSelecionados.length > 0) {
-        await supabase.from('sinistro_prestadores').insert(
-          prestadoresSelecionados.map((prestadorId) => ({
-            sinistro_id: sinistro.id,
-            prestador_id: prestadorId,
-          }))
-        );
-      }
-
-      // 6. Para cada auto center: criar cotação e enviar WhatsApp
+      // Para cada auto center: criar cotação e enviar WhatsApp
       for (const acId of autoCentersSelecionados) {
         const ac = autoCentersAtivos.find((a: any) => a.id === acId);
         if (!ac) continue;
@@ -262,7 +242,7 @@ export function AtribuirFornecedoresDialog({
             Atribuir Fornecedores
           </DialogTitle>
           <DialogDescription>
-            Selecione oficina, prestadores e auto centers para o evento {sinistro?.protocolo}
+            Selecione oficina e auto centers para o evento {sinistro?.protocolo}
           </DialogDescription>
         </DialogHeader>
 
@@ -371,66 +351,7 @@ export function AtribuirFornecedoresDialog({
 
             <Separator />
 
-            {/* SEÇÃO 2 — PRESTADORES */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold text-foreground">Prestadores de Serviço (opcional)</h3>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Se necessário, selecione prestadores especializados para serviços que a oficina não cobre
-              </p>
-
-              {loadingPrestadores ? (
-                <div className="flex items-center gap-2 py-4">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">Carregando prestadores...</span>
-                </div>
-              ) : !prestadores?.length ? (
-                <p className="text-sm text-muted-foreground py-2">
-                  Nenhum prestador encontrado para a marca {marcaVeiculo}.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {prestadores.map((prest) => (
-                    <label
-                      key={prest.id}
-                      className={cn(
-                        'flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
-                        prestadoresSelecionados.includes(prest.id)
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:bg-muted/50'
-                      )}
-                    >
-                      <Checkbox
-                        checked={prestadoresSelecionados.includes(prest.id)}
-                        onCheckedChange={() => handleTogglePrestador(prest.id)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground">
-                          {prest.nome_fantasia || prest.razao_social}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {[prest.cidade, prest.estado].filter(Boolean).join(' - ')}
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {prest.especialidades?.map((e: string) => (
-                            <Badge key={e} variant="secondary" className="text-xs">
-                              {e}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* SEÇÃO 3 — AUTO CENTERS */}
+            {/* SEÇÃO 2 — AUTO CENTERS */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Package className="h-5 w-5 text-primary" />
