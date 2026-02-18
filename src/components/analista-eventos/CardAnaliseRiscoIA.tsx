@@ -219,12 +219,12 @@ export function CardAnaliseRiscoIA({ sinistroId }: CardAnaliseRiscoIAProps) {
         {/* Pontuação e barra */}
         <div className="flex items-center gap-4">
           <div className="text-center">
-            <div className="text-3xl font-bold">{analise.pontuacao_risco}</div>
-            <div className="text-xs text-muted-foreground">/10</div>
+            <div className="text-3xl font-bold text-gray-900">{analise.pontuacao_risco}</div>
+            <div className="text-xs text-gray-500">/10</div>
           </div>
           <div className="flex-1 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Risco de fraude</span>
+              <span className="text-xs text-gray-500">Risco de fraude</span>
               <Badge className={config.color} variant="outline">{config.label}</Badge>
             </div>
             <div className="h-3 bg-muted rounded-full overflow-hidden">
@@ -238,7 +238,7 @@ export function CardAnaliseRiscoIA({ sinistroId }: CardAnaliseRiscoIAProps) {
 
         {/* Fatores */}
         <div className="space-y-1.5">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fatores analisados</h4>
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Fatores analisados</h4>
           {analise.fatores.map((fator, i) => (
             <div
               key={i}
@@ -264,8 +264,8 @@ export function CardAnaliseRiscoIA({ sinistroId }: CardAnaliseRiscoIAProps) {
 
         {/* Resumo */}
         <div className="p-3 rounded-md bg-muted/50 border">
-          <h4 className="text-xs font-semibold mb-1">📝 Resumo</h4>
-          <p className="text-xs text-muted-foreground leading-relaxed">{analise.resumo}</p>
+          <h4 className="text-xs font-semibold mb-1 text-gray-900">📝 Resumo</h4>
+          <p className="text-xs text-gray-700 leading-relaxed">{analise.resumo}</p>
         </div>
 
         {/* Recomendação */}
@@ -276,8 +276,8 @@ export function CardAnaliseRiscoIA({ sinistroId }: CardAnaliseRiscoIAProps) {
             ? 'bg-amber-50 border-amber-200'
             : 'bg-green-50 border-green-200'
         }`}>
-          <h4 className="text-xs font-semibold mb-1">💡 Recomendação</h4>
-          <p className="text-xs leading-relaxed">{analise.recomendacao}</p>
+          <h4 className="text-xs font-semibold mb-1 text-gray-900">💡 Recomendação</h4>
+          <p className="text-xs text-gray-700 leading-relaxed">{analise.recomendacao}</p>
         </div>
       </CardContent>
     </Card>
