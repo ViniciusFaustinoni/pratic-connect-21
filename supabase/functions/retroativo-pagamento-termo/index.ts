@@ -63,6 +63,23 @@ serve(async (req) => {
       }
 
       try {
+        // 0. Verificar duplicata antes de criar cobrança
+        const { data: cobrancaDuplicata } = await supabase
+          .from("asaas_cobrancas")
+          .select("id, asaas_id")
+          .eq("associado_id", associado.id)
+          .eq("tipo", "cota_participacao")
+          .eq("referencia", sinistro.protocolo)
+          .neq("status", "CANCELLED")
+          .maybeSingle();
+
+        if (cobrancaDuplicata) {
+          console.log(`[retroativo] Cobrança já existe (${cobrancaDuplicata.asaas_id}), vinculando ao sinistro`);
+          await supabase.from("sinistros").update({ cobranca_cota_id: cobrancaDuplicata.id }).eq("id", sinistro.id);
+          resultados.push({ protocolo: sinistro.protocolo, status: "ja_existente", asaas_id: cobrancaDuplicata.asaas_id });
+          continue;
+        }
+
         // 1. Buscar/criar cliente Asaas
         let customerAsaasId: string | null = null;
         const { data: clienteExistente } = await supabase
