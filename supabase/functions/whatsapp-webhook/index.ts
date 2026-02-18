@@ -2545,11 +2545,45 @@ serve(async (req) => {
     const payload = await req.json();
     console.log("[whatsapp-webhook] Payload:", JSON.stringify(payload).substring(0, 500));
 
+    // Validar que o payload tem estrutura esperada da Evolution API
+    if (!payload || typeof payload !== 'object') {
+      console.error("[whatsapp-webhook] Payload inválido recebido");
+      return new Response(JSON.stringify({ error: "Invalid payload" }), { status: 400, headers: corsHeaders });
+    }
+
+    // Validar apikey da Evolution API se configurada
+    const evolutionApiKey = Deno.env.get("EVOLUTION_API_KEY");
+    if (evolutionApiKey) {
+      const webhookApiKey = req.headers.get("apikey") || payload.apikey;
+      if (webhookApiKey && webhookApiKey !== evolutionApiKey) {
+        console.error("[whatsapp-webhook] API key inválida no webhook");
+        return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+      }
+    }
+
+    // Validar instance_name no payload contra instâncias cadastradas
+    const instanceName = payload.instance?.instanceName || payload.instance;
+
     // Criar cliente Supabase (necessário para eventos de conexão também)
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Verificar se a instância é conhecida (se o nome foi fornecido)
+    if (instanceName && typeof instanceName === 'string') {
+      const { data: instanciaConhecida } = await supabase
+        .from("whatsapp_instancias")
+        .select("id")
+        .eq("instance_name", instanceName)
+        .eq("ativa", true)
+        .maybeSingle();
+
+      if (!instanciaConhecida) {
+        console.error(`[whatsapp-webhook] Instância desconhecida: ${instanceName}`);
+        return new Response(JSON.stringify({ error: "Unknown instance" }), { status: 403, headers: corsHeaders });
+      }
+    }
 
     // ========================================
     // PROCESSAR EVENTOS DE CONEXÃO (CONNECTION_UPDATE)

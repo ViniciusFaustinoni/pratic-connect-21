@@ -12,6 +12,53 @@ serve(async (req) => {
   }
 
   try {
+    // 1. Validar autenticação
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Não autorizado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Validar JWT
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims?.sub) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Token inválido" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+
+    // 2. Verificar role do usuário
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("id, role")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const allowedRoles = ["regulador", "analista_sinistro", "diretor", "admin", "gerente", "operacional"];
+    if (!profile || !allowedRoles.includes(profile.role)) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Sem permissão para gerar link de evento" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { sinistro_id } = await req.json();
 
     if (!sinistro_id) {
@@ -21,23 +68,18 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
-    // 1. Invalidar links ativos existentes
-    await supabase
+    // 3. Invalidar links ativos existentes
+    await supabaseAdmin
       .from("sinistro_evento_links")
       .update({ status: "invalidado" })
       .eq("sinistro_id", sinistro_id)
       .eq("status", "ativo");
 
-    // 2. Criar novo link (72h)
+    // 4. Criar novo link (72h)
     const expiraEm = new Date();
     expiraEm.setHours(expiraEm.getHours() + 72);
 
-    const { data: link, error: linkError } = await supabase
+    const { data: link, error: linkError } = await supabaseAdmin
       .from("sinistro_evento_links")
       .insert({
         sinistro_id,
@@ -56,13 +98,13 @@ serve(async (req) => {
       );
     }
 
-    // 3. Atualizar sinistro
-    await supabase
+    // 5. Atualizar sinistro
+    await supabaseAdmin
       .from("sinistros")
       .update({ link_evento_id: link.id })
       .eq("id", sinistro_id);
 
-    console.log(`[gerar-link-evento] Novo link: ${link.token} para sinistro ${sinistro_id}`);
+    console.log(`[gerar-link-evento] Novo link: ${link.token} para sinistro ${sinistro_id} por usuario ${userId}`);
 
     return new Response(
       JSON.stringify({ success: true, link_id: link.id, token: link.token, expira_em: link.expira_em }),
@@ -71,7 +113,7 @@ serve(async (req) => {
   } catch (error: any) {
     console.error("[gerar-link-evento] Erro:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
