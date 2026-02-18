@@ -1,57 +1,55 @@
 
-# Corrigir exibicao de horario com timezone incorreto
+# Corrigir Card de Valores do Sinistro
 
 ## Problema
 
-O horario da ocorrencia esta sendo exibido 3 horas a menos do que o informado pelo associado. Exemplo: o associado informou 06:00, mas o card mostra 03:00.
+O card "Valores" exibe tracos (--) em todos os campos porque os dados estao sendo lidos de campos errados ou nulos na tabela `sinistros`:
 
-## Causa raiz
-
-Na edge function `criar-sinistro`, linha 500, o horario e salvo assim:
-
-```text
-"2026-02-17T06:00:00"  (sem indicador de timezone)
-```
-
-O Postgres interpreta como UTC (porque a coluna e `timestamptz`). Quando o navegador em Brasilia (UTC-3) exibe esse valor, subtrai 3 horas: 06:00 UTC vira 03:00 BRT.
-
-O horario deveria ter sido salvo como:
-
-```text
-"2026-02-17T06:00:00-03:00"  (horario de Brasilia)
-```
+| Campo no Card | Campo usado no codigo | Valor no banco | Correcao |
+|---|---|---|---|
+| Valor FIPE | `sinistro.valor_fipe` | NULL | Usar `sinistro.veiculo.valor_fipe` como fallback (veiculos tem R$ 70.008,00) |
+| Participacao | `sinistro.valor_participacao` | 0.00 | Usar `sinistro.valor_cota_participacao` que tem R$ 4.200,48 |
+| Valor Indenizacao | `sinistro.valor_indenizacao` | NULL | Manter (preenchido apos finalizacao, OK estar vazio agora) |
+| Valor Pago | `sinistro.valor_pago` | NULL | Manter (preenchido apos pagamento da oficina, OK estar vazio agora) |
 
 ## Solucao
 
-### 1. Corrigir a edge function `criar-sinistro`
+### 1. Corrigir exibicao no card de Valores (SinistroDetalhe.tsx, linhas 866-892)
 
-Adicionar o offset de Brasilia (-03:00) ao montar a data/hora na linha 500:
-
-**Antes:**
+**Valor FIPE**: Usar fallback para o valor do veiculo:
 ```text
-dataHoraOcorrencia = `${ano}-${mes}-${dia}T${payload.hora_evento}:00`;
+sinistro.valor_fipe || sinistro.veiculo?.valor_fipe
 ```
 
-**Depois:**
+**Participacao**: Usar o campo correto `valor_cota_participacao`:
 ```text
-dataHoraOcorrencia = `${ano}-${mes}-${dia}T${payload.hora_evento}:00-03:00`;
+sinistro.valor_cota_participacao || sinistro.valor_participacao
 ```
 
-Isso garante que o Postgres armazene o horario corretamente como UTC (09:00 UTC para 06:00 BRT), e o navegador em Brasilia exibira 06:00 corretamente.
+### 2. Corrigir o sinistro no banco (migration SQL)
 
-### 2. Corrigir o sinistro existente no banco
-
-O SIN-20260217-0008 tem `data_ocorrencia = 2026-02-17 06:00:00+00` que deveria ser `2026-02-17 09:00:00+00` (06:00 BRT = 09:00 UTC):
+Preencher `valor_fipe` no sinistro com o valor do veiculo para que o campo fique persistido:
 
 ```text
-UPDATE sinistros SET data_ocorrencia = '2026-02-17T06:00:00-03:00' WHERE protocolo = 'SIN-20260217-0008';
+UPDATE sinistros s
+SET valor_fipe = v.valor_fipe
+FROM veiculos v
+WHERE s.veiculo_id = v.id
+AND s.protocolo = 'SIN-20260217-0008'
+AND s.valor_fipe IS NULL;
 ```
 
-### 3. Verificar e corrigir o formatDateTime no frontend
+Tambem copiar `valor_cota_participacao` para `valor_participacao` para manter consistencia:
 
-A funcao `formatDateTime` em `SinistroDetalhe.tsx` (linha 142) ja usa `new Date()` que respeita timezone, entao apos a correcao no backend ela exibira o horario correto automaticamente.
+```text
+UPDATE sinistros
+SET valor_participacao = valor_cota_participacao
+WHERE protocolo = 'SIN-20260217-0008'
+AND (valor_participacao IS NULL OR valor_participacao = 0)
+AND valor_cota_participacao > 0;
+```
 
-## Arquivos alterados
+## Arquivo alterado
 
-1. **`supabase/functions/criar-sinistro/index.ts`** -- adicionar offset -03:00 na formatacao da data
-2. **Migration SQL** -- corrigir data_ocorrencia do sinistro existente
+1. **`src/pages/eventos/SinistroDetalhe.tsx`** -- fallback no card de Valores (linhas 870 e 876)
+2. **Migration SQL** -- preencher `valor_fipe` e `valor_participacao` do sinistro existente
