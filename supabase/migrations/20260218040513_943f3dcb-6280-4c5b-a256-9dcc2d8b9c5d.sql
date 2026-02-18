@@ -1,0 +1,1 @@
+UPDATE sinistros SET data_ocorrencia = '2026-02-17T06:00:00-03:00' WHERE protocolo = 'SIN-20260217-0008';

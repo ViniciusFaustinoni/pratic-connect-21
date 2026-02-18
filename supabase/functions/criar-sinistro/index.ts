@@ -497,7 +497,7 @@ Deno.serve(async (req) => {
     let dataHoraOcorrencia = payload.data_evento;
     if (payload.hora_evento) {
       const [ano, mes, dia] = payload.data_evento.split('-');
-      dataHoraOcorrencia = `${ano}-${mes}-${dia}T${payload.hora_evento}:00`;
+      dataHoraOcorrencia = `${ano}-${mes}-${dia}T${payload.hora_evento}:00-03:00`;
     }
 
     const { data: sinistro, error: insertError } = await supabaseAdmin
