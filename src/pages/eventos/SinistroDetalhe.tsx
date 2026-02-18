@@ -10,9 +10,11 @@ import {
   HelpCircle, FileText, Clock, MoreHorizontal, Loader2,
   ExternalLink, Download, CheckCircle, XCircle, AlertCircle, AlertTriangle,
   User, FileCheck, FilePlus, Scale, Plus, Link as LinkIcon, Trash2,
-  Bot, Wrench, Radio, Lock, Navigation, Copy, Send, FileSignature, RefreshCw, DollarSign, Search, ClipboardCheck
+  Bot, Wrench, Radio, Lock, Navigation, Copy, Send, FileSignature, RefreshCw, DollarSign, Search, ClipboardCheck, Package
 } from 'lucide-react';
 import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
+import { CardControleReparo } from '@/components/sinistros/CardControleReparo';
+import { AtribuirFornecedoresDialog } from '@/components/sinistros/AtribuirFornecedoresDialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteSinistro } from '@/hooks/useSinistros';
 import { ConfirmacaoExclusaoDialog } from '@/components/sinistros/ConfirmacaoExclusaoDialog';
@@ -265,6 +267,7 @@ function TermoAssinaturaCard({ sinistro }: { sinistro: any }) {
 export default function SinistroDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [modalVincularOpen, setModalVincularOpen] = useState(false);
   const [modalStatusOpen, setModalStatusOpen] = useState(false);
   const [modalVistoriaOpen, setModalVistoriaOpen] = useState(false);
@@ -277,6 +280,7 @@ export default function SinistroDetalhe() {
   const [modalIndenizacaoOpen, setModalIndenizacaoOpen] = useState(false);
   const [modalSindicanciaOpen, setModalSindicanciaOpen] = useState(false);
   const [modalJuridicoOpen, setModalJuridicoOpen] = useState(false);
+  const [showAtribuirFornecedores, setShowAtribuirFornecedores] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { isDiretor } = usePermissions();
 
@@ -588,107 +592,125 @@ export default function SinistroDetalhe() {
           )}
         </div>
 
-        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen} modal={false}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <MoreHorizontal className="h-4 w-4 mr-2" />
-              Ações
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
-            <DropdownMenuItem onSelect={(e) => {
-              e.preventDefault();
-              openModalSafely(setModalStatusOpen);
-            }}>
-              <FileCheck className="h-4 w-4 mr-2" />
-              Atualizar Status
-            </DropdownMenuItem>
-            {/* Ocultar vistoria para vidros (fluxo simplificado) */}
-            {sinistro.tipo !== 'vidros' && (
-              <DropdownMenuItem onSelect={(e) => {
-                e.preventDefault();
-                openModalSafely(setModalVistoriaOpen);
-              }}>
-                <Calendar className="h-4 w-4 mr-2" />
-                Agendar Vistoria
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onSelect={(e) => {
-              e.preventDefault();
-              openModalSafely(setModalParecerOpen);
-            }}>
-              <FileText className="h-4 w-4 mr-2" />
-              Emitir Parecer
-            </DropdownMenuItem>
-            {['em_analise', 'aguardando_parecer', 'em_vistoria'].includes(sinistro.status) && (
-              <DropdownMenuItem onSelect={(e) => {
-                e.preventDefault();
-                openModalSafely(setModalSindicanciaOpen);
-              }}>
-                <Search className="h-4 w-4 mr-2" />
-                Encaminhar para Sindicância
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => handleWhatsApp(sinistro.associado?.whatsapp || sinistro.associado?.telefone)}>
-              <MessageCircle className="h-4 w-4 mr-2" />
-              Enviar WhatsApp
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {['roubo', 'furto'].includes(sinistro.tipo) && (
-              <DropdownMenuItem 
-                className="text-destructive focus:text-destructive"
-                onSelect={(e) => {
+        {/* Menu de Ações - Contextual */}
+        {(() => {
+          const isAprovadoCotaPagaTermoAssinado = sinistro.status === 'aprovado' 
+            && (sinistro as any).cota_paga === true 
+            && sinistro.termo_anuencia_assinado === true;
+
+          if (isAprovadoCotaPagaTermoAssinado) {
+            // Menu simplificado: apenas "Fazer Pedidos das Peças"
+            return (
+              <Button onClick={() => setShowAtribuirFornecedores(true)}>
+                <Package className="h-4 w-4 mr-2" />
+                Fazer Pedidos das Peças
+              </Button>
+            );
+          }
+
+          // Menu padrão
+          return (
+            <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen} modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <MoreHorizontal className="h-4 w-4 mr-2" />
+                  Ações
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+                <DropdownMenuItem onSelect={(e) => {
                   e.preventDefault();
-                  openModalSafely(setModalAcionamentoOpen);
-                }}
-              >
-                <Radio className="h-4 w-4 mr-2" />
-                Acionar Recuperação
-              </DropdownMenuItem>
-            )}
-            {/* Ocultar OS de oficina para vidros (fluxo simplificado) */}
-            {['aprovado', 'em_regulacao', 'em_reparo'].includes(sinistro.status) && sinistro.tipo !== 'vidros' && (
-              <DropdownMenuItem onClick={() => navigate(`/oficina/ordens-servico?novo=true&sinistro_id=${id}`)}>
-                <Wrench className="h-4 w-4 mr-2" />
-                Criar Ordem de Serviço
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onSelect={(e) => {
-              e.preventDefault();
-              openModalSafely(setModalJuridicoOpen);
-            }}>
-              <Scale className="h-4 w-4 mr-2" />
-              Encaminhar para Jurídico
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate(`/juridico/processos/novo?sinistro_id=${id}`)}>
-              <Scale className="h-4 w-4 mr-2" />
-              Criar Processo Jurídico
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={(e) => {
-              e.preventDefault();
-              openModalSafely(setModalVincularOpen);
-            }}>
-              <LinkIcon className="h-4 w-4 mr-2" />
-              Vincular Processo Existente
-            </DropdownMenuItem>
-            {isDiretor && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    openModalSafely(setModalExcluirOpen);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Excluir Sinistro
+                  openModalSafely(setModalStatusOpen);
+                }}>
+                  <FileCheck className="h-4 w-4 mr-2" />
+                  Atualizar Status
                 </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                {sinistro.tipo !== 'vidros' && (
+                  <DropdownMenuItem onSelect={(e) => {
+                    e.preventDefault();
+                    openModalSafely(setModalVistoriaOpen);
+                  }}>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Agendar Vistoria
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={(e) => {
+                  e.preventDefault();
+                  openModalSafely(setModalParecerOpen);
+                }}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Emitir Parecer
+                </DropdownMenuItem>
+                {['em_analise', 'aguardando_parecer', 'em_vistoria'].includes(sinistro.status) && (
+                  <DropdownMenuItem onSelect={(e) => {
+                    e.preventDefault();
+                    openModalSafely(setModalSindicanciaOpen);
+                  }}>
+                    <Search className="h-4 w-4 mr-2" />
+                    Encaminhar para Sindicância
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleWhatsApp(sinistro.associado?.whatsapp || sinistro.associado?.telefone)}>
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Enviar WhatsApp
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {['roubo', 'furto'].includes(sinistro.tipo) && (
+                  <DropdownMenuItem 
+                    className="text-destructive focus:text-destructive"
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      openModalSafely(setModalAcionamentoOpen);
+                    }}
+                  >
+                    <Radio className="h-4 w-4 mr-2" />
+                    Acionar Recuperação
+                  </DropdownMenuItem>
+                )}
+                {['aprovado', 'em_regulacao', 'em_reparo'].includes(sinistro.status) && sinistro.tipo !== 'vidros' && (
+                  <DropdownMenuItem onClick={() => navigate(`/oficina/ordens-servico?novo=true&sinistro_id=${id}`)}>
+                    <Wrench className="h-4 w-4 mr-2" />
+                    Criar Ordem de Serviço
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={(e) => {
+                  e.preventDefault();
+                  openModalSafely(setModalJuridicoOpen);
+                }}>
+                  <Scale className="h-4 w-4 mr-2" />
+                  Encaminhar para Jurídico
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate(`/juridico/processos/novo?sinistro_id=${id}`)}>
+                  <Scale className="h-4 w-4 mr-2" />
+                  Criar Processo Jurídico
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={(e) => {
+                  e.preventDefault();
+                  openModalSafely(setModalVincularOpen);
+                }}>
+                  <LinkIcon className="h-4 w-4 mr-2" />
+                  Vincular Processo Existente
+                </DropdownMenuItem>
+                {isDiretor && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        openModalSafely(setModalExcluirOpen);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Excluir Sinistro
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        })()}
       </div>
 
       {/* Main Grid */}
@@ -1082,6 +1104,13 @@ export default function SinistroDetalhe() {
           {sinistro.autentique_url && (
             <TermoAssinaturaCard sinistro={sinistro} />
           )}
+
+          {/* Card Controle do Reparo */}
+          <CardControleReparo
+            sinistro={sinistro}
+            onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
+          />
+
           {/* Associado */}
           <Card>
             <CardHeader>
@@ -1608,6 +1637,18 @@ export default function SinistroDetalhe() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Atribuir Fornecedores / Fazer Pedidos das Peças */}
+      {sinistro && (
+        <AtribuirFornecedoresDialog
+          open={showAtribuirFornecedores}
+          onOpenChange={setShowAtribuirFornecedores}
+          sinistro={sinistro}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['sinistro', sinistro.id] });
+          }}
+        />
+      )}
     </div>
   );
 }

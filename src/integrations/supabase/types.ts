@@ -4117,6 +4117,7 @@ export type Database = {
           rastreador_lat: number | null
           rastreador_lng: number | null
           rastreador_posicao_capturada_em: string | null
+          sinistro_id: string | null
           status: Database["public"]["Enums"]["status_chamado"]
           tipo_servico: string
           updated_at: string
@@ -4160,6 +4161,7 @@ export type Database = {
           rastreador_lat?: number | null
           rastreador_lng?: number | null
           rastreador_posicao_capturada_em?: string | null
+          sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_chamado"]
           tipo_servico: string
           updated_at?: string
@@ -4203,6 +4205,7 @@ export type Database = {
           rastreador_lat?: number | null
           rastreador_lng?: number | null
           rastreador_posicao_capturada_em?: string | null
+          sinistro_id?: string | null
           status?: Database["public"]["Enums"]["status_chamado"]
           tipo_servico?: string
           updated_at?: string
@@ -4277,6 +4280,13 @@ export type Database = {
             columns: ["prestador_id"]
             isOneToOne: false
             referencedRelation: "prestadores_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_assistencia_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
           {
@@ -19714,6 +19724,8 @@ export type Database = {
           peca_danificada: string | null
           pecas_chegaram: boolean | null
           pecas_chegaram_em: string | null
+          pecas_pedido_realizado: boolean | null
+          pecas_status: Json | null
           percentual_fipe: number | null
           perito_id: string | null
           prazo_comunicado_dias: number | null
@@ -19816,6 +19828,8 @@ export type Database = {
           peca_danificada?: string | null
           pecas_chegaram?: boolean | null
           pecas_chegaram_em?: string | null
+          pecas_pedido_realizado?: boolean | null
+          pecas_status?: Json | null
           percentual_fipe?: number | null
           perito_id?: string | null
           prazo_comunicado_dias?: number | null
@@ -19918,6 +19932,8 @@ export type Database = {
           peca_danificada?: string | null
           pecas_chegaram?: boolean | null
           pecas_chegaram_em?: string | null
+          pecas_pedido_realizado?: boolean | null
+          pecas_status?: Json | null
           percentual_fipe?: number | null
           perito_id?: string | null
           prazo_comunicado_dias?: number | null
