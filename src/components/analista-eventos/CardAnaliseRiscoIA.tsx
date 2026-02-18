@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Brain, RefreshCw, AlertTriangle, CheckCircle, Info, Loader2, ShieldAlert } from 'lucide-react';
+import { Brain, RefreshCw, AlertTriangle, CheckCircle, Info, Loader2, ShieldAlert, Clock } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Fator {
   nome: string;
   valor: string;
-  impacto: string; // 'positivo' | 'neutro' | 'negativo'
+  impacto: string;
   detalhe: string;
 }
 
@@ -20,6 +22,7 @@ interface AnaliseRisco {
   resumo: string;
   fatores: Fator[];
   recomendacao: string;
+  salvo_em?: string;
 }
 
 interface CardAnaliseRiscoIAProps {
@@ -49,22 +52,43 @@ function ImpactoIcon({ impacto }: { impacto: string }) {
 export function CardAnaliseRiscoIA({ sinistroId }: CardAnaliseRiscoIAProps) {
   const [analise, setAnalise] = useState<AnaliseRisco | null>(null);
   const [loading, setLoading] = useState(false);
+  const [carregandoInicial, setCarregandoInicial] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [jaAnalisou, setJaAnalisou] = useState(false);
+
+  // Carregar análise salva ao montar
+  useEffect(() => {
+    const carregarAnaliseSalva = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('analise-risco-ia', {
+          body: { sinistro_id: sinistroId },
+        });
+
+        if (error) throw error;
+        if (data && !data.sem_analise && !data.error) {
+          setAnalise(data as AnaliseRisco);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar análise salva:', err);
+      } finally {
+        setCarregandoInicial(false);
+      }
+    };
+
+    carregarAnaliseSalva();
+  }, [sinistroId]);
 
   const executarAnalise = async () => {
     setLoading(true);
     setErro(null);
     try {
       const { data, error } = await supabase.functions.invoke('analise-risco-ia', {
-        body: { sinistro_id: sinistroId },
+        body: { sinistro_id: sinistroId, forcar_reanalise: true },
       });
 
       if (error) throw new Error(error.message || 'Erro ao chamar análise de IA');
       if (data?.error) throw new Error(data.error);
 
       setAnalise(data as AnaliseRisco);
-      setJaAnalisou(true);
     } catch (err: any) {
       console.error('Erro na análise de risco:', err);
       setErro(err.message || 'Erro ao processar análise');
@@ -74,8 +98,27 @@ export function CardAnaliseRiscoIA({ sinistroId }: CardAnaliseRiscoIAProps) {
     }
   };
 
-  // Estado inicial: botão para iniciar análise
-  if (!jaAnalisou && !loading) {
+  // Carregando inicial
+  if (carregandoInicial) {
+    return (
+      <Card className="border-purple-200 bg-gradient-to-r from-purple-50/50 to-indigo-50/50">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-100">
+              <Brain className="h-5 w-5 text-purple-600" />
+            </div>
+            <div className="flex-1">
+              <Skeleton className="h-4 w-48 mb-1" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Estado inicial: sem análise salva, mostrar botão
+  if (!analise && !loading && !erro) {
     return (
       <Card className="border-purple-200 bg-gradient-to-r from-purple-50/50 to-indigo-50/50">
         <CardContent className="p-4">
@@ -159,9 +202,17 @@ export function CardAnaliseRiscoIA({ sinistroId }: CardAnaliseRiscoIAProps) {
             <Brain className="h-5 w-5 text-purple-600" />
             <CardTitle className="text-sm">Análise de Risco — Inteligência Artificial</CardTitle>
           </div>
-          <Button size="sm" variant="ghost" onClick={executarAnalise} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
+          <div className="flex items-center gap-2">
+            {analise.salvo_em && (
+              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                {format(new Date(analise.salvo_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </span>
+            )}
+            <Button size="sm" variant="ghost" onClick={executarAnalise} disabled={loading} title="Reanalisar">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

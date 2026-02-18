@@ -41,7 +41,7 @@ serve(async (req) => {
   }
 
   try {
-    const { sinistro_id } = await req.json();
+    const { sinistro_id, forcar_reanalise } = await req.json();
     if (!sinistro_id) {
       return new Response(JSON.stringify({ error: "sinistro_id é obrigatório" }), {
         status: 400,
@@ -52,6 +52,37 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Se não forçar reanálise, buscar análise salva
+    if (!forcar_reanalise) {
+      const { data: analiseSalva } = await supabase
+        .from("sinistro_analises_ia")
+        .select("*")
+        .eq("sinistro_id", sinistro_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (analiseSalva) {
+        return new Response(JSON.stringify({
+          pontuacao_risco: analiseSalva.pontuacao_risco,
+          nivel: analiseSalva.nivel,
+          resumo: analiseSalva.resumo,
+          fatores: analiseSalva.fatores,
+          recomendacao: analiseSalva.recomendacao,
+          salvo_em: analiseSalva.created_at,
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Não encontrou análise salva - retornar vazio para o componente mostrar botão
+      return new Response(JSON.stringify({ sem_analise: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ===== FORÇAR ANÁLISE COM IA =====
 
     // Buscar sinistro com associado e veículo
     const { data: sinistro, error: errSinistro } = await supabase
@@ -315,7 +346,26 @@ Analise criteriosamente e forneça sua avaliação.`;
 
     const analise = JSON.parse(toolCall.function.arguments);
 
-    return new Response(JSON.stringify(analise), {
+    // Salvar no banco de dados
+    const { error: errInsert } = await supabase
+      .from("sinistro_analises_ia")
+      .insert({
+        sinistro_id,
+        pontuacao_risco: analise.pontuacao_risco,
+        nivel: analise.nivel,
+        resumo: analise.resumo,
+        fatores: analise.fatores,
+        recomendacao: analise.recomendacao,
+      });
+
+    if (errInsert) {
+      console.error("Erro ao salvar análise:", errInsert);
+    }
+
+    return new Response(JSON.stringify({
+      ...analise,
+      salvo_em: new Date().toISOString(),
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
