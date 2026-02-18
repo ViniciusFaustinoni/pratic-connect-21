@@ -235,7 +235,7 @@ export function AtribuirFornecedoresDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wrench className="h-5 w-5" />
@@ -246,7 +246,7 @@ export function AtribuirFornecedoresDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 pr-4">
+        <ScrollArea className="flex-1 min-h-0 overflow-hidden pr-4">
           <div className="space-y-6 py-2">
             {/* Cabeçalho - Dados do Veículo */}
             <div className="flex items-center gap-4 p-3 rounded-lg bg-muted">
