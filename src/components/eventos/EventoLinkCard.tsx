@@ -137,6 +137,7 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
     : ['Não iniciou', 'Auto Vistoria', 'B.O.', 'Relato Completo'];
   
   const totalEtapas = isVidros ? 2 : 3;
+  const isCompletado = linkAtivo?.status === 'completado';
 
   return (
     <Card className={statusFinal === 'ativo' ? 'border-green-500/50' : statusFinal === 'expirado' ? 'border-amber-500/50' : ''}>
@@ -171,7 +172,7 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs">
-                Etapa {linkAtivo.etapa_atual}/{totalEtapas}
+                {isCompletado ? 'Concluído' : `Etapa ${linkAtivo.etapa_atual}/${totalEtapas}`}
               </Badge>
             </div>
 
@@ -179,12 +180,12 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Progresso</span>
-                <span>{etapaLabels[linkAtivo.etapa_atual] || 'Concluído'}</span>
+                <span>{isCompletado ? 'Concluído' : (etapaLabels[linkAtivo.etapa_atual] || 'Concluído')}</span>
               </div>
               <div className="w-full bg-muted rounded-full h-2">
                 <div
                   className="bg-primary h-2 rounded-full transition-all"
-                  style={{ width: `${(linkAtivo.etapa_atual / totalEtapas) * 100}%` }}
+                  style={{ width: `${isCompletado ? 100 : (linkAtivo.etapa_atual / totalEtapas) * 100}%` }}
                 />
               </div>
             </div>
