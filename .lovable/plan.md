@@ -1,82 +1,30 @@
 
-# Persistir Análise de Risco com IA no Banco de Dados
+
+# Corrigir contraste nos cards Resumo e Recomendacao
 
 ## Problema
-Atualmente a análise de risco é feita apenas em memória (useState). Ao recarregar a página, o resultado é perdido e o usuário precisa clicar em "Analisar" novamente, gastando créditos de IA desnecessariamente.
+Em dark mode, os textos dos cards "Resumo" e "Recomendacao" herdam cor branca do tema, mas os fundos sao claros (bg-muted/50, bg-red-50, bg-amber-50, bg-green-50), resultando em texto invisivel.
 
-## Solução
-Salvar o resultado da análise no banco de dados e carregá-lo automaticamente ao abrir a página.
+## Solucao
 
-## Mudanças
+**Arquivo: `src/components/analista-eventos/CardAnaliseRiscoIA.tsx`**
 
-### 1. Nova tabela: `sinistro_analises_ia`
+Forcar cores de texto escuras nos elementos dentro de cards com fundo claro:
 
-Criar via migration:
+1. **Resumo (linhas 266-269)**
+   - Titulo "Resumo": adicionar `text-gray-900`
+   - Paragrafo resumo: trocar `text-muted-foreground` por `text-gray-700`
 
-```text
-CREATE TABLE sinistro_analises_ia (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  sinistro_id UUID NOT NULL REFERENCES sinistros(id) ON DELETE CASCADE,
-  pontuacao_risco INTEGER NOT NULL,
-  nivel TEXT NOT NULL,
-  resumo TEXT NOT NULL,
-  fatores JSONB NOT NULL DEFAULT '[]',
-  recomendacao TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+2. **Recomendacao (linhas 278-280)**
+   - Titulo "Recomendacao": adicionar `text-gray-900`
+   - Paragrafo recomendacao: adicionar `text-gray-700`
 
-CREATE INDEX idx_sinistro_analises_ia_sinistro ON sinistro_analises_ia(sinistro_id);
+3. **Pontuacao (linhas 222-223)**
+   - Numero grande: adicionar `text-gray-900`
+   - "/10": trocar `text-muted-foreground` por `text-gray-500`
 
-ALTER TABLE sinistro_analises_ia ENABLE ROW LEVEL SECURITY;
+4. **Labels auxiliares (linhas 227, 241)**
+   - "Risco de fraude": trocar `text-muted-foreground` por `text-gray-500`
+   - "Fatores analisados": trocar `text-muted-foreground` por `text-gray-500`
 
-CREATE POLICY "Authenticated users can read analises"
-  ON sinistro_analises_ia FOR SELECT
-  TO authenticated USING (true);
-
-CREATE POLICY "Service role can insert analises"
-  ON sinistro_analises_ia FOR INSERT
-  TO service_role WITH CHECK (true);
-```
-
-### 2. Edge Function: `supabase/functions/analise-risco-ia/index.ts`
-
-Duas mudanças:
-
-- Aceitar novo campo `forcar_reanalise` no body
-- Se `forcar_reanalise` for falso/ausente, buscar análise salva na tabela `sinistro_analises_ia` e retornar sem chamar a IA
-- Após chamar a IA com sucesso, salvar o resultado na tabela antes de retornar
-- Incluir `salvo_em` (timestamp) na resposta
-
-### 3. Componente: `src/components/analista-eventos/CardAnaliseRiscoIA.tsx`
-
-- Ao montar, chamar a edge function sem `forcar_reanalise` (que retornará análise salva se existir, sem gastar créditos)
-- Se já existe análise salva, exibir imediatamente com a data/hora da análise
-- Botão "Reanalisar" passa `forcar_reanalise: true` para forçar nova chamada à IA
-- Mostrar a data/hora da última análise no header do card
-
-## Fluxo
-
-```text
-Página carrega
-  |
-  v
-Componente monta --> chama edge function (sem forcar_reanalise)
-  |
-  v
-Edge function verifica tabela sinistro_analises_ia
-  |
-  +-- Encontrou? --> Retorna análise salva (sem chamar IA)
-  |
-  +-- Não encontrou? --> Retorna vazio, componente mostra botão "Analisar"
-  
-Usuário clica "Analisar" ou "Reanalisar"
-  |
-  v
-Edge function (forcar_reanalise: true) --> chama IA --> salva resultado --> retorna
-```
-
-## Arquivos alterados
-
-1. **Migration SQL** -- criar tabela `sinistro_analises_ia`
-2. **`supabase/functions/analise-risco-ia/index.ts`** -- buscar/salvar análise no banco
-3. **`src/components/analista-eventos/CardAnaliseRiscoIA.tsx`** -- carregar análise salva ao montar, mostrar data da análise
+Isso garante legibilidade em ambos os temas, ja que os fundos desses cards sao sempre claros.
