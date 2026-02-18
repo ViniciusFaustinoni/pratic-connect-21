@@ -1,50 +1,57 @@
 
+# Corrigir exibicao de horario com timezone incorreto
 
-# Corrigir dados do sinistro SIN-20260217-0008 e validar fluxo
+## Problema
 
-## Problema identificado
+O horario da ocorrencia esta sendo exibido 3 horas a menos do que o informado pelo associado. Exemplo: o associado informou 06:00, mas o card mostra 03:00.
 
-A logica do codigo ja esta implementada corretamente. O menu contextual so exibe "Fazer Pedidos das Pecas" quando as 3 condicoes sao verdadeiras:
-- `status = 'aprovado'` (OK)
-- `termo_anuencia_assinado = true` (OK)
-- `cota_paga = true` (**FALSO no banco**)
+## Causa raiz
 
-O campo `cota_paga` esta como `false` porque o bug do CHECK constraint (corrigido anteriormente) impediu que o pagamento fosse registrado localmente, mesmo tendo sido processado no Asaas.
+Na edge function `criar-sinistro`, linha 500, o horario e salvo assim:
+
+```text
+"2026-02-17T06:00:00"  (sem indicador de timezone)
+```
+
+O Postgres interpreta como UTC (porque a coluna e `timestamptz`). Quando o navegador em Brasilia (UTC-3) exibe esse valor, subtrai 3 horas: 06:00 UTC vira 03:00 BRT.
+
+O horario deveria ter sido salvo como:
+
+```text
+"2026-02-17T06:00:00-03:00"  (horario de Brasilia)
+```
 
 ## Solucao
 
-### 1. Corrigir os dados do sinistro SIN-20260217-0008
+### 1. Corrigir a edge function `criar-sinistro`
 
-Atualizar `cota_paga = true` no banco para refletir a realidade (pagamento ja foi recebido).
+Adicionar o offset de Brasilia (-03:00) ao montar a data/hora na linha 500:
 
+**Antes:**
 ```text
-UPDATE sinistros SET cota_paga = true WHERE protocolo = 'SIN-20260217-0008';
+dataHoraOcorrencia = `${ano}-${mes}-${dia}T${payload.hora_evento}:00`;
 ```
 
-### 2. Confirmar que o fluxo esta correto no codigo
-
-A logica ja implementada no ultimo deploy:
-
+**Depois:**
 ```text
-Se (aprovado + cota_paga + termo_assinado):
-  -> Exibe APENAS botao "Fazer Pedidos das Pecas"
-  -> Card "Controle do Reparo" aparece na coluna direita
-
-Senao:
-  -> Exibe menu padrao (Atualizar Status, Agendar Vistoria, etc.)
+dataHoraOcorrencia = `${ano}-${mes}-${dia}T${payload.hora_evento}:00-03:00`;
 ```
 
-Apos corrigir o `cota_paga`, o sinistro SIN-20260217-0008 passara a exibir o fluxo correto automaticamente.
+Isso garante que o Postgres armazene o horario corretamente como UTC (09:00 UTC para 06:00 BRT), e o navegador em Brasilia exibira 06:00 corretamente.
 
-## Resumo do fluxo completo (ja implementado)
+### 2. Corrigir o sinistro existente no banco
 
-1. **Menu contextual**: Apenas "Fazer Pedidos das Pecas" (abre AtribuirFornecedoresDialog)
-2. **Card Controle do Reparo - Fase 1**: Botao "Fazer Pedidos das Pecas"
-3. **Fase 2 (pecas_em_cotacao)**: Lista de pecas com fornecedor aprovado, botoes de contato (ligacao/WhatsApp), checkbox "Pedido Realizado"
-4. **Fase 2b**: Checkboxes individuais "Peca Chegou" para cada peca
-5. **Fase 3**: Todas as pecas chegaram -> Notifica associado via WhatsApp -> Botao "Enviar para Oficina"
-6. **Fase 4**: Cria chamado de guincho -> Badge "Pendente de Remocao para Oficina"
-7. **Fase 5**: Chamado concluido -> Badge "Veiculo na Oficina" -> Notifica associado
+O SIN-20260217-0008 tem `data_ocorrencia = 2026-02-17 06:00:00+00` que deveria ser `2026-02-17 09:00:00+00` (06:00 BRT = 09:00 UTC):
 
-Toda a logica ja esta no codigo. O unico problema e o dado `cota_paga = false` que precisa ser corrigido no banco.
+```text
+UPDATE sinistros SET data_ocorrencia = '2026-02-17T06:00:00-03:00' WHERE protocolo = 'SIN-20260217-0008';
+```
 
+### 3. Verificar e corrigir o formatDateTime no frontend
+
+A funcao `formatDateTime` em `SinistroDetalhe.tsx` (linha 142) ja usa `new Date()` que respeita timezone, entao apos a correcao no backend ela exibira o horario correto automaticamente.
+
+## Arquivos alterados
+
+1. **`supabase/functions/criar-sinistro/index.ts`** -- adicionar offset -03:00 na formatacao da data
+2. **Migration SQL** -- corrigir data_ocorrencia do sinistro existente
