@@ -1,25 +1,30 @@
 
-
-# Remover seção de Prestadores do modal Atribuir Fornecedores
+# Corrigir Card do Link do Evento para status "completado"
 
 ## Problema
 
-O modal "Atribuir Fornecedores" exibe uma seção "Prestadores de Serviço (opcional)" que lista prestadores da tabela `prestadores_evento`. Esses prestadores pertencem ao fluxo de Assistencia 24h e nao devem aparecer neste modal de atribuicao de oficinas para sinistros/eventos.
+O banco de dados mostra `status = 'completado'` para o link do evento, mas `etapa_atual = 2`. O card exibe "Etapa 2/3" e a barra de progresso em 66% porque usa `linkAtivo.etapa_atual` sem verificar se o link ja foi concluido.
 
 ## Solucao
 
-Remover completamente a seção de Prestadores do modal, incluindo:
+No componente `src/components/eventos/EventoLinkCard.tsx`, quando o status for `completado`, forcar a exibicao como concluido independente do valor de `etapa_atual`.
 
-1. **Remover imports e hooks** nao mais necessarios:
-   - `usePrestadoresEvento` (linha 4)
-   - Estado `prestadoresSelecionados` e funcao `handleTogglePrestador`
-   - Icone `Users` (se nao usado em outro lugar)
+### Alteracoes em `src/components/eventos/EventoLinkCard.tsx`
 
-2. **Remover a seção visual** "Prestadores de Serviço (opcional)" (linhas 372-429) do JSX
+1. **Badge de etapa (linha 173-175)**: Quando `completado`, mostrar "Concluido" em vez de "Etapa X/Y"
 
-3. **Remover referencia a prestadores na logica de submit** -- garantir que o `handleConfirmar` nao envie `prestadoresSelecionados` ao banco
+2. **Barra de progresso (linhas 178-190)**: Quando `completado`, preencher 100% e mostrar label "Concluido"
+
+3. **Acoes (linhas 236-276)**: Quando `completado`, nao mostrar botoes de "Copiar Link" ou "Gerar Novo" -- o fluxo ja terminou
+
+### Logica
+
+```text
+const isCompletado = linkAtivo?.status === 'completado';
+const etapaExibida = isCompletado ? totalEtapas : linkAtivo.etapa_atual;
+const progressoPct = isCompletado ? 100 : (linkAtivo.etapa_atual / totalEtapas) * 100;
+```
 
 ## Arquivo alterado
 
-- `src/components/sinistros/AtribuirFornecedoresDialog.tsx`
-
+- `src/components/eventos/EventoLinkCard.tsx`
