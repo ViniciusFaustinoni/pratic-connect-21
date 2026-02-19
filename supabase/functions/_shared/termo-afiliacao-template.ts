@@ -321,6 +321,21 @@ const generateSecao1 = (data: TermoAfiliacaoData): string => `
   
   <div class="field-row">
     <div class="field">
+      <span class="field-label">CNH:</span> 
+      <span class="field-value">${data.cliente.cnh || '—'}</span>
+    </div>
+    <div class="field">
+      <span class="field-label">Validade:</span> 
+      <span class="field-value">${formatDate(data.cliente.cnh_validade)}</span>
+    </div>
+    <div class="field">
+      <span class="field-label">Categoria:</span> 
+      <span class="field-value">${data.cliente.cnh_categoria || '—'}</span>
+    </div>
+  </div>
+  
+  <div class="field-row">
+    <div class="field">
       <span class="field-label">Data de Nascimento:</span> 
       <span class="field-value">${formatDate(data.cliente.data_nascimento)}</span>
     </div>
