@@ -1151,6 +1151,15 @@ export interface AbrirEAgendarManutencaoParams {
   profissionalId: string;
   permiteEncaixe: boolean;
   notificarWhatsApp: boolean;
+  /** Endereço alternativo (quando o usuário digita outro endereço) */
+  enderecoAlternativo?: {
+    logradouro: string;
+    numero: string;
+    bairro: string;
+    cidade: string;
+    uf: string;
+    cep: string;
+  };
 }
 
 /**
@@ -1256,6 +1265,18 @@ export function useAbrirEAgendarManutencao() {
         cidade = null;
         uf = null;
         cep = null;
+        latitude = null;
+        longitude = null;
+      }
+
+      // Se endereço alternativo foi fornecido, usar em vez do associado
+      if (params.enderecoAlternativo) {
+        logradouro = params.enderecoAlternativo.logradouro;
+        numero = params.enderecoAlternativo.numero;
+        bairro = params.enderecoAlternativo.bairro;
+        cidade = params.enderecoAlternativo.cidade;
+        uf = params.enderecoAlternativo.uf;
+        cep = params.enderecoAlternativo.cep;
         latitude = null;
         longitude = null;
       }
