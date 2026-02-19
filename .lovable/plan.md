@@ -1,89 +1,60 @@
 
-# Corrigir endereço de instalação/manutenção não persistindo o endereço selecionado
+# Corrigir: IA não cria eventos (sinistros/assistências) no App nem no WhatsApp
 
-## Problema
+## Causa Raiz Confirmada
 
-Quando o usuário seleciona "Outro endereço" no modal de agendamento de manutenção (ou instalação), o sistema **sempre salva o endereço cadastrado do associado** nos campos individuais do serviço (`logradouro`, `numero`, `bairro`, etc.). O endereço digitado pelo usuário é inserido apenas no campo `observacoes` como texto livre, mas nunca nos campos de endereço reais.
+Ambos os sistemas usam o modelo `google/gemini-3-flash-preview`, que **não retorna `tool_calls` de forma confiável** via `ai.gateway.lovable.dev`. Sem `tool_calls`, o loop de execução de ferramentas nunca entra, e as tools `criar_solicitacao_sinistro` e `criar_solicitacao_assistencia` nunca são chamadas — nenhum registro é criado no banco.
 
-Isso significa que rotas, mapas e atribuição por proximidade sempre usam o endereço cadastrado, não o endereço onde o serviço realmente será realizado.
+### Arquivos afetados
 
-## Causa raiz
+| Arquivo | Linhas com o modelo | Uso |
+|---|---|---|
+| `supabase/functions/assistente-chat/index.ts` | 1167, 1233 | App do associado |
+| `supabase/functions/whatsapp-webhook/index.ts` | 1853 (função `callAI`) | WhatsApp (IA principal e confirmações de agendamento) |
 
-**Arquivo:** `src/hooks/useVistoriaManutencao.ts` (função `useAbrirEAgendarManutencao`, linhas 1241-1261)
+### Por que o modelo falha
 
-O código inicializa os campos de endereço com os dados do associado e só os limpa se `localTipo === 'base'`. Quando `localTipo === 'rota'` com endereço alternativo, os campos individuais nunca são sobrescritos:
+O modelo `gemini-3-flash-preview` é uma versão **preview** que ainda não tem suporte estável a function calling no formato OpenAI. Ele responde em texto puro, sem o campo `tool_calls` na resposta. O código checa:
 
-```text
-let logradouro = associado?.logradouro || null;   // <-- sempre pega do associado
-let numero = associado?.numero || null;
-...
-if (params.localTipo === 'base') { ... limpa ... }
-// FALTA: if tipoEndereco === 'outro' { usar campos digitados }
+```
+while (assistantMessage?.tool_calls && iterations < maxIterations)
 ```
 
-**Arquivo:** `src/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal.tsx` (linhas 240-264)
-
-O modal envia `localEndereco` como string formatada (`"Rua X, 123 - Bairro, Cidade/UF"`), mas o hook precisaria receber os campos individuais para salvá-los corretamente.
+Como `tool_calls` é `undefined`, o loop nunca executa — a IA apenas escreve uma resposta textual dizendo que "criou" o evento, mas nada acontece no banco.
 
 ## Solução
 
-### 1. Expandir a interface `AbrirEAgendarManutencaoParams`
+Trocar o modelo por `google/gemini-2.5-flash`, que tem suporte estável a function calling no formato OpenAI e é o substituto direto recomendado para este caso de uso.
 
-Adicionar campos opcionais de endereço alternativo à interface:
+### Arquivos a alterar
 
-```text
-export interface AbrirEAgendarManutencaoParams {
-  ...campos existentes...
-  // Endereço alternativo (quando o usuário digita outro endereço)
-  enderecoAlternativo?: {
-    logradouro: string;
-    numero: string;
-    bairro: string;
-    cidade: string;
-    uf: string;
-    cep: string;
-  };
+**1. `supabase/functions/assistente-chat/index.ts`**
+- Linha 1167: trocar modelo na chamada inicial
+- Linha 1233: trocar modelo na chamada de follow-up (loop de tool_calls)
+
+**2. `supabase/functions/whatsapp-webhook/index.ts`**
+- Linha 1853: trocar modelo na função `callAI` (usada por toda a IA do WhatsApp)
+
+### Adição de log diagnóstico
+
+Adicionar log em ambas as funções para registrar quando o modelo não retorna `tool_calls`, facilitando debug futuro:
+
+```typescript
+// Após receber a resposta do modelo
+if (!assistantMessage?.tool_calls) {
+  console.log(`[assistente-chat] Modelo retornou texto puro (sem tool_calls). finish_reason: ${result.choices?.[0]?.finish_reason}`);
 }
 ```
 
-### 2. Usar endereço alternativo no hook
+### Deploy
 
-Na função `useAbrirEAgendarManutencao`, após a linha que inicializa com o endereço do associado, adicionar verificação:
-
-```text
-// Se endereço alternativo foi fornecido, usar em vez do associado
-if (params.enderecoAlternativo) {
-  logradouro = params.enderecoAlternativo.logradouro;
-  numero = params.enderecoAlternativo.numero;
-  bairro = params.enderecoAlternativo.bairro;
-  cidade = params.enderecoAlternativo.cidade;
-  uf = params.enderecoAlternativo.uf;
-  cep = params.enderecoAlternativo.cep;
-  latitude = null;  // Será geocodificado depois
-  longitude = null;
-}
-```
-
-### 3. Enviar campos individuais do modal
-
-No `AgendarManutencaoUnificadoModal`, ao chamar `abrirEAgendarMutation.mutateAsync`, incluir `enderecoAlternativo` quando `tipoEndereco === 'outro'`:
-
-```text
-await abrirEAgendarMutation.mutateAsync({
-  ...campos existentes...
-  enderecoAlternativo: tipoEndereco === 'outro' ? {
-    logradouro, numero, bairro, cidade, uf, cep
-  } : undefined,
-});
-```
-
-## Arquivos alterados
-
-- `src/hooks/useVistoriaManutencao.ts` - interface + lógica de endereço alternativo
-- `src/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal.tsx` - enviar campos individuais
+Após as alterações, fazer deploy de ambas as edge functions:
+- `assistente-chat`
+- `whatsapp-webhook`
 
 ## Resultado esperado
 
-- Ao selecionar "Outro endereço" e digitar um novo, o serviço será criado com esse endereço nos campos corretos
-- Rotas, mapas e atribuição por proximidade usarão o endereço real do serviço
-- Selecionar "Endereço cadastrado" continua funcionando como antes
+- Ao solicitar sinistro ou assistência pelo App, a IA chama a tool correta e o evento é criado no banco com status `comunicado`
+- O evento aparece imediatamente na tela de Pré-Análise do painel admin
+- Ao solicitar pelo WhatsApp, o mesmo fluxo funciona corretamente
+- A IA confirma ao associado o protocolo real retornado pela tool (não inventado)
