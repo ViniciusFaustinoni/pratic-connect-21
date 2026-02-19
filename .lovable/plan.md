@@ -1,64 +1,89 @@
 
-# Corrigir status da etapa de venda para refletir autovistoria em andamento
+# Corrigir endereço de instalação/manutenção não persistindo o endereço selecionado
 
 ## Problema
 
-Quando o cliente esta na etapa de autovistoria (enviando fotos), o painel administrativo mostra "Realizando Pagamento" em vez de indicar que a autovistoria esta em andamento.
+Quando o usuário seleciona "Outro endereço" no modal de agendamento de manutenção (ou instalação), o sistema **sempre salva o endereço cadastrado do associado** nos campos individuais do serviço (`logradouro`, `numero`, `bairro`, etc.). O endereço digitado pelo usuário é inserido apenas no campo `observacoes` como texto livre, mas nunca nos campos de endereço reais.
 
-**Dados reais do cliente FAUSTINONI:**
-- `status_contratacao` = `contrato_assinado`
-- `contrato.status` = `assinado`
-- `adesao_paga` = `false`
-- `tipo_vistoria` = `null` (nunca foi atualizado na cotacao)
+Isso significa que rotas, mapas e atribuição por proximidade sempre usam o endereço cadastrado, não o endereço onde o serviço realmente será realizado.
 
-## Causa raiz (2 problemas)
+## Causa raiz
 
-**Problema 1:** Quando o cliente escolhe "autovistoria" no fluxo `AssociadoVistoria`, o hook `useSelecionarTipoVistoria` atualiza apenas `contratos.tipo_vistoria`. Nao atualiza `cotacoes.status_contratacao` nem `cotacoes.tipo_vistoria`.
+**Arquivo:** `src/hooks/useVistoriaManutencao.ts` (função `useAbrirEAgendarManutencao`, linhas 1241-1261)
 
-**Problema 2:** Na funcao `getEtapaVenda`, a verificacao de pagamento (prioridade 3) tem precedencia sobre tudo: se o contrato esta assinado e `adesao_paga === false`, retorna `realizando_pagamento` independentemente de o cliente estar fazendo autovistoria.
+O código inicializa os campos de endereço com os dados do associado e só os limpa se `localTipo === 'base'`. Quando `localTipo === 'rota'` com endereço alternativo, os campos individuais nunca são sobrescritos:
 
-O fluxo do `AssociadoVistoria` e: escolha -> autovistoria -> pagamento. Ou seja, a autovistoria acontece ANTES do pagamento, mas o admin mostra "Realizando Pagamento" prematuramente.
-
-## Solucao
-
-### 1. Atualizar `cotacoes.status_contratacao` ao selecionar tipo de vistoria
-
-**Arquivo:** `src/hooks/useContratoLink.ts` (funcao `useSelecionarTipoVistoria`)
-
-Apos atualizar `contratos.tipo_vistoria`, tambem atualizar `cotacoes.status_contratacao` para `vistoria_ok`. Para isso, buscar a `cotacao_id` do contrato e fazer o update.
-
-### 2. Adicionar etapa "Realizando Autovistoria" no painel
-
-**Arquivos:** `src/components/cotacoes/CotacoesTable.tsx` e `src/components/cotacoes/CotacaoCard.tsx`
-
-- Adicionar `realizando_autovistoria` ao type `EtapaVenda`
-- Adicionar configuracao visual (label "Realizando Autovistoria", cor roxa/cyan)
-- Na funcao `getEtapaVenda`, ANTES da verificacao de pagamento (prioridade 3), adicionar:
-
+```text
+let logradouro = associado?.logradouro || null;   // <-- sempre pega do associado
+let numero = associado?.numero || null;
+...
+if (params.localTipo === 'base') { ... limpa ... }
+// FALTA: if tipoEndereco === 'outro' { usar campos digitados }
 ```
-// Se autovistoria foi escolhida mas pagamento ainda nao feito,
-// significa que o cliente esta na etapa de autovistoria
-if (cotacao.tipo_vistoria === 'autovistoria' && adesaoPaga === false) {
-  // Verificar se tem vistoria em analise (autovistoria concluida)
-  // ou se ainda esta fazendo
-  return 'realizando_autovistoria';
+
+**Arquivo:** `src/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal.tsx` (linhas 240-264)
+
+O modal envia `localEndereco` como string formatada (`"Rua X, 123 - Bairro, Cidade/UF"`), mas o hook precisaria receber os campos individuais para salvá-los corretamente.
+
+## Solução
+
+### 1. Expandir a interface `AbrirEAgendarManutencaoParams`
+
+Adicionar campos opcionais de endereço alternativo à interface:
+
+```text
+export interface AbrirEAgendarManutencaoParams {
+  ...campos existentes...
+  // Endereço alternativo (quando o usuário digita outro endereço)
+  enderecoAlternativo?: {
+    logradouro: string;
+    numero: string;
+    bairro: string;
+    cidade: string;
+    uf: string;
+    cep: string;
+  };
 }
 ```
 
-### 3. Atualizar status apos finalizar autovistoria
+### 2. Usar endereço alternativo no hook
 
-**Arquivo:** `src/hooks/useContratoLink.ts` (funcao `useFinalizarAutovistoria`)
+Na função `useAbrirEAgendarManutencao`, após a linha que inicializa com o endereço do associado, adicionar verificação:
 
-Ao finalizar a autovistoria, atualizar `cotacoes.status_contratacao` para refletir que a autovistoria foi concluida e agora o proximo passo e o pagamento.
+```text
+// Se endereço alternativo foi fornecido, usar em vez do associado
+if (params.enderecoAlternativo) {
+  logradouro = params.enderecoAlternativo.logradouro;
+  numero = params.enderecoAlternativo.numero;
+  bairro = params.enderecoAlternativo.bairro;
+  cidade = params.enderecoAlternativo.cidade;
+  uf = params.enderecoAlternativo.uf;
+  cep = params.enderecoAlternativo.cep;
+  latitude = null;  // Será geocodificado depois
+  longitude = null;
+}
+```
+
+### 3. Enviar campos individuais do modal
+
+No `AgendarManutencaoUnificadoModal`, ao chamar `abrirEAgendarMutation.mutateAsync`, incluir `enderecoAlternativo` quando `tipoEndereco === 'outro'`:
+
+```text
+await abrirEAgendarMutation.mutateAsync({
+  ...campos existentes...
+  enderecoAlternativo: tipoEndereco === 'outro' ? {
+    logradouro, numero, bairro, cidade, uf, cep
+  } : undefined,
+});
+```
 
 ## Arquivos alterados
 
-- `src/hooks/useContratoLink.ts` - 2 pontos: `useSelecionarTipoVistoria` e `useFinalizarAutovistoria`
-- `src/components/cotacoes/CotacoesTable.tsx` - tipo, config e logica `getEtapaVenda`
-- `src/components/cotacoes/CotacaoCard.tsx` - tipo, config e logica `getEtapaVenda`
+- `src/hooks/useVistoriaManutencao.ts` - interface + lógica de endereço alternativo
+- `src/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal.tsx` - enviar campos individuais
 
 ## Resultado esperado
 
-- Ao escolher autovistoria: admin mostra "Realizando Autovistoria"
-- Ao concluir autovistoria: admin mostra "Realizando Pagamento"
-- Fluxo visual correto: Escolha Vistoria -> Realizando Autovistoria -> Realizando Pagamento -> ...
+- Ao selecionar "Outro endereço" e digitar um novo, o serviço será criado com esse endereço nos campos corretos
+- Rotas, mapas e atribuição por proximidade usarão o endereço real do serviço
+- Selecionar "Endereço cadastrado" continua funcionando como antes
