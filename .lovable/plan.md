@@ -1,60 +1,74 @@
 
-# Adicionar CNH ao Termo de Filiacao
+# Envio automatico ao SGA apos ativacao do contrato
 
 ## Problema
 
-A CNH (numero, validade, categoria) e extraida via OCR e salva na tabela `cotacoes` (campos `cliente_cnh`, `cliente_cnh_validade`, `cliente_cnh_categoria`), e tambem copiada para o contrato na edge function `contrato-gerar`. Porem, esses dados **nunca chegam ao Termo de Afiliacao** porque:
+Quando um contrato e ativado (botao "Ativar Contrato"), o sistema atualiza o status do contrato e do associado para "ativo", mas **nao envia os dados automaticamente para o SGA Hinova**. O envio e feito apenas manualmente, pelo botao "Enviar para SGA" no card do contrato ativado. Se ninguem clicar nesse botao, o associado e veiculo nunca chegam ao SGA.
 
-1. A interface `ClienteData` em `termo-afiliacao-utils.ts` nao tem campos para CNH
-2. A funcao `mapearDadosParaTemplate()` nao mapeia esses campos
-3. O template HTML em `termo-afiliacao-template.ts` nao exibe a CNH
-4. O mapa de variaveis em `template-utils.ts` nao inclui variaveis `associado.cnh`
+## Causa raiz
+
+A funcao `useAtivarContrato` em `src/hooks/useAtivacoes.ts` (linha 251-301) faz apenas:
+1. Atualiza contrato para status "ativo"
+2. Atualiza associado para status "ativo"
+
+Nao existe nenhuma chamada a `sga-hinova-sync` nesse fluxo.
 
 ## Solucao
 
-Adicionar os campos da CNH em toda a cadeia: interface, mapeamento, template HTML e variaveis dinamicas.
+Adicionar a chamada automatica da edge function `sga-hinova-sync` ao final do processo de ativacao em `useAtivarContrato`. O envio ao SGA sera feito de forma **nao-bloqueante** (fire-and-forget) para nao travar a ativacao caso o SGA esteja fora do ar.
 
 ### Alteracoes
 
-**1. `supabase/functions/_shared/termo-afiliacao-utils.ts`**
+**Arquivo:** `src/hooks/useAtivacoes.ts`
 
-- Adicionar campos `cnh`, `cnh_validade` e `cnh_categoria` na interface `ClienteData`
-- Na funcao `mapearDadosParaTemplate`, mapear `contrato.cliente_cnh`, `contrato.cliente_cnh_validade` e `contrato.cliente_cnh_categoria`
+Na funcao `useAtivarContrato`, apos ativar o contrato e o associado (linha ~289), adicionar:
 
-**2. `supabase/functions/_shared/termo-afiliacao-template.ts`**
+1. Buscar o `veiculo_id` do associado
+2. Chamar `supabase.functions.invoke('sga-hinova-sync')` com o `veiculo_id` e `associado_id`
+3. Se o envio falhar, apenas logar o erro (toast de aviso), sem impedir a ativacao
 
-- Na secao 1 (Qualificacao do Associado), adicionar uma linha com CNH, validade e categoria logo abaixo do RG
+```
+// Pseudocodigo da alteracao:
+// Apos ativar contrato e associado...
 
-Exemplo do HTML a ser adicionado:
-```html
-<div class="field-row">
-  <div class="field">
-    <span class="field-label">CNH:</span>
-    <span class="field-value">${data.cliente.cnh || '---'}</span>
-  </div>
-  <div class="field">
-    <span class="field-label">Validade:</span>
-    <span class="field-value">${formatDate(data.cliente.cnh_validade)}</span>
-  </div>
-  <div class="field">
-    <span class="field-label">Categoria:</span>
-    <span class="field-value">${data.cliente.cnh_categoria || '---'}</span>
-  </div>
-</div>
+// 4. Enviar automaticamente ao SGA (fire-and-forget)
+if (contrato?.associado_id) {
+  // Buscar veiculo do associado
+  const { data: veiculo } = await supabase
+    .from('veiculos')
+    .select('id, sincronizado_hinova')
+    .eq('associado_id', contrato.associado_id)
+    .eq('sincronizado_hinova', false)
+    .limit(1)
+    .maybeSingle();
+
+  if (veiculo) {
+    // Enviar ao SGA em background (nao bloqueia ativacao)
+    supabase.functions.invoke('sga-hinova-sync', {
+      body: {
+        veiculo_id: veiculo.id,
+        associado_id: contrato.associado_id,
+      },
+    }).then(({ data, error }) => {
+      if (error || !data?.success) {
+        console.warn('[Ativacao] Falha ao enviar ao SGA:', error || data?.error);
+        toast.warning('Contrato ativado, mas envio ao SGA falhou. Use o botao manual.');
+      } else {
+        toast.success('Enviado ao SGA automaticamente!');
+      }
+    }).catch(err => {
+      console.warn('[Ativacao] Erro ao enviar ao SGA:', err);
+    });
+  }
+}
 ```
 
-**3. `supabase/functions/_shared/template-utils.ts`**
+### Comportamento esperado
 
-- Adicionar variaveis `associado.cnh`, `associado.cnh_validade` e `associado.cnh_categoria` no mapa de substituicao, permitindo que templates dinamicos tambem usem esses dados
+- Ao clicar "Ativar Contrato", o sistema ativa e ja envia ao SGA automaticamente
+- Se o SGA estiver indisponivel ou der erro, a ativacao continua normalmente e aparece um aviso
+- O botao manual "Enviar para SGA" continua disponivel como fallback
 
 ### Arquivos alterados
 
-- `supabase/functions/_shared/termo-afiliacao-utils.ts` (interface + mapeamento)
-- `supabase/functions/_shared/termo-afiliacao-template.ts` (exibicao HTML)
-- `supabase/functions/_shared/template-utils.ts` (variaveis dinamicas)
-
-### Deploy necessario
-
-As 3 edge functions que usam esses arquivos compartilhados precisarao ser re-deployed:
-- `contrato-gerar`
-- Qualquer outra function que renderize o termo
+- `src/hooks/useAtivacoes.ts` (funcao `useAtivarContrato`, adicionar chamada ao SGA)
