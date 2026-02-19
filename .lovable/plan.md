@@ -1,106 +1,94 @@
 
-# Corrigir: IA cria guincho sem confirmacao e nao gera link do evento
+# Corrigir: Erro 22001 - estado_evento muito longo para o campo estado_ocorrencia
 
-## Diagnostico (confirmado pelos logs)
+## Diagnóstico Confirmado
 
-Os logs da edge function revelam o problema real:
+Os logs da edge function mostram claramente:
 
 ```
-18:50:49 - Executando tool: criar_solicitacao_assistencia (guincho)
-18:51:04 - Executando tool: criar_solicitacao_assistencia (guincho)
-18:51:34 - Executando tool: criar_solicitacao_assistencia (guincho)
-18:56:34 - Modelo retornou texto puro (sem tool_calls). finish_reason: stop
-18:56:48 - Modelo retornou texto puro (sem tool_calls). finish_reason: stop
+[criar-sinistro] Erro ao inserir sinistro: {
+  code: "22001",
+  message: "value too long for type character varying(2)"
+}
+
+Payload recebido:
+  "estado_evento": "Rio de Janeiro"
 ```
 
-**A IA esta chamando `criar_solicitacao_assistencia` (guincho) mas NUNCA chama `criar_solicitacao_sinistro`.** Resultado:
-- Chamado de guincho criado sem o associado pedir
-- Sinistro nunca registrado no banco
-- Link do evento nunca gerado (depende do sinistro existir)
-- `[LINK_AUTO_VISTORIA]` aparece como texto puro (sem token associado)
-
-## Causa Raiz
-
-O prompt do sistema (linhas 51-54) esta incompleto. Diz "Apos coletar os dados de um sinistro de COLISAO..." mas a secao corta abruptamente para o fluxo de endereco sem definir:
-1. Que o sinistro DEVE ser criado PRIMEIRO com `criar_solicitacao_sinistro`
-2. Que o guincho so deve ser oferecido APOS criar o sinistro E com confirmacao explicita
-3. Que NUNCA deve chamar `criar_solicitacao_assistencia` automaticamente
+O campo `estado_ocorrencia` no banco é `character varying(2)`, aceitando apenas siglas de UF (ex: "RJ"). O app (tanto o formulario manual quanto a IA) envia o nome completo do estado ("Rio de Janeiro"), causando a falha no INSERT.
 
 ## Solucao
 
-### 1. Corrigir prompt do sistema (assistente-chat)
+### 1. Adicionar funcao de normalizacao de UF na edge function `criar-sinistro`
+
+**Arquivo:** `supabase/functions/criar-sinistro/index.ts`
+
+Adicionar um mapa de conversao de nome completo para sigla logo apos os imports, e usar essa funcao antes de inserir o sinistro:
+
+```text
+// Mapa de estados brasileiros → sigla
+const ESTADOS_MAP: Record<string, string> = {
+  "acre": "AC", "alagoas": "AL", "amapa": "AP", "amazonas": "AM",
+  "bahia": "BA", "ceara": "CE", "distrito federal": "DF",
+  "espirito santo": "ES", "goias": "GO", "maranhao": "MA",
+  "mato grosso": "MT", "mato grosso do sul": "MS", "minas gerais": "MG",
+  "para": "PA", "paraiba": "PB", "parana": "PR", "pernambuco": "PE",
+  "piaui": "PI", "rio de janeiro": "RJ", "rio grande do norte": "RN",
+  "rio grande do sul": "RS", "rondonia": "RO", "roraima": "RR",
+  "santa catarina": "SC", "sao paulo": "SP", "sergipe": "SE",
+  "tocantins": "TO",
+};
+
+function normalizarEstado(estado: string | undefined): string {
+  if (!estado) return '';
+  if (estado.length === 2) return estado.toUpperCase(); // já é sigla
+  const chave = estado.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove acentos
+  return ESTADOS_MAP[chave] || estado.substring(0, 2).toUpperCase();
+}
+```
+
+### 2. Aplicar normalizacao antes do INSERT
+
+Na linha 513, alterar:
+```typescript
+// ANTES
+estado_ocorrencia: payload.estado_evento || '',
+
+// DEPOIS
+estado_ocorrencia: normalizarEstado(payload.estado_evento),
+```
+
+### 3. Corrigir tambem o campo `estado_evento` no payload do chat (assistente-chat)
 
 **Arquivo:** `supabase/functions/assistente-chat/index.ts`
 
-Reescrever a secao "FLUXO SINISTRO + ASSISTENCIA" (linhas 51-55) para ser explicita e inequivoca:
+Na linha 641, o `assistente-chat` tambem insere diretamente na tabela `sinistros` com o campo `estado_ocorrencia`. Aplicar a mesma normalizacao ou truncar para 2 chars para garantir consistencia.
 
-```text
-## FLUXO SINISTRO + ASSISTENCIA (IMPORTANTE!)
-ATENCAO: So pergunte sobre guincho se a cobertura for TOTAL!
-
-ORDEM OBRIGATORIA para sinistro de COLISAO com cobertura TOTAL:
-
-1. PRIMEIRO: Colete TODOS os dados do sinistro (tipo, data, local, descricao)
-2. SEGUNDO: Chame a tool "criar_solicitacao_sinistro" para registrar o sinistro
-3. TERCEIRO: So APOS o sinistro criado com sucesso, PERGUNTE ao associado:
-   "Voce precisa de guincho/reboque para o veiculo?"
-4. QUARTO: Se o associado CONFIRMAR que precisa de guincho:
-   - Colete origem e destino
-   - Ai sim chame "criar_solicitacao_assistencia"
-5. QUINTO: Apos tudo, siga o FLUXO POS-REBOQUE (etapas + link)
-
-REGRA CRITICA: NUNCA chame "criar_solicitacao_assistencia" sem
-confirmacao EXPLICITA do associado. A IA DEVE perguntar e aguardar
-resposta antes de criar qualquer chamado de assistencia.
+Adicionar uma funcao utilitaria identica no `assistente-chat` e aplicar no campo:
+```typescript
+estado_ocorrencia: normalizarEstado(args.estado || associado?.uf || null),
 ```
 
-### 2. Corrigir o fluxo pos-sinistro no prompt
+### 4. Deploy das edge functions
 
-Atualizar a secao "FLUXO POS-REBOQUE PARA COLISAO" (linhas 110-121) para funcionar tanto COM quanto SEM guincho:
+Fazer deploy de `criar-sinistro` e `assistente-chat` com as correcoes.
 
-```text
-## FLUXO POS-SINISTRO PARA COLISAO (COBERTURA TOTAL)
-Apos criar o sinistro com sucesso (protocolo SIN-XXXX gerado):
-
-1. Informe: "Seu sinistro foi registrado com protocolo SIN-XXXX!"
-2. Se cobertura TOTAL, informe sobre as 3 etapas do link
-3. Inclua o marcador [LINK_AUTO_VISTORIA] na resposta
-4. So entao pergunte sobre guincho
-```
-
-### 3. Corrigir a descricao da tool `criar_solicitacao_assistencia`
-
-Adicionar enfase na descricao da tool para reforcar que precisa de confirmacao:
-
-```text
-description: "Cria chamado de assistencia 24h. IMPORTANTE: Use SOMENTE
-apos o associado CONFIRMAR EXPLICITAMENTE que deseja o servico.
-NUNCA crie automaticamente."
-```
-
-### 4. Corrigir renderizacao do `[LINK_AUTO_VISTORIA]` no frontend
-
-**Arquivo:** `src/components/app/chat/ChatMessage.tsx`
-
-O componente ja detecta o marcador e ja tem o `EventoLinkButton`. O problema e que `linkEventoToken` chega como `null` porque `criar_solicitacao_sinistro` nunca foi chamado. Com a correcao do prompt (itens 1-3), o sinistro sera criado, o token gerado, e o botao renderizado.
-
-Porem, como fallback adicional, quando `[LINK_AUTO_VISTORIA]` esta presente mas `linkEventoToken` e null, o marcador deve ser removido do texto (ja e feito) e nenhum botao deve aparecer (ja e o comportamento atual). Nao ha mudanca necessaria no frontend.
-
-### 5. Deploy
-
-Fazer deploy da edge function `assistente-chat` apos as alteracoes no prompt.
-
-## Resumo das alteracoes
+## Arquivos alterados
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/assistente-chat/index.ts` | Reescrever prompt: fluxo obrigatorio sinistro-primeiro, guincho apenas com confirmacao explicita; atualizar descricao da tool de assistencia |
+| `supabase/functions/criar-sinistro/index.ts` | Adicionar `normalizarEstado()` e aplicar no INSERT (linha 513) |
+| `supabase/functions/assistente-chat/index.ts` | Adicionar `normalizarEstado()` e aplicar no INSERT do sinistro via chat (linha 641) |
 
 ## Resultado esperado
 
-1. Associado relata colisao no chat
-2. IA coleta dados (tipo, data, local, descricao)
-3. IA chama `criar_solicitacao_sinistro` -> sinistro criado + link gerado
-4. IA mostra protocolo + botao "Acessar Link do Evento" (renderizado pelo frontend)
-5. IA PERGUNTA: "Voce precisa de guincho?"
-6. So cria chamado de assistencia se o associado confirmar
+- Associado preenche o sinistro no app com "Rio de Janeiro"
+- A funcao converte para "RJ" antes de inserir no banco
+- INSERT ocorre com sucesso
+- Sinistro criado com status `comunicado`
+- Fluxo continua normalmente (link do evento gerado, etc.)
+
+## Observacao adicional
+
+O campo `necessita_reboque: true` no payload indica que o app tambem estava tentando criar um chamado de reboque automaticamente junto com o sinistro (linhas 609-650 do `criar-sinistro`). Isso e um comportamento do formulario manual (nao do chat da IA). O formulario tem uma opcao onde o associado informa se precisa de reboque, e isso e enviado no payload. Esse comportamento e correto para o formulario direto.
