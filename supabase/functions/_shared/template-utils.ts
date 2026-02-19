@@ -53,6 +53,9 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'associado.cep': formatCEP(dados.cliente.cep),
     'associado.estado_civil': dados.cliente.estado_civil || '—',
     'associado.profissao': dados.cliente.profissao || '—',
+    'associado.cnh': dados.cliente.cnh || '—',
+    'associado.cnh_validade': formatDate(dados.cliente.cnh_validade),
+    'associado.cnh_categoria': dados.cliente.cnh_categoria || '—',
     'associado.endereco_completo': `${dados.cliente.logradouro || ''}, ${dados.cliente.numero || ''}${dados.cliente.complemento ? ', ' + dados.cliente.complemento : ''} - ${dados.cliente.bairro || ''} - ${dados.cliente.cidade || ''}/${dados.cliente.uf || ''} - CEP ${formatCEP(dados.cliente.cep)}`,
     
     // Veículo

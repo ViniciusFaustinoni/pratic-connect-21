@@ -9,6 +9,9 @@ export interface ClienteData {
   cpf: string;
   rg?: string;
   rg_orgao?: string;
+  cnh?: string;
+  cnh_validade?: string;
+  cnh_categoria?: string;
   data_nascimento?: string;
   estado_civil?: string;
   profissao?: string;
@@ -236,6 +239,9 @@ export function mapearDadosParaTemplate(
       cpf: contrato.cliente_cpf || cliente.cpf || "",
       rg: contrato.cliente_rg || cliente.rg || "",
       rg_orgao: contrato.cliente_rg_orgao || cliente.rg_orgao || "",
+      cnh: contrato.cliente_cnh || "",
+      cnh_validade: contrato.cliente_cnh_validade || "",
+      cnh_categoria: contrato.cliente_cnh_categoria || "",
       data_nascimento: contrato.cliente_data_nascimento || cliente.data_nascimento || "",
       estado_civil: contrato.cliente_estado_civil || cliente.estado_civil || "",
       profissao: contrato.cliente_profissao || cliente.profissao || "",
