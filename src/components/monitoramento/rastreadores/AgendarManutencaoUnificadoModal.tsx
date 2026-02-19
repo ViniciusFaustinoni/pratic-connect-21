@@ -261,6 +261,9 @@ export function AgendarManutencaoUnificadoModal({
       profissionalId,
       permiteEncaixe,
       notificarWhatsApp,
+      enderecoAlternativo: localTipo === 'rota' && tipoEndereco === 'outro' ? {
+        logradouro, numero, bairro, cidade, uf, cep: cep.replace(/\D/g, ''),
+      } : undefined,
     });
 
     onOpenChange(false);
