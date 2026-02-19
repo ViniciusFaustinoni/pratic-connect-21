@@ -1164,7 +1164,7 @@ ${assistenciasTexto}
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: aiMessages,
         tools,
         tool_choice: "auto",
@@ -1195,6 +1195,10 @@ ${assistenciasTexto}
 
     let result = await response.json();
     let assistantMessage = result.choices?.[0]?.message;
+
+    if (!assistantMessage?.tool_calls) {
+      console.log(`[assistente-chat] Modelo retornou texto puro (sem tool_calls). finish_reason: ${result.choices?.[0]?.finish_reason}`);
+    }
 
     // Handle tool calls in a loop
     let iterations = 0;
@@ -1230,16 +1234,16 @@ ${assistenciasTexto}
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: aiMessages,
-          tools,
-          tool_choice: "auto",
-          stream: false,
-        }),
-      });
+        model: "google/gemini-2.5-flash",
+        messages: aiMessages,
+        tools,
+        tool_choice: "auto",
+        stream: false,
+      }),
+    });
 
-      if (!response.ok) {
-        break;
+    if (!response.ok) {
+      break;
       }
 
       result = await response.json();
