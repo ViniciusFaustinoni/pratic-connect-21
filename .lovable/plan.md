@@ -1,48 +1,72 @@
 
-# Sincronizar status de documentos entre tabelas
+# Corrigir status de contratacao para refletir etapa atual
 
 ## Problema
 
-Ao aprovar/reprovar um documento na fila de analise, apenas a tabela `documentos` e atualizada. A tabela `contratos_documentos` (que e a fonte de dados do painel "Documentacoes Anexadas") mantem o status como "pendente", causando inconsistencia visual.
+Quando o cliente ja esta na etapa de assinatura do contrato (Autentique), o painel administrativo continua mostrando "Enviando Documentos" porque `cotacoes.status_contratacao` fica travado em `dados_preenchidos`.
+
+O fluxo atual:
+
+```text
+salvarDadosPessoais() --> status_contratacao = 'dados_preenchidos'
+                          etapaAtual = 2 (assinatura)
+                          [LACUNA: status nao atualiza]
+                          
+EtapaAssinaturaContrato:
+  - gera contrato
+  - envia para Autentique
+  - aguarda assinatura
+  [status_contratacao continua 'dados_preenchidos']
+  
+  - SOMENTE apos assinatura --> status_contratacao = 'contrato_assinado'
+```
+
+Na tabela admin, `dados_preenchidos` mapeia para "Enviando Documentos", causando confusao.
 
 ## Causa raiz
 
-A funcao `aprovarDocumento` em `src/hooks/useDocumentos.ts` atualiza somente a tabela `documentos`. O painel "Documentacoes Anexadas" (usado no detalhe do associado e na analise de proposta) le os dados de `contratos_documentos`, que nunca recebe a atualizacao de status.
+O componente `EtapaAssinaturaContrato.tsx` nunca atualiza `cotacoes.status_contratacao` durante as etapas intermediarias (geracao de contrato, envio ao Autentique, aguardando assinatura). So atualiza ao final, quando a assinatura e concluida.
 
 ## Solucao
 
-Apos atualizar o status na tabela `documentos`, sincronizar o mesmo status na tabela `contratos_documentos` usando o `tipo` e o `associado_id` (ou `arquivo_url`) como criterio de match.
+Atualizar `status_contratacao` para `documentos_ok` no `EtapaAssinaturaContrato.tsx` quando o contrato e gerado e/ou enviado ao Autentique. Isso reflete corretamente que a fase de documentos foi concluida e o processo avancou.
 
 ### Alteracoes
 
-**Arquivo:** `src/hooks/useDocumentos.ts`
+**Arquivo:** `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`
 
-1. Na mutacao `aprovarDocumento` (linha ~295-303): apos o update em `documentos`, adicionar um update correspondente em `contratos_documentos` filtrando pela URL do arquivo ou pelo tipo + cotacao_id do associado.
-
-2. Na mutacao `reprovarDocumento`: aplicar a mesma logica de sincronizacao.
-
-### Detalhe tecnico
-
-Na funcao `aprovarDocumento`, apos o update bem-sucedido em `documentos`, buscar o documento aprovado para obter a `arquivo_url` e entao atualizar `contratos_documentos`:
+1. Apos gerar o contrato com sucesso (linha ~144, depois de `update contrato_gerado_id`), adicionar update do `status_contratacao`:
 
 ```typescript
-// Apos aprovar em 'documentos', sincronizar com 'contratos_documentos'
-const { data: docAprovado } = await supabase
-  .from('documentos')
-  .select('arquivo_url, tipo')
-  .eq('id', id)
-  .single();
+// Apos vincular contrato a cotacao
+await publicSupabase
+  .from('cotacoes')
+  .update({ 
+    contrato_gerado_id: contratoId,
+    status_contratacao: 'documentos_ok' // Avanca status
+  })
+  .eq('id', cotacaoId);
+```
 
-if (docAprovado?.arquivo_url) {
-  await supabase
-    .from('contratos_documentos')
-    .update({ status: 'aprovado' })
-    .eq('arquivo_url', docAprovado.arquivo_url);
+2. Quando detecta que o contrato ja existe e ja tem link do Autentique (linha ~105-114), tambem garantir que o status esta correto:
+
+```typescript
+if (contratoData?.autentique_url) {
+  // Garantir que status reflete a etapa correta
+  await publicSupabase
+    .from('cotacoes')
+    .update({ status_contratacao: 'documentos_ok' })
+    .eq('id', cotacaoId)
+    .in('status_contratacao', ['dados_preenchidos']); // So atualiza se estiver atrasado
+  
+  setContrato({...});
+  setEtapaInterna('aguardando_assinatura');
+  return contratoData.id;
 }
 ```
 
-A mesma logica sera aplicada para `reprovarDocumento` (sincronizando status `reprovado`).
+Isso garante que assim que o contrato e gerado/enviado para assinatura, o status avanca de `dados_preenchidos` para `documentos_ok`, que no admin exibe "Escolha de Vistoria" ou pelo menos remove o "Enviando Documentos" enganoso.
 
 ### Arquivos alterados
 
-- `src/hooks/useDocumentos.ts` (mutacoes `aprovarDocumento` e `reprovarDocumento`)
+- `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx` (2 pontos de insercao)
