@@ -286,6 +286,33 @@ export function useAtivarContrato() {
         if (associadoError) {
           console.error('Erro ao ativar associado:', associadoError);
         }
+
+        // 4. Enviar automaticamente ao SGA (fire-and-forget)
+        const { data: veiculo } = await supabase
+          .from('veiculos')
+          .select('id, sincronizado_hinova')
+          .eq('associado_id', contrato.associado_id)
+          .eq('sincronizado_hinova', false)
+          .limit(1)
+          .maybeSingle();
+
+        if (veiculo) {
+          supabase.functions.invoke('sga-hinova-sync', {
+            body: {
+              veiculo_id: veiculo.id,
+              associado_id: contrato.associado_id,
+            },
+          }).then(({ data, error }) => {
+            if (error || !data?.success) {
+              console.warn('[Ativacao] Falha ao enviar ao SGA:', error || data?.error);
+              toast.warning('Contrato ativado, mas envio ao SGA falhou. Use o botão manual.');
+            } else {
+              toast.success('Enviado ao SGA automaticamente!');
+            }
+          }).catch(err => {
+            console.warn('[Ativacao] Erro ao enviar ao SGA:', err);
+          });
+        }
       }
     },
     onSuccess: () => {
