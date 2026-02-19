@@ -152,6 +152,23 @@ export function useSelecionarTipoVistoria() {
         .eq('id', contratoId);
       
       if (error) throw error;
+
+      // Atualizar cotacao vinculada com tipo_vistoria e status_contratacao
+      const { data: contrato } = await supabase
+        .from('contratos')
+        .select('cotacao_id')
+        .eq('id', contratoId)
+        .maybeSingle();
+
+      if (contrato?.cotacao_id) {
+        await supabase
+          .from('cotacoes')
+          .update({
+            tipo_vistoria: tipoVistoria,
+            status_contratacao: 'vistoria_ok',
+          } as any)
+          .eq('id', contrato.cotacao_id);
+      }
       
       // Registrar no histórico
       await supabase.from('contratos_historico').insert({
@@ -593,6 +610,29 @@ export function useFinalizarAutovistoria() {
         .eq('id', vistoriaId);
       
       if (error) throw error;
+
+      // Atualizar cotacao para refletir que autovistoria foi concluída
+      const { data: vistoria } = await supabase
+        .from('vistorias')
+        .select('contrato_id')
+        .eq('id', vistoriaId)
+        .maybeSingle();
+
+      if (vistoria?.contrato_id) {
+        const { data: contrato } = await supabase
+          .from('contratos')
+          .select('cotacao_id')
+          .eq('id', vistoria.contrato_id)
+          .maybeSingle();
+
+        if (contrato?.cotacao_id) {
+          await supabase
+            .from('cotacoes')
+            .update({ status_contratacao: 'contrato_assinado' } as any)
+            .eq('id', contrato.cotacao_id);
+        }
+      }
+
       return { success: true };
     },
     onSuccess: () => {

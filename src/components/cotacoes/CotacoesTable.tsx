@@ -26,6 +26,7 @@ type EtapaVenda =
   | 'escolhendo_plano'
   | 'enviando_documentos'
   | 'escolha_vistoria'
+  | 'realizando_autovistoria'
   | 'realizando_pagamento'
   | 'assinando_contrato'
   | 'vistoria_agendada'
@@ -101,6 +102,11 @@ const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgCol
     label: 'Escolha de Vistoria',
     color: 'text-indigo-600 dark:text-indigo-400',
     bgColor: 'bg-indigo-500/20',
+  },
+  realizando_autovistoria: {
+    label: 'Realizando Autovistoria',
+    color: 'text-purple-600 dark:text-purple-400',
+    bgColor: 'bg-purple-500/20',
   },
   realizando_pagamento: {
     label: 'Realizando Pagamento',
@@ -189,6 +195,11 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
   // PRIORIDADE 3: Verificar se pagamento foi feito ANTES de considerar vistoria agendada
   const adesaoPaga = cotacao.contrato?.adesao_paga;
   
+  // Se autovistoria foi escolhida mas pagamento ainda não feito, está na etapa de autovistoria
+  if (cotacao.tipo_vistoria === 'autovistoria' && adesaoPaga === false) {
+    return 'realizando_autovistoria';
+  }
+
   // Se contrato existe e foi assinado, verificar pagamento primeiro
   if (contratoStatus === 'assinado' || contratoStatus === 'ativo') {
     if (adesaoPaga === false) {
