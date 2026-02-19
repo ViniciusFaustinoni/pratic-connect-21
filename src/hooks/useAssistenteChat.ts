@@ -9,6 +9,7 @@ export interface ChatMessage {
   timestamp: Date;
   isLoading?: boolean;
   isAudio?: boolean;
+  linkEventoToken?: string | null;
 }
 
 interface PendingFiles {
@@ -81,12 +82,13 @@ export function useAssistenteChat() {
       }
 
       const assistantContent = data?.content || 'Desculpe, não consegui processar sua solicitação.';
+      const linkToken = data?.linkEventoToken || null;
 
       // Update the placeholder with actual response
       setMessages(prev =>
         prev.map(msg =>
           msg.id === assistantPlaceholder.id
-            ? { ...msg, content: assistantContent, isLoading: false }
+            ? { ...msg, content: assistantContent, isLoading: false, linkEventoToken: linkToken }
             : msg
         )
       );
@@ -186,12 +188,13 @@ export function useAssistenteChat() {
       }
 
       const assistantContent = aiData?.content || 'Desculpe, não consegui processar sua solicitação.';
+      const linkToken = aiData?.linkEventoToken || null;
 
       // 5. Atualizar placeholder com resposta
       setMessages(prev =>
         prev.map(msg =>
           msg.id === assistantPlaceholder.id
-            ? { ...msg, content: assistantContent, isLoading: false }
+            ? { ...msg, content: assistantContent, isLoading: false, linkEventoToken: linkToken }
             : msg
         )
       );
