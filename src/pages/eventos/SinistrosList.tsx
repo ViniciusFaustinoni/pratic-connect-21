@@ -112,9 +112,9 @@ export default function SinistrosList() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sinistros' },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['sinistros'] });
-          queryClient.invalidateQueries({ queryKey: ['sinistros-contadores'] });
-          queryClient.invalidateQueries({ queryKey: ['sinistros-pendencias-ia'] });
+          queryClient.invalidateQueries({ queryKey: ['sinistros'], exact: false });
+          queryClient.invalidateQueries({ queryKey: ['sinistros-contadores'], exact: false });
+          queryClient.invalidateQueries({ queryKey: ['sinistros-pendencias-ia'], exact: false });
         }
       )
       .subscribe();
@@ -183,6 +183,8 @@ export default function SinistrosList() {
   const { data: contadores } = useQuery({
     queryKey: ['sinistros-contadores', isAnalistaEventos, isDiretor],
     enabled: !!profile,
+    staleTime: 0, // Sempre considerar stale para refetch imediato após invalidação
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       let query = supabase.from('sinistros').select('status');
       
