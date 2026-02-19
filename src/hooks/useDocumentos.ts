@@ -250,6 +250,7 @@ export function useDocumentoActions() {
     queryClient.invalidateQueries({ queryKey: ['documento'] });
     queryClient.invalidateQueries({ queryKey: ['documentos-associado'] });
     queryClient.invalidateQueries({ queryKey: ['proximo-documento'] });
+    queryClient.invalidateQueries({ queryKey: ['contratos-documentos'] });
   };
 
   // Iniciar análise
@@ -303,6 +304,20 @@ export function useDocumentoActions() {
         .eq('id', id);
 
       if (error) throw error;
+
+      // Sincronizar status com contratos_documentos
+      const { data: docAprovado } = await supabase
+        .from('documentos')
+        .select('arquivo_url')
+        .eq('id', id)
+        .single();
+
+      if (docAprovado?.arquivo_url) {
+        await supabase
+          .from('contratos_documentos')
+          .update({ status: 'aprovado' })
+          .eq('arquivo_url', docAprovado.arquivo_url);
+      }
 
       // Enviar notificação WhatsApp
       if (documentoData?.associado_id) {
@@ -360,6 +375,20 @@ export function useDocumentoActions() {
         .eq('id', id);
 
       if (error) throw error;
+
+      // Sincronizar status com contratos_documentos
+      const { data: docReprovado } = await supabase
+        .from('documentos')
+        .select('arquivo_url')
+        .eq('id', id)
+        .single();
+
+      if (docReprovado?.arquivo_url) {
+        await supabase
+          .from('contratos_documentos')
+          .update({ status: 'reprovado' })
+          .eq('arquivo_url', docReprovado.arquivo_url);
+      }
 
       // Enviar notificação WhatsApp com motivo
       if (documentoData?.associado_id) {
