@@ -1,5 +1,26 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Mapa de estados brasileiros → sigla UF
+const ESTADOS_MAP: Record<string, string> = {
+  "acre": "AC", "alagoas": "AL", "amapa": "AP", "amazonas": "AM",
+  "bahia": "BA", "ceara": "CE", "distrito federal": "DF",
+  "espirito santo": "ES", "goias": "GO", "maranhao": "MA",
+  "mato grosso": "MT", "mato grosso do sul": "MS", "minas gerais": "MG",
+  "para": "PA", "paraiba": "PB", "parana": "PR", "pernambuco": "PE",
+  "piaui": "PI", "rio de janeiro": "RJ", "rio grande do norte": "RN",
+  "rio grande do sul": "RS", "rondonia": "RO", "roraima": "RR",
+  "santa catarina": "SC", "sao paulo": "SP", "sergipe": "SE",
+  "tocantins": "TO",
+};
+
+function normalizarEstado(estado: string | undefined | null): string {
+  if (!estado) return '';
+  const s = estado.trim();
+  if (s.length === 2) return s.toUpperCase();
+  const chave = s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return ESTADOS_MAP[chave] || s.substring(0, 2).toUpperCase();
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -510,7 +531,7 @@ Deno.serve(async (req) => {
         data_ocorrencia: dataHoraOcorrencia,
         local_ocorrencia: payload.endereco_evento || '',
         cidade_ocorrencia: payload.cidade_evento || '',
-        estado_ocorrencia: payload.estado_evento || '',
+        estado_ocorrencia: normalizarEstado(payload.estado_evento),
         descricao: payload.descricao,
         bo_numero: payload.numero_bo || null,
         status: 'comunicado',
