@@ -4,31 +4,36 @@ import ReactMarkdown from 'react-markdown';
 import { LocationButton } from './LocationButton';
 import { UploadBOButton } from './UploadBOButton';
 import { UploadFotosButton } from './UploadFotosButton';
+import { EventoLinkButton } from './EventoLinkButton';
 
 interface ChatMessageProps {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   isLoading?: boolean;
+  linkEventoToken?: string | null;
   onLocationCapture?: (latitude: number, longitude: number) => void;
   onUploadBO?: (file: File) => Promise<void>;
   onUploadFotos?: (files: File[]) => Promise<void>;
 }
 
-export function ChatMessage({ role, content, timestamp, isLoading, onLocationCapture, onUploadBO, onUploadFotos }: ChatMessageProps) {
+export function ChatMessage({ role, content, timestamp, isLoading, linkEventoToken, onLocationCapture, onUploadBO, onUploadFotos }: ChatMessageProps) {
   const isUser = role === 'user';
   
   // Verificar se a mensagem contém marcadores de componentes interativos
   const hasLocationButton = !isUser && content.includes('[BOTAO_LOCALIZACAO]');
   const hasUploadBO = !isUser && content.includes('[UPLOAD_BO]');
   const hasUploadFotos = !isUser && content.includes('[UPLOAD_FOTOS]');
+  const hasLinkAutoVistoria = !isUser && content.includes('[LINK_AUTO_VISTORIA]');
   
   // Remover os marcadores do conteúdo para exibição
   const displayContent = content
     .replace('[BOTAO_LOCALIZACAO]', '')
     .replace('[UPLOAD_BO]', '')
     .replace('[UPLOAD_FOTOS]', '')
+    .replace('[LINK_AUTO_VISTORIA]', '')
     .trim();
+
   return (
     <div
       className={cn(
@@ -132,6 +137,10 @@ export function ChatMessage({ role, content, timestamp, isLoading, onLocationCap
                     disabled={isLoading}
                   />
                 </div>
+              )}
+
+              {(hasLinkAutoVistoria || linkEventoToken) && linkEventoToken && (
+                <EventoLinkButton token={linkEventoToken} />
               )}
             </div>
           )}

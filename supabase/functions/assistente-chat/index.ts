@@ -747,11 +747,41 @@ async function executeTool(
           ? ` Arquivos anexados: ${args.bo_path ? "B.O." : ""}${args.bo_path && args.fotos_paths?.length ? " + " : ""}${args.fotos_paths?.length ? `${args.fotos_paths.length} foto(s)` : ""}`
           : "";
 
+        // 12. Gerar link do evento automaticamente (72h)
+        let linkEventoToken: string | null = null;
+        try {
+          // Invalidar links ativos anteriores
+          await supabase.from("sinistro_evento_links")
+            .update({ status: "invalidado" })
+            .eq("sinistro_id", sinistroChat.id)
+            .eq("status", "ativo");
+
+          const expiraLink = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+          const { data: novoLink, error: linkErr } = await supabase
+            .from("sinistro_evento_links")
+            .insert({ sinistro_id: sinistroChat.id, expira_em: expiraLink, status: "ativo", etapa_atual: 0 })
+            .select("id, token")
+            .single();
+
+          if (!linkErr && novoLink) {
+            linkEventoToken = novoLink.token;
+            await supabase.from("sinistros")
+              .update({ link_evento_id: novoLink.id })
+              .eq("id", sinistroChat.id);
+            console.log(`[assistente-chat] Link evento gerado: ${linkEventoToken}`);
+          } else {
+            console.error("[assistente-chat] Erro ao gerar link evento:", linkErr);
+          }
+        } catch (linkErrCatch) {
+          console.error("[assistente-chat] Erro ao gerar link evento (não bloqueante):", linkErrCatch);
+        }
+
         return JSON.stringify({
           sucesso: true,
           protocolo: protocoloChat,
           message: `Sinistro registrado com sucesso! Protocolo: **${protocoloChat}**.${arquivosInfoChat} Nossa equipe já foi notificada e iniciará a análise em breve.`,
           id: sinistroChat.id,
+          link_evento_token: linkEventoToken,
         });
       }
 
@@ -1203,6 +1233,7 @@ ${assistenciasTexto}
     // Handle tool calls in a loop
     let iterations = 0;
     const maxIterations = 5;
+    let capturedLinkEventoToken: string | null = null;
 
     while (assistantMessage?.tool_calls && iterations < maxIterations) {
       iterations++;
@@ -1215,6 +1246,17 @@ ${assistenciasTexto}
         const toolArgs = JSON.parse(toolCall.function.arguments || "{}");
 
         const toolResult = await executeTool(supabase, associado.id, toolName, toolArgs);
+
+        // Capturar token do link evento se a tool criar_solicitacao_sinistro retornou
+        if (toolName === "criar_solicitacao_sinistro") {
+          try {
+            const parsed = JSON.parse(toolResult);
+            if (parsed?.link_evento_token) {
+              capturedLinkEventoToken = parsed.link_evento_token;
+              console.log(`[assistente-chat] Token do link evento capturado: ${capturedLinkEventoToken}`);
+            }
+          } catch (_) {}
+        }
 
         toolResults.push({
           role: "tool",
@@ -1273,6 +1315,7 @@ ${assistenciasTexto}
       JSON.stringify({
         content: finalContent,
         toolsUsed: assistantMessage?.tool_calls?.map((tc: any) => tc.function.name) || [],
+        linkEventoToken: capturedLinkEventoToken,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

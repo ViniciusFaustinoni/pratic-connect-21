@@ -92,6 +92,7 @@ export default function AppChat() {
                 content={message.content}
                 timestamp={message.timestamp}
                 isLoading={message.isLoading}
+                linkEventoToken={message.linkEventoToken}
                 onLocationCapture={sendLocation}
                 onUploadBO={uploadBO}
                 onUploadFotos={uploadFotos}
