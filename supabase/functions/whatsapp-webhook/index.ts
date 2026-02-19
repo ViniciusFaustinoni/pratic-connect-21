@@ -1850,7 +1850,7 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY não configurada");
 
   const body: any = {
-    model: "google/gemini-3-flash-preview", // ATUALIZADO: Mesmo modelo do App
+    model: "google/gemini-2.5-flash", // ATUALIZADO: Modelo com suporte estável a function calling
     messages: [
       { role: "system", content: systemPrompt },
       ...messages,
