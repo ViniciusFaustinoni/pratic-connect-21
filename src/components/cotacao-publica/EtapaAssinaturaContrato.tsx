@@ -103,6 +103,14 @@ export function EtapaAssinaturaContrato({
 
         // Se já tem link do Autentique, ir para aguardar
         if (contratoData?.autentique_url) {
+          // Garantir que status reflete a etapa correta (avançar se ainda estiver em dados_preenchidos)
+          await publicSupabase
+            .from('cotacoes')
+            .update({ status_contratacao: 'documentos_ok' })
+            .eq('id', cotacaoId)
+            .eq('token_publico', tokenPublico)
+            .in('status_contratacao', ['dados_preenchidos']);
+
           setContrato({
             id: contratoData.id,
             numero: contratoData.numero,
@@ -137,10 +145,10 @@ export function EtapaAssinaturaContrato({
         contratoId = data.contrato.id;
         console.log('[EtapaAssinatura] Contrato gerado:', data.contrato.numero);
 
-        // Atualizar cotação com ID do contrato
+        // Atualizar cotação com ID do contrato e avançar status
         await publicSupabase
           .from('cotacoes')
-          .update({ contrato_gerado_id: contratoId })
+          .update({ contrato_gerado_id: contratoId, status_contratacao: 'documentos_ok' })
           .eq('id', cotacaoId);
 
         setContrato({
