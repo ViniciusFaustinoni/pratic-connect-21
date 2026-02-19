@@ -52,8 +52,9 @@ serve(async (req) => {
       );
     }
 
-    // PRIORIZAR URL do secret sobre a URL do banco
-    const apiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+    // PRIORIZAR URL do secret sobre a URL do banco (remover trailing slash)
+    const rawApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+    const apiUrl = rawApiUrl ? rawApiUrl.replace(/\/+$/, '') : null;
     if (!apiUrl) {
       return new Response(
         JSON.stringify({ success: false, error: "URL da Evolution API não configurada" }),
