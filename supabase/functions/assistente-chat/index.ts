@@ -1,6 +1,27 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Mapa de estados brasileiros → sigla UF
+const ESTADOS_MAP_CHAT: Record<string, string> = {
+  "acre": "AC", "alagoas": "AL", "amapa": "AP", "amazonas": "AM",
+  "bahia": "BA", "ceara": "CE", "distrito federal": "DF",
+  "espirito santo": "ES", "goias": "GO", "maranhao": "MA",
+  "mato grosso": "MT", "mato grosso do sul": "MS", "minas gerais": "MG",
+  "para": "PA", "paraiba": "PB", "parana": "PR", "pernambuco": "PE",
+  "piaui": "PI", "rio de janeiro": "RJ", "rio grande do norte": "RN",
+  "rio grande do sul": "RS", "rondonia": "RO", "roraima": "RR",
+  "santa catarina": "SC", "sao paulo": "SP", "sergipe": "SE",
+  "tocantins": "TO",
+};
+
+function normalizarEstadoChat(estado: string | undefined | null): string {
+  if (!estado) return '';
+  const s = estado.trim();
+  if (s.length === 2) return s.toUpperCase();
+  const chave = s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return ESTADOS_MAP_CHAT[chave] || s.substring(0, 2).toUpperCase();
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -638,7 +659,7 @@ async function executeTool(
             data_ocorrencia: args.data_ocorrencia || null,
             local_ocorrencia: args.local || "",
             cidade_ocorrencia: args.cidade || associado?.cidade || null,
-            estado_ocorrencia: args.estado || associado?.uf || null,
+            estado_ocorrencia: normalizarEstadoChat(args.estado || associado?.uf || null),
             descricao: args.descricao,
             status: "comunicado",
             canal: "ia",
