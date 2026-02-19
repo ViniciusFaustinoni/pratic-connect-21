@@ -1,47 +1,48 @@
 
-
-# Corrigir scroll do modal "Atribuir Fornecedores" para exibir Auto Centers
+# Sincronizar status de documentos entre tabelas
 
 ## Problema
 
-O titulo "Auto Centers para Cotacao de Pecas" aparece, mas os cards dos auto centers ficam cortados logo abaixo. O auto center "FUSCAO PRETO JACAREPAGUA" existe no banco com status `ativo` e WhatsApp preenchido, confirmando que o problema e puramente de layout/scroll.
-
-A correcao anterior (`min-h-0` no ScrollArea) nao foi suficiente porque o Radix ScrollArea Viewport interno usa `h-full` que depende de uma altura explicita no container pai.
+Ao aprovar/reprovar um documento na fila de analise, apenas a tabela `documentos` e atualizada. A tabela `contratos_documentos` (que e a fonte de dados do painel "Documentacoes Anexadas") mantem o status como "pendente", causando inconsistencia visual.
 
 ## Causa raiz
 
-O `DialogContent` base ja possui `max-h-[90vh] overflow-y-auto` nas classes internas do componente. A classe customizada `overflow-hidden` sobrescreve isso, mas o `ScrollArea` do Radix precisa que seu Viewport tenha uma altura real calculada. O `flex-1 min-h-0` sozinho nao garante isso sem que o Viewport do Radix tambem tenha as restricoes corretas.
+A funcao `aprovarDocumento` em `src/hooks/useDocumentos.ts` atualiza somente a tabela `documentos`. O painel "Documentacoes Anexadas" (usado no detalhe do associado e na analise de proposta) le os dados de `contratos_documentos`, que nunca recebe a atualizacao de status.
 
 ## Solucao
 
-Duas alteracoes complementares:
+Apos atualizar o status na tabela `documentos`, sincronizar o mesmo status na tabela `contratos_documentos` usando o `tipo` e o `associado_id` (ou `arquivo_url`) como criterio de match.
 
-### 1. Remover `overflow-hidden` do DialogContent e usar altura fixa no ScrollArea
+### Alteracoes
 
-No `DialogContent` (linha 238), trocar a abordagem de `overflow-hidden flex flex-col` para garantir que o flex container funcione corretamente:
+**Arquivo:** `src/hooks/useDocumentos.ts`
 
-```tsx
-// De:
-<DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+1. Na mutacao `aprovarDocumento` (linha ~295-303): apos o update em `documentos`, adicionar um update correspondente em `contratos_documentos` filtrando pela URL do arquivo ou pelo tipo + cotacao_id do associado.
 
-// Para:
-<DialogContent className="max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+2. Na mutacao `reprovarDocumento`: aplicar a mesma logica de sincronizacao.
+
+### Detalhe tecnico
+
+Na funcao `aprovarDocumento`, apos o update bem-sucedido em `documentos`, buscar o documento aprovado para obter a `arquivo_url` e entao atualizar `contratos_documentos`:
+
+```typescript
+// Apos aprovar em 'documentos', sincronizar com 'contratos_documentos'
+const { data: docAprovado } = await supabase
+  .from('documentos')
+  .select('arquivo_url, tipo')
+  .eq('id', id)
+  .single();
+
+if (docAprovado?.arquivo_url) {
+  await supabase
+    .from('contratos_documentos')
+    .update({ status: 'aprovado' })
+    .eq('arquivo_url', docAprovado.arquivo_url);
+}
 ```
 
-Usar `h-[90vh]` em vez de `max-h-[90vh]` da uma altura definida ao flex container, permitindo que `flex-1` calcule corretamente a altura do ScrollArea.
+A mesma logica sera aplicada para `reprovarDocumento` (sincronizando status `reprovado`).
 
-### 2. Adicionar altura maxima explicita ao ScrollArea como fallback
+### Arquivos alterados
 
-Garantir que o `ScrollArea` tenha uma restricao de overflow funcional:
-
-```tsx
-// De:
-<ScrollArea className="flex-1 min-h-0 pr-4">
-
-// Para:
-<ScrollArea className="flex-1 min-h-0 overflow-hidden pr-4">
-```
-
-## Arquivo alterado
-
-- `src/components/sinistros/AtribuirFornecedoresDialog.tsx` (2 linhas)
+- `src/hooks/useDocumentos.ts` (mutacoes `aprovarDocumento` e `reprovarDocumento`)
