@@ -1,94 +1,77 @@
 
-# Corrigir: Erro 22001 - estado_evento muito longo para o campo estado_ocorrencia
+# Corrigir: Erro ao Gerar Contrato — Violação do Constraint `dia_vencimento`
 
 ## Diagnóstico Confirmado
 
-Os logs da edge function mostram claramente:
+Os logs da edge function `contrato-gerar` mostram claramente:
 
 ```
-[criar-sinistro] Erro ao inserir sinistro: {
-  code: "22001",
-  message: "value too long for type character varying(2)"
-}
-
-Payload recebido:
-  "estado_evento": "Rio de Janeiro"
+code: "23514"
+message: 'new row for relation "associados" violates check constraint "associados_dia_vencimento_check"'
+Failing row contains: (..., dia_vencimento = 30, ...)
 ```
 
-O campo `estado_ocorrencia` no banco é `character varying(2)`, aceitando apenas siglas de UF (ex: "RJ"). O app (tanto o formulario manual quanto a IA) envia o nome completo do estado ("Rio de Janeiro"), causando a falha no INSERT.
-
-## Solucao
-
-### 1. Adicionar funcao de normalizacao de UF na edge function `criar-sinistro`
-
-**Arquivo:** `supabase/functions/criar-sinistro/index.ts`
-
-Adicionar um mapa de conversao de nome completo para sigla logo apos os imports, e usar essa funcao antes de inserir o sinistro:
-
-```text
-// Mapa de estados brasileiros → sigla
-const ESTADOS_MAP: Record<string, string> = {
-  "acre": "AC", "alagoas": "AL", "amapa": "AP", "amazonas": "AM",
-  "bahia": "BA", "ceara": "CE", "distrito federal": "DF",
-  "espirito santo": "ES", "goias": "GO", "maranhao": "MA",
-  "mato grosso": "MT", "mato grosso do sul": "MS", "minas gerais": "MG",
-  "para": "PA", "paraiba": "PB", "parana": "PR", "pernambuco": "PE",
-  "piaui": "PI", "rio de janeiro": "RJ", "rio grande do norte": "RN",
-  "rio grande do sul": "RS", "rondonia": "RO", "roraima": "RR",
-  "santa catarina": "SC", "sao paulo": "SP", "sergipe": "SE",
-  "tocantins": "TO",
-};
-
-function normalizarEstado(estado: string | undefined): string {
-  if (!estado) return '';
-  if (estado.length === 2) return estado.toUpperCase(); // já é sigla
-  const chave = estado.toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove acentos
-  return ESTADOS_MAP[chave] || estado.substring(0, 2).toUpperCase();
-}
+O constraint atual no banco é:
+```sql
+CHECK ((dia_vencimento IS NULL) OR ((dia_vencimento >= 1) AND (dia_vencimento <= 28)))
 ```
 
-### 2. Aplicar normalizacao antes do INSERT
+O valor `30` está sendo enviado pela cotação (campo `cotacao.dia_vencimento = 30`), mas o banco só aceita valores entre 1 e 28.
 
-Na linha 513, alterar:
+## Análise das Opções
+
+**Opção A — Ampliar o constraint no banco para aceitar até 31**
+- Mais correta semanticamente: dia de vencimento pode ser até 31
+- Requer migration de banco de dados
+- Solução definitiva — qualquer dia válido do mês funcionará
+
+**Opção B — Sanitizar o valor na edge function antes de inserir**
+- Limitar o valor a no máximo 28 na edge function
+- Não resolve o problema raiz (constraint ainda restritivo)
+- Pode causar discrepância entre o dia escolhido e o dia real de cobrança
+
+A **Opção A** é a correta. O constraint foi originalmente criado com limite 28 para evitar problemas em fevereiro, mas o correto é aceitar qualquer dia entre 1 e 28 sendo o valor máximo seguro, ou liberar até 31 e tratar o caso de meses curtos na lógica de cobrança.
+
+## Solução: Ampliar constraint + Sanitizar na edge function
+
+### Parte 1 — Alterar o constraint no banco
+
+Remover o constraint atual e criar um novo que aceite de 1 a 31:
+
+```sql
+ALTER TABLE associados 
+DROP CONSTRAINT associados_dia_vencimento_check;
+
+ALTER TABLE associados 
+ADD CONSTRAINT associados_dia_vencimento_check 
+CHECK (dia_vencimento IS NULL OR (dia_vencimento >= 1 AND dia_vencimento <= 31));
+```
+
+Também verificar e corrigir o mesmo constraint na tabela `contratos` se existir.
+
+### Parte 2 — Adicionar sanitização na edge function `contrato-gerar`
+
+Como proteção adicional, garantir que o valor enviado à tabela `associados` e `contratos` seja sempre válido:
+
 ```typescript
-// ANTES
-estado_ocorrencia: payload.estado_evento || '',
-
-// DEPOIS
-estado_ocorrencia: normalizarEstado(payload.estado_evento),
+// Sanitizar dia_vencimento: aceitar 1-31, default 10
+const diaVencimento = cotacao.dia_vencimento 
+  ? Math.min(Math.max(Number(cotacao.dia_vencimento), 1), 31) 
+  : 10;
 ```
 
-### 3. Corrigir tambem o campo `estado_evento` no payload do chat (assistente-chat)
-
-**Arquivo:** `supabase/functions/assistente-chat/index.ts`
-
-Na linha 641, o `assistente-chat` tambem insere diretamente na tabela `sinistros` com o campo `estado_ocorrencia`. Aplicar a mesma normalizacao ou truncar para 2 chars para garantir consistencia.
-
-Adicionar uma funcao utilitaria identica no `assistente-chat` e aplicar no campo:
-```typescript
-estado_ocorrencia: normalizarEstado(args.estado || associado?.uf || null),
-```
-
-### 4. Deploy das edge functions
-
-Fazer deploy de `criar-sinistro` e `assistente-chat` com as correcoes.
+Aplicar essa sanitização nas linhas 466 e 585 do arquivo `contrato-gerar/index.ts`.
 
 ## Arquivos alterados
 
-| Arquivo | Alteracao |
+| Arquivo / Recurso | Alteração |
 |---|---|
-| `supabase/functions/criar-sinistro/index.ts` | Adicionar `normalizarEstado()` e aplicar no INSERT (linha 513) |
-| `supabase/functions/assistente-chat/index.ts` | Adicionar `normalizarEstado()` e aplicar no INSERT do sinistro via chat (linha 641) |
+| Banco de dados (migration) | Ampliar `associados_dia_vencimento_check` de `<= 28` para `<= 31` |
+| `supabase/functions/contrato-gerar/index.ts` | Sanitizar `dia_vencimento` antes dos INSERTs (linhas 466 e 585) |
 
 ## Resultado esperado
 
-- Associado preenche o sinistro no app com "Rio de Janeiro"
-- A funcao converte para "RJ" antes de inserir no banco
-- INSERT ocorre com sucesso
-- Sinistro criado com status `comunicado`
-- Fluxo continua normalmente (link do evento gerado, etc.)
-
-## Observacao adicional
-
-O campo `necessita_reboque: true` no payload indica que o app tambem estava tentando criar um chamado de reboque automaticamente junto com o sinistro (linhas 609-650 do `criar-sinistro`). Isso e um comportamento do formulario manual (nao do chat da IA). O formulario tem uma opcao onde o associado informa se precisa de reboque, e isso e enviado no payload. Esse comportamento e correto para o formulario direto.
+- Cotação com `dia_vencimento = 30` é aceita normalmente
+- Associado criado com sucesso
+- Contrato gerado para o associado
+- Qualquer dia entre 1 e 31 funciona sem erro
