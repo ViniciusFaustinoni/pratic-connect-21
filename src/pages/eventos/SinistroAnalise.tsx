@@ -430,12 +430,34 @@ export default function SinistroAnalise() {
     }
   };
   const handleEnviarLinkAutoVistoria = async () => {
-    if (!sinistro || !associado) return;
-    const telefone = associado.whatsapp || associado.telefone;
+    if (!sinistro) {
+      toast.error('Dados do sinistro não disponíveis.');
+      return;
+    }
+
+    // Tentar usar dados do associado já carregados; se null, buscar diretamente pelo associado_id
+    let telefone = associado?.whatsapp || associado?.telefone;
+
+    if (!telefone && sinistro.associado_id) {
+      try {
+        const { data: assocData } = await supabase
+          .from('associados')
+          .select('telefone, whatsapp')
+          .eq('id', sinistro.associado_id)
+          .single();
+        telefone = assocData?.whatsapp || assocData?.telefone;
+      } catch (e) {
+        console.error('[handleEnviarLinkAutoVistoria] Erro ao buscar associado:', e);
+      }
+    }
+
     if (!telefone) {
       toast.error('Associado não possui telefone cadastrado.');
       return;
     }
+
+    // Usar nome do associado carregado ou fallback
+    const nomeAssociado = associado?.nome || sinistro.associado?.nome;
     setEnviandoLinkAutoVistoria(true);
     try {
       // 1. Gerar link de evento
@@ -448,12 +470,12 @@ export default function SinistroAnalise() {
 
       // 2. Buscar dados para calcular coparticipação
       const link = `https://pratic-connect-21.lovable.app/evento/${linkData.token}`;
-      const nome = associado.nome?.split(' ')[0] || 'Associado';
+      const nome = nomeAssociado?.split(' ')[0] || 'Associado';
 
       let cotaTexto = "";
       try {
         const veiculo = sinistro.veiculo;
-        const planoId = associado.plano?.id;
+        const planoId = associado?.plano?.id;
         if (planoId && veiculo?.valor_fipe) {
           const { data: planoData } = await supabase
             .from('planos')
