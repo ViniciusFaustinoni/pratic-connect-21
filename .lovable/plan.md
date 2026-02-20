@@ -1,76 +1,81 @@
 
-# Correção: Badge de Status Incorreto na Lista de Sinistros
+# Corrigir: Diretor Não Consegue Editar Prestador de Assistência
 
-## Diagnóstico
+## Diagnóstico Completo
 
-### Dois erros distintos relatados
-
-**Erro 1 — Status "Comunicado" exibido errado:**
-No `SinistrosList.tsx`, linha 497, o fallback de status é:
-```ts
-const statusInfo = statusConfig[sinistro.status] || statusConfig.comunicado;
+### Problema 1 — Botão de editar na lista não faz nada
+Em `PrestadoresList.tsx`, linha 374–376:
+```tsx
+<Button variant="ghost" size="icon">
+  <Pencil className="h-4 w-4" />
+</Button>
 ```
-O mapa `statusConfig` (linhas 54–71) **não possui entrada para `pecas_em_cotacao`**, então qualquer sinistro com esse status cai no fallback `statusConfig.comunicado`, exibindo o badge "Comunicado" em amarelo — completamente errado.
+O botão existe visualmente mas não tem `onClick` — qualquer clique é ignorado.
 
-**Confirmado no banco:** O sinistro SIN-20260220-0012 está com `status = pecas_em_cotacao` desde às 18:20 de hoje, mas a lista exibe "Comunicado".
+### Problema 2 — Rota de edição não existe
+Em `PrestadorDetalhe.tsx`, o menu "Ações → Editar" navega para `/assistencia/prestadores/${id}/editar`, mas no `App.tsx` essa rota não está registrada:
+```tsx
+// App.tsx — só tem essas rotas para assistência:
+<Route path="/assistencia/prestadores" element={<PrestadoresList />} />
+<Route path="/assistencia/prestadores/:id" element={<PrestadorDetalhe />} />
+// ❌ Falta: /assistencia/prestadores/:id/editar
+```
+Resultado: clicar em "Editar" no detalhe navega para uma página em branco ou 404.
 
-**Erro 2 — "Deveria aparecer em Pré-Análise":**
-Este ponto não é um erro — é uma expectativa incorreta. A tela **Pré-Análise** (`EventosPreAnalise.tsx`) existe para sinistros ainda na fase inicial: `comunicado`, `documentacao_pendente`, `aguardando_vistoria`. Um sinistro em `pecas_em_cotacao` já passou pela vistoria, aprovação e pagamento da cota — ele pertence corretamente à **lista geral de Sinistros**. O problema era apenas o badge errado dando a impressão de que estava "em comunicado".
+### Causa raiz
+O `NovoPrestadorModal` (componente de formulário de prestador) foi criado apenas para **criação**, sem suporte a edição. A rota `/editar` foi adicionada ao código mas nunca implementada.
 
 ## Solução
 
-### 1. Adicionar `pecas_em_cotacao` ao `statusConfig` do `SinistrosList.tsx`
+A abordagem mais limpa é **adaptar o `NovoPrestadorModal` para aceitar um prestador existente**, tornando-o um modal tanto de criação quanto de edição — exatamente como o `PrestadorFormDialog` já faz para os prestadores de eventos. Depois:
 
-Inserir a entrada faltante no mapa de configuração de status:
+1. Conectar o botão da lista ao modal de edição
+2. Conectar o botão do detalhe ao mesmo modal (em vez de navegar para uma rota inexistente)
+3. Registrar a rota de edição no `App.tsx` como redirecionamento para o detalhe (por segurança)
 
-```ts
-pecas_em_cotacao: { label: 'Peças em Cotação', class: 'bg-amber-100 text-amber-800' },
-```
+## Mudanças Técnicas
 
-### 2. Corrigir o fallback de status
+### 1. `src/components/assistencia/NovoPrestadorModal.tsx`
 
-Trocar o fallback perigoso por um fallback genérico que não mascara o status real:
+**Adicionar suporte a edição:**
+- Nova prop `prestador?: Prestador` (tipo com todos os campos necessários)
+- Quando `prestador` for fornecido: pré-preencher o formulário com `reset(defaultValues)` no `useEffect`
+- Adicionar `updateMutation` que faz `supabase.from('prestadores_assistencia').update(...).eq('id', prestador.id)`
+- No `onSubmit`: chamar `updateMutation` se `prestador` existe, `createMutation` se não existe
+- Mudar título do Dialog para "Editar Prestador" quando for edição
+- Adicionar `prestador_id` prop na interface
 
-```ts
-// Antes (bugado — fallback faz qualquer status desconhecido virar "Comunicado"):
-const statusInfo = statusConfig[sinistro.status] || statusConfig.comunicado;
+### 2. `src/pages/assistencia/PrestadoresList.tsx`
 
-// Depois (seguro — usa o próprio valor do status como label):
-const statusInfo = statusConfig[sinistro.status] || { 
-  label: sinistro.status?.replace(/_/g, ' ') || 'Desconhecido', 
-  class: 'bg-gray-100 text-gray-800' 
-};
-```
+**Conectar botão de editar:**
+- Adicionar estado `editingPrestador: Prestador | null`
+- No botão lápis da tabela: `onClick={() => setEditingPrestador(prestador)}`
+- Adicionar `<NovoPrestadorModal open={!!editingPrestador} onClose={() => setEditingPrestador(null)} prestador={editingPrestador} />`
 
-### 3. Adicionar `pecas_em_cotacao` ao filtro de status no Select
+### 3. `src/pages/assistencia/PrestadorDetalhe.tsx`
 
-O select de filtros (linha 424–441) não tem a opção "Peças em Cotação", tornando impossível filtrar por esse status na lista do diretor. Adicionar a opção:
+**Substituir navegação pelo modal:**
+- Importar `NovoPrestadorModal` e adicionar estado `editOpen: boolean`
+- Trocar `navigate('/assistencia/prestadores/${id}/editar')` por `setEditOpen(true)`
+- Adicionar `<NovoPrestadorModal open={editOpen} onClose={() => setEditOpen(false)} prestador={prestador} />`
 
-```tsx
-<SelectItem value="pecas_em_cotacao">Peças em Cotação</SelectItem>
-```
+### 4. `src/App.tsx`
 
-### 4. Adicionar `pecas_em_cotacao` ao filtro do analista de eventos
-
-Na linha 143–147, o analista de eventos vê apenas certos status. `pecas_em_cotacao` deve ser incluído para que o analista acompanhe o andamento dos sinistros aprovados:
-
-```ts
-query = query.in('status', [
-  'aguardando_analise', 'aprovado', 'negado', 'reprovado',
-  'em_reparo', 'em_recuperacao', 'aguardando_pagamento',
-  'pago', 'encerrado', 'cancelado',
-  'pecas_em_cotacao'  // ← adicionar
-] as any);
-```
-
-Igualmente no contador de analistas (linhas 193–197).
+**Registrar a rota como fallback:**
+- Adicionar `<Route path="/assistencia/prestadores/:id/editar" element={<PrestadorDetalhe />} />` — redireciona para o detalhe onde o modal pode ser aberto (proteção contra URLs diretas)
 
 ## Arquivos a Alterar
 
 | Arquivo | Alteração |
 |---|---|
-| `src/pages/eventos/SinistrosList.tsx` | 1. Adicionar `pecas_em_cotacao` ao `statusConfig`; 2. Corrigir fallback de status para não apontar para `comunicado`; 3. Adicionar opção no Select de filtros; 4. Incluir `pecas_em_cotacao` nos status visíveis pelo analista |
+| `src/components/assistencia/NovoPrestadorModal.tsx` | Adicionar prop `prestador?`, pré-preencher formulário, adicionar `updateMutation`, lógica de submit dual |
+| `src/pages/assistencia/PrestadoresList.tsx` | Adicionar estado `editingPrestador`, `onClick` no botão lápis, renderizar modal de edição |
+| `src/pages/assistencia/PrestadorDetalhe.tsx` | Substituir navegação para rota inexistente por abertura de modal |
+| `src/App.tsx` | Registrar rota `/assistencia/prestadores/:id/editar` |
 
 ## Resultado Esperado
 
-Após a correção, o sinistro SIN-20260220-0012 exibirá o badge **"Peças em Cotação"** em amarelo-âmbar na lista de Gestão de Sinistros — que é o local correto para ele estar. Outros sinistros com status desconhecidos futuros também não serão mais erroneamente rotulados como "Comunicado".
+- Clicar no lápis na lista → abre modal pré-preenchido com os dados do prestador
+- Clicar em "Ações → Editar" no detalhe → abre o mesmo modal pré-preenchido
+- Salvar → chama `UPDATE` na tabela `prestadores_assistencia` e invalida o cache React Query
+- Toast de sucesso "Prestador atualizado com sucesso!"
