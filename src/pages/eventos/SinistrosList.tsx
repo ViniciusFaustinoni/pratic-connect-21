@@ -239,6 +239,11 @@ export default function SinistrosList() {
     return format(new Date(date), 'dd/MM/yyyy', { locale: ptBR });
   };
 
+  const formatDateTime = (date: string | null) => {
+    if (!date) return '-';
+    return format(new Date(date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -497,7 +502,14 @@ export default function SinistrosList() {
                       <TableCell className="font-mono font-medium">
                         {sinistro.protocolo}
                       </TableCell>
-                      <TableCell>{formatDate(sinistro.data_ocorrencia)}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{formatDate(sinistro.data_ocorrencia)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Comunicado: {formatDateTime(sinistro.created_at)}
+                          </p>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{sinistro.associado?.nome || '-'}</p>
