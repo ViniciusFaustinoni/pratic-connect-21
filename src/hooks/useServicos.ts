@@ -941,6 +941,26 @@ export function useAprovarVeiculoServico() {
           .eq('id', data.veiculoId);
 
         if (veiculoError) throw veiculoError;
+
+        // Notificar associado via WhatsApp sobre cobertura total ativada
+        ;(async () => {
+          try {
+            const { data: veiculoInfo } = await supabase
+              .from('veiculos')
+              .select('placa')
+              .eq('id', data.veiculoId)
+              .single();
+            await supabase.functions.invoke('notificar-cliente', {
+              body: {
+                tipo: 'cobertura_total_ativada',
+                associado_id: data.associadoId,
+                dados: { placa: veiculoInfo?.placa || '' },
+              },
+            });
+          } catch (err) {
+            console.warn('[aprovar-veiculo-servico] Erro ao notificar (não crítico):', err);
+          }
+        })();
       } else {
         // Fluxo normal sem autovistoria prévia
         const { error: veiculoError } = await supabase

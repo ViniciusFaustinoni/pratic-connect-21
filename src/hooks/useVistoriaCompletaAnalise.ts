@@ -194,7 +194,26 @@ export function useAtivarRastreadorPlataforma() {
 
       if (assocError) throw assocError;
 
-      // 6. Registrar no histórico
+      // 6. Notificar associado via WhatsApp sobre cobertura total ativada
+      try {
+        const { data: veiculoInfo } = await supabase
+          .from('veiculos')
+          .select('placa')
+          .eq('id', veiculoId)
+          .single();
+
+        supabase.functions.invoke('notificar-cliente', {
+          body: {
+            tipo: 'cobertura_total_ativada',
+            associado_id: associadoId,
+            dados: { placa: veiculoInfo?.placa || '' },
+          },
+        }).catch(err => console.warn('[ativar-rastreador] Erro ao notificar associado (não crítico):', err));
+      } catch (notifError) {
+        console.warn('[ativar-rastreador] Erro ao preparar notificação (não crítico):', notifError);
+      }
+
+      // 7. Registrar no histórico
       await supabase.from('associados_historico').insert({
         associado_id: associadoId,
         tipo: 'ativacao',

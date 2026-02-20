@@ -45,7 +45,19 @@ const TEMPLATES: Record<string, {
   },
   cobertura_total_ativada: {
     titulo: '🛡️ Cobertura Total Ativada!',
-    mensagem: 'Parabéns {nome}! Seu veículo {placa} agora está com COBERTURA TOTAL ativa. A instalação do rastreador e vistoria foram concluídas com sucesso. Bem-vindo à PRATIC!',
+    mensagem: `Parabéns {nome}! Seu veículo *{placa}* agora está com *COBERTURA TOTAL* ativa! ✅
+
+*O que está incluso na sua cobertura:*
+🔐 Roubo e Furto
+💥 Colisão
+🔥 Incêndio
+🌧️ Fenômenos Naturais
+🚗 Assistência 24h (guincho, pane seca, chaveiro e mais)
+📍 Rastreamento em tempo real
+
+Acesse o App PRATIC para acompanhar seu veículo e solicitar assistência quando precisar.
+
+Bem-vindo à família PRATIC! 💙`,
     emailTemplate: 'generico',
   },
   documentos_solicitados: {
