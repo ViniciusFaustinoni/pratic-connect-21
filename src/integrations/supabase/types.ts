@@ -24205,6 +24205,7 @@ export type Database = {
         | "finalizado"
         | "aguardando_indenizacao"
         | "aguardando_pagamento"
+        | "pecas_em_cotacao"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -24610,6 +24611,7 @@ export const Constants = {
         "finalizado",
         "aguardando_indenizacao",
         "aguardando_pagamento",
+        "pecas_em_cotacao",
       ],
       status_veiculo: [
         "em_analise",
