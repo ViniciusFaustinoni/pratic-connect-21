@@ -451,6 +451,7 @@ const App = () => (
               <Route path="/assistencia/chamados/:id" element={<ChamadoDetalhe />} />
               <Route path="/assistencia/prestadores" element={<PrestadoresList />} />
               <Route path="/assistencia/prestadores/:id" element={<PrestadorDetalhe />} />
+              <Route path="/assistencia/prestadores/:id/editar" element={<PrestadorDetalhe />} />
               
               {/* Financeiro */}
               <Route path="/financeiro" element={<FinanceiroDashboard />} />

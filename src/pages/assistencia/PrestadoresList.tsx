@@ -80,6 +80,7 @@ const formatCPF = (cpf: string) => {
 export default function PrestadoresList() {
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingPrestador, setEditingPrestador] = useState<Prestador | null>(null);
   const [filters, setFilters] = useState({
     status: 'todos',
     tipo: 'todos',
@@ -371,7 +372,7 @@ export default function PrestadoresList() {
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon">
+                      <Button variant="ghost" size="icon" onClick={() => setEditingPrestador(prestador)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                     </div>
@@ -387,6 +388,13 @@ export default function PrestadoresList() {
       <NovoPrestadorModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
+      />
+
+      {/* Modal de Editar Prestador */}
+      <NovoPrestadorModal
+        open={!!editingPrestador}
+        onClose={() => setEditingPrestador(null)}
+        prestador={editingPrestador}
       />
     </div>
   );
