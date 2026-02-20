@@ -327,9 +327,10 @@ export default function SinistroAnalise() {
   const currentIndex = pendentes?.findIndex((p) => p.id === id) ?? -1;
   const nextSinistro = currentIndex >= 0 && pendentes ? pendentes[currentIndex + 1] : null;
 
-  // Bloquear analista de acessar sinistros pré-vistoria
+  // Bloquear analista de acessar sinistros pré-vistoria (exceto se já há vistoria concluída)
+  const temVistoriaConcluida = !!vistoriaEvento;
   const statusPreVistoria = ['comunicado', 'documentacao_pendente', 'aguardando_vistoria', 'pendente_vistoria_regulador'];
-  const bloqueadoParaAnalista = isAnalistaEventos && !isDiretor && !!sinistro && statusPreVistoria.includes(sinistro?.status);
+  const bloqueadoParaAnalista = isAnalistaEventos && !isDiretor && !!sinistro && statusPreVistoria.includes(sinistro?.status) && !temVistoriaConcluida;
   
   useEffect(() => {
     if (bloqueadoParaAnalista) {
@@ -1632,7 +1633,7 @@ export default function SinistroAnalise() {
                       </div>
                     )}
                     {(() => {
-                      const analistaPodeDecidir = isAnalistaEventos && sinistro.status === 'aguardando_analise';
+                      const analistaPodeDecidir = isAnalistaEventos && (sinistro.status === 'aguardando_analise' || (temVistoriaConcluida && statusPreVistoria.includes(sinistro.status as string)));
                       const podeAprovar = (isDiretor || analistaPodeDecidir) && !temDocsPendentes;
 
                       if (isDiretor && !temDocsPendentes && ['comunicado', 'aberto'].includes(sinistro.status as string)) {
