@@ -1215,12 +1215,13 @@ ${assistenciasTexto}
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-flash-preview",
         messages: aiMessages,
         tools,
         tool_choice: "auto",
         stream: false,
       }),
+      signal: AbortSignal.timeout(25000), // 25 segundos máximo por chamada
     });
 
     if (!response.ok) {
@@ -1253,7 +1254,7 @@ ${assistenciasTexto}
 
     // Handle tool calls in a loop
     let iterations = 0;
-    const maxIterations = 5;
+    const maxIterations = 3; // Reduzido de 5 para 3 para evitar timeout
     let capturedLinkEventoToken: string | null = null;
 
     while (assistantMessage?.tool_calls && iterations < maxIterations) {
@@ -1297,13 +1298,14 @@ ${assistenciasTexto}
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: aiMessages,
-        tools,
-        tool_choice: "auto",
-        stream: false,
-      }),
-    });
+          model: "google/gemini-3-flash-preview",
+          messages: aiMessages,
+          tools,
+          tool_choice: "auto",
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(25000), // 25 segundos máximo por chamada
+      });
 
     if (!response.ok) {
       break;
@@ -1344,6 +1346,15 @@ ${assistenciasTexto}
     );
   } catch (error) {
     console.error("[assistente-chat] Erro:", error);
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      return new Response(
+        JSON.stringify({ error: "O serviço de IA está demorando mais que o esperado. Por favor, tente novamente." }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Erro interno" }),
       {
