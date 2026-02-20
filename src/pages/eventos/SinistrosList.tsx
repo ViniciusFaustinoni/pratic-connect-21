@@ -68,6 +68,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
   cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
   aguardando_analise: { label: 'Aguard. Análise Final', class: 'bg-blue-100 text-blue-800' },
+  pecas_em_cotacao: { label: 'Peças em Cotação', class: 'bg-amber-100 text-amber-800' },
 };
 
 // Tipo configuration
@@ -143,7 +144,7 @@ export default function SinistrosList() {
         query = query.in('status', [
           'aguardando_analise', 'aprovado', 'negado', 'reprovado',
           'em_reparo', 'em_recuperacao', 'aguardando_pagamento',
-          'pago', 'encerrado', 'cancelado'
+          'pago', 'encerrado', 'cancelado', 'pecas_em_cotacao'
         ] as any);
       }
 
@@ -193,7 +194,7 @@ export default function SinistrosList() {
         query = query.in('status', [
           'aguardando_analise', 'aprovado', 'negado', 'reprovado',
           'em_reparo', 'em_recuperacao', 'aguardando_pagamento',
-          'pago', 'encerrado', 'cancelado'
+          'pago', 'encerrado', 'cancelado', 'pecas_em_cotacao'
         ] as any);
       }
 
@@ -433,6 +434,7 @@ export default function SinistrosList() {
                   <SelectItem value="aguardando_analise">Aguard. Análise Final</SelectItem>
                   <SelectItem value="aprovado">Aprovado</SelectItem>
                   <SelectItem value="negado">Negado</SelectItem>
+                  <SelectItem value="pecas_em_cotacao">Peças em Cotação</SelectItem>
                   <SelectItem value="em_recuperacao">Em Recuperação</SelectItem>
                   <SelectItem value="aguardando_pagamento">Aguard. Pagamento</SelectItem>
                   <SelectItem value="pago">Pago</SelectItem>
@@ -494,7 +496,7 @@ export default function SinistrosList() {
               ) : sinistros && sinistros.length > 0 ? (
                 sinistros.map((sinistro) => {
                   const TipoIcon = tipoConfig[sinistro.tipo]?.icon || HelpCircle;
-                  const statusInfo = statusConfig[sinistro.status] || statusConfig.comunicado;
+                  const statusInfo = statusConfig[sinistro.status] || { label: sinistro.status?.replace(/_/g, ' ') || 'Desconhecido', class: 'bg-gray-100 text-gray-800' };
                   const tipoInfo = tipoConfig[sinistro.tipo] || { label: sinistro.tipo };
 
                   return (
