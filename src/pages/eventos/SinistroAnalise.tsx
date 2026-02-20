@@ -794,7 +794,20 @@ export default function SinistroAnalise() {
                     <InfoItem icon={MapPin} label="Cidade/UF" value={`${sinistro.cidade_ocorrencia || linkEvento?.dados_etapa2?.endereco_cidade || sinistro.associado?.cidade || ''}/${sinistro.estado_ocorrencia || linkEvento?.dados_etapa2?.endereco_uf || sinistro.associado?.uf || ''}`} />
                     <InfoItem icon={MapPin} label="Bairro" value={linkEvento?.dados_etapa2?.endereco_bairro || sinistro.associado?.bairro || '---'} />
                     <InfoItem icon={FileText} label="Nº B.O." value={sinistro.bo_numero || linkEvento?.dados_etapa2?.numero_bo} />
-                    <InfoItem icon={Clock} label="Comunicado em" value={formatDateTime(sinistro.created_at)} />
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <Clock className="h-4 w-4" /> Comunicado em
+                      </p>
+                      <p className="text-foreground font-medium">
+                        {sinistro.created_at ? format(new Date(sinistro.created_at), "dd/MM/yyyy", { locale: ptBR }) : '---'}
+                      </p>
+                      {sinistro.created_at && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-info bg-info/10 border border-info/30 rounded px-2 py-0.5 w-fit mt-0.5">
+                          <Clock className="h-3 w-3" />
+                          {format(new Date(sinistro.created_at), "HH:mm:ss", { locale: ptBR })} (horário exato)
+                        </span>
+                      )}
+                    </div>
                     <div className="md:col-span-2">
                       <p className="text-sm text-muted-foreground mb-1">Descrição</p>
                       <p className="text-foreground bg-muted p-3 rounded-md">{sinistro.descricao || '---'}</p>
