@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -85,15 +85,42 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+interface PrestadorParaEdicao {
+  id: string;
+  tipo_pessoa?: string | null;
+  razao_social: string;
+  nome_fantasia?: string | null;
+  cnpj?: string | null;
+  cpf?: string | null;
+  telefone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  cep?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  bairro?: string | null;
+  cidade: string;
+  estado: string;
+  raio_atendimento_km?: number | null;
+  tipos_servico?: string[] | null;
+  banco?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  pix_chave?: string | null;
+  pix_tipo?: string | null;
+}
+
 interface NovoPrestadorModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  prestador?: PrestadorParaEdicao | null;
 }
 
-export function NovoPrestadorModal({ open, onClose, onSuccess }: NovoPrestadorModalProps) {
+export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: NovoPrestadorModalProps) {
   const [activeTab, setActiveTab] = useState('dados');
   const queryClient = useQueryClient();
+  const isEditing = !!prestador;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -122,40 +149,90 @@ export function NovoPrestadorModal({ open, onClose, onSuccess }: NovoPrestadorMo
     },
   });
 
+  // Pré-preencher formulário quando editando
+  useEffect(() => {
+    if (open && prestador) {
+      form.reset({
+        tipo_pessoa: (prestador.tipo_pessoa as 'pf' | 'pj') || 'pj',
+        razao_social: prestador.razao_social || '',
+        nome_fantasia: prestador.nome_fantasia || '',
+        cnpj: prestador.cnpj || '',
+        cpf: prestador.cpf || '',
+        telefone: prestador.telefone || '',
+        whatsapp: prestador.whatsapp || '',
+        email: prestador.email || '',
+        cep: prestador.cep || '',
+        logradouro: prestador.logradouro || '',
+        numero: prestador.numero || '',
+        bairro: prestador.bairro || '',
+        cidade: prestador.cidade || '',
+        estado: prestador.estado || '',
+        raio_atendimento_km: prestador.raio_atendimento_km || 50,
+        tipos_servico: prestador.tipos_servico || [],
+        banco: prestador.banco || '',
+        agencia: prestador.agencia || '',
+        conta: prestador.conta || '',
+        pix_chave: prestador.pix_chave || '',
+        pix_tipo: prestador.pix_tipo || '',
+      });
+    } else if (open && !prestador) {
+      form.reset({
+        tipo_pessoa: 'pj',
+        razao_social: '',
+        nome_fantasia: '',
+        cnpj: '',
+        cpf: '',
+        telefone: '',
+        whatsapp: '',
+        email: '',
+        cep: '',
+        logradouro: '',
+        numero: '',
+        bairro: '',
+        cidade: '',
+        estado: '',
+        raio_atendimento_km: 50,
+        tipos_servico: [],
+        banco: '',
+        agencia: '',
+        conta: '',
+        pix_chave: '',
+        pix_tipo: '',
+      });
+    }
+  }, [open, prestador]);
+
   const tipoPessoa = form.watch('tipo_pessoa');
+
+  const buildPayload = (data: FormValues) => ({
+    razao_social: data.razao_social,
+    nome_fantasia: data.nome_fantasia || null,
+    tipo_pessoa: data.tipo_pessoa,
+    cnpj: data.tipo_pessoa === 'pj' ? data.cnpj || null : null,
+    cpf: data.tipo_pessoa === 'pf' ? data.cpf || null : null,
+    telefone: data.telefone,
+    whatsapp: data.whatsapp || null,
+    email: data.email || null,
+    cep: data.cep || null,
+    logradouro: data.logradouro || null,
+    numero: data.numero || null,
+    bairro: data.bairro || null,
+    cidade: data.cidade,
+    estado: data.estado,
+    raio_atendimento_km: data.raio_atendimento_km,
+    tipos_servico: data.tipos_servico,
+    banco: data.banco || null,
+    agencia: data.agencia || null,
+    conta: data.conta || null,
+    pix_chave: data.pix_chave || null,
+    pix_tipo: data.pix_tipo || null,
+  });
 
   const createMutation = useMutation({
     mutationFn: async (data: FormValues) => {
-      const payload = {
-        razao_social: data.razao_social,
-        nome_fantasia: data.nome_fantasia || null,
-        tipo_pessoa: data.tipo_pessoa,
-        cnpj: data.tipo_pessoa === 'pj' ? data.cnpj || null : null,
-        cpf: data.tipo_pessoa === 'pf' ? data.cpf || null : null,
-        telefone: data.telefone,
-        whatsapp: data.whatsapp || null,
-        email: data.email || null,
-        cep: data.cep || null,
-        logradouro: data.logradouro || null,
-        numero: data.numero || null,
-        bairro: data.bairro || null,
-        cidade: data.cidade,
-        estado: data.estado,
-        raio_atendimento_km: data.raio_atendimento_km,
-        tipos_servico: data.tipos_servico,
-        banco: data.banco || null,
-        agencia: data.agencia || null,
-        conta: data.conta || null,
-        pix_chave: data.pix_chave || null,
-        pix_tipo: data.pix_tipo || null,
-        status: 'ativo',
-        disponivel: true,
-      };
-
       const { error } = await supabase
         .from('prestadores_assistencia')
-        .insert(payload);
-
+        .insert({ ...buildPayload(data), status: 'ativo', disponivel: true });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -170,6 +247,28 @@ export function NovoPrestadorModal({ open, onClose, onSuccess }: NovoPrestadorMo
     onError: (error: Error) => {
       console.error('Erro ao criar prestador:', error);
       toast.error('Erro ao cadastrar prestador');
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: FormValues) => {
+      const { error } = await supabase
+        .from('prestadores_assistencia')
+        .update(buildPayload(data))
+        .eq('id', prestador!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Prestador atualizado com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['prestadores'] });
+      queryClient.invalidateQueries({ queryKey: ['prestadores-metricas'] });
+      queryClient.invalidateQueries({ queryKey: ['prestador', prestador?.id] });
+      onSuccess?.();
+      onClose();
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao atualizar prestador:', error);
+      toast.error('Erro ao atualizar prestador');
     },
   });
 
@@ -191,22 +290,27 @@ export function NovoPrestadorModal({ open, onClose, onSuccess }: NovoPrestadorMo
   };
 
   const handleClose = () => {
-    form.reset();
     setActiveTab('dados');
     onClose();
   };
 
   const onSubmit = (data: FormValues) => {
-    createMutation.mutate(data);
+    if (isEditing) {
+      updateMutation.mutate(data);
+    } else {
+      createMutation.mutate(data);
+    }
   };
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Novo Prestador de Serviço</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Prestador' : 'Novo Prestador de Serviço'}</DialogTitle>
           <DialogDescription>
-            Cadastre um novo prestador de assistência 24h
+            {isEditing ? 'Atualize os dados do prestador de assistência' : 'Cadastre um novo prestador de assistência 24h'}
           </DialogDescription>
         </DialogHeader>
 
@@ -631,9 +735,9 @@ export function NovoPrestadorModal({ open, onClose, onSuccess }: NovoPrestadorMo
               <Button type="button" variant="outline" onClick={handleClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Salvar Prestador
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEditing ? 'Atualizar Prestador' : 'Salvar Prestador'}
               </Button>
             </div>
           </form>

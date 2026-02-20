@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { NovoPrestadorModal } from '@/components/assistencia/NovoPrestadorModal';
 import { format, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -101,6 +103,7 @@ export default function PrestadorDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data: prestador, isLoading } = useQuery({
     queryKey: ['prestador', id],
@@ -279,7 +282,7 @@ export default function PrestadorDetalhe() {
               <Button variant="outline">Ações</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate(`/assistencia/prestadores/${id}/editar`)}>
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Editar
               </DropdownMenuItem>
@@ -586,6 +589,13 @@ export default function PrestadorDetalhe() {
           </Card>
         </div>
       </div>
+
+      {/* Modal de edição */}
+      <NovoPrestadorModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        prestador={prestador}
+      />
     </div>
   );
 }
