@@ -202,9 +202,10 @@ Deno.serve(async (req) => {
 
       if (updateVistoriaError) throw updateVistoriaError;
 
-      // Update sinistro
+      // Update sinistro - sempre avançar para aguardando_analise ao concluir vistoria
       const updateSinistro: any = {
         status: "aguardando_analise",
+        updated_at: new Date().toISOString(),
       };
 
       if (dados.valor_total_orcamento) {
@@ -214,10 +215,15 @@ Deno.serve(async (req) => {
         updateSinistro.tipo_dano = dados.tipo_dano;
       }
 
-      await supabase
+      const { error: updateSinistroError } = await supabase
         .from("sinistros")
         .update(updateSinistro)
-        .eq("id", vistoria.sinistro_id);
+        .eq("id", vistoria.sinistro_id)
+        .in("status", ["comunicado", "em_analise", "aguardando_vistoria", "pendente_vistoria_regulador", "documentacao_pendente"]);
+
+      if (updateSinistroError) {
+        console.error("Erro ao atualizar status do sinistro:", updateSinistroError);
+      }
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
