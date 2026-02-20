@@ -1850,7 +1850,7 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY não configurada");
 
   const body: any = {
-    model: "google/gemini-2.5-flash", // ATUALIZADO: Modelo com suporte estável a function calling
+    model: "google/gemini-3-flash-preview", // Modelo mais rápido para evitar timeout
     messages: [
       { role: "system", content: systemPrompt },
       ...messages,
@@ -1863,7 +1863,6 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
     body.tool_choice = "auto";
   }
 
-  // ATUALIZADO: Usar ai.gateway.lovable.dev (mesmo endpoint do App)
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -1871,6 +1870,7 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
       Authorization: `Bearer ${LOVABLE_API_KEY}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(25000), // 25 segundos máximo por chamada
   });
 
   if (!response.ok) {
