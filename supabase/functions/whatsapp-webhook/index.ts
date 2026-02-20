@@ -2555,13 +2555,13 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Invalid payload" }), { status: 400, headers: corsHeaders });
     }
 
-    // Validar apikey da Evolution API se configurada
+    // Validar apikey da Evolution API (apenas log, não rejeitar)
+    // A instância será validada logo abaixo — rejeitar aqui bloqueia mensagens legítimas
     const evolutionApiKey = Deno.env.get("EVOLUTION_API_KEY");
     if (evolutionApiKey) {
       const webhookApiKey = req.headers.get("apikey") || payload.apikey;
       if (webhookApiKey && webhookApiKey !== evolutionApiKey) {
-        console.error("[whatsapp-webhook] API key inválida no webhook");
-        return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+        console.warn("[whatsapp-webhook] API key do webhook diferente da configurada — continuando processamento");
       }
     }
 
