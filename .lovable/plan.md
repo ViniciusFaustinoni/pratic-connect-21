@@ -1,142 +1,130 @@
 
-# Enviar WhatsApp de Confirmação de Cobertura Total ao Associado
+# Diferenciar Parecer Técnico: Dano Parcial vs Perda Total
 
-## Visão Geral do Problema
+## Diagnóstico da Situação Atual
 
-Quando a cobertura total é ativada (após instalação e vistoria concluídas), o associado **não recebe nenhuma mensagem de WhatsApp** confirmando que está totalmente protegido. O sistema já tem um template chamado `cobertura_total_ativada` em `notificar-cliente`, mas ele **nunca é chamado**.
+O `EmitirParecerModal.tsx` já contém lógica para diferenciar os dois casos:
+- A classificação automática `perda_total` / `parcial` é calculada com base na regra de 75% do valor FIPE
+- Quando perda total: o status é enviado para `aguardando_pagamento` (indenização integral)
+- Quando dano parcial: status vai para `aprovado` (fluxo de reparo em oficina)
 
-## Fluxo Atual Identificado
+**Porém, o formulário atual tem sérios problemas de UX/lógica:**
 
-Existem **3 pontos** no código onde `cobertura_total = true` é definido, e nenhum dispara o WhatsApp:
+1. O campo "Valor Aprovado" pede o mesmo tipo de entrada para ambos os fluxos, mas a semântica é diferente:
+   - **Parcial:** valor do orçamento de reparo (até 74,9% FIPE)
+   - **Perda Total:** valor da indenização integral = valor FIPE (calculado automaticamente com depreciações)
+2. Não há orientação visual clara sobre o que preencher em cada caso
+3. Para perda total, o campo "Valor Aprovado" é redundante — o valor é o FIPE (já registrado) com depreciações. O analista não deveria digitar livremente
+4. Não existe seleção de tipo de dano explícita — só a classificação automática que pode confundir (e se o sinistro não tem valor FIPE cadastrado?)
+5. O botão de submit tem o mesmo texto para ambos os casos
 
-| Hook | Quando ocorre | Arquivo |
-|---|---|---|
-| `useAtivarRastreadorPlataforma` | Analista clica "Ativar Rastreador" na tela de análise de instalação | `src/hooks/useVistoriaCompletaAnalise.ts` linha 173 |
-| `useAprovarVeiculoVistoria` | Técnico aprovam vistoria completa no campo | `src/hooks/useVistoriaCompleta.ts` linha 37 |
-| `useAprovarVeiculoServico` | Aprovação de veículo via serviços (autovistoria + instalação) | `src/hooks/useServicos.ts` linha 938 |
+## Solução: Reformular o Modal com Dois Fluxos Distintos
 
-## Template de WhatsApp Existente (pronto para usar)
+Manter TODA a lógica backend existente (status, inativação de veículo, notificação, autentique). Apenas reformular a interface para:
 
-O template `cobertura_total_ativada` já existe em `notificar-cliente/index.ts` (linha 46-50):
+### Fluxo 1 - Dano Parcial (< 75% FIPE)
+- Mostrar badge "Dano Parcial" em verde/azul após o resultado aprovado
+- Campo "Valor do Reparo (Orçamento)" com limite visual do teto FIPE×75%
+- Texto explicativo: "Veículo será encaminhado para oficina parceira"
+- Botão: "Aprovar Reparo Parcial"
 
+### Fluxo 2 - Perda Total (≥ 75% FIPE)
+- Mostrar banner de alerta vermelho com ícone de alerta
+- Exibir o **valor FIPE como referência** em destaque (não editável)
+- Campo "Percentual de Depreciação" (opcional, para calcular o valor final) OU campo "Valor da Indenização" pré-populado com o FIPE
+- Checkbox de confirmação: "Confirmo que o veículo será baixado da plataforma"
+- Texto explicativo: "Indenização integral — veículo será baixado da plataforma"
+- Botão: "Aprovar Perda Total"
+
+### Fluxo Negado
+- Sem campo de valor (já funciona assim)
+- Manter como está
+
+## Detalhes Técnicos
+
+### Arquivo Principal: `src/components/eventos/EmitirParecerModal.tsx`
+
+**Mudanças na Interface:**
+
+1. **Novo estado:** `tipoDanoManual: 'parcial' | 'perda_total' | 'auto'` — permite ao analista sobrescrever a classificação automática quando não há valor FIPE cadastrado
+2. **Lógica de classificação aprimorada:**
+   - Se há valor FIPE: automática (como hoje)
+   - Se não há valor FIPE: analista seleciona manualmente entre "Dano Parcial" e "Perda Total"
+3. **Campo de valor contextualizado:**
+   - Para `parcial`: Label "Valor do Reparo (Orçamento)", hint "Máximo: 74,9% do valor FIPE = {X}"
+   - Para `perda_total`: Label "Valor da Indenização", campo pré-populado com o valor FIPE, editável para aplicar depreciações
+4. **Confirmação extra para Perda Total:**
+   - Checkbox: "Confirmo que o veículo será baixado da plataforma"
+   - Este checkbox é obrigatório para submeter como perda total
+5. **Botão contextualizado:**
+   - Dano Parcial aprovado: "Aprovar – Dano Parcial"
+   - Perda Total aprovada: "Aprovar – Perda Total"
+   - Negado: "Registrar Recusa"
+
+**Lógica de validação atualizada (`isFormValid`):**
+- Parcial aprovado: valor > 0 E valor <= 75% FIPE (quando há FIPE) E parecer >= 100 chars
+- Perda Total aprovado: confirmação do checkbox ativa E valor > 0 E parecer >= 100 chars
+- Negado: apenas parecer >= 100 chars
+
+**Backend NÃO muda** — toda a lógica da `mutationFn` permanece idêntica (os mesmos status, inativação de veículo para perda total, notificação via `notificar-sinistro`, envio do termo pelo `autentique-evento-create`).
+
+### Estrutura Visual do Modal Reformulado
+
+```text
+┌─────────────────────────────────────┐
+│ Emitir Parecer Técnico              │
+│ Sinistro SIN-XXXXXX                 │
+├─────────────────────────────────────┤
+│ [Info: Protocolo | Tipo | Veículo   │
+│  Valor FIPE: R$ 70.000,00]          │
+├─────────────────────────────────────┤
+│ Resultado do Parecer *              │
+│  ● Aprovado    ○ Negado             │
+├─────────────────────────────────────┤
+│ SE APROVADO e valor FIPE existe:    │
+│ Classificação detectada:            │
+│  [🔧 Dano Parcial] ou [⚠️ Perda Total] │
+│  (editável se analista quiser mudar)│
+│                                     │
+│ SE DANO PARCIAL:                    │
+│  Valor do Reparo (Orçamento) *      │
+│  [R$ ___] ← máx R$ 52.500 (75% FIPE)│
+│                                     │
+│ SE PERDA TOTAL:                     │
+│  ┌─────────────────────────────┐    │
+│  │ ⚠️ PERDA TOTAL DETECTADA     │    │
+│  │ O veículo será baixado da   │    │
+│  │ plataforma após aprovação   │    │
+│  └─────────────────────────────┘    │
+│  Valor FIPE de Referência:          │
+│  R$ 70.000,00 (não editável)        │
+│  Valor da Indenização *             │
+│  [R$ 70.000,00] ← pré-populado FIPE│
+│  ☐ Confirmo baixa do veículo        │
+│                                     │
+│ SE NÃO HÁ VALOR FIPE + APROVADO:   │
+│  Tipo de Dano * [Parcial|Perda Total│
+│  (seleção manual)                   │
+│  Valor Aprovado *                   │
+│  [R$ ___]                           │
+├─────────────────────────────────────┤
+│ Parecer Técnico *                   │
+│ [textarea 100+ chars]               │
+├─────────────────────────────────────┤
+│ [Cancelar]  [Aprovar – Dano Parcial]│
+│         ou  [Aprovar – Perda Total] │
+│         ou  [Registrar Recusa]      │
+└─────────────────────────────────────┘
 ```
-🛡️ Cobertura Total Ativada!
-Parabéns {nome}! Seu veículo {placa} agora está com COBERTURA TOTAL ativa. 
-A instalação do rastreador e vistoria foram concluídas com sucesso. Bem-vindo à PRATIC!
-```
-
-Ele já suporta as variáveis `{nome}` e `{placa}`.
-
-## Solução
-
-Adicionar chamada à `notificar-cliente` com o tipo `cobertura_total_ativada` nos 3 pontos onde cobertura total é ativada, **após** o sucesso das atualizações no banco, garantindo que a mensagem só é enviada quando o associado realmente está ativo.
-
-A mensagem será enriquecida com mais informações sobre o que a cobertura total inclui (assistência 24h, sinistros de colisão, incêndio, etc.).
-
-## Mudanças Técnicas
-
-### 1. Melhorar o template de WhatsApp em `notificar-cliente`
-
-O template atual é simples. Vamos enriquecê-lo com detalhes sobre o que a cobertura total inclui, mantendo o formato nativo do WhatsApp (sem HTML):
-
-```
-🛡️ *Cobertura Total Ativada!*
-
-Parabéns {nome}! Seu veículo {placa} agora está com *COBERTURA TOTAL* ativa! ✅
-
-*O que está incluso na sua cobertura:*
-🔐 Roubo e Furto
-💥 Colisão
-🔥 Incêndio
-🌧️ Fenômenos Naturais
-🚗 Assistência 24h (guincho, pane seca, chaveiro e mais)
-📍 Rastreamento em tempo real
-
-Acesse o App PRATIC para acompanhar seu veículo e solicitar assistência quando precisar.
-
-Bem-vindo à família PRATIC! 💙
-```
-
-### 2. Adicionar chamada em `useVistoriaCompletaAnalise.ts` (após linha 195)
-
-Após ativar associado e antes do histórico, adicionar:
-
-```typescript
-// Notificar associado via WhatsApp sobre cobertura total ativada
-try {
-  const { data: veiculoInfo } = await supabase
-    .from('veiculos')
-    .select('placa')
-    .eq('id', veiculoId)
-    .single();
-
-  await supabase.functions.invoke('notificar-cliente', {
-    body: {
-      tipo: 'cobertura_total_ativada',
-      associado_id: associadoId,
-      dados: { placa: veiculoInfo?.placa || '' },
-    },
-  });
-} catch (notifError) {
-  console.warn('[ativar-rastreador] Erro ao notificar associado (não crítico):', notifError);
-}
-```
-
-### 3. Adicionar chamada em `useVistoriaCompleta.ts` (após linha 96)
-
-No hook `useAprovarVeiculoVistoria`, após registrar no histórico (step 5), adicionar notificação:
-
-```typescript
-// Notificar associado via WhatsApp sobre cobertura total ativada
-try {
-  await supabase.functions.invoke('notificar-cliente', {
-    body: {
-      tipo: 'cobertura_total_ativada',
-      associado_id: data.associadoId,
-      dados: { placa: vistoriaData?.veiculos?.placa || '' },
-    },
-  });
-} catch (notifError) {
-  console.warn('[aprovar-veiculo-vistoria] Erro ao notificar (não crítico):', notifError);
-}
-```
-
-### 4. Adicionar chamada em `useServicos.ts` (após linha 940, apenas quando cobertura_total for ativada)
-
-No bloco onde `cobertura_total: true` é definido (linhas 931-943), adicionar após a atualização:
-
-```typescript
-// Notificar associado via WhatsApp sobre cobertura total ativada
-try {
-  const { data: veiculoInfo } = await supabase
-    .from('veiculos')
-    .select('placa')
-    .eq('id', data.veiculoId)
-    .single();
-
-  await supabase.functions.invoke('notificar-cliente', {
-    body: {
-      tipo: 'cobertura_total_ativada',
-      associado_id: data.associadoId,
-      dados: { placa: veiculoInfo?.placa || '' },
-    },
-  });
-} catch (notifError) {
-  console.warn('[aprovar-veiculo-servico] Erro ao notificar (não crítico):', notifError);
-}
-```
-
-## Garantias de Segurança
-
-- A notificação é sempre enviada **depois** que todos os dados são confirmados no banco (cobertura_total = true, associado.status = ativo)
-- Todos os `try/catch` garantem que uma falha no WhatsApp **não bloqueia** o fluxo principal de ativação
-- A edge function `notificar-cliente` já valida se o associado tem telefone antes de tentar enviar
 
 ## Arquivos a Alterar
 
-| Arquivo | Alteração |
+| Arquivo | Mudança |
 |---|---|
-| `supabase/functions/notificar-cliente/index.ts` | Melhorar o template `cobertura_total_ativada` com mensagem detalhada |
-| `src/hooks/useVistoriaCompletaAnalise.ts` | Adicionar chamada à `notificar-cliente` após ativar associado |
-| `src/hooks/useVistoriaCompleta.ts` | Adicionar chamada à `notificar-cliente` após aprovar veículo na vistoria |
-| `src/hooks/useServicos.ts` | Adicionar chamada à `notificar-cliente` quando cobertura_total é ativada via serviços |
+| `src/components/eventos/EmitirParecerModal.tsx` | Reformular UI com dois fluxos distintos: parcial e perda total. Backend (mutationFn) sem alterações. |
+
+## Garantias
+
+- **Nenhuma lógica backend é removida ou substituída** — o fluxo de inativação de veículo, status `aguardando_pagamento`, envio de termo e notificação WhatsApp permanecem intactos
+- **Compatibilidade garantida** com sinistros sem valor FIPE cadastrado (seleção manual de tipo de dano)
+- **Fallback seguro** — se o analista tiver dúvida, a classificação automática já preenche o campo correto
