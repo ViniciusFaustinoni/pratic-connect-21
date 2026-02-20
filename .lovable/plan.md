@@ -1,128 +1,142 @@
 
-# Corrigir: Status Não Atualiza e Botões de Aprovação/Rejeição Ausentes para Analista
+# Enviar WhatsApp de Confirmação de Cobertura Total ao Associado
 
-## Diagnóstico
+## Visão Geral do Problema
 
-### Problema 1: Status não avança automaticamente após vistoria concluída
+Quando a cobertura total é ativada (após instalação e vistoria concluídas), o associado **não recebe nenhuma mensagem de WhatsApp** confirmando que está totalmente protegido. O sistema já tem um template chamado `cobertura_total_ativada` em `notificar-cliente`, mas ele **nunca é chamado**.
 
-A tabela `vistorias_evento` mostra que o sinistro `d089ab74` tem uma vistoria com `status = 'concluida'`. Porém, o sinistro em si ainda está com `status = 'comunicado'`. 
+## Fluxo Atual Identificado
 
-O que deveria acontecer: quando o regulador conclui a vistoria, o sinistro deveria automaticamente avançar para `aguardando_analise`. Provavelmente esse trigger/lógica falhou ou não existe de forma robusta na edge function de conclusão da vistoria.
+Existem **3 pontos** no código onde `cobertura_total = true` é definido, e nenhum dispara o WhatsApp:
 
-### Problema 2: Analista é bloqueado e não vê botões
+| Hook | Quando ocorre | Arquivo |
+|---|---|---|
+| `useAtivarRastreadorPlataforma` | Analista clica "Ativar Rastreador" na tela de análise de instalação | `src/hooks/useVistoriaCompletaAnalise.ts` linha 173 |
+| `useAprovarVeiculoVistoria` | Técnico aprovam vistoria completa no campo | `src/hooks/useVistoriaCompleta.ts` linha 37 |
+| `useAprovarVeiculoServico` | Aprovação de veículo via serviços (autovistoria + instalação) | `src/hooks/useServicos.ts` linha 938 |
 
-Em `SinistroAnalise.tsx`, linha 331:
-```typescript
-const statusPreVistoria = ['comunicado', 'documentacao_pendente', 'aguardando_vistoria', 'pendente_vistoria_regulador'];
-const bloqueadoParaAnalista = isAnalistaEventos && !isDiretor && !!sinistro && statusPreVistoria.includes(sinistro?.status);
+## Template de WhatsApp Existente (pronto para usar)
+
+O template `cobertura_total_ativada` já existe em `notificar-cliente/index.ts` (linha 46-50):
+
+```
+🛡️ Cobertura Total Ativada!
+Parabéns {nome}! Seu veículo {placa} agora está com COBERTURA TOTAL ativa. 
+A instalação do rastreador e vistoria foram concluídas com sucesso. Bem-vindo à PRATIC!
 ```
 
-Como o status ainda é `comunicado`, o analista é redirecionado de volta para a lista sem poder fazer nada.
-
-E mesmo que o analista acesse, os botões Aprovar/Recusar só aparecem na condição:
-```typescript
-const analistaPodeDecidir = isAnalistaEventos && sinistro.status === 'aguardando_analise';
-```
-
-Ou seja, **o problema raiz é que o status do sinistro não foi atualizado para `aguardando_analise`** quando a vistoria foi concluída.
-
-### Problema 3: Fluxo de vistoria concluída sem atualização de status
-
-Analisando os dados reais da rede:
-- Vistoria `06584384`: `status = 'concluida'`, `concluida_em = '2026-02-20T16:29:01'`
-- Sinistro: ainda `status = 'comunicado'`
-
-Isso indica que a edge function ou trigger que deveria atualizar o sinistro ao concluir a vistoria não está funcionando corretamente, **ou** a atualização foi feita mas foi sobrescrita.
+Ele já suporta as variáveis `{nome}` e `{placa}`.
 
 ## Solução
 
-### Parte 1: Corrigir o status atual do sinistro (correção imediata via migration)
+Adicionar chamada à `notificar-cliente` com o tipo `cobertura_total_ativada` nos 3 pontos onde cobertura total é ativada, **após** o sucesso das atualizações no banco, garantindo que a mensagem só é enviada quando o associado realmente está ativo.
 
-Atualizar o sinistro `d089ab74-a18a-462d-93ec-fad83f305f2a` para `aguardando_analise` via migration SQL, já que a vistoria foi concluída.
+A mensagem será enriquecida com mais informações sobre o que a cobertura total inclui (assistência 24h, sinistros de colisão, incêndio, etc.).
 
-Também registrar no histórico essa transição que faltou.
+## Mudanças Técnicas
 
-### Parte 2: Corrigir a edge function/lógica que conclui vistórias
+### 1. Melhorar o template de WhatsApp em `notificar-cliente`
 
-Verificar a edge function responsável por marcar a vistoria como concluída e garantir que ela também atualiza o status do sinistro para `aguardando_analise`.
+O template atual é simples. Vamos enriquecê-lo com detalhes sobre o que a cobertura total inclui, mantendo o formato nativo do WhatsApp (sem HTML):
 
-### Parte 3: Adicionar fallback robusto no frontend
+```
+🛡️ *Cobertura Total Ativada!*
 
-Se o sinistro estiver com status `comunicado` mas tiver vistoria concluída, mostrar um alerta visível com botão para avançar o status manualmente — em vez de redirecionar o analista.
+Parabéns {nome}! Seu veículo {placa} agora está com *COBERTURA TOTAL* ativa! ✅
 
-### Parte 4: Permitir que analista veja sinistro com vistoria concluída mesmo em status `comunicado`
+*O que está incluso na sua cobertura:*
+🔐 Roubo e Furto
+💥 Colisão
+🔥 Incêndio
+🌧️ Fenômenos Naturais
+🚗 Assistência 24h (guincho, pane seca, chaveiro e mais)
+📍 Rastreamento em tempo real
 
-Remover `comunicado` do `statusPreVistoria` quando a vistoria já foi concluída — ou criar uma verificação adicional antes de redirecionar.
+Acesse o App PRATIC para acompanhar seu veículo e solicitar assistência quando precisar.
+
+Bem-vindo à família PRATIC! 💙
+```
+
+### 2. Adicionar chamada em `useVistoriaCompletaAnalise.ts` (após linha 195)
+
+Após ativar associado e antes do histórico, adicionar:
+
+```typescript
+// Notificar associado via WhatsApp sobre cobertura total ativada
+try {
+  const { data: veiculoInfo } = await supabase
+    .from('veiculos')
+    .select('placa')
+    .eq('id', veiculoId)
+    .single();
+
+  await supabase.functions.invoke('notificar-cliente', {
+    body: {
+      tipo: 'cobertura_total_ativada',
+      associado_id: associadoId,
+      dados: { placa: veiculoInfo?.placa || '' },
+    },
+  });
+} catch (notifError) {
+  console.warn('[ativar-rastreador] Erro ao notificar associado (não crítico):', notifError);
+}
+```
+
+### 3. Adicionar chamada em `useVistoriaCompleta.ts` (após linha 96)
+
+No hook `useAprovarVeiculoVistoria`, após registrar no histórico (step 5), adicionar notificação:
+
+```typescript
+// Notificar associado via WhatsApp sobre cobertura total ativada
+try {
+  await supabase.functions.invoke('notificar-cliente', {
+    body: {
+      tipo: 'cobertura_total_ativada',
+      associado_id: data.associadoId,
+      dados: { placa: vistoriaData?.veiculos?.placa || '' },
+    },
+  });
+} catch (notifError) {
+  console.warn('[aprovar-veiculo-vistoria] Erro ao notificar (não crítico):', notifError);
+}
+```
+
+### 4. Adicionar chamada em `useServicos.ts` (após linha 940, apenas quando cobertura_total for ativada)
+
+No bloco onde `cobertura_total: true` é definido (linhas 931-943), adicionar após a atualização:
+
+```typescript
+// Notificar associado via WhatsApp sobre cobertura total ativada
+try {
+  const { data: veiculoInfo } = await supabase
+    .from('veiculos')
+    .select('placa')
+    .eq('id', data.veiculoId)
+    .single();
+
+  await supabase.functions.invoke('notificar-cliente', {
+    body: {
+      tipo: 'cobertura_total_ativada',
+      associado_id: data.associadoId,
+      dados: { placa: veiculoInfo?.placa || '' },
+    },
+  });
+} catch (notifError) {
+  console.warn('[aprovar-veiculo-servico] Erro ao notificar (não crítico):', notifError);
+}
+```
+
+## Garantias de Segurança
+
+- A notificação é sempre enviada **depois** que todos os dados são confirmados no banco (cobertura_total = true, associado.status = ativo)
+- Todos os `try/catch` garantem que uma falha no WhatsApp **não bloqueia** o fluxo principal de ativação
+- A edge function `notificar-cliente` já valida se o associado tem telefone antes de tentar enviar
 
 ## Arquivos a Alterar
 
 | Arquivo | Alteração |
 |---|---|
-| Migration SQL | Atualizar status do sinistro `d089ab74` para `aguardando_analise` + registrar histórico |
-| `src/pages/eventos/SinistroAnalise.tsx` | Remover bloqueio quando vistoria já está concluída; mostrar botões de aprovação/rejeição nesses casos |
-| Edge function `concluir-vistoria` (ou similar) | Garantir que ao concluir vistoria, status do sinistro é avançado para `aguardando_analise` |
-
-## Fluxo Correto Esperado
-
-```text
-Vistoria do Regulador Concluída
-          ↓
-Sinistro atualizado para 'aguardando_analise' (automático)
-          ↓
-Analista acessa a tela e vê os botões "Aprovar Evento" e "Recusar Evento"
-          ↓
-Analista toma a decisão → status avança para 'aprovado' ou 'reprovado'
-```
-
-## Detalhes Técnicos
-
-### Migration SQL
-```sql
--- Corrigir status do sinistro que tem vistoria concluída mas status não avançou
-UPDATE sinistros 
-SET status = 'aguardando_analise', updated_at = NOW()
-WHERE id = 'd089ab74-a18a-462d-93ec-fad83f305f2a'
-  AND status = 'comunicado';
-
--- Registrar a transição no histórico
-INSERT INTO sinistro_historico (sinistro_id, status_anterior, status_novo, observacao)
-VALUES (
-  'd089ab74-a18a-462d-93ec-fad83f305f2a',
-  'comunicado',
-  'aguardando_analise',
-  'Status corrigido automaticamente: vistoria do regulador foi concluída sem atualização do status do sinistro.'
-);
-```
-
-### Lógica Frontend (SinistroAnalise.tsx)
-Modificar a condição de bloqueio para verificar se existe vistoria concluída:
-
-```typescript
-// Atual (problemático):
-const statusPreVistoria = ['comunicado', 'documentacao_pendente', 'aguardando_vistoria', 'pendente_vistoria_regulador'];
-const bloqueadoParaAnalista = isAnalistaEventos && !isDiretor && !!sinistro && statusPreVistoria.includes(sinistro?.status);
-
-// Corrigido:
-const temVistoriaConcluida = !!vistoriaEvento; // hook já busca vistoria concluída
-const bloqueadoParaAnalista = isAnalistaEventos && !isDiretor && !!sinistro 
-  && statusPreVistoria.includes(sinistro?.status)
-  && !temVistoriaConcluida; // Não bloquear se vistoria já foi concluída
-```
-
-E na lógica de botões de decisão:
-```typescript
-// Analista pode decidir se status é aguardando_analise OU se vistoria está concluída
-const analistaPodeDecidir = isAnalistaEventos && 
-  (sinistro.status === 'aguardando_analise' || (temVistoriaConcluida && sinistro.status === 'comunicado'));
-```
-
-### Edge Function
-Buscar a edge function que conclui a vistoria do regulador e verificar se ela atualiza o `sinistro.status`. Se não estiver fazendo isso, adicionar a atualização:
-```typescript
-// Após marcar vistoria como concluída:
-await supabase
-  .from('sinistros')
-  .update({ status: 'aguardando_analise', updated_at: new Date().toISOString() })
-  .eq('id', sinistro_id)
-  .in('status', ['comunicado', 'em_analise', 'aguardando_vistoria']);
-```
+| `supabase/functions/notificar-cliente/index.ts` | Melhorar o template `cobertura_total_ativada` com mensagem detalhada |
+| `src/hooks/useVistoriaCompletaAnalise.ts` | Adicionar chamada à `notificar-cliente` após ativar associado |
+| `src/hooks/useVistoriaCompleta.ts` | Adicionar chamada à `notificar-cliente` após aprovar veículo na vistoria |
+| `src/hooks/useServicos.ts` | Adicionar chamada à `notificar-cliente` quando cobertura_total é ativada via serviços |
