@@ -459,5 +459,8 @@ verify_jwt = false
 [functions.retroativo-pagamento-termo]
 verify_jwt = false
 
+[functions.asaas-verificar-cota-sinistro]
+verify_jwt = false
+
 [functions.delete-chamado-assistencia]
 verify_jwt = false

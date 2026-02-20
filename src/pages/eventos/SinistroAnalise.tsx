@@ -236,6 +236,7 @@ export default function SinistroAnalise() {
   const [salvandoValores, setSalvandoValores] = useState(false);
   const [reenviandoAssinatura, setReenviandoAssinatura] = useState(false);
   const [reenviandoPagamento, setReenviandoPagamento] = useState(false);
+  const [verificandoCota, setVerificandoCota] = useState(false);
   const [fotoViewerVistoriaAdesao, setFotoViewerVistoriaAdesao] = useState({ open: false, index: 0 });
 
   const {
@@ -322,6 +323,27 @@ export default function SinistroAnalise() {
 
     return () => clearInterval(interval);
   }, [sinistro?.autentique_documento_id, sinistro?.termo_anuencia_assinado, id, queryClient]);
+
+  // Polling automático para detectar pagamento da cota de coparticipação (a cada 15s)
+  useEffect(() => {
+    const cotaPendente = sinistro?.termo_anuencia_assinado && !sinistro?.cota_paga && (sinistro as any)?.cobranca_cota_id;
+    if (!cotaPendente) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await supabase.functions.invoke('asaas-verificar-cota-sinistro', {
+          body: { sinistroId: sinistro!.id },
+        });
+        if (data?.pago) {
+          queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+        }
+      } catch {
+        // silencioso — não interrompe UX
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [sinistro?.cota_paga, sinistro?.termo_anuencia_assinado, (sinistro as any)?.cobranca_cota_id, id, queryClient]);
 
   // Navegação entre sinistros
   const currentIndex = pendentes?.findIndex((p) => p.id === id) ?? -1;
@@ -591,6 +613,27 @@ export default function SinistroAnalise() {
       toast.error('Erro ao reenviar: ' + (err.message || 'Tente novamente'));
     } finally {
       setReenviandoPagamento(false);
+    }
+  };
+
+  const handleVerificarCota = async () => {
+    if (!sinistro) return;
+    setVerificandoCota(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('asaas-verificar-cota-sinistro', {
+        body: { sinistroId: sinistro.id },
+      });
+      if (error) throw error;
+      if (data?.pago) {
+        toast.success('Pagamento confirmado! Status atualizado.');
+        queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+      } else {
+        toast.info('Pagamento ainda não identificado. Tente novamente em instantes.');
+      }
+    } catch (err: any) {
+      toast.error('Erro ao verificar: ' + (err.message || 'Tente novamente'));
+    } finally {
+      setVerificandoCota(false);
     }
   };
 
@@ -1584,6 +1627,19 @@ export default function SinistroAnalise() {
                             {reenviandoPagamento ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
                             Reenviar Link de Pagamento
                           </Button>
+                          {(sinistro as any).cobranca_cota_id && (
+                            <Button
+                              variant="outline"
+                              className="w-full border-green-300 text-green-700 hover:bg-green-50"
+                              onClick={handleVerificarCota}
+                              disabled={verificandoCota}
+                            >
+                              {verificandoCota
+                                ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                : <CheckCircle className="h-4 w-4 mr-2" />}
+                              Verificar Pagamento
+                            </Button>
+                          )}
                         </div>
                       )}
                     </>
