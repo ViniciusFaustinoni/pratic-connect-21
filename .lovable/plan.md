@@ -1,76 +1,61 @@
 
-# Corrigir: Webhook WhatsApp Rejeitando Mensagens com 403 (API Key Inválida)
+# Adicionar Horário de Comunicação (created_at) na Tabela de Sinistros
 
-## Diagnóstico Confirmado
+## Problema
 
-Os logs da edge function `whatsapp-webhook` mostram o problema de forma explícita:
+A coluna "Data" em `SinistrosList.tsx` (linha 500) mostra apenas a **data da ocorrência** (`data_ocorrencia`) no formato `dd/MM/yyyy`. O usuário quer também ver o **horário exato em que o sinistro foi comunicado** (campo `created_at`) — especialmente importante para sinistros recebidos via WhatsApp.
 
-```
-[whatsapp-webhook] API key inválida no webhook → HTTP 403 Forbidden
-```
+## O que precisa mudar
 
-**Fluxo que está acontecendo:**
+### Arquivo: `src/pages/eventos/SinistrosList.tsx`
 
-1. Associado envia mensagem no WhatsApp
-2. Evolution API faz POST no webhook com header `apikey: <valor>`
-3. A função compara esse `apikey` com o secret `EVOLUTION_API_KEY`
-4. Os valores são diferentes → função retorna 403 e **abandona o request**
-5. A IA nunca processa nada → associado não recebe resposta
+**Mudança 1 — Expandir a coluna "Data" para exibir dois campos:**
 
-**Causa raiz:** A Evolution API envia como `apikey` do webhook a key configurada especificamente para aquele webhook (que pode ser diferente da `EVOLUTION_API_KEY` global da instância). A validação atual é muito restritiva — ela rejeita qualquer request onde o `apikey` do webhook não bate exatamente com a chave global.
-
-**Código problemático (linha 2562):**
-```typescript
-// Validar apikey da Evolution API se configurada
-const evolutionApiKey = Deno.env.get("EVOLUTION_API_KEY");
-if (evolutionApiKey) {
-  const webhookApiKey = req.headers.get("apikey") || payload.apikey;
-  if (webhookApiKey && webhookApiKey !== evolutionApiKey) {  // ← BUG AQUI
-    console.error("[whatsapp-webhook] API key inválida no webhook");
-    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
-  }
-}
+A célula atual na linha 500:
+```tsx
+<TableCell>{formatDate(sinistro.data_ocorrencia)}</TableCell>
 ```
 
-## Solução
+Será transformada em um bloco com dois campos empilhados:
 
-### Opção A — Remover a validação restritiva (recomendada)
+```tsx
+<TableCell>
+  <div>
+    <p className="font-medium">{formatDate(sinistro.data_ocorrencia)}</p>
+    <p className="text-xs text-muted-foreground">
+      Comunicado: {formatDateTime(sinistro.created_at)}
+    </p>
+  </div>
+</TableCell>
+```
 
-A validação atual causa mais dano do que benefício. O webhook já é protegido pela URL secreta (apenas quem conhece a URL do endpoint pode chamá-lo). Além disso, a instância é validada logo abaixo (linha 2578) — se a instância não for conhecida, o request é rejeitado.
+**Mudança 2 — Adicionar a função `formatDateTime` (linha 237 aprox.):**
 
-Alterar a lógica para **apenas logar** quando a key for diferente, sem rejeitar o request:
+Próximo à função `formatDate` existente, adicionar:
 
 ```typescript
-// Validar apikey da Evolution API (apenas log, não rejeitar)
-const evolutionApiKey = Deno.env.get("EVOLUTION_API_KEY");
-if (evolutionApiKey) {
-  const webhookApiKey = req.headers.get("apikey") || payload.apikey;
-  if (webhookApiKey && webhookApiKey !== evolutionApiKey) {
-    console.warn("[whatsapp-webhook] API key do webhook diferente da configurada — continuando processamento");
-    // Não rejeitar: a instância será validada abaixo
-  }
-}
+const formatDateTime = (date: string | null) => {
+  if (!date) return '-';
+  return format(new Date(date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+};
 ```
 
-### Opção B — Adicionar secret WEBHOOK_API_KEY separado
+## Resultado visual esperado
 
-Criar um secret `WEBHOOK_API_KEY` específico para validação do webhook (separado da key global). Porém isso requer reconfigurar o webhook na Evolution API — mais trabalhoso.
+Na coluna "Data" da tabela de sinistros:
 
-**A Opção A é a solução correta e imediata.**
+```
+20/02/2026
+Comunicado: 20/02/2026 às 15:46
+```
 
-## Verificação Adicional
+- A data da ocorrência (que o associado informou) continua em destaque
+- O horário exato do comunicado (`created_at`) aparece abaixo em texto menor e cinza
+- O label "Comunicado:" deixa claro que é o momento do registro, não da ocorrência
 
-Além da correção da validação, verificar se o modelo de IA na função está correto após os deploys anteriores. Com base nos logs e no diff anterior, as mudanças para `gemini-3-flash-preview` e `AbortSignal.timeout(25000)` já foram aplicadas.
-
-## Arquivo Alterado
+## Arquivos Alterados
 
 | Arquivo | Linha | Alteração |
 |---|---|---|
-| `supabase/functions/whatsapp-webhook/index.ts` | 2562 | Remover rejeição quando API key do webhook difere; substituir por log de aviso |
-
-## Resultado Esperado
-
-- Mensagens recebidas do WhatsApp são processadas normalmente
-- A IA responde ao associado em 5-15 segundos
-- O webhook continua protegido pela validação da instância (linha 2578)
-- Nenhuma mensagem legítima é bloqueada com 403
+| `src/pages/eventos/SinistrosList.tsx` | ~237 | Adicionar função `formatDateTime` |
+| `src/pages/eventos/SinistrosList.tsx` | ~500 | Expandir célula para mostrar `created_at` com horário |
