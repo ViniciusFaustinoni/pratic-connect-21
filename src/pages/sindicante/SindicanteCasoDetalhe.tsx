@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, ArrowLeft, Plus, FileText, MapPin, Car, User, Clock, AlertTriangle, Play, Send, ChevronRight, Image, Video, Download, Paperclip, Calendar, Search as SearchIcon } from 'lucide-react';
+import { Loader2, ArrowLeft, Plus, FileText, MapPin, Car, User, Clock, AlertTriangle, Play, Send, ChevronRight, Image, Video, Download, Paperclip, Calendar, Search as SearchIcon, CheckCircle2 } from 'lucide-react';
 import { format, differenceInDays, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { 
   STATUS_SINDICANCIA_LABELS, STATUS_SINDICANCIA_COLORS, 
-  TIPO_DILIGENCIA_LABELS, CONCLUSAO_LAUDO_LABELS, MOTIVOS_PADRONIZADOS,
-  type StatusSindicancia, type TipoDiligencia 
+  TIPO_DILIGENCIA_LABELS, CONCLUSAO_LAUDO_LABELS, RECOMENDACAO_LABELS, MOTIVOS_PADRONIZADOS,
+  type StatusSindicancia, type TipoDiligencia, type ConclusaoLaudo, type RecomendacaoLaudo 
 } from '@/types/sindicancia';
 import { RegistrarDiligenciaModal } from '@/components/sindicante/RegistrarDiligenciaModal';
 import { EmitirLaudoModal } from '@/components/sindicante/EmitirLaudoModal';
@@ -168,6 +168,7 @@ export default function SindicanteCasoDetalhe() {
   const podeRegistrar = ['em_andamento'].includes(status);
   const podeEmitirLaudo = status === 'em_andamento' && diligencias.length > 0;
   const isAtribuido = status === 'atribuido';
+  const isLaudoEmitido = ['laudo_emitido', 'encerrado'].includes(status);
 
   const boletim = documentos.find(d => d.tipo === 'boletim_ocorrencia');
 
@@ -400,6 +401,59 @@ export default function SindicanteCasoDetalhe() {
             </CardContent>
           </Card>
 
+          {/* Card Laudo Emitido (somente leitura, visível após emissão) */}
+          {isLaudoEmitido && sindicancia.laudo_conclusao && (
+            <Card className="border-green-200 dark:border-green-800">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="h-4 w-4" /> Laudo Emitido
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <span className="text-xs text-muted-foreground">Conclusão:</span>
+                  <div className="mt-1">
+                    <Badge className={
+                      sindicancia.laudo_conclusao === 'regular' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                      sindicancia.laudo_conclusao === 'irregular_comprovada' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                      sindicancia.laudo_conclusao === 'irregular_suspeita' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' :
+                      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                    }>
+                      {CONCLUSAO_LAUDO_LABELS[sindicancia.laudo_conclusao as ConclusaoLaudo] || sindicancia.laudo_conclusao}
+                    </Badge>
+                  </div>
+                </div>
+                {sindicancia.laudo_resumo && (
+                  <div>
+                    <span className="text-xs text-muted-foreground">Resumo Executivo:</span>
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{sindicancia.laudo_resumo}</p>
+                  </div>
+                )}
+                {sindicancia.laudo_irregularidades && (
+                  <div>
+                    <span className="text-xs text-muted-foreground">Irregularidades:</span>
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{sindicancia.laudo_irregularidades}</p>
+                  </div>
+                )}
+                {sindicancia.laudo_recomendacao && (
+                  <div>
+                    <span className="text-xs text-muted-foreground">Recomendação:</span>
+                    <p className="text-sm mt-1 font-medium">
+                      {RECOMENDACAO_LABELS[sindicancia.laudo_recomendacao as RecomendacaoLaudo] || sindicancia.laudo_recomendacao}
+                    </p>
+                  </div>
+                )}
+                {sindicancia.laudo_arquivo_url && (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={sindicancia.laudo_arquivo_url} target="_blank" rel="noopener noreferrer">
+                      <Download className="h-4 w-4 mr-1" /> Baixar Laudo PDF
+                    </a>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Solicitações */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -449,54 +503,78 @@ export default function SindicanteCasoDetalhe() {
               <CardTitle className="text-base">Ações</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {isAtribuido && (
-                <Button 
-                  className="w-full bg-green-600 hover:bg-green-700 text-white" 
-                  onClick={handleIniciarInvestigacao}
-                  disabled={iniciando}
-                >
-                  {iniciando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
-                  Iniciar Investigação
-                </Button>
-              )}
-
-              <Button 
-                className="w-full" 
-                onClick={() => setShowDiligencia(true)}
-                disabled={isAtribuido}
-              >
-                <Plus className="h-4 w-4 mr-1" /> Registrar Diligência
-              </Button>
-
-              <Button 
-                variant="outline" 
-                className="w-full" 
-                onClick={() => setShowSolicitacao(true)}
-              >
-                <Send className="h-4 w-4 mr-1" /> Solicitar Informação
-              </Button>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div>
-                      <Button 
-                        variant="destructive" 
-                        className="w-full" 
-                        onClick={() => setShowLaudo(true)}
-                        disabled={!podeEmitirLaudo}
-                      >
-                        <FileText className="h-4 w-4 mr-1" /> Emitir Laudo
-                      </Button>
-                    </div>
-                  </TooltipTrigger>
-                  {!podeEmitirLaudo && (
-                    <TooltipContent>
-                      <p>{status !== 'em_andamento' ? 'Inicie a investigação primeiro' : 'Registre pelo menos 1 diligência antes de emitir o laudo'}</p>
-                    </TooltipContent>
+              {isLaudoEmitido ? (
+                <div className="space-y-3 text-center">
+                  <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+                    <CheckCircle2 className="h-8 w-8 text-green-600" />
+                    <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                      Laudo emitido em {sindicancia.data_laudo ? format(new Date(sindicancia.data_laudo), 'dd/MM/yyyy') : '—'}
+                    </p>
+                    {sindicancia.laudo_conclusao && (
+                      <Badge className={
+                        sindicancia.laudo_conclusao === 'regular' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                        sindicancia.laudo_conclusao === 'irregular_comprovada' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                        sindicancia.laudo_conclusao === 'irregular_suspeita' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' :
+                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                      }>
+                        {CONCLUSAO_LAUDO_LABELS[sindicancia.laudo_conclusao as ConclusaoLaudo] || sindicancia.laudo_conclusao}
+                      </Badge>
+                    )}
+                    <p className="text-xs text-muted-foreground">Aguardando decisão do analista</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {isAtribuido && (
+                    <Button 
+                      className="w-full bg-green-600 hover:bg-green-700 text-white" 
+                      onClick={handleIniciarInvestigacao}
+                      disabled={iniciando}
+                    >
+                      {iniciando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
+                      Iniciar Investigação
+                    </Button>
                   )}
-                </Tooltip>
-              </TooltipProvider>
+
+                  <Button 
+                    className="w-full" 
+                    onClick={() => setShowDiligencia(true)}
+                    disabled={isAtribuido}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Registrar Diligência
+                  </Button>
+
+                  <Button 
+                    variant="outline" 
+                    className="w-full" 
+                    onClick={() => setShowSolicitacao(true)}
+                  >
+                    <Send className="h-4 w-4 mr-1" /> Solicitar Informação
+                  </Button>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <Button 
+                            variant="destructive" 
+                            className="w-full" 
+                            onClick={() => setShowLaudo(true)}
+                            disabled={!podeEmitirLaudo}
+                          >
+                            <FileText className="h-4 w-4 mr-1" /> Emitir Laudo
+                          </Button>
+                        </div>
+                      </TooltipTrigger>
+                      {!podeEmitirLaudo && (
+                        <TooltipContent>
+                          <p>{status !== 'em_andamento' ? 'Inicie a investigação primeiro' : 'Registre pelo menos 1 diligência antes de emitir o laudo'}</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
+                </>
+              )}
             </CardContent>
           </Card>
 

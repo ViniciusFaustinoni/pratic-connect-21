@@ -171,3 +171,27 @@ export async function notificarAguardandoDiretoria(sinistroId: string, protocolo
     referenciaTipo: 'sinistro',
   });
 }
+
+// 9. Laudo de sindicância emitido → notifica analistas de eventos + diretores
+async function getAnalistasEventosIds(): Promise<string[]> {
+  const { data } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('role', 'analista_eventos');
+  return (data || []).map(r => r.user_id);
+}
+
+export async function notificarLaudoEmitido(sinistroId: string, protocolo: string, conclusao: string, sindicanciaNumero: string) {
+  const [analistas, diretores] = await Promise.all([getAnalistasEventosIds(), getDiretoresIds()]);
+  const unicos = [...new Set([...analistas, ...diretores])];
+  await inserirParaMultiplos(unicos, {
+    titulo: 'Laudo de Sindicância Recebido',
+    mensagem: `📋 Laudo de sindicância recebido — Evento #${protocolo} — Sindicância ${sindicanciaNumero} — Conclusão: ${conclusao}`,
+    tipo: 'sinistro',
+    subtipo: 'laudo_emitido',
+    link: `/eventos/sinistros/${sinistroId}`,
+    prioridade: 'alta',
+    referenciaId: sinistroId,
+    referenciaTipo: 'sinistro',
+  });
+}
