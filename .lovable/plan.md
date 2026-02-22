@@ -1,127 +1,94 @@
 
-# S02 — Tela Administrativa de Gestao de Sindicantes
+# S03 — Modal de Abertura de Sindicancia
 
 ## Resumo
 
-Substituir a pagina basica `EmpresasSindicancia.tsx` por uma tela completa em `/eventos/sindicantes` com: 4 cards de resumo, tabela com filtros/busca, modal de cadastro com criacao automatica de usuario, e painel lateral de detalhe com historico e metricas.
+Substituir o modal antigo `EncaminharSindicanciaDialog.tsx` por um novo modal completo que cria um registro na tabela `sindicancias`, com motivos padronizados detalhados, selecao de empresa de sindicancia ativa, datepicker de prazo, e card de resumo antes de confirmar. Criar tambem um segundo modal simples para atribuir sindicante a casos "Aguardando Atribuicao".
 
 ---
 
-## 1. Atualizar Edge Function `create-user`
+## 1. Atualizar constantes em `src/types/sindicancia.ts`
 
-**Arquivo:** `supabase/functions/create-user/index.ts`
+Substituir o array `MOTIVOS_PADRONIZADOS` atual (8 itens genericos) pela nova lista de 10 motivos detalhados da tarefa:
 
-A funcao ja suporta `tipo: 'prestador'` e `perfis: ['sindicante']`, mas a lista de roles com permissao para criar usuarios nao inclui `analista_eventos`. Precisamos adicionar.
-
-**Alteracao (linha 73):**
-```typescript
-const allowedRoles = ['diretor', 'gerente_comercial', 'supervisor_vendas', 'analista_eventos'];
+```
+inconsistencia_relato -> "Inconsistencia no relato do associado"
+distancia_gps -> "Distancia GPS suspeita"
+historico_sinistros -> "Historico de sinistros"
+valor_dano_incompativel -> "Valor do dano incompativel"
+documentacao_suspeita -> "Documentacao suspeita"
+indicios_fraude -> "Indicios de fraude"
+denuncia_externa -> "Denuncia ou informacao externa"
+veiculo_restricoes -> "Veiculo com restricoes"
+condutor_irregular -> "Condutor irregular"
+evento_carencia -> "Evento em periodo de carencia"
 ```
 
 ---
 
-## 2. Reescrever a pagina principal
+## 2. Reescrever `src/components/sinistros/EncaminharSindicanciaDialog.tsx`
 
-**Arquivo:** `src/pages/eventos/SindicantesAdmin.tsx` (novo — substitui `EmpresasSindicancia.tsx`)
+O modal atual sera completamente reescrito. Conteudo novo:
 
-**Rota:** `/eventos/sindicantes`
+**Titulo:** "Abrir Sindicancia — Evento #[protocolo]"
 
-### 2.1 Topo
-- Breadcrumb: Home > Eventos > Sindicantes
-- Titulo: "Sindicantes" / Subtitulo: "Empresas de sindicancia cadastradas"
-- Botao "+ Novo Sindicante" no canto direito
+### Secao 1: Motivo da Sindicancia
+- 10 checkboxes (pode marcar varios) com os motivos padronizados
+- Textarea obrigatoria "Descricao detalhada do motivo" com minimo 50 caracteres
+- Placeholder explicativo para o analista
 
-### 2.2 Cards de resumo (4)
-Queries ao Supabase:
-- **Total Cadastrados**: `COUNT(*)` de `empresas_sindicancia`
-- **Ativos**: `COUNT(*)` de `empresas_sindicancia WHERE ativo = true`
-- **Com Caso em Andamento**: `COUNT(DISTINCT empresa_sindicancia_id)` de `sindicancias WHERE status IN ('atribuido', 'em_andamento')`
-- **Sindicancias este Mes**: `COUNT(*)` de `sindicancias WHERE data_abertura >= primeiro dia do mes`
+### Secao 2: Atribuir Sindicante
+- Select buscando `empresas_sindicancia` WHERE `ativo = true`
+- Cada opcao mostra: nome_fantasia + especialidades (badges) + count de casos ativos (query em `sindicancias`)
+- Pode deixar em branco — mostra informativo azul "caso ficara como Aguardando Atribuicao"
 
-### 2.3 Filtros e busca
-- Select de status: Ativo / Inativo / Todos
-- Select de especialidade: lista das especialidades
-- Campo de busca: filtra por nome fantasia, razao social, CNPJ, nome do responsavel
+### Secao 3: Prazo
+- Datepicker (nao input numerico)
+- Valor padrao: hoje + 30 dias
+- Minimo: hoje + 7 dias
+- Maximo: hoje + 60 dias
 
-### 2.4 Tabela
-Colunas: Nome Fantasia (clicavel — abre Sheet), CNPJ, Responsavel, Telefone, Especialidades (badges coloridas), Casos Ativos (numero), Status (badge), Acoes (dropdown: Editar, Ativar/Desativar, Ver Casos)
+### Secao 4: Resumo antes de confirmar
+- Card cinza com: evento, motivos selecionados, sindicante ou "Nao atribuido", prazo, aviso de suspensao
 
-As cores das badges de especialidade:
-- Fraude Veicular: vermelho
-- Roubo/Furto: laranja
-- Incendio: amarelo
-- Colisao Suspeita: purple
-- Geral: azul
+### Validacoes
+- Pelo menos 1 checkbox marcado
+- Descricao >= 50 caracteres
+- Verifica se ja existe sindicancia ativa (status != 'encerrado' e != 'cancelado') para o mesmo sinistro. Se sim, bloqueia com erro mostrando o numero.
 
-**Query principal:** busca `empresas_sindicancia` com left join count em `sindicancias` para contar casos ativos. Como o Supabase JS nao faz left join count facilmente, faremos 2 queries: uma para empresas e outra para contagem de casos ativos por empresa.
+### Fluxo ao confirmar
+1. Inserir em `sindicancias` com:
+   - `sinistro_id`, `motivo` (descricao), `motivos_padronizados` (array dos checkboxes marcados)
+   - `empresa_sindicancia_id` e `sindicante_profile_id` (da empresa selecionada, se houver)
+   - `data_limite` (data do datepicker)
+   - `status`: 'atribuido' se sindicante selecionado, 'aguardando_atribuicao' se nao
+   - `data_atribuicao`: now() se atribuido
+   - `aberto_por`: profile_id do analista logado
+2. Atualizar `sinistros` SET status = 'em_sindicancia', prazo_suspenso = true, etc.
+3. Inserir suspensao de prazo em `sinistro_suspensoes_prazo`
+4. Inserir historico em `sinistro_historico`
+5. Se sindicante atribuido, notificar via `NotificacaoHelper`
+6. Toast de sucesso com o numero da sindicancia gerado
 
----
-
-## 3. Modal de Cadastro/Edicao
-
-**Dentro do mesmo arquivo** `SindicantesAdmin.tsx` (ou componente separado `NovoSindicanteModal.tsx`).
-
-### 3.1 Secoes do formulario
-
-**Dados da Empresa:** Razao Social*, Nome Fantasia, CNPJ* (com mascara CnpjInput)
-
-**Dados do Responsavel:** Nome Completo*, CPF (CpfInput), Telefone* (TelefoneInput), Email* (Input type=email)
-
-**Configuracao:** Especialidades (checkboxes), Regioes de Atuacao (checkboxes), Valor por Sindicancia (CurrencyInput), Observacoes (Textarea)
-
-### 3.2 Validacoes
-- CNPJ unico: query `empresas_sindicancia` antes de salvar
-- Email unico: a edge function `create-user` ja valida
-- Campos obrigatorios: razao_social, cnpj, responsavel_nome, responsavel_telefone, responsavel_email
-
-### 3.3 Fluxo ao salvar (NOVO)
-1. Chamar `create-user` edge function com `{ nome, email, tipo: 'prestador', perfis: ['sindicante'] }`
-2. Com o `userId` retornado, buscar o `profile_id` correspondente
-3. Inserir em `empresas_sindicancia` com `profile_id` vinculado
-4. Toast: "Sindicante cadastrado! Email de acesso enviado para [email]"
-
-### 3.4 Fluxo ao salvar (EDICAO)
-- Apenas `UPDATE` em `empresas_sindicancia` (nao recria usuario)
-- Se email mudou, avisar que o login nao muda automaticamente
+**Botoes:** "Cancelar" (outline) | "Abrir Sindicancia" (vermelho/destrutivo)
 
 ---
 
-## 4. Painel Lateral de Detalhe (Sheet)
+## 3. Criar `src/components/sinistros/AtribuirSindicanteModal.tsx` (novo)
 
-**Componente:** `SindicanteDetalheSheet.tsx` (novo)
+Modal simples para atribuir sindicante a caso "Aguardando Atribuicao":
 
-Abre ao clicar no nome na tabela. Conteudo:
-
-### Card "Dados da Empresa"
-- Todos os dados cadastrais exibidos em formato label/valor
-- Especialidades e regioes como badges
-- Botao "Editar" abre modal de edicao pre-preenchido
-
-### Card "Historico de Sindicancias"
-- Query: `sindicancias WHERE empresa_sindicancia_id = X ORDER BY data_abertura DESC LIMIT 10`
-- Tabela compacta: Numero, Evento, Data, Conclusao (badge colorida), Dias
-- Dias = diferenca entre data_abertura e data_laudo (ou "Em andamento — X dias" se sem laudo)
-
-### Card "Metricas"
-- Total de sindicancias realizadas
-- Tempo medio de conclusao (em dias) — calcula media de (data_laudo - data_abertura) para casos com laudo
-- Distribuicao de resultados: contagem por laudo_conclusao, exibido como mini barras horizontais com % (recharts BarChart ou simples divs com width %)
+- Props: `sindicanciaId`, `open`, `onOpenChange`, `onSuccess`
+- Select de empresas ativas (mesmo do modal principal)
+- Botao "Atribuir"
+- Ao salvar: UPDATE sindicancias SET empresa_sindicancia_id, sindicante_profile_id, status = 'atribuido', data_atribuicao = now()
+- Notifica o sindicante
 
 ---
 
-## 5. Atualizar Rotas
+## 4. Atualizar `SinistroDetalhe.tsx`
 
-**Arquivo:** `src/App.tsx`
-
-- Trocar `/configuracoes/empresas-sindicancia` por `/eventos/sindicantes`
-- Importar `SindicantesAdmin` em vez de `EmpresasSindicancia`
-- A rota antiga pode ficar como redirect por seguranca
-
----
-
-## 6. Navegacao
-
-Verificar se o menu lateral ja tem link para sindicantes. Se nao tiver, adicionar em "Eventos" um subitem "Sindicantes" apontando para `/eventos/sindicantes`.
+Nenhuma mudanca estrutural necessaria — o modal ja esta conectado via `modalSindicanciaOpen` e `EncaminharSindicanciaDialog`. A interface do componente (props) sera mantida compativel. Apenas garantir que o `onSuccess` invalida as queries corretas (incluindo sindicancias).
 
 ---
 
@@ -129,26 +96,17 @@ Verificar se o menu lateral ja tem link para sindicantes. Se nao tiver, adiciona
 
 | Arquivo | Descricao |
 |---|---|
-| `src/pages/eventos/SindicantesAdmin.tsx` | Pagina principal com cards, tabela, filtros, modal de cadastro/edicao |
-| `src/components/sindicante/SindicanteDetalheSheet.tsx` | Painel lateral com dados, historico e metricas |
+| `src/components/sinistros/AtribuirSindicanteModal.tsx` | Modal simples para atribuir sindicante |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/create-user/index.ts` | Adicionar `analista_eventos` aos allowedRoles |
-| `src/App.tsx` | Trocar rota de `/configuracoes/empresas-sindicancia` para `/eventos/sindicantes` e importar novo componente |
-
-## Arquivo a Remover (opcional)
-
-| Arquivo | Motivo |
-|---|---|
-| `src/pages/configuracoes/EmpresasSindicancia.tsx` | Substituido pelo novo `SindicantesAdmin.tsx` |
+| `src/types/sindicancia.ts` | Atualizar MOTIVOS_PADRONIZADOS com 10 novos motivos |
+| `src/components/sinistros/EncaminharSindicanciaDialog.tsx` | Reescrever completamente com novo fluxo |
 
 ## Sequencia de Implementacao
 
-1. Atualizar edge function `create-user` (allowedRoles)
-2. Criar `SindicantesAdmin.tsx` (pagina completa com cards, tabela, filtros, modal)
-3. Criar `SindicanteDetalheSheet.tsx` (painel lateral)
-4. Atualizar rotas no `App.tsx`
-5. Verificar navegacao no menu lateral
+1. Atualizar `MOTIVOS_PADRONIZADOS` em `sindicancia.ts`
+2. Reescrever `EncaminharSindicanciaDialog.tsx`
+3. Criar `AtribuirSindicanteModal.tsx`
