@@ -1,126 +1,177 @@
 
-# S05 — Modal de Emissao de Laudo
+# S06 — Integracao do Laudo na Tela de Analise + Decisao + Lista
 
 ## Resumo
 
-Reescrever completamente o `EmitirLaudoModal.tsx` de um formulario basico (4 campos) para um modal completo com 7 secoes: conclusao com radio buttons coloridos, resumo executivo (min 100 chars), irregularidades condicionais, recomendacao com validacao cruzada, upload de PDF, resumo automatico de diligencias, e confirmacao final com checkbox obrigatorio. Apos emissao, atualizar a pagina de detalhe para mostrar card de conclusao no lugar dos botoes de acao.
+Integrar o resultado da sindicancia (laudo) na tela de analise do analista (`SinistroAnalise.tsx`), com: (1) card destacado do laudo quando disponivel, (2) banner de bloqueio durante sindicancia em andamento, (3) modal de decisao pos-sindicancia com 5 opcoes que reutilizam os fluxos existentes de aprovacao/reprovacao, e (4) reescrever a lista de sindicancias (`SindicanciasList.tsx`) para usar a tabela `sindicancias` ao inves da tabela `sinistros`.
 
 ---
 
-## 1. Reescrever `src/components/sindicante/EmitirLaudoModal.tsx`
+## 1. Criar componente `CardLaudoSindicancia`
 
-O modal atual sera completamente substituido. Novo conteudo:
+**Arquivo novo:** `src/components/sinistros/CardLaudoSindicancia.tsx`
 
-**Titulo:** "Emitir Laudo — SIND-XXXXXXXX-001"
-**Subtitulo:** "Evento #EVT-XXXXXXXX-XXX"
-**Tamanho:** `max-w-2xl` com `max-h-[90vh] overflow-y-auto`
+Card read-only que exibe o laudo emitido pelo sindicante. Recebe a sindicancia como prop.
 
-### Props adicionais necessarias
-Adicionar `sindicanciaNumero`, `eventoProtocolo` e `diligencias` (array) as props, para exibir no titulo e calcular o resumo de diligencias. Alternativa: buscar dentro do modal via query (mais simples, menos props).
+Conteudo:
+- Titulo: "Laudo de Sindicancia — SIND-XXXXXXXX-001"
+- Subtitulo: "Emitido em [data_laudo] por [nome_fantasia da empresa]"
+- Badge grande de conclusao com cores (Regular=verde, Irregular Comprovada=vermelho, Irregular Suspeita=laranja, Inconclusivo=amarelo) usando `CONCLUSAO_LAUDO_LABELS`
+- Resumo Executivo: texto completo de `laudo_resumo`
+- Irregularidades (condicional): card com borda vermelha se conclusao irregular, mostrando `laudo_irregularidades`
+- Recomendacao: badge informativo "O sindicante recomenda: [recomendacao]" usando `RECOMENDACAO_LABELS`
+- Diligencias (expansivel via Collapsible): titulo "[X] diligencias realizadas em [Y] dias", lista resumida com data + tipo + descricao truncada. Buscar `sindicancia_diligencias` dentro do componente.
+- Botao "Baixar Laudo Formal (PDF)" se `laudo_arquivo_url` existir
 
-Decisao: buscar diligencias dentro do modal via query ao abrir, para manter a interface de props simples.
+---
 
-### Secao 1: Conclusao (radio buttons)
-4 opcoes com `RadioGroup`, cada uma como card clicavel com borda colorida:
-- **Regular** — borda/badge verde. Texto descritivo abaixo.
-- **Irregular — Fraude Comprovada** — borda/badge vermelho.
-- **Irregular — Fraude Suspeita** — borda/badge laranja.
-- **Inconclusivo** — borda/badge amarelo.
+## 2. Criar componente `BannerSindicanciaEmAndamento`
 
-Usar `CONCLUSAO_LAUDO_LABELS` do types.
+**Arquivo novo:** `src/components/sinistros/BannerSindicanciaEmAndamento.tsx`
 
-### Secao 2: Resumo Executivo
-- Textarea com `rows={6}`, minimo 100 caracteres
-- Placeholder longo explicativo
-- Dica abaixo: "Este resumo sera lido pelo analista da Pratic..."
-- Contador de caracteres
+Banner informativo quando existe sindicancia ativa sem laudo.
 
-### Secao 3: Irregularidades (condicional)
-- Visivel apenas se conclusao = 'irregular_comprovada' ou 'irregular_suspeita'
-- Textarea obrigatoria quando visivel
-- Placeholder explicativo
+- Card com fundo azul/indigo
+- Icone de lupa + "Sindicancia em andamento — SIND-XXXXXXXX-001"
+- "Sindicante: [nome_fantasia] | Prazo: [data_limite] ([X] dias restantes)"
+- "Aguardando emissao do laudo pelo sindicante."
+- Retorna `null` se nao houver sindicancia ativa
 
-### Secao 4: Recomendacao (select)
-- 5 opcoes de `RECOMENDACAO_LABELS`
-- Validacao cruzada: se conclusao = 'regular', filtrar opcoes para mostrar apenas 'aprovar' e 'encaminhar_diretoria'
-- Se conclusao mudar de regular para outro, resetar recomendacao se era 'aprovar'
+---
 
-### Secao 5: Upload de PDF
-- Input de arquivo unico, aceita apenas PDF, max 10MB
-- Upload para bucket `sindicancia-evidencias` no path `{sindicanciaId}/laudo/`
-- Se nao anexar: alerta amarelo recomendando anexar
-- Usar `react-dropzone` ou input nativo
+## 3. Criar componente `DecisaoPosSindicanciaModal`
 
-### Secao 6: Resumo de Diligencias (somente leitura)
-- Query: `sindicancia_diligencias WHERE sindicancia_id = X`
-- Card informativo com contagem por tipo (usando `TIPO_DILIGENCIA_LABELS`)
-- Calculo de dias entre primeira e ultima diligencia
-- Formato: "Foram realizadas [X] diligencias ao longo de [Y] dias: - [N] visita(s) ao local - [N] entrevista(s) - ..."
+**Arquivo novo:** `src/components/sinistros/DecisaoPosSindicanciaModal.tsx`
 
-### Secao 7: Confirmacao Final
-- Card com borda amarela e icone de atencao
-- Texto de aviso sobre irreversibilidade
-- Checkbox: "Confirmo que as informacoes do laudo estao corretas e completas"
-- Botao "Emitir Laudo" (vermelho) so habilitado quando checkbox marcado
+Modal de decisao do analista apos receber o laudo.
+
+### Props
+- `open`, `onOpenChange`
+- `sinistroId`, `protocolo`
+- `sindicancia` (dados completos com laudo)
+- `onSuccess`
+
+### Conteudo
+- Titulo: "Decisao Pos-Sindicancia"
+- Card resumo no topo: conclusao (badge) + recomendacao do sindicante (badge)
+- 5 opcoes (RadioGroup), cada uma como card clicavel:
+  1. **Regular — Retomar Fluxo Normal**: chama `supabase.functions.invoke('aprovar-sinistro')` (mesmo fluxo de aprovacao existente)
+  2. **Irregular — Negar Evento**: chama `supabase.functions.invoke('reprovar-sinistro')` com motivo 'fraude_sindicancia'
+  3. **Carta de Cancelamento**: negar evento + marcar associado para exclusao + criar registro juridico. Alerta vermelho de aviso.
+  4. **Encaminhar para o Juridico**: status -> 'aguardando_juridico'
+  5. **Inconclusivo — Escalar para Diretoria**: status -> 'aguardando_diretoria'
+- Justificativa obrigatoria (textarea, min 30 chars)
 
 ### Fluxo ao confirmar
-1. Upload do PDF (se houver) -> obter URL publica
-2. UPDATE `sindicancias` SET laudo_conclusao, laudo_resumo, laudo_irregularidades, laudo_recomendacao, laudo_arquivo_url, data_laudo, status = 'laudo_emitido'
-3. UPDATE `sinistros` SET status = 'aguardando_analise' WHERE id = sinistro_id
-4. INSERT `sinistro_historico` com descricao "Laudo de sindicancia emitido — Conclusao: [X] — Recomendacao: [Y]"
-5. Notificar analistas de eventos via `NotificacaoHelper` — criar nova funcao `notificarLaudoEmitido` ou reutilizar `notificarSindicanciaConcluida`
-6. Toast de sucesso
-7. Redirecionar para `/sindicante` (dashboard)
-
-### Botoes
-- "Cancelar" (outline)
-- "Emitir Laudo" (variant="destructive", disabled se !confirmado)
-
----
-
-## 2. Adicionar funcao de notificacao
-
-**Arquivo:** `src/components/sinistros/NotificacaoHelper.ts`
-
-Adicionar funcao `notificarLaudoEmitido(sinistroId, protocolo, conclusao, sindicanciaNumero)`:
-- Buscar user_ids com role 'analista_eventos' (similar a getDiretoresIds)
-- Tambem notificar diretores
-- Mensagem: "Laudo de sindicancia recebido — Evento #[protocolo] — Conclusao: [conclusao]"
+1. Atualizar `sindicancias`: SET `decisao_analista` = opcao, `decisao_observacao` = justificativa, `decisao_por` = profile_id, `decisao_em` = now(), `status` = 'encerrado'
+2. Conforme a decisao:
+   - **Regular**: invocar edge function `aprovar-sinistro` (reutiliza fluxo completo existente que ja gera link de pagamento da cota)
+   - **Negar**: invocar edge function `reprovar-sinistro` com motivo e justificativa
+   - **Carta cancelamento**: reprovar + criar registro em `processos` + marcar associado
+   - **Juridico**: UPDATE sinistros SET status='aguardando_juridico', inserir historico, notificar
+   - **Diretoria**: UPDATE sinistros SET status='aguardando_diretoria', inserir historico, notificar via `notificarAguardandoDiretoria`
+3. Inserir `sinistro_historico` com descricao da decisao
+4. Notificacoes conforme decisao
+5. Toast de sucesso com proximo passo
+6. Invalidar queries e chamar onSuccess
 
 ---
 
-## 3. Atualizar card de acoes apos emissao no `SindicanteCasoDetalhe.tsx`
+## 4. Integrar na tela de analise (`SinistroAnalise.tsx`)
 
-**Arquivo:** `src/pages/sindicante/SindicanteCasoDetalhe.tsx`
+**Arquivo:** `src/pages/eventos/SinistroAnalise.tsx`
 
-No card "Acoes" (coluna direita), quando `status === 'laudo_emitido'`:
-- Substituir botoes por card verde com:
-  - Icone check
-  - "Laudo emitido em [data_laudo formatada]"
-  - Badge da conclusao (cores do `CONCLUSAO_LAUDO_LABELS`)
-  - "Aguardando decisao do analista"
+### 4a. Adicionar query para buscar sindicancia do evento
 
-Tambem adicionar na coluna esquerda um novo card "Laudo Emitido" mostrando:
-- Conclusao (badge colorida)
-- Resumo executivo (texto)
-- Irregularidades (se houver)
-- Recomendacao
-- Link para download do PDF (se houver)
+Nova query usando `useQuery`:
+```
+sindicancias WHERE sinistro_id = id
+  AND status NOT IN ('cancelado')
+  ORDER BY created_at DESC LIMIT 1
+```
+Com join na `empresas_sindicancia` para obter nome_fantasia.
 
-Adicionar `useNavigate` ao `onSuccess` do `EmitirLaudoModal` para redirecionar ao dashboard.
+### 4b. Banner de sindicancia em andamento (apos alertas existentes, antes do grid principal)
+
+Se sindicancia com status IN ('atribuido', 'em_andamento'):
+- Renderizar `BannerSindicanciaEmAndamento`
+- Na secao de acoes (coluna direita), desabilitar TODOS os botoes de acao
+- Excecao: diretor pode ver botao "Cancelar Sindicancia" (se implementado)
+
+### 4c. Card do laudo (antes do grid principal ou no topo da coluna esquerda)
+
+Se sindicancia com status IN ('laudo_emitido', 'encerrado') E `laudo_conclusao` preenchido:
+- Renderizar `CardLaudoSindicancia`
+
+### 4d. Botao "Decidir com Base no Laudo" (coluna direita)
+
+Se sindicancia com status = 'laudo_emitido' (laudo recebido, pendente decisao):
+- Em vez das acoes normais, mostrar unico botao "Decidir com Base no Laudo" (azul)
+- Abre `DecisaoPosSindicanciaModal`
+
+### 4e. Estado do modal
+
+Adicionar: `const [showDecisaoSindicancia, setShowDecisaoSindicancia] = useState(false)`
 
 ---
+
+## 5. Reescrever lista de sindicancias (`SindicanciasList.tsx`)
+
+**Arquivo:** `src/pages/eventos/SindicanciasList.tsx`
+
+A lista atual consulta a tabela `sinistros` com campos antigos. Precisa ser reescrita para usar a tabela `sindicancias` que e a nova fonte de verdade.
+
+### Query principal
+```
+sindicancias.select('*, empresa:empresas_sindicancia(nome_fantasia), sinistros(protocolo, tipo)')
+  .order('data_limite', { ascending: true })
+```
+
+### KPIs (4 cards)
+- "Em Andamento": count status IN ('atribuido', 'em_andamento')
+- "Aguardando Decisao": count status = 'laudo_emitido'
+- "Prazo Vencido": count data_limite < hoje AND status NOT IN ('encerrado', 'cancelado')
+- "Concluidas no Mes": count status = 'encerrado' AND updated_at >= inicio do mes
+
+### Filtros
+- Status: select com opcoes (todos, aguardando_atribuicao, atribuido, em_andamento, laudo_emitido, encerrado, cancelado) — usar `STATUS_SINDICANCIA_LABELS`
+- Sindicante: select com empresas_sindicancia
+- Conclusao: regular, irregular, inconclusivo, sem laudo
+- Busca por texto (numero, protocolo evento)
+
+### Tabela
+Colunas: Numero (SIND-*), Evento (protocolo, link), Tipo, Sindicante (nome_fantasia ou "Nao atribuido"), Status (badge colorido usando `STATUS_SINDICANCIA_COLORS`), Prazo (data + dias restantes/vencido), Conclusao (badge se laudo emitido), Acoes.
+
+Acoes:
+- "Atribuir" se status = 'aguardando_atribuicao' (abre `AtribuirSindicanteModal` de S03)
+- "Ver Caso" para qualquer status (link para detalhe)
+- "Decidir" se status = 'laudo_emitido' (link para analise do evento)
+
+### Importar componentes necessarios
+- `AtribuirSindicanteModal` de S03
+- `STATUS_SINDICANCIA_LABELS`, `STATUS_SINDICANCIA_COLORS`, `CONCLUSAO_LAUDO_LABELS` dos types
+
+---
+
+## Arquivos a Criar
+
+| Arquivo | Descricao |
+|---|---|
+| `src/components/sinistros/CardLaudoSindicancia.tsx` | Card read-only com laudo completo |
+| `src/components/sinistros/BannerSindicanciaEmAndamento.tsx` | Banner de bloqueio durante sindicancia |
+| `src/components/sinistros/DecisaoPosSindicanciaModal.tsx` | Modal de decisao pos-sindicancia com 5 opcoes |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/sindicante/EmitirLaudoModal.tsx` | Reescrever completamente: 7 secoes, radio buttons, upload PDF, resumo diligencias, checkbox confirmacao |
-| `src/components/sinistros/NotificacaoHelper.ts` | Adicionar `notificarLaudoEmitido` |
-| `src/pages/sindicante/SindicanteCasoDetalhe.tsx` | Card de acoes pos-emissao + card de laudo emitido na coluna esquerda + redirect apos emissao |
+| `src/pages/eventos/SinistroAnalise.tsx` | Query de sindicancia + banner + card laudo + botao decisao + bloqueio de acoes |
+| `src/pages/eventos/SindicanciasList.tsx` | Reescrever para usar tabela sindicancias com KPIs, filtros e acoes corretos |
 
 ## Sequencia de Implementacao
 
-1. Adicionar `notificarLaudoEmitido` no NotificacaoHelper
-2. Reescrever `EmitirLaudoModal.tsx`
-3. Atualizar `SindicanteCasoDetalhe.tsx` com card pos-emissao e redirect
+1. Criar `CardLaudoSindicancia.tsx`
+2. Criar `BannerSindicanciaEmAndamento.tsx`
+3. Criar `DecisaoPosSindicanciaModal.tsx`
+4. Integrar na `SinistroAnalise.tsx` (query + banner + card + botao + bloqueio)
+5. Reescrever `SindicanciasList.tsx`
