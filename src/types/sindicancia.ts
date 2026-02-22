@@ -104,14 +104,16 @@ export const RECOMENDACAO_LABELS: Record<RecomendacaoLaudo, string> = {
 };
 
 export const MOTIVOS_PADRONIZADOS = [
-  { value: 'inconsistencia_relato', label: 'Inconsistência no relato' },
+  { value: 'inconsistencia_relato', label: 'Inconsistência no relato do associado' },
   { value: 'distancia_gps', label: 'Distância GPS suspeita' },
   { value: 'historico_sinistros', label: 'Histórico de sinistros' },
-  { value: 'documentos_suspeitos', label: 'Documentos suspeitos' },
-  { value: 'valor_elevado', label: 'Valor elevado' },
-  { value: 'testemunhas_divergentes', label: 'Testemunhas divergentes' },
-  { value: 'fraude_conhecida', label: 'Padrão de fraude conhecido' },
-  { value: 'outro', label: 'Outro' },
+  { value: 'valor_dano_incompativel', label: 'Valor do dano incompatível' },
+  { value: 'documentacao_suspeita', label: 'Documentação suspeita' },
+  { value: 'indicios_fraude', label: 'Indícios de fraude' },
+  { value: 'denuncia_externa', label: 'Denúncia ou informação externa' },
+  { value: 'veiculo_restricoes', label: 'Veículo com restrições' },
+  { value: 'condutor_irregular', label: 'Condutor irregular' },
+  { value: 'evento_carencia', label: 'Evento em período de carência' },
 ];
 
 export interface Sindicancia {
