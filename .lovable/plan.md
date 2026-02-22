@@ -1,197 +1,126 @@
 
-# S04 — Portal Completo do Sindicante
+# S05 — Modal de Emissao de Laudo
 
 ## Resumo
 
-Reescrever completamente o dashboard e a pagina de detalhe do sindicante, transformando-os de placeholders basicos em um portal completo com: cards KPI corretos, alertas de prazo, cards de caso ricos, filtros por tabs, pagina de detalhe em 2 colunas com dados do evento (somente leitura), mapa de comparacao GPS, galeria de fotos/video, diligencias com upload de evidencias, solicitacoes, timeline, barra de prazo, e botao "Iniciar Investigacao". Tambem configurar o menu lateral para mostrar apenas Dashboard e Meus Casos quando o usuario for sindicante.
+Reescrever completamente o `EmitirLaudoModal.tsx` de um formulario basico (4 campos) para um modal completo com 7 secoes: conclusao com radio buttons coloridos, resumo executivo (min 100 chars), irregularidades condicionais, recomendacao com validacao cruzada, upload de PDF, resumo automatico de diligencias, e confirmacao final com checkbox obrigatorio. Apos emissao, atualizar a pagina de detalhe para mostrar card de conclusao no lugar dos botoes de acao.
 
 ---
 
-## 1. Configurar menu lateral para sindicante
+## 1. Reescrever `src/components/sindicante/EmitirLaudoModal.tsx`
 
-**Arquivo:** `src/components/layout/AppSidebar.tsx`
+O modal atual sera completamente substituido. Novo conteudo:
 
-Na funcao `getVisibleGroups()` (linha ~519), adicionar condicao para `isSindicanteOnly`:
+**Titulo:** "Emitir Laudo — SIND-XXXXXXXX-001"
+**Subtitulo:** "Evento #EVT-XXXXXXXX-XXX"
+**Tamanho:** `max-w-2xl` com `max-h-[90vh] overflow-y-auto`
 
-```
-if (permissions.isSindicanteOnly) {
-  return []; // Nenhum grupo de menu — sindicante so ve itens main
-}
-```
+### Props adicionais necessarias
+Adicionar `sindicanciaNumero`, `eventoProtocolo` e `diligencias` (array) as props, para exibir no titulo e calcular o resumo de diligencias. Alternativa: buscar dentro do modal via query (mais simples, menos props).
 
-Na secao `visibleMainItems`, quando `isSindicanteOnly`, substituir por apenas 2 itens:
-- Dashboard -> `/sindicante` (icone LayoutDashboard)
-- Meus Casos -> `/sindicante` (icone Search)
+Decisao: buscar diligencias dentro do modal via query ao abrir, para manter a interface de props simples.
 
-Ambos apontam para a mesma rota pois o dashboard ja lista os casos. Alternativamente, criar rota `/sindicante/casos` separada se preferirmos.
+### Secao 1: Conclusao (radio buttons)
+4 opcoes com `RadioGroup`, cada uma como card clicavel com borda colorida:
+- **Regular** — borda/badge verde. Texto descritivo abaixo.
+- **Irregular — Fraude Comprovada** — borda/badge vermelho.
+- **Irregular — Fraude Suspeita** — borda/badge laranja.
+- **Inconclusivo** — borda/badge amarelo.
 
----
+Usar `CONCLUSAO_LAUDO_LABELS` do types.
 
-## 2. Reescrever Dashboard do Sindicante
+### Secao 2: Resumo Executivo
+- Textarea com `rows={6}`, minimo 100 caracteres
+- Placeholder longo explicativo
+- Dica abaixo: "Este resumo sera lido pelo analista da Pratic..."
+- Contador de caracteres
 
-**Arquivo:** `src/pages/sindicante/SindicanteDashboard.tsx` (reescrever)
+### Secao 3: Irregularidades (condicional)
+- Visivel apenas se conclusao = 'irregular_comprovada' ou 'irregular_suspeita'
+- Textarea obrigatoria quando visivel
+- Placeholder explicativo
 
-### Cabecalho
-- Titulo: "Meus Casos de Sindicancia"
-- Subtitulo: "Bem-vindo, [nome_fantasia da empresa vinculada ao profile]"
-- Buscar empresa do sindicante: `empresas_sindicancia WHERE profile_id = profile.id`
+### Secao 4: Recomendacao (select)
+- 5 opcoes de `RECOMENDACAO_LABELS`
+- Validacao cruzada: se conclusao = 'regular', filtrar opcoes para mostrar apenas 'aprovar' e 'encaminhar_diretoria'
+- Se conclusao mudar de regular para outro, resetar recomendacao se era 'aprovar'
 
-### 4 Cards KPI
-- **Novos**: count sindicancias status = 'atribuido'. Badge azul. Se > 0, animacao pulse.
-- **Em Andamento**: count status = 'em_andamento'. Badge amarelo.
-- **Prazo Urgente**: count status IN ('atribuido','em_andamento') AND data_limite <= hoje+5dias. Badge vermelho.
-- **Concluidos no Mes**: count status IN ('laudo_emitido','encerrado') AND data_laudo ou updated_at >= primeiro dia do mes. Badge verde.
+### Secao 5: Upload de PDF
+- Input de arquivo unico, aceita apenas PDF, max 10MB
+- Upload para bucket `sindicancia-evidencias` no path `{sindicanciaId}/laudo/`
+- Se nao anexar: alerta amarelo recomendando anexar
+- Usar `react-dropzone` ou input nativo
 
-### Alerta de prazo (condicional)
-- Se existem casos com data_limite <= hoje+3dias E status ativo: card vermelho de alerta
-- Se data_limite < hoje: alerta critico "PRAZO VENCIDO"
+### Secao 6: Resumo de Diligencias (somente leitura)
+- Query: `sindicancia_diligencias WHERE sindicancia_id = X`
+- Card informativo com contagem por tipo (usando `TIPO_DILIGENCIA_LABELS`)
+- Calculo de dias entre primeira e ultima diligencia
+- Formato: "Foram realizadas [X] diligencias ao longo de [Y] dias: - [N] visita(s) ao local - [N] entrevista(s) - ..."
 
-### Filtros (Tabs)
-- "Todos" | "Novos" (atribuido) | "Em Andamento" | "Concluidos" (laudo_emitido + encerrado)
+### Secao 7: Confirmacao Final
+- Card com borda amarela e icone de atencao
+- Texto de aviso sobre irreversibilidade
+- Checkbox: "Confirmo que as informacoes do laudo estao corretas e completas"
+- Botao "Emitir Laudo" (vermelho) so habilitado quando checkbox marcado
 
-### Lista de Casos como Cards
-Cards horizontais ricos com:
-- Numero da sindicancia + badge de status colorido
-- Evento (protocolo) + tipo
-- Veiculo (marca, modelo, ano, placa) — join via sinistros -> veiculos
-- Associado (nome, CPF) — join via sinistros -> associados
-- Data de abertura, prazo (dias restantes), diligencias realizadas (count), motivos (badges)
-- Botao "Abrir Caso"
-- Borda vermelha se prazo < 5 dias
-- Badge pulsante "PRAZO VENCIDO" se prazo ja venceu
+### Fluxo ao confirmar
+1. Upload do PDF (se houver) -> obter URL publica
+2. UPDATE `sindicancias` SET laudo_conclusao, laudo_resumo, laudo_irregularidades, laudo_recomendacao, laudo_arquivo_url, data_laudo, status = 'laudo_emitido'
+3. UPDATE `sinistros` SET status = 'aguardando_analise' WHERE id = sinistro_id
+4. INSERT `sinistro_historico` com descricao "Laudo de sindicancia emitido — Conclusao: [X] — Recomendacao: [Y]"
+5. Notificar analistas de eventos via `NotificacaoHelper` — criar nova funcao `notificarLaudoEmitido` ou reutilizar `notificarSindicanciaConcluida`
+6. Toast de sucesso
+7. Redirecionar para `/sindicante` (dashboard)
 
-**Query:** sindicancias com joins:
-```
-sindicancias.select('*, sinistros(protocolo, tipo, data_ocorrencia, associado:associados(nome, cpf), veiculo:veiculos(marca, modelo, ano_modelo, placa))')
-```
-Tambem buscar contagem de diligencias por sindicancia (query separada ou subquery).
-
-Ordenacao: status='atribuido' primeiro, depois por data_limite ASC.
-
----
-
-## 3. Reescrever Detalhe do Caso
-
-**Arquivo:** `src/pages/sindicante/SindicanteCasoDetalhe.tsx` (reescrever)
-
-### Cabecalho
-- Breadcrumb: Meus Casos > SIND-XXXXXXXX-001
-- Titulo + badge status
-- Subtitulo: "Evento #[protocolo] — [tipo]"
-- Barra de prazo visual colorida (verde >10 dias, amarelo 5-10, vermelho <5)
-
-### Layout 2 colunas (lg:grid-cols-3)
-
-**Coluna esquerda (col-span-2):**
-
-#### Card "Dados do Evento" (somente leitura)
-- Tipo, data/hora, local, descricao
-- Veiculo: marca, modelo, ano, placa, cor, valor FIPE
-- Associado: nome, CPF, telefone
-- Query via join sindicancias -> sinistros -> veiculos, sinistros -> associados
-
-#### Card "Motivo da Sindicancia" (somente leitura)
-- Motivos padronizados como badges (usando MOTIVOS_PADRONIZADOS labels)
-- Descricao detalhada (campo `motivo`)
-
-#### Card "Evidencias do Evento" (somente leitura)
-- **Fotos da auto vistoria**: usar `sinistro_fotos` com `buscarFotosComUrls()` do service existente. Galeria de thumbnails clicaveis que abrem em tamanho maior (Dialog).
-- **Video do associado**: buscar `sinistro_evento_links` -> campo `dados_etapas` para URL de video, ou `sinistro_documentos` tipo 'video'. Player HTML5.
-- **B.O.**: buscar `sinistro_documentos` tipo 'boletim_ocorrencia'. Link download.
-- **Fotos da vistoria do regulador**: buscar `vistorias_evento` -> `dados_vistoria` (campo JSONB com fotos). Galeria separada.
-- **Parecer do regulador**: texto de `vistorias_evento.observacoes` ou campo do JSON.
-- Cada item mostra "Nao disponivel" se nao existir.
-
-#### Card "Mapa — Comparacao de Posicoes" (somente leitura)
-- Reutilizar componente `ComparacaoPosicoes` existente
-- Props: `latitudeInformada`, `longitudeInformada` (do sinistro), `rastreadorLat`, `rastreadorLng` (do sinistro: `rastreador_lat_momento`, `rastreador_lng_momento`)
-- Badge de distancia com cores (ja implementado no componente)
-
-#### Card "Minhas Diligencias"
-- Lista cronologica de diligencias (ja existe parcialmente)
-- Cada diligencia mostra tipo (badge), data, descricao, resultado, local
-- **Novo**: mostrar evidencias anexadas — buscar `sindicancia_evidencias WHERE diligencia_id = X`, exibir thumbnails
-- Botao "+ Registrar Diligencia"
-
-#### Card "Solicitacoes de Informacao"
-- Lista com tipo, descricao, status (badge colorida), resposta, data
-- Botao "+ Nova Solicitacao"
-
-**Coluna direita (col-span-1):**
-
-#### Card "Acoes"
-Botoes empilhados:
-1. **"Iniciar Investigacao"** — visivel apenas se status='atribuido'. Ao clicar, UPDATE status='em_andamento'. Destaque especial.
-2. **"Registrar Diligencia"** — botao principal azul. Desabilitado se status='atribuido'.
-3. **"Solicitar Informacao"** — botao outline.
-4. **"Emitir Laudo"** — botao vermelho. Habilitado apenas se status='em_andamento' E pelo menos 1 diligencia. Tooltip se desabilitado.
-
-#### Card "Timeline"
-- Combinar dados de:
-  - `sindicancia.created_at` -> "Sindicancia aberta"
-  - `sindicancia.data_atribuicao` -> "Caso atribuido"
-  - Diligencias -> "Diligencia: [tipo]"
-  - Solicitacoes -> "Solicitacao enviada" / "Solicitacao respondida"
-  - `sindicancia.data_laudo` -> "Laudo emitido"
-- Formato: data/hora + icone + descricao curta
-- Ordem cronologica
-
-#### Card "Informacoes do Prazo"
-- Data abertura, data limite, dias corridos, dias restantes (com cor)
-- Barra de progresso: (dias corridos / total dias) * 100%
-- Cores: verde, amarelo, vermelho
+### Botoes
+- "Cancelar" (outline)
+- "Emitir Laudo" (variant="destructive", disabled se !confirmado)
 
 ---
 
-## 4. Atualizar Modal de Diligencia
+## 2. Adicionar funcao de notificacao
 
-**Arquivo:** `src/components/sindicante/RegistrarDiligenciaModal.tsx` (atualizar)
+**Arquivo:** `src/components/sinistros/NotificacaoHelper.ts`
 
-Adicionar:
-- Validacao minimo 30 caracteres na descricao
-- Campo de upload multiplo (ate 10 arquivos, max 5MB cada, jpg/png/pdf)
-- Upload para bucket `sindicancia-evidencias` na pasta `{sindicanciaId}/{diligenciaId}/`
-- Apos inserir diligencia, inserir registros em `sindicancia_evidencias` com `diligencia_id`
-- Usar `react-dropzone` (ja instalado) para area de upload
+Adicionar funcao `notificarLaudoEmitido(sinistroId, protocolo, conclusao, sindicanciaNumero)`:
+- Buscar user_ids com role 'analista_eventos' (similar a getDiretoresIds)
+- Tambem notificar diretores
+- Mensagem: "Laudo de sindicancia recebido — Evento #[protocolo] — Conclusao: [conclusao]"
 
 ---
 
-## 5. RLS — Garantir acesso do sindicante
+## 3. Atualizar card de acoes apos emissao no `SindicanteCasoDetalhe.tsx`
 
-Verificar se as politicas RLS permitem ao sindicante ler:
-- `sinistros` (via sindicancias vinculadas)
-- `sinistro_fotos` (via sinistro_id de sindicancias vinculadas)
-- `sinistro_documentos` (idem)
-- `vistorias_evento` (idem)
-- `sinistro_evento_links` (idem)
-- `veiculos` (via sinistros)
-- `associados` (via sinistros)
+**Arquivo:** `src/pages/sindicante/SindicanteCasoDetalhe.tsx`
 
-Se nao existirem politicas para o perfil sindicante nessas tabelas, criar migracoes SQL para adicionar politicas de SELECT que permitam acesso apenas quando o sinistro_id pertence a uma sindicancia atribuida ao sindicante logado.
+No card "Acoes" (coluna direita), quando `status === 'laudo_emitido'`:
+- Substituir botoes por card verde com:
+  - Icone check
+  - "Laudo emitido em [data_laudo formatada]"
+  - Badge da conclusao (cores do `CONCLUSAO_LAUDO_LABELS`)
+  - "Aguardando decisao do analista"
+
+Tambem adicionar na coluna esquerda um novo card "Laudo Emitido" mostrando:
+- Conclusao (badge colorida)
+- Resumo executivo (texto)
+- Irregularidades (se houver)
+- Recomendacao
+- Link para download do PDF (se houver)
+
+Adicionar `useNavigate` ao `onSuccess` do `EmitirLaudoModal` para redirecionar ao dashboard.
 
 ---
-
-## Arquivos a Criar
-
-Nenhum arquivo novo — todos ja existem.
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/layout/AppSidebar.tsx` | Adicionar menu sindicante-only (Dashboard + Meus Casos) |
-| `src/pages/sindicante/SindicanteDashboard.tsx` | Reescrever completamente: KPIs corretos, alertas, cards ricos, filtros tabs |
-| `src/pages/sindicante/SindicanteCasoDetalhe.tsx` | Reescrever completamente: 2 colunas, dados evento, evidencias, mapa, timeline, acoes |
-| `src/components/sindicante/RegistrarDiligenciaModal.tsx` | Adicionar upload de evidencias e validacao 30 chars |
-
-## Migracoes SQL (se necessario)
-
-Politicas RLS de SELECT nas tabelas `sinistros`, `sinistro_fotos`, `sinistro_documentos`, `vistorias_evento`, `sinistro_evento_links`, `veiculos`, `associados` para o perfil sindicante — acesso restrito aos sinistros vinculados a sindicancias atribuidas ao sindicante logado.
+| `src/components/sindicante/EmitirLaudoModal.tsx` | Reescrever completamente: 7 secoes, radio buttons, upload PDF, resumo diligencias, checkbox confirmacao |
+| `src/components/sinistros/NotificacaoHelper.ts` | Adicionar `notificarLaudoEmitido` |
+| `src/pages/sindicante/SindicanteCasoDetalhe.tsx` | Card de acoes pos-emissao + card de laudo emitido na coluna esquerda + redirect apos emissao |
 
 ## Sequencia de Implementacao
 
-1. Verificar/criar politicas RLS para acesso do sindicante
-2. Atualizar `AppSidebar.tsx` com menu sindicante
-3. Reescrever `SindicanteDashboard.tsx`
-4. Reescrever `SindicanteCasoDetalhe.tsx`
-5. Atualizar `RegistrarDiligenciaModal.tsx` com upload de evidencias
+1. Adicionar `notificarLaudoEmitido` no NotificacaoHelper
+2. Reescrever `EmitirLaudoModal.tsx`
+3. Atualizar `SindicanteCasoDetalhe.tsx` com card pos-emissao e redirect
