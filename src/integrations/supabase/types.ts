@@ -9516,6 +9516,85 @@ export type Database = {
           },
         ]
       }
+      empresas_sindicancia: {
+        Row: {
+          ativo: boolean | null
+          cnpj: string
+          created_at: string | null
+          especialidades: string[] | null
+          id: string
+          nome_fantasia: string | null
+          observacoes: string | null
+          profile_id: string | null
+          razao_social: string
+          regioes_atuacao: string[] | null
+          responsavel_cpf: string | null
+          responsavel_email: string | null
+          responsavel_nome: string
+          responsavel_telefone: string | null
+          updated_at: string | null
+          valor_por_sindicancia: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cnpj: string
+          created_at?: string | null
+          especialidades?: string[] | null
+          id?: string
+          nome_fantasia?: string | null
+          observacoes?: string | null
+          profile_id?: string | null
+          razao_social: string
+          regioes_atuacao?: string[] | null
+          responsavel_cpf?: string | null
+          responsavel_email?: string | null
+          responsavel_nome: string
+          responsavel_telefone?: string | null
+          updated_at?: string | null
+          valor_por_sindicancia?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cnpj?: string
+          created_at?: string | null
+          especialidades?: string[] | null
+          id?: string
+          nome_fantasia?: string | null
+          observacoes?: string | null
+          profile_id?: string | null
+          razao_social?: string
+          regioes_atuacao?: string[] | null
+          responsavel_cpf?: string | null
+          responsavel_email?: string | null
+          responsavel_nome?: string
+          responsavel_telefone?: string | null
+          updated_at?: string | null
+          valor_por_sindicancia?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "empresas_sindicancia_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "empresas_sindicancia_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "empresas_sindicancia_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       encaixes_urgentes: {
         Row: {
           created_at: string
@@ -19279,14 +19358,81 @@ export type Database = {
           },
         ]
       }
+      sindicancia_diligencias: {
+        Row: {
+          created_at: string | null
+          data_diligencia: string
+          descricao: string
+          id: string
+          local: string | null
+          registrado_por: string
+          resultado: string | null
+          sindicancia_id: string
+          tipo: string
+        }
+        Insert: {
+          created_at?: string | null
+          data_diligencia?: string
+          descricao: string
+          id?: string
+          local?: string | null
+          registrado_por: string
+          resultado?: string | null
+          sindicancia_id: string
+          tipo: string
+        }
+        Update: {
+          created_at?: string | null
+          data_diligencia?: string
+          descricao?: string
+          id?: string
+          local?: string | null
+          registrado_por?: string
+          resultado?: string | null
+          sindicancia_id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sindicancia_diligencias_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sindicancia_diligencias_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancia_diligencias_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancia_diligencias_sindicancia_id_fkey"
+            columns: ["sindicancia_id"]
+            isOneToOne: false
+            referencedRelation: "sindicancias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sindicancia_evidencias: {
         Row: {
           arquivo_nome: string | null
           arquivo_url: string | null
           created_at: string
           descricao: string | null
+          diligencia_id: string | null
           id: string
           registrado_por: string | null
+          sindicancia_id: string | null
           sinistro_id: string
           tipo: string
           titulo: string
@@ -19296,8 +19442,10 @@ export type Database = {
           arquivo_url?: string | null
           created_at?: string
           descricao?: string | null
+          diligencia_id?: string | null
           id?: string
           registrado_por?: string | null
+          sindicancia_id?: string | null
           sinistro_id: string
           tipo?: string
           titulo: string
@@ -19307,13 +19455,22 @@ export type Database = {
           arquivo_url?: string | null
           created_at?: string
           descricao?: string | null
+          diligencia_id?: string | null
           id?: string
           registrado_por?: string | null
+          sindicancia_id?: string | null
           sinistro_id?: string
           tipo?: string
           titulo?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sindicancia_evidencias_diligencia_id_fkey"
+            columns: ["diligencia_id"]
+            isOneToOne: false
+            referencedRelation: "sindicancia_diligencias"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sindicancia_evidencias_registrado_por_fkey"
             columns: ["registrado_por"]
@@ -19336,7 +19493,271 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "sindicancia_evidencias_sindicancia_id_fkey"
+            columns: ["sindicancia_id"]
+            isOneToOne: false
+            referencedRelation: "sindicancias"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sindicancia_evidencias_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sindicancia_solicitacoes: {
+        Row: {
+          descricao: string
+          id: string
+          respondido_em: string | null
+          respondido_por: string | null
+          resposta: string | null
+          resposta_anexo_url: string | null
+          sindicancia_id: string
+          solicitado_em: string | null
+          solicitado_por: string | null
+          status: string | null
+          tipo: string
+        }
+        Insert: {
+          descricao: string
+          id?: string
+          respondido_em?: string | null
+          respondido_por?: string | null
+          resposta?: string | null
+          resposta_anexo_url?: string | null
+          sindicancia_id: string
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          status?: string | null
+          tipo: string
+        }
+        Update: {
+          descricao?: string
+          id?: string
+          respondido_em?: string | null
+          respondido_por?: string | null
+          resposta?: string | null
+          resposta_anexo_url?: string | null
+          sindicancia_id?: string
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          status?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sindicancia_solicitacoes_respondido_por_fkey"
+            columns: ["respondido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sindicancia_solicitacoes_respondido_por_fkey"
+            columns: ["respondido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancia_solicitacoes_respondido_por_fkey"
+            columns: ["respondido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancia_solicitacoes_sindicancia_id_fkey"
+            columns: ["sindicancia_id"]
+            isOneToOne: false
+            referencedRelation: "sindicancias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sindicancia_solicitacoes_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sindicancia_solicitacoes_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancia_solicitacoes_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      sindicancias: {
+        Row: {
+          aberto_por: string | null
+          created_at: string | null
+          data_abertura: string | null
+          data_atribuicao: string | null
+          data_encerramento: string | null
+          data_laudo: string | null
+          data_limite: string | null
+          decisao_analista: string | null
+          decisao_em: string | null
+          decisao_observacao: string | null
+          decisao_por: string | null
+          descricao: string | null
+          empresa_sindicancia_id: string | null
+          id: string
+          laudo_arquivo_url: string | null
+          laudo_conclusao: string | null
+          laudo_irregularidades: string | null
+          laudo_recomendacao: string | null
+          laudo_resumo: string | null
+          motivo: string
+          motivos_padronizados: string[] | null
+          numero: string | null
+          sindicante_profile_id: string | null
+          sinistro_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          aberto_por?: string | null
+          created_at?: string | null
+          data_abertura?: string | null
+          data_atribuicao?: string | null
+          data_encerramento?: string | null
+          data_laudo?: string | null
+          data_limite?: string | null
+          decisao_analista?: string | null
+          decisao_em?: string | null
+          decisao_observacao?: string | null
+          decisao_por?: string | null
+          descricao?: string | null
+          empresa_sindicancia_id?: string | null
+          id?: string
+          laudo_arquivo_url?: string | null
+          laudo_conclusao?: string | null
+          laudo_irregularidades?: string | null
+          laudo_recomendacao?: string | null
+          laudo_resumo?: string | null
+          motivo: string
+          motivos_padronizados?: string[] | null
+          numero?: string | null
+          sindicante_profile_id?: string | null
+          sinistro_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          aberto_por?: string | null
+          created_at?: string | null
+          data_abertura?: string | null
+          data_atribuicao?: string | null
+          data_encerramento?: string | null
+          data_laudo?: string | null
+          data_limite?: string | null
+          decisao_analista?: string | null
+          decisao_em?: string | null
+          decisao_observacao?: string | null
+          decisao_por?: string | null
+          descricao?: string | null
+          empresa_sindicancia_id?: string | null
+          id?: string
+          laudo_arquivo_url?: string | null
+          laudo_conclusao?: string | null
+          laudo_irregularidades?: string | null
+          laudo_recomendacao?: string | null
+          laudo_resumo?: string | null
+          motivo?: string
+          motivos_padronizados?: string[] | null
+          numero?: string | null
+          sindicante_profile_id?: string | null
+          sinistro_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sindicancias_aberto_por_fkey"
+            columns: ["aberto_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sindicancias_aberto_por_fkey"
+            columns: ["aberto_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancias_aberto_por_fkey"
+            columns: ["aberto_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancias_decisao_por_fkey"
+            columns: ["decisao_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sindicancias_decisao_por_fkey"
+            columns: ["decisao_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancias_decisao_por_fkey"
+            columns: ["decisao_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancias_empresa_sindicancia_id_fkey"
+            columns: ["empresa_sindicancia_id"]
+            isOneToOne: false
+            referencedRelation: "empresas_sindicancia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sindicancias_sindicante_profile_id_fkey"
+            columns: ["sindicante_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sindicancias_sindicante_profile_id_fkey"
+            columns: ["sindicante_profile_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancias_sindicante_profile_id_fkey"
+            columns: ["sindicante_profile_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sindicancias_sinistro_id_fkey"
             columns: ["sinistro_id"]
             isOneToOne: false
             referencedRelation: "sinistros"
@@ -24029,6 +24450,7 @@ export type Database = {
         | "regulador"
         | "analista_eventos"
         | "advogado"
+        | "sindicante"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -24427,6 +24849,7 @@ export const Constants = {
         "regulador",
         "analista_eventos",
         "advogado",
+        "sindicante",
       ],
       etapa_lead: [
         "novo",

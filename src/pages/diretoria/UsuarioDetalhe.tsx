@@ -65,6 +65,7 @@ const PERFIL_COLORS: Record<PerfilAcesso, string> = {
   analista_juridico: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
   regulador: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
   analista_eventos: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200',
+  sindicante: 'bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200',
 };
 
 // ============================================

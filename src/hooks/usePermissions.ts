@@ -162,8 +162,16 @@ export function usePermissions() {
     !isDesenvolvedor &&
     !isAdminMaster;
 
+  // Sindicante
+  const isSindicante = hasRoleByName('sindicante');
+  const isSindicanteOnly = isSindicante &&
+    !isDiretor &&
+    !isGerencia() &&
+    !isDesenvolvedor &&
+    !isAdminMaster;
+
   // Perfis que devem ver "Perfil" ao invés de "Configurações"
-  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly || isVistoriadorBaseOnly || isReguladorOnly || isAnalistaEventosOnly;
+  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly || isVistoriadorBaseOnly || isReguladorOnly || isAnalistaEventosOnly || isSindicanteOnly;
 
   // Verificações de grupo para cotações
   const isVendedorCotacao = hasRole('vendedor_clt') || hasRole('vendedor_externo');
@@ -239,6 +247,8 @@ export function usePermissions() {
     isReguladorOnly,
     isAnalistaEventos,
     isAnalistaEventosOnly,
+    isSindicante,
+    isSindicanteOnly,
     isAnalistaPlataforma: hasRole('analista_plataforma'),
     isInstaladorVistoriador,
     isAnalistaMarketing: hasRole('analista_marketing'),

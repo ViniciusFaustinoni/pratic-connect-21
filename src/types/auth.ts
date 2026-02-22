@@ -67,7 +67,8 @@ export type PerfilAcesso =
   | 'analista_marketing'
   | 'analista_juridico'
   | 'regulador'
-  | 'analista_eventos';
+  | 'analista_eventos'
+  | 'sindicante';
 
 /**
  * Alias para PerfilAcesso
@@ -298,6 +299,7 @@ export const PERFIL_ACESSO_LABELS: Record<PerfilAcesso, string> = {
   analista_juridico: 'Analista Jurídico',
   regulador: 'Regulador',
   analista_eventos: 'Analista de Eventos',
+  sindicante: 'Sindicante',
 };
 
 // ============================================================
@@ -469,6 +471,12 @@ export interface AuthFlags {
   isAnalistaEventos: boolean;
   
   /**
+   * Se é sindicante
+   * @derived perfis.includes('sindicante')
+   */
+  isSindicante: boolean;
+  
+  /**
    * Se é analista de marketing
    * @derived perfis.includes('analista_marketing')
    */
@@ -520,6 +528,7 @@ export const initialAuthFlags: AuthFlags = {
   isInstalador: false,
   isRegulador: false,
   isAnalistaEventos: false,
+  isSindicante: false,
   isAnalistaMarketing: false,
   isAnalistaJuridico: false,
 };
@@ -557,6 +566,7 @@ export function computeAuthFlags(state: AuthState): AuthFlags {
     isInstalador: perfis.includes('instalador_vistoriador'),
     isRegulador: perfis.includes('regulador'),
     isAnalistaEventos: perfis.includes('analista_eventos'),
+    isSindicante: perfis.includes('sindicante' as PerfilAcesso),
     isAnalistaMarketing: perfis.includes('analista_marketing'),
     isAnalistaJuridico: perfis.includes('analista_juridico'),
   };
