@@ -85,7 +85,7 @@ export default function AuthCallback() {
         setMensagem('Login realizado com sucesso!');
 
         // 6. Aguardar e redirecionar
-        setTimeout(() => {
+        setTimeout(async () => {
           // Verificar primeiro acesso
           if (profile.primeiro_acesso) {
             navigate('/definir-senha', { replace: true });
@@ -96,7 +96,21 @@ export default function AuthCallback() {
           if (profile.tipo === 'associado') {
             navigate('/app/home', { replace: true });
           } else if (profile.tipo === 'prestador') {
-            navigate('/instalador', { replace: true });
+            // Verificar se é sindicante
+            try {
+              const { data: userRoles } = await supabase
+                .from('user_roles')
+                .select('role')
+                .eq('user_id', session.user.id);
+              const roles = userRoles?.map(r => r.role) || [];
+              if (roles.includes('sindicante')) {
+                navigate('/sindicante', { replace: true });
+              } else {
+                navigate('/instalador', { replace: true });
+              }
+            } catch {
+              navigate('/instalador', { replace: true });
+            }
           } else {
             navigate('/dashboard', { replace: true });
           }
