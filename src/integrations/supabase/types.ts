@@ -24400,6 +24400,10 @@ export type Database = {
       is_funcionario: { Args: { _user_id: string }; Returns: boolean }
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
       is_prestador: { Args: { _user_id: string }; Returns: boolean }
+      is_sindicante_of_sinistro: {
+        Args: { _sinistro_id: string }
+        Returns: boolean
+      }
       is_vendedor: { Args: { _user_id: string }; Returns: boolean }
       log_auth_event: {
         Args: {
