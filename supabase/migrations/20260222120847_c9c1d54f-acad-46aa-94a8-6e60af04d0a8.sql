@@ -1,0 +1,1 @@
+UPDATE public.profiles SET primeiro_acesso = false WHERE user_id = 'afe41f0f-f2f6-430a-9a00-8d0161eb2201';

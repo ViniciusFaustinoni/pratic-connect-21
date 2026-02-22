@@ -68,6 +68,7 @@ export default function SindicantesAdmin() {
     responsavel_cpf: '',
     responsavel_telefone: '',
     responsavel_email: '',
+    senha: '',
     especialidades: [] as string[],
     regioes_atuacao: [] as string[],
     valor_por_sindicancia: 0,
@@ -130,7 +131,7 @@ export default function SindicantesAdmin() {
     setEditing(null);
     setForm({
       razao_social: '', nome_fantasia: '', cnpj: '', responsavel_nome: '',
-      responsavel_cpf: '', responsavel_telefone: '', responsavel_email: '',
+      responsavel_cpf: '', responsavel_telefone: '', responsavel_email: '', senha: '',
       especialidades: [], regioes_atuacao: [], valor_por_sindicancia: 0, observacoes: '',
     });
     setShowModal(true);
@@ -146,6 +147,7 @@ export default function SindicantesAdmin() {
       responsavel_cpf: e.responsavel_cpf || '',
       responsavel_telefone: e.responsavel_telefone || '',
       responsavel_email: e.responsavel_email || '',
+      senha: '',
       especialidades: e.especialidades || [],
       regioes_atuacao: e.regioes_atuacao || [],
       valor_por_sindicancia: e.valor_por_sindicancia || 0,
@@ -164,6 +166,11 @@ export default function SindicantesAdmin() {
   const handleSave = async () => {
     if (!form.razao_social || !form.cnpj || !form.responsavel_nome || !form.responsavel_telefone || !form.responsavel_email) {
       toast.error('Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    if (!editing && (!form.senha || form.senha.length < 6)) {
+      toast.error('A senha deve ter pelo menos 6 caracteres');
       return;
     }
 
@@ -221,6 +228,7 @@ export default function SindicantesAdmin() {
             email: form.responsavel_email,
             cpf: form.responsavel_cpf || undefined,
             telefone: form.responsavel_telefone || undefined,
+            senha: form.senha,
             tipo: 'prestador',
             perfis: ['sindicante'],
           },
@@ -509,6 +517,12 @@ export default function SindicantesAdmin() {
                   <Input type="email" value={form.responsavel_email} onChange={e => setForm(f => ({ ...f, responsavel_email: e.target.value }))} disabled={!!editing} />
                   {editing && <p className="text-xs text-muted-foreground">O email de login não pode ser alterado por aqui.</p>}
                 </div>
+                {!editing && (
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>Senha * <span className="text-xs text-muted-foreground">(mínimo 6 caracteres)</span></Label>
+                    <Input type="password" value={form.senha} onChange={e => setForm(f => ({ ...f, senha: e.target.value }))} placeholder="Senha de acesso do sindicante" />
+                  </div>
+                )}
               </div>
             </div>
 
