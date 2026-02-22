@@ -72,7 +72,7 @@ import SindicanciasList from "./pages/eventos/SindicanciasList";
 import SindicanciaDetalhe from "./pages/eventos/SindicanciaDetalhe";
 import SindicanteDashboard from "./pages/sindicante/SindicanteDashboard";
 import SindicanteCasoDetalhe from "./pages/sindicante/SindicanteCasoDetalhe";
-import EmpresasSindicancia from "./pages/configuracoes/EmpresasSindicancia";
+import SindicantesAdmin from "./pages/eventos/SindicantesAdmin";
 import InstalacoesList from "./pages/monitoramento/InstalacoesList";
 import InstalacaoDetalhe from "./pages/monitoramento/InstalacaoDetalhe";
 import Rotas from "./pages/monitoramento/Rotas";
@@ -451,8 +451,9 @@ const App = () => (
               <Route path="/sindicante" element={<SindicanteDashboard />} />
               <Route path="/sindicante/caso/:id" element={<SindicanteCasoDetalhe />} />
               
-              {/* Empresas de Sindicância (admin) */}
-              <Route path="/configuracoes/empresas-sindicancia" element={<EmpresasSindicancia />} />
+              {/* Sindicantes (admin) */}
+              <Route path="/eventos/sindicantes" element={<SindicantesAdmin />} />
+              <Route path="/configuracoes/empresas-sindicancia" element={<Navigate to="/eventos/sindicantes" replace />} />
               <Route path="/eventos/pre-analise" element={<EventosPreAnalise />} />
               
               {/* Assistência 24h */}
