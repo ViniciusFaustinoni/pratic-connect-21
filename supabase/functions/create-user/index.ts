@@ -70,7 +70,7 @@ serve(async (req) => {
       .select('role')
       .eq('user_id', currentUserId);
 
-    const allowedRoles = ['diretor', 'gerente_comercial', 'supervisor_vendas'];
+    const allowedRoles = ['diretor', 'gerente_comercial', 'supervisor_vendas', 'analista_eventos'];
     const hasPermission = roles?.some(r => allowedRoles.includes(r.role));
 
     if (!hasPermission) {

@@ -219,6 +219,7 @@ const menuConfig: {
         { title: 'Pré-Análise', url: '/eventos/pre-analise', icon: ClipboardCheck, permission: 'isDiretor' },
         { title: 'SLA', url: '/eventos/sla', icon: Clock },
         { title: 'Sindicâncias', url: '/eventos/sindicancias', icon: Search },
+        { title: 'Sindicantes', url: '/eventos/sindicantes', icon: Building2 },
         { title: 'Solicitações IA', url: '/eventos/solicitacoes-ia', icon: Bot },
       ],
     },
