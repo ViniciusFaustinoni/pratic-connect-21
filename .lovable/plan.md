@@ -1,112 +1,197 @@
 
-# S03 — Modal de Abertura de Sindicancia
+# S04 — Portal Completo do Sindicante
 
 ## Resumo
 
-Substituir o modal antigo `EncaminharSindicanciaDialog.tsx` por um novo modal completo que cria um registro na tabela `sindicancias`, com motivos padronizados detalhados, selecao de empresa de sindicancia ativa, datepicker de prazo, e card de resumo antes de confirmar. Criar tambem um segundo modal simples para atribuir sindicante a casos "Aguardando Atribuicao".
+Reescrever completamente o dashboard e a pagina de detalhe do sindicante, transformando-os de placeholders basicos em um portal completo com: cards KPI corretos, alertas de prazo, cards de caso ricos, filtros por tabs, pagina de detalhe em 2 colunas com dados do evento (somente leitura), mapa de comparacao GPS, galeria de fotos/video, diligencias com upload de evidencias, solicitacoes, timeline, barra de prazo, e botao "Iniciar Investigacao". Tambem configurar o menu lateral para mostrar apenas Dashboard e Meus Casos quando o usuario for sindicante.
 
 ---
 
-## 1. Atualizar constantes em `src/types/sindicancia.ts`
+## 1. Configurar menu lateral para sindicante
 
-Substituir o array `MOTIVOS_PADRONIZADOS` atual (8 itens genericos) pela nova lista de 10 motivos detalhados da tarefa:
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
+
+Na funcao `getVisibleGroups()` (linha ~519), adicionar condicao para `isSindicanteOnly`:
 
 ```
-inconsistencia_relato -> "Inconsistencia no relato do associado"
-distancia_gps -> "Distancia GPS suspeita"
-historico_sinistros -> "Historico de sinistros"
-valor_dano_incompativel -> "Valor do dano incompativel"
-documentacao_suspeita -> "Documentacao suspeita"
-indicios_fraude -> "Indicios de fraude"
-denuncia_externa -> "Denuncia ou informacao externa"
-veiculo_restricoes -> "Veiculo com restricoes"
-condutor_irregular -> "Condutor irregular"
-evento_carencia -> "Evento em periodo de carencia"
+if (permissions.isSindicanteOnly) {
+  return []; // Nenhum grupo de menu — sindicante so ve itens main
+}
 ```
 
----
+Na secao `visibleMainItems`, quando `isSindicanteOnly`, substituir por apenas 2 itens:
+- Dashboard -> `/sindicante` (icone LayoutDashboard)
+- Meus Casos -> `/sindicante` (icone Search)
 
-## 2. Reescrever `src/components/sinistros/EncaminharSindicanciaDialog.tsx`
-
-O modal atual sera completamente reescrito. Conteudo novo:
-
-**Titulo:** "Abrir Sindicancia — Evento #[protocolo]"
-
-### Secao 1: Motivo da Sindicancia
-- 10 checkboxes (pode marcar varios) com os motivos padronizados
-- Textarea obrigatoria "Descricao detalhada do motivo" com minimo 50 caracteres
-- Placeholder explicativo para o analista
-
-### Secao 2: Atribuir Sindicante
-- Select buscando `empresas_sindicancia` WHERE `ativo = true`
-- Cada opcao mostra: nome_fantasia + especialidades (badges) + count de casos ativos (query em `sindicancias`)
-- Pode deixar em branco — mostra informativo azul "caso ficara como Aguardando Atribuicao"
-
-### Secao 3: Prazo
-- Datepicker (nao input numerico)
-- Valor padrao: hoje + 30 dias
-- Minimo: hoje + 7 dias
-- Maximo: hoje + 60 dias
-
-### Secao 4: Resumo antes de confirmar
-- Card cinza com: evento, motivos selecionados, sindicante ou "Nao atribuido", prazo, aviso de suspensao
-
-### Validacoes
-- Pelo menos 1 checkbox marcado
-- Descricao >= 50 caracteres
-- Verifica se ja existe sindicancia ativa (status != 'encerrado' e != 'cancelado') para o mesmo sinistro. Se sim, bloqueia com erro mostrando o numero.
-
-### Fluxo ao confirmar
-1. Inserir em `sindicancias` com:
-   - `sinistro_id`, `motivo` (descricao), `motivos_padronizados` (array dos checkboxes marcados)
-   - `empresa_sindicancia_id` e `sindicante_profile_id` (da empresa selecionada, se houver)
-   - `data_limite` (data do datepicker)
-   - `status`: 'atribuido' se sindicante selecionado, 'aguardando_atribuicao' se nao
-   - `data_atribuicao`: now() se atribuido
-   - `aberto_por`: profile_id do analista logado
-2. Atualizar `sinistros` SET status = 'em_sindicancia', prazo_suspenso = true, etc.
-3. Inserir suspensao de prazo em `sinistro_suspensoes_prazo`
-4. Inserir historico em `sinistro_historico`
-5. Se sindicante atribuido, notificar via `NotificacaoHelper`
-6. Toast de sucesso com o numero da sindicancia gerado
-
-**Botoes:** "Cancelar" (outline) | "Abrir Sindicancia" (vermelho/destrutivo)
+Ambos apontam para a mesma rota pois o dashboard ja lista os casos. Alternativamente, criar rota `/sindicante/casos` separada se preferirmos.
 
 ---
 
-## 3. Criar `src/components/sinistros/AtribuirSindicanteModal.tsx` (novo)
+## 2. Reescrever Dashboard do Sindicante
 
-Modal simples para atribuir sindicante a caso "Aguardando Atribuicao":
+**Arquivo:** `src/pages/sindicante/SindicanteDashboard.tsx` (reescrever)
 
-- Props: `sindicanciaId`, `open`, `onOpenChange`, `onSuccess`
-- Select de empresas ativas (mesmo do modal principal)
-- Botao "Atribuir"
-- Ao salvar: UPDATE sindicancias SET empresa_sindicancia_id, sindicante_profile_id, status = 'atribuido', data_atribuicao = now()
-- Notifica o sindicante
+### Cabecalho
+- Titulo: "Meus Casos de Sindicancia"
+- Subtitulo: "Bem-vindo, [nome_fantasia da empresa vinculada ao profile]"
+- Buscar empresa do sindicante: `empresas_sindicancia WHERE profile_id = profile.id`
+
+### 4 Cards KPI
+- **Novos**: count sindicancias status = 'atribuido'. Badge azul. Se > 0, animacao pulse.
+- **Em Andamento**: count status = 'em_andamento'. Badge amarelo.
+- **Prazo Urgente**: count status IN ('atribuido','em_andamento') AND data_limite <= hoje+5dias. Badge vermelho.
+- **Concluidos no Mes**: count status IN ('laudo_emitido','encerrado') AND data_laudo ou updated_at >= primeiro dia do mes. Badge verde.
+
+### Alerta de prazo (condicional)
+- Se existem casos com data_limite <= hoje+3dias E status ativo: card vermelho de alerta
+- Se data_limite < hoje: alerta critico "PRAZO VENCIDO"
+
+### Filtros (Tabs)
+- "Todos" | "Novos" (atribuido) | "Em Andamento" | "Concluidos" (laudo_emitido + encerrado)
+
+### Lista de Casos como Cards
+Cards horizontais ricos com:
+- Numero da sindicancia + badge de status colorido
+- Evento (protocolo) + tipo
+- Veiculo (marca, modelo, ano, placa) — join via sinistros -> veiculos
+- Associado (nome, CPF) — join via sinistros -> associados
+- Data de abertura, prazo (dias restantes), diligencias realizadas (count), motivos (badges)
+- Botao "Abrir Caso"
+- Borda vermelha se prazo < 5 dias
+- Badge pulsante "PRAZO VENCIDO" se prazo ja venceu
+
+**Query:** sindicancias com joins:
+```
+sindicancias.select('*, sinistros(protocolo, tipo, data_ocorrencia, associado:associados(nome, cpf), veiculo:veiculos(marca, modelo, ano_modelo, placa))')
+```
+Tambem buscar contagem de diligencias por sindicancia (query separada ou subquery).
+
+Ordenacao: status='atribuido' primeiro, depois por data_limite ASC.
 
 ---
 
-## 4. Atualizar `SinistroDetalhe.tsx`
+## 3. Reescrever Detalhe do Caso
 
-Nenhuma mudanca estrutural necessaria — o modal ja esta conectado via `modalSindicanciaOpen` e `EncaminharSindicanciaDialog`. A interface do componente (props) sera mantida compativel. Apenas garantir que o `onSuccess` invalida as queries corretas (incluindo sindicancias).
+**Arquivo:** `src/pages/sindicante/SindicanteCasoDetalhe.tsx` (reescrever)
+
+### Cabecalho
+- Breadcrumb: Meus Casos > SIND-XXXXXXXX-001
+- Titulo + badge status
+- Subtitulo: "Evento #[protocolo] — [tipo]"
+- Barra de prazo visual colorida (verde >10 dias, amarelo 5-10, vermelho <5)
+
+### Layout 2 colunas (lg:grid-cols-3)
+
+**Coluna esquerda (col-span-2):**
+
+#### Card "Dados do Evento" (somente leitura)
+- Tipo, data/hora, local, descricao
+- Veiculo: marca, modelo, ano, placa, cor, valor FIPE
+- Associado: nome, CPF, telefone
+- Query via join sindicancias -> sinistros -> veiculos, sinistros -> associados
+
+#### Card "Motivo da Sindicancia" (somente leitura)
+- Motivos padronizados como badges (usando MOTIVOS_PADRONIZADOS labels)
+- Descricao detalhada (campo `motivo`)
+
+#### Card "Evidencias do Evento" (somente leitura)
+- **Fotos da auto vistoria**: usar `sinistro_fotos` com `buscarFotosComUrls()` do service existente. Galeria de thumbnails clicaveis que abrem em tamanho maior (Dialog).
+- **Video do associado**: buscar `sinistro_evento_links` -> campo `dados_etapas` para URL de video, ou `sinistro_documentos` tipo 'video'. Player HTML5.
+- **B.O.**: buscar `sinistro_documentos` tipo 'boletim_ocorrencia'. Link download.
+- **Fotos da vistoria do regulador**: buscar `vistorias_evento` -> `dados_vistoria` (campo JSONB com fotos). Galeria separada.
+- **Parecer do regulador**: texto de `vistorias_evento.observacoes` ou campo do JSON.
+- Cada item mostra "Nao disponivel" se nao existir.
+
+#### Card "Mapa — Comparacao de Posicoes" (somente leitura)
+- Reutilizar componente `ComparacaoPosicoes` existente
+- Props: `latitudeInformada`, `longitudeInformada` (do sinistro), `rastreadorLat`, `rastreadorLng` (do sinistro: `rastreador_lat_momento`, `rastreador_lng_momento`)
+- Badge de distancia com cores (ja implementado no componente)
+
+#### Card "Minhas Diligencias"
+- Lista cronologica de diligencias (ja existe parcialmente)
+- Cada diligencia mostra tipo (badge), data, descricao, resultado, local
+- **Novo**: mostrar evidencias anexadas — buscar `sindicancia_evidencias WHERE diligencia_id = X`, exibir thumbnails
+- Botao "+ Registrar Diligencia"
+
+#### Card "Solicitacoes de Informacao"
+- Lista com tipo, descricao, status (badge colorida), resposta, data
+- Botao "+ Nova Solicitacao"
+
+**Coluna direita (col-span-1):**
+
+#### Card "Acoes"
+Botoes empilhados:
+1. **"Iniciar Investigacao"** — visivel apenas se status='atribuido'. Ao clicar, UPDATE status='em_andamento'. Destaque especial.
+2. **"Registrar Diligencia"** — botao principal azul. Desabilitado se status='atribuido'.
+3. **"Solicitar Informacao"** — botao outline.
+4. **"Emitir Laudo"** — botao vermelho. Habilitado apenas se status='em_andamento' E pelo menos 1 diligencia. Tooltip se desabilitado.
+
+#### Card "Timeline"
+- Combinar dados de:
+  - `sindicancia.created_at` -> "Sindicancia aberta"
+  - `sindicancia.data_atribuicao` -> "Caso atribuido"
+  - Diligencias -> "Diligencia: [tipo]"
+  - Solicitacoes -> "Solicitacao enviada" / "Solicitacao respondida"
+  - `sindicancia.data_laudo` -> "Laudo emitido"
+- Formato: data/hora + icone + descricao curta
+- Ordem cronologica
+
+#### Card "Informacoes do Prazo"
+- Data abertura, data limite, dias corridos, dias restantes (com cor)
+- Barra de progresso: (dias corridos / total dias) * 100%
+- Cores: verde, amarelo, vermelho
+
+---
+
+## 4. Atualizar Modal de Diligencia
+
+**Arquivo:** `src/components/sindicante/RegistrarDiligenciaModal.tsx` (atualizar)
+
+Adicionar:
+- Validacao minimo 30 caracteres na descricao
+- Campo de upload multiplo (ate 10 arquivos, max 5MB cada, jpg/png/pdf)
+- Upload para bucket `sindicancia-evidencias` na pasta `{sindicanciaId}/{diligenciaId}/`
+- Apos inserir diligencia, inserir registros em `sindicancia_evidencias` com `diligencia_id`
+- Usar `react-dropzone` (ja instalado) para area de upload
+
+---
+
+## 5. RLS — Garantir acesso do sindicante
+
+Verificar se as politicas RLS permitem ao sindicante ler:
+- `sinistros` (via sindicancias vinculadas)
+- `sinistro_fotos` (via sinistro_id de sindicancias vinculadas)
+- `sinistro_documentos` (idem)
+- `vistorias_evento` (idem)
+- `sinistro_evento_links` (idem)
+- `veiculos` (via sinistros)
+- `associados` (via sinistros)
+
+Se nao existirem politicas para o perfil sindicante nessas tabelas, criar migracoes SQL para adicionar politicas de SELECT que permitam acesso apenas quando o sinistro_id pertence a uma sindicancia atribuida ao sindicante logado.
 
 ---
 
 ## Arquivos a Criar
 
-| Arquivo | Descricao |
-|---|---|
-| `src/components/sinistros/AtribuirSindicanteModal.tsx` | Modal simples para atribuir sindicante |
+Nenhum arquivo novo — todos ja existem.
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/types/sindicancia.ts` | Atualizar MOTIVOS_PADRONIZADOS com 10 novos motivos |
-| `src/components/sinistros/EncaminharSindicanciaDialog.tsx` | Reescrever completamente com novo fluxo |
+| `src/components/layout/AppSidebar.tsx` | Adicionar menu sindicante-only (Dashboard + Meus Casos) |
+| `src/pages/sindicante/SindicanteDashboard.tsx` | Reescrever completamente: KPIs corretos, alertas, cards ricos, filtros tabs |
+| `src/pages/sindicante/SindicanteCasoDetalhe.tsx` | Reescrever completamente: 2 colunas, dados evento, evidencias, mapa, timeline, acoes |
+| `src/components/sindicante/RegistrarDiligenciaModal.tsx` | Adicionar upload de evidencias e validacao 30 chars |
+
+## Migracoes SQL (se necessario)
+
+Politicas RLS de SELECT nas tabelas `sinistros`, `sinistro_fotos`, `sinistro_documentos`, `vistorias_evento`, `sinistro_evento_links`, `veiculos`, `associados` para o perfil sindicante — acesso restrito aos sinistros vinculados a sindicancias atribuidas ao sindicante logado.
 
 ## Sequencia de Implementacao
 
-1. Atualizar `MOTIVOS_PADRONIZADOS` em `sindicancia.ts`
-2. Reescrever `EncaminharSindicanciaDialog.tsx`
-3. Criar `AtribuirSindicanteModal.tsx`
+1. Verificar/criar politicas RLS para acesso do sindicante
+2. Atualizar `AppSidebar.tsx` com menu sindicante
+3. Reescrever `SindicanteDashboard.tsx`
+4. Reescrever `SindicanteCasoDetalhe.tsx`
+5. Atualizar `RegistrarDiligenciaModal.tsx` com upload de evidencias
