@@ -517,6 +517,10 @@ export function AppSidebar() {
 
   // Se é apenas analista de cadastro, filtrar menu para mostrar apenas Cadastro
   const getVisibleGroups = () => {
+    if (permissions.isSindicanteOnly) {
+      return []; // Sindicante não vê nenhum grupo de menu
+    }
+
     const baseGroups = filterGroups(menuConfig.groups);
     
     if (permissions.isAnalistaCadastroOnly) {
@@ -550,7 +554,12 @@ export function AppSidebar() {
     return baseGroups;
   };
 
-  const visibleMainItems = filterByPermission(menuConfig.main);
+  const visibleMainItems = permissions.isSindicanteOnly
+    ? [
+        { title: 'Dashboard', url: '/sindicante', icon: LayoutDashboard, color: MENU_COLORS.dashboard },
+        { title: 'Meus Casos', url: '/sindicante', icon: Search, color: MENU_COLORS.eventos },
+      ]
+    : filterByPermission(menuConfig.main);
   const visibleGroups = getVisibleGroups();
   // Perfis limitados (analista de cadastro e vendedor CLT) não veem Configurações no menu (só via /perfil)
   const visibleConfigItems = permissions.isPerfilLimitado ? [] : filterByPermission(configItems);
