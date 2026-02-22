@@ -1,6 +1,9 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
+import { CardLaudoSindicancia } from '@/components/sinistros/CardLaudoSindicancia';
+import { BannerSindicanciaEmAndamento } from '@/components/sinistros/BannerSindicanciaEmAndamento';
+import { DecisaoPosSindicanciaModal } from '@/components/sinistros/DecisaoPosSindicanciaModal';
 import { formatarTipoFotoVeiculo } from '@/hooks/useVeiculoDetalhes';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -238,6 +241,7 @@ export default function SinistroAnalise() {
   const [reenviandoPagamento, setReenviandoPagamento] = useState(false);
   const [verificandoCota, setVerificandoCota] = useState(false);
   const [fotoViewerVistoriaAdesao, setFotoViewerVistoriaAdesao] = useState({ open: false, index: 0 });
+  const [showDecisaoSindicancia, setShowDecisaoSindicancia] = useState(false);
 
   const {
     sinistro,
@@ -312,7 +316,29 @@ export default function SinistroAnalise() {
     staleTime: 1000 * 60 * 10,
   });
 
-  // Polling automático para detectar assinatura do termo
+  // Query para buscar sindicância vinculada ao evento
+  const { data: sindicanciaEvento } = useQuery({
+    queryKey: ['sindicancia-evento', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sindicancias')
+        .select('*, empresa:empresas_sindicancia(nome_fantasia)')
+        .eq('sinistro_id', id!)
+        .not('status', 'eq', 'cancelado')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  const sindicanciaEmAndamento = sindicanciaEvento && ['atribuido', 'em_andamento'].includes(sindicanciaEvento.status);
+  const sindicanciaComLaudo = sindicanciaEvento && ['laudo_emitido', 'encerrado'].includes(sindicanciaEvento.status) && sindicanciaEvento.laudo_conclusao;
+  const sindicanciaAguardandoDecisao = sindicanciaEvento && sindicanciaEvento.status === 'laudo_emitido';
+
+
   useEffect(() => {
     const aguardandoAssinatura = sinistro?.autentique_documento_id && !sinistro?.termo_anuencia_assinado;
     if (!aguardandoAssinatura) return;
@@ -727,6 +753,22 @@ export default function SinistroAnalise() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Banner de sindicância em andamento */}
+      {sindicanciaEmAndamento && sindicanciaEvento && (
+        <BannerSindicanciaEmAndamento
+          sindicancia={sindicanciaEvento}
+          empresaNome={(sindicanciaEvento as any)?.empresa?.nome_fantasia}
+        />
+      )}
+
+      {/* Card do laudo de sindicância */}
+      {sindicanciaComLaudo && sindicanciaEvento && (
+        <CardLaudoSindicancia
+          sindicancia={sindicanciaEvento}
+          empresaNome={(sindicanciaEvento as any)?.empresa?.nome_fantasia}
+        />
       )}
 
       {/* Main Grid */}
@@ -1497,7 +1539,21 @@ export default function SinistroAnalise() {
               <CardDescription>Decisão sobre o sinistro</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {(() => {
+              {/* Bloqueio por sindicância em andamento */}
+              {sindicanciaEmAndamento ? (
+                <div className="flex items-center gap-2 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                  <Search className="h-4 w-4 flex-shrink-0" />
+                  <span>Ações bloqueadas enquanto a sindicância está em andamento.</span>
+                </div>
+              ) : sindicanciaAguardandoDecisao ? (
+                <Button
+                  className="w-full"
+                  onClick={() => setShowDecisaoSindicancia(true)}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Decidir com Base no Laudo
+                </Button>
+              ) : (() => {
                 // Pronto para oficina — atribuir fornecedores
                 if ((sinistro.status as string) === 'pronto_para_oficina') {
                   return (
@@ -1787,7 +1843,7 @@ export default function SinistroAnalise() {
                   </>
                 );
               })()}
-              {(() => {
+              {!sindicanciaEmAndamento && !sindicanciaAguardandoDecisao && (() => {
                 // Mostrar botões adicionais apenas quando status permite
                 const statusPermiteAcoes = !['suspenso', 'negado', 'encerrado', 'reprovado', 'em_reparo', 'pronto_para_oficina', 'pagamento_confirmado', 'pecas_em_cotacao'].includes(sinistro.status as string);
                 if (!statusPermiteAcoes) return null;
@@ -2007,6 +2063,17 @@ export default function SinistroAnalise() {
         sinistroId={sinistro.id}
         protocolo={sinistro.protocolo}
       />
+
+      {sindicanciaEvento && (
+        <DecisaoPosSindicanciaModal
+          open={showDecisaoSindicancia}
+          onOpenChange={setShowDecisaoSindicancia}
+          sinistroId={sinistro.id}
+          protocolo={sinistro.protocolo}
+          sindicancia={sindicanciaEvento}
+          onSuccess={handleActionSuccess}
+        />
+      )}
 
       <SolicitarOrcamentoDialog
         open={showSolicitarOrcamento}
