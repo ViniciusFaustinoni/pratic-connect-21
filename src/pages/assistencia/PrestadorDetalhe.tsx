@@ -8,7 +8,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, MessageSquare, MapPin, Star, Pencil,
-  Ban, Clock, Truck, CheckCircle, Mail, Building2, CreditCard,
+  Ban, Clock, Truck, CheckCircle, Mail, Building2, CreditCard, DollarSign,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +39,7 @@ interface Prestador {
   cidade: string;
   estado: string;
   tipos_servico: string[] | null;
+  tipos_reboque: string[] | null;
   raio_atendimento_km: number | null;
   cidades_atendidas: string[] | null;
   banco: string | null;
@@ -62,12 +63,22 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 const tiposServicoConfig: Record<string, string> = {
-  reboque: 'Reboque/Guincho',
-  chaveiro: 'Chaveiro',
-  troca_pneu: 'Troca de Pneu',
+  reboque: 'Reboque / Guincho',
   pane_seca: 'Pane Seca',
+  socorro_mecanico: 'Socorro Mecânico',
+  socorro_eletrico: 'Socorro Elétrico',
+  troca_pneu: 'Troca de Pneu',
+  chaveiro: 'Chaveiro',
   bateria: 'Bateria',
+  taxi: 'Táxi / Transporte',
+  hospedagem: 'Hospedagem',
   outro: 'Outros',
+};
+
+const tiposReboqueConfig: Record<string, string> = {
+  leve: 'Leves',
+  utilitario: 'Utilitários',
+  pesado: 'Pesados',
 };
 
 const statusAtendimentoConfig: Record<string, { label: string; className: string }> = {
@@ -99,6 +110,11 @@ const formatPhone = (phone: string) => {
   return cleaned.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
 };
 
+const formatCurrency = (value: number | null) => {
+  if (value === null || value === undefined) return '-';
+  return `R$ ${value.toFixed(2).replace('.', ',')}`;
+};
+
 export default function PrestadorDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -114,7 +130,22 @@ export default function PrestadorDetalhe() {
         .eq('id', id!)
         .single();
       if (error) throw error;
-      return data as Prestador;
+      return data as unknown as Prestador;
+    },
+    enabled: !!id,
+  });
+
+  const { data: valoresPrestador } = useQuery({
+    queryKey: ['prestador-valores', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('prestadores_assistencia_valores' as any)
+        .select('*')
+        .eq('prestador_id', id!)
+        .eq('ativo', true)
+        .order('tipo_servico');
+      if (error) throw error;
+      return data as any[];
     },
     enabled: !!id,
   });
@@ -414,6 +445,47 @@ export default function PrestadorDetalhe() {
             </CardContent>
           </Card>
 
+          {/* Tabela de Valores */}
+          {valoresPrestador && valoresPrestador.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Tabela de Valores
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Serviço</TableHead>
+                      <TableHead className="text-right">Saída</TableHead>
+                      <TableHead className="text-right">Km</TableHead>
+                      <TableHead className="text-right">Fixo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {valoresPrestador.map((v: any) => {
+                      const servicoLabel = tiposServicoConfig[v.tipo_servico] || v.tipo_servico;
+                      const reboqueLabel = v.tipo_reboque ? tiposReboqueConfig[v.tipo_reboque] || v.tipo_reboque : null;
+                      return (
+                        <TableRow key={v.id}>
+                          <TableCell className="font-medium">
+                            {servicoLabel}
+                            {reboqueLabel && <span className="text-muted-foreground text-xs ml-1">({reboqueLabel})</span>}
+                          </TableCell>
+                          <TableCell className="text-right">{formatCurrency(v.valor_saida)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(v.valor_km)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(v.valor_fixo)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Últimos Atendimentos */}
           <Card>
             <CardHeader>
@@ -542,7 +614,7 @@ export default function PrestadorDetalhe() {
             <CardHeader>
               <CardTitle>Tipos de Serviço</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {prestador.tipos_servico?.map((tipo) => (
                   <Badge key={tipo} variant="secondary">
@@ -553,6 +625,23 @@ export default function PrestadorDetalhe() {
                   <p className="text-sm text-muted-foreground">Nenhum tipo cadastrado</p>
                 )}
               </div>
+
+              {/* Tipos de Reboque */}
+              {prestador.tipos_reboque && prestador.tipos_reboque.length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Tipos de Reboque</p>
+                    <div className="flex flex-wrap gap-2">
+                      {prestador.tipos_reboque.map((tipo) => (
+                        <Badge key={tipo} variant="outline">
+                          {tiposReboqueConfig[tipo] || tipo}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
