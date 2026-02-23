@@ -1,66 +1,104 @@
 
 
-# Adicionar campo de senha ao formulario de cadastro de sindicante + definir senha do usuario existente
+# Completar Cadastro de Prestadores da Assistencia
 
-## Resultado do Teste
+## Resumo
 
-O fluxo de cadastro de sindicante funciona corretamente:
-- Formulario preenche todos os campos (empresa, responsavel, configuracao)
-- Usuario e criado via edge function `create-user`
-- Empresa aparece na tabela com KPIs atualizados
-- Painel lateral exibe todos os dados corretamente (razao social, CNPJ, responsavel, especialidades, regioes, valor, historico)
-
-**Problema identificado:** O formulario NAO tem campo de senha. O usuario e criado via magic link (primeiro_acesso: true). Para que o sindicante possa logar com email/senha, e necessario adicionar o campo.
+Expandir o cadastro de prestadores da assistencia 24h com novos tipos de servico, campo de tipos de reboque condicional, tabela de valores por servico, e exibicao desses dados na tela de detalhe.
 
 ---
 
-## 1. Adicionar campo "Senha" ao formulario de novo sindicante
+## 1. Banco de Dados - Migracao
 
-**Arquivo:** `src/pages/eventos/SindicantesAdmin.tsx`
+### 1a. Adicionar coluna `tipos_reboque` na tabela existente
 
-### Alteracoes no form state (linha ~63)
-Adicionar `senha: ''` ao estado inicial do form.
-
-### Alteracoes no JSX (apos o campo de Email, ~linha 511)
-Adicionar campo de senha (visivel apenas na criacao, nao na edicao):
-
-```
-{!editing && (
-  <div className="space-y-1.5 sm:col-span-2">
-    <Label>Senha * <span className="text-xs text-muted-foreground">(minimo 6 caracteres)</span></Label>
-    <Input type="password" value={form.senha} onChange={...} />
-  </div>
-)}
+```sql
+ALTER TABLE prestadores_assistencia 
+ADD COLUMN tipos_reboque text[] DEFAULT '{}';
 ```
 
-### Alteracoes na validacao (linha ~165)
-Adicionar validacao: se nao e edicao, senha obrigatoria e minimo 6 chars.
+### 1b. Criar tabela `prestadores_assistencia_valores`
 
-### Alteracoes no handleSave (linha ~218)
-Passar `senha: form.senha` no body do `create-user`:
+Tabela para armazenar precos por tipo de servico e tipo de reboque, com constraint UNIQUE para evitar duplicidade.
 
-```javascript
-const res = await supabase.functions.invoke('create-user', {
-  body: {
-    nome: form.responsavel_nome,
-    email: form.responsavel_email,
-    senha: form.senha,  // <-- adicionar
-    ...
-  },
-});
-```
+Campos: `prestador_id`, `tipo_servico`, `tipo_reboque` (nullable), `valor_saida`, `valor_km`, `valor_fixo`, `observacoes`, `ativo`.
 
-A edge function `create-user` ja suporta o campo `senha` — quando presente, cria o usuario com senha direta em vez de magic link.
+RLS habilitado com politica permissiva (mesma abordagem da tabela pai).
 
 ---
 
-## 2. Definir senha do sindicante existente (sindicante@teste.com)
+## 2. Formulario - NovoPrestadorModal.tsx
 
-Apos implementar a mudanca acima, usar a interface do app para redefinir a senha. Alternativa: chamar a edge function `admin-reset-password` com `userId: 'afe41f0f-f2f6-430a-9a00-8d0161eb2201'` e `novaSenha: 'sindicante@teste.com'` (a funcao exige minimo 8 chars, e 'sindicante@teste.com' tem 20 chars, entao atende).
+### 2a. Expandir constante TIPOS_SERVICO
 
-Como nao ha interface de reset na pagina de sindicantes, farei a chamada programaticamente no browser apos o deploy.
+Adicionar 4 novos tipos mantendo os existentes:
 
-Tambem atualizar `primeiro_acesso` para `false` no profile.
+| value | label |
+|---|---|
+| reboque | Reboque / Guincho |
+| pane_seca | Pane Seca |
+| socorro_mecanico | Socorro Mecanico (novo) |
+| socorro_eletrico | Socorro Eletrico (novo) |
+| troca_pneu | Troca de Pneu |
+| chaveiro | Chaveiro |
+| bateria | Bateria |
+| taxi | Taxi / Transporte (novo) |
+| hospedagem | Hospedagem (novo) |
+| outro | Outros |
+
+### 2b. Adicionar campo `tipos_reboque` ao schema e formulario
+
+- Adicionar `tipos_reboque: z.array(z.string()).default([])` ao zod schema
+- Adicionar ao `defaultValues` e ao `useEffect` de pre-preenchimento
+- No JSX, renderizar checkboxes condicionais (so aparece quando "reboque" esta marcado):
+  - Leve (leve) - "motos, carros de passeio"
+  - Utilitario (utilitario) - "vans, pickups, SUVs"  
+  - Pesado (pesado) - "sprinters, caminhoes"
+- Incluir `tipos_reboque` no `buildPayload`
+
+### 2c. Adicionar secao de Valores (expansivel)
+
+- Adicionar uma 4a aba "Valores" ao TabsList (grid muda de 3 para 4 colunas)
+- Usar estado local `valores` para gerenciar os cards de preco
+- Para cada servico marcado:
+  - Se for "reboque", gerar um card para cada tipo de reboque selecionado (ex: "Reboque - Leves")
+  - Se for outro servico, gerar um card unico (ex: "Chaveiro")
+- Cada card tem:
+  - Servicos com km (reboque, pane_seca, socorro_mecanico, socorro_eletrico, troca_pneu, bateria): campos `Valor de Saida` e `Valor por Km`
+  - Servicos de valor fixo (chaveiro, taxi, hospedagem): campo `Valor Fixo`
+  - Campo opcional de observacoes
+- Todos os campos sao opcionais
+- No submit, salvar os valores na tabela `prestadores_assistencia_valores` (insert apos criar, upsert apos editar)
+- No modo edicao, carregar valores existentes da tabela
+
+### 2d. Atualizar interface PrestadorParaEdicao
+
+Adicionar `tipos_reboque` ao tipo para suportar edicao.
+
+---
+
+## 3. Tela de Detalhe - PrestadorDetalhe.tsx
+
+### 3a. Atualizar mapa de tipos de servico
+
+Adicionar os 4 novos tipos ao `tiposServicoConfig`.
+
+### 3b. Adicionar tipos de reboque ao tipo Prestador
+
+Incluir `tipos_reboque: string[] | null` na interface.
+
+### 3c. Mostrar tipos de reboque
+
+No card "Tipos de Servico" (coluna lateral), se o prestador tem `tipos_reboque` com itens, exibir uma subsecao "Tipos de Reboque" com badges: Leves, Utilitarios, Pesados.
+
+### 3d. Mostrar tabela de valores
+
+Adicionar query para buscar `prestadores_assistencia_valores` do prestador. Exibir um novo Card "Tabela de Valores" na coluna principal (apos dados bancarios), com uma tabela simples:
+
+| Servico | Saida | Km | Fixo |
+|---|---|---|---|
+
+Cada linha mostra o servico (e tipo reboque se aplicavel) com os valores formatados em R$.
 
 ---
 
@@ -68,12 +106,15 @@ Tambem atualizar `primeiro_acesso` para `false` no profile.
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/eventos/SindicantesAdmin.tsx` | Adicionar campo senha ao form state, JSX, validacao e chamada do create-user |
+| Migracao SQL | Adicionar coluna tipos_reboque + criar tabela valores + RLS |
+| src/components/assistencia/NovoPrestadorModal.tsx | Novos tipos servico, checkboxes reboque, aba de valores, logica de save |
+| src/pages/assistencia/PrestadorDetalhe.tsx | Novos tipos no config, exibir tipos reboque e tabela de valores |
+| src/integrations/supabase/types.ts | Atualizado automaticamente apos migracao |
 
-## Sequencia
+## Sequencia de Implementacao
 
-1. Modificar `SindicantesAdmin.tsx` com campo de senha
-2. Definir a senha do usuario existente via `admin-reset-password`
-3. Atualizar `primeiro_acesso` para false no profile
-4. Testar login com sindicante@teste.com
+1. Criar migracao (coluna + tabela + RLS)
+2. Atualizar NovoPrestadorModal.tsx (tipos servico, reboque, aba valores, save)
+3. Atualizar PrestadorDetalhe.tsx (exibir novos dados)
+4. Testar fluxo completo
 
