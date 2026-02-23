@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
 import {
   Dialog,
@@ -19,6 +19,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -35,15 +37,35 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { CpfInput, CnpjInput, TelefoneInput, CepInput } from '@/components/inputs/MaskedInputs';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 const TIPOS_SERVICO = [
-  { value: 'reboque', label: 'Reboque/Guincho' },
-  { value: 'chaveiro', label: 'Chaveiro' },
-  { value: 'troca_pneu', label: 'Troca de Pneu' },
+  { value: 'reboque', label: 'Reboque / Guincho' },
   { value: 'pane_seca', label: 'Pane Seca' },
+  { value: 'socorro_mecanico', label: 'Socorro Mecânico' },
+  { value: 'socorro_eletrico', label: 'Socorro Elétrico' },
+  { value: 'troca_pneu', label: 'Troca de Pneu' },
+  { value: 'chaveiro', label: 'Chaveiro' },
   { value: 'bateria', label: 'Bateria' },
+  { value: 'taxi', label: 'Táxi / Transporte' },
+  { value: 'hospedagem', label: 'Hospedagem' },
   { value: 'outro', label: 'Outros' },
 ];
+
+const TIPOS_REBOQUE = [
+  { value: 'leve', label: 'Leves', desc: 'motos, carros de passeio' },
+  { value: 'utilitario', label: 'Utilitários', desc: 'vans, pickups, SUVs' },
+  { value: 'pesado', label: 'Pesados', desc: 'sprinters, caminhões' },
+];
+
+// Serviços que usam valor_saida + valor_km
+const SERVICOS_KM = ['reboque', 'pane_seca', 'socorro_mecanico', 'socorro_eletrico', 'troca_pneu', 'bateria'];
+// Serviços que usam valor_fixo
+const SERVICOS_FIXO = ['chaveiro', 'taxi', 'hospedagem'];
 
 const PIX_TIPOS = [
   { value: 'cpf', label: 'CPF' },
@@ -76,6 +98,7 @@ const formSchema = z.object({
   estado: z.string().length(2, 'Selecione o estado'),
   raio_atendimento_km: z.number().min(1).max(500).default(50),
   tipos_servico: z.array(z.string()).min(1, 'Selecione pelo menos um tipo de serviço'),
+  tipos_reboque: z.array(z.string()).default([]),
   banco: z.string().optional(),
   agencia: z.string().optional(),
   conta: z.string().optional(),
@@ -84,6 +107,15 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
+
+interface ValorItem {
+  tipo_servico: string;
+  tipo_reboque: string | null;
+  valor_saida: string;
+  valor_km: string;
+  valor_fixo: string;
+  observacoes: string;
+}
 
 interface PrestadorParaEdicao {
   id: string;
@@ -103,6 +135,7 @@ interface PrestadorParaEdicao {
   estado: string;
   raio_atendimento_km?: number | null;
   tipos_servico?: string[] | null;
+  tipos_reboque?: string[] | null;
   banco?: string | null;
   agencia?: string | null;
   conta?: string | null;
@@ -117,8 +150,23 @@ interface NovoPrestadorModalProps {
   prestador?: PrestadorParaEdicao | null;
 }
 
+function getValorKey(tipo_servico: string, tipo_reboque: string | null): string {
+  return tipo_reboque ? `${tipo_servico}__${tipo_reboque}` : tipo_servico;
+}
+
+function getServicoLabel(tipo_servico: string, tipo_reboque: string | null): string {
+  const servLabel = TIPOS_SERVICO.find(t => t.value === tipo_servico)?.label || tipo_servico;
+  if (tipo_reboque) {
+    const rebLabel = TIPOS_REBOQUE.find(t => t.value === tipo_reboque)?.label || tipo_reboque;
+    return `${servLabel} - ${rebLabel}`;
+  }
+  return servLabel;
+}
+
 export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: NovoPrestadorModalProps) {
   const [activeTab, setActiveTab] = useState('dados');
+  const [valores, setValores] = useState<Record<string, ValorItem>>({});
+  const [valoresOpen, setValoresOpen] = useState(false);
   const queryClient = useQueryClient();
   const isEditing = !!prestador;
 
@@ -141,12 +189,27 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
       estado: '',
       raio_atendimento_km: 50,
       tipos_servico: [],
+      tipos_reboque: [],
       banco: '',
       agencia: '',
       conta: '',
       pix_chave: '',
       pix_tipo: '',
     },
+  });
+
+  // Carregar valores existentes quando editando
+  const { data: valoresExistentes } = useQuery({
+    queryKey: ['prestador-valores', prestador?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('prestadores_assistencia_valores' as any)
+        .select('*')
+        .eq('prestador_id', prestador!.id);
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!prestador?.id && open,
   });
 
   // Pré-preencher formulário quando editando
@@ -169,6 +232,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
         estado: prestador.estado || '',
         raio_atendimento_km: prestador.raio_atendimento_km || 50,
         tipos_servico: prestador.tipos_servico || [],
+        tipos_reboque: prestador.tipos_reboque || [],
         banco: prestador.banco || '',
         agencia: prestador.agencia || '',
         conta: prestador.conta || '',
@@ -193,16 +257,80 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
         estado: '',
         raio_atendimento_km: 50,
         tipos_servico: [],
+        tipos_reboque: [],
         banco: '',
         agencia: '',
         conta: '',
         pix_chave: '',
         pix_tipo: '',
       });
+      setValores({});
+      setValoresOpen(false);
     }
   }, [open, prestador]);
 
+  // Carregar valores existentes no estado local
+  useEffect(() => {
+    if (valoresExistentes && valoresExistentes.length > 0) {
+      const map: Record<string, ValorItem> = {};
+      for (const v of valoresExistentes) {
+        const key = getValorKey(v.tipo_servico, v.tipo_reboque);
+        map[key] = {
+          tipo_servico: v.tipo_servico,
+          tipo_reboque: v.tipo_reboque || null,
+          valor_saida: v.valor_saida ? String(v.valor_saida) : '',
+          valor_km: v.valor_km ? String(v.valor_km) : '',
+          valor_fixo: v.valor_fixo ? String(v.valor_fixo) : '',
+          observacoes: v.observacoes || '',
+        };
+      }
+      setValores(map);
+      setValoresOpen(true);
+    }
+  }, [valoresExistentes]);
+
   const tipoPessoa = form.watch('tipo_pessoa');
+  const tiposServico = form.watch('tipos_servico');
+  const tiposReboque = form.watch('tipos_reboque');
+
+  const hasReboque = tiposServico?.includes('reboque');
+
+  // Limpar tipos_reboque quando reboque é desmarcado
+  useEffect(() => {
+    if (!hasReboque) {
+      form.setValue('tipos_reboque', []);
+    }
+  }, [hasReboque]);
+
+  // Gerar lista de cards de valores baseado nos serviços selecionados
+  const valoresCards = (() => {
+    const cards: { key: string; tipo_servico: string; tipo_reboque: string | null; label: string; isKm: boolean }[] = [];
+    for (const ts of (tiposServico || [])) {
+      if (ts === 'reboque') {
+        for (const tr of (tiposReboque || [])) {
+          const key = getValorKey(ts, tr);
+          cards.push({ key, tipo_servico: ts, tipo_reboque: tr, label: getServicoLabel(ts, tr), isKm: true });
+        }
+      } else if (ts === 'outro') {
+        // skip "outro"
+      } else {
+        const key = getValorKey(ts, null);
+        const isKm = SERVICOS_KM.includes(ts);
+        cards.push({ key, tipo_servico: ts, tipo_reboque: null, label: getServicoLabel(ts, null), isKm });
+      }
+    }
+    return cards;
+  })();
+
+  const updateValor = (key: string, field: keyof ValorItem, value: string) => {
+    setValores(prev => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        [field]: value,
+      }
+    }));
+  };
 
   const buildPayload = (data: FormValues) => ({
     razao_social: data.razao_social,
@@ -221,6 +349,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
     estado: data.estado,
     raio_atendimento_km: data.raio_atendimento_km,
     tipos_servico: data.tipos_servico,
+    tipos_reboque: data.tipos_reboque,
     banco: data.banco || null,
     agencia: data.agencia || null,
     conta: data.conta || null,
@@ -228,12 +357,49 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
     pix_tipo: data.pix_tipo || null,
   });
 
+  const saveValores = async (prestadorId: string) => {
+    // Deletar valores antigos
+    await supabase
+      .from('prestadores_assistencia_valores' as any)
+      .delete()
+      .eq('prestador_id', prestadorId);
+
+    // Inserir novos valores (só os que têm algum valor preenchido)
+    const rows = valoresCards
+      .map(card => {
+        const v = valores[card.key];
+        if (!v) return null;
+        const hasValue = v.valor_saida || v.valor_km || v.valor_fixo;
+        if (!hasValue) return null;
+        return {
+          prestador_id: prestadorId,
+          tipo_servico: card.tipo_servico,
+          tipo_reboque: card.tipo_reboque,
+          valor_saida: v.valor_saida ? parseFloat(v.valor_saida) : null,
+          valor_km: v.valor_km ? parseFloat(v.valor_km) : null,
+          valor_fixo: v.valor_fixo ? parseFloat(v.valor_fixo) : null,
+          observacoes: v.observacoes || null,
+        };
+      })
+      .filter(Boolean);
+
+    if (rows.length > 0) {
+      const { error } = await supabase
+        .from('prestadores_assistencia_valores' as any)
+        .insert(rows);
+      if (error) throw error;
+    }
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: FormValues) => {
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from('prestadores_assistencia')
-        .insert({ ...buildPayload(data), status: 'ativo', disponivel: true });
+        .insert({ ...buildPayload(data), status: 'ativo', disponivel: true } as any)
+        .select('id')
+        .single();
       if (error) throw error;
+      await saveValores(inserted.id);
     },
     onSuccess: () => {
       toast.success('Prestador cadastrado com sucesso!');
@@ -241,6 +407,8 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
       queryClient.invalidateQueries({ queryKey: ['prestadores-metricas'] });
       form.reset();
       setActiveTab('dados');
+      setValores({});
+      setValoresOpen(false);
       onSuccess?.();
       onClose();
     },
@@ -254,15 +422,17 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
     mutationFn: async (data: FormValues) => {
       const { error } = await supabase
         .from('prestadores_assistencia')
-        .update(buildPayload(data))
+        .update(buildPayload(data) as any)
         .eq('id', prestador!.id);
       if (error) throw error;
+      await saveValores(prestador!.id);
     },
     onSuccess: () => {
       toast.success('Prestador atualizado com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['prestadores'] });
       queryClient.invalidateQueries({ queryKey: ['prestadores-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['prestador', prestador?.id] });
+      queryClient.invalidateQueries({ queryKey: ['prestador-valores', prestador?.id] });
       onSuccess?.();
       onClose();
     },
@@ -317,10 +487,11 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="dados">Dados Gerais</TabsTrigger>
                 <TabsTrigger value="endereco">Endereço</TabsTrigger>
-                <TabsTrigger value="bancario">Dados Bancários</TabsTrigger>
+                <TabsTrigger value="bancario">Bancário</TabsTrigger>
+                <TabsTrigger value="valores">Valores</TabsTrigger>
               </TabsList>
 
               <TabsContent value="dados" className="space-y-4 mt-4">
@@ -510,6 +681,49 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
                     </FormItem>
                   )}
                 />
+
+                {/* Tipos de Reboque (condicional) */}
+                {hasReboque && (
+                  <FormField
+                    control={form.control}
+                    name="tipos_reboque"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>Quais tipos de veículo você reboca?</FormLabel>
+                        <div className="space-y-2 mt-2 pl-2 border-l-2 border-primary/20">
+                          {TIPOS_REBOQUE.map((tipo) => (
+                            <FormField
+                              key={tipo.value}
+                              control={form.control}
+                              name="tipos_reboque"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center space-x-2 space-y-0">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(tipo.value)}
+                                      onCheckedChange={(checked) => {
+                                        const current = field.value || [];
+                                        if (checked) {
+                                          field.onChange([...current, tipo.value]);
+                                        } else {
+                                          field.onChange(current.filter((v) => v !== tipo.value));
+                                        }
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <Label className="font-normal cursor-pointer">
+                                    {tipo.label} <span className="text-muted-foreground text-xs">({tipo.desc})</span>
+                                  </Label>
+                                </FormItem>
+                              )}
+                            />
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {/* Raio de Atendimento */}
                 <FormField
@@ -728,6 +942,96 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
                     )}
                   />
                 </div>
+              </TabsContent>
+
+              <TabsContent value="valores" className="space-y-4 mt-4">
+                {valoresCards.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>Selecione os tipos de serviço na aba "Dados Gerais" para configurar os valores.</p>
+                    {hasReboque && (!tiposReboque || tiposReboque.length === 0) && (
+                      <p className="mt-2 text-sm">Para reboque, selecione também os tipos de veículo.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Configure os valores para cada serviço. Todos os campos são opcionais.
+                    </p>
+                    {valoresCards.map((card) => {
+                      const v = valores[card.key] || {
+                        tipo_servico: card.tipo_servico,
+                        tipo_reboque: card.tipo_reboque,
+                        valor_saida: '',
+                        valor_km: '',
+                        valor_fixo: '',
+                        observacoes: '',
+                      };
+                      // Initialize in state if not present
+                      if (!valores[card.key]) {
+                        setValores(prev => ({ ...prev, [card.key]: v }));
+                      }
+                      return (
+                        <Card key={card.key} className="border">
+                          <CardHeader className="py-3 px-4">
+                            <CardTitle className="text-sm font-medium">{card.label}</CardTitle>
+                          </CardHeader>
+                          <CardContent className="px-4 pb-3 pt-0 space-y-2">
+                            {card.isKm ? (
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Valor de Saída (R$)</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0,00"
+                                    value={v.valor_saida}
+                                    onChange={(e) => updateValor(card.key, 'valor_saida', e.target.value)}
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Valor por Km (R$)</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0,00"
+                                    value={v.valor_km}
+                                    onChange={(e) => updateValor(card.key, 'valor_km', e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Valor Fixo (R$)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  value={v.valor_fixo}
+                                  onChange={(e) => updateValor(card.key, 'valor_fixo', e.target.value)}
+                                />
+                              </div>
+                            )}
+                            <Collapsible>
+                              <CollapsibleTrigger asChild>
+                                <Button variant="ghost" size="sm" className="text-xs h-6 px-1 text-muted-foreground">
+                                  Observações
+                                </Button>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <Textarea
+                                  placeholder="Observações sobre este serviço..."
+                                  className="min-h-[60px] text-sm mt-1"
+                                  value={v.observacoes}
+                                  onChange={(e) => updateValor(card.key, 'observacoes', e.target.value)}
+                                />
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
 

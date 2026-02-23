@@ -15710,6 +15710,7 @@ export type Database = {
           status: string | null
           telefone: string
           tipo_pessoa: string | null
+          tipos_reboque: string[] | null
           tipos_servico: string[] | null
           total_atendimentos: number | null
           total_avaliacoes: number | null
@@ -15742,6 +15743,7 @@ export type Database = {
           status?: string | null
           telefone: string
           tipo_pessoa?: string | null
+          tipos_reboque?: string[] | null
           tipos_servico?: string[] | null
           total_atendimentos?: number | null
           total_avaliacoes?: number | null
@@ -15774,6 +15776,7 @@ export type Database = {
           status?: string | null
           telefone?: string
           tipo_pessoa?: string | null
+          tipos_reboque?: string[] | null
           tipos_servico?: string[] | null
           total_atendimentos?: number | null
           total_avaliacoes?: number | null
@@ -15781,6 +15784,56 @@ export type Database = {
           whatsapp?: string | null
         }
         Relationships: []
+      }
+      prestadores_assistencia_valores: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          id: string
+          observacoes: string | null
+          prestador_id: string
+          tipo_reboque: string | null
+          tipo_servico: string
+          updated_at: string | null
+          valor_fixo: number | null
+          valor_km: number | null
+          valor_saida: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          observacoes?: string | null
+          prestador_id: string
+          tipo_reboque?: string | null
+          tipo_servico: string
+          updated_at?: string | null
+          valor_fixo?: number | null
+          valor_km?: number | null
+          valor_saida?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          observacoes?: string | null
+          prestador_id?: string
+          tipo_reboque?: string | null
+          tipo_servico?: string
+          updated_at?: string | null
+          valor_fixo?: number | null
+          valor_km?: number | null
+          valor_saida?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prestadores_assistencia_valores_prestador_id_fkey"
+            columns: ["prestador_id"]
+            isOneToOne: false
+            referencedRelation: "prestadores_assistencia"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       prestadores_evento: {
         Row: {
