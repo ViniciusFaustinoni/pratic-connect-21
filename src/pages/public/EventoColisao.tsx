@@ -132,7 +132,7 @@ export default function EventoColisao() {
   const renderContent = () => {
     // Steps 1-2
     if (!isEtapas1e2Completas) {
-      if (etapaAtual === 0) return <EventoEtapa1Vistoria token={token!} onComplete={handleStepComplete} />;
+      if (etapaAtual === 0) return <EventoEtapa1Vistoria token={token!} onComplete={handleStepComplete} dadosEtapa1={(link as any)?.dados_etapa1} etapa1Completada={!!(link as any)?.etapa1_completada_em} />;
       if (etapaAtual === 1) return <EventoEtapa2BO token={token!} onComplete={handleStepComplete} />;
       return null;
     }

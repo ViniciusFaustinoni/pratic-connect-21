@@ -948,6 +948,36 @@ export default function SinistroAnalise() {
                               );
                             })}
                           </div>
+
+                          {/* Video History - visible only to analyst */}
+                          {linkEvento.dados_etapa1?.historico_videos?.length > 0 && (
+                            <div className="mt-3 p-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Badge className="bg-amber-500 text-white text-xs">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Vídeo Substituído ({linkEvento.dados_etapa1.historico_videos.length}x)
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                O associado substituiu o vídeo. Todos os vídeos anteriores estão preservados abaixo.
+                              </p>
+                              {linkEvento.dados_etapa1.historico_videos.map((hist: any, hIdx: number) => (
+                                <div key={hIdx} className="space-y-1 pt-2 border-t border-amber-200 dark:border-amber-800">
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <History className="h-3 w-3" />
+                                    <span>Enviado: {formatDateTime(hist.enviado_em)}</span>
+                                    <span>•</span>
+                                    <span>Substituído: {formatDateTime(hist.substituido_em)}</span>
+                                  </div>
+                                  <video
+                                    src={resolverUrl(hist.url)}
+                                    controls
+                                    className="w-full max-h-32 rounded-md border"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
 

@@ -137,6 +137,7 @@ serve(async (req) => {
           dados_etapa2: link.dados_etapa2,
           dados_etapa3: link.dados_etapa3,
           etapa4_completada_em: link.etapa4_completada_em || null,
+          etapa1_completada_em: link.etapa1_completada_em || null,
         },
         sinistro: sinistro ? {
           id: sinistro.id,
