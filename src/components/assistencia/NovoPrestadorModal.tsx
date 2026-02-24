@@ -89,6 +89,7 @@ const formSchema = z.object({
   cpf: z.string().optional(),
   telefone: z.string().min(14, 'Telefone inválido'),
   whatsapp: z.string().optional(),
+  telefone_extra: z.string().optional(),
   email: z.string().email('E-mail inválido').optional().or(z.literal('')),
   cep: z.string().optional(),
   logradouro: z.string().optional(),
@@ -115,6 +116,10 @@ interface ValorItem {
   valor_km: string;
   valor_fixo: string;
   observacoes: string;
+  km_franquia: string;
+  hr_trabalhada: string;
+  hr_parada: string;
+  diaria_base: string;
 }
 
 interface PrestadorParaEdicao {
@@ -126,6 +131,7 @@ interface PrestadorParaEdicao {
   cpf?: string | null;
   telefone?: string | null;
   whatsapp?: string | null;
+  telefone_extra?: string | null;
   email?: string | null;
   cep?: string | null;
   logradouro?: string | null;
@@ -180,6 +186,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
       cpf: '',
       telefone: '',
       whatsapp: '',
+      telefone_extra: '',
       email: '',
       cep: '',
       logradouro: '',
@@ -223,6 +230,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
         cpf: prestador.cpf || '',
         telefone: prestador.telefone || '',
         whatsapp: prestador.whatsapp || '',
+        telefone_extra: prestador.telefone_extra || '',
         email: prestador.email || '',
         cep: prestador.cep || '',
         logradouro: prestador.logradouro || '',
@@ -248,6 +256,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
         cpf: '',
         telefone: '',
         whatsapp: '',
+        telefone_extra: '',
         email: '',
         cep: '',
         logradouro: '',
@@ -282,6 +291,10 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
           valor_km: v.valor_km ? String(v.valor_km) : '',
           valor_fixo: v.valor_fixo ? String(v.valor_fixo) : '',
           observacoes: v.observacoes || '',
+          km_franquia: v.km_franquia ? String(v.km_franquia) : '',
+          hr_trabalhada: v.hr_trabalhada ? String(v.hr_trabalhada) : '',
+          hr_parada: v.hr_parada ? String(v.hr_parada) : '',
+          diaria_base: v.diaria_base ? String(v.diaria_base) : '',
         };
       }
       setValores(map);
@@ -340,6 +353,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
     cpf: data.tipo_pessoa === 'pf' ? data.cpf || null : null,
     telefone: data.telefone,
     whatsapp: data.whatsapp || null,
+    telefone_extra: data.telefone_extra || null,
     email: data.email || null,
     cep: data.cep || null,
     logradouro: data.logradouro || null,
@@ -369,7 +383,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
       .map(card => {
         const v = valores[card.key];
         if (!v) return null;
-        const hasValue = v.valor_saida || v.valor_km || v.valor_fixo;
+        const hasValue = v.valor_saida || v.valor_km || v.valor_fixo || v.km_franquia || v.hr_trabalhada || v.hr_parada || v.diaria_base;
         if (!hasValue) return null;
         return {
           prestador_id: prestadorId,
@@ -379,6 +393,10 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
           valor_km: v.valor_km ? parseFloat(v.valor_km) : null,
           valor_fixo: v.valor_fixo ? parseFloat(v.valor_fixo) : null,
           observacoes: v.observacoes || null,
+          km_franquia: v.km_franquia ? parseFloat(v.km_franquia) : null,
+          hr_trabalhada: v.hr_trabalhada ? parseFloat(v.hr_trabalhada) : null,
+          hr_parada: v.hr_parada ? parseFloat(v.hr_parada) : null,
+          diaria_base: v.diaria_base ? parseFloat(v.diaria_base) : null,
         };
       })
       .filter(Boolean);
@@ -625,6 +643,24 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
                     )}
                   />
                 </div>
+
+                {/* Telefone Extra */}
+                <FormField
+                  control={form.control}
+                  name="telefone_extra"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Telefone Extra</FormLabel>
+                      <FormControl>
+                        <TelefoneInput
+                          value={field.value || ''}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {/* Email */}
                 <FormField
@@ -965,6 +1001,10 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
                         valor_km: '',
                         valor_fixo: '',
                         observacoes: '',
+                        km_franquia: '',
+                        hr_trabalhada: '',
+                        hr_parada: '',
+                        diaria_base: '',
                       };
                       // Initialize in state if not present
                       if (!valores[card.key]) {
@@ -1011,6 +1051,49 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
                                 />
                               </div>
                             )}
+                            {/* Novos campos - grid 2x2 */}
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                              <div className="space-y-1">
+                                <Label className="text-xs">KM Franquia</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0"
+                                  value={v.km_franquia}
+                                  onChange={(e) => updateValor(card.key, 'km_franquia', e.target.value)}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Hora Trabalhada (R$)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  value={v.hr_trabalhada}
+                                  onChange={(e) => updateValor(card.key, 'hr_trabalhada', e.target.value)}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Hora Parada (R$)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  value={v.hr_parada}
+                                  onChange={(e) => updateValor(card.key, 'hr_parada', e.target.value)}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Diária Base (R$)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0,00"
+                                  value={v.diaria_base}
+                                  onChange={(e) => updateValor(card.key, 'diaria_base', e.target.value)}
+                                />
+                              </div>
+                            </div>
                             <Collapsible>
                               <CollapsibleTrigger asChild>
                                 <Button variant="ghost" size="sm" className="text-xs h-6 px-1 text-muted-foreground">

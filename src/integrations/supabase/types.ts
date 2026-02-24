@@ -15709,6 +15709,7 @@ export type Database = {
           razao_social: string
           status: string | null
           telefone: string
+          telefone_extra: string | null
           tipo_pessoa: string | null
           tipos_reboque: string[] | null
           tipos_servico: string[] | null
@@ -15742,6 +15743,7 @@ export type Database = {
           razao_social: string
           status?: string | null
           telefone: string
+          telefone_extra?: string | null
           tipo_pessoa?: string | null
           tipos_reboque?: string[] | null
           tipos_servico?: string[] | null
@@ -15775,6 +15777,7 @@ export type Database = {
           razao_social?: string
           status?: string | null
           telefone?: string
+          telefone_extra?: string | null
           tipo_pessoa?: string | null
           tipos_reboque?: string[] | null
           tipos_servico?: string[] | null
@@ -15789,7 +15792,11 @@ export type Database = {
         Row: {
           ativo: boolean | null
           created_at: string | null
+          diaria_base: number | null
+          hr_parada: number | null
+          hr_trabalhada: number | null
           id: string
+          km_franquia: number | null
           observacoes: string | null
           prestador_id: string
           tipo_reboque: string | null
@@ -15802,7 +15809,11 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           created_at?: string | null
+          diaria_base?: number | null
+          hr_parada?: number | null
+          hr_trabalhada?: number | null
           id?: string
+          km_franquia?: number | null
           observacoes?: string | null
           prestador_id: string
           tipo_reboque?: string | null
@@ -15815,7 +15826,11 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           created_at?: string | null
+          diaria_base?: number | null
+          hr_parada?: number | null
+          hr_trabalhada?: number | null
           id?: string
+          km_franquia?: number | null
           observacoes?: string | null
           prestador_id?: string
           tipo_reboque?: string | null

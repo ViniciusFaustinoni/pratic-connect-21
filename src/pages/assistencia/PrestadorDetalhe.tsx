@@ -31,6 +31,7 @@ interface Prestador {
   cpf: string | null;
   telefone: string | null;
   whatsapp: string | null;
+  telefone_extra: string | null;
   email: string | null;
   cep: string | null;
   logradouro: string | null;
@@ -381,6 +382,12 @@ export default function PrestadorDetalhe() {
                     {formatPhone(prestador.telefone)}
                   </Button>
                 )}
+                {prestador.telefone_extra && (
+                  <Button variant="outline" size="sm" onClick={() => handleCall(prestador.telefone_extra)}>
+                    <Phone className="mr-2 h-4 w-4" />
+                    {formatPhone(prestador.telefone_extra)}
+                  </Button>
+                )}
                 {prestador.whatsapp && (
                   <Button variant="outline" size="sm" onClick={() => handleWhatsApp(prestador.whatsapp)}>
                     <MessageSquare className="mr-2 h-4 w-4" />
@@ -462,6 +469,10 @@ export default function PrestadorDetalhe() {
                       <TableHead className="text-right">Saída</TableHead>
                       <TableHead className="text-right">Km</TableHead>
                       <TableHead className="text-right">Fixo</TableHead>
+                      <TableHead className="text-right">KM Franquia</TableHead>
+                      <TableHead className="text-right">Hr Trab.</TableHead>
+                      <TableHead className="text-right">Hr Parada</TableHead>
+                      <TableHead className="text-right">Diária</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -477,6 +488,10 @@ export default function PrestadorDetalhe() {
                           <TableCell className="text-right">{formatCurrency(v.valor_saida)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(v.valor_km)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(v.valor_fixo)}</TableCell>
+                          <TableCell className="text-right">{v.km_franquia != null ? v.km_franquia : '-'}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(v.hr_trabalhada)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(v.hr_parada)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(v.diaria_base)}</TableCell>
                         </TableRow>
                       );
                     })}
