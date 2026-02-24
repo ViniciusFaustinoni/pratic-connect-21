@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -19,7 +18,6 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { NovoPrestadorModal } from '@/components/assistencia/NovoPrestadorModal';
-import { ImportarPrestadoresDialog } from '@/components/assistencia/ImportarPrestadoresDialog';
 
 interface Prestador {
   id: string;
@@ -82,7 +80,6 @@ const formatCPF = (cpf: string) => {
 export default function PrestadoresList() {
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const [editingPrestador, setEditingPrestador] = useState<Prestador | null>(null);
   const [filters, setFilters] = useState({
     status: 'todos',
@@ -153,16 +150,10 @@ export default function PrestadoresList() {
           <h1 className="text-2xl font-bold">Prestadores de Serviço</h1>
           <p className="text-muted-foreground">Gerencie os prestadores de assistência 24h</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Importar
-          </Button>
-          <Button onClick={() => setModalOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Prestador
-          </Button>
-        </div>
+        <Button onClick={() => setModalOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Novo Prestador
+        </Button>
       </div>
 
       {/* KPI Cards */}
@@ -400,11 +391,6 @@ export default function PrestadoresList() {
       />
 
       {/* Modal de Editar Prestador */}
-      <ImportarPrestadoresDialog
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-      />
-
       <NovoPrestadorModal
         open={!!editingPrestador}
         onClose={() => setEditingPrestador(null)}
