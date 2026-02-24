@@ -1,223 +1,199 @@
 
-
-# Orcamento Vivo -- Sistema de Orcamento Dinamico para Reparos
+# Dois Caminhos de Orcamento: Cotacao Separada vs Pacote Fechado
 
 ## Resumo
 
-Criar um sistema completo de orcamento dinamico ("Orcamento Vivo") que acompanha a evolucao real dos custos de reparo de veiculos sinistrados. O orcamento nasce com a estimativa da oficina, evolui conforme o regulador descobre novos danos ou economias, e se consolida quando o reparo termina. Toda alteracao fica registrada com trilha de auditoria completa.
-
----
-
-## Analise do Estado Atual
-
-O sistema ja possui:
-- Tabela `ordens_servico` com campos `valor_orcamento`, `valor_aprovado`, `valor_pago`
-- Tabela `ordens_servico_itens` com campos: `tipo` (peca/mao_de_obra/servico_terceiro), `descricao`, `quantidade`, `valor_unitario`, `valor_total`, `aprovado`, `marca`, `numero_peca`
-- Tabela `sinistros` com campos de orcamento: `orcamento_valor_total`, `orcamento_detalhamento` (JSONB), `orcamento_status`, `orcamento_data`, `valor_fipe`, `percentual_fipe`
-- `CardControleReparo` gerencia o fluxo de pecas/reparo
-- `SolicitarOrcamentoDialog` envia cotacoes para auto centers
-- `ReguladorOficina.tsx` onde o regulador acompanha reparos
-- Roles existentes: `regulador`, `analista_eventos`, `diretor`
-- Funcao `has_role()` para RLS
-
-**O que falta:** sistema dedicado de itens do orcamento com historico de alteracoes, campos de origem de peca, status granular por item, consolidacao formal, e alerta de perda total (75% FIPE).
-
----
-
-## Estrutura de Dados
-
-### Nova tabela: `orcamento_reparo`
-
-Tabela principal do orcamento vinculado ao sinistro.
-
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | Identificador |
-| sinistro_id | uuid FK -> sinistros | Evento vinculado (UNIQUE) |
-| oficina_id | uuid FK -> oficinas | Oficina responsavel |
-| status | text | 'elaboracao', 'execucao', 'consolidado' |
-| valor_inicial_total | numeric(12,2) | Total original (snapshot no 1o save) |
-| valor_pecas | numeric(12,2) | Total pecas ativas (calculado) |
-| valor_mao_obra | numeric(12,2) | Total mao de obra ativa (calculado) |
-| valor_total | numeric(12,2) | Soma geral ativa |
-| consolidado_em | timestamptz | Data da consolidacao |
-| consolidado_por | uuid FK -> auth.users | Quem consolidou |
-| observacao_final | text | Comentario de consolidacao |
-| created_at | timestamptz | Criacao |
-| updated_at | timestamptz | Ultima atualizacao |
-
-### Nova tabela: `orcamento_reparo_itens`
-
-Cada item (peca ou servico) do orcamento.
-
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | Identificador |
-| orcamento_id | uuid FK -> orcamento_reparo | Orcamento pai |
-| tipo | text | 'peca' ou 'mao_de_obra' |
-| descricao | text NOT NULL | Nome da peca/servico |
-| origem | text | 'original', 'seminova', 'paralela' (so peca) |
-| quantidade | numeric DEFAULT 1 | Quantidade |
-| valor_unitario | numeric(12,2) | Preco unitario |
-| valor_total | numeric(12,2) | Calculado: qtd x unitario |
-| status | text | 'pendente', 'aprovado', 'comprado', 'instalado', 'cancelado' |
-| observacao | text | Texto livre |
-| motivo_inclusao | text | Obrigatorio se orcamento em execucao |
-| motivo_cancelamento | text | Se cancelado |
-| created_at | timestamptz | Criacao |
-| updated_at | timestamptz | Atualizacao |
-| created_by | uuid FK -> auth.users | Quem criou |
-
-### Nova tabela: `orcamento_reparo_historico`
-
-Log de auditoria de todas as alteracoes.
-
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | Identificador |
-| orcamento_id | uuid FK -> orcamento_reparo | Orcamento |
-| item_id | uuid FK -> orcamento_reparo_itens | Item afetado (nullable) |
-| acao | text | 'item_adicionado', 'item_editado', 'item_cancelado', 'consolidado' |
-| descricao | text | Descricao legivel da alteracao |
-| dados_anteriores | jsonb | Snapshot do estado anterior |
-| dados_novos | jsonb | Snapshot do estado novo |
-| motivo | text | Motivo informado pelo usuario |
-| usuario_id | uuid FK -> auth.users | Quem fez |
-| created_at | timestamptz | Quando |
-
-### RLS Policies
-
-- **SELECT orcamento_reparo / itens / historico**: `has_role(auth.uid(), 'regulador')` OR `has_role(auth.uid(), 'analista_eventos')` OR `has_role(auth.uid(), 'diretor')`
-- **INSERT/UPDATE orcamento_reparo**: `has_role(auth.uid(), 'regulador')` OR `has_role(auth.uid(), 'diretor')`
-- **INSERT orcamento_reparo_itens**: `has_role(auth.uid(), 'regulador')` OR `has_role(auth.uid(), 'diretor')`
-- **UPDATE orcamento_reparo_itens**: Permitido se orcamento NAO estiver consolidado OU `has_role(auth.uid(), 'diretor')`
-- **INSERT orcamento_reparo_historico**: `has_role(auth.uid(), 'regulador')` OR `has_role(auth.uid(), 'analista_eventos')` OR `has_role(auth.uid(), 'diretor')`
+Adicionar ao sistema a possibilidade do analista escolher entre dois tipos de orcamento ao solicitar reparo: **Cotacao Separada** (itemizada, fluxo atual) ou **Pacote Fechado** (valor unico com a oficina). A escolha e feita uma unica vez e determina toda a experiencia do orcamento daquele evento.
 
 ---
 
 ## Parte 1: Migracao SQL
 
-Arquivo: nova migracao
+Adicionar colunas na tabela `orcamento_reparo` existente:
 
-- Criar tabelas `orcamento_reparo`, `orcamento_reparo_itens`, `orcamento_reparo_historico`
-- Indices em `sinistro_id`, `orcamento_id`
-- Constraint UNIQUE em `orcamento_reparo.sinistro_id`
-- Politicas RLS conforme acima
-- Trigger para calcular `valor_total` do item automaticamente (quantidade x valor_unitario)
-- Trigger para recalcular totais do orcamento ao inserir/atualizar/deletar itens
+```text
+ALTER TABLE orcamento_reparo ADD COLUMN tipo_orcamento text DEFAULT 'cotacao_separada'
+  CHECK (tipo_orcamento IN ('cotacao_separada', 'pacote_fechado'));
 
----
+-- Campos exclusivos do Pacote Fechado
+ALTER TABLE orcamento_reparo ADD COLUMN valor_pacote numeric(12,2);
+ALTER TABLE orcamento_reparo ADD COLUMN descricao_pacote text;
+ALTER TABLE orcamento_reparo ADD COLUMN prazo_estimado_dias integer;
+ALTER TABLE orcamento_reparo ADD COLUMN forma_pagamento text;
+ALTER TABLE orcamento_reparo ADD COLUMN observacao_negociacao text;
+ALTER TABLE orcamento_reparo ADD COLUMN detalhamento_pacote jsonb;
+```
 
-## Parte 2: Hook React
+Nova tabela para cotacoes de pecas (Caminho 1):
 
-### Arquivo: `src/hooks/useOrcamentoReparo.ts`
+```text
+CREATE TABLE orcamento_reparo_cotacoes (
+  id uuid PK,
+  item_id uuid FK -> orcamento_reparo_itens,
+  fornecedor text NOT NULL,
+  tipo_peca text CHECK ('original','seminova','paralela'),
+  valor numeric(12,2),
+  prazo_entrega text,
+  observacao text,
+  selecionada boolean DEFAULT false,
+  created_at timestamptz
+);
+```
 
-Hooks:
-- `useOrcamentoReparo(sinistroId)` -- busca o orcamento do sinistro com contagem de itens
-- `useOrcamentoItens(orcamentoId)` -- lista itens separados por tipo (pecas vs mao_de_obra)
-- `useOrcamentoHistorico(orcamentoId)` -- lista historico com join em profiles para nome
-- `useCriarOrcamento()` -- cria orcamento vinculado ao sinistro
-- `useAdicionarItem()` -- insere item + registra historico
-- `useEditarItem()` -- atualiza item + registra historico com diff
-- `useCancelarItem()` -- marca item como cancelado + registra historico
-- `useConsolidarOrcamento()` -- fecha orcamento, atualiza status dos itens, registra historico
-
-Cada mutation de item deve:
-1. Fazer a operacao no item
-2. Inserir registro no historico com dados anteriores/novos
-3. Recalcular totais do orcamento (ou delegar ao trigger SQL)
-4. Invalidar queries
-
----
-
-## Parte 3: Componentes
-
-### `src/components/orcamento/CardOrcamentoReparo.tsx`
-
-Card principal que aparece no SinistroAnalise/SinistroDetalhe. Contem:
-
-- Cabecalho: titulo, badge de status (Elaboracao/Execucao/Consolidado), oficina, data
-- 4 mini-cards: Total Pecas, Total Mao de Obra, Total Geral, Variacao
-- Valor FIPE discreto com alerta 75%
-- Abas: Pecas | Mao de Obra | Historico
-- Tabela de itens por aba com acoes (editar/cancelar)
-- Rodape com totais
-- Botoes: + Adicionar Peca, + Adicionar Servico, Consolidar Orcamento
-- Se readonly (analista sem permissao de edicao): botoes ocultos, so visualizacao
-
-### `src/components/orcamento/AdicionarItemModal.tsx`
-
-Modal para adicionar ou editar um item:
-- Radio tipo (peca/mao de obra)
-- Descricao, Origem (so peca), Quantidade, Valor Unitario
-- Calculo automatico do total
-- Status (pendente/aprovado/comprado/instalado/cancelado)
-- Observacao
-- Motivo da inclusao (obrigatorio se orcamento em execucao)
-- Ao editar: campo "O que mudou" obrigatorio
-
-### `src/components/orcamento/CancelarItemDialog.tsx`
-
-Dialog de confirmacao com campo obrigatorio "Motivo do cancelamento".
-
-### `src/components/orcamento/ConsolidarOrcamentoModal.tsx`
-
-Modal de consolidacao com:
-- Resumo visual: pecas, mao de obra, total, variacao, % FIPE
-- Textarea observacao final
-- Checkbox de confirmacao
-- Alerta se > 75% FIPE (bloqueia consolidacao ate decisao)
-- Ao confirmar: marca consolidado, atualiza itens pendentes para instalado
-
-### `src/components/orcamento/HistoricoAlteracoes.tsx`
-
-Lista cronologica com icones por acao, nome do usuario, data/hora, descricao da alteracao e motivo.
+RLS: mesmas politicas do `orcamento_reparo_itens` (regulador, analista_eventos, diretor).
 
 ---
 
-## Parte 4: Integracao no SinistroAnalise
+## Parte 2: Hook useOrcamentoReparo.ts -- Extensoes
 
-### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
+Adicionar ao hook existente:
 
-Na fase de reparo (`em_reparo`, `pecas_em_cotacao`, `aprovado`), adicionar o `CardOrcamentoReparo` na coluna principal, abaixo do `CardControleReparo`. 
+- `useCriarOrcamento`: aceitar `tipoOrcamento` ('cotacao_separada' | 'pacote_fechado') como parametro obrigatorio, salvar no campo `tipo_orcamento`
+- `useAtualizarPacote()`: mutation para atualizar `valor_pacote`, `descricao_pacote`, `prazo_estimado_dias`, `forma_pagamento`, `observacao_negociacao`, `detalhamento_pacote` + registrar historico
+- `useCotacoesItem(itemId)`: query para buscar cotacoes de uma peca
+- `useAdicionarCotacao()`: mutation para inserir cotacao + se `selecionada=true`, atualizar `valor_unitario` do item
+- `useRemoverCotacao()`: mutation para deletar cotacao
 
-Para o analista de eventos: visualizacao completa mas sem botoes de edicao de itens. Pode ver historico e totais. Botao "Aprovar Orcamento" se status = elaboracao.
+Atualizar interfaces TypeScript:
 
-### Arquivo: `src/pages/eventos/SinistroDetalhe.tsx`
-
-Mesmo card na tela de detalhe (mais simples, ja tem CardControleReparo).
-
----
-
-## Parte 5: Integracao no ReguladorOficina
-
-### Arquivo: `src/pages/regulador/ReguladorOficina.tsx`
-
-Na listagem de veiculos em oficina, ao expandir um veiculo, mostrar:
-- Resumo do orcamento (total, variacao, status)
-- Botao "Gerenciar Orcamento" que abre o card completo em modal ou navega para tela dedicada
-
----
-
-## Parte 6: Alerta de Perda Total (75% FIPE)
-
-Logica no `CardOrcamentoReparo`:
-- Ao recalcular totais, comparar `valor_total` com `valor_fipe * 0.75`
-- Se ultrapassar: badge vermelho, mensagem de alerta
-- Bloquear consolidacao ate que analista/diretor tome decisao
-- Notificacao automatica (insert em tabela de notificacoes existente)
+```text
+OrcamentoReparo {
+  ...campos existentes,
+  tipo_orcamento: 'cotacao_separada' | 'pacote_fechado';
+  valor_pacote: number | null;
+  descricao_pacote: string | null;
+  prazo_estimado_dias: number | null;
+  forma_pagamento: string | null;
+  observacao_negociacao: string | null;
+  detalhamento_pacote: any;
+}
+```
 
 ---
 
-## Parte 7: Criacao Automatica do Orcamento
+## Parte 3: Modal de Escolha do Tipo de Orcamento
 
-Quando o evento entra em fase de reparo (status `em_reparo` ou quando a cotacao e aprovada), o sistema cria automaticamente o `orcamento_reparo` com:
-- Itens vindos da cotacao aprovada (pecas com precos)
-- Itens de mao de obra vindos do orcamento do regulador (`vistoria.itens_orcamento`)
-- Status inicial: 'elaboracao'
-- `valor_inicial_total` = soma de todos os itens
+### Novo componente: `src/components/orcamento/EscolhaTipoOrcamentoModal.tsx`
 
-Isso pode ser feito no frontend (ao aprovar cotacao ou ao mudar status para em_reparo) ou via trigger SQL.
+Modal com dois cards selecionaveis lado a lado:
+
+- Card "Cotacao Separada": icone clipboard, descricao com pros/contras, radio visual
+- Card "Pacote Fechado": icone package, descricao com pros/contras, radio visual
+
+Ao selecionar e clicar "Continuar":
+1. Cria o `orcamento_reparo` com o `tipo_orcamento` escolhido
+2. Se Pacote Fechado: abre a tela de pacote fechado
+3. Se Cotacao Separada: abre a tela itemizada (fluxo atual)
+
+Este modal substitui o botao "Criar Orcamento" atual no `CardOrcamentoReparo`.
+
+---
+
+## Parte 4: CardOrcamentoReparo -- Adaptar para Dois Tipos
+
+### Arquivo: `src/components/orcamento/CardOrcamentoReparo.tsx`
+
+Logica condicional baseada em `orcamento.tipo_orcamento`:
+
+**Se `cotacao_separada`:**
+- Mostrar badge "Cotacao Separada" no cabecalho
+- Renderizar todo o fluxo atual (tabelas de pecas/mao de obra, abas, etc.)
+- Adicionar coluna "Cotacoes" na tabela de pecas (link clicavel mostrando quantidade)
+
+**Se `pacote_fechado`:**
+- Mostrar badge "Pacote Fechado" no cabecalho
+- 4 cards de resumo diferentes: Valor do Pacote, Oficina, Prazo, % da FIPE
+- Card "Oficina Responsavel" com select de oficinas
+- Card "Valor do Pacote" com campos: valor, descricao, prazo, forma de pagamento, observacoes
+- Card "Detalhamento Opcional" colapsavel com mini-tabela (item/tipo/valor estimado)
+- Card "Comparativo FIPE" automatico
+- Botoes: Aprovar Pacote, Editar Valor (com motivo), Cancelar Pacote
+- Historico de alteracoes (reutiliza componente existente)
+
+Na pratica, o componente tera um `if/else` no render principal que escolhe entre `renderCotacaoSeparada()` e `renderPacoteFechado()`.
+
+---
+
+## Parte 5: Modal de Cotacoes por Peca (Caminho 1)
+
+### Novo componente: `src/components/orcamento/CotacoesPecaModal.tsx`
+
+Modal que abre ao clicar em "X cotacoes" na linha de uma peca:
+
+- Titulo: "Cotacoes -- [nome da peca]"
+- Tabela: Fornecedor, Tipo (Original/Seminova/Paralela), Valor, Prazo, Observacao, Radio "Selecionada"
+- Botao "+ Adicionar Cotacao"
+- Ao selecionar uma cotacao como escolhida: atualiza automaticamente o `valor_unitario` e `origem` do item no orcamento
+- Alerta se oficina nao credenciada e menos de 3 cotacoes (art. 11.3)
+
+---
+
+## Parte 6: Formulario Pacote Fechado
+
+### Novo componente: `src/components/orcamento/FormPacoteFechado.tsx`
+
+Renderiza dentro do CardOrcamentoReparo quando tipo = pacote_fechado:
+
+- Select de oficina (usa `useOficinasDisponiveis` existente)
+- Campo valor pacote (monetario)
+- Textarea "O que esta incluido" (obrigatorio)
+- Input prazo estimado (dias uteis)
+- Select forma de pagamento: "A vista apos conclusao" / "50% entrada + 50% entrega" / "Faturado" / "Outro"
+- Textarea observacoes da negociacao (opcional)
+- Secao colapsavel de detalhamento opcional com mini-tabela editavel
+
+Botoes de acao:
+- "Salvar": persiste dados no `orcamento_reparo`
+- "Aprovar Pacote": muda status para 'execucao' e registra historico
+- "Editar Valor": se orcamento ja aprovado, exige motivo obrigatorio
+
+---
+
+## Parte 7: Consolidacao do Pacote Fechado
+
+### Atualizar: `src/components/orcamento/ConsolidarOrcamentoModal.tsx`
+
+Adicionar variante para pacote fechado:
+- Resumo mostra valor do pacote (em vez de pecas + mao de obra separados)
+- Mostra variacao se valor foi alterado durante o reparo
+- Mesmo fluxo de checkbox de confirmacao e bloqueio pos-consolidacao
+
+---
+
+## Parte 8: Integracao no SinistroAnalise e SinistroDetalhe
+
+### `src/pages/eventos/SinistroAnalise.tsx` (linha ~1644)
+
+O `CardOrcamentoReparo` ja esta integrado na aba "Orcamento". As mudancas sao internas ao componente -- nenhuma alteracao necessaria no SinistroAnalise exceto:
+
+- Passar prop adicional `canChooseType` (true para analista_eventos e diretor)
+- O card ja mostra o modal de escolha quando nao existe orcamento
+
+### `src/pages/eventos/SinistroDetalhe.tsx`
+
+Mesma logica -- o CardOrcamentoReparo se adapta internamente.
+
+---
+
+## Parte 9: Permissoes e Reset
+
+### Reset do tipo de orcamento (somente diretor)
+
+Botao discreto no CardOrcamentoReparo (visivel apenas para diretor):
+"Resetar Orcamento" -> Dialog de confirmacao com motivo obrigatorio.
+
+Ao resetar:
+- Deleta o `orcamento_reparo` e seus itens/historico/cotacoes (CASCADE)
+- Registra log
+- O analista pode escolher novamente o tipo
+
+### Permissoes no frontend
+
+```text
+canChooseType = analista_eventos OR diretor
+canEditPacote = analista_eventos OR regulador OR diretor
+canResetOrcamento = diretor (somente)
+```
 
 ---
 
@@ -225,56 +201,18 @@ Isso pode ser feito no frontend (ao aprovar cotacao ou ao mudar status para em_r
 
 | Arquivo | Acao |
 |---------|------|
-| Nova migracao SQL | Tabelas, RLS, triggers |
-| `src/hooks/useOrcamentoReparo.ts` | Novo hook CRUD completo |
-| `src/components/orcamento/CardOrcamentoReparo.tsx` | Novo card principal |
-| `src/components/orcamento/AdicionarItemModal.tsx` | Novo modal adicionar/editar |
-| `src/components/orcamento/CancelarItemDialog.tsx` | Novo dialog cancelar |
-| `src/components/orcamento/ConsolidarOrcamentoModal.tsx` | Novo modal consolidar |
-| `src/components/orcamento/HistoricoAlteracoes.tsx` | Novo componente historico |
-| `src/pages/eventos/SinistroAnalise.tsx` | Integrar CardOrcamentoReparo |
-| `src/pages/eventos/SinistroDetalhe.tsx` | Integrar CardOrcamentoReparo |
-| `src/pages/regulador/ReguladorOficina.tsx` | Resumo e acesso ao orcamento |
+| Nova migracao SQL | Colunas em `orcamento_reparo`, tabela `orcamento_reparo_cotacoes`, RLS |
+| `src/hooks/useOrcamentoReparo.ts` | Novos hooks para pacote e cotacoes |
+| `src/components/orcamento/EscolhaTipoOrcamentoModal.tsx` | Novo modal de escolha |
+| `src/components/orcamento/CardOrcamentoReparo.tsx` | Adaptar para dois tipos |
+| `src/components/orcamento/FormPacoteFechado.tsx` | Novo formulario pacote |
+| `src/components/orcamento/CotacoesPecaModal.tsx` | Novo modal cotacoes por peca |
+| `src/components/orcamento/ConsolidarOrcamentoModal.tsx` | Variante pacote fechado |
 
 ## Sem alteracoes em
 
-- App do associado (nenhuma info de custo)
-- Portal do sindicante (sem acesso a custos)
+- App do associado (nao ve custos)
+- Portal do sindicante
 - Edge functions existentes
-- Fluxo de cotacao de pecas (continua funcionando como esta)
-- Tabelas `ordens_servico` / `ordens_servico_itens` (mantidas para fluxo de OS da oficina)
-
----
-
-## Detalhes Tecnicos
-
-### Triggers SQL para recalculo automatico
-
-```text
--- Trigger em orcamento_reparo_itens (INSERT/UPDATE/DELETE)
--- Recalcula valor_pecas, valor_mao_obra, valor_total no orcamento_reparo pai
--- Exclui itens com status 'cancelado' do calculo
-```
-
-### Logica de permissao no frontend
-
-```text
-- canEdit = has_role(regulador) OR has_role(diretor)
-- canEditConsolidado = has_role(diretor)
-- canConsolidar = has_role(regulador) OR has_role(diretor)
-- canView = has_role(regulador) OR has_role(analista_eventos) OR has_role(diretor)
-```
-
-### Formato do historico
-
-Cada entrada segue o padrao:
-```text
-{
-  acao: "item_editado",
-  descricao: "Editou peca: Para-choque dianteiro — valor de R$ 800 para R$ 650",
-  dados_anteriores: { valor_unitario: 800, valor_total: 800 },
-  dados_novos: { valor_unitario: 650, valor_total: 650 },
-  motivo: "Encontramos seminova por R$ 150 menos"
-}
-```
-
+- Fluxo de cotacao via WhatsApp (SolicitarOrcamentoDialog) -- continua como esta
+- Tabela `ordens_servico` / `ordens_servico_itens` (fluxo de OS da oficina)
