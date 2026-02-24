@@ -4,6 +4,7 @@ import { FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
 import { useFotosReboquistaBySinistro } from '@/hooks/useFotosReboquista';
 import { FotosReboquistaGallery } from '@/components/assistencia/FotosReboquistaGallery';
 import { CardOrcamentoReparo } from '@/components/orcamento/CardOrcamentoReparo';
+import { CardParecerRegulador } from '@/components/orcamento/CardParecerRegulador';
 import { CardLaudoSindicancia } from '@/components/sinistros/CardLaudoSindicancia';
 import { BannerSindicanciaEmAndamento } from '@/components/sinistros/BannerSindicanciaEmAndamento';
 import { DecisaoPosSindicanciaModal } from '@/components/sinistros/DecisaoPosSindicanciaModal';
@@ -2271,35 +2272,12 @@ export default function SinistroAnalise() {
             </Card>
           )}
 
-          {/* Card Dados da Regulagem */}
+          {/* Card Parecer Técnico do Regulador */}
           {(sinistro as any).regulagem_concluida_em && (
-            <Card className="border-teal-200">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-teal-600" />
-                  Dados da Regulagem
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {(sinistro as any).regulagem_tipo_dano && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Tipo de dano:</span>
-                    <Badge variant={(sinistro as any).regulagem_tipo_dano === 'perda_total' ? 'destructive' : 'default'}>
-                      {(sinistro as any).regulagem_tipo_dano === 'perda_total' ? 'Perda Total' : 'Parcial'}
-                    </Badge>
-                  </div>
-                )}
-                {(sinistro as any).regulagem_parecer && (
-                  <div>
-                    <span className="text-muted-foreground">Parecer:</span>
-                    <p className="mt-1 text-foreground bg-muted p-2 rounded text-xs">{(sinistro as any).regulagem_parecer}</p>
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Concluída em {formatDateTime((sinistro as any).regulagem_concluida_em)}
-                </p>
-              </CardContent>
-            </Card>
+            <CardParecerRegulador
+              sinistroId={sinistro.id}
+              valorFipe={(sinistro.veiculo as any)?.valor_fipe}
+            />
           )}
 
           {/* Card Orçamento */}

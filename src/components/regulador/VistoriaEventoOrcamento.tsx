@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,12 +18,11 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Loader2, ArrowRight, Car } from 'lucide-react';
+import { Plus, Trash2, Loader2, ArrowRight, Camera, X, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { PecaSelectFields, PecaSelectValues } from '@/components/oficinas/PecaSelectFields';
 
 const ETAPAS_REPARO = [
   { id: 'lanternagem', nome: 'Lanternagem', descricao: 'Chaparia e estrutura da carroceria' },
@@ -35,22 +34,21 @@ const ETAPAS_REPARO = [
   { id: 'lavagem', nome: 'Lavagem', descricao: 'Limpeza completa antes da entrega' },
 ] as const;
 
-interface ItemOrcamento {
+interface ItemParecer {
+  tipo: 'peca' | 'servico';
   descricao: string;
-  tipo: 'peca' | 'mao_de_obra' | 'servico';
-  valor_unitario: number;
+  origem_sugerida?: string;
   quantidade: number;
-  valor_total: number;
-  // Structured peca fields
-  tipo_peca?: string;
-  veiculo_marca?: string;
-  veiculo_modelo?: string;
-  veiculo_ano?: string;
+  valor_estimado: number;
+  prioridade: 'essencial' | 'necessario' | 'opcional';
+  observacao?: string;
 }
 
-const defaultPecaValues: PecaSelectValues = {
-  tipoPeca: '', marcaCodigo: '', marcaNome: '', modeloCodigo: '', modeloNome: '', anoCodigo: '', anoNome: '',
-};
+interface FotoTecnica {
+  file: File;
+  preview: string;
+  descricao: string;
+}
 
 interface VistoriaEventoOrcamentoProps {
   open: boolean;
@@ -72,127 +70,85 @@ export function VistoriaEventoOrcamento({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Diagnóstico
-  const [tipoDano, setTipoDano] = useState<'parcial' | 'total' | ''>('');
+  // Seção 1: Avaliação Geral
+  const [gravidade, setGravidade] = useState<string>('');
   const [descricaoTecnica, setDescricaoTecnica] = useState('');
-  const [observacoesTotal, setObservacoesTotal] = useState('');
+  const [fotos, setFotos] = useState<FotoTecnica[]>([]);
+
+  // Seção 2: Itens
+  const [itens, setItens] = useState<ItemParecer[]>([]);
   const [etapasReparo, setEtapasReparo] = useState<string[]>([]);
 
-  // Shared vehicle — auto-filled from vehicle data (read-only)
-  const sharedVeiculo = {
-    marcaCodigo: '', marcaNome: veiculo?.marca || '',
-    modeloCodigo: '', modeloNome: veiculo?.modelo || '',
-    anoCodigo: '', anoNome: veiculo?.ano_modelo ? String(veiculo.ano_modelo) : '',
+  // Seção 3: Prazo
+  const [prazoEstimado, setPrazoEstimado] = useState('');
+  const [prazoObservacao, setPrazoObservacao] = useState('');
+
+  // Seção 4: Observações
+  const [observacoesGerais, setObservacoesGerais] = useState('');
+  const [recomendacao, setRecomendacao] = useState('');
+
+  const totalPecas = itens.filter(i => i.tipo === 'peca').reduce((s, i) => s + i.valor_estimado * i.quantidade, 0);
+  const totalServicos = itens.filter(i => i.tipo === 'servico').reduce((s, i) => s + i.valor_estimado * i.quantidade, 0);
+  const totalGeral = totalPecas + totalServicos;
+  const pctFipe = valorFipe && valorFipe > 0 ? (totalGeral / valorFipe) * 100 : 0;
+  const alertaFipe = pctFipe > 75;
+
+  const adicionarItem = (tipo: 'peca' | 'servico') => {
+    setItens(prev => [...prev, {
+      tipo,
+      descricao: '',
+      origem_sugerida: tipo === 'peca' ? 'qualquer' : undefined,
+      quantidade: 1,
+      valor_estimado: 0,
+      prioridade: 'necessario',
+      observacao: '',
+    }]);
   };
 
-  // Orçamento
-  const [itens, setItens] = useState<ItemOrcamento[]>([
-    { descricao: '', tipo: 'peca', valor_unitario: 0, quantidade: 1, valor_total: 0 },
-  ]);
-  // PecaSelectFields values per item index
-  const [pecaValuesMap, setPecaValuesMap] = useState<Record<number, PecaSelectValues>>({
-    0: { ...defaultPecaValues },
-  });
-
-  // Parecer
-  const [parecerTecnico, setParecerTecnico] = useState('');
-  const [recomendacao, setRecomendacao] = useState<'aprovar' | 'analise_detalhada' | ''>('');
-
-  // Only sum non-peca items (peças don't have valor)
-  const valorTotal = itens.reduce((sum, item) => sum + (item.tipo !== 'peca' ? item.valor_total : 0), 0);
-
-  const handleItemChange = (index: number, field: keyof ItemOrcamento, value: any) => {
-    setItens((prev) => {
-      const novos = [...prev];
-      (novos[index] as any)[field] = value;
-      if (field === 'valor_unitario' || field === 'quantidade') {
-        novos[index].valor_total = novos[index].valor_unitario * novos[index].quantidade;
-      }
-      // When switching to peca, clear value fields; when switching away, clear peca fields
-      if (field === 'tipo') {
-        if (value === 'peca') {
-          novos[index].valor_unitario = 0;
-          novos[index].quantidade = 1;
-          novos[index].valor_total = 0;
-          novos[index].descricao = '';
-          setPecaValuesMap(prev => ({ ...prev, [index]: { ...defaultPecaValues } }));
-        } else {
-          novos[index].tipo_peca = undefined;
-          novos[index].veiculo_marca = undefined;
-          novos[index].veiculo_modelo = undefined;
-          novos[index].veiculo_ano = undefined;
-          setPecaValuesMap(prev => {
-            const copy = { ...prev };
-            delete copy[index];
-            return copy;
-          });
-        }
-      }
-      return novos;
-    });
-  };
-
-  const handlePecaValuesChange = (index: number, pv: PecaSelectValues) => {
-    setPecaValuesMap(prev => ({ ...prev, [index]: pv }));
-    // Update structured fields on the item
+  const updateItem = (idx: number, field: keyof ItemParecer, value: any) => {
     setItens(prev => {
-      const novos = [...prev];
-      novos[index].tipo_peca = pv.tipoPeca;
-      novos[index].veiculo_marca = pv.marcaNome;
-      novos[index].veiculo_modelo = pv.modeloNome;
-      novos[index].veiculo_ano = pv.anoNome;
-      novos[index].descricao = pv.tipoPeca
-        ? `${pv.tipoPeca}${pv.marcaNome ? ` - ${pv.marcaNome}` : ''}${pv.modeloNome ? ` ${pv.modeloNome}` : ''}${pv.anoNome ? ` ${pv.anoNome}` : ''}`
-        : '';
-      return novos;
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx], [field]: value };
+      return copy;
     });
   };
 
-  const adicionarItem = () => {
-    const newIndex = itens.length;
-    setItens((prev) => [...prev, { descricao: '', tipo: 'peca', valor_unitario: 0, quantidade: 1, valor_total: 0 }]);
-    setPecaValuesMap(prev => ({ ...prev, [newIndex]: { ...defaultPecaValues } }));
+  const removerItem = (idx: number) => {
+    setItens(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const removerItem = (index: number) => {
-    setItens((prev) => prev.filter((_, i) => i !== index));
-    setPecaValuesMap(prev => {
-      const newMap: Record<number, PecaSelectValues> = {};
-      Object.entries(prev).forEach(([k, v]) => {
-        const key = parseInt(k);
-        if (key < index) newMap[key] = v;
-        else if (key > index) newMap[key - 1] = v;
-      });
-      return newMap;
+  const handleFotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const newFotos: FotoTecnica[] = [];
+    for (let i = 0; i < files.length && fotos.length + newFotos.length < 20; i++) {
+      const file = files[i];
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} excede 5MB`);
+        continue;
+      }
+      newFotos.push({ file, preview: URL.createObjectURL(file), descricao: '' });
+    }
+    setFotos(prev => [...prev, ...newFotos]);
+    e.target.value = '';
+  };
+
+  const removerFoto = (idx: number) => {
+    setFotos(prev => {
+      URL.revokeObjectURL(prev[idx].preview);
+      return prev.filter((_, i) => i !== idx);
     });
   };
 
   const handleFinalizar = async () => {
-    if (!tipoDano) {
-      toast.error('Selecione o tipo de dano');
-      return;
-    }
-    if (!descricaoTecnica.trim()) {
-      toast.error('Preencha a descrição técnica');
-      return;
-    }
-    if (!parecerTecnico.trim()) {
-      toast.error('Preencha o parecer técnico');
-      return;
-    }
-    if (!recomendacao) {
-      toast.error('Selecione a recomendação');
-      return;
-    }
-    if (tipoDano === 'parcial' && etapasReparo.length === 0) {
-      toast.error('Selecione pelo menos uma etapa de reparo');
-      return;
-    }
-    if (tipoDano === 'parcial' && itens.length === 0) {
-      toast.error('Adicione pelo menos um item ao orçamento');
-      return;
-    }
+    if (!gravidade) { toast.error('Selecione a gravidade do dano'); return; }
+    if (descricaoTecnica.length < 50) { toast.error('Descrição técnica deve ter pelo menos 50 caracteres'); return; }
+    if (fotos.length < 3) { toast.error('Envie pelo menos 3 fotos técnicas'); return; }
+    if (!recomendacao) { toast.error('Selecione a recomendação'); return; }
+    if (gravidade !== 'possivel_perda_total' && itens.length === 0) { toast.error('Adicione pelo menos um item'); return; }
+    if (gravidade !== 'possivel_perda_total' && etapasReparo.length === 0) { toast.error('Selecione pelo menos uma etapa de reparo'); return; }
 
     setSaving(true);
     try {
@@ -200,25 +156,52 @@ export function VistoriaEventoOrcamento({
       if (!session) throw new Error('Sessão expirada');
 
       const dados = {
-        tipo_dano: tipoDano,
+        gravidade,
         descricao_tecnica: descricaoTecnica,
-        itens_orcamento: tipoDano === 'parcial' ? itens : [],
-        valor_total_orcamento: tipoDano === 'parcial' ? valorTotal : 0,
-        parecer_tecnico: parecerTecnico,
-        recomendacao: recomendacao,
-        observacoes_perda_total: tipoDano === 'total' ? observacoesTotal : null,
-        etapas_reparo: tipoDano === 'parcial'
+        prazo_estimado: prazoEstimado || null,
+        prazo_observacao: prazoObservacao || null,
+        observacoes_gerais: observacoesGerais || null,
+        recomendacao,
+        estimativa_total: totalGeral,
+        itens_parecer: itens,
+        etapas_reparo: gravidade !== 'possivel_perda_total'
           ? ETAPAS_REPARO
               .filter(e => etapasReparo.includes(e.id))
-              .map(e => ({
-                id: e.id,
-                nome: e.nome,
-                selecionada: true,
-                status: 'pendente' as const,
-              }))
+              .map(e => ({ id: e.id, nome: e.nome, selecionada: true, status: 'pendente' as const }))
           : [],
+        // Legacy compatibility
+        tipo_dano: gravidade === 'possivel_perda_total' ? 'total' : 'parcial',
+        parecer_tecnico: descricaoTecnica,
+        itens_orcamento: itens.map(i => ({
+          descricao: i.descricao,
+          tipo: i.tipo === 'peca' ? 'peca' : 'servico',
+          valor_unitario: i.valor_estimado,
+          quantidade: i.quantidade,
+          valor_total: i.valor_estimado * i.quantidade,
+        })),
+        valor_total_orcamento: totalGeral,
       };
 
+      // Upload fotos first
+      for (let i = 0; i < fotos.length; i++) {
+        const formData = new FormData();
+        formData.append('acao', 'salvar_midias');
+        formData.append('vistoria_id', vistoriaId);
+        formData.append('tipo', 'foto');
+        formData.append('index', String(i + 1));
+        formData.append('arquivo', fotos[i].file);
+
+        await fetch(
+          `https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/salvar-vistoria-regulador`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            body: formData,
+          }
+        );
+      }
+
+      // Finalizar
       const formData = new FormData();
       formData.append('acao', 'finalizar');
       formData.append('vistoria_id', vistoriaId);
@@ -238,9 +221,10 @@ export function VistoriaEventoOrcamento({
         throw new Error(err.error || 'Erro ao finalizar');
       }
 
-      toast.success('Vistoria finalizada com sucesso!');
+      toast.success('Parecer técnico registrado com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['vistorias-evento'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-evento-contadores'] });
+      queryClient.invalidateQueries({ queryKey: ['parecer-tecnico'] });
       navigate('/regulador/vistorias');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao finalizar vistoria');
@@ -249,90 +233,104 @@ export function VistoriaEventoOrcamento({
     }
   };
 
+  const pecas = itens.filter(i => i.tipo === 'peca');
+  const servicos = itens.filter(i => i.tipo === 'servico');
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-full h-full max-h-full sm:max-w-2xl sm:max-h-[90vh] sm:h-auto p-0 gap-0 rounded-none sm:rounded-lg">
         <DialogHeader className="px-4 pt-4 pb-2 border-b sticky top-0 bg-background z-10">
-          <DialogTitle>Orçamento da Vistoria</DialogTitle>
+          <DialogTitle>Parecer Técnico — Regulagem</DialogTitle>
         </DialogHeader>
 
         <div className="overflow-y-auto p-4 space-y-6 flex-1">
-          {/* Diagnóstico */}
+          {/* ====== SEÇÃO 1: Avaliação Geral ====== */}
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Diagnóstico</h3>
+            <h3 className="text-sm font-semibold">1. Avaliação Geral do Dano</h3>
 
             <div className="space-y-1">
-              <Label className="text-xs">Tipo de dano</Label>
-              <Select value={tipoDano} onValueChange={(v) => setTipoDano(v as any)}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <Label className="text-xs">Gravidade do dano *</Label>
+              <Select value={gravidade} onValueChange={setGravidade}>
+                <SelectTrigger><SelectValue placeholder="Selecione a gravidade..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="parcial">Parcial</SelectItem>
-                  <SelectItem value="total">Total (≥ 75% FIPE)</SelectItem>
+                  <SelectItem value="leve">Leve — arranhões, amassados pequenos</SelectItem>
+                  <SelectItem value="moderado">Moderado — peças a trocar, funilaria necessária</SelectItem>
+                  <SelectItem value="grave">Grave — múltiplas peças, danos estruturais</SelectItem>
+                  <SelectItem value="possivel_perda_total">Possível Perda Total — dano extenso</SelectItem>
                 </SelectContent>
               </Select>
-              {valorFipe && tipoDano === 'total' && (
-                <p className="text-xs text-muted-foreground">
-                  Valor FIPE: R$ {Number(valorFipe).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-              )}
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Descrição técnica dos danos</Label>
+              <Label className="text-xs">Descrição técnica dos danos * (mín. 50 caracteres)</Label>
               <Textarea
                 value={descricaoTecnica}
                 onChange={(e) => setDescricaoTecnica(e.target.value)}
-                placeholder="Descreva tecnicamente os danos observados..."
-                rows={3}
+                placeholder="Descreva tecnicamente os danos encontrados, áreas afetadas, estado geral do veículo..."
+                rows={4}
               />
+              <p className="text-[10px] text-muted-foreground">{descricaoTecnica.length}/50 caracteres mínimos</p>
             </div>
 
-            {tipoDano === 'total' && (
-              <>
-                <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 p-3 space-y-1">
-                  <p className="text-sm font-medium text-red-800 dark:text-red-300">⚠️ Perda Total Identificada</p>
-                  <p className="text-xs text-red-700 dark:text-red-400">
-                    O veículo não será reparado. O fluxo seguirá para indenização integral após aprovação do parecer.
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Justificativa da perda total *</Label>
-                  <Textarea
-                    value={observacoesTotal}
-                    onChange={(e) => setObservacoesTotal(e.target.value)}
-                    placeholder="Ex: Danos estruturais comprometeram chassis, motor e suspensão. Custo estimado de reparo ultrapassa 80% da FIPE."
-                    rows={4}
-                  />
-                </div>
-              </>
-            )}
+            {/* Fotos técnicas */}
+            <div className="space-y-1">
+              <Label className="text-xs">Fotos técnicas * (mín. 3, máx. 20)</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png"
+                multiple
+                className="hidden"
+                onChange={handleFotoUpload}
+              />
+              <div className="grid grid-cols-4 gap-2">
+                {fotos.map((foto, i) => (
+                  <div key={i} className="relative aspect-square rounded border overflow-hidden group">
+                    <img src={foto.preview} alt="" className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => removerFoto(i)}
+                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {fotos.length < 20 && (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="aspect-square rounded border-2 border-dashed flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                  >
+                    <Camera className="h-5 w-5" />
+                    <span className="text-[10px]">{fotos.length}/20</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </section>
 
-          {/* Etapas do Reparo - apenas para parcial */}
-          {tipoDano === 'parcial' && (
+          {/* ====== SEÇÃO 2: Itens ====== */}
+          {gravidade && gravidade !== 'possivel_perda_total' && (
             <section className="space-y-3">
-              <h3 className="text-sm font-semibold">Etapas Necessárias para o Reparo</h3>
+              <h3 className="text-sm font-semibold">2. Itens Necessários (Estimativa)</h3>
+              <p className="text-xs text-muted-foreground">
+                Valores estimados com base na sua experiência. O orçamento final será feito pelo analista com a oficina.
+              </p>
 
+              {/* Etapas do Reparo */}
               <div className="space-y-2">
+                <Label className="text-xs font-medium">Etapas necessárias *</Label>
                 {ETAPAS_REPARO.map((etapa) => (
-                  <label
-                    key={etapa.id}
-                    className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                  >
+                  <label key={etapa.id} className="flex items-start gap-3 rounded-lg border p-2.5 cursor-pointer hover:bg-muted/50 transition-colors">
                     <Checkbox
                       checked={etapasReparo.includes(etapa.id)}
                       onCheckedChange={(checked) => {
-                        setEtapasReparo((prev) =>
-                          checked
-                            ? [...prev, etapa.id]
-                            : prev.filter((id) => id !== etapa.id)
-                        );
+                        setEtapasReparo(prev => checked ? [...prev, etapa.id] : prev.filter(id => id !== etapa.id));
                       }}
                       className="mt-0.5"
                     />
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium">{etapa.nome}</span>
-                      <p className="text-xs text-muted-foreground">{etapa.descricao}</p>
+                      <span className="text-xs font-medium">{etapa.nome}</span>
+                      <p className="text-[10px] text-muted-foreground">{etapa.descricao}</p>
                     </div>
                   </label>
                 ))}
@@ -340,161 +338,206 @@ export function VistoriaEventoOrcamento({
 
               {etapasReparo.length > 0 && (
                 <div className="rounded-lg bg-muted px-3 py-2">
-                  <p className="text-xs text-muted-foreground mb-1.5">Sequência de execução:</p>
+                  <p className="text-[10px] text-muted-foreground mb-1">Sequência:</p>
                   <div className="flex flex-wrap items-center gap-1">
-                    {ETAPAS_REPARO.filter((e) => etapasReparo.includes(e.id)).map((etapa, i, arr) => (
+                    {ETAPAS_REPARO.filter(e => etapasReparo.includes(e.id)).map((etapa, i, arr) => (
                       <span key={etapa.id} className="flex items-center gap-1">
-                        <Badge variant="secondary" className="text-xs">{etapa.nome}</Badge>
+                        <Badge variant="secondary" className="text-[10px]">{etapa.nome}</Badge>
                         {i < arr.length - 1 && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
                       </span>
                     ))}
                   </div>
                 </div>
               )}
-            </section>
-          )}
 
-          {/* Veículo do Orçamento (preenchido automaticamente) */}
-          {tipoDano === 'parcial' && (
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Car className="h-4 w-4" />
-                Veículo (aplicado a todos os itens)
-              </h3>
-              {sharedVeiculo.marcaNome && (
-                <p className="text-xs text-muted-foreground">
-                  {[sharedVeiculo.marcaNome, sharedVeiculo.modeloNome, sharedVeiculo.anoNome].filter(Boolean).join(' — ')}
-                </p>
-              )}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Marca</Label>
-                  <Input value={sharedVeiculo.marcaNome || '—'} disabled className="bg-muted" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Modelo</Label>
-                  <Input value={sharedVeiculo.modeloNome || '—'} disabled className="bg-muted" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Ano</Label>
-                  <Input value={sharedVeiculo.anoNome || '—'} disabled className="bg-muted" />
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Itens do Orçamento - apenas para parcial */}
-          {tipoDano === 'parcial' && (
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold">Itens do Orçamento</h3>
-
+              {/* Itens list */}
               {itens.map((item, i) => (
                 <div key={i} className="rounded-lg border p-3 space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-medium text-muted-foreground">Item {i + 1}</span>
-                    {itens.length > 1 && (
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removerItem(i)}>
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </Button>
-                    )}
+                    <Badge variant={item.tipo === 'peca' ? 'default' : 'secondary'} className="text-[10px]">
+                      {item.tipo === 'peca' ? '🔧 Peça' : '🛠️ Serviço'}
+                    </Badge>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removerItem(i)}>
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
                   </div>
 
-                  <Select value={item.tipo} onValueChange={(v) => handleItemChange(i, 'tipo', v)}>
-                    <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="peca">Peça</SelectItem>
-                      <SelectItem value="mao_de_obra">Mão de Obra</SelectItem>
-                      <SelectItem value="servico">Serviço</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    placeholder={item.tipo === 'peca' ? 'Ex: Para-choque dianteiro, Farol esquerdo...' : 'Ex: Funilaria lateral, Pintura parcial...'}
+                    value={item.descricao}
+                    onChange={(e) => updateItem(i, 'descricao', e.target.value)}
+                    className="text-sm"
+                  />
 
-                  {item.tipo === 'peca' ? (
-                    <PecaSelectFields
-                      values={pecaValuesMap[i] || defaultPecaValues}
-                      onChange={(pv) => handlePecaValuesChange(i, pv)}
-                      active={open}
-                      sharedVeiculo={sharedVeiculo.marcaNome ? sharedVeiculo : undefined}
-                      initialVeiculo={!sharedVeiculo.marcaNome && veiculo ? { marca: veiculo.marca || '', modelo: veiculo.modelo || '', ano_modelo: veiculo.ano_modelo || '' } : undefined}
-                    />
-                  ) : (
-                    <>
-                      <Input
-                        placeholder="Descrição do serviço"
-                        value={item.descricao}
-                        onChange={(e) => handleItemChange(i, 'descricao', e.target.value)}
-                      />
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <Label className="text-[10px]">Vlr. Unit.</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={item.valor_unitario || ''}
-                            onChange={(e) => handleItemChange(i, 'valor_unitario', parseFloat(e.target.value) || 0)}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">Qtd.</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={item.quantidade || ''}
-                            onChange={(e) => handleItemChange(i, 'quantidade', parseInt(e.target.value) || 1)}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">Total</Label>
-                          <Input
-                            value={`R$ ${item.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                            readOnly
-                            className="bg-muted"
-                          />
-                        </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {item.tipo === 'peca' && (
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">Origem sugerida</Label>
+                        <Select value={item.origem_sugerida || 'qualquer'} onValueChange={(v) => updateItem(i, 'origem_sugerida', v)}>
+                          <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="original">Original</SelectItem>
+                            <SelectItem value="seminova">Seminova</SelectItem>
+                            <SelectItem value="paralela">Paralela</SelectItem>
+                            <SelectItem value="qualquer">Qualquer</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </>
-                  )}
+                    )}
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Prioridade</Label>
+                      <Select value={item.prioridade} onValueChange={(v) => updateItem(i, 'prioridade', v as any)}>
+                        <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="essencial">Essencial</SelectItem>
+                          <SelectItem value="necessario">Necessário</SelectItem>
+                          <SelectItem value="opcional">Opcional</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Valor estimado (R$)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={item.valor_estimado || ''}
+                        onChange={(e) => updateItem(i, 'valor_estimado', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Qtd</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={item.quantidade || ''}
+                        onChange={(e) => updateItem(i, 'quantidade', parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Total</Label>
+                      <Input
+                        value={`R$ ${(item.valor_estimado * item.quantidade).toFixed(2)}`}
+                        readOnly
+                        className="bg-muted"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[10px]">Observação técnica (opcional)</Label>
+                    <Input
+                      placeholder="Ex: Peça original só em SP — prazo pode ser maior"
+                      value={item.observacao || ''}
+                      onChange={(e) => updateItem(i, 'observacao', e.target.value)}
+                      className="text-xs"
+                    />
+                  </div>
                 </div>
               ))}
 
-              <Button variant="outline" size="sm" onClick={adicionarItem} className="w-full gap-2">
-                <Plus className="h-4 w-4" />
-                Adicionar Item
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => adicionarItem('peca')} className="flex-1 gap-1">
+                  <Plus className="h-3 w-3" /> Peça
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => adicionarItem('servico')} className="flex-1 gap-1">
+                  <Plus className="h-3 w-3" /> Serviço
+                </Button>
+              </div>
 
-              {valorTotal > 0 && (
-                <div className="flex justify-between items-center rounded-lg bg-muted px-3 py-2">
-                  <span className="text-sm font-semibold">Total (Serviços/Mão de Obra)</span>
-                  <span className="text-lg font-bold">
-                    R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
+              {/* Resumo de itens */}
+              {itens.length > 0 && (
+                <div className="rounded-lg bg-muted p-3 space-y-1 text-sm">
+                  <div className="flex justify-between text-xs">
+                    <span>Peças ({pecas.length}):</span>
+                    <span>R$ {totalPecas.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span>Serviços ({servicos.length}):</span>
+                    <span>R$ {totalServicos.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold">
+                    <span>ESTIMATIVA TOTAL:</span>
+                    <span>R$ {totalGeral.toFixed(2)}</span>
+                  </div>
+                  {valorFipe && valorFipe > 0 && (
+                    <div className={`flex justify-between text-xs ${alertaFipe ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                      <span>FIPE: R$ {valorFipe.toFixed(0)}</span>
+                      <span>{pctFipe.toFixed(1)}% da FIPE</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {alertaFipe && (
+                <div className="flex items-start gap-2 p-2 rounded bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
+                  <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  <span>⚠️ A estimativa ultrapassa 75% da FIPE. Pode configurar Perda Total. O analista será notificado.</span>
                 </div>
               )}
             </section>
           )}
 
-          {/* Parecer */}
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Parecer do Regulador</h3>
+          {/* Perda Total banner */}
+          {gravidade === 'possivel_perda_total' && (
+            <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 p-3 space-y-1">
+              <p className="text-sm font-medium text-red-800 dark:text-red-300">⚠️ Possível Perda Total</p>
+              <p className="text-xs text-red-700 dark:text-red-400">
+                A avaliação indica que o dano pode configurar perda total. O analista e o diretor serão notificados.
+              </p>
+            </div>
+          )}
 
+          {/* ====== SEÇÃO 3: Prazo ====== */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">3. Prazo Estimado</h3>
             <div className="space-y-1">
-              <Label className="text-xs">Parecer técnico</Label>
+              <Label className="text-xs">Tempo estimado de reparo</Label>
+              <Select value={prazoEstimado} onValueChange={setPrazoEstimado}>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ate_5_dias">Até 5 dias úteis</SelectItem>
+                  <SelectItem value="5_a_15">5 a 15 dias úteis</SelectItem>
+                  <SelectItem value="15_a_30">15 a 30 dias úteis</SelectItem>
+                  <SelectItem value="30_a_60">30 a 60 dias úteis</SelectItem>
+                  <SelectItem value="mais_60">Mais de 60 dias úteis</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Observação sobre prazo (opcional)</Label>
+              <Input
+                value={prazoObservacao}
+                onChange={(e) => setPrazoObservacao(e.target.value)}
+                placeholder="Ex: Depende da disponibilidade de peça importada"
+              />
+            </div>
+          </section>
+
+          {/* ====== SEÇÃO 4: Observações ====== */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">4. Observações e Recomendação</h3>
+            <div className="space-y-1">
+              <Label className="text-xs">Observações gerais (opcional)</Label>
               <Textarea
-                value={parecerTecnico}
-                onChange={(e) => setParecerTecnico(e.target.value)}
-                placeholder="Conclusão técnica da vistoria..."
+                value={observacoesGerais}
+                onChange={(e) => setObservacoesGerais(e.target.value)}
+                placeholder="Ex: Recomendo oficina X por ter experiência com esta marca..."
                 rows={3}
               />
             </div>
-
             <div className="space-y-1">
-              <Label className="text-xs">Recomendação</Label>
-              <Select value={recomendacao} onValueChange={(v) => setRecomendacao(v as any)}>
+              <Label className="text-xs">Recomendação *</Label>
+              <Select value={recomendacao} onValueChange={setRecomendacao}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="aprovar">Recomendar Aprovação</SelectItem>
-                  <SelectItem value="analise_detalhada">Recomendar Análise Detalhada</SelectItem>
+                  <SelectItem value="seguir_reparo">Seguir com reparo normalmente</SelectItem>
+                  <SelectItem value="segunda_avaliacao">Solicitar segunda avaliação</SelectItem>
+                  <SelectItem value="avaliar_perda_total">Avaliar possibilidade de Perda Total</SelectItem>
+                  <SelectItem value="pericia_tecnica">Encaminhar para perícia técnica</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -514,10 +557,8 @@ export function VistoriaEventoOrcamento({
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 Finalizando...
               </>
-            ) : tipoDano === 'total' ? (
-              'Finalizar Vistoria — Perda Total'
             ) : (
-              'Finalizar Vistoria e Enviar Orçamento'
+              'Registrar Parecer Técnico'
             )}
           </Button>
         </div>
