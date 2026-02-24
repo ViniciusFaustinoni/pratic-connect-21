@@ -1,115 +1,147 @@
 
 
-# Video Substitution with Hidden History for the Associate
+# Fotos do Reboquista -- Registro e Exibicao no Fluxo de Sinistros
 
-## Summary
+## Resumo
 
-Allow the associate to "remove" and replace their uploaded video during the event self-inspection (Etapa 1). From the associate's perspective, the old video is deleted. But on the backend, ALL videos ever uploaded are preserved and visible to the analyst.
-
----
-
-## How It Works
-
-### Data Structure Change
-
-Currently `dados_etapa1` stores a flat `arquivos_urls` array. We add a new field:
-
-```text
-dados_etapa1: {
-  arquivos_urls: [...current visible URLs...],
-  historico_videos: [
-    { url: "...", enviado_em: "2026-02-24T...", substituido_em: "2026-02-24T..." },
-    { url: "...", enviado_em: "2026-02-24T...", substituido_em: "2026-02-24T..." }
-  ]
-}
-```
-
-- `arquivos_urls` always reflects what the associate "sees" (latest video only)
-- `historico_videos` accumulates ALL previous videos with timestamps
+Criar um sistema para armazenar fotos tiradas pelo reboquista durante a remocao do veiculo, exibindo-as tanto no chamado de assistencia quanto na tela de analise do evento (sinistro). O analista de eventos faz o upload manualmente. O sindicante tambem tera acesso somente-leitura.
 
 ---
 
-## Phase 1: Backend (salvar-etapa-evento)
+## Estrutura de Dados
 
-**File**: `supabase/functions/salvar-etapa-evento/index.ts`
+### Nova tabela: `fotos_reboquista`
 
-When `etapa === 1` and the link already has `dados_etapa1` with video URLs:
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | Identificador |
+| chamado_id | uuid FK -> chamados_assistencia | Chamado vinculado |
+| arquivo_url | text NOT NULL | URL publica da foto |
+| momento | text | 'chegada', 'carregamento', 'entrega', 'outro' |
+| observacao | text | Anotacao opcional do analista |
+| uploaded_by | uuid FK -> auth.users | Quem fez upload |
+| created_at | timestamptz | Data/hora do upload |
 
-1. Before overwriting `dados_etapa1`, check if there are existing video URLs in the old data
-2. Move any existing video URLs to `historico_videos` array with a `substituido_em` timestamp
-3. Merge the new upload data, preserving the accumulated `historico_videos`
+### Storage bucket: `fotos-reboquista` (publico)
 
-This way, every re-submission of Etapa 1 appends old videos to the history instead of losing them.
-
-Key changes:
-- Read existing `link.dados_etapa1` before updating
-- Extract video URLs from old `arquivos_urls` (files matching mp4/webm/mov)
-- Append them to `historico_videos` with metadata
-- Merge into new `dadosEtapa` before saving
-
----
-
-## Phase 2: Frontend - Associate View (EventoEtapa1Vistoria.tsx)
-
-**File**: `src/components/evento/EventoEtapa1Vistoria.tsx`
-
-Currently, the "remove video" button only works on local state (before submit). After the etapa is submitted, the associate cannot go back.
-
-Changes needed:
-- If the etapa was already completed (associate returns to the link), show the current video with a "Substituir Video" button
-- Clicking "Substituir" clears the local video preview and lets them pick a new one
-- Re-submitting sends the new video to the backend (which handles the history preservation)
-- The old video simply disappears from the associate's view
-
-To support re-submission of Etapa 1:
-- The backend currently blocks re-submission because `etapa1_completada_em` is already set
-- Add a `substituir_video` flag in the `dados` JSON so the backend knows to allow re-submission of just the video portion
+### RLS Policies:
+- SELECT: perfis `analista_eventos`, `diretor`, `sindicante` (sindicante so via sinistro vinculado)
+- INSERT: perfis `analista_eventos`, `diretor`
+- DELETE: quem fez upload (uploaded_by = auth.uid()) OU diretor
 
 ---
 
-## Phase 3: Backend - Allow Video Substitution on Completed Etapa
+## Parte 1: Backend -- Migracao e Hook
 
-**File**: `supabase/functions/salvar-etapa-evento/index.ts`
+### 1.1 Migracao SQL
+- Criar tabela `fotos_reboquista` com colunas acima
+- Criar bucket `fotos-reboquista` (publico)
+- Criar politicas RLS para SELECT/INSERT/DELETE
+- Criar politicas de storage para upload e leitura
 
-Add handling for a special case: when `etapa === 1` AND `dados.substituir_video === true`:
-- Skip the validation that etapa 1 is already complete
-- Only process the video file (not photos)
-- Keep existing photo URLs from `dados_etapa1.arquivos_urls`
-- Move old video URLs to `historico_videos`
-- Add the new video URL to `arquivos_urls`
-- Do NOT update `etapa1_completada_em` again
-
----
-
-## Phase 4: Analyst View (SinistroAnalise.tsx)
-
-**File**: `src/pages/eventos/SinistroAnalise.tsx`
-
-In the section that displays Etapa 1 media, add:
-
-- After showing the current video, check for `dados_etapa1.historico_videos`
-- If there are previous videos, show a collapsible section titled "Videos Anteriores (Substituidos)"
-- Each entry shows:
-  - The video player
-  - "Enviado em: [date]"
-  - "Substituido em: [date]"
-- Visual indicator (amber/warning badge) alerting the analyst that the associate replaced their video
-- This is a potential fraud indicator -- if someone replaces a video, it could mean they're trying to hide something
+### 1.2 Hook React: `useFotosReboquista.ts`
+- `useFotosReboquista(chamadoId)` -- busca fotos do chamado com join em `profiles` para nome de quem fez upload
+- `useAddFotoReboquista()` -- upload de arquivo + insert na tabela
+- `useDeleteFotoReboquista()` -- remove do storage + deleta registro
+- `useFotosReboquistaBySinistro(sinistroId)` -- busca fotos via sinistro -> chamado_assistencia_id/chamado_origem_id
 
 ---
 
-## Files Affected
+## Parte 2: Tela de Detalhes do Chamado de Assistencia
 
-| File | Change |
-|------|--------|
-| `supabase/functions/salvar-etapa-evento/index.ts` | Preserve video history on re-submission |
-| `src/components/evento/EventoEtapa1Vistoria.tsx` | Allow video substitution after completion |
-| `src/pages/eventos/SinistroAnalise.tsx` | Show all videos (current + history) to analyst |
+### Arquivo: `src/pages/assistencia/ChamadoDetalhe.tsx`
 
-## What Does NOT Change
+Adicionar um novo Card na coluna principal (apos o card de Prestador):
 
-- Photo upload/removal flow stays the same
-- Etapa 2 (B.O.) flow unchanged
-- The associate never sees old videos after replacing
-- No database migration needed (uses existing JSONB field)
+**Para chamados com tipo `reboque` ou similar:**
+- Card destacado com titulo "Fotos do Reboquista" e badge com contagem
+- Botao "+ Adicionar Fotos" abre modal de upload multiplo
+- Grid de thumbnails 3 colunas (desktop) / 2 colunas (mobile)
+- Clique na foto abre lightbox (VisualizadorFoto existente)
+- Cada foto mostra data/hora e nome de quem fez upload
+- Botao de excluir (visivel para quem fez upload ou diretor)
+- Mensagem placeholder quando nao ha fotos
+
+**Para chamados sem reboque:**
+- Botao discreto "Adicionar fotos" caso queira registrar algo
+
+### Novo componente: `FotosReboquistaUploadModal.tsx`
+- Upload multiplo (ate 20 fotos, max 5MB cada, jpg/png)
+- Select para "Momento da foto": Na chegada / Durante carregamento / Na entrega / Outro
+- Campo de observacao (texto curto, opcional)
+- Preview das fotos selecionadas antes de enviar
+
+### Novo componente: `FotosReboquistaGallery.tsx`
+- Componente reutilizavel que renderiza a galeria de fotos
+- Aceita prop `readonly` para uso no sindicante
+- Agrupa fotos por "momento" quando disponivel
+- Integra com VisualizadorFoto para lightbox
+
+---
+
+## Parte 3: Tela de Analise do Evento (SinistroAnalise.tsx)
+
+### Posicionamento
+Inserir o novo card **entre** o card "Fotos da Auto-Vistoria" (linha ~1037) e o card "Fotos da Vistoria de Instalacao/Adesao" (linha ~1039).
+
+### Card com visual diferenciado
+- Borda azul / fundo azul claro para diferenciar
+- Titulo: "Fotos do Reboquista" com badge azul "Via Assistencia 24h"
+- Subtitulo: numero do chamado, data, tipo de servico
+- Info do reboque: destino, data/hora do acionamento
+- Galeria agrupada por momento (chegada / carregamento / entrega)
+- Observacoes exibidas abaixo de cada thumbnail
+
+### Logica de exibicao
+- Busca `chamado_assistencia_id` ou `chamado_origem_id` do sinistro
+- Se nao existir chamado vinculado: card nao aparece
+- Se existir chamado mas sem fotos: card com aviso e botao para adicionar
+- Se existir chamado com fotos: galeria completa
+
+### Badge no cabecalho do sinistro
+- Se houver chamado de assistencia vinculado, exibir badge clicavel "Assistencia: #PROTOCOLO -- status"
+
+---
+
+## Parte 4: Portal do Sindicante
+
+### Arquivo: `src/pages/sindicante/SindicanteCasoDetalhe.tsx`
+
+- Reutilizar `FotosReboquistaGallery` com `readonly={true}`
+- Exibir o card somente se o sinistro tiver chamado vinculado com fotos
+- Mesmo visual azul diferenciado
+
+---
+
+## Parte 5: Vinculacao Chamado <-> Evento
+
+O vinculo ja existe na base (`sinistros.chamado_assistencia_id` e `chamados_assistencia.sinistro_id`). Melhorias:
+
+### No chamado de assistencia (ChamadoDetalhe)
+- Quando tipo for reboque, mostrar campo "Evento vinculado" com busca por protocolo
+- Se o chamado ja tiver `sinistro_id`, exibir link para o evento
+- Se o sinistro ja referenciar o chamado via `chamado_assistencia_id`, mostrar vinculo
+
+### No evento (SinistroAnalise)
+- Na secao de informacoes, se houver chamado vinculado, badge clicavel "Assistencia: #PROTOCOLO"
+
+---
+
+## Arquivos Afetados
+
+| Arquivo | Acao |
+|---------|------|
+| Nova migracao SQL | Tabela `fotos_reboquista`, bucket, RLS |
+| `src/hooks/useFotosReboquista.ts` | Novo hook CRUD |
+| `src/components/assistencia/FotosReboquistaGallery.tsx` | Novo componente galeria |
+| `src/components/assistencia/FotosReboquistaUploadModal.tsx` | Novo modal de upload |
+| `src/pages/assistencia/ChamadoDetalhe.tsx` | Adicionar card de fotos |
+| `src/pages/eventos/SinistroAnalise.tsx` | Card azul de fotos do reboquista |
+| `src/pages/sindicante/SindicanteCasoDetalhe.tsx` | Galeria somente-leitura |
+
+## Sem alteracoes em
+
+- Edge functions existentes
+- Fluxo de auto-vistoria do associado
+- Fotos do regulador
 
