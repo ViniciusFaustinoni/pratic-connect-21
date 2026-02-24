@@ -351,6 +351,41 @@ export type Database = {
           },
         ]
       }
+      acompanhamento_reboque_tokens: {
+        Row: {
+          associado_id: string
+          chamado_id: string
+          created_at: string
+          expira_em: string
+          id: string
+          token: string
+        }
+        Insert: {
+          associado_id: string
+          chamado_id: string
+          created_at?: string
+          expira_em: string
+          id?: string
+          token: string
+        }
+        Update: {
+          associado_id?: string
+          chamado_id?: string
+          created_at?: string
+          expira_em?: string
+          id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acompanhamento_reboque_tokens_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       acordo_parcelas: {
         Row: {
           acordo_id: string

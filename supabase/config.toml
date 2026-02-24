@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.despacho-reboque-consultar]
 verify_jwt = false
+
+[functions.acompanhamento-reboque-consultar]
+verify_jwt = false

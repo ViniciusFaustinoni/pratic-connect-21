@@ -9,10 +9,9 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
     const { despacho_id } = await req.json();
@@ -118,14 +117,17 @@ serve(async (req) => {
       .eq("despacho_id", despacho_id)
       .in("status", ["enviado", "visualizado"]);
 
+    const prestadorNome = prestador?.razao_social || prestador?.nome_fantasia || null;
+    const prestadorTelefone = prestador?.whatsapp || prestador?.telefone || null;
+
     // Atualizar chamado
     await supabase
       .from("chamados_assistencia")
       .update({
         status: "prestador_a_caminho",
         prestador_id: vencedor.prestador_id,
-        prestador_nome: prestador?.razao_social || prestador?.nome_fantasia || null,
-        prestador_telefone: prestador?.whatsapp || prestador?.telefone || null,
+        prestador_nome: prestadorNome,
+        prestador_telefone: prestadorTelefone,
       })
       .eq("id", despacho.chamado_id);
 
@@ -155,15 +157,80 @@ serve(async (req) => {
       chamado_id: despacho.chamado_id,
       status_anterior: "aguardando_aceites",
       status_novo: "prestador_a_caminho",
-      observacao: `Reboque atribuído automaticamente a ${prestador?.razao_social || prestador?.nome_fantasia} — R$ ${vencedor.valor_calculado} — ${vencedor.distancia_km} km (${aceites.length} aceites recebidos, atribuído ao menor valor${aceites.length > 1 ? ` de R$ ${maiorValor} mais caro` : ""})`,
+      observacao: `Reboque atribuído automaticamente a ${prestadorNome} — R$ ${vencedor.valor_calculado} — ${vencedor.distancia_km} km (${aceites.length} aceites recebidos, atribuído ao menor valor${aceites.length > 1 ? ` de R$ ${maiorValor} mais caro` : ""})`,
     });
+
+    // === GERAR TOKEN DE ACOMPANHAMENTO PARA O ASSOCIADO ===
+    try {
+      // Buscar associado do chamado
+      const { data: chamado } = await supabase
+        .from("chamados_assistencia")
+        .select("id, associado_id, associado:associados(id, nome, whatsapp, telefone), veiculo:veiculos(marca, modelo, placa)")
+        .eq("id", despacho.chamado_id)
+        .single();
+
+      if (chamado?.associado_id) {
+        const acompToken = crypto.randomUUID();
+        const expiraEm = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2h
+
+        await supabase.from("acompanhamento_reboque_tokens").insert({
+          chamado_id: despacho.chamado_id,
+          associado_id: chamado.associado_id,
+          token: acompToken,
+          expira_em: expiraEm,
+        });
+
+        // Enviar WhatsApp ao associado
+        const associado = chamado.associado as any;
+        const veiculo = chamado.veiculo as any;
+        const telefoneAssociado = associado?.whatsapp || associado?.telefone;
+
+        if (telefoneAssociado) {
+          const baseUrl = Deno.env.get("PUBLIC_SITE_URL") || `https://iyxdgmukrrdkffraptsx.supabase.co`;
+          // Use the app domain for the link
+          const linkAcompanhamento = `https://pratic-connect-21.lovable.app/acompanhar/reboque/${acompToken}`;
+
+          const distanciaKm = vencedor.distancia_km ? `${vencedor.distancia_km} km` : "calculando";
+          const tempoEstimado = vencedor.distancia_km
+            ? `~${Math.round(vencedor.distancia_km * 3)} min`
+            : "calculando";
+
+          const mensagem = `🚛 *Reboque a caminho — Pratic Car*
+
+Seu reboque foi acionado e está a caminho!
+
+🔧 Prestador: ${prestadorNome}
+📍 Distância: ${distanciaKm}
+⏰ Estimativa: ${tempoEstimado}
+
+👉 Acompanhe em tempo real:
+${linkAcompanhamento}
+
+📞 Ligar para o reboquista: ${prestadorTelefone || ""}
+
+Este link é válido por 2 horas.`;
+
+          await supabase.functions.invoke("whatsapp-send-text", {
+            body: {
+              telefone: telefoneAssociado.replace(/\D/g, ""),
+              mensagem,
+            },
+          });
+
+          console.log(`[despacho-atribuir] WhatsApp de acompanhamento enviado ao associado ${associado?.nome}`);
+        }
+      }
+    } catch (whatsErr: any) {
+      console.error("[despacho-atribuir] Erro ao enviar WhatsApp ao associado:", whatsErr.message);
+      // Não falha a atribuição por erro no WhatsApp
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
         status: "atribuido",
         prestador_id: vencedor.prestador_id,
-        prestador_nome: prestador?.razao_social || prestador?.nome_fantasia,
+        prestador_nome: prestadorNome,
         valor: vencedor.valor_calculado,
         distancia_km: vencedor.distancia_km,
         total_aceites: aceites.length,

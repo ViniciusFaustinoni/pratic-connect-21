@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +7,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Clock, Phone, Truck, Wrench, CheckCircle,
-  XCircle, MapPin, MessageSquare, Car, RefreshCw, Check,
+  XCircle, MapPin, MessageSquare, Car, RefreshCw, Check, Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { cn } from '@/lib/utils';
+import MapaRastreamentoReboque from '@/components/assistencia/MapaRastreamentoReboque';
 
 // Fix Leaflet default marker icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -157,6 +158,14 @@ const statusConfig: Record<string, {
     bgGradient: 'from-gray-400 to-gray-500',
     animacao: false
   },
+  aguardando_aceites: {
+    icon: Clock,
+    label: 'Buscando reboquista',
+    descricao: 'Buscando o melhor reboquista disponível',
+    cor: 'blue',
+    bgGradient: 'from-blue-400 to-indigo-500',
+    animacao: true
+  },
 };
 
 const getTipoServicoLabel = (tipo: string) => {
@@ -202,6 +211,33 @@ export default function AcompanharChamado() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [trackingInfo, setTrackingInfo] = useState<{ distanciaKm: number; tempoEstimadoMin: number } | null>(null);
+
+  // Realtime subscription for status updates
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`app-chamado-${id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'chamados_assistencia',
+        filter: `id=eq.${id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['meu-chamado', id] });
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chamados_assistencia_historico',
+        filter: `chamado_id=eq.${id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['meu-chamado-historico', id] });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id, queryClient]);
 
   // Query principal - dados do chamado
   const { data: chamado, isLoading } = useQuery({
@@ -279,6 +315,10 @@ export default function AcompanharChamado() {
 
   const currentStatus = chamado?.status ? statusConfig[chamado.status] : null;
   const StatusIcon = currentStatus?.icon || Clock;
+
+  const isReboque = chamado?.tipo_servico && ['reboque', 'guincho'].some(t => chamado.tipo_servico.includes(t));
+  const hasTracking = isReboque && chamado?.prestador_nome && ['prestador_a_caminho', 'em_atendimento'].includes(chamado?.status || '');
+  const isAguardandoAceites = chamado?.status === 'aguardando_aceites';
 
   if (isLoading) {
     return (
@@ -446,8 +486,54 @@ export default function AcompanharChamado() {
           </CardContent>
         </Card>
 
-        {/* Mapa com Origem e Destino */}
-        {chamado.origem_lat && chamado.origem_lng && (
+        {/* Mapa de Rastreamento em Tempo Real (reboque/guincho) */}
+        {isAguardandoAceites && (
+          <Card>
+            <CardContent className="py-8 text-center space-y-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+              <p className="font-semibold">Buscando reboquista disponível...</p>
+              <p className="text-sm text-muted-foreground">Estamos encontrando o melhor reboquista para você. Você será notificado assim que um for atribuído.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {hasTracking && chamado.origem_lat && chamado.origem_lng && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Truck className="h-4 w-4" />
+                Rastreamento em Tempo Real
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <MapaRastreamentoReboque
+                chamadoId={chamado.id}
+                posicaoVeiculo={{ lat: chamado.origem_lat, lng: chamado.origem_lng }}
+                posicaoDestino={chamado.destino_lat && chamado.destino_lng ? { lat: chamado.destino_lat, lng: chamado.destino_lng } : null}
+                nomeReboquista={chamado.prestador_nome || undefined}
+                telefoneReboquista={chamado.prestador_telefone || undefined}
+                altura="250px"
+                expandivel
+                onPosicaoAtualizada={(info) => setTrackingInfo(info)}
+              />
+              {trackingInfo && (
+                <div className="flex gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {Math.round(trackingInfo.distanciaKm * 10) / 10} km
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {trackingInfo.tempoEstimadoMin > 0 ? `~${trackingInfo.tempoEstimadoMin} min` : 'Quase lá!'}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Mapa estático (não-reboque ou sem tracking) */}
+        {!hasTracking && !isAguardandoAceites && chamado.origem_lat && chamado.origem_lng && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -468,49 +554,15 @@ export default function AcompanharChamado() {
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
-                  
-                  {/* Marcador Origem (você) */}
-                  <Marker 
-                    position={[chamado.origem_lat, chamado.origem_lng]}
-                    icon={origemIcon}
-                  >
-                    <Popup>
-                      <div className="text-center">
-                        <p className="font-medium">Sua localização</p>
-                        <p className="text-xs text-muted-foreground">{chamado.origem_endereco || 'Origem'}</p>
-                      </div>
-                    </Popup>
+                  <Marker position={[chamado.origem_lat, chamado.origem_lng]} icon={origemIcon}>
+                    <Popup><div className="text-center"><p className="font-medium">Sua localização</p></div></Popup>
                   </Marker>
-                  
-                  {/* Marcador Destino (se guincho/reboque) */}
                   {chamado.destino_lat && chamado.destino_lng && (
-                    <Marker 
-                      position={[chamado.destino_lat, chamado.destino_lng]}
-                      icon={destinoIcon}
-                    >
-                      <Popup>
-                        <div className="text-center">
-                          <p className="font-medium">Destino</p>
-                          <p className="text-xs text-muted-foreground">{chamado.destino_endereco || 'Destino do reboque'}</p>
-                        </div>
-                      </Popup>
+                    <Marker position={[chamado.destino_lat, chamado.destino_lng]} icon={destinoIcon}>
+                      <Popup><div className="text-center"><p className="font-medium">Destino</p></div></Popup>
                     </Marker>
                   )}
                 </MapContainer>
-              </div>
-
-              {/* Legenda */}
-              <div className="flex gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  Você está aqui
-                </span>
-                {chamado.destino_lat && chamado.destino_lng && (
-                  <span className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    Destino
-                  </span>
-                )}
               </div>
             </CardContent>
           </Card>

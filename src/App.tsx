@@ -319,6 +319,7 @@ import EventoColisao from "./pages/public/EventoColisao";
 import EventoPosAprovacao from "./pages/public/EventoPosAprovacao";
 import RetiradaVeiculo from "./pages/public/RetiradaVeiculo";
 import DespachoReboquistaPublico from "./pages/assistencia/DespachoReboquistaPublico";
+import AcompanhamentoReboquePublico from "./pages/public/AcompanhamentoReboquePublico";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -392,6 +393,9 @@ const App = () => (
             
             {/* Public Despacho Reboquista */}
             <Route path="/assistencia/chamado/:token" element={<DespachoReboquistaPublico />} />
+            
+            {/* Public Acompanhamento Reboque (Associado) */}
+            <Route path="/acompanhar/reboque/:token" element={<AcompanhamentoReboquePublico />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
