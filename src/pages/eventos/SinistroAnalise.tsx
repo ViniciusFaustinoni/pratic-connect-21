@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
 import { useFotosReboquistaBySinistro } from '@/hooks/useFotosReboquista';
 import { FotosReboquistaGallery } from '@/components/assistencia/FotosReboquistaGallery';
+import { CardOrcamentoReparo } from '@/components/orcamento/CardOrcamentoReparo';
 import { CardLaudoSindicancia } from '@/components/sinistros/CardLaudoSindicancia';
 import { BannerSindicanciaEmAndamento } from '@/components/sinistros/BannerSindicanciaEmAndamento';
 import { DecisaoPosSindicanciaModal } from '@/components/sinistros/DecisaoPosSindicanciaModal';
@@ -217,7 +218,7 @@ function InfoItem({
 export default function SinistroAnalise() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isDiretor, isAnalistaEventos } = usePermissions();
+  const { isDiretor, isAnalistaEventos, isRegulador } = usePermissions();
 
   const [showAprovar, setShowAprovar] = useState(false);
   const [showReprovar, setShowReprovar] = useState(false);
@@ -1633,11 +1634,20 @@ export default function SinistroAnalise() {
                 <TabsList>
                   <TabsTrigger value="detalhes">Detalhes</TabsTrigger>
                   <TabsTrigger value="cotacoes">Cotações Recebidas</TabsTrigger>
+                  <TabsTrigger value="orcamento">Orçamento</TabsTrigger>
                   <TabsTrigger value="timeline">Timeline</TabsTrigger>
                 </TabsList>
                 <TabsContent value="detalhes">{detalhesContent}</TabsContent>
                 <TabsContent value="cotacoes">
                   <CotacoesRecebidasTab sinistroId={sinistro.id} />
+                </TabsContent>
+                <TabsContent value="orcamento">
+                  <CardOrcamentoReparo
+                    sinistroId={sinistro.id}
+                    valorFipe={(sinistro.veiculo as any)?.valor_fipe}
+                    canEdit={isDiretor || isRegulador}
+                    oficinaNome={(sinistro as any)?.oficina?.nome_fantasia}
+                  />
                 </TabsContent>
                 <TabsContent value="timeline">
                   <TimelineEventoTab sinistroId={sinistro.id} />

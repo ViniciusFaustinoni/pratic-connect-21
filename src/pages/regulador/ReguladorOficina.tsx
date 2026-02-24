@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { CardOrcamentoReparo } from '@/components/orcamento/CardOrcamentoReparo';
 import { useVeiculosOficina, useOficinasDisponiveis, type VeiculoOficina } from '@/hooks/useVeiculosOficina';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -515,6 +516,26 @@ export default function ReguladorOficina() {
                       Ver Detalhes
                     </Button>
                   </div>
+
+                  {/* Orçamento do Reparo */}
+                  {v.sinistro_id && (
+                    <Collapsible>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="w-full h-7 text-[11px] text-muted-foreground">
+                          💰 Orçamento do Reparo
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="border-t pt-2 mt-1">
+                          <CardOrcamentoReparo
+                            sinistroId={v.sinistro_id}
+                            canEdit={true}
+                            oficinaNome={v.oficina?.nome_fantasia || v.oficina?.razao_social}
+                          />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
                 </CardContent>
               </Card>
             );
