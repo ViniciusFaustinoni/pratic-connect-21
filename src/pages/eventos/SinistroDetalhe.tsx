@@ -1111,6 +1111,8 @@ export default function SinistroDetalhe() {
             sinistroId={sinistro.id}
             valorFipe={(sinistro.veiculo as any)?.valor_fipe}
             canEdit={isDiretor || isRegulador}
+            canChooseType={isDiretor}
+            canReset={isDiretor}
           />
 
           {/* Associado */}

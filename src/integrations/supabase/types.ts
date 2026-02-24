@@ -14024,14 +14024,21 @@ export type Database = {
           consolidado_em: string | null
           consolidado_por: string | null
           created_at: string
+          descricao_pacote: string | null
+          detalhamento_pacote: Json | null
+          forma_pagamento: string | null
           id: string
           observacao_final: string | null
+          observacao_negociacao: string | null
           oficina_id: string | null
+          prazo_estimado_dias: number | null
           sinistro_id: string
           status: string
+          tipo_orcamento: string | null
           updated_at: string
           valor_inicial_total: number | null
           valor_mao_obra: number | null
+          valor_pacote: number | null
           valor_pecas: number | null
           valor_total: number | null
         }
@@ -14039,14 +14046,21 @@ export type Database = {
           consolidado_em?: string | null
           consolidado_por?: string | null
           created_at?: string
+          descricao_pacote?: string | null
+          detalhamento_pacote?: Json | null
+          forma_pagamento?: string | null
           id?: string
           observacao_final?: string | null
+          observacao_negociacao?: string | null
           oficina_id?: string | null
+          prazo_estimado_dias?: number | null
           sinistro_id: string
           status?: string
+          tipo_orcamento?: string | null
           updated_at?: string
           valor_inicial_total?: number | null
           valor_mao_obra?: number | null
+          valor_pacote?: number | null
           valor_pecas?: number | null
           valor_total?: number | null
         }
@@ -14054,14 +14068,21 @@ export type Database = {
           consolidado_em?: string | null
           consolidado_por?: string | null
           created_at?: string
+          descricao_pacote?: string | null
+          detalhamento_pacote?: Json | null
+          forma_pagamento?: string | null
           id?: string
           observacao_final?: string | null
+          observacao_negociacao?: string | null
           oficina_id?: string | null
+          prazo_estimado_dias?: number | null
           sinistro_id?: string
           status?: string
+          tipo_orcamento?: string | null
           updated_at?: string
           valor_inicial_total?: number | null
           valor_mao_obra?: number | null
+          valor_pacote?: number | null
           valor_pecas?: number | null
           valor_total?: number | null
         }
@@ -14078,6 +14099,50 @@ export type Database = {
             columns: ["sinistro_id"]
             isOneToOne: true
             referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orcamento_reparo_cotacoes: {
+        Row: {
+          created_at: string | null
+          fornecedor: string
+          id: string
+          item_id: string
+          observacao: string | null
+          prazo_entrega: string | null
+          selecionada: boolean | null
+          tipo_peca: string | null
+          valor: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          fornecedor: string
+          id?: string
+          item_id: string
+          observacao?: string | null
+          prazo_entrega?: string | null
+          selecionada?: boolean | null
+          tipo_peca?: string | null
+          valor?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          fornecedor?: string
+          id?: string
+          item_id?: string
+          observacao?: string | null
+          prazo_entrega?: string | null
+          selecionada?: boolean | null
+          tipo_peca?: string | null
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamento_reparo_cotacoes_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "orcamento_reparo_itens"
             referencedColumns: ["id"]
           },
         ]
