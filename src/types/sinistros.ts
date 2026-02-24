@@ -19,6 +19,8 @@ export type StatusSinistro =
   // FASE 2: ABERTURA/DOCUMENTAÇÃO
   | 'em_analise'
   | 'documentacao_pendente'
+  // FASE 2B: ASSISTÊNCIA (CAMINHO COM REBOQUE)
+  | 'assistencia_acionada'
   // FASE 3: VISTORIA
   | 'aguardando_vistoria'
   | 'em_vistoria'
@@ -34,7 +36,14 @@ export type StatusSinistro =
   | 'aprovado'
   | 'negado'
   | 'reprovado'
-  // FASE 6: EXECUÇÃO (REPAROS)
+  // FASE 6: PÓS-APROVAÇÃO COLISÃO
+  | 'aguardando_agendamento'
+  | 'aguardando_regulagem'
+  | 'aguardando_orcamento'
+  | 'aguardando_pecas'
+  | 'aguardando_entrada_oficina'
+  | 'reparo_concluido'
+  // FASE 6: EXECUÇÃO (REPAROS) - LEGADO
   | 'em_regulacao'
   | 'aguardando_termo'
   | 'aguardando_cota'
@@ -156,6 +165,7 @@ export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
   comunicado: 'Comunicado',
   em_analise: 'Em Análise',
   documentacao_pendente: 'Doc. Pendente',
+  assistencia_acionada: 'Assistência Acionada',
   aguardando_vistoria: 'Aguard. Vistoria',
   em_vistoria: 'Em Vistoria',
   aguardando_parecer: 'Aguard. Parecer',
@@ -168,6 +178,12 @@ export const STATUS_SINISTRO_LABELS: Record<StatusSinistro, string> = {
   aprovado: 'Aprovado',
   negado: 'Negado',
   reprovado: 'Reprovado',
+  aguardando_agendamento: 'Aguard. Agendamento',
+  aguardando_regulagem: 'Aguard. Regulagem',
+  aguardando_orcamento: 'Aguard. Orçamento',
+  aguardando_pecas: 'Aguard. Peças',
+  aguardando_entrada_oficina: 'Aguard. Entrada Oficina',
+  reparo_concluido: 'Reparo Concluído',
   em_regulacao: 'Em Regulação',
   aguardando_termo: 'Aguard. Termo',
   aguardando_cota: 'Aguard. Cota',
@@ -197,6 +213,7 @@ export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
   comunicado: 'bg-yellow-100 text-yellow-800',
   em_analise: 'bg-blue-100 text-blue-800',
   documentacao_pendente: 'bg-orange-100 text-orange-800',
+  assistencia_acionada: 'bg-red-100 text-red-800',
   aguardando_vistoria: 'bg-purple-100 text-purple-800',
   em_vistoria: 'bg-indigo-100 text-indigo-800',
   aguardando_parecer: 'bg-cyan-100 text-cyan-800',
@@ -209,6 +226,12 @@ export const STATUS_SINISTRO_COLORS: Record<StatusSinistro, string> = {
   aprovado: 'bg-green-100 text-green-800',
   negado: 'bg-red-100 text-red-800',
   reprovado: 'bg-red-100 text-red-800',
+  aguardando_agendamento: 'bg-sky-100 text-sky-800',
+  aguardando_regulagem: 'bg-teal-100 text-teal-800',
+  aguardando_orcamento: 'bg-amber-100 text-amber-800',
+  aguardando_pecas: 'bg-orange-100 text-orange-800',
+  aguardando_entrada_oficina: 'bg-lime-100 text-lime-800',
+  reparo_concluido: 'bg-emerald-100 text-emerald-800',
   em_regulacao: 'bg-teal-100 text-teal-800',
   aguardando_termo: 'bg-sky-100 text-sky-800',
   aguardando_cota: 'bg-lime-100 text-lime-800',
@@ -286,9 +309,10 @@ export const DOCUMENTOS_POR_LOCAL: Record<TipoLocalEvento, { sem_vitima: string[
 // ============================================
 
 export const WORKFLOW_SINISTRO: Record<StatusSinistro, StatusSinistro[]> = {
-  comunicado: ['em_analise', 'cancelado'],
+  comunicado: ['em_analise', 'assistencia_acionada', 'cancelado'],
   em_analise: ['documentacao_pendente', 'aguardando_vistoria', 'em_sindicancia', 'analise_interna', 'aprovado', 'negado', 'cancelado'],
   documentacao_pendente: ['em_analise', 'cancelado'],
+  assistencia_acionada: ['em_analise', 'cancelado'],
   aguardando_vistoria: ['em_vistoria', 'cancelado'],
   em_vistoria: ['aguardando_parecer', 'em_sindicancia', 'cancelado'],
   aguardando_parecer: ['aprovado', 'negado', 'em_sindicancia'],
@@ -298,13 +322,22 @@ export const WORKFLOW_SINISTRO: Record<StatusSinistro, StatusSinistro[]> = {
   suspenso: ['em_analise', 'em_sindicancia', 'cancelado'],
   aguardando_diretoria: ['em_analise', 'negado', 'em_sindicancia', 'aguardando_juridico'],
   aguardando_juridico: ['em_analise', 'negado', 'aprovado'],
-  aprovado: ['em_regulacao', 'em_recuperacao', 'aguardando_pagamento'],
+  // Pós-aprovação: o fluxo bifurca entre colisão com/sem reboque
+  aprovado: ['aguardando_cota', 'em_regulacao', 'em_recuperacao', 'aguardando_pagamento'],
   negado: ['encerrado'],
   reprovado: ['encerrado'],
+  // Novo fluxo colisão pós-aprovação
+  aguardando_agendamento: ['aguardando_regulagem', 'cancelado'],
+  aguardando_regulagem: ['aguardando_orcamento', 'cancelado'],
+  aguardando_orcamento: ['aguardando_pecas', 'em_reparo', 'cancelado'],
+  aguardando_pecas: ['aguardando_entrada_oficina', 'em_reparo'],
+  aguardando_entrada_oficina: ['em_reparo', 'cancelado'],
+  reparo_concluido: ['entregue', 'encerrado'],
+  // Fluxo legado / outros tipos
   em_regulacao: ['aguardando_termo', 'aguardando_cota', 'em_reparo', 'aguardando_pagamento'],
-  aguardando_termo: ['aguardando_cota', 'cancelado'],
-  aguardando_cota: ['em_reparo', 'cancelado'],
-  em_reparo: ['em_garantia', 'pago', 'encerrado'],
+  aguardando_termo: ['aguardando_agendamento', 'aguardando_regulagem', 'aguardando_cota', 'cancelado'],
+  aguardando_cota: ['aguardando_termo', 'em_reparo', 'cancelado'],
+  em_reparo: ['reparo_concluido', 'em_garantia', 'pago', 'encerrado'],
   em_garantia: ['encerrado'],
   aguardando_confirmacoes: ['em_analise', 'aprovado'],
   pronto_para_oficina: ['em_oficina'],

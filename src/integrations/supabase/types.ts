@@ -20428,11 +20428,18 @@ export type Database = {
       }
       sinistros: {
         Row: {
+          agendamento_entrada_oficina_data: string | null
+          agendamento_entrada_oficina_obs: string | null
+          agendamento_regulagem_data: string | null
+          agendamento_regulagem_local: string | null
+          agendamento_regulagem_obs: string | null
+          agendamento_regulagem_periodo: string | null
           alerta_inadimplente: boolean | null
           alerta_recem_ativado: boolean | null
           analise_interna: boolean | null
           analise_interna_motivos: string[] | null
           analista_id: string | null
+          assistencia_acionada_em: string | null
           associado_id: string
           autentique_documento_id: string | null
           autentique_url: string | null
@@ -20463,6 +20470,9 @@ export type Database = {
           data_prazo_documentos: string | null
           data_prazo_termo: string | null
           descricao: string | null
+          destino_reboque_endereco: string | null
+          destino_reboque_oficina_id: string | null
+          destino_reboque_tipo: string | null
           estado_ocorrencia: string | null
           fluxo_simplificado: boolean | null
           garantia_observacoes: string | null
@@ -20481,6 +20491,12 @@ export type Database = {
           nf_reembolso_url: string | null
           oficina_id: string | null
           opcao_reparo: string | null
+          orcamento_data: string | null
+          orcamento_detalhamento: Json | null
+          orcamento_oficina_id: string | null
+          orcamento_prazo_reparo: string | null
+          orcamento_status: string | null
+          orcamento_valor_total: number | null
           ordem_servico_id: string | null
           parecer: string | null
           peca_danificada: string | null
@@ -20500,6 +20516,9 @@ export type Database = {
           rastreador_lat_momento: number | null
           rastreador_lng_momento: number | null
           rastreador_posicao_capturada_em: string | null
+          regulagem_concluida_em: string | null
+          regulagem_parecer: string | null
+          regulagem_tipo_dano: string | null
           resultado_pericia: string | null
           resultado_sindicancia: string | null
           sindicancia_prazo_fim: string | null
@@ -20532,11 +20551,18 @@ export type Database = {
           veiculo_recuperado_local: string | null
         }
         Insert: {
+          agendamento_entrada_oficina_data?: string | null
+          agendamento_entrada_oficina_obs?: string | null
+          agendamento_regulagem_data?: string | null
+          agendamento_regulagem_local?: string | null
+          agendamento_regulagem_obs?: string | null
+          agendamento_regulagem_periodo?: string | null
           alerta_inadimplente?: boolean | null
           alerta_recem_ativado?: boolean | null
           analise_interna?: boolean | null
           analise_interna_motivos?: string[] | null
           analista_id?: string | null
+          assistencia_acionada_em?: string | null
           associado_id: string
           autentique_documento_id?: string | null
           autentique_url?: string | null
@@ -20567,6 +20593,9 @@ export type Database = {
           data_prazo_documentos?: string | null
           data_prazo_termo?: string | null
           descricao?: string | null
+          destino_reboque_endereco?: string | null
+          destino_reboque_oficina_id?: string | null
+          destino_reboque_tipo?: string | null
           estado_ocorrencia?: string | null
           fluxo_simplificado?: boolean | null
           garantia_observacoes?: string | null
@@ -20585,6 +20614,12 @@ export type Database = {
           nf_reembolso_url?: string | null
           oficina_id?: string | null
           opcao_reparo?: string | null
+          orcamento_data?: string | null
+          orcamento_detalhamento?: Json | null
+          orcamento_oficina_id?: string | null
+          orcamento_prazo_reparo?: string | null
+          orcamento_status?: string | null
+          orcamento_valor_total?: number | null
           ordem_servico_id?: string | null
           parecer?: string | null
           peca_danificada?: string | null
@@ -20604,6 +20639,9 @@ export type Database = {
           rastreador_lat_momento?: number | null
           rastreador_lng_momento?: number | null
           rastreador_posicao_capturada_em?: string | null
+          regulagem_concluida_em?: string | null
+          regulagem_parecer?: string | null
+          regulagem_tipo_dano?: string | null
           resultado_pericia?: string | null
           resultado_sindicancia?: string | null
           sindicancia_prazo_fim?: string | null
@@ -20636,11 +20674,18 @@ export type Database = {
           veiculo_recuperado_local?: string | null
         }
         Update: {
+          agendamento_entrada_oficina_data?: string | null
+          agendamento_entrada_oficina_obs?: string | null
+          agendamento_regulagem_data?: string | null
+          agendamento_regulagem_local?: string | null
+          agendamento_regulagem_obs?: string | null
+          agendamento_regulagem_periodo?: string | null
           alerta_inadimplente?: boolean | null
           alerta_recem_ativado?: boolean | null
           analise_interna?: boolean | null
           analise_interna_motivos?: string[] | null
           analista_id?: string | null
+          assistencia_acionada_em?: string | null
           associado_id?: string
           autentique_documento_id?: string | null
           autentique_url?: string | null
@@ -20671,6 +20716,9 @@ export type Database = {
           data_prazo_documentos?: string | null
           data_prazo_termo?: string | null
           descricao?: string | null
+          destino_reboque_endereco?: string | null
+          destino_reboque_oficina_id?: string | null
+          destino_reboque_tipo?: string | null
           estado_ocorrencia?: string | null
           fluxo_simplificado?: boolean | null
           garantia_observacoes?: string | null
@@ -20689,6 +20737,12 @@ export type Database = {
           nf_reembolso_url?: string | null
           oficina_id?: string | null
           opcao_reparo?: string | null
+          orcamento_data?: string | null
+          orcamento_detalhamento?: Json | null
+          orcamento_oficina_id?: string | null
+          orcamento_prazo_reparo?: string | null
+          orcamento_status?: string | null
+          orcamento_valor_total?: number | null
           ordem_servico_id?: string | null
           parecer?: string | null
           peca_danificada?: string | null
@@ -20708,6 +20762,9 @@ export type Database = {
           rastreador_lat_momento?: number | null
           rastreador_lng_momento?: number | null
           rastreador_posicao_capturada_em?: string | null
+          regulagem_concluida_em?: string | null
+          regulagem_parecer?: string | null
+          regulagem_tipo_dano?: string | null
           resultado_pericia?: string | null
           resultado_sindicancia?: string | null
           sindicancia_prazo_fim?: string | null
@@ -20825,10 +20882,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sinistros_destino_reboque_oficina_id_fkey"
+            columns: ["destino_reboque_oficina_id"]
+            isOneToOne: false
+            referencedRelation: "oficinas"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sinistros_link_evento_id_fkey"
             columns: ["link_evento_id"]
             isOneToOne: false
             referencedRelation: "sinistro_evento_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistros_orcamento_oficina_id_fkey"
+            columns: ["orcamento_oficina_id"]
+            isOneToOne: false
+            referencedRelation: "oficinas"
             referencedColumns: ["id"]
           },
           {
