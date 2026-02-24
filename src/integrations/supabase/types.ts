@@ -15194,6 +15194,145 @@ export type Database = {
           },
         ]
       }
+      parecer_tecnico_fotos: {
+        Row: {
+          arquivo_url: string
+          created_at: string
+          descricao: string | null
+          id: string
+          parecer_id: string
+        }
+        Insert: {
+          arquivo_url: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          parecer_id: string
+        }
+        Update: {
+          arquivo_url?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          parecer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parecer_tecnico_fotos_parecer_id_fkey"
+            columns: ["parecer_id"]
+            isOneToOne: false
+            referencedRelation: "parecer_tecnico_regulador"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parecer_tecnico_itens: {
+        Row: {
+          created_at: string
+          descricao: string
+          id: string
+          observacao: string | null
+          origem_sugerida: string | null
+          parecer_id: string
+          prioridade: string | null
+          quantidade: number | null
+          tipo: string
+          valor_estimado: number | null
+        }
+        Insert: {
+          created_at?: string
+          descricao: string
+          id?: string
+          observacao?: string | null
+          origem_sugerida?: string | null
+          parecer_id: string
+          prioridade?: string | null
+          quantidade?: number | null
+          tipo: string
+          valor_estimado?: number | null
+        }
+        Update: {
+          created_at?: string
+          descricao?: string
+          id?: string
+          observacao?: string | null
+          origem_sugerida?: string | null
+          parecer_id?: string
+          prioridade?: string | null
+          quantidade?: number | null
+          tipo?: string
+          valor_estimado?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parecer_tecnico_itens_parecer_id_fkey"
+            columns: ["parecer_id"]
+            isOneToOne: false
+            referencedRelation: "parecer_tecnico_regulador"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parecer_tecnico_regulador: {
+        Row: {
+          created_at: string
+          descricao_tecnica: string
+          estimativa_total: number | null
+          gravidade: string
+          id: string
+          observacoes_gerais: string | null
+          prazo_estimado: string | null
+          prazo_observacao: string | null
+          recomendacao: string | null
+          regulador_id: string
+          sinistro_id: string
+          vistoria_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          descricao_tecnica: string
+          estimativa_total?: number | null
+          gravidade: string
+          id?: string
+          observacoes_gerais?: string | null
+          prazo_estimado?: string | null
+          prazo_observacao?: string | null
+          recomendacao?: string | null
+          regulador_id: string
+          sinistro_id: string
+          vistoria_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          descricao_tecnica?: string
+          estimativa_total?: number | null
+          gravidade?: string
+          id?: string
+          observacoes_gerais?: string | null
+          prazo_estimado?: string | null
+          prazo_observacao?: string | null
+          recomendacao?: string | null
+          regulador_id?: string
+          sinistro_id?: string
+          vistoria_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parecer_tecnico_regulador_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: true
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parecer_tecnico_regulador_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "vistorias_evento"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pesquisas_antecedentes: {
         Row: {
           associado_id: string | null
