@@ -14,6 +14,16 @@ const statusChamadoMap: Record<string, string> = {
   concluido: "concluido",
 };
 
+// Mapeamento de status → mensagem WhatsApp para o associado
+const mensagensAssociado: Record<string, (nome: string, destino: string, link: string) => string> = {
+  chegou_local: (nome, _destino, link) =>
+    `📍 *Reboquista chegou! — Pratic Car*\n\nO reboquista ${nome} chegou ao local do seu veículo.\n\n👉 Acompanhe: ${link}`,
+  veiculo_carregado: (nome, destino, link) =>
+    `🚛 *Veículo no guincho — Pratic Car*\n\nSeu veículo foi carregado e está sendo levado para:\n📍 ${destino || "o destino informado"}\n\n👉 Acompanhe: ${link}`,
+  concluido: (_nome, destino, _link) =>
+    `✅ *Veículo entregue — Pratic Car*\n\nSeu veículo foi entregue em:\n📍 ${destino || "o destino informado"}\n\n⏰ Horário: ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}\n\nObrigado por usar a Pratic Car!`,
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -47,9 +57,11 @@ serve(async (req) => {
       throw new Error("Apenas o prestador atribuído pode atualizar o status");
     }
 
+    const chamadoId = despacho.chamado_id;
+
     // Inserir log de status
     await supabase.from("despacho_reboque_status_log").insert({
-      chamado_id: despacho.chamado_id,
+      chamado_id: chamadoId,
       prestador_id: convite.prestador_id,
       status,
       latitude: latitude || null,
@@ -63,17 +75,17 @@ serve(async (req) => {
       const { data: chamadoAtual } = await supabase
         .from("chamados_assistencia")
         .select("status")
-        .eq("id", despacho.chamado_id)
+        .eq("id", chamadoId)
         .single();
 
       if (chamadoAtual && chamadoAtual.status !== novoStatusChamado) {
         await supabase
           .from("chamados_assistencia")
           .update({ status: novoStatusChamado })
-          .eq("id", despacho.chamado_id);
+          .eq("id", chamadoId);
 
         await supabase.from("chamados_assistencia_historico").insert({
-          chamado_id: despacho.chamado_id,
+          chamado_id: chamadoId,
           status_anterior: chamadoAtual.status,
           status_novo: novoStatusChamado,
           observacao: `Status atualizado pelo reboquista: ${status}${observacao ? ` — ${observacao}` : ""}`,
@@ -88,7 +100,7 @@ serve(async (req) => {
             status: "concluido",
             hora_conclusao: new Date().toISOString(),
           })
-          .eq("chamado_id", despacho.chamado_id)
+          .eq("chamado_id", chamadoId)
           .eq("prestador_id", convite.prestador_id);
       }
 
@@ -99,12 +111,53 @@ serve(async (req) => {
             status: "no_local",
             hora_chegada: new Date().toISOString(),
           })
-          .eq("chamado_id", despacho.chamado_id)
+          .eq("chamado_id", chamadoId)
           .eq("prestador_id", convite.prestador_id);
       }
     }
 
-    console.log(`[despacho-status] Status '${status}' registrado para chamado ${despacho.chamado_id}`);
+    console.log(`[despacho-status] Status '${status}' registrado para chamado ${chamadoId}`);
+
+    // === ENVIAR WHATSAPP AO ASSOCIADO ===
+    const mensagemFn = mensagensAssociado[status];
+    if (mensagemFn) {
+      try {
+        // Buscar token de acompanhamento e dados do associado
+        const { data: acompToken } = await supabase
+          .from("acompanhamento_reboque_tokens")
+          .select("token")
+          .eq("chamado_id", chamadoId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const { data: chamado } = await supabase
+          .from("chamados_assistencia")
+          .select("prestador_nome, destino_endereco, destino_logradouro, associado:associados(nome, whatsapp, telefone)")
+          .eq("id", chamadoId)
+          .single();
+
+        const associado = chamado?.associado as any;
+        const telefoneAssociado = associado?.whatsapp || associado?.telefone;
+
+        if (telefoneAssociado && acompToken?.token) {
+          const link = `https://pratic-connect-21.lovable.app/acompanhar/reboque/${acompToken.token}`;
+          const destino = chamado?.destino_logradouro || chamado?.destino_endereco || "";
+          const mensagem = mensagemFn(chamado?.prestador_nome || "Reboquista", destino, link);
+
+          await supabase.functions.invoke("whatsapp-send-text", {
+            body: {
+              telefone: telefoneAssociado.replace(/\D/g, ""),
+              mensagem,
+            },
+          });
+
+          console.log(`[despacho-status] WhatsApp '${status}' enviado ao associado`);
+        }
+      } catch (whatsErr: any) {
+        console.error("[despacho-status] Erro ao enviar WhatsApp ao associado:", whatsErr.message);
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true, status }),
