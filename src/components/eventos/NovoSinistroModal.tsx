@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle, Flame, CloudRain } from 'lucide-react';
+import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle, Flame, CloudRain, Home, Wrench } from 'lucide-react';
+import { useOficinas } from '@/hooks/useOficinas';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -171,6 +172,16 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
     descricao: ''
   });
   const [necessitaReboque, setNecessitaReboque] = useState(false);
+  
+  // === Colisão: bifurcação reboque ===
+  const [destinoReboqueTipo, setDestinoReboqueTipo] = useState<'associado' | 'oficina' | ''>('');
+  const [destinoReboqueEndereco, setDestinoReboqueEndereco] = useState('');
+  const [destinoReboqueOficinaId, setDestinoReboqueOficinaId] = useState('');
+
+  const isColisao = formData.tipo === 'colisao';
+  
+  // Buscar oficinas ativas para seleção de destino do reboque
+  const { data: oficinasAtivas = [] } = useOficinas({ status: 'ativo' as any });
 
   // === Incêndio / Fenômeno Natural state ===
   const [bombeirosAcionados, setBombeirosAcionados] = useState<boolean | null>(null);
@@ -401,6 +412,11 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         canal: 'presencial',
         status: 'comunicado' as any,
         necessita_reboque: isVidros ? false : necessitaReboque,
+        // Campos de destino do reboque (colisão)
+        destino_reboque_tipo: (isColisao && necessitaReboque && destinoReboqueTipo) ? destinoReboqueTipo : null,
+        destino_reboque_endereco: (isColisao && necessitaReboque && destinoReboqueTipo === 'associado') ? destinoReboqueEndereco || null : null,
+        destino_reboque_oficina_id: (isColisao && necessitaReboque && destinoReboqueTipo === 'oficina') ? destinoReboqueOficinaId || null : null,
+        assistencia_acionada_em: (isColisao && necessitaReboque) ? new Date().toISOString() : null,
         alerta_recem_ativado: alertaRecemAtivado,
         rastreador_lat_momento: rastreador?.ultima_posicao_lat || null,
         rastreador_lng_momento: rastreador?.ultima_posicao_lng || null,
@@ -485,7 +501,9 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
               associado_id: selectedAssociado!,
               veiculo_id: selectedVeiculo!,
               tipo_servico: 'guincho',
-              descricao: `Reboque solicitado junto ao sinistro ${protocolo}`,
+              descricao: isColisao && destinoReboqueTipo
+                ? `Reboque solicitado junto ao sinistro ${protocolo}. Destino: ${destinoReboqueTipo === 'oficina' ? `Oficina (ID: ${destinoReboqueOficinaId})` : `Endereço do associado: ${destinoReboqueEndereco}`}`
+                : `Reboque solicitado junto ao sinistro ${protocolo}`,
               origem_endereco: formData.local_ocorrencia || null,
               canal: 'presencial',
               status: 'aberto',
@@ -721,6 +739,9 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
       descricao: ''
     });
     setNecessitaReboque(false);
+    setDestinoReboqueTipo('');
+    setDestinoReboqueEndereco('');
+    setDestinoReboqueOficinaId('');
     setPecaDanificada('');
     setOpcaoReparo('via_pratic');
     setBombeirosAcionados(null);
@@ -741,6 +762,13 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
 
     if (isVidros) {
       return baseValid && pecaDanificada && opcaoReparo && !vidrosBloqueado;
+    }
+
+    // Colisão com reboque: exigir destino
+    if (isColisao && necessitaReboque) {
+      if (!destinoReboqueTipo) return false;
+      if (destinoReboqueTipo === 'associado' && !destinoReboqueEndereco) return false;
+      if (destinoReboqueTipo === 'oficina' && !destinoReboqueOficinaId) return false;
     }
 
     return baseValid;
