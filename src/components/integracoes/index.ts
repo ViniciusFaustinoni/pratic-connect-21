@@ -4,3 +4,6 @@ export { ChavesApiTab } from './ChavesApiTab';
 export { WhatsAppTab } from './WhatsAppTab';
 export { WhatsAppStats } from './WhatsAppStats';
 export { WhatsAppIAConfig } from './WhatsAppIAConfig';
+export { WhatsAppProvedorSelector } from './WhatsAppProvedorSelector';
+export { WhatsAppMetaTemplates } from './WhatsAppMetaTemplates';
+export { WhatsAppMetaTemplateDrawer } from './WhatsAppMetaTemplateDrawer';

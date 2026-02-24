@@ -6,13 +6,207 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ====== HELPER: Formatar telefone ======
+function formatarTelefone(telefone: string): string {
+  let limpo = telefone.replace(/\D/g, "");
+  if (!limpo.startsWith("55")) limpo = "55" + limpo;
+  return limpo;
+}
+
+// ====== HELPER: Enviar via Evolution API ======
+async function enviarViaEvolution(
+  supabase: any,
+  telefoneFormatado: string,
+  mensagem: string,
+  instancia: any,
+  apiKey: string,
+  delayMs: number
+) {
+  // Verificar status
+  const rawApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+  const apiUrl = rawApiUrl ? rawApiUrl.replace(/\/+$/, '') : null;
+  if (!apiUrl) throw new Error("URL da Evolution API não configurada");
+
+  if (!instancia.status || instancia.status !== 'open') {
+    console.log(`[whatsapp-send-text] Status no banco: ${instancia.status} - verificando API...`);
+    try {
+      const statusResponse = await fetch(
+        `${apiUrl}/instance/connectionState/${instancia.instance_name}`,
+        { method: 'GET', headers: { 'apikey': apiKey } }
+      );
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        if (statusData.instance?.state === 'open') {
+          await supabase.from('whatsapp_instancias')
+            .update({ status: 'open', updated_at: new Date().toISOString() })
+            .eq('id', instancia.id);
+        } else {
+          throw new Error("WhatsApp não está conectado. Acesse as configurações para reconectar.");
+        }
+      } else {
+        throw new Error("WhatsApp não está conectado. Acesse as configurações para reconectar.");
+      }
+    } catch (apiError: any) {
+      if (apiError.message?.includes("WhatsApp não está")) throw apiError;
+      throw new Error("WhatsApp não está conectado. Acesse as configurações para reconectar.");
+    }
+  }
+
+  if (telefoneFormatado.length < 12) throw new Error("Número de telefone inválido.");
+
+  // Delay anti-bloqueio
+  if (delayMs > 0) {
+    console.log(`[whatsapp-send-text] Delay: ${delayMs}ms`);
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+
+  console.log(`[whatsapp-send-text] Enviando via Evolution para ${telefoneFormatado}`);
+
+  const response = await fetch(`${apiUrl}/message/sendText/${instancia.instance_name}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: apiKey },
+    body: JSON.stringify({ number: telefoneFormatado, text: mensagem }),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    console.error("[whatsapp-send-text] Erro Evolution:", result);
+    await supabase.from("whatsapp_mensagens").insert({
+      instancia_id: instancia.id, telefone: telefoneFormatado, tipo: "text",
+      mensagem, direcao: "saida", status: "erro",
+      erro_mensagem: result.message || result.error || "Erro desconhecido",
+    });
+    throw new Error(result.message || "Erro ao enviar");
+  }
+
+  await supabase.from("whatsapp_mensagens").insert({
+    instancia_id: instancia.id, telefone: telefoneFormatado, tipo: "text",
+    mensagem, direcao: "saida", status: "enviada", message_id: result.key?.id,
+  });
+
+  console.log(`[whatsapp-send-text] ✓ Evolution: ${telefoneFormatado} - ID: ${result.key?.id}`);
+  return { success: true, message_id: result.key?.id, telefone: telefoneFormatado, provedor: 'evolution' };
+}
+
+// ====== HELPER: Enviar via Meta API ======
+async function enviarViaMeta(
+  supabase: any,
+  telefoneFormatado: string,
+  mensagem: string,
+  templateName?: string,
+  templateParams?: string[]
+) {
+  const accessToken = Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
+  if (!accessToken) throw new Error("META_WHATSAPP_ACCESS_TOKEN não configurado");
+
+  const { data: metaConfig } = await supabase
+    .from("whatsapp_meta_config")
+    .select("phone_number_id")
+    .eq("ativo", true)
+    .single();
+
+  if (!metaConfig?.phone_number_id) throw new Error("Configuração da Meta não encontrada");
+
+  const phoneNumberId = metaConfig.phone_number_id;
+  let metaBody: any;
+
+  if (templateName) {
+    // Enviar como template
+    const { data: template } = await supabase
+      .from("whatsapp_meta_templates")
+      .select("nome, idioma, status")
+      .eq("nome", templateName)
+      .single();
+
+    if (!template) throw new Error(`Template '${templateName}' não encontrado`);
+    if (template.status !== "APPROVED") {
+      console.warn(`[whatsapp-send-text] Template '${templateName}' não aprovado (${template.status})`);
+      throw new Error(`Template '${templateName}' não aprovado. Status: ${template.status}`);
+    }
+
+    const components: any[] = [];
+    if (templateParams && templateParams.length > 0) {
+      components.push({
+        type: "body",
+        parameters: templateParams.map(p => ({ type: "text", text: p })),
+      });
+    }
+
+    metaBody = {
+      messaging_product: "whatsapp",
+      to: telefoneFormatado,
+      type: "template",
+      template: {
+        name: template.nome,
+        language: { code: template.idioma || "pt_BR" },
+        components,
+      },
+    };
+
+    console.log(`[whatsapp-send-text] Enviando template '${templateName}' via Meta para ${telefoneFormatado}`);
+  } else {
+    // Enviar como texto livre (janela 24h)
+    metaBody = {
+      messaging_product: "whatsapp",
+      to: telefoneFormatado,
+      type: "text",
+      text: { body: mensagem },
+    };
+
+    console.log(`[whatsapp-send-text] Enviando texto livre via Meta para ${telefoneFormatado}`);
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(metaBody),
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    console.error("[whatsapp-send-text] Erro Meta:", result);
+    
+    // Se erro 131026 = fora de janela 24h e sem template
+    const errorCode = result.error?.code;
+    const errorMsg = result.error?.message || "Erro ao enviar via Meta";
+
+    await supabase.from("whatsapp_mensagens").insert({
+      telefone: telefoneFormatado, tipo: "text", mensagem,
+      direcao: "saida", status: "erro", erro_mensagem: errorMsg,
+      provedor: "meta_oficial",
+    });
+
+    throw new Error(errorMsg);
+  }
+
+  const messageId = result.messages?.[0]?.id;
+
+  await supabase.from("whatsapp_mensagens").insert({
+    telefone: telefoneFormatado, tipo: "text", mensagem,
+    direcao: "saida", status: "enviada", message_id: messageId,
+    provedor: "meta_oficial",
+  });
+
+  console.log(`[whatsapp-send-text] ✓ Meta: ${telefoneFormatado} - ID: ${messageId}`);
+  return { success: true, message_id: messageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
+}
+
+// ====== MAIN ======
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { telefone, mensagem, instancia_id, delay_ms } = await req.json();
+    const { telefone, mensagem, instancia_id, delay_ms, template_name, template_params } = await req.json();
 
     if (!telefone || !mensagem) {
       return new Response(
@@ -26,9 +220,28 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Buscar instância - INCLUIR status para verificação
+    const telefoneFormatado = formatarTelefone(telefone);
+
+    // Verificar qual provedor está ativo
+    const { data: metaConfig } = await supabase
+      .from("whatsapp_meta_config")
+      .select("ativo")
+      .limit(1)
+      .maybeSingle();
+
+    const provedorAtivo = metaConfig?.ativo === true ? 'meta_oficial' : 'evolution';
+
+    console.log(`[whatsapp-send-text] Provedor ativo: ${provedorAtivo}`);
+
+    if (provedorAtivo === 'meta_oficial') {
+      const result = await enviarViaMeta(supabase, telefoneFormatado, mensagem, template_name, template_params);
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Evolution API (fluxo padrão)
     let query = supabase.from("whatsapp_instancias").select("id, api_url, instance_name, status");
-    
     if (instancia_id) {
       query = query.eq("id", instancia_id);
     } else {
@@ -36,7 +249,6 @@ serve(async (req) => {
     }
 
     const { data: instancia, error: instError } = await query.single();
-
     if (instError || !instancia) {
       return new Response(
         JSON.stringify({ success: false, error: "Instância não encontrada" }),
@@ -52,171 +264,19 @@ serve(async (req) => {
       );
     }
 
-    // PRIORIZAR URL do secret sobre a URL do banco (remover trailing slash)
-    const rawApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
-    const apiUrl = rawApiUrl ? rawApiUrl.replace(/\/+$/, '') : null;
-    if (!apiUrl) {
-      return new Response(
-        JSON.stringify({ success: false, error: "URL da Evolution API não configurada" }),
-        { status: 500, headers: corsHeaders }
-      );
-    }
-
-    // VERIFICAR SE WHATSAPP ESTÁ CONECTADO - COM FALLBACK PARA API EM TEMPO REAL
-    if (!instancia.status || instancia.status !== 'open') {
-      console.log(`[whatsapp-send-text] Status no banco: ${instancia.status} - verificando API em tempo real...`);
-      
-      try {
-        const statusResponse = await fetch(
-          `${apiUrl}/instance/connectionState/${instancia.instance_name}`,
-          {
-            method: 'GET',
-            headers: { 'apikey': EVOLUTION_API_KEY }
-          }
-        );
-        
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          const realStatus = statusData.instance?.state;
-          console.log(`[whatsapp-send-text] Status real da API: ${realStatus}`);
-          
-          if (realStatus === 'open') {
-            console.log(`[whatsapp-send-text] API retorna OPEN - corrigindo banco e prosseguindo`);
-            // Atualizar banco com status correto
-            await supabase
-              .from('whatsapp_instancias')
-              .update({ status: 'open', updated_at: new Date().toISOString() })
-              .eq('id', instancia.id);
-          } else {
-            // Realmente desconectado
-            return new Response(
-              JSON.stringify({ 
-                success: false, 
-                error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
-                status: realStatus
-              }),
-              { status: 503, headers: corsHeaders }
-            );
-          }
-        } else {
-          // Não conseguiu verificar API - usar status do banco
-          console.log(`[whatsapp-send-text] Falha ao verificar API: ${statusResponse.status}`);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
-              status: instancia.status
-            }),
-            { status: 503, headers: corsHeaders }
-          );
-        }
-      } catch (apiError) {
-        console.error(`[whatsapp-send-text] Erro ao verificar API:`, apiError);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: "WhatsApp não está conectado. Acesse as configurações para reconectar.",
-            status: instancia.status
-          }),
-          { status: 503, headers: corsHeaders }
-        );
-      }
-    }
-
-    console.log(`[whatsapp-send-text] Usando API URL: ${apiUrl}`);
-
-    // Formatar telefone: remover caracteres especiais E garantir prefixo 55
-    let telefoneFormatado = telefone.replace(/\D/g, "");
-    
-    // Garantir que tenha DDI do Brasil (55)
-    if (!telefoneFormatado.startsWith("55")) {
-      telefoneFormatado = "55" + telefoneFormatado;
-    }
-    
-    // Validar tamanho mínimo: 55 + DDD (2) + número (8 ou 9) = 12 ou 13 dígitos
-    if (telefoneFormatado.length < 12) {
-      console.error(`[whatsapp-send-text] Telefone inválido: ${telefoneFormatado}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "Número de telefone inválido. Verifique o DDD e número." 
-        }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    // Delay configurável para envios em lote (anti-bloqueio)
     const delayGlobal = parseInt(Deno.env.get('WHATSAPP_SEND_DELAY_MS') || '0');
     const delayFinal = delay_ms || delayGlobal;
-    
-    if (delayFinal > 0) {
-      console.log(`[whatsapp-send-text] Aplicando delay de ${delayFinal}ms`);
-      await new Promise(resolve => setTimeout(resolve, delayFinal));
-    }
 
-    console.log(`[whatsapp-send-text] Enviando para ${telefoneFormatado} via ${instancia.instance_name}`);
-
-    // Enviar mensagem via Evolution API
-    const response = await fetch(`${apiUrl}/message/sendText/${instancia.instance_name}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: EVOLUTION_API_KEY,
-      },
-      body: JSON.stringify({
-        number: telefoneFormatado,
-        text: mensagem,
-      }),
+    const result = await enviarViaEvolution(supabase, telefoneFormatado, mensagem, instancia, EVOLUTION_API_KEY, delayFinal);
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error("[whatsapp-send-text] Erro Evolution:", result);
-      
-      // Registrar mensagem com erro
-      await supabase.from("whatsapp_mensagens").insert({
-        instancia_id: instancia.id,
-        telefone: telefoneFormatado,
-        tipo: "text",
-        mensagem,
-        direcao: "saida",
-        status: "erro",
-        erro_mensagem: result.message || result.error || "Erro desconhecido",
-      });
-      
-      return new Response(
-        JSON.stringify({ success: false, error: result.message || "Erro ao enviar" }),
-        { status: response.status, headers: corsHeaders }
-      );
-    }
-
-    // Registrar mensagem enviada
-    await supabase.from("whatsapp_mensagens").insert({
-      instancia_id: instancia.id,
-      telefone: telefoneFormatado,
-      tipo: "text",
-      mensagem,
-      direcao: "saida",
-      status: "enviada",
-      message_id: result.key?.id,
-    });
-
-    console.log(`[whatsapp-send-text] ✓ Mensagem enviada para ${telefoneFormatado} - ID: ${result.key?.id}`);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message_id: result.key?.id,
-        telefone: telefoneFormatado,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (error: any) {
     console.error("[whatsapp-send-text] Erro:", error);
+    const status = error.message?.includes("não está conectado") ? 503 : 500;
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      { status: 500, headers: corsHeaders }
+      { status, headers: corsHeaders }
     );
   }
 });

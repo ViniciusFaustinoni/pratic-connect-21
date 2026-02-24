@@ -1,15 +1,12 @@
-import { useState } from 'react';
-import { MessageCircle, Bot, BarChart3, Settings } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { MessageCircle, Settings } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ConfiguracaoEvolutionURL } from '@/components/whatsapp/ConfiguracaoEvolutionURL';
 import { WhatsAppStatusCard } from '@/components/whatsapp/WhatsAppStatusCard';
 import { WhatsAppIAConfig } from './WhatsAppIAConfig';
 import { WhatsAppStats } from './WhatsAppStats';
+import { WhatsAppProvedorSelector } from './WhatsAppProvedorSelector';
+import { WhatsAppMetaTemplates } from './WhatsAppMetaTemplates';
 
 export function WhatsAppTab() {
   return (
@@ -22,17 +19,19 @@ export function WhatsAppTab() {
         <div>
           <h2 className="text-lg font-semibold">WhatsApp Business</h2>
           <p className="text-sm text-muted-foreground">
-            Conecte via Evolution API e habilite atendimento automático com IA
+            Conecte via Evolution API ou API Oficial da Meta e habilite atendimento automático com IA
           </p>
         </div>
       </div>
 
-      {/* Cards de configuração */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Configuração da Evolution API */}
-        <ConfiguracaoEvolutionURL />
+      {/* Seletor de Provedor */}
+      <WhatsAppProvedorSelector />
 
-        {/* Status da Conexão */}
+      <Separator />
+
+      {/* Cards de configuração Evolution */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <ConfiguracaoEvolutionURL />
         <WhatsAppStatusCard />
       </div>
 
@@ -40,12 +39,14 @@ export function WhatsAppTab() {
 
       {/* IA e Estatísticas */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Configuração da IA */}
         <WhatsAppIAConfig />
-
-        {/* Estatísticas */}
         <WhatsAppStats />
       </div>
+
+      <Separator />
+
+      {/* Templates Meta */}
+      <WhatsAppMetaTemplates />
 
       {/* Info sobre webhook */}
       <Alert>

@@ -23549,6 +23549,7 @@ export type Database = {
           nome: string
           nome_perfil: string | null
           principal: boolean | null
+          provedor: string | null
           status: string | null
           telefone: string | null
           ultima_conexao: string | null
@@ -23569,6 +23570,7 @@ export type Database = {
           nome: string
           nome_perfil?: string | null
           principal?: boolean | null
+          provedor?: string | null
           status?: string | null
           telefone?: string | null
           ultima_conexao?: string | null
@@ -23589,6 +23591,7 @@ export type Database = {
           nome?: string
           nome_perfil?: string | null
           principal?: boolean | null
+          provedor?: string | null
           status?: string | null
           telefone?: string | null
           ultima_conexao?: string | null
@@ -23746,6 +23749,102 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_meta_config: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          id: string
+          phone_number_id: string
+          testado: boolean | null
+          testado_em: string | null
+          updated_at: string | null
+          verify_token: string | null
+          waba_id: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          phone_number_id?: string
+          testado?: boolean | null
+          testado_em?: string | null
+          updated_at?: string | null
+          verify_token?: string | null
+          waba_id?: string
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          phone_number_id?: string
+          testado?: boolean | null
+          testado_em?: string | null
+          updated_at?: string | null
+          verify_token?: string | null
+          waba_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_meta_templates: {
+        Row: {
+          aprovado_em: string | null
+          botoes: Json | null
+          categoria: string
+          corpo: string
+          created_at: string | null
+          enviado_em: string | null
+          header_texto: string | null
+          header_tipo: string | null
+          id: string
+          idioma: string | null
+          meta_template_id: string | null
+          motivo_rejeicao: string | null
+          nome: string
+          rodape: string | null
+          status: string | null
+          updated_at: string | null
+          variaveis_exemplo: Json | null
+        }
+        Insert: {
+          aprovado_em?: string | null
+          botoes?: Json | null
+          categoria?: string
+          corpo: string
+          created_at?: string | null
+          enviado_em?: string | null
+          header_texto?: string | null
+          header_tipo?: string | null
+          id?: string
+          idioma?: string | null
+          meta_template_id?: string | null
+          motivo_rejeicao?: string | null
+          nome: string
+          rodape?: string | null
+          status?: string | null
+          updated_at?: string | null
+          variaveis_exemplo?: Json | null
+        }
+        Update: {
+          aprovado_em?: string | null
+          botoes?: Json | null
+          categoria?: string
+          corpo?: string
+          created_at?: string | null
+          enviado_em?: string | null
+          header_texto?: string | null
+          header_tipo?: string | null
+          id?: string
+          idioma?: string | null
+          meta_template_id?: string | null
+          motivo_rejeicao?: string | null
+          nome?: string
+          rodape?: string | null
+          status?: string | null
+          updated_at?: string | null
+          variaveis_exemplo?: Json | null
+        }
+        Relationships: []
       }
       whatsapp_templates: {
         Row: {
