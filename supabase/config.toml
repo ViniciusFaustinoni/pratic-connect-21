@@ -1,1 +1,4 @@
 project_id = "iyxdgmukrrdkffraptsx"
+
+[functions.analise-consistencia-relatos]
+verify_jwt = false

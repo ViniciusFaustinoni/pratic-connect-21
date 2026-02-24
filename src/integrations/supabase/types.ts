@@ -19836,6 +19836,7 @@ export type Database = {
       sinistro_analises_ia: {
         Row: {
           created_at: string | null
+          dados_extras: Json | null
           fatores: Json
           id: string
           nivel: string
@@ -19843,9 +19844,11 @@ export type Database = {
           recomendacao: string
           resumo: string
           sinistro_id: string
+          tipo: string
         }
         Insert: {
           created_at?: string | null
+          dados_extras?: Json | null
           fatores?: Json
           id?: string
           nivel: string
@@ -19853,9 +19856,11 @@ export type Database = {
           recomendacao: string
           resumo: string
           sinistro_id: string
+          tipo?: string
         }
         Update: {
           created_at?: string | null
+          dados_extras?: Json | null
           fatores?: Json
           id?: string
           nivel?: string
@@ -19863,6 +19868,7 @@ export type Database = {
           recomendacao?: string
           resumo?: string
           sinistro_id?: string
+          tipo?: string
         }
         Relationships: [
           {

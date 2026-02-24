@@ -152,6 +152,22 @@ serve(async (req) => {
       .in("status", ["OVERDUE", "PENDING"])
       .limit(5);
 
+    // Buscar análise de consistência de relatos (se existir)
+    const { data: analiseConsistencia } = await supabase
+      .from("sinistro_analises_ia")
+      .select("pontuacao_risco, resumo, dados_extras")
+      .eq("sinistro_id", sinistro_id)
+      .eq("tipo", "consistencia_relatos")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const inconsistenciaScore = analiseConsistencia?.pontuacao_risco || null;
+    const inconsistenciaResumo = analiseConsistencia?.resumo || null;
+    const inconsistencias = (analiseConsistencia?.dados_extras as any)?.inconsistencias || [];
+    const inconsistenciasGraves = inconsistencias.filter((i: any) => i.gravidade === 'grave').length;
+    const inconsistenciasModeradas = inconsistencias.filter((i: any) => i.gravidade === 'moderada').length;
+
     // ===== CÁLCULOS PRÉ-IA =====
     const horasComunicacao =
       sinistro.data_ocorrencia && sinistro.created_at
@@ -228,6 +244,12 @@ CONTEXTO DO ASSOCIADO:
 - Inadimplente: ${inadimplente ? "Sim" : "Não"}
 - Eventos anteriores: ${qtdEventosAnteriores}
 
+ANÁLISE DE CONSISTÊNCIA DOS RELATOS:
+- Score de inconsistência: ${inconsistenciaScore !== null ? inconsistenciaScore + "/5" : "Não disponível"}
+- Inconsistências graves: ${inconsistenciasGraves}
+- Inconsistências moderadas: ${inconsistenciasModeradas}
+- Resumo: ${inconsistenciaResumo || "Análise não realizada"}
+
 REGRAS DE AVALIAÇÃO:
 1. Se horas entre evento e comunicação > 6h, isso aumenta o risco
 2. Se distância GPS > 10km entre local informado e posição do rastreador, aumenta risco significativamente
@@ -236,6 +258,8 @@ REGRAS DE AVALIAÇÃO:
 5. Se ratio custo/FIPE > 40%, sinal de atenção
 6. Múltiplos eventos anteriores em curto espaço de tempo aumentam risco
 7. Inadimplência combinada com sinistro pode indicar risco
+8. Se o score de inconsistência dos relatos for >= 3, isso AUMENTA significativamente o risco (relatos contraditórios)
+9. Inconsistências graves (divergência de local, dinâmica, presença de terceiros) são fortíssimos indicadores de fraude
 
 Analise criteriosamente e forneça sua avaliação.`;
 
