@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
+import { useFotosReboquistaBySinistro } from '@/hooks/useFotosReboquista';
+import { FotosReboquistaGallery } from '@/components/assistencia/FotosReboquistaGallery';
 import { CardLaudoSindicancia } from '@/components/sinistros/CardLaudoSindicancia';
 import { BannerSindicanciaEmAndamento } from '@/components/sinistros/BannerSindicanciaEmAndamento';
 import { DecisaoPosSindicanciaModal } from '@/components/sinistros/DecisaoPosSindicanciaModal';
@@ -86,7 +88,7 @@ import { cn } from '@/lib/utils';
 import { STATUS_SINISTRO_LABELS, STATUS_SINISTRO_COLORS } from '@/types/sinistros';
 import { AgendarRegulagemModal } from '@/components/eventos/AgendarRegulagemModal';
 import { RegistrarEntradaOficinaModal } from '@/components/sinistros/RegistrarEntradaOficinaModal';
-import { Truck } from 'lucide-react';
+import { Truck, Camera } from 'lucide-react';
 
 const statusConfig: Record<string, { label: string; class: string }> = Object.fromEntries(
   Object.entries(STATUS_SINISTRO_LABELS).map(([key, label]) => [
@@ -338,6 +340,24 @@ export default function SinistroAnalise() {
   const sindicanciaEmAndamento = sindicanciaEvento && ['atribuido', 'em_andamento'].includes(sindicanciaEvento.status);
   const sindicanciaComLaudo = sindicanciaEvento && ['laudo_emitido', 'encerrado'].includes(sindicanciaEvento.status) && sindicanciaEvento.laudo_conclusao;
   const sindicanciaAguardandoDecisao = sindicanciaEvento && sindicanciaEvento.status === 'laudo_emitido';
+
+  // Fotos do reboquista via chamado vinculado
+  const { data: fotosReboquista = [] } = useFotosReboquistaBySinistro(sinistro);
+  const chamadoVinculadoId = sinistro?.chamado_assistencia_id || (sinistro as any)?.chamado_origem_id;
+
+  // Query para dados do chamado vinculado
+  const { data: chamadoVinculado } = useQuery({
+    queryKey: ['chamado-vinculado-sinistro', chamadoVinculadoId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('chamados_assistencia')
+        .select('id, protocolo, tipo_servico, data_abertura, status, destino_logradouro, destino_endereco')
+        .eq('id', chamadoVinculadoId!)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!chamadoVinculadoId,
+  });
 
 
   useEffect(() => {
@@ -1031,6 +1051,64 @@ export default function SinistroAnalise() {
                         <p className="text-sm text-muted-foreground text-center py-4">
                           Aguardando envio das informações pelo associado
                         </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Card: Fotos do Reboquista (via Assistência 24h) */}
+                {chamadoVinculadoId && (
+                  <Card className="border-blue-300 bg-blue-50/50 dark:bg-blue-950/20">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                          <Camera className="h-5 w-5 text-blue-600" />
+                          Fotos do Reboquista
+                          {fotosReboquista.length > 0 && (
+                            <Badge variant="secondary">{fotosReboquista.length}</Badge>
+                          )}
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-200">Via Assistência 24h</Badge>
+                        </CardTitle>
+                        {chamadoVinculado && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => window.open(`/assistencia/chamados/${chamadoVinculadoId}`, '_blank')}
+                          >
+                            <Truck className="h-3 w-3 mr-1" />
+                            #{chamadoVinculado.protocolo}
+                          </Button>
+                        )}
+                      </div>
+                      {chamadoVinculado && (
+                        <CardDescription className="text-blue-600/80">
+                          Chamado #{chamadoVinculado.protocolo} — {format(new Date(chamadoVinculado.data_abertura), "dd/MM/yyyy", { locale: ptBR })} — {chamadoVinculado.tipo_servico}
+                          {chamadoVinculado.destino_logradouro || chamadoVinculado.destino_endereco
+                            ? ` • Destino: ${chamadoVinculado.destino_logradouro || chamadoVinculado.destino_endereco}`
+                            : ''}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      {fotosReboquista.length > 0 ? (
+                        <FotosReboquistaGallery fotos={fotosReboquista} readonly />
+                      ) : (
+                        <div className="text-center py-6 space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            ⚠️ Nenhuma foto do reboquista anexada neste chamado.
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            As fotos do reboquista ajudam a verificar o estado do veículo no momento da remoção.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(`/assistencia/chamados/${chamadoVinculadoId}`, '_blank')}
+                          >
+                            Adicionar Fotos no Chamado
+                          </Button>
+                        </div>
                       )}
                     </CardContent>
                   </Card>

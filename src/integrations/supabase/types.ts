@@ -10759,6 +10759,44 @@ export type Database = {
           },
         ]
       }
+      fotos_reboquista: {
+        Row: {
+          arquivo_url: string
+          chamado_id: string
+          created_at: string
+          id: string
+          momento: string | null
+          observacao: string | null
+          uploaded_by: string
+        }
+        Insert: {
+          arquivo_url: string
+          chamado_id: string
+          created_at?: string
+          id?: string
+          momento?: string | null
+          observacao?: string | null
+          uploaded_by: string
+        }
+        Update: {
+          arquivo_url?: string
+          chamado_id?: string
+          created_at?: string
+          id?: string
+          momento?: string | null
+          observacao?: string | null
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fotos_reboquista_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funcionarios: {
         Row: {
           agencia: string | null

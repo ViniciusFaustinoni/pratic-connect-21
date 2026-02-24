@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, ArrowLeft, Plus, FileText, MapPin, Car, User, Clock, AlertTriangle, Play, Send, ChevronRight, Image, Video, Download, Paperclip, Calendar, Search as SearchIcon, CheckCircle2 } from 'lucide-react';
+import { Loader2, ArrowLeft, Plus, FileText, MapPin, Car, User, Clock, AlertTriangle, Play, Send, ChevronRight, Image, Video, Download, Paperclip, Calendar, Search as SearchIcon, CheckCircle2, Camera } from 'lucide-react';
 import { format, differenceInDays, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -22,6 +22,8 @@ import { EmitirLaudoModal } from '@/components/sindicante/EmitirLaudoModal';
 import { SolicitarInfoModal } from '@/components/sindicante/SolicitarInfoModal';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { buscarFotosComUrls } from '@/services/uploadFotoSinistro';
+import { useFotosReboquista } from '@/hooks/useFotosReboquista';
+import { FotosReboquistaGallery } from '@/components/assistencia/FotosReboquistaGallery';
 
 export default function SindicanteCasoDetalhe() {
   const { id } = useParams<{ id: string }>();
@@ -41,6 +43,10 @@ export default function SindicanteCasoDetalhe() {
   const [showSolicitacao, setShowSolicitacao] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
+  // Fotos do reboquista
+  const chamadoReboquistaId = sindicancia?.sinistros?.chamado_assistencia_id || sindicancia?.sinistros?.chamado_origem_id;
+  const { data: fotosReboquista = [] } = useFotosReboquista(chamadoReboquistaId);
+
   const fetchData = async () => {
     if (!id) return;
 
@@ -50,6 +56,7 @@ export default function SindicanteCasoDetalhe() {
         .select(`*, sinistros(
           protocolo, numero, tipo, subtipo, data_evento, local_evento, descricao,
           latitude, longitude, rastreador_lat_momento, rastreador_lng_momento,
+          chamado_assistencia_id, chamado_origem_id,
           associado:associados(nome, cpf, telefone),
           veiculo:veiculos(marca, modelo, ano_modelo, placa, cor, valor_fipe)
         )`)
@@ -306,6 +313,17 @@ export default function SindicanteCasoDetalhe() {
                   <p className="text-sm text-muted-foreground">Não disponível</p>
                 )}
               </div>
+
+              {/* Fotos do Reboquista */}
+              {fotosReboquista.length > 0 && (
+                <div className="border-l-4 border-blue-400 pl-3">
+                  <p className="text-xs font-semibold text-blue-600 mb-2 flex items-center gap-1">
+                    <Camera className="h-3 w-3" /> Fotos do Reboquista
+                    <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded-full ml-1">Via Assistência 24h</span>
+                  </p>
+                  <FotosReboquistaGallery fotos={fotosReboquista} readonly />
+                </div>
+              )}
 
               {/* B.O. */}
               <div>

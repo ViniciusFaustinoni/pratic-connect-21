@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import { useFotosReboquista, useDeleteFotoReboquista } from '@/hooks/useFotosReboquista';
+import { FotosReboquistaGallery } from '@/components/assistencia/FotosReboquistaGallery';
+import { FotosReboquistaUploadModal } from '@/components/assistencia/FotosReboquistaUploadModal';
+import { Camera } from 'lucide-react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -98,6 +102,7 @@ export default function ChamadoDetalhe() {
   const [modalPrestador, setModalPrestador] = useState(false);
   const [modalStatus, setModalStatus] = useState(false);
   const [dialogExcluir, setDialogExcluir] = useState(false);
+  const [modalFotos, setModalFotos] = useState(false);
   const { isDiretor } = usePermissions();
 
   const handleExcluir = async (motivo: string) => {
@@ -219,6 +224,14 @@ export default function ChamadoDetalhe() {
     },
     enabled: !!id,
   });
+
+  // Fotos do reboquista
+  const { data: fotosReboquista = [] } = useFotosReboquista(id);
+  const deleteFoto = useDeleteFotoReboquista();
+  const { userId } = usePermissions();
+
+  const tiposReboque = ['reboque', 'guincho', 'reboque_evento', 'reboque_pane'];
+  const isReboque = chamado ? tiposReboque.some(t => chamado.tipo_servico?.toLowerCase().includes(t.replace('_', ''))) || chamado.tipo_servico === 'reboque' : false;
 
   // Loading state
   if (isLoading) {
@@ -533,6 +546,46 @@ export default function ChamadoDetalhe() {
             </Card>
           )}
 
+          {/* Card: Fotos do Reboquista */}
+          {isReboque ? (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Camera className="h-5 w-5" />
+                    Fotos do Reboquista
+                    {fotosReboquista.length > 0 && (
+                      <Badge variant="secondary">{fotosReboquista.length}</Badge>
+                    )}
+                  </CardTitle>
+                  <Button size="sm" onClick={() => setModalFotos(true)}>
+                    + Adicionar Fotos
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {fotosReboquista.length > 0 ? (
+                  <FotosReboquistaGallery
+                    fotos={fotosReboquista}
+                    canDelete={(foto) => foto.uploaded_by === userId || isDiretor}
+                    onDelete={(foto) => deleteFoto.mutate({ id: foto.id, arquivoUrl: foto.arquivo_url, chamadoId: chamado.id })}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    Nenhuma foto do reboquista anexada. Clique em &quot;+ Adicionar Fotos&quot; para enviar as imagens recebidas.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setModalFotos(true)} className="text-muted-foreground">
+                <Camera className="h-4 w-4 mr-1" />
+                Adicionar fotos
+              </Button>
+            </div>
+          )}
+
           {/* Card: Atendimentos */}
           {atendimentos && atendimentos.length > 0 && (
             <Card>
@@ -751,6 +804,13 @@ export default function ChamadoDetalhe() {
         onOpenChange={setDialogExcluir}
         protocolo={chamado.protocolo}
         onConfirm={handleExcluir}
+      />
+
+      {/* Modal Upload Fotos Reboquista */}
+      <FotosReboquistaUploadModal
+        open={modalFotos}
+        onClose={() => setModalFotos(false)}
+        chamadoId={chamado.id}
       />
     </div>
   );
