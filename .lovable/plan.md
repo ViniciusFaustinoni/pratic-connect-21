@@ -1,120 +1,91 @@
 
 
-# Completar Cadastro de Prestadores da Assistencia
+# Adicionar Campos para Importacao de Prestadores
 
 ## Resumo
 
-Expandir o cadastro de prestadores da assistencia 24h com novos tipos de servico, campo de tipos de reboque condicional, tabela de valores por servico, e exibicao desses dados na tela de detalhe.
+Adicionar 5 novos campos ao sistema de prestadores de assistencia: `telefone_extra` na tabela principal e `km_franquia`, `hr_trabalhada`, `hr_parada`, `diaria_base` na tabela de valores. Atualizar o formulario de cadastro/edicao e a pagina de detalhes.
 
 ---
 
-## 1. Banco de Dados - Migracao
+## 1. Migration - Novas Colunas
 
-### 1a. Adicionar coluna `tipos_reboque` na tabela existente
+Criar migration SQL adicionando:
 
-```sql
-ALTER TABLE prestadores_assistencia 
-ADD COLUMN tipos_reboque text[] DEFAULT '{}';
+**Tabela `prestadores_assistencia`:**
+- `telefone_extra` VARCHAR, nullable
+
+**Tabela `prestadores_assistencia_valores`:**
+- `km_franquia` NUMERIC, nullable
+- `hr_trabalhada` NUMERIC, nullable
+- `hr_parada` NUMERIC, nullable
+- `diaria_base` NUMERIC, nullable
+
+---
+
+## 2. NovoPrestadorModal.tsx - Aba "Dados Gerais"
+
+Adicionar campo "Telefone Extra" logo apos o grid de Telefone/WhatsApp (linha 627).
+
+- Usar componente `TelefoneInput` (mesma mascara do telefone principal)
+- Campo opcional, sem validacao obrigatoria
+- Adicionar `telefone_extra` ao schema Zod (string opcional)
+- Adicionar ao `buildPayload` (linha 335-358)
+- Adicionar ao `form.reset` nos dois useEffects (linhas 218-241 e 243-268)
+- Adicionar a interface `PrestadorParaEdicao` (linha 120-144)
+
+---
+
+## 3. NovoPrestadorModal.tsx - Aba "Valores"
+
+Para cada card de servico, adicionar 4 novos campos abaixo dos campos existentes (Valor de Saida/Valor Km ou Valor Fixo):
+
+Layout em grid 2x2:
+```text
++-------------------+-------------------+
+| KM Franquia       | Hora Trabalhada   |
++-------------------+-------------------+
+| Hora Parada       | Diaria Base       |
++-------------------+-------------------+
 ```
 
-### 1b. Criar tabela `prestadores_assistencia_valores`
-
-Tabela para armazenar precos por tipo de servico e tipo de reboque, com constraint UNIQUE para evitar duplicidade.
-
-Campos: `prestador_id`, `tipo_servico`, `tipo_reboque` (nullable), `valor_saida`, `valor_km`, `valor_fixo`, `observacoes`, `ativo`.
-
-RLS habilitado com politica permissiva (mesma abordagem da tabela pai).
-
----
-
-## 2. Formulario - NovoPrestadorModal.tsx
-
-### 2a. Expandir constante TIPOS_SERVICO
-
-Adicionar 4 novos tipos mantendo os existentes:
-
-| value | label |
-|---|---|
-| reboque | Reboque / Guincho |
-| pane_seca | Pane Seca |
-| socorro_mecanico | Socorro Mecanico (novo) |
-| socorro_eletrico | Socorro Eletrico (novo) |
-| troca_pneu | Troca de Pneu |
-| chaveiro | Chaveiro |
-| bateria | Bateria |
-| taxi | Taxi / Transporte (novo) |
-| hospedagem | Hospedagem (novo) |
-| outro | Outros |
-
-### 2b. Adicionar campo `tipos_reboque` ao schema e formulario
-
-- Adicionar `tipos_reboque: z.array(z.string()).default([])` ao zod schema
-- Adicionar ao `defaultValues` e ao `useEffect` de pre-preenchimento
-- No JSX, renderizar checkboxes condicionais (so aparece quando "reboque" esta marcado):
-  - Leve (leve) - "motos, carros de passeio"
-  - Utilitario (utilitario) - "vans, pickups, SUVs"  
-  - Pesado (pesado) - "sprinters, caminhoes"
-- Incluir `tipos_reboque` no `buildPayload`
-
-### 2c. Adicionar secao de Valores (expansivel)
-
-- Adicionar uma 4a aba "Valores" ao TabsList (grid muda de 3 para 4 colunas)
-- Usar estado local `valores` para gerenciar os cards de preco
-- Para cada servico marcado:
-  - Se for "reboque", gerar um card para cada tipo de reboque selecionado (ex: "Reboque - Leves")
-  - Se for outro servico, gerar um card unico (ex: "Chaveiro")
-- Cada card tem:
-  - Servicos com km (reboque, pane_seca, socorro_mecanico, socorro_eletrico, troca_pneu, bateria): campos `Valor de Saida` e `Valor por Km`
-  - Servicos de valor fixo (chaveiro, taxi, hospedagem): campo `Valor Fixo`
-  - Campo opcional de observacoes
-- Todos os campos sao opcionais
-- No submit, salvar os valores na tabela `prestadores_assistencia_valores` (insert apos criar, upsert apos editar)
-- No modo edicao, carregar valores existentes da tabela
-
-### 2d. Atualizar interface PrestadorParaEdicao
-
-Adicionar `tipos_reboque` ao tipo para suportar edicao.
+Alteracoes tecnicas:
+- Expandir interface `ValorItem` (linha 111-118) com os 4 novos campos
+- Atualizar `updateValor` para suportar os novos campos
+- Atualizar `saveValores` (linha 360-392) para incluir os novos campos no INSERT
+- Atualizar o useEffect de carregamento de valores existentes (linha 273-290) para ler os novos campos
+- Renderizar os 4 inputs tipo number dentro de cada card de servico (linhas 978-1013)
 
 ---
 
-## 3. Tela de Detalhe - PrestadorDetalhe.tsx
+## 4. PrestadorDetalhe.tsx - Tabela de Valores
 
-### 3a. Atualizar mapa de tipos de servico
+Atualizar a tabela de valores (linha 448-486) para exibir as novas colunas:
 
-Adicionar os 4 novos tipos ao `tiposServicoConfig`.
+Adicionar colunas ao TableHeader:
+- KM Franquia
+- Hr Trabalhada
+- Hr Parada
+- Diaria Base
 
-### 3b. Adicionar tipos de reboque ao tipo Prestador
+Adicionar cells correspondentes ao TableBody.
 
-Incluir `tipos_reboque: string[] | null` na interface.
-
-### 3c. Mostrar tipos de reboque
-
-No card "Tipos de Servico" (coluna lateral), se o prestador tem `tipos_reboque` com itens, exibir uma subsecao "Tipos de Reboque" com badges: Leves, Utilitarios, Pesados.
-
-### 3d. Mostrar tabela de valores
-
-Adicionar query para buscar `prestadores_assistencia_valores` do prestador. Exibir um novo Card "Tabela de Valores" na coluna principal (apos dados bancarios), com uma tabela simples:
-
-| Servico | Saida | Km | Fixo |
-|---|---|---|---|
-
-Cada linha mostra o servico (e tipo reboque se aplicavel) com os valores formatados em R$.
+Tambem exibir `telefone_extra` no card de Dados Cadastrais (linha 377-398), ao lado dos outros botoes de contato.
 
 ---
 
-## Arquivos a Modificar
+## Arquivos Modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| Migracao SQL | Adicionar coluna tipos_reboque + criar tabela valores + RLS |
-| src/components/assistencia/NovoPrestadorModal.tsx | Novos tipos servico, checkboxes reboque, aba de valores, logica de save |
-| src/pages/assistencia/PrestadorDetalhe.tsx | Novos tipos no config, exibir tipos reboque e tabela de valores |
-| src/integrations/supabase/types.ts | Atualizado automaticamente apos migracao |
+| Migration SQL (nova) | ALTER TABLE para adicionar 5 colunas |
+| src/components/assistencia/NovoPrestadorModal.tsx | Schema, interface, buildPayload, saveValores, formulario (2 locais: aba dados e aba valores) |
+| src/pages/assistencia/PrestadorDetalhe.tsx | Interface Prestador, tabela de valores, card de contato |
 
-## Sequencia de Implementacao
+## O que NAO sera alterado
 
-1. Criar migracao (coluna + tabela + RLS)
-2. Atualizar NovoPrestadorModal.tsx (tipos servico, reboque, aba valores, save)
-3. Atualizar PrestadorDetalhe.tsx (exibir novos dados)
-4. Testar fluxo completo
+- Nenhum campo existente sera modificado
+- Nenhuma logica de salvamento sera alterada (apenas novos campos adicionados)
+- Nenhuma outra tabela sera tocada
+- RLS policies permanecem inalteradas
 
