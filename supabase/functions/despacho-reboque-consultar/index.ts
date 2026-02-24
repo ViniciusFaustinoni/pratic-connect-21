@@ -120,6 +120,7 @@ serve(async (req) => {
         status: euFuiAtribuido ? "atribuido_a_mim" : jaAtribuido ? "ja_atribuido" : "aguardando",
         convite_status: convite.status,
         convite_id: convite.id,
+        prestador_id: (convite.prestador as any)?.id,
         despacho_status: despacho.despacho_status,
         hora_limite: despacho.hora_limite,
         hora_disparo: despacho.hora_disparo,
@@ -140,9 +141,9 @@ serve(async (req) => {
         endereco_cidade: chamado?.origem_cidade,
         endereco_uf: chamado?.origem_uf,
         associado: euFuiAtribuido ? {
-          nome: chamado?.associado?.nome,
-          telefone: chamado?.associado?.telefone,
-          whatsapp: chamado?.associado?.whatsapp,
+          nome: (chamado?.associado as any)?.nome,
+          telefone: (chamado?.associado as any)?.telefone,
+          whatsapp: (chamado?.associado as any)?.whatsapp,
         } : null,
         destino: euFuiAtribuido ? {
           lat: chamado?.destino_lat,
