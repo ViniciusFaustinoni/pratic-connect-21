@@ -214,6 +214,8 @@ Este link é válido por 2 horas.`;
             body: {
               telefone: telefoneAssociado.replace(/\D/g, ""),
               mensagem,
+              template_name: "reboque_a_caminho",
+              template_params: [prestadorNome, distanciaKm, tempoEstimado, linkAcompanhamento, prestadorTelefone || ""],
             },
           });
 

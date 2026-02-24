@@ -226,10 +226,16 @@ ${link}
 ⏰ Você tem 10 minutos para responder.`;
 
       try {
+        const dataHora = now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-          body: JSON.stringify({ telefone, mensagem }),
+          body: JSON.stringify({
+            telefone,
+            mensagem,
+            template_name: "despacho_reboque_novo",
+            template_params: [veiculoDesc, placaDisplay, enderecoVeiculo || "Ver no link", dataHora, link],
+          }),
         });
 
         const sendResult = await sendRes.json();
