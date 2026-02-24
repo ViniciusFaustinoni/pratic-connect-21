@@ -5,3 +5,15 @@ verify_jwt = false
 
 [functions.whatsapp-meta-webhook]
 verify_jwt = false
+
+[functions.despacho-reboque-responder]
+verify_jwt = false
+
+[functions.despacho-reboque-tracking]
+verify_jwt = false
+
+[functions.despacho-reboque-status]
+verify_jwt = false
+
+[functions.despacho-reboque-consultar]
+verify_jwt = false
