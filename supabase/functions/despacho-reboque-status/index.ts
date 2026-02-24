@@ -145,10 +145,35 @@ serve(async (req) => {
           const destino = chamado?.destino_logradouro || chamado?.destino_endereco || "";
           const mensagem = mensagemFn(chamado?.prestador_nome || "Reboquista", destino, link);
 
+          // Mapear template Meta para cada status
+          const templateMap: Record<string, { name: string; params: string[] }> = {
+            chegou_local: {
+              name: "reboque_chegou_local",
+              params: [chamado?.prestador_nome || "Reboquista", link],
+            },
+            veiculo_carregado: {
+              name: "reboque_veiculo_carregado",
+              params: [destino || "o destino informado", link],
+            },
+            concluido: {
+              name: "reboque_entregue",
+              params: [
+                destino || "o destino informado",
+                new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }),
+              ],
+            },
+          };
+
+          const templateInfo = templateMap[status];
+
           await supabase.functions.invoke("whatsapp-send-text", {
             body: {
               telefone: telefoneAssociado.replace(/\D/g, ""),
               mensagem,
+              ...(templateInfo && {
+                template_name: templateInfo.name,
+                template_params: templateInfo.params,
+              }),
             },
           });
 
