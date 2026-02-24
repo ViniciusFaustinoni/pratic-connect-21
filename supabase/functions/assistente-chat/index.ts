@@ -70,9 +70,9 @@ Antes de criar qualquer solicitação, verifique a COBERTURA do veículo no cont
    - ✅ TUDO LIBERADO: Assistência 24h, todos tipos de sinistro, rastreamento
 
 ## ⚠️ FLUXO SINISTRO + ASSISTÊNCIA (IMPORTANTE!)
-**ATENÇÃO: Só pergunte sobre guincho se a cobertura for TOTAL!**
+**ATENÇÃO: Para COLISÃO com cobertura TOTAL, pergunte se o veículo anda ANTES de criar o sinistro (ver seção BIFURCAÇÃO DE COLISÃO)!**
 
-Após coletar os dados de um sinistro de COLISÃO, PANE ou situação onde o veículo pode estar danificado:
+Para outros tipos de sinistro (não colisão), após coletar os dados:
 
 ## FLUXO DE COLETA DE ENDEREÇO (MUITO IMPORTANTE!)
 Quando precisar coletar o endereço para sinistro ou assistência:
@@ -128,17 +128,38 @@ Quando o associado manifestar interesse em:
 3. Informe: "Será agendada uma vistoria do veículo e o novo titular receberá um link para envio de documentos"
 4. Crie a solicitação usando a tool criar_solicitacao_troca_titularidade
 
-## FLUXO PÓS-REBOQUE PARA COLISÃO (COBERTURA TOTAL)
-Após confirmar a necessidade de reboque e criar o chamado de assistência para um sinistro de COLISÃO com cobertura TOTAL:
+## BIFURCAÇÃO DE COLISÃO: PERGUNTAR SE O VEÍCULO ANDA (OBRIGATÓRIO!)
+Quando o sinistro for de COLISÃO e o veículo tiver cobertura TOTAL, ANTES de criar o sinistro você DEVE perguntar:
+
+1. **"O veículo ainda consegue andar ou precisa de reboque?"**
+   - Se o associado disser que **CONSEGUE ANDAR** (sim, anda, tá rodando, consigo dirigir):
+     - Marque necessita_reboque = false na tool criar_solicitacao_sinistro
+     - NÃO ofereça guincho
+   - Se o associado disser que **PRECISA DE REBOQUE** (não anda, não liga, não consigo, precisa de guincho):
+     - Marque necessita_reboque = true na tool criar_solicitacao_sinistro
+     - Pergunte: "Você tem um local seguro para guardar o veículo? Posso enviar o guincho para o seu endereço: **[ENDEREÇO CADASTRADO]**. Ou prefere que leve para uma oficina credenciada?"
+     - Se o associado escolher **seu endereço** ou outro endereço próprio:
+       - Use destino_reboque_tipo = "associado"
+       - Use destino_reboque_endereco = endereço informado (ou cadastrado se confirmou)
+     - Se o associado escolher **oficina**:
+       - Use destino_reboque_tipo = "oficina"
+       - Use destino_reboque_endereco = "Oficina credenciada (a definir pela equipe)"
+     - Após definir o destino, crie o chamado de assistência com criar_solicitacao_assistencia usando o local do sinistro como ORIGEM e o destino escolhido como DESTINO
+
+2. **IMPORTANTE**: Essa pergunta deve ser feita ANTES de chamar criar_solicitacao_sinistro, pois os campos necessita_reboque e destino_reboque_* são enviados junto com o sinistro.
+
+## FLUXO PÓS-SINISTRO DE COLISÃO (COBERTURA TOTAL)
+Após criar o sinistro de colisão com sucesso:
 
 1. Informe ao associado: "Seu plano inclui cobertura para conserto do veículo em oficina credenciada!"
 2. Explique que para dar andamento, ele precisa completar 3 etapas simples pelo link que será enviado:
    - **Etapa 1** — Enviar no mínimo 5 fotos do veículo danificado (diferentes ângulos)
    - **Etapa 2** — Enviar o Boletim de Ocorrência (foto ou PDF) e o número do B.O.
    - **Etapa 3** — Enviar um relato escrito ou em áudio sobre o ocorrido
-3. Diga: "Você receberá um link por WhatsApp para enviar essas informações. O link é válido por 72 horas."
+3. Diga: "Você receberá um link para enviar essas informações. O link é válido por 72 horas."
 4. Conclua: "Após o envio, um regulador será agendado para vistoria em até 3 dias úteis."
 5. Inclua EXATAMENTE este marcador na sua resposta: [LINK_AUTO_VISTORIA]
+6. Se necessita_reboque = true E já criou o chamado de assistência, informe o protocolo do guincho também.
 
 IMPORTANTE: Só mencione conserto se a cobertura for TOTAL. Para cobertura apenas roubo/furto, não há cobertura de conserto.
 
@@ -218,7 +239,7 @@ const tools = [
     type: "function",
     function: {
       name: "criar_solicitacao_sinistro",
-      description: "Registra sinistro diretamente no sistema com protocolo SIN-XXXX. A equipe será notificada automaticamente. Use APENAS após coletar TODOS os dados necessários: tipo, data, local, descrição, e opcionalmente B.O. e fotos.",
+      description: "Registra sinistro diretamente no sistema com protocolo SIN-XXXX. A equipe será notificada automaticamente. Use APENAS após coletar TODOS os dados necessários: tipo, data, local, descrição, e opcionalmente B.O. e fotos. Para COLISÃO, inclua também necessita_reboque e destino_reboque_*.",
       parameters: {
         type: "object",
         properties: {
@@ -259,6 +280,19 @@ const tools = [
           estado: {
             type: "string",
             description: "UF/Estado onde ocorreu (sigla, ex: RJ, SP)",
+          },
+          necessita_reboque: {
+            type: "boolean",
+            description: "Se o veículo precisa de reboque (obrigatório para colisão). true = precisa de guincho, false = consegue andar",
+          },
+          destino_reboque_tipo: {
+            type: "string",
+            enum: ["associado", "oficina"],
+            description: "Tipo do destino do reboque: 'associado' = endereço do associado/outro, 'oficina' = oficina credenciada",
+          },
+          destino_reboque_endereco: {
+            type: "string",
+            description: "Endereço de destino do reboque (quando destino_reboque_tipo = 'associado')",
           },
         },
         required: ["tipo", "data_ocorrencia", "local", "descricao"],
@@ -648,22 +682,35 @@ async function executeTool(
         const randomChat = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
         const protocoloChat = `SIN-${yearChat}${monthChat}${dayChat}-${randomChat}`;
 
-        // 5. INSERT sinistro
+        // 5. INSERT sinistro (com campos de bifurcação para colisão)
+        const insertDataChat: Record<string, any> = {
+          associado_id: associadoId,
+          veiculo_id: veiculoChat.id,
+          protocolo: protocoloChat,
+          tipo: tipoSistemaChat,
+          data_ocorrencia: args.data_ocorrencia || null,
+          local_ocorrencia: args.local || "",
+          cidade_ocorrencia: args.cidade || associado?.cidade || null,
+          estado_ocorrencia: normalizarEstadoChat(args.estado || associado?.uf || null),
+          descricao: args.descricao,
+          status: "comunicado",
+          canal: "ia",
+        };
+
+        // Campos de bifurcação (colisão)
+        if (tipoSistemaChat === "colisao" && args.necessita_reboque !== undefined) {
+          insertDataChat.necessita_reboque = args.necessita_reboque;
+          if (args.destino_reboque_tipo) {
+            insertDataChat.destino_reboque_tipo = args.destino_reboque_tipo;
+          }
+          if (args.destino_reboque_endereco) {
+            insertDataChat.destino_reboque_endereco = args.destino_reboque_endereco;
+          }
+        }
+
         const { data: sinistroChat, error: sinErrorChat } = await supabase
           .from("sinistros")
-          .insert({
-            associado_id: associadoId,
-            veiculo_id: veiculoChat.id,
-            protocolo: protocoloChat,
-            tipo: tipoSistemaChat,
-            data_ocorrencia: args.data_ocorrencia || null,
-            local_ocorrencia: args.local || "",
-            cidade_ocorrencia: args.cidade || associado?.cidade || null,
-            estado_ocorrencia: normalizarEstadoChat(args.estado || associado?.uf || null),
-            descricao: args.descricao,
-            status: "comunicado",
-            canal: "ia",
-          })
+          .insert(insertDataChat)
           .select("id")
           .single();
 
