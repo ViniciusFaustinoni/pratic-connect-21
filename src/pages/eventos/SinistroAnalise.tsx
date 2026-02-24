@@ -1646,6 +1646,8 @@ export default function SinistroAnalise() {
                     sinistroId={sinistro.id}
                     valorFipe={(sinistro.veiculo as any)?.valor_fipe}
                     canEdit={isDiretor || isRegulador}
+                    canChooseType={isAnalistaEventos || isDiretor}
+                    canReset={isDiretor}
                     oficinaNome={(sinistro as any)?.oficina?.nome_fantasia}
                   />
                 </TabsContent>
