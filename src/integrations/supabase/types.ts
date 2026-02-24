@@ -14019,6 +14019,185 @@ export type Database = {
           },
         ]
       }
+      orcamento_reparo: {
+        Row: {
+          consolidado_em: string | null
+          consolidado_por: string | null
+          created_at: string
+          id: string
+          observacao_final: string | null
+          oficina_id: string | null
+          sinistro_id: string
+          status: string
+          updated_at: string
+          valor_inicial_total: number | null
+          valor_mao_obra: number | null
+          valor_pecas: number | null
+          valor_total: number | null
+        }
+        Insert: {
+          consolidado_em?: string | null
+          consolidado_por?: string | null
+          created_at?: string
+          id?: string
+          observacao_final?: string | null
+          oficina_id?: string | null
+          sinistro_id: string
+          status?: string
+          updated_at?: string
+          valor_inicial_total?: number | null
+          valor_mao_obra?: number | null
+          valor_pecas?: number | null
+          valor_total?: number | null
+        }
+        Update: {
+          consolidado_em?: string | null
+          consolidado_por?: string | null
+          created_at?: string
+          id?: string
+          observacao_final?: string | null
+          oficina_id?: string | null
+          sinistro_id?: string
+          status?: string
+          updated_at?: string
+          valor_inicial_total?: number | null
+          valor_mao_obra?: number | null
+          valor_pecas?: number | null
+          valor_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamento_reparo_oficina_id_fkey"
+            columns: ["oficina_id"]
+            isOneToOne: false
+            referencedRelation: "oficinas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orcamento_reparo_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: true
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orcamento_reparo_historico: {
+        Row: {
+          acao: string
+          created_at: string
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          descricao: string | null
+          id: string
+          item_id: string | null
+          motivo: string | null
+          orcamento_id: string
+          usuario_id: string | null
+        }
+        Insert: {
+          acao: string
+          created_at?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao?: string | null
+          id?: string
+          item_id?: string | null
+          motivo?: string | null
+          orcamento_id: string
+          usuario_id?: string | null
+        }
+        Update: {
+          acao?: string
+          created_at?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao?: string | null
+          id?: string
+          item_id?: string | null
+          motivo?: string | null
+          orcamento_id?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamento_reparo_historico_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "orcamento_reparo_itens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orcamento_reparo_historico_orcamento_id_fkey"
+            columns: ["orcamento_id"]
+            isOneToOne: false
+            referencedRelation: "orcamento_reparo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orcamento_reparo_itens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          descricao: string
+          id: string
+          motivo_cancelamento: string | null
+          motivo_inclusao: string | null
+          observacao: string | null
+          orcamento_id: string
+          origem: string | null
+          quantidade: number
+          status: string
+          tipo: string
+          updated_at: string
+          valor_total: number
+          valor_unitario: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          descricao: string
+          id?: string
+          motivo_cancelamento?: string | null
+          motivo_inclusao?: string | null
+          observacao?: string | null
+          orcamento_id: string
+          origem?: string | null
+          quantidade?: number
+          status?: string
+          tipo: string
+          updated_at?: string
+          valor_total?: number
+          valor_unitario?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          descricao?: string
+          id?: string
+          motivo_cancelamento?: string | null
+          motivo_inclusao?: string | null
+          observacao?: string | null
+          orcamento_id?: string
+          origem?: string | null
+          quantidade?: number
+          status?: string
+          tipo?: string
+          updated_at?: string
+          valor_total?: number
+          valor_unitario?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamento_reparo_itens_orcamento_id_fkey"
+            columns: ["orcamento_id"]
+            isOneToOne: false
+            referencedRelation: "orcamento_reparo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ordens_servico: {
         Row: {
           aprovado_por: string | null

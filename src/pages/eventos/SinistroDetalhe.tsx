@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { EventoLinkCard } from '@/components/eventos/EventoLinkCard';
 import { CardControleReparo } from '@/components/sinistros/CardControleReparo';
+import { CardOrcamentoReparo } from '@/components/orcamento/CardOrcamentoReparo';
 import { AtribuirFornecedoresDialog } from '@/components/sinistros/AtribuirFornecedoresDialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteSinistro } from '@/hooks/useSinistros';
@@ -251,7 +252,7 @@ export default function SinistroDetalhe() {
   const [modalJuridicoOpen, setModalJuridicoOpen] = useState(false);
   const [showAtribuirFornecedores, setShowAtribuirFornecedores] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const { isDiretor, isAnalistaEventosOnly } = usePermissions();
+  const { isDiretor, isAnalistaEventosOnly, isRegulador } = usePermissions();
 
   const openModalSafely = (setter: (v: boolean) => void) => {
     setDropdownOpen(false);
@@ -1103,6 +1104,13 @@ export default function SinistroDetalhe() {
           <CardControleReparo
             sinistro={sinistro}
             onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
+          />
+
+          {/* Card Orçamento do Reparo */}
+          <CardOrcamentoReparo
+            sinistroId={sinistro.id}
+            valorFipe={(sinistro.veiculo as any)?.valor_fipe}
+            canEdit={isDiretor || isRegulador}
           />
 
           {/* Associado */}
