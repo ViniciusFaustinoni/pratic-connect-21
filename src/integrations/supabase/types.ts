@@ -8489,6 +8489,240 @@ export type Database = {
           },
         ]
       }
+      despacho_reboque: {
+        Row: {
+          chamado_id: string
+          ciclo: number
+          created_at: string
+          distancia_atribuida_km: number | null
+          hora_disparo: string
+          hora_limite: string
+          id: string
+          prestador_atribuido_id: string | null
+          status: string
+          total_aceites: number
+          total_enviados: number
+          total_recusas: number
+          valor_atribuido: number | null
+        }
+        Insert: {
+          chamado_id: string
+          ciclo?: number
+          created_at?: string
+          distancia_atribuida_km?: number | null
+          hora_disparo?: string
+          hora_limite?: string
+          id?: string
+          prestador_atribuido_id?: string | null
+          status?: string
+          total_aceites?: number
+          total_enviados?: number
+          total_recusas?: number
+          valor_atribuido?: number | null
+        }
+        Update: {
+          chamado_id?: string
+          ciclo?: number
+          created_at?: string
+          distancia_atribuida_km?: number | null
+          hora_disparo?: string
+          hora_limite?: string
+          id?: string
+          prestador_atribuido_id?: string | null
+          status?: string
+          total_aceites?: number
+          total_enviados?: number
+          total_recusas?: number
+          valor_atribuido?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despacho_reboque_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despacho_reboque_prestador_atribuido_id_fkey"
+            columns: ["prestador_atribuido_id"]
+            isOneToOne: false
+            referencedRelation: "prestadores_assistencia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despacho_reboque_convites: {
+        Row: {
+          created_at: string
+          data_aceite: string | null
+          data_recusa: string | null
+          data_visualizacao: string | null
+          despacho_id: string
+          distancia_km: number | null
+          id: string
+          latitude_prestador: number | null
+          longitude_prestador: number | null
+          prestador_id: string
+          status: string
+          token: string
+          token_expira_em: string
+          valor_calculado: number | null
+          valor_km: number | null
+          valor_saida: number | null
+          whatsapp_enviado: boolean
+        }
+        Insert: {
+          created_at?: string
+          data_aceite?: string | null
+          data_recusa?: string | null
+          data_visualizacao?: string | null
+          despacho_id: string
+          distancia_km?: number | null
+          id?: string
+          latitude_prestador?: number | null
+          longitude_prestador?: number | null
+          prestador_id: string
+          status?: string
+          token?: string
+          token_expira_em?: string
+          valor_calculado?: number | null
+          valor_km?: number | null
+          valor_saida?: number | null
+          whatsapp_enviado?: boolean
+        }
+        Update: {
+          created_at?: string
+          data_aceite?: string | null
+          data_recusa?: string | null
+          data_visualizacao?: string | null
+          despacho_id?: string
+          distancia_km?: number | null
+          id?: string
+          latitude_prestador?: number | null
+          longitude_prestador?: number | null
+          prestador_id?: string
+          status?: string
+          token?: string
+          token_expira_em?: string
+          valor_calculado?: number | null
+          valor_km?: number | null
+          valor_saida?: number | null
+          whatsapp_enviado?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despacho_reboque_convites_despacho_id_fkey"
+            columns: ["despacho_id"]
+            isOneToOne: false
+            referencedRelation: "despacho_reboque"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despacho_reboque_convites_prestador_id_fkey"
+            columns: ["prestador_id"]
+            isOneToOne: false
+            referencedRelation: "prestadores_assistencia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despacho_reboque_status_log: {
+        Row: {
+          chamado_id: string
+          created_at: string
+          id: string
+          latitude: number | null
+          longitude: number | null
+          observacao: string | null
+          prestador_id: string
+          status: string
+        }
+        Insert: {
+          chamado_id: string
+          created_at?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          observacao?: string | null
+          prestador_id: string
+          status: string
+        }
+        Update: {
+          chamado_id?: string
+          created_at?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          observacao?: string | null
+          prestador_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despacho_reboque_status_log_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despacho_reboque_status_log_prestador_id_fkey"
+            columns: ["prestador_id"]
+            isOneToOne: false
+            referencedRelation: "prestadores_assistencia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despacho_reboque_tracking: {
+        Row: {
+          chamado_id: string
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          precisao: number | null
+          prestador_id: string
+          velocidade: number | null
+        }
+        Insert: {
+          chamado_id: string
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          precisao?: number | null
+          prestador_id: string
+          velocidade?: number | null
+        }
+        Update: {
+          chamado_id?: string
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          precisao?: number | null
+          prestador_id?: string
+          velocidade?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despacho_reboque_tracking_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados_assistencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despacho_reboque_tracking_prestador_id_fkey"
+            columns: ["prestador_id"]
+            isOneToOne: false
+            referencedRelation: "prestadores_assistencia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_rateio: {
         Row: {
           created_at: string | null

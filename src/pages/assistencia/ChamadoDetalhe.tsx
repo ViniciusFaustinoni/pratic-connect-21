@@ -12,6 +12,7 @@ import { AtribuirPrestadorModal } from '@/components/assistencia/AtribuirPrestad
 import { AtualizarStatusChamadoModal } from '@/components/assistencia/AtualizarStatusChamadoModal';
 import { MapaChamado } from '@/components/assistencia/MapaChamado';
 import { EnviarLinkPrestadorButton } from '@/components/assistencia/EnviarLinkPrestadorButton';
+import { CardDespachoReboque } from '@/components/assistencia/CardDespachoReboque';
 import { useChamadoPosicaoTempoReal } from '@/hooks/useChamadoPosicaoTempoReal';
 import { supabase } from '@/integrations/supabase/client';
 import { format, differenceInMinutes } from 'date-fns';
@@ -39,6 +40,7 @@ import {
 // Configurações
 const statusConfig: Record<string, { label: string; className: string }> = {
   aberto: { label: 'Aberto', className: 'bg-yellow-100 text-yellow-800' },
+  aguardando_aceites: { label: 'Aguard. Aceites', className: 'bg-amber-100 text-amber-800' },
   aguardando_prestador: { label: 'Aguard. Prestador', className: 'bg-orange-100 text-orange-800' },
   prestador_despachado: { label: 'Despachado', className: 'bg-blue-100 text-blue-800' },
   prestador_a_caminho: { label: 'A Caminho', className: 'bg-purple-100 text-purple-800' },
@@ -484,6 +486,11 @@ export default function ChamadoDetalhe() {
               />
             </CardContent>
           </Card>
+
+          {/* Card: Despacho de Reboque (automático) */}
+          {isReboque && (
+            <CardDespachoReboque chamadoId={chamado.id} chamadoStatus={chamado.status} />
+          )}
 
           {/* Card: Prestador */}
           {(chamado.prestador || chamado.prestador_nome) && (
