@@ -71,45 +71,14 @@ function resolverUrl(url: string | null): string {
   if (url.startsWith('http')) return url;
   return supabase.storage.from('sinistros').getPublicUrl(url).data.publicUrl;
 }
-const statusConfig: Record<string, { label: string; class: string }> = {
-  comunicado: { label: 'Comunicado', class: 'bg-yellow-100 text-yellow-800' },
-  em_analise: { label: 'Em Análise', class: 'bg-blue-100 text-blue-800' },
-  documentacao_pendente: { label: 'Doc. Pendente', class: 'bg-orange-100 text-orange-800' },
-  aguardando_vistoria: { label: 'Aguard. Vistoria', class: 'bg-purple-100 text-purple-800' },
-  em_vistoria: { label: 'Em Vistoria', class: 'bg-indigo-100 text-indigo-800' },
-  aguardando_parecer: { label: 'Aguard. Parecer', class: 'bg-cyan-100 text-cyan-800' },
-  aprovado: { label: 'Aprovado', class: 'bg-green-100 text-green-800' },
-  negado: { label: 'Negado', class: 'bg-red-100 text-red-800' },
-  em_regulacao: { label: 'Em Regulação', class: 'bg-amber-100 text-amber-800' },
-  em_reparo: { label: 'Em Reparo', class: 'bg-teal-100 text-teal-800' },
-  em_recuperacao: { label: 'Em Recuperação', class: 'bg-violet-100 text-violet-800' },
-  aguardando_pagamento: { label: 'Aguard. Pagamento', class: 'bg-pink-100 text-pink-800' },
-  pago: { label: 'Pago', class: 'bg-emerald-100 text-emerald-800' },
-  encerrado: { label: 'Encerrado', class: 'bg-gray-100 text-gray-800' },
-  cancelado: { label: 'Cancelado', class: 'bg-slate-100 text-slate-800' },
-  em_sindicancia: { label: 'Em Sindicância', class: 'bg-rose-100 text-rose-800' },
-  em_pericia: { label: 'Em Perícia', class: 'bg-pink-100 text-pink-800' },
-  analise_interna: { label: 'Análise Interna', class: 'bg-amber-100 text-amber-800' },
-  suspenso: { label: 'Suspenso', class: 'bg-slate-200 text-slate-700' },
-  aguardando_diretoria: { label: 'Aguard. Diretoria', class: 'bg-amber-100 text-amber-800' },
-  aguardando_juridico: { label: 'Aguard. Jurídico', class: 'bg-purple-100 text-purple-800' },
-  aguardando_confirmacoes: { label: 'Aguard. Confirmações', class: 'bg-sky-100 text-sky-800' },
-  em_oficina: { label: 'Em Oficina', class: 'bg-violet-100 text-violet-800' },
-  aguardando_peca: { label: 'Aguard. Peça', class: 'bg-orange-100 text-orange-800' },
-  em_finalizacao: { label: 'Em Finalização', class: 'bg-teal-100 text-teal-800' },
-  concluido: { label: 'Concluído', class: 'bg-green-100 text-green-800' },
-  entregue: { label: 'Entregue', class: 'bg-emerald-100 text-emerald-800' },
-  finalizado: { label: 'Finalizado', class: 'bg-gray-200 text-gray-800' },
-  aguardando_indenizacao: { label: 'Aguard. Indenização', class: 'bg-pink-100 text-pink-800' },
-  aguardando_analise: { label: 'Aguard. Análise', class: 'bg-blue-100 text-blue-800' },
-  pronto_para_oficina: { label: 'Pronto p/ Oficina', class: 'bg-lime-100 text-lime-800' },
-  pagamento_confirmado: { label: 'Pgto Confirmado', class: 'bg-green-100 text-green-800' },
-  reprovado: { label: 'Reprovado', class: 'bg-red-100 text-red-800' },
-  indenizado: { label: 'Indenizado', class: 'bg-green-100 text-green-800' },
-  aguardando_cota: { label: 'Aguard. Cota', class: 'bg-lime-100 text-lime-800' },
-  aguardando_termo: { label: 'Aguard. Termo', class: 'bg-sky-100 text-sky-800' },
-  em_garantia: { label: 'Em Garantia', class: 'bg-emerald-100 text-emerald-800' },
-};
+import { STATUS_SINISTRO_LABELS, STATUS_SINISTRO_COLORS } from '@/types/sinistros';
+
+const statusConfig: Record<string, { label: string; class: string }> = Object.fromEntries(
+  Object.entries(STATUS_SINISTRO_LABELS).map(([key, label]) => [
+    key,
+    { label, class: STATUS_SINISTRO_COLORS[key as keyof typeof STATUS_SINISTRO_COLORS] || 'bg-gray-100 text-gray-800' }
+  ])
+);
 
 const tipoConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   colisao: { label: 'Colisão', icon: Car },
@@ -570,6 +539,17 @@ export default function SinistroDetalhe() {
             <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-sm px-3 py-1">
               <FileCheck className="h-4 w-4 mr-1" />
               Assinatura Pendente
+            </Badge>
+          )}
+          {/* Badge COM/SEM REBOQUE para colisão */}
+          {sinistro.tipo === 'colisao' && sinistro.necessita_reboque === true && (
+            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300 text-sm px-3 py-1">
+              COM REBOQUE
+            </Badge>
+          )}
+          {sinistro.tipo === 'colisao' && sinistro.necessita_reboque === false && (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 text-sm px-3 py-1">
+              SEM REBOQUE
             </Badge>
           )}
           {sinistro.termo_anuencia_assinado && (

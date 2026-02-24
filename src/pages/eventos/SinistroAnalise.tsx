@@ -82,19 +82,17 @@ import { cn } from '@/lib/utils';
 // CONFIGURAÇÕES
 // ============================================
 
-const statusConfig: Record<string, { label: string; class: string }> = {
-  comunicado: { label: 'Comunicado', class: 'bg-warning/20 text-warning border-warning' },
-  em_analise: { label: 'Em Análise', class: 'bg-info/20 text-info border-info' },
-  documentacao_pendente: { label: 'Doc. Pendente', class: 'bg-orange-100 text-orange-800' },
-  aprovado: { label: 'Aprovado', class: 'bg-success/20 text-success border-success' },
-  pronto_para_oficina: { label: 'Pronto p/ Oficina', class: 'bg-teal-100 text-teal-800 border-teal-300' },
-  em_reparo: { label: 'Em Reparo', class: 'bg-blue-100 text-blue-800 border-blue-300' },
-  pagamento_confirmado: { label: 'Pag. Confirmado', class: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
-  reprovado: { label: 'Reprovado', class: 'bg-red-100 text-red-800 border-red-300' },
-  negado: { label: 'Negado', class: 'bg-destructive/20 text-destructive border-destructive' },
-  aguardando_analise: { label: 'Aguardando Análise Final', class: 'bg-blue-100 text-blue-800 border-blue-300' },
-  pecas_em_cotacao: { label: 'Peças em Cotação', class: 'bg-amber-100 text-amber-800 border-amber-300' },
-};
+import { STATUS_SINISTRO_LABELS, STATUS_SINISTRO_COLORS } from '@/types/sinistros';
+import { AgendarRegulagemModal } from '@/components/eventos/AgendarRegulagemModal';
+import { RegistrarEntradaOficinaModal } from '@/components/sinistros/RegistrarEntradaOficinaModal';
+import { Truck } from 'lucide-react';
+
+const statusConfig: Record<string, { label: string; class: string }> = Object.fromEntries(
+  Object.entries(STATUS_SINISTRO_LABELS).map(([key, label]) => [
+    key,
+    { label, class: STATUS_SINISTRO_COLORS[key as keyof typeof STATUS_SINISTRO_COLORS] || 'bg-gray-100 text-gray-800' }
+  ])
+);
 
 const tipoConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   colisao: { label: 'Colisão', icon: Car },
@@ -233,6 +231,8 @@ export default function SinistroAnalise() {
   const [fotoViewer, setFotoViewer] = useState({ open: false, index: 0 });
   
   const [showSolicitarOrcamento, setShowSolicitarOrcamento] = useState(false);
+  const [showAgendarRegulagem, setShowAgendarRegulagem] = useState(false);
+  const [showEntradaOficina, setShowEntradaOficina] = useState(false);
   const [valoresPecas, setValoresPecas] = useState<Record<number, number>>({});
   const [fornecedoresPecas, setFornecedoresPecas] = useState<Record<number, { id: string; nome: string }>>({});
   const [fornecedoresMO, setFornecedoresMO] = useState<Record<number, { id: string; nome: string }>>({});
@@ -712,6 +712,19 @@ export default function SinistroAnalise() {
             <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
               <AlertTriangle className="h-4 w-4 mr-1" />
               Recém-ativado
+            </Badge>
+          )}
+          {/* Badge COM/SEM REBOQUE para colisão */}
+          {sinistro.tipo === 'colisao' && sinistro.necessita_reboque === true && (
+            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300">
+              <Truck className="h-4 w-4 mr-1" />
+              COM REBOQUE
+            </Badge>
+          )}
+          {sinistro.tipo === 'colisao' && sinistro.necessita_reboque === false && (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+              <Car className="h-4 w-4 mr-1" />
+              SEM REBOQUE
             </Badge>
           )}
           {sinistro.autentique_documento_id && !sinistro.termo_anuencia_assinado && (
@@ -1554,6 +1567,122 @@ export default function SinistroAnalise() {
                   Decidir com Base no Laudo
                 </Button>
               ) : (() => {
+                // === NOVOS STATUS DO FLUXO DE COLISÃO ===
+
+                // Aguardando agendamento (Caminho B - sem reboque)
+                if ((sinistro.status as string) === 'aguardando_agendamento') {
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-sky-50 border border-sky-200 text-sky-800 text-sm">
+                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Aguardando agendamento</strong> — agendar data para regulagem do veículo.</span>
+                      </div>
+                      <Button className="w-full" onClick={() => setShowAgendarRegulagem(true)}>
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Registrar Agendamento
+                      </Button>
+                    </div>
+                  );
+                }
+
+                // Aguardando regulagem
+                if ((sinistro.status as string) === 'aguardando_regulagem') {
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-sm">
+                        <Wrench className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Aguardando regulagem</strong> — regulador precisa avaliar o veículo.</span>
+                      </div>
+                      {(sinistro as any).agendamento_regulagem_data && (
+                        <p className="text-xs text-muted-foreground">
+                          Agendado para: {formatDateTime((sinistro as any).agendamento_regulagem_data)}
+                          {(sinistro as any).agendamento_regulagem_local && ` — ${(sinistro as any).agendamento_regulagem_local}`}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Aguardando orçamento
+                if ((sinistro.status as string) === 'aguardando_orcamento') {
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                        <DollarSign className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Aguardando orçamento</strong> — solicitar orçamento à oficina.</span>
+                      </div>
+                      <Button className="w-full" onClick={() => setShowSolicitarOrcamento(true)}>
+                        <Send className="h-4 w-4 mr-2" />
+                        Solicitar Orçamento
+                      </Button>
+                    </div>
+                  );
+                }
+
+                // Aguardando peças
+                if ((sinistro.status as string) === 'aguardando_pecas') {
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-orange-50 border border-orange-200 text-orange-800 text-sm">
+                        <Clock className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Aguardando peças</strong> — esperando peças chegarem para reparo.</span>
+                      </div>
+                      <Button
+                        className="w-full"
+                        onClick={async () => {
+                          try {
+                            const { data: { user: currentUser } } = await supabase.auth.getUser();
+                            const nextStatus = sinistro.necessita_reboque === false ? 'aguardando_entrada_oficina' : 'em_reparo';
+                            await supabase.from('sinistros').update({ status: nextStatus as any, updated_at: new Date().toISOString() }).eq('id', sinistro.id);
+                            await supabase.from('sinistro_historico').insert({
+                              sinistro_id: sinistro.id,
+                              status_anterior: 'aguardando_pecas',
+                              status_novo: nextStatus,
+                              usuario_id: currentUser?.id,
+                              observacao: 'Peças recebidas.',
+                            });
+                            toast.success('Peças registradas como recebidas!');
+                            queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] });
+                          } catch (err: any) {
+                            toast.error('Erro: ' + (err.message || 'Tente novamente'));
+                          }
+                        }}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Registrar Chegada de Peças
+                      </Button>
+                    </div>
+                  );
+                }
+
+                // Aguardando entrada oficina (Caminho B - sem reboque)
+                if ((sinistro.status as string) === 'aguardando_entrada_oficina') {
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-lime-50 border border-lime-200 text-lime-800 text-sm">
+                        <Car className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Aguardando entrada na oficina</strong> — associado precisa levar o veículo.</span>
+                      </div>
+                      <Button className="w-full" onClick={() => setShowEntradaOficina(true)}>
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Confirmar Entrada na Oficina
+                      </Button>
+                    </div>
+                  );
+                }
+
+                // Reparo concluído
+                if ((sinistro.status as string) === 'reparo_concluido') {
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
+                        <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                        <span><strong>Reparo concluído</strong> — veículo pronto para entrega ao associado.</span>
+                      </div>
+                    </div>
+                  );
+                }
+
                 // Pronto para oficina — atribuir fornecedores
                 if ((sinistro.status as string) === 'pronto_para_oficina') {
                   return (
@@ -1978,6 +2107,107 @@ export default function SinistroAnalise() {
             </Card>
           )}
 
+          {/* Card Assistência 24h (reboque) */}
+          {sinistro.tipo === 'colisao' && sinistro.necessita_reboque && (
+            <Card className="border-red-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-red-600" />
+                  Assistência 24h (Reboque)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Destino:</span>
+                  <span className="font-medium">
+                    {(sinistro as any).destino_reboque_tipo === 'oficina' 
+                      ? '🔧 Oficina credenciada' 
+                      : '🏠 Local do associado'}
+                  </span>
+                </div>
+                {(sinistro as any).destino_reboque_endereco && (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-3.5 w-3.5 mt-0.5 text-muted-foreground" />
+                    <span>{(sinistro as any).destino_reboque_endereco}</span>
+                  </div>
+                )}
+                {(sinistro as any).assistencia_acionada_em && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Acionada em {formatDateTime((sinistro as any).assistencia_acionada_em)}
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Card Dados da Regulagem */}
+          {(sinistro as any).regulagem_concluida_em && (
+            <Card className="border-teal-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-teal-600" />
+                  Dados da Regulagem
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {(sinistro as any).regulagem_tipo_dano && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Tipo de dano:</span>
+                    <Badge variant={(sinistro as any).regulagem_tipo_dano === 'perda_total' ? 'destructive' : 'default'}>
+                      {(sinistro as any).regulagem_tipo_dano === 'perda_total' ? 'Perda Total' : 'Parcial'}
+                    </Badge>
+                  </div>
+                )}
+                {(sinistro as any).regulagem_parecer && (
+                  <div>
+                    <span className="text-muted-foreground">Parecer:</span>
+                    <p className="mt-1 text-foreground bg-muted p-2 rounded text-xs">{(sinistro as any).regulagem_parecer}</p>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Concluída em {formatDateTime((sinistro as any).regulagem_concluida_em)}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Card Orçamento */}
+          {(sinistro as any).orcamento_status && (
+            <Card className="border-amber-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-amber-600" />
+                  Orçamento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Status:</span>
+                  <Badge variant="outline">
+                    {(sinistro as any).orcamento_status === 'solicitado' ? 'Solicitado' :
+                     (sinistro as any).orcamento_status === 'recebido' ? 'Recebido' :
+                     (sinistro as any).orcamento_status === 'aprovado' ? 'Aprovado' : 'Rejeitado'}
+                  </Badge>
+                </div>
+                {(sinistro as any).orcamento_valor_total && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Valor total:</span>
+                    <span className="font-semibold">{formatCurrency((sinistro as any).orcamento_valor_total)}</span>
+                  </div>
+                )}
+                {(sinistro as any).orcamento_prazo_reparo && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Prazo:</span>
+                    <span>{(sinistro as any).orcamento_prazo_reparo}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Histórico do Sinistro */}
           <Card>
             <CardHeader>
@@ -2086,6 +2316,20 @@ export default function SinistroAnalise() {
           ) || []
         }
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ['sinistro-analise', id] })}
+      />
+
+      <AgendarRegulagemModal
+        open={showAgendarRegulagem}
+        onClose={() => setShowAgendarRegulagem(false)}
+        sinistroId={sinistro.id}
+        protocolo={sinistro.protocolo}
+      />
+
+      <RegistrarEntradaOficinaModal
+        open={showEntradaOficina}
+        onClose={() => setShowEntradaOficina(false)}
+        sinistroId={sinistro.id}
+        protocolo={sinistro.protocolo}
       />
 
 
