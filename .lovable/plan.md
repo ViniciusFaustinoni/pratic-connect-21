@@ -1,230 +1,272 @@
 
-
-# Parecer Tecnico do Regulador + Orcamento Oficial do Analista
+# Seletor de Provedor WhatsApp + Gerenciador de Templates Meta
 
 ## Resumo
 
-Criar dois formularios distintos para o fluxo de reparo de colisao:
+Implementar duas funcionalidades na tela de Integracoes > WhatsApp:
+1. **Seletor de Provedor**: permitir ao Diretor escolher entre Evolution API (Baileys) e API Oficial da Meta como provedor ativo de WhatsApp
+2. **Gerenciador de Templates**: interface completa para criar, editar, sincronizar e gerenciar templates da API Oficial da Meta
 
-1. **Parecer Tecnico do Regulador** -- formulario expandido que o regulador preenche durante a regulagem, com avaliacao de gravidade, fotos tecnicas, lista estimada de pecas/servicos com prioridades, e recomendacao. Substitui/expande o formulario atual `VistoriaEventoOrcamento`.
-
-2. **Orcamento Oficial do Analista** -- o analista preenche com os valores reais da oficina apos receber o parecer. Pode importar itens do parecer como ponto de partida, com comparativo visual entre estimativa do regulador e valor real.
-
----
-
-## Analise do Estado Atual
-
-### O que ja existe
-
-- **Tabela `vistorias_evento`**: armazena dados da vistoria do regulador em `dados_vistoria` (JSONB). Ja contem `tipo_dano`, `descricao_tecnica`, `itens_orcamento`, `parecer_tecnico`, `recomendacao`, `etapas_reparo`.
-- **Componente `VistoriaEventoOrcamento.tsx`**: formulario atual do regulador com diagnostico, etapas de reparo, e lista de itens (peca/mao_de_obra/servico) com valores.
-- **Edge Function `salvar-vistoria-regulador`**: salva midias e finaliza a vistoria, mudando status do sinistro para `aguardando_analise`.
-- **`CardOrcamentoReparo`**: orcamento vivo que ja funciona com dois caminhos (cotacao separada / pacote fechado). Usa tabelas `orcamento_reparo`, `orcamento_reparo_itens`, `orcamento_reparo_historico`.
-- **Campos no sinistro**: `regulagem_parecer`, `regulagem_tipo_dano`, `regulagem_concluida_em`.
-- **Card "Dados da Regulagem"** na SinistroAnalise (linha ~2274): mostra tipo de dano e parecer de forma minima.
-- **Status `aguardando_regulagem` -> `aguardando_orcamento`**: transicao ja definida em `types/sinistros.ts`.
-
-### O que falta
-
-- O formulario do regulador nao tem: gravidade (leve/moderado/grave/PT), fotos tecnicas dedicadas, origem sugerida de pecas, prioridade por item (essencial/necessario/opcional), prazo estimado, observacoes finais, campo de recomendacao expandido.
-- O analista nao tem tela dedicada para preencher o orcamento oficial com base no parecer.
-- Nao existe funcionalidade de "importar itens do parecer" para o orcamento.
-- O card de regulagem na SinistroAnalise e muito basico -- nao mostra itens, fotos, nem estimativas.
+O envio de mensagens pelo sistema sera transparente -- as ~26 edge functions que chamam `whatsapp-send-text` continuarao funcionando sem alteracao. A logica de roteamento entre provedores ficara centralizada na propria edge function `whatsapp-send-text`.
 
 ---
 
 ## Parte 1: Migracao SQL
 
-Criar tabela dedicada para o parecer tecnico (ao inves de depender apenas do JSONB `dados_vistoria`):
+### Alteracoes na tabela `whatsapp_instancias`
 
-### Nova tabela: `parecer_tecnico_regulador`
+Adicionar coluna para identificar o provedor ativo:
 
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | Identificador |
-| sinistro_id | uuid FK -> sinistros UNIQUE | Evento vinculado |
-| vistoria_id | uuid FK -> vistorias_evento | Vistoria de origem |
-| regulador_id | uuid FK -> auth.users | Quem preencheu |
-| gravidade | text NOT NULL | 'leve', 'moderado', 'grave', 'possivel_perda_total' |
-| descricao_tecnica | text NOT NULL | Descricao detalhada dos danos |
-| prazo_estimado | text | 'ate_5_dias', '5_a_15', '15_a_30', '30_a_60', 'mais_60' |
-| prazo_observacao | text | Obs sobre prazo |
-| observacoes_gerais | text | Informacoes adicionais |
-| recomendacao | text | 'seguir_reparo', 'segunda_avaliacao', 'avaliar_perda_total', 'pericia_tecnica' |
-| estimativa_total | numeric(12,2) DEFAULT 0 | Soma das estimativas |
-| created_at | timestamptz | Criacao |
+```text
+ALTER TABLE whatsapp_instancias ADD COLUMN provedor text DEFAULT 'evolution'
+  CHECK (provedor IN ('evolution', 'meta_oficial'));
+```
 
-### Nova tabela: `parecer_tecnico_itens`
+### Nova tabela: `whatsapp_meta_config`
+
+Armazena a configuracao da API Oficial da Meta (uma unica linha).
 
 | Coluna | Tipo | Descricao |
 |--------|------|-----------|
 | id | uuid PK | Identificador |
-| parecer_id | uuid FK -> parecer_tecnico_regulador ON DELETE CASCADE | Parecer pai |
-| tipo | text NOT NULL | 'peca' ou 'servico' |
-| descricao | text NOT NULL | Nome da peca/servico |
-| origem_sugerida | text | 'original', 'seminova', 'paralela', 'qualquer' (so peca) |
-| quantidade | numeric DEFAULT 1 | Quantidade |
-| valor_estimado | numeric(12,2) DEFAULT 0 | Estimativa do regulador |
-| prioridade | text DEFAULT 'necessario' | 'essencial', 'necessario', 'opcional' |
-| observacao | text | Obs tecnica |
+| phone_number_id | text NOT NULL | ID do telefone na Meta |
+| waba_id | text NOT NULL | WhatsApp Business Account ID |
+| verify_token | text DEFAULT 'sga_pratic_meta_webhook' | Token de verificacao do webhook |
+| testado | boolean DEFAULT false | Se o teste de conexao foi bem-sucedido |
+| testado_em | timestamptz | Data do ultimo teste |
+| ativo | boolean DEFAULT false | Se este e o provedor ativo |
 | created_at | timestamptz | Criacao |
+| updated_at | timestamptz | Atualizacao |
 
-### Nova tabela: `parecer_tecnico_fotos`
+O Access Token sera armazenado como secret do Supabase (`META_WHATSAPP_ACCESS_TOKEN`), nao no banco.
+
+RLS: SELECT/INSERT/UPDATE apenas para `has_role(auth.uid(), 'diretor')`.
+
+### Nova tabela: `whatsapp_meta_templates`
+
+Templates da API Oficial da Meta (separada da tabela `whatsapp_templates` existente que e para templates internos do Evolution).
 
 | Coluna | Tipo | Descricao |
 |--------|------|-----------|
 | id | uuid PK | Identificador |
-| parecer_id | uuid FK -> parecer_tecnico_regulador ON DELETE CASCADE | Parecer pai |
-| arquivo_url | text NOT NULL | URL da foto |
-| descricao | text | Descricao da foto |
+| nome | text NOT NULL UNIQUE | Nome do template (snake_case) |
+| categoria | text NOT NULL | 'UTILITY', 'MARKETING', 'AUTHENTICATION' |
+| idioma | text DEFAULT 'pt_BR' | Idioma |
+| status | text DEFAULT 'DRAFT' | 'DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'PAUSED', 'DISABLED' |
+| header_tipo | text | 'none', 'text', 'image', 'document' |
+| header_texto | text | Texto do cabecalho (se tipo text) |
+| corpo | text NOT NULL | Corpo da mensagem com variaveis {{1}} |
+| rodape | text | Texto do rodape |
+| botoes | jsonb | Array de botoes [{tipo, texto, url/telefone}] |
+| variaveis_exemplo | jsonb | Valores de exemplo para cada variavel |
+| meta_template_id | text | ID retornado pela Meta apos envio |
+| motivo_rejeicao | text | Motivo se rejeitado pela Meta |
+| enviado_em | timestamptz | Data de envio para aprovacao |
+| aprovado_em | timestamptz | Data de aprovacao |
 | created_at | timestamptz | Criacao |
+| updated_at | timestamptz | Atualizacao |
 
-### RLS Policies
-
-- SELECT em todas: `has_role(auth.uid(), 'regulador')` OR `has_role(auth.uid(), 'analista_eventos')` OR `has_role(auth.uid(), 'diretor')`
-- INSERT/UPDATE `parecer_tecnico_regulador`: `has_role(auth.uid(), 'regulador')` OR `has_role(auth.uid(), 'diretor')`
-- INSERT `parecer_tecnico_itens` e `parecer_tecnico_fotos`: mesmas roles de insert
-
-### Storage
-
-Usar bucket existente `sinistro-eventos` para fotos tecnicas do parecer (path: `{sinistro_id}/parecer-tecnico/`).
+RLS: SELECT para `regulador`, `analista_eventos`, `diretor`. INSERT/UPDATE/DELETE apenas `diretor`.
 
 ---
 
-## Parte 2: Hook `useParecerTecnico.ts`
+## Parte 2: Secrets
 
-Novo hook com:
-
-- `useParecerTecnico(sinistroId)` -- busca parecer completo com itens e fotos, join em profiles para nome do regulador
-- `useParecerTecnicoItens(parecerId)` -- lista itens do parecer
-- `useParecerTecnicoFotos(parecerId)` -- lista fotos do parecer
-- `useSalvarParecerTecnico()` -- mutation que cria parecer + itens + atualiza status do sinistro para `aguardando_orcamento`
-- `useUploadFotoParecer()` -- upload para storage + insert na tabela de fotos
+Solicitar ao usuario o secret `META_WHATSAPP_ACCESS_TOKEN` para armazenar o Access Token da API da Meta. Esse token sera usado pelas edge functions ao enviar via API Oficial.
 
 ---
 
-## Parte 3: Formulario do Regulador (expandido)
+## Parte 3: Edge Functions
 
-### Refatorar: `src/components/regulador/VistoriaEventoOrcamento.tsx`
+### 3.1 Nova: `whatsapp-meta-test`
 
-O formulario atual sera expandido significativamente. Manter como dialog fullscreen mas reorganizar em secoes:
+Testa conexao com a API da Meta:
+- Faz GET em `https://graph.facebook.com/v21.0/{phone_number_id}` com Bearer token
+- Retorna sucesso/erro e dados do numero (nome, status de verificacao)
+- Atualiza `whatsapp_meta_config.testado = true`
 
-**Secao 1: Avaliacao Geral do Dano**
-- Select de gravidade: Leve / Moderado / Grave / Possivel Perda Total (novo)
-- Textarea descricao tecnica (manter existente, adicionar minimo 50 chars)
-- Upload de fotos tecnicas (minimo 3, ate 20, 5MB cada) com descricao opcional por foto (novo)
+### 3.2 Nova: `whatsapp-meta-templates`
 
-**Secao 2: Itens necessarios (estimativa)**
-- Titulo e subtitulo explicativo ("Valores estimados com base na sua experiencia...")
-- Manter lista de itens existente mas adicionar:
-  - Campo "Origem sugerida" (select: original/seminova/paralela/qualquer) para pecas
-  - Campo "Prioridade" (select: essencial/necessario/opcional) para cada item
-  - Campo "Valor estimado unitario" para TODOS os itens (hoje pecas nao tem valor)
-  - Campo "Observacao tecnica" por item
-- Manter botoes "+ Adicionar Peca" e "+ Adicionar Servico"
-- Tabela preview com subtotais e total estimado
-- Alerta se estimativa > 75% FIPE
+CRUD de templates na API da Meta:
+- **POST (criar/enviar)**: envia template para a Meta via `POST /v21.0/{waba_id}/message_templates`
+- **GET (sincronizar)**: busca status de todos os templates via `GET /v21.0/{waba_id}/message_templates`
+- **DELETE**: exclui template na Meta via `DELETE /v21.0/{waba_id}/message_templates?name={nome}`
 
-**Secao 3: Prazo estimado** (novo)
-- Select: ate 5 dias / 5-15 / 15-30 / 30-60 / mais de 60
-- Textarea observacao sobre prazo
+### 3.3 Nova: `whatsapp-meta-webhook`
 
-**Secao 4: Observacoes e Recomendacao** (expandido)
-- Textarea observacoes gerais
-- Select recomendacao: Seguir com reparo / Segunda avaliacao / Avaliar PT / Pericia tecnica (expandido do atual "aprovar" / "analise_detalhada")
+Webhook para receber eventos da Meta:
+- GET: verificacao do webhook (verify_token)
+- POST: recebe eventos de mensagens, delivery reports, status de templates
+- Ao receber `message_template_status_update`: atualiza status do template no banco
+- Ao receber mensagens: registra em `whatsapp_mensagens` e encaminha para IA (se habilitada)
 
-**Ao finalizar:**
-1. Salva na nova tabela `parecer_tecnico_regulador` + itens + fotos
-2. Muda status do sinistro para `aguardando_orcamento` (nao mais `aguardando_analise`)
-3. Cria notificacao para analista com resumo
-4. Se estimativa > 75% FIPE: notifica diretor tambem
-5. Atualiza `regulagem_concluida_em`, `regulagem_parecer`, `regulagem_tipo_dano` no sinistro (manter compatibilidade)
+config.toml: `verify_jwt = false` (webhook publico)
 
-### Atualizar Edge Function `salvar-vistoria-regulador`
+### 3.4 Atualizar: `whatsapp-send-text`
 
-Modificar a acao `finalizar` para:
-- Inserir na tabela `parecer_tecnico_regulador` e `parecer_tecnico_itens`
-- Mudar status para `aguardando_orcamento` ao inves de `aguardando_analise`
-- Manter gravacao no `dados_vistoria` JSONB para compatibilidade
+Adicionar logica de roteamento por provedor:
 
----
+```text
+1. Buscar provedor ativo: SELECT provedor FROM whatsapp_meta_config WHERE ativo = true
+   (se nao existir ou ativo = false, usar 'evolution' como default)
+2. Se provedor = 'evolution': fluxo atual (sem mudancas)
+3. Se provedor = 'meta_oficial':
+   a. Buscar phone_number_id e access_token
+   b. Buscar template correspondente ao tipo de mensagem (ou enviar como texto livre se dentro de janela 24h)
+   c. POST em https://graph.facebook.com/v21.0/{phone_number_id}/messages
+   d. Registrar em whatsapp_mensagens
+```
 
-## Parte 4: Card Parecer do Regulador na SinistroAnalise
+Para a Meta, como mensagens proativas exigem template, a funcao deve:
+- Receber campo opcional `template_name` e `template_params`
+- Se `template_name` for informado: enviar como template
+- Se nao for informado: enviar como texto livre (so funciona dentro de janela 24h)
+- Se fora de janela e sem template: logar alerta e retornar erro
 
-### Novo componente: `src/components/orcamento/CardParecerRegulador.tsx`
+### 3.5 Atualizar: `whatsapp-send-media`
 
-Card destacado (borda teal) que substitui o card basico atual "Dados da Regulagem" (linhas 2274-2302 do SinistroAnalise):
-
-- Cabecalho: nome do regulador, data, badge de gravidade colorido
-- Descricao tecnica completa
-- Galeria de fotos tecnicas (thumbnails clicaveis com lightbox)
-- Tabela de itens estimados (somente leitura):
-  | Descricao | Tipo | Origem Sugerida | Qtd | Estimativa | Prioridade |
-- Rodape com totais: estimativa pecas, servicos, total, % FIPE
-- Prazo estimado
-- Recomendacao com badge
-- Observacoes gerais
-
-Este card aparece na tela de analise do evento quando `aguardando_orcamento` ou apos.
+Mesma logica de roteamento. Para a Meta, midias sao enviadas via `POST /messages` com tipo `image`/`document`/`audio`/`video` usando URL publica ou upload previo.
 
 ---
 
-## Parte 5: Orcamento Oficial do Analista
+## Parte 4: Componentes Frontend
 
-### Atualizar: `src/components/orcamento/CardOrcamentoReparo.tsx`
+### 4.1 Refatorar: `WhatsAppTab.tsx`
 
-Quando o evento esta no status `aguardando_orcamento` e o analista vai criar o orcamento, alem do modal de escolha de tipo (cotacao separada / pacote fechado), adicionar:
+Reorganizar a tela em 3 secoes:
+1. **Provedor de WhatsApp** (nova secao no topo)
+2. **IA e Estatisticas** (mantido)
+3. **Templates de Mensagem (API Oficial Meta)** (nova secao)
 
-**Botao "Importar itens do parecer"** (novo)
+### 4.2 Novo: `src/components/integracoes/WhatsAppProvedorSelector.tsx`
 
-Aparece na tela de cotacao separada, logo apos criar o orcamento. Ao clicar:
-- Copia todos os itens do `parecer_tecnico_itens` para `orcamento_reparo_itens`
-- Descricao, tipo, origem, quantidade sao copiados
-- Valor unitario fica com a estimativa do regulador como valor inicial (editavel)
-- Status = 'pendente'
-- Motivo = 'Importado do parecer tecnico do regulador'
-- Registra no historico
+Secao com dois cards lado a lado:
 
-**Coluna "Estimativa Regulador"** (novo)
+**Card 1 -- Evolution API / Baileys:**
+- Exibe URL, instancia, status de conexao (dados existentes, somente leitura)
+- Badge "CONECTADO" se status = open
+- Badge "ATIVO" se e o provedor ativo
+- Botao "Usar este provedor" (desabilitado se ja ativo)
 
-Na tabela de itens do orcamento, adicionar coluna que busca o valor estimado correspondente no parecer tecnico (por match de descricao ou por referencia):
-- Se o valor da oficina for > 30% acima da estimativa: badge amarelo
-- Se > 50%: badge vermelho
-- Apenas visual, nao bloqueia
+**Card 2 -- API Oficial da Meta:**
+- Formulario: Phone Number ID, WABA ID, Access Token (campo senha com show/hide)
+- Verify Token (readonly, valor fixo)
+- URL do Webhook (readonly, gerada: `https://{project_id}.supabase.co/functions/v1/whatsapp-meta-webhook`, com botao copiar)
+- Botoes: "Salvar Configuracao", "Testar Conexao"
+- Badge "ATIVO" se e o provedor ativo
+- Botao "Usar este provedor" (habilitado apos teste bem-sucedido)
+- Secao colapsavel "Como configurar" com instrucoes passo a passo
 
-**Rodape expandido** (novo)
+**Troca de provedor:** AlertDialog com confirmacao "Todos os envios passarao a usar [nome]. Deseja continuar?"
 
-Apos os totais do orcamento, mostrar:
-- Estimativa do regulador era: R$ X.XXX
-- Diferenca: +/- R$ XXX (+/- XX%)
+### 4.3 Novo: `src/components/integracoes/WhatsAppMetaTemplates.tsx`
 
-### Para Pacote Fechado
+Secao completa de gerenciamento de templates:
 
-No `FormPacoteFechado`, apos preencher o valor do pacote:
-- Mostrar comparativo com estimativa do regulador automaticamente
-- "Estimativa do regulador: R$ X.XXX | Pacote negociado: R$ X.XXX | Diferenca: +/- XX%"
+**Cabecalho:**
+- Aviso sobre obrigatoriedade de templates
+- Cards de resumo: Total | Aprovados | Pendentes | Rejeitados
+- Botoes: "Novo Template" e "Sincronizar com a Meta"
+
+**Tabela:**
+- Colunas: Nome, Categoria, Status (badge colorido), Previa, Enviado em, Atualizado em, Acoes
+- Acoes: Visualizar, Editar (se REJECTED/DRAFT), Reenviar (se REJECTED), Excluir (se REJECTED/PENDING/DRAFT)
+- Filtro por status e busca por nome
+
+### 4.4 Novo: `src/components/integracoes/WhatsAppMetaTemplateDrawer.tsx`
+
+Drawer (Sheet) lateral para criar/editar template:
+
+**Lado esquerdo -- Formulario:**
+- Nome (snake_case, auto-gerado a partir da descricao)
+- Categoria (UTILITY/MARKETING/AUTHENTICATION com tooltips)
+- Idioma (fixo pt_BR)
+- Header tipo (select: Nenhum/Texto/Imagem/Documento) + campo texto se tipo = text
+- Corpo (textarea com contador de caracteres, limite 1024)
+- Botao "+ Variavel" que insere {{N}} e cria campo "Exemplo para {{N}}"
+- Rodape (texto simples, limite 60 chars)
+- Botoes (ate 3: Resposta Rapida / URL / Telefone)
+
+**Lado direito -- Preview:**
+- Bolha estilizada do WhatsApp com cabecalho, corpo (variaveis substituidas pelos exemplos), rodape e botoes
+- Atualiza em tempo real
+
+**Acoes:**
+- "Salvar rascunho" (status DRAFT, so local)
+- "Enviar para aprovacao" (chama edge function, status vira PENDING)
+
+### 4.5 Novo: `src/hooks/useWhatsAppMeta.ts`
+
+Hooks:
+- `useMetaConfig()` -- busca configuracao da Meta
+- `useSalvarMetaConfig()` -- mutation para salvar config
+- `useTestarMetaConexao()` -- mutation para testar conexao
+- `useTrocarProvedor()` -- mutation para ativar/desativar provedor
+- `useMetaTemplates()` -- query para listar templates
+- `useCriarMetaTemplate()` -- mutation para criar/enviar template
+- `useExcluirMetaTemplate()` -- mutation para excluir
+- `useSincronizarMetaTemplates()` -- mutation para buscar status atualizados
 
 ---
 
-## Parte 6: Integracao no SinistroAnalise
+## Parte 5: Templates Padrao
 
-### Arquivo: `src/pages/eventos/SinistroAnalise.tsx`
+Inserir na migracao SQL os 8 templates padrao como rascunho (status = 'DRAFT'):
 
-1. **Substituir card basico de regulagem** (linhas 2274-2302) pelo novo `CardParecerRegulador` completo
+1. `boas_vindas_associado` (UTILITY)
+2. `cobranca_mensalidade` (UTILITY)
+3. `sinistro_aberto` (UTILITY)
+4. `sinistro_atualizado` (UTILITY)
+5. `assistencia_confirmada` (UTILITY)
+6. `tarefa_vistoriador` (UTILITY)
+7. `orcamento_oficina` (UTILITY)
+8. `documentacao_pendente` (UTILITY)
 
-2. **Na aba "Orcamento"** (linha 1644): manter `CardOrcamentoReparo` mas passar prop adicional `parecerTecnico` com os dados do parecer para exibir comparativos
-
-3. **Card de acoes**: quando status = `aguardando_orcamento`, mostrar botao de acao para criar orcamento (ja funciona via CardOrcamentoReparo na aba correspondente)
+Cada um com corpo, variaveis e exemplos pre-preenchidos conforme especificado.
 
 ---
 
-## Parte 7: Fluxo de Status
+## Parte 6: Webhook da Meta
 
-A transicao ja esta definida:
-- `aguardando_regulagem` -> regulador conclui vistoria -> `aguardando_orcamento`
-- `aguardando_orcamento` -> analista aprova orcamento -> `aguardando_pecas` ou `em_reparo`
+### config.toml
 
-Atualizar a Edge Function para usar `aguardando_orcamento` ao inves de `aguardando_analise` quando o regulador finaliza a vistoria.
+```text
+[functions.whatsapp-meta-webhook]
+verify_jwt = false
+```
+
+### Fluxo do webhook
+
+1. **GET** (verificacao): Meta envia `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`. Validar verify_token e retornar challenge.
+2. **POST** (eventos):
+   - `message_template_status_update`: atualizar status do template no banco
+   - `messages`: registrar mensagem recebida + encaminhar para IA (reutilizar logica do `whatsapp-webhook` existente)
+   - `statuses` (delivery/read): atualizar status da mensagem no banco
+
+---
+
+## Parte 7: Roteamento Transparente
+
+A mudanca critica e no `whatsapp-send-text` e `whatsapp-send-media`. As ~26 edge functions que chamam essas funcoes NAO precisam ser alteradas. O roteamento e interno:
+
+```text
+whatsapp-send-text recebe { telefone, mensagem, template_name?, template_params? }
+  |
+  v
+  Qual provedor esta ativo?
+  |
+  +--> evolution --> fluxo atual (Evolution API)
+  |
+  +--> meta_oficial --> enviar via Graph API
+       |
+       +--> template_name informado? --> enviar como template
+       |
+       +--> sem template --> enviar como texto livre (se dentro de janela 24h)
+       |
+       +--> fora de janela e sem template --> logar erro, retornar falha
+```
+
+Para a fase inicial, as edge functions existentes continuam enviando texto livre. Quando o provedor ativo for Meta e a mensagem for proativa (fora de janela), o sistema logara o alerta. O Diretor precisara mapear gradualmente quais envios usam qual template.
 
 ---
 
@@ -232,20 +274,93 @@ Atualizar a Edge Function para usar `aguardando_orcamento` ao inves de `aguardan
 
 | Arquivo | Acao |
 |---------|------|
-| Nova migracao SQL | Tabelas `parecer_tecnico_regulador`, `parecer_tecnico_itens`, `parecer_tecnico_fotos`, RLS |
-| `src/hooks/useParecerTecnico.ts` | Novo hook CRUD |
-| `src/components/regulador/VistoriaEventoOrcamento.tsx` | Expandir formulario com gravidade, fotos, prioridade, origem, prazo |
-| `src/components/orcamento/CardParecerRegulador.tsx` | Novo card completo do parecer (substitui card basico) |
-| `src/components/orcamento/CardOrcamentoReparo.tsx` | Botao importar do parecer, coluna estimativa, rodape comparativo |
-| `src/components/orcamento/FormPacoteFechado.tsx` | Comparativo com estimativa do regulador |
-| `src/pages/eventos/SinistroAnalise.tsx` | Integrar CardParecerRegulador, substituir card basico |
-| `supabase/functions/salvar-vistoria-regulador/index.ts` | Salvar no parecer_tecnico, mudar status para aguardando_orcamento |
+| Nova migracao SQL | Tabelas `whatsapp_meta_config`, `whatsapp_meta_templates`, coluna `provedor`, templates padrao |
+| `supabase/functions/whatsapp-meta-test/index.ts` | Nova edge function |
+| `supabase/functions/whatsapp-meta-templates/index.ts` | Nova edge function |
+| `supabase/functions/whatsapp-meta-webhook/index.ts` | Nova edge function |
+| `supabase/functions/whatsapp-send-text/index.ts` | Adicionar roteamento por provedor |
+| `supabase/functions/whatsapp-send-media/index.ts` | Adicionar roteamento por provedor |
+| `supabase/config.toml` | Adicionar `whatsapp-meta-webhook` com verify_jwt = false |
+| `src/hooks/useWhatsAppMeta.ts` | Novo hook |
+| `src/components/integracoes/WhatsAppProvedorSelector.tsx` | Novo componente |
+| `src/components/integracoes/WhatsAppMetaTemplates.tsx` | Novo componente |
+| `src/components/integracoes/WhatsAppMetaTemplateDrawer.tsx` | Novo componente |
+| `src/components/integracoes/WhatsAppTab.tsx` | Integrar novos componentes |
+| `src/integrations/supabase/types.ts` | Tipos das novas tabelas |
 
 ## Sem alteracoes em
 
-- App do associado (nenhuma info de custo)
-- Portal do sindicante (nao ve custos)
-- Tabela `vistorias_evento` (mantem `dados_vistoria` JSONB para compatibilidade)
-- Fluxo de cotacoes WhatsApp
-- Tabelas de ordens de servico
+- As ~26 edge functions que chamam `whatsapp-send-text` (roteamento transparente)
+- App do associado
+- Webhook existente do Evolution (`whatsapp-webhook`)
+- Tabela `whatsapp_templates` existente (templates internos do Evolution)
+- Tabela `whatsapp_instancias` (apenas adicionada coluna `provedor`)
 
+---
+
+## Detalhes Tecnicos
+
+### API da Meta -- Endpoints usados
+
+```text
+-- Testar conexao
+GET https://graph.facebook.com/v21.0/{phone_number_id}
+Authorization: Bearer {access_token}
+
+-- Enviar mensagem template
+POST https://graph.facebook.com/v21.0/{phone_number_id}/messages
+{
+  "messaging_product": "whatsapp",
+  "to": "5511999999999",
+  "type": "template",
+  "template": {
+    "name": "boas_vindas_associado",
+    "language": { "code": "pt_BR" },
+    "components": [
+      {
+        "type": "body",
+        "parameters": [
+          { "type": "text", "text": "João" },
+          { "type": "text", "text": "ABC-1234" }
+        ]
+      }
+    ]
+  }
+}
+
+-- Enviar mensagem texto livre (dentro de janela 24h)
+POST https://graph.facebook.com/v21.0/{phone_number_id}/messages
+{
+  "messaging_product": "whatsapp",
+  "to": "5511999999999",
+  "type": "text",
+  "text": { "body": "Mensagem livre" }
+}
+
+-- Criar template
+POST https://graph.facebook.com/v21.0/{waba_id}/message_templates
+{
+  "name": "boas_vindas_associado",
+  "language": "pt_BR",
+  "category": "UTILITY",
+  "components": [...]
+}
+
+-- Listar templates (sincronizar status)
+GET https://graph.facebook.com/v21.0/{waba_id}/message_templates
+
+-- Excluir template
+DELETE https://graph.facebook.com/v21.0/{waba_id}/message_templates?name={nome}
+```
+
+### Permissoes
+
+```text
+canAccessProvedor = has_role(diretor)
+canAccessTemplates = has_role(diretor)
+canSwitchProvider = has_role(diretor)
+```
+
+### Secret necessario
+
+`META_WHATSAPP_ACCESS_TOKEN` -- token de acesso permanente gerado no painel de desenvolvedores da Meta.
