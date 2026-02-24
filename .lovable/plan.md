@@ -1,272 +1,349 @@
 
-# Seletor de Provedor WhatsApp + Gerenciador de Templates Meta
+
+# Sistema de Despacho de Reboque -- "Uber do Guincho"
 
 ## Resumo
 
-Implementar duas funcionalidades na tela de Integracoes > WhatsApp:
-1. **Seletor de Provedor**: permitir ao Diretor escolher entre Evolution API (Baileys) e API Oficial da Meta como provedor ativo de WhatsApp
-2. **Gerenciador de Templates**: interface completa para criar, editar, sincronizar e gerenciar templates da API Oficial da Meta
+Criar um sistema automatizado de despacho de reboque onde, ao abrir um chamado de reboque, TODOS os reboquistas ativos recebem um link por WhatsApp. Cada reboquista abre o link em uma pagina publica, ativa a localizacao, ve o valor calculado automaticamente (saida + km x distancia), e decide se aceita. O sistema espera ate 10 minutos e atribui ao mais barato.
 
-O envio de mensagens pelo sistema sera transparente -- as ~26 edge functions que chamam `whatsapp-send-text` continuarao funcionando sem alteracao. A logica de roteamento entre provedores ficara centralizada na propria edge function `whatsapp-send-text`.
+---
+
+## Analise do Estado Atual
+
+### O que ja existe
+- **Tabela `chamados_assistencia`**: completa com origem_lat/lng, rastreador_lat/lng, destino_lat/lng, prestador_id/nome/telefone, status enum (aberto, aguardando_prestador, prestador_despachado, prestador_a_caminho, em_atendimento, concluido, cancelado_*)
+- **Tabela `chamados_assistencia_atendimentos`**: registra acionamentos com hora_acionamento, hora_aceite, hora_chegada, hora_conclusao, valor_servico, valor_total, km_origem_destino
+- **Tabela `prestadores_assistencia`**: nome, whatsapp, tipos_servico, tipos_reboque, status, disponivel, raio_atendimento_km
+- **Tabela `prestadores_assistencia_valores`**: valor_saida, valor_km, km_franquia, tipo_servico, tipo_reboque, ativo
+- **`AtribuirPrestadorModal`**: atribuicao manual (seleciona um prestador da lista)
+- **`EnviarLinkPrestadorButton`**: envia localizacao/mensagem via WhatsApp (Evolution API) para UM prestador ja atribuido
+- **`MapaChamado`**: componente Leaflet com marcadores, rotas, rastreador
+- **`NovoChamadoModal`**: criacao de chamado com busca de localizacao do rastreador via `posicao-veiculo`
+- **Pagina publica `/tracking/assistencia/:id`**: ja existe uma rota publica para tracking
+- **`publicSupabase`**: cliente Supabase sem autenticacao para paginas publicas
+- **Status enum `status_chamado`**: precisa adicionar `aguardando_aceites` (novo status para o timer de 10 min)
+- **Edge functions**: `whatsapp-send-text`, `whatsapp-send-location`, `reverse-geocode`, `geocode-endereco`, `posicao-veiculo`
+
+### O que falta
+- Tabela de despacho (tokens unicos por reboquista + chamado, aceites, timer)
+- Tabela de tracking do reboquista (posicoes periodicas durante o deslocamento)
+- Pagina publica do reboquista (`/assistencia/chamado/:token`)
+- Edge function para disparo em lote dos links
+- Edge function para atribuicao automatica (apos timer)
+- Card de "Despacho de Reboque" no painel do analista
+- Novo status `aguardando_aceites` no enum
 
 ---
 
 ## Parte 1: Migracao SQL
 
-### Alteracoes na tabela `whatsapp_instancias`
-
-Adicionar coluna para identificar o provedor ativo:
+### Novo status no enum
 
 ```text
-ALTER TABLE whatsapp_instancias ADD COLUMN provedor text DEFAULT 'evolution'
-  CHECK (provedor IN ('evolution', 'meta_oficial'));
+ALTER TYPE status_chamado ADD VALUE IF NOT EXISTS 'aguardando_aceites' BEFORE 'aguardando_prestador';
 ```
 
-### Nova tabela: `whatsapp_meta_config`
+### Nova tabela: `despacho_reboque`
 
-Armazena a configuracao da API Oficial da Meta (uma unica linha).
+Controla o ciclo de despacho (um por chamado).
 
 | Coluna | Tipo | Descricao |
 |--------|------|-----------|
 | id | uuid PK | Identificador |
-| phone_number_id | text NOT NULL | ID do telefone na Meta |
-| waba_id | text NOT NULL | WhatsApp Business Account ID |
-| verify_token | text DEFAULT 'sga_pratic_meta_webhook' | Token de verificacao do webhook |
-| testado | boolean DEFAULT false | Se o teste de conexao foi bem-sucedido |
-| testado_em | timestamptz | Data do ultimo teste |
-| ativo | boolean DEFAULT false | Se este e o provedor ativo |
+| chamado_id | uuid FK chamados_assistencia UNIQUE | Chamado vinculado |
+| hora_disparo | timestamptz NOT NULL | Quando os links foram disparados |
+| hora_limite | timestamptz NOT NULL | hora_disparo + 10 min |
+| status | text DEFAULT 'aguardando' | 'aguardando', 'atribuido', 'expirado', 'cancelado' |
+| total_enviados | int DEFAULT 0 | Quantos reboquistas receberam link |
+| total_aceites | int DEFAULT 0 | Quantos aceitaram |
+| total_recusas | int DEFAULT 0 | Quantos recusaram |
+| prestador_atribuido_id | uuid FK prestadores_assistencia | Quem foi atribuido |
+| valor_atribuido | numeric(12,2) | Valor final atribuido |
+| distancia_atribuida_km | numeric(8,2) | Distancia do atribuido |
+| ciclo | int DEFAULT 1 | Numero do ciclo (reenvio = ciclo 2, 3...) |
 | created_at | timestamptz | Criacao |
-| updated_at | timestamptz | Atualizacao |
 
-O Access Token sera armazenado como secret do Supabase (`META_WHATSAPP_ACCESS_TOKEN`), nao no banco.
+### Nova tabela: `despacho_reboque_convites`
 
-RLS: SELECT/INSERT/UPDATE apenas para `has_role(auth.uid(), 'diretor')`.
-
-### Nova tabela: `whatsapp_meta_templates`
-
-Templates da API Oficial da Meta (separada da tabela `whatsapp_templates` existente que e para templates internos do Evolution).
+Um registro por reboquista por despacho.
 
 | Coluna | Tipo | Descricao |
 |--------|------|-----------|
 | id | uuid PK | Identificador |
-| nome | text NOT NULL UNIQUE | Nome do template (snake_case) |
-| categoria | text NOT NULL | 'UTILITY', 'MARKETING', 'AUTHENTICATION' |
-| idioma | text DEFAULT 'pt_BR' | Idioma |
-| status | text DEFAULT 'DRAFT' | 'DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'PAUSED', 'DISABLED' |
-| header_tipo | text | 'none', 'text', 'image', 'document' |
-| header_texto | text | Texto do cabecalho (se tipo text) |
-| corpo | text NOT NULL | Corpo da mensagem com variaveis {{1}} |
-| rodape | text | Texto do rodape |
-| botoes | jsonb | Array de botoes [{tipo, texto, url/telefone}] |
-| variaveis_exemplo | jsonb | Valores de exemplo para cada variavel |
-| meta_template_id | text | ID retornado pela Meta apos envio |
-| motivo_rejeicao | text | Motivo se rejeitado pela Meta |
-| enviado_em | timestamptz | Data de envio para aprovacao |
-| aprovado_em | timestamptz | Data de aprovacao |
+| despacho_id | uuid FK despacho_reboque ON DELETE CASCADE | Despacho pai |
+| prestador_id | uuid FK prestadores_assistencia | Reboquista |
+| token | text NOT NULL UNIQUE | Token unico para o link (uuid) |
+| token_expira_em | timestamptz NOT NULL | hora_disparo + 30 min |
+| status | text DEFAULT 'enviado' | 'enviado', 'visualizado', 'aceito', 'recusado', 'expirado', 'nao_atribuido' |
+| whatsapp_enviado | boolean DEFAULT false | Se a mensagem foi entregue |
+| latitude_prestador | numeric(10,7) | Lat do reboquista ao abrir o link |
+| longitude_prestador | numeric(10,7) | Lng do reboquista ao abrir o link |
+| distancia_km | numeric(8,2) | Distancia calculada ate o veiculo |
+| valor_calculado | numeric(12,2) | Valor = saida + (km x distancia) |
+| valor_saida | numeric(12,2) | Taxa de saida do prestador |
+| valor_km | numeric(12,2) | Valor por km do prestador |
+| data_visualizacao | timestamptz | Quando abriu o link |
+| data_aceite | timestamptz | Quando aceitou |
+| data_recusa | timestamptz | Quando recusou |
 | created_at | timestamptz | Criacao |
-| updated_at | timestamptz | Atualizacao |
 
-RLS: SELECT para `regulador`, `analista_eventos`, `diretor`. INSERT/UPDATE/DELETE apenas `diretor`.
+### Nova tabela: `despacho_reboque_tracking`
 
----
+Posicoes do reboquista apos ser atribuido.
 
-## Parte 2: Secrets
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | Identificador |
+| chamado_id | uuid FK chamados_assistencia | Chamado |
+| prestador_id | uuid FK prestadores_assistencia | Reboquista |
+| latitude | numeric(10,7) NOT NULL | Lat |
+| longitude | numeric(10,7) NOT NULL | Lng |
+| velocidade | numeric(6,2) | Velocidade km/h |
+| precisao | numeric(8,2) | Accuracy em metros |
+| created_at | timestamptz DEFAULT now() | Timestamp |
 
-Solicitar ao usuario o secret `META_WHATSAPP_ACCESS_TOKEN` para armazenar o Access Token da API da Meta. Esse token sera usado pelas edge functions ao enviar via API Oficial.
+### Nova tabela: `despacho_reboque_status_log`
 
----
+Timeline de progresso do reboquista.
 
-## Parte 3: Edge Functions
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | Identificador |
+| chamado_id | uuid FK chamados_assistencia | Chamado |
+| prestador_id | uuid FK prestadores_assistencia | Reboquista |
+| status | text NOT NULL | 'a_caminho', 'chegou_local', 'veiculo_carregado', 'chegou_destino', 'concluido' |
+| latitude | numeric(10,7) | Posicao ao registrar |
+| longitude | numeric(10,7) | Posicao ao registrar |
+| observacao | text | Obs opcional |
+| created_at | timestamptz DEFAULT now() | Timestamp |
 
-### 3.1 Nova: `whatsapp-meta-test`
+### RLS Policies
 
-Testa conexao com a API da Meta:
-- Faz GET em `https://graph.facebook.com/v21.0/{phone_number_id}` com Bearer token
-- Retorna sucesso/erro e dados do numero (nome, status de verificacao)
-- Atualiza `whatsapp_meta_config.testado = true`
-
-### 3.2 Nova: `whatsapp-meta-templates`
-
-CRUD de templates na API da Meta:
-- **POST (criar/enviar)**: envia template para a Meta via `POST /v21.0/{waba_id}/message_templates`
-- **GET (sincronizar)**: busca status de todos os templates via `GET /v21.0/{waba_id}/message_templates`
-- **DELETE**: exclui template na Meta via `DELETE /v21.0/{waba_id}/message_templates?name={nome}`
-
-### 3.3 Nova: `whatsapp-meta-webhook`
-
-Webhook para receber eventos da Meta:
-- GET: verificacao do webhook (verify_token)
-- POST: recebe eventos de mensagens, delivery reports, status de templates
-- Ao receber `message_template_status_update`: atualiza status do template no banco
-- Ao receber mensagens: registra em `whatsapp_mensagens` e encaminha para IA (se habilitada)
-
-config.toml: `verify_jwt = false` (webhook publico)
-
-### 3.4 Atualizar: `whatsapp-send-text`
-
-Adicionar logica de roteamento por provedor:
-
-```text
-1. Buscar provedor ativo: SELECT provedor FROM whatsapp_meta_config WHERE ativo = true
-   (se nao existir ou ativo = false, usar 'evolution' como default)
-2. Se provedor = 'evolution': fluxo atual (sem mudancas)
-3. Se provedor = 'meta_oficial':
-   a. Buscar phone_number_id e access_token
-   b. Buscar template correspondente ao tipo de mensagem (ou enviar como texto livre se dentro de janela 24h)
-   c. POST em https://graph.facebook.com/v21.0/{phone_number_id}/messages
-   d. Registrar em whatsapp_mensagens
-```
-
-Para a Meta, como mensagens proativas exigem template, a funcao deve:
-- Receber campo opcional `template_name` e `template_params`
-- Se `template_name` for informado: enviar como template
-- Se nao for informado: enviar como texto livre (so funciona dentro de janela 24h)
-- Se fora de janela e sem template: logar alerta e retornar erro
-
-### 3.5 Atualizar: `whatsapp-send-media`
-
-Mesma logica de roteamento. Para a Meta, midias sao enviadas via `POST /messages` com tipo `image`/`document`/`audio`/`video` usando URL publica ou upload previo.
+- `despacho_reboque`, `despacho_reboque_convites`: SELECT para analista_eventos, diretor. INSERT/UPDATE via service_role (edge functions).
+- `despacho_reboque_convites`: SELECT publico via token (anon pode ler seu proprio convite pelo token). UPDATE anon para status/lat/lng (filtrado por token).
+- `despacho_reboque_tracking`: INSERT anon (filtrado por chamado_id + prestador atribuido). SELECT para analista_eventos, diretor.
+- `despacho_reboque_status_log`: INSERT anon (via token validado). SELECT para analista_eventos, diretor.
 
 ---
 
-## Parte 4: Componentes Frontend
+## Parte 2: Edge Functions
 
-### 4.1 Refatorar: `WhatsAppTab.tsx`
+### 2.1 Nova: `despacho-reboque-disparar`
 
-Reorganizar a tela em 3 secoes:
-1. **Provedor de WhatsApp** (nova secao no topo)
-2. **IA e Estatisticas** (mantido)
-3. **Templates de Mensagem (API Oficial Meta)** (nova secao)
+Dispara o ciclo de despacho para um chamado de reboque:
 
-### 4.2 Novo: `src/components/integracoes/WhatsAppProvedorSelector.tsx`
+1. Valida JWT e role (analista_eventos ou diretor)
+2. Busca localizacao do veiculo (rastreador ou endereco do chamado)
+3. Busca todos os prestadores ativos com tipos_servico incluindo 'reboque' ou 'guincho', whatsapp preenchido, disponivel=true
+4. Para cada prestador: gera token UUID, busca valores (valor_saida, valor_km), cria convite
+5. Cria registro em `despacho_reboque` com hora_limite = now() + 10 min
+6. Envia WhatsApp em lote para cada reboquista (chama `whatsapp-send-text` internamente)
+7. Atualiza status do chamado para `aguardando_aceites`
+8. Agenda a atribuicao automatica (via pg_cron ou retorno com instrucao de delay)
+9. Retorna: total_enviados, despacho_id
 
-Secao com dois cards lado a lado:
+### 2.2 Nova: `despacho-reboque-responder`
 
-**Card 1 -- Evolution API / Baileys:**
-- Exibe URL, instancia, status de conexao (dados existentes, somente leitura)
-- Badge "CONECTADO" se status = open
-- Badge "ATIVO" se e o provedor ativo
-- Botao "Usar este provedor" (desabilitado se ja ativo)
+Endpoint publico (verify_jwt = false) para o reboquista aceitar/recusar:
 
-**Card 2 -- API Oficial da Meta:**
-- Formulario: Phone Number ID, WABA ID, Access Token (campo senha com show/hide)
-- Verify Token (readonly, valor fixo)
-- URL do Webhook (readonly, gerada: `https://{project_id}.supabase.co/functions/v1/whatsapp-meta-webhook`, com botao copiar)
-- Botoes: "Salvar Configuracao", "Testar Conexao"
-- Badge "ATIVO" se e o provedor ativo
-- Botao "Usar este provedor" (habilitado apos teste bem-sucedido)
-- Secao colapsavel "Como configurar" com instrucoes passo a passo
+1. Recebe: token, acao ('aceitar' ou 'recusar'), latitude, longitude
+2. Valida token (existe, nao expirado, convite nao ja respondido)
+3. Se aceitar: calcula distancia (haversine), calcula valor, salva aceite, incrementa total_aceites no despacho
+4. Se 10 aceites atingidos: dispara atribuicao imediata
+5. Se recusar: salva recusa
+6. Retorna: sucesso + dados do convite atualizado
 
-**Troca de provedor:** AlertDialog com confirmacao "Todos os envios passarao a usar [nome]. Deseja continuar?"
+### 2.3 Nova: `despacho-reboque-atribuir`
 
-### 4.3 Novo: `src/components/integracoes/WhatsAppMetaTemplates.tsx`
+Executa a logica de atribuicao (chamada apos timer ou apos 10 aceites):
 
-Secao completa de gerenciamento de templates:
+1. Busca todos os convites com status='aceito' do despacho
+2. Ordena por valor_calculado ASC, data_aceite ASC (desempate)
+3. Atribui ao mais barato: atualiza despacho, atualiza chamado (prestador_id, status='prestador_a_caminho')
+4. Marca convite do atribuido como 'aceito' (ja esta), demais como 'nao_atribuido'
+5. Cria atendimento em `chamados_assistencia_atendimentos`
+6. Registra historico e notifica analista
+7. Se 0 aceites: marca despacho como 'expirado', notifica analista
 
-**Cabecalho:**
-- Aviso sobre obrigatoriedade de templates
-- Cards de resumo: Total | Aprovados | Pendentes | Rejeitados
-- Botoes: "Novo Template" e "Sincronizar com a Meta"
+### 2.4 Nova: `despacho-reboque-tracking`
 
-**Tabela:**
-- Colunas: Nome, Categoria, Status (badge colorido), Previa, Enviado em, Atualizado em, Acoes
-- Acoes: Visualizar, Editar (se REJECTED/DRAFT), Reenviar (se REJECTED), Excluir (se REJECTED/PENDING/DRAFT)
-- Filtro por status e busca por nome
+Endpoint publico (verify_jwt = false) para receber posicoes do reboquista:
 
-### 4.4 Novo: `src/components/integracoes/WhatsAppMetaTemplateDrawer.tsx`
+1. Recebe: token ou chamado_id + prestador_id, latitude, longitude, velocidade, precisao
+2. Valida que o prestador e o atribuido para aquele chamado
+3. Insere em `despacho_reboque_tracking`
 
-Drawer (Sheet) lateral para criar/editar template:
+### 2.5 Nova: `despacho-reboque-status`
 
-**Lado esquerdo -- Formulario:**
-- Nome (snake_case, auto-gerado a partir da descricao)
-- Categoria (UTILITY/MARKETING/AUTHENTICATION com tooltips)
-- Idioma (fixo pt_BR)
-- Header tipo (select: Nenhum/Texto/Imagem/Documento) + campo texto se tipo = text
-- Corpo (textarea com contador de caracteres, limite 1024)
-- Botao "+ Variavel" que insere {{N}} e cria campo "Exemplo para {{N}}"
-- Rodape (texto simples, limite 60 chars)
-- Botoes (ate 3: Resposta Rapida / URL / Telefone)
+Endpoint publico (verify_jwt = false) para o reboquista atualizar progresso:
 
-**Lado direito -- Preview:**
-- Bolha estilizada do WhatsApp com cabecalho, corpo (variaveis substituidas pelos exemplos), rodape e botoes
-- Atualiza em tempo real
+1. Recebe: token, status ('chegou_local', 'veiculo_carregado', etc.), latitude, longitude, observacao
+2. Valida token e que o prestador e o atribuido
+3. Insere em `despacho_reboque_status_log`
+4. Atualiza status do chamado conforme: chegou_local -> em_atendimento, concluido -> concluido
 
-**Acoes:**
-- "Salvar rascunho" (status DRAFT, so local)
-- "Enviar para aprovacao" (chama edge function, status vira PENDING)
+### 2.6 Nova: `despacho-reboque-consultar`
 
-### 4.5 Novo: `src/hooks/useWhatsAppMeta.ts`
+Endpoint publico (verify_jwt = false) para a pagina do reboquista consultar dados:
 
-Hooks:
-- `useMetaConfig()` -- busca configuracao da Meta
-- `useSalvarMetaConfig()` -- mutation para salvar config
-- `useTestarMetaConexao()` -- mutation para testar conexao
-- `useTrocarProvedor()` -- mutation para ativar/desativar provedor
-- `useMetaTemplates()` -- query para listar templates
-- `useCriarMetaTemplate()` -- mutation para criar/enviar template
-- `useExcluirMetaTemplate()` -- mutation para excluir
-- `useSincronizarMetaTemplates()` -- mutation para buscar status atualizados
-
----
-
-## Parte 5: Templates Padrao
-
-Inserir na migracao SQL os 8 templates padrao como rascunho (status = 'DRAFT'):
-
-1. `boas_vindas_associado` (UTILITY)
-2. `cobranca_mensalidade` (UTILITY)
-3. `sinistro_aberto` (UTILITY)
-4. `sinistro_atualizado` (UTILITY)
-5. `assistencia_confirmada` (UTILITY)
-6. `tarefa_vistoriador` (UTILITY)
-7. `orcamento_oficina` (UTILITY)
-8. `documentacao_pendente` (UTILITY)
-
-Cada um com corpo, variaveis e exemplos pre-preenchidos conforme especificado.
-
----
-
-## Parte 6: Webhook da Meta
+1. Recebe: token
+2. Retorna: dados do chamado (veiculo, endereco, mapa), status do convite, status do despacho, se ja foi atribuido e a quem
+3. Usado para renderizar a pagina publica
 
 ### config.toml
 
 ```text
-[functions.whatsapp-meta-webhook]
+[functions.despacho-reboque-responder]
+verify_jwt = false
+
+[functions.despacho-reboque-tracking]
+verify_jwt = false
+
+[functions.despacho-reboque-status]
+verify_jwt = false
+
+[functions.despacho-reboque-consultar]
 verify_jwt = false
 ```
 
-### Fluxo do webhook
+---
 
-1. **GET** (verificacao): Meta envia `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`. Validar verify_token e retornar challenge.
-2. **POST** (eventos):
-   - `message_template_status_update`: atualizar status do template no banco
-   - `messages`: registrar mensagem recebida + encaminhar para IA (reutilizar logica do `whatsapp-webhook` existente)
-   - `statuses` (delivery/read): atualizar status da mensagem no banco
+## Parte 3: Timer de 10 Minutos
+
+A logica de atribuicao automatica apos 10 minutos sera implementada via **pg_cron**:
+
+1. Ao disparar o despacho, agendar um job unico via `cron.schedule` que chama a edge function `despacho-reboque-atribuir` apos 10 minutos
+2. Alternativa mais simples: a edge function `despacho-reboque-responder` verifica, a cada aceite, se ja passou do tempo limite ou se atingiu 10 aceites, e dispara a atribuicao
+3. Fallback: a pagina do analista faz polling a cada 10s e, se o timer expirou, chama a atribuicao
+
+Implementacao recomendada: usar `pg_net.http_post` agendado via `pg_cron` para chamar a edge function apos 10 min. Isso garante que a atribuicao aconteca mesmo se ninguem estiver olhando.
 
 ---
 
-## Parte 7: Roteamento Transparente
+## Parte 4: Pagina Publica do Reboquista
 
-A mudanca critica e no `whatsapp-send-text` e `whatsapp-send-media`. As ~26 edge functions que chamam essas funcoes NAO precisam ser alteradas. O roteamento e interno:
+### Nova rota: `/assistencia/chamado/:token`
+
+Pagina publica (sem login), mobile-first, acessada via link do WhatsApp.
+
+### Novo componente: `src/pages/assistencia/DespachoReboquistaPublico.tsx`
+
+Pagina com 4 estados:
+
+**Estado 1: Permissao de localizacao**
+- Fundo escuro, icone de pin grande
+- "Ativacao de Localizacao Obrigatoria"
+- Botao "Ativar Localizacao" -> `navigator.geolocation.getCurrentPosition()`
+- Se negar: tela de erro com "Tentar novamente"
+
+**Estado 2: Detalhes do chamado + valor**
+- Chama `despacho-reboque-consultar` com o token
+- Card: Dados do veiculo (marca, modelo, placa, cor)
+- Card: Mapa Leaflet com dois pins (reboquista azul, veiculo vermelho) + linha
+- Card: Valor do servico (destaque grande): "R$ 140,00" com detalhamento (saida + km x distancia)
+- Timer regressivo visual (barra de progresso)
+- Botao verde "ACEITAR CHAMADO -- R$ 140,00" (sticky bottom)
+- Botao vermelho "RECUSAR" (menor)
+
+**Estado 3: Aguardando confirmacao (apos aceite)**
+- "Aceite registrado! Aguardando confirmacao..."
+- Spinner
+- Escuta Supabase Realtime no convite para mudanca de status
+- Fallback: polling a cada 5s
+
+**Estado 4a: Chamado confirmado (reboquista atribuido)**
+- "CHAMADO CONFIRMADO! Voce foi selecionado!"
+- Dados completos: veiculo, endereco, associado nome, telefone (clicavel)
+- Mapa com rota
+- Botoes: "Ligar para associado", "Abrir no Google Maps"
+- Botoes de progresso: "Cheguei no local", "Fotos", "Veiculo carregado", "Cheguei no destino", "Servico concluido"
+- Indicador de localizacao ativa (bolinha verde pulsando)
+- Aviso: "Mantenha esta pagina aberta"
+- `navigator.geolocation.watchPosition()` enviando posicao a cada 15-30s
+
+**Estado 4b: Nao atribuido**
+- "Chamado ja aceito por outro prestador. Obrigado!"
+
+**Estado 5: Expirado / Cancelado / Ja atribuido**
+- Mensagens correspondentes
+
+### Uso do `publicSupabase`
+- A pagina usa o cliente publico (sem auth)
+- Chamadas via `supabase.functions.invoke()` para as edge functions publicas
+
+---
+
+## Parte 5: Painel do Analista -- Card "Despacho de Reboque"
+
+### Novo componente: `src/components/assistencia/CardDespachoReboque.tsx`
+
+Integrado na pagina `ChamadoDetalhe.tsx`. Aparece quando o chamado e do tipo reboque/guincho.
+
+**Antes do despacho (chamado aberto):**
+- Botao: "Despachar Reboque Automaticamente"
+- Ao clicar: confirma e chama `despacho-reboque-disparar`
+
+**Durante o timer (status aguardando_aceites):**
+- Timer regressivo visual
+- Contadores: Links enviados, Aceites, Recusas, Sem resposta
+- Tabela expandivel com cada reboquista: nome, distancia, valor, status, hora
+- Botao "Encerrar e atribuir agora"
+
+**Apos atribuicao:**
+- Prestador atribuido: nome, valor, distancia
+- Status atual do reboquista (a caminho, chegou, etc.)
+- Timeline de status do reboquista
+- Mini mapa com posicao do reboquista (se tracking ativo)
+- Resumo: "X reboquistas aceitaram em Y minutos"
+
+**Se ninguem aceitou:**
+- Alerta
+- Botoes: "Reenviar para todos" (novo ciclo), "Atribuir manualmente"
+
+**Realtime:** Escuta mudancas em `despacho_reboque` e `despacho_reboque_convites` via Supabase Realtime para atualizar em tempo real.
+
+---
+
+## Parte 6: Integracao no ChamadoDetalhe
+
+### Arquivo: `src/pages/assistencia/ChamadoDetalhe.tsx`
+
+1. Importar `CardDespachoReboque`
+2. Renderizar o card quando `tipo_servico` inclui 'reboque' ou 'guincho'
+3. Passar chamado_id e dados do chamado como props
+4. Manter o fluxo manual (`AtribuirPrestadorModal`) como alternativa -- o analista pode escolher despacho automatico OU manual
+
+---
+
+## Parte 7: Calculo de Distancia
+
+### Funcao utilitaria: Haversine
+
+Calcular distancia em linha reta entre dois pontos (lat/lng). Usar tanto no frontend (pagina do reboquista) quanto no backend (edge functions).
 
 ```text
-whatsapp-send-text recebe { telefone, mensagem, template_name?, template_params? }
-  |
-  v
-  Qual provedor esta ativo?
-  |
-  +--> evolution --> fluxo atual (Evolution API)
-  |
-  +--> meta_oficial --> enviar via Graph API
-       |
-       +--> template_name informado? --> enviar como template
-       |
-       +--> sem template --> enviar como texto livre (se dentro de janela 24h)
-       |
-       +--> fora de janela e sem template --> logar erro, retornar falha
+function haversineKm(lat1, lon1, lat2, lon2):
+  R = 6371 (raio da Terra em km)
+  dLat = (lat2 - lat1) em radianos
+  dLon = (lon2 - lon1) em radianos
+  a = sin(dLat/2)^2 + cos(lat1) * cos(lat2) * sin(dLon/2)^2
+  c = 2 * atan2(sqrt(a), sqrt(1-a))
+  return R * c
 ```
 
-Para a fase inicial, as edge functions existentes continuam enviando texto livre. Quando o provedor ativo for Meta e a mensagem for proativa (fora de janela), o sistema logara o alerta. O Diretor precisara mapear gradualmente quais envios usam qual template.
+Para o MVP: distancia em linha reta. Futuramente: integrar API de rotas (OSRM/Google) para distancia real.
+
+---
+
+## Parte 8: Rota no App.tsx
+
+Adicionar rota publica:
+
+```text
+<Route path="/assistencia/chamado/:token" element={<DespachoReboquistaPublico />} />
+```
+
+Colocar junto com as outras rotas publicas (antes das rotas protegidas).
 
 ---
 
@@ -274,93 +351,39 @@ Para a fase inicial, as edge functions existentes continuam enviando texto livre
 
 | Arquivo | Acao |
 |---------|------|
-| Nova migracao SQL | Tabelas `whatsapp_meta_config`, `whatsapp_meta_templates`, coluna `provedor`, templates padrao |
-| `supabase/functions/whatsapp-meta-test/index.ts` | Nova edge function |
-| `supabase/functions/whatsapp-meta-templates/index.ts` | Nova edge function |
-| `supabase/functions/whatsapp-meta-webhook/index.ts` | Nova edge function |
-| `supabase/functions/whatsapp-send-text/index.ts` | Adicionar roteamento por provedor |
-| `supabase/functions/whatsapp-send-media/index.ts` | Adicionar roteamento por provedor |
-| `supabase/config.toml` | Adicionar `whatsapp-meta-webhook` com verify_jwt = false |
-| `src/hooks/useWhatsAppMeta.ts` | Novo hook |
-| `src/components/integracoes/WhatsAppProvedorSelector.tsx` | Novo componente |
-| `src/components/integracoes/WhatsAppMetaTemplates.tsx` | Novo componente |
-| `src/components/integracoes/WhatsAppMetaTemplateDrawer.tsx` | Novo componente |
-| `src/components/integracoes/WhatsAppTab.tsx` | Integrar novos componentes |
-| `src/integrations/supabase/types.ts` | Tipos das novas tabelas |
+| Nova migracao SQL | Tabelas despacho_reboque, convites, tracking, status_log, novo enum status |
+| `supabase/functions/despacho-reboque-disparar/index.ts` | Nova edge function (autenticada) |
+| `supabase/functions/despacho-reboque-responder/index.ts` | Nova edge function (publica) |
+| `supabase/functions/despacho-reboque-atribuir/index.ts` | Nova edge function (chamada internamente) |
+| `supabase/functions/despacho-reboque-tracking/index.ts` | Nova edge function (publica) |
+| `supabase/functions/despacho-reboque-status/index.ts` | Nova edge function (publica) |
+| `supabase/functions/despacho-reboque-consultar/index.ts` | Nova edge function (publica) |
+| `supabase/config.toml` | Adicionar verify_jwt = false para funcoes publicas |
+| `src/pages/assistencia/DespachoReboquistaPublico.tsx` | Nova pagina publica do reboquista |
+| `src/components/assistencia/CardDespachoReboque.tsx` | Novo card para painel do analista |
+| `src/pages/assistencia/ChamadoDetalhe.tsx` | Integrar CardDespachoReboque |
+| `src/App.tsx` | Adicionar rota publica |
 
 ## Sem alteracoes em
 
-- As ~26 edge functions que chamam `whatsapp-send-text` (roteamento transparente)
-- App do associado
-- Webhook existente do Evolution (`whatsapp-webhook`)
-- Tabela `whatsapp_templates` existente (templates internos do Evolution)
-- Tabela `whatsapp_instancias` (apenas adicionada coluna `provedor`)
+- App do associado (nao ve custos, apenas status)
+- `AtribuirPrestadorModal` (mantido como alternativa manual)
+- `EnviarLinkPrestadorButton` (mantido para envio individual)
+- `NovoChamadoModal` (mantido como esta)
+- Edge functions existentes de WhatsApp (usadas internamente pelo despacho)
+- Cadastro de prestadores (ja tem os campos necessarios: valor_saida, valor_km, whatsapp, tipos_servico)
 
 ---
 
-## Detalhes Tecnicos
+## Ordem de Implementacao Sugerida
 
-### API da Meta -- Endpoints usados
+Devido a complexidade, recomendo implementar em 3 fases:
 
-```text
--- Testar conexao
-GET https://graph.facebook.com/v21.0/{phone_number_id}
-Authorization: Bearer {access_token}
+**Fase 1 (esta implementacao):** Migracao SQL + Edge functions de disparo/resposta/atribuicao/consulta + Pagina publica do reboquista (estados 1-4) + Card do analista + Rota no App.tsx
 
--- Enviar mensagem template
-POST https://graph.facebook.com/v21.0/{phone_number_id}/messages
-{
-  "messaging_product": "whatsapp",
-  "to": "5511999999999",
-  "type": "template",
-  "template": {
-    "name": "boas_vindas_associado",
-    "language": { "code": "pt_BR" },
-    "components": [
-      {
-        "type": "body",
-        "parameters": [
-          { "type": "text", "text": "João" },
-          { "type": "text", "text": "ABC-1234" }
-        ]
-      }
-    ]
-  }
-}
+**Fase 2 (proxima):** Tracking em tempo real (watchPosition + edge function de tracking + mapa no painel do analista) + Botoes de progresso do reboquista + Timeline de status
 
--- Enviar mensagem texto livre (dentro de janela 24h)
-POST https://graph.facebook.com/v21.0/{phone_number_id}/messages
-{
-  "messaging_product": "whatsapp",
-  "to": "5511999999999",
-  "type": "text",
-  "text": { "body": "Mensagem livre" }
-}
+**Fase 3 (futura):** Upload de fotos pelo reboquista na pagina publica + Integracao com cron para timer server-side + Distancia por rota real (OSRM)
 
--- Criar template
-POST https://graph.facebook.com/v21.0/{waba_id}/message_templates
-{
-  "name": "boas_vindas_associado",
-  "language": "pt_BR",
-  "category": "UTILITY",
-  "components": [...]
-}
+Este plano cobre a Fase 1 completa.
 
--- Listar templates (sincronizar status)
-GET https://graph.facebook.com/v21.0/{waba_id}/message_templates
-
--- Excluir template
-DELETE https://graph.facebook.com/v21.0/{waba_id}/message_templates?name={nome}
-```
-
-### Permissoes
-
-```text
-canAccessProvedor = has_role(diretor)
-canAccessTemplates = has_role(diretor)
-canSwitchProvider = has_role(diretor)
-```
-
-### Secret necessario
-
-`META_WHATSAPP_ACCESS_TOKEN` -- token de acesso permanente gerado no painel de desenvolvedores da Meta.
