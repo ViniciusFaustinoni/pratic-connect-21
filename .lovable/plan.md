@@ -1,91 +1,178 @@
 
 
-# Adicionar Campos para Importacao de Prestadores
+# Importacao em Massa de Prestadores de Assistencia via JSON
 
 ## Resumo
 
-Adicionar 5 novos campos ao sistema de prestadores de assistencia: `telefone_extra` na tabela principal e `km_franquia`, `hr_trabalhada`, `hr_parada`, `diaria_base` na tabela de valores. Atualizar o formulario de cadastro/edicao e a pagina de detalhes.
+Criar uma Edge Function `import-prestadores` que recebe um array JSON de prestadores e insere tanto na tabela principal (`prestadores_assistencia`) quanto na tabela de valores (`prestadores_assistencia_valores`), respeitando todas as regras de negocio existentes. Criar tambem um dialog no frontend (similar ao ImportarOficinasDialog) para upload/preview/importacao.
 
 ---
 
-## 1. Migration - Novas Colunas
+## Por que Edge Function?
 
-Criar migration SQL adicionando:
-
-**Tabela `prestadores_assistencia`:**
-- `telefone_extra` VARCHAR, nullable
-
-**Tabela `prestadores_assistencia_valores`:**
-- `km_franquia` NUMERIC, nullable
-- `hr_trabalhada` NUMERIC, nullable
-- `hr_parada` NUMERIC, nullable
-- `diaria_base` NUMERIC, nullable
+- Os dados envolvem insert em 2 tabelas com relacionamento (prestador + valores)
+- Precisa de transacao logica: se o prestador for criado, os valores devem ser inseridos logo em seguida
+- Validacao server-side garante integridade dos dados
+- Permissao verificada via token JWT (apenas diretores/gerentes)
 
 ---
 
-## 2. NovoPrestadorModal.tsx - Aba "Dados Gerais"
+## 1. Estrutura do JSON Esperado
 
-Adicionar campo "Telefone Extra" logo apos o grid de Telefone/WhatsApp (linha 627).
+Cada item do array deve seguir este formato:
 
-- Usar componente `TelefoneInput` (mesma mascara do telefone principal)
-- Campo opcional, sem validacao obrigatoria
-- Adicionar `telefone_extra` ao schema Zod (string opcional)
-- Adicionar ao `buildPayload` (linha 335-358)
-- Adicionar ao `form.reset` nos dois useEffects (linhas 218-241 e 243-268)
-- Adicionar a interface `PrestadorParaEdicao` (linha 120-144)
-
----
-
-## 3. NovoPrestadorModal.tsx - Aba "Valores"
-
-Para cada card de servico, adicionar 4 novos campos abaixo dos campos existentes (Valor de Saida/Valor Km ou Valor Fixo):
-
-Layout em grid 2x2:
 ```text
-+-------------------+-------------------+
-| KM Franquia       | Hora Trabalhada   |
-+-------------------+-------------------+
-| Hora Parada       | Diaria Base       |
-+-------------------+-------------------+
+{
+  "prestadores": [
+    {
+      // Dados obrigatorios
+      "razao_social": "PRESTADOR EXEMPLO LTDA",
+      "telefone": "(21) 99999-9999",
+      "cidade": "RIO DE JANEIRO",
+      "estado": "RJ",
+      "tipos_servico": ["reboque", "bateria"],
+
+      // Dados opcionais
+      "nome_fantasia": "PRESTADOR EXEMPLO",
+      "tipo_pessoa": "pj",
+      "cnpj": "00.000.000/0001-00",
+      "cpf": null,
+      "whatsapp": "(21) 99999-9999",
+      "telefone_extra": "(21) 88888-8888",
+      "email": "contato@exemplo.com",
+      "cep": "20000-000",
+      "logradouro": "RUA X",
+      "numero": "123",
+      "bairro": "CENTRO",
+      "raio_atendimento_km": 50,
+      "tipos_reboque": ["leve", "utilitario"],
+      "banco": "Bradesco",
+      "agencia": "1234",
+      "conta": "56789-0",
+      "pix_tipo": "cnpj",
+      "pix_chave": "00000000000100",
+
+      // Valores por servico (opcional)
+      "valores": [
+        {
+          "tipo_servico": "reboque",
+          "tipo_reboque": "leve",
+          "valor_saida": 150.00,
+          "valor_km": 4.50,
+          "km_franquia": 10,
+          "hr_trabalhada": 80,
+          "hr_parada": 40,
+          "diaria_base": 200
+        },
+        {
+          "tipo_servico": "bateria",
+          "tipo_reboque": null,
+          "valor_saida": 80.00,
+          "valor_km": 3.00
+        }
+      ]
+    }
+  ]
+}
 ```
 
-Alteracoes tecnicas:
-- Expandir interface `ValorItem` (linha 111-118) com os 4 novos campos
-- Atualizar `updateValor` para suportar os novos campos
-- Atualizar `saveValores` (linha 360-392) para incluir os novos campos no INSERT
-- Atualizar o useEffect de carregamento de valores existentes (linha 273-290) para ler os novos campos
-- Renderizar os 4 inputs tipo number dentro de cada card de servico (linhas 978-1013)
+---
+
+## 2. Edge Function: `import-prestadores`
+
+**Arquivo:** `supabase/functions/import-prestadores/index.ts`
+
+Logica:
+1. Verificar autenticacao JWT
+2. Verificar role do usuario (diretor, gerente_comercial, supervisor_vendas)
+3. Para cada prestador no array:
+   - Validar campos obrigatorios (razao_social, telefone, cidade, estado, tipos_servico)
+   - Validar tipos_servico contra lista permitida: `reboque, pane_seca, socorro_mecanico, socorro_eletrico, troca_pneu, chaveiro, bateria, taxi, hospedagem, outro`
+   - Validar tipos_reboque (se tiver "reboque" nos tipos_servico): `leve, utilitario, pesado`
+   - INSERT em `prestadores_assistencia` com `status='ativo'` e `disponivel=true`
+   - Se houver array `valores`, INSERT em `prestadores_assistencia_valores` vinculando ao prestador_id recem-criado
+   - Respeitar constraint UNIQUE `(prestador_id, tipo_servico, tipo_reboque)`
+4. Retornar resumo: total, sucesso, erros, detalhes por linha
+
+**Seguranca:**
+- Usa `SUPABASE_SERVICE_ROLE_KEY` para inserts (bypassa RLS)
+- Valida JWT do usuario chamador
+- Verifica permissao via `user_roles`
 
 ---
 
-## 4. PrestadorDetalhe.tsx - Tabela de Valores
+## 3. Frontend: Dialog de Importacao
 
-Atualizar a tabela de valores (linha 448-486) para exibir as novas colunas:
+**Arquivos novos:**
+- `src/lib/parsePrestador.ts` - funcoes de validacao e parsing
+- `src/hooks/useImportPrestadores.ts` - hook que chama a Edge Function
+- `src/components/assistencia/ImportarPrestadoresDialog.tsx` - dialog com 4 etapas (upload, preview, importing, result)
 
-Adicionar colunas ao TableHeader:
-- KM Franquia
-- Hr Trabalhada
-- Hr Parada
-- Diaria Base
+**Fluxo do dialog (mesmo padrao do ImportarOficinasDialog):**
 
-Adicionar cells correspondentes ao TableBody.
+```text
+[Upload JSON] --> [Preview com validacao] --> [Importando...] --> [Resultado]
+```
 
-Tambem exibir `telefone_extra` no card de Dados Cadastrais (linha 377-398), ao lado dos outros botoes de contato.
+### parsePrestador.ts
+- Validar campos obrigatorios
+- Validar tipos_servico e tipos_reboque
+- Verificar consistencia: se tem "reboque" nos tipos_servico, tipos_reboque nao pode estar vazio
+- Verificar valores: tipo_servico do valor deve estar nos tipos_servico do prestador
+
+### useImportPrestadores.ts
+- Chama `supabase.functions.invoke('import-prestadores', { body: { prestadores } })`
+- Retorna o resumo de importacao
+
+### ImportarPrestadoresDialog.tsx
+- Aceita `.json` no upload (alem de `.xlsx` e `.csv`)
+- Para JSON: faz parse direto
+- Para Excel/CSV: mapeia colunas para o formato esperado
+- Preview mostra tabela com status de validacao
+- Botao "Importar X prestador(es)"
+- Tela de resultado com sucesso/erros
 
 ---
 
-## Arquivos Modificados
+## 4. Integracao na Pagina de Prestadores
 
-| Arquivo | Alteracao |
+**Arquivo:** `src/pages/assistencia/PrestadoresList.tsx`
+
+- Adicionar botao "Importar" ao lado do botao "Novo Prestador"
+- Abrir o `ImportarPrestadoresDialog`
+- Ao concluir, invalidar query `['prestadores']`
+
+---
+
+## 5. Config da Edge Function
+
+**Arquivo:** `supabase/config.toml`
+
+Adicionar:
+```text
+[functions.import-prestadores]
+verify_jwt = false
+```
+
+(Validacao de JWT sera feita manualmente no codigo, como ja e feito em `import-users`)
+
+---
+
+## Arquivos Criados/Modificados
+
+| Arquivo | Tipo |
 |---|---|
-| Migration SQL (nova) | ALTER TABLE para adicionar 5 colunas |
-| src/components/assistencia/NovoPrestadorModal.tsx | Schema, interface, buildPayload, saveValores, formulario (2 locais: aba dados e aba valores) |
-| src/pages/assistencia/PrestadorDetalhe.tsx | Interface Prestador, tabela de valores, card de contato |
+| `supabase/functions/import-prestadores/index.ts` | Novo |
+| `supabase/config.toml` | Modificado (adicionar config) |
+| `src/lib/parsePrestador.ts` | Novo |
+| `src/hooks/useImportPrestadores.ts` | Novo |
+| `src/components/assistencia/ImportarPrestadoresDialog.tsx` | Novo |
+| `src/pages/assistencia/PrestadoresList.tsx` | Modificado (botao importar) |
 
 ## O que NAO sera alterado
 
-- Nenhum campo existente sera modificado
-- Nenhuma logica de salvamento sera alterada (apenas novos campos adicionados)
-- Nenhuma outra tabela sera tocada
+- Nenhuma tabela do banco (ja tem todas as colunas necessarias)
+- Nenhum componente existente alem do PrestadoresList
+- Nenhuma logica de cadastro/edicao manual existente
 - RLS policies permanecem inalteradas
 
