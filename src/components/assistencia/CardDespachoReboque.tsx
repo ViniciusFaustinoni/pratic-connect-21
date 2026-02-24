@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,10 +8,24 @@ import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Truck, Clock, Send, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw } from 'lucide-react';
+import { Truck, Clock, Send, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, MapPin, Navigation } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+const vehicleIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
+const truckIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
+
+function FitBoundsCard({ positions }: { positions: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (positions.length >= 2) map.fitBounds(positions as L.LatLngBoundsExpression, { padding: [30, 30] });
+  }, [positions, map]);
+  return null;
+}
 
 function formatCurrency(v: number | null) {
   if (v === null || v === undefined) return '-';
@@ -90,6 +104,65 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
     enabled: !!despacho && despacho.status === 'atribuido',
   });
 
+  // Buscar última posição do tracking
+  const { data: ultimaPosicao } = useQuery({
+    queryKey: ['despacho-tracking-last', chamadoId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('despacho_reboque_tracking')
+        .select('*')
+        .eq('chamado_id', chamadoId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!despacho && despacho.status === 'atribuido',
+    refetchInterval: 15000, // polling every 15s
+  });
+
+  // Buscar trilha do tracking (últimas 50 posições)
+  const { data: trilhaTracking } = useQuery({
+    queryKey: ['despacho-tracking-trail', chamadoId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('despacho_reboque_tracking')
+        .select('latitude, longitude, created_at')
+        .eq('chamado_id', chamadoId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!despacho && despacho.status === 'atribuido',
+    refetchInterval: 30000,
+  });
+
+  // Dados do chamado para o mapa (lat/lng do veículo)
+  const { data: chamadoData } = useQuery({
+    queryKey: ['chamado-coords', chamadoId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('chamados_assistencia')
+        .select('origem_lat, origem_lng, rastreador_lat, rastreador_lng, destino_lat, destino_lng')
+        .eq('id', chamadoId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!despacho && despacho.status === 'atribuido',
+  });
+
+  const veiculoLat = chamadoData?.rastreador_lat || chamadoData?.origem_lat;
+  const veiculoLng = chamadoData?.rastreador_lng || chamadoData?.origem_lng;
+
+  // Trilha como posições para polyline
+  const trilhaPosicoes = useMemo(() => {
+    if (!trilhaTracking?.length) return [];
+    return trilhaTracking.map(t => [Number(t.latitude), Number(t.longitude)] as [number, number]);
+  }, [trilhaTracking]);
+
   // Realtime
   useEffect(() => {
     if (!despacho?.id) return;
@@ -103,6 +176,10 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'despacho_reboque_status_log', filter: `chamado_id=eq.${chamadoId}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['despacho-status-log', chamadoId] });
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'despacho_reboque_tracking', filter: `chamado_id=eq.${chamadoId}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['despacho-tracking-last', chamadoId] });
+        queryClient.invalidateQueries({ queryKey: ['despacho-tracking-trail', chamadoId] });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -293,31 +370,110 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
     const prest = despacho.prestador_atribuido as any;
     const aceites = convites?.filter((c) => c.status === 'aceito' || c.status === 'nao_atribuido').length || 0;
 
+    const lastStatus = statusLog?.[statusLog.length - 1]?.status;
+    const isConcluido = lastStatus === 'concluido';
+    const truckLat = ultimaPosicao ? Number(ultimaPosicao.latitude) : null;
+    const truckLng = ultimaPosicao ? Number(ultimaPosicao.longitude) : null;
+    const temTracking = truckLat !== null && truckLng !== null;
+    const temVeiculo = veiculoLat !== null && veiculoLng !== null;
+
+    // Posições para fit bounds
+    const mapPositions: [number, number][] = [];
+    if (temTracking) mapPositions.push([truckLat!, truckLng!]);
+    if (temVeiculo) mapPositions.push([veiculoLat!, veiculoLng!]);
+
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Truck className="h-5 w-5" /> Despacho de Reboque</CardTitle>
-          <Badge className="bg-green-100 text-green-800 w-fit">✅ Atribuído</Badge>
+          <Badge className="bg-green-100 text-green-800 w-fit">
+            {isConcluido ? '✅ Concluído' : '🚛 Em andamento'}
+          </Badge>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Prestador info */}
           <div className="bg-green-50 dark:bg-green-950/30 p-4 rounded-lg space-y-2">
             <p className="font-bold">{prest?.razao_social || prest?.nome_fantasia || 'Prestador'}</p>
-            <p>Valor: <strong>{formatCurrency(despacho.valor_atribuido)}</strong></p>
-            <p>Distância: <strong>{despacho.distancia_atribuida_km} km</strong></p>
+            <div className="flex gap-4 text-sm">
+              <span>Valor: <strong>{formatCurrency(despacho.valor_atribuido)}</strong></span>
+              <span>Distância: <strong>{despacho.distancia_atribuida_km} km</strong></span>
+            </div>
+            {prest?.whatsapp && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={`https://wa.me/55${prest.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">
+                  📱 WhatsApp do reboquista
+                </a>
+              </Button>
+            )}
           </div>
+
+          {/* Tracking indicator */}
+          {!isConcluido && (
+            <div className="flex items-center gap-2">
+              <div className={`h-3 w-3 rounded-full ${temTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
+              <span className="text-sm">
+                {temTracking
+                  ? `📡 Localização ativa — última atualização: ${ultimaPosicao?.created_at ? format(new Date(ultimaPosicao.created_at), 'HH:mm:ss', { locale: ptBR }) : ''}`
+                  : '📡 Aguardando localização do reboquista...'}
+              </span>
+            </div>
+          )}
+
+          {/* Mapa de tracking */}
+          {mapPositions.length > 0 && !isConcluido && (
+            <div className="h-64 rounded-lg overflow-hidden border">
+              <MapContainer
+                center={temTracking ? [truckLat!, truckLng!] : [veiculoLat!, veiculoLng!]}
+                zoom={13}
+                style={{ height: '100%', width: '100%' }}
+                zoomControl={true}
+              >
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                {temVeiculo && <Marker position={[veiculoLat!, veiculoLng!]} icon={vehicleIcon} />}
+                {temTracking && <Marker position={[truckLat!, truckLng!]} icon={truckIcon} />}
+                {trilhaPosicoes.length > 1 && (
+                  <Polyline positions={trilhaPosicoes} color="#22c55e" weight={3} opacity={0.7} />
+                )}
+                {temTracking && temVeiculo && (
+                  <Polyline positions={[[truckLat!, truckLng!], [veiculoLat!, veiculoLng!]]} color="#3b82f6" dashArray="8 8" weight={2} />
+                )}
+                {mapPositions.length >= 2 && <FitBoundsCard positions={mapPositions} />}
+              </MapContainer>
+            </div>
+          )}
+          {mapPositions.length > 0 && !isConcluido && (
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500 inline-block" /> Veículo</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500 inline-block" /> Reboquista</span>
+              {trilhaPosicoes.length > 1 && <span className="flex items-center gap-1"><span className="h-3 w-3 border-t-2 border-green-500 inline-block" /> Percurso</span>}
+            </div>
+          )}
 
           {/* Status timeline */}
           {statusLog && statusLog.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Timeline do Reboquista:</p>
-              {statusLog.map((log) => (
-                <div key={log.id} className="flex items-center gap-2 text-sm">
-                  <Badge variant="outline" className="text-xs">
-                    {format(new Date(log.created_at), 'HH:mm', { locale: ptBR })}
-                  </Badge>
-                  <span>{log.status === 'a_caminho' ? '🚛 A caminho' : log.status === 'chegou_local' ? '📍 Chegou no local' : log.status === 'veiculo_carregado' ? '🚛 Veículo carregado' : log.status === 'chegou_destino' ? '📍 Chegou no destino' : log.status === 'concluido' ? '✅ Concluído' : log.status}</span>
-                </div>
-              ))}
+            <div className="space-y-1">
+              <p className="text-sm font-medium mb-2">Timeline do Reboquista:</p>
+              <div className="relative pl-6 border-l-2 border-muted space-y-3">
+                {statusLog.map((log, idx) => {
+                  const isLast = idx === statusLog.length - 1;
+                  const statusEmoji = log.status === 'a_caminho' ? '🚛' : log.status === 'chegou_local' ? '📍' : log.status === 'veiculo_carregado' ? '🔵' : log.status === 'chegou_destino' ? '🟢' : log.status === 'concluido' ? '✅' : '⚪';
+                  const statusText = log.status === 'a_caminho' ? 'A caminho' : log.status === 'chegou_local' ? 'Chegou no local' : log.status === 'veiculo_carregado' ? 'Veículo carregado' : log.status === 'chegou_destino' ? 'Chegou no destino' : log.status === 'concluido' ? 'Serviço concluído' : log.status;
+                  return (
+                    <div key={log.id} className="relative">
+                      <div className={`absolute -left-[25px] top-0.5 h-4 w-4 rounded-full flex items-center justify-center text-xs ${isLast ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                        <span className="text-[10px]">{statusEmoji}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs font-mono">
+                          {format(new Date(log.created_at), 'HH:mm', { locale: ptBR })}
+                        </Badge>
+                        <span className={`text-sm ${isLast ? 'font-semibold' : ''}`}>{statusText}</span>
+                      </div>
+                      {log.observacao && <p className="text-xs text-muted-foreground mt-0.5">{log.observacao}</p>}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
