@@ -1017,9 +1017,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 Dados do Associado
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-3">
                 {/* Nome do Associado */}
-                <div className="md:col-span-2 space-y-1.5">
+                <div className="space-y-1.5">
                   <Label className="text-sm">
                     Nome do Associado <span className="text-destructive">*</span>
                   </Label>
