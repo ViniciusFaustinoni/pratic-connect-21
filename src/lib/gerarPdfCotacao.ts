@@ -178,6 +178,18 @@ const loadImageAsBase64 = async (url: string): Promise<string | null> => {
   }
 };
 
+// Carrega imagem e retorna base64 + dimensões naturais para manter aspect ratio
+const loadImageWithDimensions = async (url: string): Promise<{ base64: string; naturalWidth: number; naturalHeight: number } | null> => {
+  const base64 = await loadImageAsBase64(url);
+  if (!base64) return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ base64, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = base64;
+  });
+};
+
 // ============= Função para desenhar gradiente =============
 
 const drawGradientRect = (
@@ -293,10 +305,12 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   let y = 0;
 
   // Carregar imagens
-  const [logoBase64, vehicleBase64] = await Promise.all([
-    loadImageAsBase64('/logos/logo-full-light.png'),
+  const [logoData, vehicleBase64] = await Promise.all([
+    loadImageWithDimensions('/logos/logo-full-light.png'),
     loadImageAsBase64('/vehicle-silhouette.png'),
   ]);
+  const logoBase64 = logoData?.base64 || null;
+  const logoAspect = logoData ? logoData.naturalWidth / logoData.naturalHeight : 1;
 
   // Função auxiliar para verificar se precisa nova página (com background persistente)
   const checkPageBreak = (requiredSpace: number) => {
@@ -326,16 +340,18 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, { r: 30, g: 70, b: 130 });
   drawGradientRect(doc, 0, headerHeight - 3, pageWidth, 3, glowBlue, brandRed, 60);
 
-  // Logo no header
+  // Logo no header (proporcional)
+  const logoHeaderHeight = 35;
+  const logoHeaderWidth = logoHeaderHeight * logoAspect;
   if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', margin, 8, 40, 40);
+    doc.addImage(logoBase64, 'PNG', margin, 10, logoHeaderWidth, logoHeaderHeight);
   }
 
   // Texto do header
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
-  const titleX = logoBase64 ? margin + 48 : margin;
+  const titleX = logoBase64 ? margin + logoHeaderWidth + 6 : margin;
   doc.text('PRATICCAR', titleX, 26);
 
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
@@ -621,12 +637,14 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
   doc.rect(0, footerY, pageWidth, 30, 'F');
 
-  // Logo pequeno no rodapé
+  // Logo pequeno no rodapé (proporcional)
+  const logoFooterHeight = 14;
+  const logoFooterWidth = logoFooterHeight * logoAspect;
   if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', margin, footerY + 2, 18, 18);
+    doc.addImage(logoBase64, 'PNG', margin, footerY + 4, logoFooterWidth, logoFooterHeight);
   }
 
-  const footerTextX = logoBase64 ? margin + 24 : margin;
+  const footerTextX = logoBase64 ? margin + logoFooterWidth + 4 : margin;
 
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFontSize(10);
@@ -667,7 +685,8 @@ const desenharRodapeCompacto = (
   margin: number,
   paginaAtual: number,
   totalPaginas: number,
-  isUltimaPagina: boolean = false
+  isUltimaPagina: boolean = false,
+  logoAspect: number = 1
 ) => {
   // Cor do WhatsApp
   const whatsappGreen = { r: 37, g: 211, b: 102 };
@@ -713,12 +732,14 @@ const desenharRodapeCompacto = (
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
   doc.rect(0, footerY, pageWidth, 20, 'F');
 
-  // Logo pequeno
+  // Logo pequeno (proporcional)
+  const logoSmallHeight = 12;
+  const logoSmallWidth = logoSmallHeight * (logoBase64 ? logoAspect : 1);
   if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', margin, footerY + 2, 14, 14);
+    doc.addImage(logoBase64, 'PNG', margin, footerY + 3, logoSmallWidth, logoSmallHeight);
   }
 
-  const footerTextX = logoBase64 ? margin + 18 : margin;
+  const footerTextX = logoBase64 ? margin + logoSmallWidth + 4 : margin;
 
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFontSize(8);
@@ -852,7 +873,8 @@ const desenharPaginaCapa = (
   pageHeight: number,
   margin: number,
   totalPaginas: number,
-  isUltimaPagina: boolean = false
+  isUltimaPagina: boolean = false,
+  logoAspect: number = 1
 ) => {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
@@ -865,14 +887,16 @@ const desenharPaginaCapa = (
   drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, { r: 30, g: 70, b: 130 });
   drawGradientRect(doc, 0, headerHeight - 3, pageWidth, 3, glowBlue, brandRed, 60);
 
+  const logoCapaHeight = 28;
+  const logoCapaWidth = logoCapaHeight * logoAspect;
   if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', margin, 5, 32, 32);
+    doc.addImage(logoBase64, 'PNG', margin, 7, logoCapaWidth, logoCapaHeight);
   }
 
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  const titleX = logoBase64 ? margin + 38 : margin;
+  const titleX = logoBase64 ? margin + logoCapaWidth + 4 : margin;
   doc.text('PRATICCAR', titleX, 18);
 
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
@@ -996,7 +1020,7 @@ const desenharPaginaCapa = (
   }
 
   // Rodapé (se for única página, passa isUltimaPagina)
-  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas, isUltimaPagina);
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas, isUltimaPagina, logoAspect);
 };
 
 // Função para desenhar página de detalhes de um plano
@@ -1011,7 +1035,8 @@ const desenharPaginaDetalhesPlano = (
   pageHeight: number,
   margin: number,
   paginaAtual: number,
-  totalPaginas: number
+  totalPaginas: number,
+  logoAspect: number = 1
 ) => {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
@@ -1288,7 +1313,7 @@ const desenharPaginaDetalhesPlano = (
   doc.text(formatCurrency(primeiroPagamento), valueCol, y + 14, { align: 'right' });
 
   // Rodapé
-  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas);
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas, false, logoAspect);
 };
 
 // Função para desenhar página comparativa (última página)
@@ -1300,7 +1325,8 @@ const desenharPaginaComparativa = (
   pageHeight: number,
   margin: number,
   paginaAtual: number,
-  totalPaginas: number
+  totalPaginas: number,
+  logoAspect: number = 1
 ) => {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
@@ -1447,7 +1473,7 @@ const desenharPaginaComparativa = (
   });
 
   // Rodapé (esta é a última página, então passa true)
-  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas, true);
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas, true, logoAspect);
 };
 
 export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf): Promise<void> {
@@ -1456,8 +1482,10 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
 
-  // Carregar logo
-  const logoBase64 = await loadImageAsBase64('/logos/logo-full-light.png');
+  // Carregar logo com dimensões
+  const logoData = await loadImageWithDimensions('/logos/logo-full-light.png');
+  const logoBase64 = logoData?.base64 || null;
+  const logoAspect = logoData ? logoData.naturalWidth / logoData.naturalHeight : 1;
 
   const numPlanos = cotacao.planosComparar.length;
   
@@ -1468,7 +1496,7 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   // ============= PÁGINA 1: CAPA COM CARDS DOS PLANOS =============
   // Se só tem 1 plano, esta é a última página
   const isCapaUltimaPagina = numPlanos <= 1;
-  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, isCapaUltimaPagina);
+  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, isCapaUltimaPagina, logoAspect);
 
   // ============= PÁGINA 2: TABELA COMPARATIVA (se mais de 1 plano) =============
   if (numPlanos > 1) {
@@ -1481,7 +1509,8 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
       pageHeight, 
       margin,
       2,
-      totalPaginas
+      totalPaginas,
+      logoAspect
     );
   }
 
