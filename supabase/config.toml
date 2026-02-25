@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.upload-documento-terceiro]
 verify_jwt = false
+
+[functions.salvar-posicao-comunicacao]
+verify_jwt = false

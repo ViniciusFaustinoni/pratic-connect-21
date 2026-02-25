@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { Card, CardContent } from '@/components/ui/card';
@@ -53,6 +53,7 @@ export default function EventoColisao() {
   const [data, setData] = useState<EventoData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [etapaAtual, setEtapaAtual] = useState(0);
+  const posicaoEnviada = useRef(false);
 
   const validar = useCallback(async () => {
     if (!token) return;
@@ -72,6 +73,32 @@ export default function EventoColisao() {
   }, [token]);
 
   useEffect(() => { validar(); }, [validar]);
+
+  // Capturar geolocalização do associado ao abrir o link
+  useEffect(() => {
+    if (!data?.valid || !data?.sinistro?.id || posicaoEnviada.current) return;
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        if (posicaoEnviada.current) return;
+        posicaoEnviada.current = true;
+        try {
+          await publicSupabase.functions.invoke('salvar-posicao-comunicacao', {
+            body: {
+              token,
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            },
+          });
+        } catch (e) {
+          console.warn('Falha ao enviar posição:', e);
+        }
+      },
+      () => { /* Negado ou erro - ignorar */ },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }, [data?.valid, data?.sinistro?.id, token]);
 
   if (loading) {
     return (
