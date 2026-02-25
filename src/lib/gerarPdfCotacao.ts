@@ -81,24 +81,25 @@ export interface CotacaoComparativaParaPdf {
 const brandBlue = { r: 20, g: 55, b: 110 };       // Azul escuro PRATIC
 const brandRed = { r: 200, g: 30, b: 65 };        // Vermelho PRATIC
 
-// Cores para tema claro
-const cardBg = { r: 255, g: 255, b: 255 };         // white
-const cardBorder = { r: 226, g: 232, b: 240 };      // slate-200
-const sectionHeaderBg = { r: 241, g: 245, b: 249 }; // slate-100
-const stripeBg = { r: 248, g: 250, b: 252 };        // slate-50
-const glowBlue = { r: 59, g: 130, b: 246 };         // blue-500
-const glowRed = { r: 239, g: 68, b: 68 };           // red-500
+// Cores para corpo escuro (dark body)
+const bodyBg = { r: 30, g: 41, b: 59 };              // slate-800
+const cardBg = { r: 30, g: 41, b: 59 };              // slate-800
+const cardBorder = { r: 51, g: 65, b: 85 };           // slate-700
+const sectionHeaderBg = { r: 51, g: 65, b: 85 };      // slate-700
+const stripeBg = { r: 40, g: 52, b: 70 };             // slate-750
+const glowBlue = { r: 59, g: 130, b: 246 };           // blue-500
+const glowRed = { r: 239, g: 68, b: 68 };             // red-500
 
-// Cores de texto (tema claro)
+// Cores de texto (tema escuro - texto claro para fundo escuro)
 const textWhite = { r: 255, g: 255, b: 255 };
-const textDark = { r: 30, g: 41, b: 59 };             // slate-800
-const textDarkMuted = { r: 100, g: 116, b: 139 };     // slate-500
-const textMuted = { r: 100, g: 116, b: 139 };         // slate-500 (alias)
-const textLight = { r: 30, g: 41, b: 59 };            // slate-800 (alias - agora escuro)
-const successGreen = { r: 22, g: 163, b: 74 };        // green-600 (mais escuro p/ contraste)
-const warningYellow = { r: 202, g: 138, b: 4 };       // yellow-600 (mais escuro p/ contraste)
+const textDark = { r: 30, g: 41, b: 59 };             // slate-800 (para header/footer claro)
+const textDarkMuted = { r: 100, g: 116, b: 139 };     // slate-500 (para header/footer)
+const textMuted = { r: 148, g: 163, b: 184 };         // slate-400 (claro p/ fundo escuro)
+const textLight = { r: 226, g: 232, b: 240 };         // slate-200 (claro p/ fundo escuro)
+const successGreen = { r: 34, g: 197, b: 94 };        // green-500 (brilhante p/ fundo escuro)
+const warningYellow = { r: 234, g: 179, b: 8 };       // yellow-500 (brilhante p/ fundo escuro)
 
-// Cores para header/footer
+// Cores para header/footer (claros)
 const headerFooterBg = { r: 245, g: 247, b: 250 };   // slate-50
 
 // ============= CONSTANTES DE ESPAÇAMENTO (REDUZIDAS) =============
@@ -227,7 +228,7 @@ const drawCheckIndicator = (doc: jsPDF, x: number, y: number) => {
   doc.circle(x, y - 2, 1.5, 'F');
 };
 
-// ============= Função para desenhar card premium (tema claro) =============
+// ============= Função para desenhar card premium (tema escuro) =============
 
 const drawPremiumCard = (
   doc: jsPDF,
@@ -270,7 +271,7 @@ const drawPremiumSectionHeader = (
   width: number,
   title: string
 ) => {
-  // Fundo do header da seção (claro)
+  // Fundo do header da seção (escuro)
   doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(x, y, width, HEADER_HEIGHT, 2, 2, 'F');
 
@@ -278,8 +279,8 @@ const drawPremiumSectionHeader = (
   doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
   doc.rect(x + 5, y + 3.5, 4, 5, 'F');
 
-  // Texto do título (escuro)
-  doc.setTextColor(textDark.r, textDark.g, textDark.b);
+  // Texto do título (branco para fundo escuro)
+  doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text(title, x + 13, y + 8);
@@ -295,8 +296,8 @@ const drawPageBackground = (
   pageWidth: number,
   pageHeight: number
 ) => {
-  // Fundo branco
-  doc.setFillColor(255, 255, 255);
+  // Fundo escuro (corpo do PDF)
+  doc.setFillColor(bodyBg.r, bodyBg.g, bodyBg.b);
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
 };
 
@@ -482,7 +483,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   });
 
   // Nome do plano (truncado para evitar overflow)
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.text(truncateText(planoNome.toUpperCase(), 32), margin + 15, y + 16);
@@ -588,12 +589,12 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y += 24;
 
-  // Taxa de adesão
-  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
+  // Taxa de adesão (texto claro para fundo escuro)
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text('Taxa de Adesão (pagamento único)', labelCol, y);
-  doc.setTextColor(textDark.r, textDark.g, textDark.b);
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(cotacao.valor_adesao), valueCol, y, { align: 'right' });
 
@@ -625,7 +626,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   // Borda gradiente no topo
   drawGradientRect(doc, margin, y, contentWidth, 2, glowBlue, brandRed, 40);
   
-  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'italic');
   doc.text('Será um prazer ter você como nosso associado.', pageWidth / 2, y + 10, { align: 'center' });
@@ -1282,12 +1283,12 @@ const desenharPaginaDetalhesPlano = (
   doc.text(formatCurrency(plano.valorMensal), valueCol, y + 13, { align: 'right' });
   y += 26;
 
-  // Taxa de adesão
-  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
+  // Taxa de adesão (texto claro para fundo escuro)
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.text('Taxa de Adesão (pagamento único)', labelCol, y);
-  doc.setTextColor(textDark.r, textDark.g, textDark.b);
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(plano.valorAdesao), valueCol, y, { align: 'right' });
   y += 14;
