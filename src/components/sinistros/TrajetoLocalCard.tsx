@@ -137,7 +137,7 @@ export function TrajetoLocalCard({ veiculoId, dataOcorrencia, horasAnteriores = 
     return (
       <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
         <AlertTriangle className="h-4 w-4" />
-        Sem dados de posição nas últimas {horasAnteriores}h antes do evento.
+        Sem dados de posição na 1h anterior à comunicação do evento.
       </div>
     );
   }

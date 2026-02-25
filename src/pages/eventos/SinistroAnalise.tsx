@@ -898,14 +898,14 @@ export default function SinistroAnalise() {
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-base">
-                        <MapPin className="h-5 w-5" /> Trajeto do Veículo (4h antes)
+                        <MapPin className="h-5 w-5" /> Trajeto do Veículo (1h antes da comunicação)
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <TrajetoLocalCard
                         veiculoId={sinistro.veiculo_id}
-                        dataOcorrencia={sinistro.data_ocorrencia}
-                        horasAnteriores={4}
+                        dataOcorrencia={linkEvento?.etapa1_completada_em || linkEvento?.created_at || sinistro.data_ocorrencia}
+                        horasAnteriores={1}
                       />
                     </CardContent>
                   </Card>
