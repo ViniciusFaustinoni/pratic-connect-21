@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search, FileText, Send, Check, Loader2, CheckCircle, TrendingUp, Calendar as CalendarIcon, User, RefreshCw, CalendarDays } from 'lucide-react';
+import { Plus, Search, FileText, Send, Check, Loader2, CheckCircle, TrendingUp, Calendar as CalendarIcon, User, RefreshCw, CalendarDays, Link, ListChecks, FileUp, PenTool, CreditCard, MapPin, Clock, Trophy } from 'lucide-react';
 import { formatDistanceToNow, format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -548,20 +548,22 @@ export default function Cotacoes() {
 
   const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all';
 
-  // Stats
-  const stats = {
-    total: cotacoes?.length || 0,
-    rascunhos: cotacoes?.filter((c) => c.status === 'rascunho').length || 0,
-    enviadas: cotacoes?.filter((c) => c.status === 'enviada').length || 0,
-    aceitas: cotacoes?.filter((c) => c.status === 'aceita').length || 0,
-    taxa: cotacoes && cotacoes.length > 0
-      ? Math.round(
-          (cotacoes.filter((c) => c.status === 'aceita').length /
-            cotacoes.filter((c) => c.status !== 'rascunho').length) *
-            100
-        ) || 0
-      : 0,
-  };
+  // Stats - 9 status do fluxo de cotação
+  const statusStats = useMemo(() => {
+    if (!cotacoes) return [];
+    const items = [
+      { label: 'Rascunho', icon: FileText, color: 'text-gray-500', bg: 'bg-gray-500/15', count: cotacoes.filter(c => c.status === 'rascunho').length },
+      { label: 'Link Enviado', icon: Link, color: 'text-blue-500', bg: 'bg-blue-500/15', count: cotacoes.filter(c => c.status === 'enviada').length },
+      { label: 'Escolhendo Plano', icon: ListChecks, color: 'text-indigo-500', bg: 'bg-indigo-500/15', count: cotacoes.filter(c => ['escolhendo_plano', 'plano_escolhido'].includes(c.status_contratacao || '')).length },
+      { label: 'Enviando Docs', icon: FileUp, color: 'text-cyan-500', bg: 'bg-cyan-500/15', count: cotacoes.filter(c => ['enviando_documentos', 'dados_preenchidos'].includes(c.status_contratacao || '')).length },
+      { label: 'Assinando Contrato', icon: PenTool, color: 'text-purple-500', bg: 'bg-purple-500/15', count: cotacoes.filter(c => c.status_contratacao === 'assinando_contrato').length },
+      { label: 'Pagando Taxa', icon: CreditCard, color: 'text-amber-500', bg: 'bg-amber-500/15', count: cotacoes.filter(c => c.status_contratacao === 'pagando_taxa').length },
+      { label: 'Agendando Vistoria', icon: MapPin, color: 'text-orange-500', bg: 'bg-orange-500/15', count: cotacoes.filter(c => c.status_contratacao === 'agendando_vistoria').length },
+      { label: 'Em Análise', icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-500/15', count: cotacoes.filter(c => c.status_contratacao === 'em_analise').length },
+      { label: 'Fechado', icon: Trophy, color: 'text-green-500', bg: 'bg-green-500/15', count: cotacoes.filter(c => c.status === 'aceita' || c.status_contratacao === 'concluido').length },
+    ];
+    return items;
+  }, [cotacoes]);
 
   // Função para obter permissões de cada cotação
   const getPermissions = (cotacao: CotacaoWithRelations): CotacoesTablePermissions => {
@@ -603,46 +605,21 @@ export default function Cotacoes() {
         </PermissionGate>
       </div>
 
-      {/* Stats Bar - Compacta */}
-      <Card className="bg-gradient-to-r from-card via-card to-muted/20 border shadow-sm">
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                <FileText className="h-5 w-5 text-primary" />
+      {/* Stats Bar - 9 Status do Fluxo */}
+      <Card className="border shadow-sm">
+        <CardContent className="p-3">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {statusStats.map((item) => (
+              <div key={item.label} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 min-w-fit">
+                <div className={`h-8 w-8 rounded-md ${item.bg} flex items-center justify-center shrink-0`}>
+                  <item.icon className={`h-4 w-4 ${item.color}`} />
+                </div>
+                <div>
+                  <p className={`text-lg font-bold leading-none ${item.color}`}>{item.count}</p>
+                  <p className="text-[10px] text-muted-foreground whitespace-nowrap">{item.label}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-primary">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
-                <Send className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.enviadas}</p>
-                <p className="text-xs text-muted-foreground">Enviadas</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0">
-                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.aceitas}</p>
-                <p className="text-xs text-muted-foreground">Aceitas</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
-                <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.taxa}%</p>
-                <p className="text-xs text-muted-foreground">Conversão</p>
-              </div>
-            </div>
+            ))}
           </div>
         </CardContent>
       </Card>
