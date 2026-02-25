@@ -1,6 +1,6 @@
 import {
   FolderOpen, CalendarDays, Clock, Wrench, Radar, DollarSign,
-  TrendingUp, TrendingDown,
+  TrendingUp, TrendingDown, ArrowRight,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,61 +24,61 @@ interface KPICardProps {
   variacao?: number;
   variacaoInvertida?: boolean;
   loading?: boolean;
+  destaque?: boolean;
 }
 
-function KPICard({ titulo, valor, subtitulo, icon: Icon, cor, variacao, variacaoInvertida, loading }: KPICardProps) {
+function KPICard({ titulo, valor, subtitulo, icon: Icon, cor, variacao, variacaoInvertida, loading, destaque }: KPICardProps) {
   if (loading) {
     return (
-      <Card>
-        <CardContent className="p-4">
-          <Skeleton className="h-4 w-24 mb-3" />
-          <Skeleton className="h-8 w-16 mb-1" />
-          <Skeleton className="h-3 w-20" />
+      <Card className={destaque ? 'col-span-2 lg:col-span-1' : ''}>
+        <CardContent className="p-5">
+          <Skeleton className="h-4 w-20 mb-4" />
+          <Skeleton className="h-9 w-14 mb-2" />
+          <Skeleton className="h-3 w-24" />
         </CardContent>
       </Card>
     );
   }
 
-  const corMap: Record<string, string> = {
-    blue: 'text-blue-600 bg-blue-50',
-    green: 'text-green-600 bg-green-50',
-    orange: 'text-orange-600 bg-orange-50',
-    indigo: 'text-indigo-600 bg-indigo-50',
-    purple: 'text-violet-600 bg-violet-50',
-    amber: 'text-amber-600 bg-amber-50',
+  const corMap: Record<string, { icon: string; bg: string; ring: string }> = {
+    blue:   { icon: 'text-blue-600',   bg: 'bg-blue-50',   ring: 'ring-blue-100' },
+    green:  { icon: 'text-emerald-600', bg: 'bg-emerald-50', ring: 'ring-emerald-100' },
+    orange: { icon: 'text-orange-600', bg: 'bg-orange-50', ring: 'ring-orange-100' },
+    indigo: { icon: 'text-indigo-600', bg: 'bg-indigo-50', ring: 'ring-indigo-100' },
+    purple: { icon: 'text-violet-600', bg: 'bg-violet-50', ring: 'ring-violet-100' },
+    amber:  { icon: 'text-amber-600',  bg: 'bg-amber-50',  ring: 'ring-amber-100' },
   };
-  const corClasses = corMap[cor] || 'text-gray-600 bg-gray-50';
-  const [textCor, bgCor] = corClasses.split(' ');
+  const c = corMap[cor] || corMap.blue;
 
   let variacaoColor = '';
   let VarIcon = TrendingUp;
   if (variacao !== undefined) {
     if (variacaoInvertida) {
-      variacaoColor = variacao <= 0 ? 'text-green-600' : 'text-red-600';
+      variacaoColor = variacao <= 0 ? 'text-emerald-600' : 'text-red-500';
     } else {
-      variacaoColor = variacao >= 0 ? 'text-green-600' : 'text-red-600';
+      variacaoColor = variacao >= 0 ? 'text-emerald-600' : 'text-red-500';
     }
     VarIcon = variacao >= 0 ? TrendingUp : TrendingDown;
   }
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{titulo}</span>
-          <div className={`p-1.5 rounded-md ${bgCor}`}>
-            <Icon className={`h-4 w-4 ${textCor}`} />
+    <Card className={`group hover:shadow-lg transition-all duration-200 border-border/60 hover:border-border ${destaque ? 'col-span-2 sm:col-span-1' : ''}`}>
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between mb-3">
+          <div className={`p-2 rounded-lg ${c.bg} ring-1 ${c.ring}`}>
+            <Icon className={`h-4 w-4 ${c.icon}`} />
           </div>
-        </div>
-        <div className="text-2xl font-bold tracking-tight">{valor}</div>
-        <div className="flex items-center gap-1 mt-1">
           {variacao !== undefined && (
-            <span className={`text-xs font-medium flex items-center gap-0.5 ${variacaoColor}`}>
+            <span className={`text-xs font-semibold flex items-center gap-0.5 ${variacaoColor}`}>
               <VarIcon className="h-3 w-3" />
               {variacao > 0 ? '+' : ''}{variacao}%
             </span>
           )}
-          {subtitulo && <span className="text-xs text-muted-foreground">{subtitulo}</span>}
+        </div>
+        <div className="text-3xl font-bold tracking-tight text-foreground">{valor}</div>
+        <div className="mt-1 space-y-0.5">
+          <p className="text-xs font-medium text-muted-foreground">{titulo}</p>
+          {subtitulo && <p className="text-[11px] text-muted-foreground/70">{subtitulo}</p>}
         </div>
       </CardContent>
     </Card>
@@ -101,8 +101,8 @@ export default function EventosKPICards({ filtros }: Props) {
   const canSeeValues = isDiretor || isGerencia;
 
   return (
-    <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-      <KPICard titulo="Eventos Abertos" valor={abertos.data ?? 0} icon={FolderOpen} cor="blue" loading={abertos.isLoading} />
+    <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      <KPICard titulo="Eventos Abertos" valor={abertos.data ?? 0} icon={FolderOpen} cor="blue" loading={abertos.isLoading} destaque />
       <KPICard
         titulo="Novos este Mês"
         valor={novos.data?.count ?? 0}

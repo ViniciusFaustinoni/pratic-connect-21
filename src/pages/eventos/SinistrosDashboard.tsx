@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Filter, LayoutDashboard } from 'lucide-react';
 import EventosKPICards from '@/components/eventos/dashboard/EventosKPICards';
 import EventosFunilOperacional from '@/components/eventos/dashboard/EventosFunilOperacional';
 import EventosGraficosTipo from '@/components/eventos/dashboard/EventosGraficosTipo';
@@ -11,10 +12,10 @@ import { FiltrosGlobais, PeriodoFiltro, TipoFiltro, StatusFiltro } from '@/hooks
 
 const PERIODOS: { value: PeriodoFiltro; label: string }[] = [
   { value: 'hoje', label: 'Hoje' },
-  { value: 'semana', label: 'Esta Semana' },
-  { value: 'mes', label: 'Este Mês' },
-  { value: 'trimestre', label: 'Último Trimestre' },
-  { value: 'ano', label: 'Este Ano' },
+  { value: 'semana', label: 'Semana' },
+  { value: 'mes', label: 'Mês' },
+  { value: 'trimestre', label: 'Trimestre' },
+  { value: 'ano', label: 'Ano' },
 ];
 
 export default function SinistrosDashboard() {
@@ -26,33 +27,39 @@ export default function SinistrosDashboard() {
   const filtros: FiltrosGlobais = { periodo, tipo, statusFiltro };
 
   return (
-    <div className="space-y-4">
-      {/* Header + Filtros Globais */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard de Eventos</h1>
-          <p className="text-sm text-muted-foreground">Visão operacional completa dos sinistros</p>
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <LayoutDashboard className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Painel de Eventos</h1>
+            <p className="text-sm text-muted-foreground">Visão operacional dos sinistros em tempo real</p>
+          </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap items-center">
-          {/* Período */}
-          <div className="flex gap-1">
+        {/* ── Filtros ── */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/60 border border-border">
             {PERIODOS.map(p => (
-              <Button
+              <button
                 key={p.value}
-                variant={periodo === p.value ? 'default' : 'outline'}
-                size="sm"
                 onClick={() => setPeriodo(p.value)}
-                className="text-xs"
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  periodo === p.value
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-background'
+                }`}
               >
                 {p.label}
-              </Button>
+              </button>
             ))}
           </div>
 
-          {/* Tipo */}
           <Select value={tipo} onValueChange={(v) => setTipo(v as TipoFiltro)}>
-            <SelectTrigger className="w-[140px] h-8 text-xs">
+            <SelectTrigger className="w-[130px] h-8 text-xs border-border bg-background">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -66,36 +73,35 @@ export default function SinistrosDashboard() {
             </SelectContent>
           </Select>
 
-          {/* Status */}
           <Select value={statusFiltro} onValueChange={(v) => setStatusFiltro(v as StatusFiltro)}>
-            <SelectTrigger className="w-[140px] h-8 text-xs">
+            <SelectTrigger className="w-[130px] h-8 text-xs border-border bg-background">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos Status</SelectItem>
-              <SelectItem value="abertos">Apenas Abertos</SelectItem>
+              <SelectItem value="abertos">Abertos</SelectItem>
               <SelectItem value="finalizados">Finalizados</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Área 1 — KPI Cards */}
-      <EventosKPICards filtros={filtros} />
-
-      {/* Área 2 — Funil Operacional */}
-      <EventosFunilOperacional filtros={filtros} onFaseClick={setFaseFilter} faseAtiva={faseFilter} />
-
-      {/* Área 3 — Gráficos por Tipo */}
-      <EventosGraficosTipo filtros={filtros} />
-
-      {/* Área 4 — Gráficos de Análise */}
-      <EventosGraficosAnalise filtros={filtros} />
-
-      {/* Área 5 — Alertas */}
+      {/* ── Alertas (destaque no topo quando existem) ── */}
       <EventosAlertasUrgentes />
 
-      {/* Área 6 — Tabela Recentes */}
+      {/* ── KPIs ── */}
+      <EventosKPICards filtros={filtros} />
+
+      {/* ── Funil Operacional ── */}
+      <EventosFunilOperacional filtros={filtros} onFaseClick={setFaseFilter} faseAtiva={faseFilter} />
+
+      {/* ── Gráficos Distribuição + Tendência ── */}
+      <EventosGraficosTipo filtros={filtros} />
+
+      {/* ── Análise de Performance ── */}
+      <EventosGraficosAnalise filtros={filtros} />
+
+      {/* ── Tabela Recentes ── */}
       <EventosTabelaRecentes filtros={filtros} faseFilter={faseFilter.length > 0 ? faseFilter : undefined} />
     </div>
   );
