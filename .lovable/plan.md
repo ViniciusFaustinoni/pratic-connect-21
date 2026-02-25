@@ -1,69 +1,59 @@
 
 
-# Adicionar Templates Meta para Mensagens de Reboque
+# Fix: Overflow nas Coberturas do PDF da Cotacao Comparativa
 
-## Resumo
+## Problema
 
-Atualmente, as mensagens de WhatsApp enviadas durante o fluxo de despacho de reboque (para o reboquista e para o associado) sao enviadas como texto livre via `whatsapp-send-text`. Quando o provedor ativo for a API Oficial da Meta, essas mensagens proativas **exigem templates aprovados**. Precisamos criar os templates Meta correspondentes e atualizar as edge functions para enviar via template quando o provedor for Meta.
+Na pagina 1 (capa) do PDF comparativo, quando ha 3 planos lado a lado, as coberturas apresentam dois problemas de overflow:
 
----
+1. **Overflow horizontal**: O texto das coberturas nao e truncado para caber na largura do card. Textos como "Rastreador/Monitoramento (acima de R$30mil)" ultrapassam a borda do card.
+2. **Overflow vertical**: Com ate 14 coberturas por card (lineHeight=7), os cards podem ultrapassar o limite inferior da pagina, especialmente com 3 cards.
 
-## Templates a Criar
+## Solucao
 
-### Para o Prestador/Reboquista
+Ajustar a funcao `desenharCardPlanoExpandido` em `src/lib/gerarPdfCotacao.ts`:
 
-| Nome | Categoria | Corpo | Variaveis |
-|------|-----------|-------|-----------|
-| `despacho_reboque_novo` | UTILITY | Novo chamado de reboque -- PraticCar. Veiculo: {{1}} -- {{2}}. Local: {{3}}. Aberto: {{4}}. Toque para ver detalhes e aceitar: {{5}}. Voce tem 10 minutos para responder. | 1=marca/modelo, 2=placa, 3=endereco, 4=data/hora, 5=link |
+### 1. Truncar texto das coberturas
 
-### Para o Associado (Acompanhamento)
+Na linha onde o texto da cobertura e desenhado (linha ~810), usar `truncateText` com base na largura disponivel do card. A largura util e `width - padding*2 - 8` (8px para o circulo verde). Calcular o numero maximo de caracteres proporcionalmente a largura do card.
 
-| Nome | Categoria | Corpo | Variaveis |
-|------|-----------|-------|-----------|
-| `reboque_a_caminho` | UTILITY | Reboque a caminho -- Pratic Car. Seu reboque foi acionado e esta a caminho! Prestador: {{1}}. Distancia: {{2}}. Estimativa: {{3}}. Acompanhe em tempo real: {{4}}. Ligar para o reboquista: {{5}}. Este link e valido por 2 horas. | 1=nome prestador, 2=distancia, 3=tempo, 4=link, 5=telefone |
-| `reboque_chegou_local` | UTILITY | Reboquista chegou! -- Pratic Car. O reboquista {{1}} chegou ao local do seu veiculo. Acompanhe: {{2}} | 1=nome, 2=link |
-| `reboque_veiculo_carregado` | UTILITY | Veiculo no guincho -- Pratic Car. Seu veiculo foi carregado e esta sendo levado para: {{1}}. Acompanhe: {{2}} | 1=destino, 2=link |
-| `reboque_entregue` | UTILITY | Veiculo entregue -- Pratic Car. Seu veiculo foi entregue em: {{1}}. Horario: {{2}}. Obrigado por usar a Pratic Car! | 1=destino, 2=horario |
+### 2. Reduzir maxCoberturas para 3 cards
 
----
+Quando os cards sao estreitos (3 por linha), limitar a 10-12 coberturas em vez de 14, e reduzir o fontSize e lineHeight para que tudo caiba. O layout atual usa:
+- `lineHeight = 7` e `maxCoberturas = 14` -- resulta em ~98px so para coberturas
+- Com header (24) + valor (28) + coberturas (98) + rodape (18) = ~168px + o Y inicial (~100px) = ~268px, ultrapassando os ~297px da pagina A4
 
-## Alteracoes
+### 3. Ajustes especificos
 
-### 1. Migracao SQL
+- Reduzir `maxCoberturas` de 14 para 10 quando ha 3+ planos
+- Reduzir `fontSize` das coberturas de 9 para 7 quando ha 3+ planos  
+- Reduzir `lineHeight` de 7 para 5.5 quando ha 3+ planos
+- Truncar o texto de cada cobertura com base na largura disponivel do card (caracteres calculados proporcionalmente: ~`(width - padding*2 - 8) / 1.8` para fontSize 7)
 
-Inserir os 5 novos templates como rascunho (status='DRAFT') na tabela `whatsapp_meta_templates`, com as variaveis de exemplo preenchidas. Serao adicionados aos 8 templates existentes.
+## Detalhes Tecnicos
 
-### 2. Edge Functions
+### Arquivo: `src/lib/gerarPdfCotacao.ts`
 
-Atualizar as 3 edge functions para incluir `template_name` e `template_params` ao chamar `whatsapp-send-text`. O roteamento transparente ja existente no `whatsapp-send-text` usara esses campos quando o provedor ativo for Meta:
+**Funcao `desenharCardPlanoExpandido`** (linha 740-839):
 
-**`despacho-reboque-disparar`**: Ao enviar WhatsApp para os reboquistas, incluir `template_name: "despacho_reboque_novo"` e `template_params` com os valores das variaveis.
+Adicionar parametro opcional `compact: boolean = false` para indicar layout compacto (3+ planos).
 
-**`despacho-reboque-atribuir`**: Ao enviar WhatsApp ao associado, incluir `template_name: "reboque_a_caminho"` e `template_params`.
+Quando `compact = true`:
+- `maxCoberturas = 10`
+- `lineHeight = 5.5`
+- fontSize coberturas: 7 (em vez de 9)
+- Truncar cada cobertura: `truncateText(cobertura, maxChars)` onde `maxChars = Math.floor((width - padding*2 - 8) / 1.6)`
 
-**`despacho-reboque-status`**: Para cada status mapeado, incluir o `template_name` correspondente:
-- `chegou_local` -> `reboque_chegou_local`
-- `veiculo_carregado` -> `reboque_veiculo_carregado`
-- `concluido` -> `reboque_entregue`
+**Funcao `desenharPaginaCapa`** (linha 842-993):
 
-### 3. Nenhuma alteracao no `whatsapp-send-text`
+No bloco de 3+ cards (linha 966-988):
+- Passar `compact = true` ao chamar `desenharCardPlanoExpandido`
+- Recalcular `estimatedCardHeight` com os novos valores (menos coberturas, menor lineHeight)
 
-A logica de roteamento ja suporta os campos `template_name` e `template_params`. Quando o provedor e Evolution, esses campos sao ignorados e a mensagem e enviada como texto livre. Quando e Meta, usa o template.
+No bloco de 2 cards (linha 957-963):
+- Tambem truncar texto, mas manter fontSize 9 e maxCoberturas 14 (cards sao mais largos)
 
----
+### Sem alteracoes em outros arquivos
 
-## Arquivos Afetados
-
-| Arquivo | Acao |
-|---------|------|
-| Nova migracao SQL | INSERT dos 5 novos templates em `whatsapp_meta_templates` |
-| `supabase/functions/despacho-reboque-disparar/index.ts` | Adicionar template_name + template_params na chamada whatsapp-send-text |
-| `supabase/functions/despacho-reboque-atribuir/index.ts` | Adicionar template_name + template_params na chamada whatsapp-send-text |
-| `supabase/functions/despacho-reboque-status/index.ts` | Adicionar template_name + template_params para cada status |
-
-## Sem alteracoes em
-
-- `whatsapp-send-text` (ja suporta template_name/template_params)
-- Componentes frontend (templates aparecem automaticamente na tabela de templates Meta)
-- Tabela `whatsapp_templates` (templates internos do Evolution, separados)
+Apenas `src/lib/gerarPdfCotacao.ts` sera modificado.
 
