@@ -83,7 +83,9 @@ export function UnifiedDocumentUploader({
   const [isProcessing, setIsProcessing] = useState(false);
   const processFile = useCallback(async (file: File) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!allowedTypes.includes(file.type)) {
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'jfif', 'bmp', 'gif', 'heic'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(ext)) {
       toast.error('Formato não suportado. Use JPG, PNG ou PDF.');
       return;
     }
