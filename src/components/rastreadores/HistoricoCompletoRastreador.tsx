@@ -385,10 +385,20 @@ function MovimentacaoItem({ data }: { data: Movimentacao }) {
 function ManutencaoCampoItem({ data }: { data: ManutencaoCampo }) {
   const [checklistOpen, setChecklistOpen] = useState(false);
 
-  const checklistItems = data.checklist_manutencao || [];
+  const rawChecklist = data.checklist_manutencao;
+  const checklistItems: ChecklistItem[] = Array.isArray(rawChecklist)
+    ? rawChecklist
+    : typeof rawChecklist === 'string'
+      ? (() => { try { const p = JSON.parse(rawChecklist); return Array.isArray(p) ? p : []; } catch { return []; } })()
+      : [];
   const checklistOk = checklistItems.filter((i) => i.status === 'ok').length;
 
-  const fotos: FotoManutencao[] = data.fotos_manutencao || [];
+  const rawFotos = data.fotos_manutencao;
+  const fotos: FotoManutencao[] = Array.isArray(rawFotos)
+    ? rawFotos
+    : typeof rawFotos === 'string'
+      ? (() => { try { const p = JSON.parse(rawFotos); return Array.isArray(p) ? p : []; } catch { return []; } })()
+      : [];
 
   return (
     <div className="relative pl-10">
