@@ -806,7 +806,7 @@ const desenharCardPlanoExpandido = (
   const lineToShow = nomeLines[0];
   doc.text(lineToShow, x + width / 2, currentY + 9, { align: 'center' });
   
-  currentY += 20;
+  currentY += 28;
   
   // 2. Valor mensal grande centralizado
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
