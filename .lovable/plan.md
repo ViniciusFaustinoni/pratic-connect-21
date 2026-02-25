@@ -1,59 +1,61 @@
 
 
-# Fix: Overflow nas Coberturas do PDF da Cotacao Comparativa
+# Fix: Logo do PDF em Tamanho Original (Proporcional)
 
 ## Problema
 
-Na pagina 1 (capa) do PDF comparativo, quando ha 3 planos lado a lado, as coberturas apresentam dois problemas de overflow:
-
-1. **Overflow horizontal**: O texto das coberturas nao e truncado para caber na largura do card. Textos como "Rastreador/Monitoramento (acima de R$30mil)" ultrapassam a borda do card.
-2. **Overflow vertical**: Com ate 14 coberturas por card (lineHeight=7), os cards podem ultrapassar o limite inferior da pagina, especialmente com 3 cards.
+A logo no header do PDF esta sendo renderizada com dimensoes fixas quadradas (40x40mm no PDF simples, 32x32mm no comparativo), o que distorce a imagem pois o logo "PraticCar" e retangular (mais largo que alto). O resultado e um logo esticado/comprimido verticalmente.
 
 ## Solucao
 
-Ajustar a funcao `desenharCardPlanoExpandido` em `src/lib/gerarPdfCotacao.ts`:
-
-### 1. Truncar texto das coberturas
-
-Na linha onde o texto da cobertura e desenhado (linha ~810), usar `truncateText` com base na largura disponivel do card. A largura util e `width - padding*2 - 8` (8px para o circulo verde). Calcular o numero maximo de caracteres proporcionalmente a largura do card.
-
-### 2. Reduzir maxCoberturas para 3 cards
-
-Quando os cards sao estreitos (3 por linha), limitar a 10-12 coberturas em vez de 14, e reduzir o fontSize e lineHeight para que tudo caiba. O layout atual usa:
-- `lineHeight = 7` e `maxCoberturas = 14` -- resulta em ~98px so para coberturas
-- Com header (24) + valor (28) + coberturas (98) + rodape (18) = ~168px + o Y inicial (~100px) = ~268px, ultrapassando os ~297px da pagina A4
-
-### 3. Ajustes especificos
-
-- Reduzir `maxCoberturas` de 14 para 10 quando ha 3+ planos
-- Reduzir `fontSize` das coberturas de 9 para 7 quando ha 3+ planos  
-- Reduzir `lineHeight` de 7 para 5.5 quando ha 3+ planos
-- Truncar o texto de cada cobertura com base na largura disponivel do card (caracteres calculados proporcionalmente: ~`(width - padding*2 - 8) / 1.8` para fontSize 7)
+Carregar a imagem da logo em um elemento `Image` do navegador para obter suas dimensoes naturais (largura x altura), e entao calcular as dimensoes proporcionais para o PDF mantendo a proporcao original (aspect ratio).
 
 ## Detalhes Tecnicos
 
 ### Arquivo: `src/lib/gerarPdfCotacao.ts`
 
-**Funcao `desenharCardPlanoExpandido`** (linha 740-839):
+### 1. Nova funcao utilitaria: `loadImageWithDimensions`
 
-Adicionar parametro opcional `compact: boolean = false` para indicar layout compacto (3+ planos).
+Criar uma funcao que retorna tanto o base64 quanto as dimensoes naturais da imagem:
 
-Quando `compact = true`:
-- `maxCoberturas = 10`
-- `lineHeight = 5.5`
-- fontSize coberturas: 7 (em vez de 9)
-- Truncar cada cobertura: `truncateText(cobertura, maxChars)` onde `maxChars = Math.floor((width - padding*2 - 8) / 1.6)`
+```
+async function loadImageWithDimensions(url): Promise<{ base64, width, height } | null>
+```
 
-**Funcao `desenharPaginaCapa`** (linha 842-993):
+Carrega a imagem em um `new Image()`, espera o `onload`, e retorna `naturalWidth` e `naturalHeight` junto com o base64.
 
-No bloco de 3+ cards (linha 966-988):
-- Passar `compact = true` ao chamar `desenharCardPlanoExpandido`
-- Recalcular `estimatedCardHeight` com os novos valores (menos coberturas, menor lineHeight)
+### 2. Ajustar header do PDF simples (linha ~330)
 
-No bloco de 2 cards (linha 957-963):
-- Tambem truncar texto, mas manter fontSize 9 e maxCoberturas 14 (cards sao mais largos)
+Atual: `doc.addImage(logoBase64, 'PNG', margin, 8, 40, 40)`
 
-### Sem alteracoes em outros arquivos
+Novo: Calcular largura proporcional baseada na altura desejada do header (ex: altura = 35mm, largura = 35 * (naturalWidth / naturalHeight)). Isso preserva o aspect ratio.
 
-Apenas `src/lib/gerarPdfCotacao.ts` sera modificado.
+### 3. Ajustar header do PDF comparativo/capa (linha ~869)
 
+Atual: `doc.addImage(logoBase64, 'PNG', margin, 5, 32, 32)`
+
+Novo: Mesma logica -- altura = 28mm, largura proporcional.
+
+### 4. Ajustar rodape do PDF simples (linha ~626)
+
+Atual: `doc.addImage(logoBase64, 'PNG', margin, footerY + 2, 18, 18)`
+
+Novo: Altura = 14mm, largura proporcional.
+
+### 5. Ajustar rodape compacto (linha ~718)
+
+Atual: `doc.addImage(logoBase64, 'PNG', margin, footerY + 2, 14, 14)`
+
+Novo: Altura = 12mm, largura proporcional.
+
+### 6. Ajustar posicao do texto ao lado da logo
+
+Como a largura da logo muda (sera mais larga que antes), os `titleX` que posicionam o texto "PRATICCAR" ao lado da logo precisam ser recalculados usando a largura real da logo + margem.
+
+### Resumo das alteracoes
+
+- Alterar `loadImageAsBase64` ou criar funcao complementar que retorna dimensoes
+- Passar dimensoes da logo para as funcoes de desenho
+- Calcular largura proporcional em cada `addImage` da logo
+- Ajustar `titleX` em todos os headers para usar a largura real da logo
+- Apenas o arquivo `src/lib/gerarPdfCotacao.ts` sera modificado
