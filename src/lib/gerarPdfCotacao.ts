@@ -312,7 +312,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   // Carregar imagens
   const [logoData, vehicleBase64] = await Promise.all([
-    loadImageWithDimensions('/logos/logo-full-dark.png'),
+    loadImageWithDimensions('/logos/logo-full-light.png'),
     loadImageAsBase64('/vehicle-silhouette.png'),
   ]);
   const logoBase64 = logoData?.base64 || null;
@@ -1315,7 +1315,7 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   const margin = 15;
 
   // Carregar logo com dimensões
-  const logoData = await loadImageWithDimensions('/logos/logo-full-dark.png');
+  const logoData = await loadImageWithDimensions('/logos/logo-full-light.png');
   const logoBase64 = logoData?.base64 || null;
   const logoAspect = logoData ? logoData.naturalWidth / logoData.naturalHeight : 1;
 
