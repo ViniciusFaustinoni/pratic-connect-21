@@ -15832,6 +15832,8 @@ export type Database = {
           cota_minima: number | null
           cota_minima_desagio: number | null
           cota_participacao: number | null
+          cota_terceiros: number | null
+          cota_terceiros_isento: boolean
           coverage_type: string | null
           created_at: string
           descricao: string | null
@@ -15840,6 +15842,7 @@ export type Database = {
           fipe_minima: number | null
           footer_note: string | null
           id: string
+          limite_terceiros: number | null
           linha: string | null
           nivel: string | null
           nome: string
@@ -15873,6 +15876,8 @@ export type Database = {
           cota_minima?: number | null
           cota_minima_desagio?: number | null
           cota_participacao?: number | null
+          cota_terceiros?: number | null
+          cota_terceiros_isento?: boolean
           coverage_type?: string | null
           created_at?: string
           descricao?: string | null
@@ -15881,6 +15886,7 @@ export type Database = {
           fipe_minima?: number | null
           footer_note?: string | null
           id?: string
+          limite_terceiros?: number | null
           linha?: string | null
           nivel?: string | null
           nome: string
@@ -15914,6 +15920,8 @@ export type Database = {
           cota_minima?: number | null
           cota_minima_desagio?: number | null
           cota_participacao?: number | null
+          cota_terceiros?: number | null
+          cota_terceiros_isento?: boolean
           coverage_type?: string | null
           created_at?: string
           descricao?: string | null
@@ -15922,6 +15930,7 @@ export type Database = {
           fipe_minima?: number | null
           footer_note?: string | null
           id?: string
+          limite_terceiros?: number | null
           linha?: string | null
           nivel?: string | null
           nome?: string
@@ -21000,6 +21009,187 @@ export type Database = {
           },
         ]
       }
+      sinistro_terceiro_documentos: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          created_at: string
+          id: string
+          motivo_rejeicao: string | null
+          nome: string
+          status: string
+          terceiro_id: string
+          tipo: string
+          url: string
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string
+          id?: string
+          motivo_rejeicao?: string | null
+          nome: string
+          status?: string
+          terceiro_id: string
+          tipo: string
+          url: string
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string
+          id?: string
+          motivo_rejeicao?: string | null
+          nome?: string
+          status?: string
+          terceiro_id?: string
+          tipo?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_terceiro_documentos_terceiro_id_fkey"
+            columns: ["terceiro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistro_terceiros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sinistro_terceiros: {
+        Row: {
+          acordo_justificativa: string | null
+          acordo_respondido_em: string | null
+          acordo_status: string | null
+          acordo_valor: number | null
+          cpf: string
+          created_at: string
+          created_by: string | null
+          culpa: string
+          documentos_aprovados_em: string | null
+          email: string | null
+          entrega_em: string | null
+          id: string
+          nome: string
+          numero_sequencial: number
+          observacoes: string | null
+          oficina_endereco: string | null
+          oficina_nome: string | null
+          oficina_telefone: string | null
+          oficina_tipo: string | null
+          orcamento_valor: number | null
+          parentesco: boolean
+          parentesco_descricao: string | null
+          reparo_concluido_em: string | null
+          sinistro_id: string
+          status: string
+          telefone: string
+          termo_assinado_em: string | null
+          termo_assinatura_ip: string | null
+          termo_assinatura_nome: string | null
+          tipo_dano: string
+          token: string
+          updated_at: string
+          veiculo_ano: string
+          veiculo_cor: string
+          veiculo_fipe: number | null
+          veiculo_marca: string
+          veiculo_modelo: string
+          veiculo_placa: string
+          whatsapp: string
+        }
+        Insert: {
+          acordo_justificativa?: string | null
+          acordo_respondido_em?: string | null
+          acordo_status?: string | null
+          acordo_valor?: number | null
+          cpf: string
+          created_at?: string
+          created_by?: string | null
+          culpa?: string
+          documentos_aprovados_em?: string | null
+          email?: string | null
+          entrega_em?: string | null
+          id?: string
+          nome: string
+          numero_sequencial?: number
+          observacoes?: string | null
+          oficina_endereco?: string | null
+          oficina_nome?: string | null
+          oficina_telefone?: string | null
+          oficina_tipo?: string | null
+          orcamento_valor?: number | null
+          parentesco?: boolean
+          parentesco_descricao?: string | null
+          reparo_concluido_em?: string | null
+          sinistro_id: string
+          status?: string
+          telefone: string
+          termo_assinado_em?: string | null
+          termo_assinatura_ip?: string | null
+          termo_assinatura_nome?: string | null
+          tipo_dano?: string
+          token?: string
+          updated_at?: string
+          veiculo_ano: string
+          veiculo_cor: string
+          veiculo_fipe?: number | null
+          veiculo_marca: string
+          veiculo_modelo: string
+          veiculo_placa: string
+          whatsapp: string
+        }
+        Update: {
+          acordo_justificativa?: string | null
+          acordo_respondido_em?: string | null
+          acordo_status?: string | null
+          acordo_valor?: number | null
+          cpf?: string
+          created_at?: string
+          created_by?: string | null
+          culpa?: string
+          documentos_aprovados_em?: string | null
+          email?: string | null
+          entrega_em?: string | null
+          id?: string
+          nome?: string
+          numero_sequencial?: number
+          observacoes?: string | null
+          oficina_endereco?: string | null
+          oficina_nome?: string | null
+          oficina_telefone?: string | null
+          oficina_tipo?: string | null
+          orcamento_valor?: number | null
+          parentesco?: boolean
+          parentesco_descricao?: string | null
+          reparo_concluido_em?: string | null
+          sinistro_id?: string
+          status?: string
+          telefone?: string
+          termo_assinado_em?: string | null
+          termo_assinatura_ip?: string | null
+          termo_assinatura_nome?: string | null
+          tipo_dano?: string
+          token?: string
+          updated_at?: string
+          veiculo_ano?: string
+          veiculo_cor?: string
+          veiculo_fipe?: number | null
+          veiculo_marca?: string
+          veiculo_modelo?: string
+          veiculo_placa?: string
+          whatsapp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_terceiros_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistro_vidros_historico: {
         Row: {
           associado_id: string
@@ -21223,6 +21413,7 @@ export type Database = {
           snapshot_salvo_por: string | null
           snapshot_trajeto_json: Json | null
           status: Database["public"]["Enums"]["status_sinistro"]
+          tem_terceiro: boolean
           termo_anuencia_assinado: boolean | null
           termo_anuencia_assinado_em: string | null
           termo_anuencia_url: string | null
@@ -21346,6 +21537,7 @@ export type Database = {
           snapshot_salvo_por?: string | null
           snapshot_trajeto_json?: Json | null
           status?: Database["public"]["Enums"]["status_sinistro"]
+          tem_terceiro?: boolean
           termo_anuencia_assinado?: boolean | null
           termo_anuencia_assinado_em?: string | null
           termo_anuencia_url?: string | null
@@ -21469,6 +21661,7 @@ export type Database = {
           snapshot_salvo_por?: string | null
           snapshot_trajeto_json?: Json | null
           status?: Database["public"]["Enums"]["status_sinistro"]
+          tem_terceiro?: boolean
           termo_anuencia_assinado?: boolean | null
           termo_anuencia_assinado_em?: string | null
           termo_anuencia_url?: string | null

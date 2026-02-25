@@ -43,6 +43,7 @@ import { BannerAguardandoDiretoria } from '@/components/sinistros/BannerAguardan
 import { PrazoRessarcimento } from '@/components/sinistros/PrazoRessarcimento';
 import { SecaoSindicanciasJuridico } from '@/components/sinistros/SecaoSindicanciasJuridico';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
+import { SecaoTerceiros } from '@/components/sinistros/SecaoTerceiros';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -1091,6 +1092,15 @@ export default function SinistroDetalhe() {
 
           {/* Seção Sindicâncias e Jurídico */}
           <SecaoSindicanciasJuridico sinistroId={sinistro.id} />
+
+          {/* Seção Terceiros Envolvidos — só para colisão */}
+          {sinistro.tipo === 'colisao' && (
+            <SecaoTerceiros
+              sinistroId={sinistro.id}
+              associadoId={sinistro.associado_id}
+              placaAssociado={sinistro.veiculo?.placa}
+            />
+          )}
         </div>
 
         {/* Right Column - Sidebar */}
