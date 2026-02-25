@@ -17,6 +17,8 @@ import {
   generateSecaoAssinatura,
   markdownParaHTML,
   buscarEGerarAditivos,
+  hasSignatureArea,
+  sanitizeSignatureBlocks,
 } from "../_shared/template-utils.ts";
 
 const corsHeaders = {
@@ -35,12 +37,19 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
   const conteudoPreenchido = substituirVariaveis(templateConteudo, dados);
   
   // 2. Converter markdown para HTML
-  const conteudoHTML = markdownParaHTML(conteudoPreenchido);
+  let conteudoHTML = markdownParaHTML(conteudoPreenchido);
   
-  // 3. Buscar e gerar aditivos dinâmicos
+  // 3. Sanitizar blocos de assinatura manual que possam existir no template
+  conteudoHTML = sanitizeSignatureBlocks(conteudoHTML);
+  
+  // 4. Buscar e gerar aditivos dinâmicos
   const aditivosHTML = await buscarEGerarAditivos(supabase, dados.veiculo, dados);
   
-  // 4. Montar HTML completo
+  // 5. Só injetar assinatura padrão se o conteúdo + aditivos não contiverem uma
+  const conteudoCompleto = conteudoHTML + (aditivosHTML || '');
+  const assinaturaHTML = hasSignatureArea(conteudoCompleto) ? '' : generateSecaoAssinatura(dados);
+  
+  // 6. Montar HTML completo
   return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -54,7 +63,7 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
     ${generateHeader(dados)}
     ${conteudoHTML}
     ${aditivosHTML}
-    ${(conteudoHTML.includes('signature-block') || conteudoHTML.includes('signature-line') || conteudoHTML.includes('ASSINATURA')) ? '' : generateSecaoAssinatura(dados)}
+    ${assinaturaHTML}
     ${generateFooter(dados)}
   </div>
 </body>

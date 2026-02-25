@@ -542,6 +542,41 @@ export function generateFooter(dados: TermoAfiliacaoData): string {
 `;
 }
 
+// ============= DETECÇÃO E SANITIZAÇÃO DE ASSINATURA =============
+
+/**
+ * Detecta se o conteúdo HTML já contém uma área de assinatura válida.
+ * Verifica múltiplos padrões: classes CSS, títulos, blocos manuais com nome+CPF.
+ */
+export function hasSignatureArea(html: string): boolean {
+  if (!html) return false;
+  const patterns = [
+    /class\s*=\s*["']signature-area["']/i,
+    /class\s*=\s*["']signature-block["']/i,
+    /class\s*=\s*["']signature-line["']/i,
+    /class\s*=\s*["']signature-local-data["']/i,
+    />ASSINATURA<\//i,
+    />\s*8\.\s*ASSINATURA\s*<\//i,
+  ];
+  return patterns.some(p => p.test(html));
+}
+
+/**
+ * Remove blocos de assinatura manual do conteúdo HTML (signature-block, linhas nome+CPF em contexto de assinatura).
+ * Preserva o restante do conteúdo intacto.
+ */
+export function sanitizeSignatureBlocks(html: string): string {
+  if (!html) return html;
+  let result = html;
+  // Remove divs com class signature-block (e todo conteúdo interno)
+  result = result.replace(/<div[^>]*class\s*=\s*["'][^"']*signature-block[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '');
+  // Remove parágrafos com class signature-line
+  result = result.replace(/<p[^>]*class\s*=\s*["'][^"']*signature-line[^"']*["'][^>]*>[\s\S]*?<\/p>/gi, '');
+  // Remove divs com class signature-labels
+  result = result.replace(/<div[^>]*class\s*=\s*["'][^"']*signature-labels[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '');
+  return result;
+}
+
 // ============= SEÇÃO ASSINATURA =============
 
 export function generateSecaoAssinatura(dados: TermoAfiliacaoData): string {
