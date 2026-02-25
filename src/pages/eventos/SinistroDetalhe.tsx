@@ -44,6 +44,9 @@ import { PrazoRessarcimento } from '@/components/sinistros/PrazoRessarcimento';
 import { SecaoSindicanciasJuridico } from '@/components/sinistros/SecaoSindicanciasJuridico';
 import { ComparacaoPosicoes } from '@/components/sinistros/ComparacaoPosicoes';
 import { SecaoTerceiros } from '@/components/sinistros/SecaoTerceiros';
+import { AbaTerceiroReparo } from '@/components/sinistros/AbaTerceiroReparo';
+import { useTerceiros } from '@/hooks/useTerceiros';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -286,6 +289,9 @@ export default function SinistroDetalhe() {
     },
     enabled: !!id,
   });
+
+  const { data: terceirosData = [] } = useTerceiros(id);
+  const temTerceiros = terceirosData.length > 0;
 
   const { data: historico } = useQuery({
     queryKey: ['sinistro-historico', id],
@@ -1105,25 +1111,56 @@ export default function SinistroDetalhe() {
 
         {/* Right Column - Sidebar */}
         <div className="space-y-6">
-          {/* Termo de Entrada de Evento - Assinatura */}
-          {sinistro.autentique_url && (
-            <TermoAssinaturaCard sinistro={sinistro} />
+          {temTerceiros ? (
+            <Tabs defaultValue="associado">
+              <TabsList className="w-full">
+                <TabsTrigger value="associado" className="flex-1">🚗 Associado</TabsTrigger>
+                {terceirosData.map((t) => (
+                  <TabsTrigger key={t.id} value={t.id} className="flex-1">
+                    🚙 Terceiro {t.numero_sequencial}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <TabsContent value="associado" className="space-y-6 mt-4">
+                {sinistro.autentique_url && <TermoAssinaturaCard sinistro={sinistro} />}
+                <CardControleReparo
+                  sinistro={sinistro}
+                  onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
+                />
+                <CardOrcamentoReparo
+                  sinistroId={sinistro.id}
+                  valorFipe={(sinistro.veiculo as any)?.valor_fipe}
+                  canEdit={isDiretor || isRegulador}
+                  canChooseType={isDiretor}
+                  canReset={isDiretor}
+                />
+              </TabsContent>
+              {terceirosData.map((t) => (
+                <TabsContent key={t.id} value={t.id} className="mt-4">
+                  <AbaTerceiroReparo
+                    terceiro={t}
+                    sinistroId={sinistro.id}
+                    associadoId={sinistro.associado_id}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
+          ) : (
+            <>
+              {sinistro.autentique_url && <TermoAssinaturaCard sinistro={sinistro} />}
+              <CardControleReparo
+                sinistro={sinistro}
+                onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
+              />
+              <CardOrcamentoReparo
+                sinistroId={sinistro.id}
+                valorFipe={(sinistro.veiculo as any)?.valor_fipe}
+                canEdit={isDiretor || isRegulador}
+                canChooseType={isDiretor}
+                canReset={isDiretor}
+              />
+            </>
           )}
-
-          {/* Card Controle do Reparo */}
-          <CardControleReparo
-            sinistro={sinistro}
-            onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
-          />
-
-          {/* Card Orçamento do Reparo */}
-          <CardOrcamentoReparo
-            sinistroId={sinistro.id}
-            valorFipe={(sinistro.veiculo as any)?.valor_fipe}
-            canEdit={isDiretor || isRegulador}
-            canChooseType={isDiretor}
-            canReset={isDiretor}
-          />
 
           {/* Associado */}
           <Card>

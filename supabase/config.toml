@@ -20,3 +20,12 @@ verify_jwt = false
 
 [functions.acompanhamento-reboque-consultar]
 verify_jwt = false
+
+[functions.validar-link-terceiro]
+verify_jwt = false
+
+[functions.salvar-etapa-terceiro]
+verify_jwt = false
+
+[functions.upload-documento-terceiro]
+verify_jwt = false
