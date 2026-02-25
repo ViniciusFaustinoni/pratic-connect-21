@@ -1,49 +1,44 @@
 
+Objetivo: corrigir imediatamente a logo do PDF de cotação para aparecer na cor escura (visível no fundo claro), sem alterar layout/cor dos demais blocos.
 
-# Remover bloco "Servicos: {{plano.descricao}}" do Termo de Filiacao
+Contexto confirmado na base atual:
+- O PDF (simples e comparativo) está carregando `'/logos/logo-full-dark.png'` em `src/lib/gerarPdfCotacao.ts` (2 pontos).
+- Validação visual dos arquivos públicos mostrou:
+  - `logo-full-dark.png` = versão com texto claro (fica “branca” em fundo claro).
+  - `logo-full-light.png` = versão com texto escuro (a “logo escura/original” que você quer no PDF claro).
+- Portanto, hoje está invertido para o resultado esperado no PDF.
 
-## Problema
+Implementação proposta (rápida e direta):
+1) Ajustar a logo no PDF simples
+- Arquivo: `src/lib/gerarPdfCotacao.ts`
+- Trocar em `gerarPdfCotacao(...)`:
+  - de `loadImageWithDimensions('/logos/logo-full-dark.png')`
+  - para `loadImageWithDimensions('/logos/logo-full-light.png')`
 
-O template AF1 armazenado no banco de dados (`documento_templates`) contém um bloco:
+2) Ajustar a logo no PDF comparativo
+- Mesmo arquivo
+- Trocar em `gerarPdfCotacaoComparativa(...)`:
+  - de `loadImageWithDimensions('/logos/logo-full-dark.png')`
+  - para `loadImageWithDimensions('/logos/logo-full-light.png')`
 
-```html
-<p><strong>Serviços:</strong></p>
-<p>{{plano.descricao}}</p>
-```
+3) (Opcional recomendado para evitar nova confusão de nomes)
+- Substituir string literal por constante semântica local, por exemplo:
+  - `const LOGO_FOR_LIGHT_BG = '/logos/logo-full-light.png';`
+- Usar essa constante nos 2 pontos.
+- Não muda comportamento, só reduz risco de regressão futura.
 
-Este bloco nao deveria existir no termo. Mesmo que a variavel fosse substituida corretamente, o conteudo (lista de coberturas) ja aparece em outro lugar do documento. O resultado e informacao duplicada ou, pior, a variavel aparecendo literalmente no PDF.
+Validação de aceite (fim a fim):
+1. Entrar como `admin@teste.com` (senha igual ao e-mail).
+2. Ir em `/vendas/cotacoes`.
+3. Abrir uma cotação existente e baixar PDF.
+4. Confirmar:
+   - Logo aparece em cor escura/original.
+   - Fundo claro continua no topo/rodapé e área de planos (como já definido).
+   - Nenhuma outra cor/estrutura do PDF foi alterada.
 
-## Solucao
+Risco e impacto:
+- Impacto baixo (apenas troca de asset path em 2 linhas).
+- Sem alteração em dados, regras de negócio ou banco.
+- Sem impacto em telas web; somente geração do PDF.
 
-### 1. Limpeza no codigo (seguranca permanente)
-
-**Arquivo:** `supabase/functions/_shared/template-utils.ts`
-
-Adicionar na funcao `substituirVariaveis` (ou como pos-processamento) uma regex para remover o bloco "Servicos:" seguido de `{{plano.descricao}}` ou seu valor substituido. Isso garante que mesmo que o template do banco volte a ter esse trecho, ele sera removido automaticamente.
-
-Regex de limpeza:
-```
-<p><strong>Serviços:</strong></p>\s*<p>.*?</p>
-```
-Aplicada apenas quando o paragrafo seguinte contem `plano.descricao` ou o conteudo de coberturas.
-
-### 2. Limpar o template no banco de dados
-
-Executar UPDATE no banco para remover o trecho do template AF1:
-
-```sql
-UPDATE documento_templates 
-SET conteudo = REPLACE(
-  REPLACE(conteudo, '<p><strong>Serviços:</strong></p>', ''),
-  '<p>{{plano.descricao}}</p>', ''
-)
-WHERE codigo = 'AF1';
-```
-
-### 3. Deploy
-
-Deployar `autentique-create` e `autentique-create-by-token` para aplicar a limpeza no codigo.
-
-## Resultado
-
-O termo de filiacao nao tera mais o bloco "Servicos" no topo, independentemente do conteudo do template no banco.
+Após sua aprovação, aplico essa correção imediatamente.
