@@ -132,6 +132,18 @@ serve(async (req) => {
 
     console.log(`[autentique-create] Nenhum documento existente, criando novo para contrato ${contratoId}`);
 
+    // ============= BUSCAR NOME DO CONSULTOR/VENDEDOR =============
+    let vendedorNome: string | null = null;
+    if (contrato.vendedor_id) {
+      const { data: vendedorProfile } = await supabase
+        .from('profiles')
+        .select('nome')
+        .eq('id', contrato.vendedor_id)
+        .maybeSingle();
+      vendedorNome = vendedorProfile?.nome || null;
+      console.log(`[autentique-create] Consultor: ${vendedorNome || 'não encontrado'}`);
+    }
+
     // ============= BUSCAR TEMPLATE DO BANCO DE DADOS =============
     const { data: templateDB, error: templateError } = await supabase
       .from("documento_templates")
@@ -163,7 +175,8 @@ serve(async (req) => {
       contrato.planos,
       empresaConfig,
       contrato.leads,
-      contrato.associados
+      contrato.associados,
+      vendedorNome
     );
 
     // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============

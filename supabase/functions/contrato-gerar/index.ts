@@ -551,6 +551,11 @@ serve(async (req) => {
             veiculo_combustivel: cotacao.veiculo_combustivel || null,
             veiculo_ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano || null,
             
+            // Campos para Termo de Afiliação (Autentique)
+            codigo_fipe: cotacao.codigo_fipe || null,
+            uso_aplicativo: cotacao.uso_aplicativo || false,
+            veiculo_categoria: cotacao.categoria || cotacao.veiculo_categoria || 'Automóvel',
+            
             // Dados obrigatórios para SGA Hinova e Termo de Afiliação (extraídos do CRLV via OCR)
             veiculo_chassi: cotacao.veiculo_chassi || null,
             veiculo_renavam: cotacao.veiculo_renavam || null,
