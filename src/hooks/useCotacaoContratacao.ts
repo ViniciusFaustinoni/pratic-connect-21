@@ -95,9 +95,14 @@ export function useCotacaoContratacao(token: string | undefined) {
 
       // Atualizar visualizado_em se for primeira visualização
       if (!data.visualizado_em) {
+        const updateData: any = { visualizado_em: new Date().toISOString() };
+        // Se ainda está em rascunho, mover para 'enviada' (Link Enviado)
+        if (data.status === 'rascunho') {
+          updateData.status = 'enviada';
+        }
         await publicSupabase
           .from('cotacoes')
-          .update({ visualizado_em: new Date().toISOString() })
+          .update(updateData)
           .eq('id', data.id);
       }
 
