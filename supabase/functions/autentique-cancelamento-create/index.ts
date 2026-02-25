@@ -141,11 +141,9 @@ serve(async (req) => {
 </div>
 ${conteudoHTML}
 <div class="signature-area">
+  <h2 class="section-title">ASSINATURA</h2>
+  <br><br>
   <p class="signature-local-data">${associado.cidade || ""}/${associado.uf || ""}, ${variaveis["sistema.data_extenso"]}</p>
-  <div style="text-align:center;">
-    <div class="signature-block"><div class="signature-line"><p class="signature-name">${associado.nome}</p><p class="signature-doc">CPF: ${variaveis["associado.cpf"]}</p><p class="signature-role">ASSOCIADO</p></div></div>
-    <div class="signature-block" style="margin-left:40pt;"><div class="signature-line"><p class="signature-name">${variaveis["empresa.nome"]}</p><p class="signature-doc">CNPJ: ${variaveis["empresa.cnpj"]}</p><p class="signature-role">ASSOCIAÇÃO</p></div></div>
-  </div>
 </div>
 <div class="footer">ABP PraticCar | Termo de Cancelamento</div>
 </div></body></html>`;
@@ -194,11 +192,9 @@ ${conteudoHTML}
   </ul>
 </div>
 <div class="signature-area">
+  <h2 class="section-title">ASSINATURA</h2>
+  <br><br>
   <p class="signature-local-data">${associado.cidade || ""}/${associado.uf || ""}, ${variaveis["sistema.data_extenso"]}</p>
-  <div style="text-align:center;">
-    <div class="signature-block"><div class="signature-line"><p class="signature-name">${associado.nome}</p><p class="signature-doc">CPF: ${variaveis["associado.cpf"]}</p><p class="signature-role">ASSOCIADO</p></div></div>
-    <div class="signature-block" style="margin-left:40pt;"><div class="signature-line"><p class="signature-name">${variaveis["empresa.nome"]}</p><p class="signature-doc">CNPJ: ${variaveis["empresa.cnpj"]}</p><p class="signature-role">ASSOCIAÇÃO</p></div></div>
-  </div>
 </div>
 <div class="footer">ABP PraticCar | Termo de Cancelamento</div>
 </div></body></html>`;

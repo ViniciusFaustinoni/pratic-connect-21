@@ -242,23 +242,8 @@ serve(async (req) => {
     ${conteudoHTML}
     <div class="signature-area">
       <h2 class="section-title">ASSINATURA</h2>
+      <br><br>
       <p class="signature-local-data">${associado.cidade || ''}/${associado.uf || ''}, ${formatDateExtended(dataAtual)}</p>
-      <div style="text-align: center;">
-        <div class="signature-block">
-          <div class="signature-line">
-            <p class="signature-name">${associado.nome}</p>
-            <p class="signature-doc">CPF: ${formatCPF(associado.cpf)}</p>
-            <p class="signature-role">ASSOCIADO</p>
-          </div>
-        </div>
-        <div class="signature-block" style="margin-left: 40pt;">
-          <div class="signature-line">
-            <p class="signature-name">${empresaConfig.nome || 'ABP PRATICCAR'}</p>
-            <p class="signature-doc">CNPJ: ${empresaConfig.cnpj}</p>
-            <p class="signature-role">ABP PRATICCAR</p>
-          </div>
-        </div>
-      </div>
     </div>
     <div class="footer">
       ABP PraticCar | Termo de Entrada de Evento - Protocolo ${sinistro.protocolo}
@@ -351,23 +336,8 @@ serve(async (req) => {
 
     <div class="signature-area">
       <h2 class="section-title">ASSINATURA</h2>
+      <br><br>
       <p class="signature-local-data">${associado.cidade || ''}/${associado.uf || ''}, ${formatDateExtended(dataAtual)}</p>
-      <div style="text-align: center;">
-        <div class="signature-block">
-          <div class="signature-line">
-            <p class="signature-name">${associado.nome}</p>
-            <p class="signature-doc">CPF: ${formatCPF(associado.cpf)}</p>
-            <p class="signature-role">ASSOCIADO</p>
-          </div>
-        </div>
-        <div class="signature-block" style="margin-left: 40pt;">
-          <div class="signature-line">
-            <p class="signature-name">${empresaConfig.nome || 'ABP PRATICCAR'}</p>
-            <p class="signature-doc">CNPJ: ${empresaConfig.cnpj}</p>
-            <p class="signature-role">ABP PRATICCAR</p>
-          </div>
-        </div>
-      </div>
     </div>
 
     <div class="footer">
