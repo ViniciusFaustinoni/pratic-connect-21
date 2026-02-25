@@ -758,28 +758,10 @@ const generateSecao8 = (data: TermoAfiliacaoData): string => {
   return `
 <div class="signature-area">
   <h2 class="section-title">8. ASSINATURA</h2>
-  
+  <br><br>
   <p class="signature-local-data">
     ${localAssinatura}, ${dataAssinatura}
   </p>
-  
-  <div style="text-align: center;">
-    <div class="signature-block">
-      <div class="signature-line">
-        <p class="signature-name">${data.cliente.nome}</p>
-        <p class="signature-doc">CPF: ${formatCPF(data.cliente.cpf)}</p>
-        <p class="signature-role">ASSOCIADO</p>
-      </div>
-    </div>
-    
-    <div class="signature-block" style="margin-left: 40pt;">
-      <div class="signature-line">
-        <p class="signature-name">ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR</p>
-        <p class="signature-doc">CNPJ: ${data.empresa.cnpj}</p>
-        <p class="signature-role">ABP PRATICCAR</p>
-      </div>
-    </div>
-  </div>
 </div>
 `;
 };
@@ -984,19 +966,11 @@ const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
   </div>
   
   <div class="signature-area" style="margin-top: 30pt; padding-top: 15pt; border-top: 1px solid #e5e7eb;">
-    <p style="text-align: center; margin-bottom: 40pt;">
+    <h2 class="section-title">ASSINATURA</h2>
+    <br><br>
+    <p style="text-align: center;">
       ${localAssinatura}, ${dataAssinatura}
     </p>
-    
-    <div style="text-align: center;">
-      <div class="signature-block">
-        <div class="signature-line">
-          <p class="signature-name">${data.cliente.nome}</p>
-          <p class="signature-doc">CPF: ${formatCPF(data.cliente.cpf)}</p>
-          <p class="signature-role">ASSOCIADO - COMODATÁRIO</p>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 `;

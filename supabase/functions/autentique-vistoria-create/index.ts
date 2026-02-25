@@ -209,12 +209,10 @@ function gerarTermoVistoriaHtml(params: VistoriaRequest): string {
       </div>
 
       <div class="signature-area">
+        <h2 class="section-title">ASSINATURA</h2>
         <p>Ao assinar eletronicamente este documento, o PROPRIETÁRIO declara estar ciente e de acordo com todas as informações registradas nesta vistoria.</p>
-        
-        <div class="signature-line">
-          ${params.clienteNome}<br>
-          <small>Proprietário do Veículo</small>
-        </div>
+        <br><br>
+        <p class="signature-local-data">${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
       </div>
 
       <div class="footer">
