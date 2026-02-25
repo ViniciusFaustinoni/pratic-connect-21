@@ -1,61 +1,34 @@
 
 
-# Fix: Logo do PDF em Tamanho Original (Proporcional)
+# Centralizar Texto do Header na Capa do PDF Comparativo
 
 ## Problema
 
-A logo no header do PDF esta sendo renderizada com dimensoes fixas quadradas (40x40mm no PDF simples, 32x32mm no comparativo), o que distorce a imagem pois o logo "PraticCar" e retangular (mais largo que alto). O resultado e um logo esticado/comprimido verticalmente.
+No header da capa do PDF comparativo, os textos "PRATICCAR", "Proteção Veicular" e "COMPARATIVO DE PLANOS" estão alinhados à esquerda (logo à esquerda do logo). O esperado é que fiquem centralizados na página.
 
-## Solucao
+## Solução
 
-Carregar a imagem da logo em um elemento `Image` do navegador para obter suas dimensoes naturais (largura x altura), e entao calcular as dimensoes proporcionais para o PDF mantendo a proporcao original (aspect ratio).
+No arquivo `src/lib/gerarPdfCotacao.ts`, nas linhas 896-910, alterar as 3 chamadas `doc.text(...)` para usar alinhamento centralizado, substituindo o `titleX` por `pageWidth / 2` e passando a opção `{ align: 'center' }`.
 
-## Detalhes Tecnicos
+## Detalhes Técnicos
 
 ### Arquivo: `src/lib/gerarPdfCotacao.ts`
 
-### 1. Nova funcao utilitaria: `loadImageWithDimensions`
-
-Criar uma funcao que retorna tanto o base64 quanto as dimensoes naturais da imagem:
+Linhas 900, 905 e 910 -- trocar de:
 
 ```
-async function loadImageWithDimensions(url): Promise<{ base64, width, height } | null>
+doc.text('PRATICCAR', titleX, 18);
+doc.text('Proteção Veicular', titleX, 27);
+doc.text('COMPARATIVO DE PLANOS', titleX, 38);
 ```
 
-Carrega a imagem em um `new Image()`, espera o `onload`, e retorna `naturalWidth` e `naturalHeight` junto com o base64.
+Para:
 
-### 2. Ajustar header do PDF simples (linha ~330)
+```
+doc.text('PRATICCAR', pageWidth / 2, 18, { align: 'center' });
+doc.text('Proteção Veicular', pageWidth / 2, 27, { align: 'center' });
+doc.text('COMPARATIVO DE PLANOS', pageWidth / 2, 38, { align: 'center' });
+```
 
-Atual: `doc.addImage(logoBase64, 'PNG', margin, 8, 40, 40)`
+A variável `titleX` e a lógica condicional com a logo podem ser mantidas (não causam problema), mas não serão mais usadas nessas 3 linhas. Apenas o posicionamento do texto muda -- a logo permanece à esquerda.
 
-Novo: Calcular largura proporcional baseada na altura desejada do header (ex: altura = 35mm, largura = 35 * (naturalWidth / naturalHeight)). Isso preserva o aspect ratio.
-
-### 3. Ajustar header do PDF comparativo/capa (linha ~869)
-
-Atual: `doc.addImage(logoBase64, 'PNG', margin, 5, 32, 32)`
-
-Novo: Mesma logica -- altura = 28mm, largura proporcional.
-
-### 4. Ajustar rodape do PDF simples (linha ~626)
-
-Atual: `doc.addImage(logoBase64, 'PNG', margin, footerY + 2, 18, 18)`
-
-Novo: Altura = 14mm, largura proporcional.
-
-### 5. Ajustar rodape compacto (linha ~718)
-
-Atual: `doc.addImage(logoBase64, 'PNG', margin, footerY + 2, 14, 14)`
-
-Novo: Altura = 12mm, largura proporcional.
-
-### 6. Ajustar posicao do texto ao lado da logo
-
-Como a largura da logo muda (sera mais larga que antes), os `titleX` que posicionam o texto "PRATICCAR" ao lado da logo precisam ser recalculados usando a largura real da logo + margem.
-
-### Resumo das alteracoes
-
-- Alterar `loadImageAsBase64` ou criar funcao complementar que retorna dimensoes
-- Passar dimensoes da logo para as funcoes de desenho
-- Calcular largura proporcional em cada `addImage` da logo
-- Ajustar `titleX` em todos os headers para usar a largura real da logo
-- Apenas o arquivo `src/lib/gerarPdfCotacao.ts` sera modificado
