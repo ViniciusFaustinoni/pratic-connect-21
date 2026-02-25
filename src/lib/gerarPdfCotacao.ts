@@ -744,11 +744,16 @@ const desenharCardPlanoExpandido = (
   y: number,
   width: number,
   index: number,
-  isRecommended: boolean = false
+  isRecommended: boolean = false,
+  compact: boolean = false
 ): number => {
   const padding = 6;
-  const lineHeight = 7;
-  const maxCoberturas = 14; // Máximo de coberturas por card para caber na página
+  const lineHeight = compact ? 5.5 : 7;
+  const maxCoberturas = compact ? 10 : 14;
+  const coberturaFontSize = compact ? 7 : 9;
+  const maxChars = compact 
+    ? Math.floor((width - padding * 2 - 8) / 1.6) 
+    : Math.floor((width - padding * 2 - 8) / 2.2);
   
   // Calcular altura baseada nas coberturas
   const numCoberturas = Math.min(plano.coberturas.length, maxCoberturas);
@@ -803,11 +808,11 @@ const desenharCardPlanoExpandido = (
     doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
     doc.circle(x + padding + 3, currentY - 1.5, 1.5, 'F');
     
-    // Texto da cobertura
+    // Texto da cobertura (truncado para caber no card)
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(9);
+    doc.setFontSize(coberturaFontSize);
     doc.setFont('helvetica', 'normal');
-    doc.text(cobertura, x + padding + 8, currentY);
+    doc.text(truncateText(cobertura, maxChars), x + padding + 8, currentY);
     
     currentY += lineHeight;
   });
@@ -963,7 +968,7 @@ const desenharPaginaCapa = (
     });
     
   } else {
-    // 3+ cards: Layout em grid
+    // 3+ cards: Layout em grid (compact mode)
     const cardsPerRow = 3;
     const cardWidth = (contentWidth - (cardGap * (cardsPerRow - 1))) / cardsPerRow;
     
@@ -979,12 +984,14 @@ const desenharPaginaCapa = (
       
       const cardX = startX + (cardWidth + cardGap) * col;
       
-      // Calcular altura máxima dos cards (baseada no máximo de coberturas)
-      const maxCoberturas = Math.min(14, Math.max(...cotacao.planosComparar.map(p => p.coberturas.length)));
-      const estimatedCardHeight = 24 + 28 + (Math.min(maxCoberturas, 14) * 7) + 18;
+      // Compact: maxCoberturas=10, lineHeight=5.5
+      const compactMaxCob = 10;
+      const compactLineHeight = 5.5;
+      const maxCoberturas = Math.min(compactMaxCob, Math.max(...cotacao.planosComparar.map(p => p.coberturas.length)));
+      const estimatedCardHeight = 24 + 28 + (maxCoberturas * compactLineHeight) + 18;
       const cardY = y + row * (estimatedCardHeight + cardGap);
       
-      desenharCardPlanoExpandido(doc, plano, cardX, cardY, cardWidth, index, index === planoRecomendadoIndex);
+      desenharCardPlanoExpandido(doc, plano, cardX, cardY, cardWidth, index, index === planoRecomendadoIndex, true);
     });
   }
 
