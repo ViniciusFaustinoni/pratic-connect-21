@@ -279,13 +279,13 @@ export default function EventoAnaliseDetalhe() {
           {sinistro.veiculo_id && (
             <AccordionItem value="trajeto-veiculo" className="border rounded-lg px-3">
               <AccordionTrigger className="text-sm font-semibold">
-                <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Trajeto do Veículo (4h antes)</span>
+                <span className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Trajeto do Veículo (1h antes da comunicação)</span>
               </AccordionTrigger>
               <AccordionContent>
                 <TrajetoLocalCard
                   veiculoId={sinistro.veiculo_id}
-                  dataOcorrencia={sinistro.data_ocorrencia}
-                  horasAnteriores={4}
+                  dataOcorrencia={link?.etapa1_completada_em || link?.created_at || sinistro.data_ocorrencia}
+                  horasAnteriores={1}
                 />
               </AccordionContent>
             </AccordionItem>
