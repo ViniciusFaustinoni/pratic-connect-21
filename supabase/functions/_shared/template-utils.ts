@@ -225,6 +225,15 @@ export const generateStyles = (): string => `
     margin-bottom: 10pt;
     page-break-inside: avoid;
   }
+
+  /* ===== CONTEÚDO RICO (TipTap) — SEM page-break-inside: avoid ===== */
+  .content-body {
+    margin-bottom: 10pt;
+  }
+
+  .content-body table {
+    page-break-inside: auto;
+  }
   
   .section-title {
     background: #1a1a6e;
@@ -592,7 +601,7 @@ export function substituirVariaveisEvento(conteudo: string, variaveis: Record<st
 export function markdownParaHTML(conteudo: string): string {
   // Se o conteúdo já é HTML rico (vindo do TipTap), não aplicar conversão markdown
   if (conteudo.includes('<table') || conteudo.includes('<p>') || conteudo.includes('<p ') || conteudo.includes('<div')) {
-    return `<div class="section">${conteudo}</div>`;
+    return `<div class="content-body">${conteudo}</div>`;
   }
 
   let html = conteudo;
