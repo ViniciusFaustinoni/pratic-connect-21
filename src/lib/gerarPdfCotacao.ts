@@ -882,7 +882,8 @@ const desenharPaginaCapa = (
   const logoCapaHeight = 28;
   const logoCapaWidth = logoCapaHeight * logoAspect;
   if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', margin, 7, logoCapaWidth, logoCapaHeight);
+    const logoX = (pageWidth - logoCapaWidth) / 2;
+    doc.addImage(logoBase64, 'PNG', logoX, 7, logoCapaWidth, logoCapaHeight);
   }
 
   doc.setTextColor(255, 255, 255);
