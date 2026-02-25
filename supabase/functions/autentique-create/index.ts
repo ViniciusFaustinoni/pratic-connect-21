@@ -54,7 +54,7 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
     ${generateHeader(dados)}
     ${conteudoHTML}
     ${aditivosHTML}
-    ${generateSecaoAssinatura(dados)}
+    ${(conteudoHTML.includes('signature-block') || conteudoHTML.includes('signature-line') || conteudoHTML.includes('ASSINATURA')) ? '' : generateSecaoAssinatura(dados)}
     ${generateFooter(dados)}
   </div>
 </body>
