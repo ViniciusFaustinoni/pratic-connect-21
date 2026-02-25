@@ -1,15 +1,49 @@
 
 
-# Melhoria UX: Campos empilhados na Cotacao Rapida
+# Remover bloco "Servicos: {{plano.descricao}}" do Termo de Filiacao
 
-## Alteracao
+## Problema
 
-No bloco "Dados do Associado" do formulario de Cotacao Rapida, os campos Telefone/WhatsApp e E-mail estao lado a lado em telas maiores (`md:grid-cols-2`). A melhoria e empilhar todos os campos verticalmente (um abaixo do outro).
+O template AF1 armazenado no banco de dados (`documento_templates`) contém um bloco:
 
-## Detalhe tecnico
+```html
+<p><strong>Serviços:</strong></p>
+<p>{{plano.descricao}}</p>
+```
 
-**Arquivo:** `src/components/cotacoes/CotacaoFormDialog.tsx` (linha 1020)
+Este bloco nao deveria existir no termo. Mesmo que a variavel fosse substituida corretamente, o conteudo (lista de coberturas) ja aparece em outro lugar do documento. O resultado e informacao duplicada ou, pior, a variavel aparecendo literalmente no PDF.
 
-Alterar o container de `grid grid-cols-1 md:grid-cols-2 gap-3` para `space-y-3` (layout vertical puro), e remover o `md:col-span-2` do campo Nome que nao sera mais necessario.
+## Solucao
 
-Resultado: Nome, Telefone e Email ficam empilhados verticalmente, como mostrado na imagem de referencia.
+### 1. Limpeza no codigo (seguranca permanente)
+
+**Arquivo:** `supabase/functions/_shared/template-utils.ts`
+
+Adicionar na funcao `substituirVariaveis` (ou como pos-processamento) uma regex para remover o bloco "Servicos:" seguido de `{{plano.descricao}}` ou seu valor substituido. Isso garante que mesmo que o template do banco volte a ter esse trecho, ele sera removido automaticamente.
+
+Regex de limpeza:
+```
+<p><strong>Serviços:</strong></p>\s*<p>.*?</p>
+```
+Aplicada apenas quando o paragrafo seguinte contem `plano.descricao` ou o conteudo de coberturas.
+
+### 2. Limpar o template no banco de dados
+
+Executar UPDATE no banco para remover o trecho do template AF1:
+
+```sql
+UPDATE documento_templates 
+SET conteudo = REPLACE(
+  REPLACE(conteudo, '<p><strong>Serviços:</strong></p>', ''),
+  '<p>{{plano.descricao}}</p>', ''
+)
+WHERE codigo = 'AF1';
+```
+
+### 3. Deploy
+
+Deployar `autentique-create` e `autentique-create-by-token` para aplicar a limpeza no codigo.
+
+## Resultado
+
+O termo de filiacao nao tera mais o bloco "Servicos" no topo, independentemente do conteudo do template no banco.
