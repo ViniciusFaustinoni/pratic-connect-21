@@ -1,56 +1,63 @@
 
-# Corrigir Erro "removeChild" ao Abrir Nova Cotacao
+# Corrigir Upload de Arquivos .jfif na Tela de Documentos
 
 ## Problema
-Ao clicar em "Nova Cotacao" (seja pelo botao na pagina de Cotacoes ou pela acao rapida do Dashboard), a aplicacao crasha com o erro:
-`Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.`
+Arquivos `.jfif` falham no upload com "Erro ao enviar arquivo para o storage", apesar da policy RLS ja incluir a extensao `.jfif`. O problema esta no content-type: navegadores frequentemente reportam `.jfif` como `image/jpeg` ou ate `application/octet-stream`, e o Supabase Storage pode nao inferir corretamente o MIME type para extensoes incomuns.
 
 ## Causa Raiz
-O componente `CotacaoFormDialog` possui componentes baseados em portais (AlertDialog e PlacaDuplicadaModal) renderizados **dentro** do wrapper `<Dialog>` do Radix UI. Isso cria portais aninhados que conflitam com a reconciliacao do React 18 ao manipular o DOM.
-
-Especificamente, nas linhas 1926-1973, o `AlertDialog` e o `PlacaDuplicadaModal` estao entre `</DialogContent>` e `</Dialog>` -- ainda filhos do `Dialog.Root`. Quando o React tenta montar/desmontar esses portais simultaneamente, perde o controle dos nos do DOM.
+No `UnifiedDocumentUploader.tsx` (linha 151-156), o upload nao especifica `contentType` explicitamente. O Supabase tenta inferir do File object, mas para extensoes como `.jfif`, `.heic`, `.bmp`, o browser pode nao fornecer um MIME type correto, causando falha silenciosa no storage.
 
 ## Solucao
-Reestruturar o `CotacaoFormDialog` para que os modais aninhados (AlertDialog de confirmacao e PlacaDuplicadaModal) sejam renderizados **fora** do `<Dialog>` principal, usando um Fragment como wrapper.
 
-## Detalhes Tecnicos
+### Arquivo: `src/components/contratos/UnifiedDocumentUploader.tsx`
 
-### Arquivo: `src/components/cotacoes/CotacaoFormDialog.tsx`
-
-**Mudanca 1:** Alterar o return do componente para usar Fragment e mover os modais para fora do Dialog:
-
-De:
-```tsx
-return (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent>...</DialogContent>
-    {/* AlertDialog dentro do Dialog */}
-    {showConfirmDialog && (<AlertDialog>...</AlertDialog>)}
-    {/* PlacaDuplicadaModal dentro do Dialog */}
-    {showPlacaDuplicadaModal && (<PlacaDuplicadaModal ... />)}
-  </Dialog>
-);
+**Mudanca 1 - Adicionar mapeamento de MIME types** (apos as constantes existentes, ~linha 68):
+```typescript
+const MIME_TYPE_MAP: Record<string, string> = {
+  'jfif': 'image/jpeg',
+  'jpg': 'image/jpeg',
+  'jpeg': 'image/jpeg',
+  'png': 'image/png',
+  'webp': 'image/webp',
+  'bmp': 'image/bmp',
+  'gif': 'image/gif',
+  'heic': 'image/heic',
+  'tiff': 'image/tiff',
+  'tif': 'image/tiff',
+  'pdf': 'application/pdf',
+};
 ```
 
-Para:
-```tsx
-return (
-  <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>...</DialogContent>
-    </Dialog>
+**Mudanca 2 - Definir contentType explicito no upload** (linhas 147-156):
+Apos obter `sanitizedFileName`, extrair a extensao e usar o mapeamento para definir o `contentType` no call de upload:
+```typescript
+const fileExt = sanitizedFileName.split('.').pop()?.toLowerCase() || '';
+const contentType = MIME_TYPE_MAP[fileExt] || file.type || 'application/octet-stream';
 
-    {/* Modais FORA do Dialog principal */}
-    {showConfirmDialog && (<AlertDialog>...</AlertDialog>)}
-    {showPlacaDuplicadaModal && (<PlacaDuplicadaModal ... />)}
-  </>
-);
+const { data: uploadData, error: uploadError } = await supabaseClient.storage
+  .from(bucketName)
+  .upload(filePath, fileToUpload, {
+    cacheControl: '3600',
+    upsert: false,
+    contentType,
+  });
 ```
 
-Isso elimina o conflito de portais aninhados que causa o erro `removeChild`.
+**Mudanca 3 - Log detalhado do erro** (linhas 158-161):
+Melhorar o log de erro para incluir detalhes que facilitem debug futuro:
+```typescript
+if (uploadError) {
+  console.error('Upload error:', uploadError, {
+    fileName: sanitizedFileName,
+    contentType,
+    fileSize: fileToUpload.size,
+    bucket: bucketName,
+  });
+  throw new Error('Erro ao enviar arquivo para o storage.');
+}
+```
 
 ## Impacto
-- Zero alteracao funcional -- ambos os modais continuam funcionando identicamente
-- O Dialog principal abre/fecha normalmente
-- Os modais de confirmacao e placa duplicada aparecem sobre o Dialog quando necessario
-- Nenhuma outra pagina ou componente e afetado
+- Arquivos `.jfif`, `.heic`, `.bmp`, `.gif`, `.tiff` passarao a ser enviados com o content-type correto
+- Nenhuma mudanca funcional para formatos que ja funcionam (JPG, PNG, PDF)
+- Log de erro mais informativo para debug futuro
