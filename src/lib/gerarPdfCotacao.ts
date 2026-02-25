@@ -897,17 +897,17 @@ const desenharPaginaCapa = (
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
   const titleX = logoBase64 ? margin + logoCapaWidth + 4 : margin;
-  doc.text('PRATICCAR', titleX, 18);
+  doc.text('PRATICCAR', pageWidth / 2, 18, { align: 'center' });
 
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text('Proteção Veicular', titleX, 27);
+  doc.text('Proteção Veicular', pageWidth / 2, 27, { align: 'center' });
 
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('COMPARATIVO DE PLANOS', titleX, 38);
+  doc.text('COMPARATIVO DE PLANOS', pageWidth / 2, 38, { align: 'center' });
 
   y = headerHeight + 5;
 
