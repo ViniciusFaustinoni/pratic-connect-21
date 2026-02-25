@@ -1,34 +1,24 @@
 
 
-# Centralizar Texto do Header na Capa do PDF Comparativo
+# Remover Pagina "TABELA COMPARATIVA DE COBERTURAS" do PDF
 
 ## Problema
 
-No header da capa do PDF comparativo, os textos "PRATICCAR", "Proteção Veicular" e "COMPARATIVO DE PLANOS" estão alinhados à esquerda (logo à esquerda do logo). O esperado é que fiquem centralizados na página.
+O PDF comparativo gera uma segunda pagina com o titulo "TABELA COMPARATIVA DE COBERTURAS" contendo uma tabela com checks de coberturas por plano. Essa pagina nao deve mais existir.
 
-## Solução
+## Solucao
 
-No arquivo `src/lib/gerarPdfCotacao.ts`, nas linhas 896-910, alterar as 3 chamadas `doc.text(...)` para usar alinhamento centralizado, substituindo o `titleX` por `pageWidth / 2` e passando a opção `{ align: 'center' }`.
+Remover a chamada da pagina comparativa e a propria funcao do arquivo `src/lib/gerarPdfCotacao.ts`.
 
-## Detalhes Técnicos
+## Detalhes Tecnicos
 
 ### Arquivo: `src/lib/gerarPdfCotacao.ts`
 
-Linhas 900, 905 e 910 -- trocar de:
+1. **Remover o bloco de chamada** (linhas 1501-1515): O trecho que adiciona a pagina 2 com `desenharPaginaComparativa` sera removido inteiramente, incluindo o `doc.addPage()` e a chamada da funcao.
 
-```
-doc.text('PRATICCAR', titleX, 18);
-doc.text('Proteção Veicular', titleX, 27);
-doc.text('COMPARATIVO DE PLANOS', titleX, 38);
-```
+2. **Remover a funcao `desenharPaginaComparativa`** (linhas 1319-1516 aproximadamente): Toda a funcao que desenha a tabela comparativa sera removida, ja que nao sera mais utilizada.
 
-Para:
+3. **Simplificar calculo de `totalPaginas`**: Atualmente o total de paginas considera a pagina comparativa. Sera ajustado para sempre ser 1 (apenas a capa), removendo a logica condicional baseada em `numPlanos > 1`.
 
-```
-doc.text('PRATICCAR', pageWidth / 2, 18, { align: 'center' });
-doc.text('Proteção Veicular', pageWidth / 2, 27, { align: 'center' });
-doc.text('COMPARATIVO DE PLANOS', pageWidth / 2, 38, { align: 'center' });
-```
-
-A variável `titleX` e a lógica condicional com a logo podem ser mantidas (não causam problema), mas não serão mais usadas nessas 3 linhas. Apenas o posicionamento do texto muda -- a logo permanece à esquerda.
+4. **Ajustar `isCapaUltimaPagina`**: Sempre sera `true`, ja que a capa sera a unica pagina.
 
