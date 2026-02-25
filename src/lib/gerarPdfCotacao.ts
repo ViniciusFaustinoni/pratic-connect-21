@@ -770,7 +770,7 @@ const desenharCardPlanoExpandido = (
 ): number => {
   const padding = 6;
   const lineHeight = compact ? 5.5 : 7;
-  const maxCoberturas = compact ? 10 : 14;
+  const maxCoberturas = plano.coberturas.length;
   const coberturaFontSize = compact ? 7 : 9;
   const maxChars = compact 
     ? Math.floor((width - padding * 2 - 8) / 1.6) 
@@ -838,14 +838,6 @@ const desenharCardPlanoExpandido = (
     currentY += lineHeight;
   });
   
-  // Se tem mais coberturas, indicar
-  if (plano.coberturas.length > maxCoberturas) {
-    doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
-    doc.setFontSize(6);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`+ ${plano.coberturas.length - maxCoberturas} mais...`, x + width / 2, currentY, { align: 'center' });
-    currentY += 8;
-  }
   
   currentY += 4;
   
@@ -997,10 +989,8 @@ const desenharPaginaCapa = (
       
       const cardX = startX + (cardWidth + cardGap) * col;
       
-      // Compact: maxCoberturas=10, lineHeight=5.5
-      const compactMaxCob = 10;
       const compactLineHeight = 5.5;
-      const maxCoberturas = Math.min(compactMaxCob, Math.max(...cotacao.planosComparar.map(p => p.coberturas.length)));
+      const maxCoberturas = Math.max(...cotacao.planosComparar.map(p => p.coberturas.length));
       const estimatedCardHeight = 24 + 28 + (maxCoberturas * compactLineHeight) + 18;
       const cardY = y + row * (estimatedCardHeight + cardGap);
       
