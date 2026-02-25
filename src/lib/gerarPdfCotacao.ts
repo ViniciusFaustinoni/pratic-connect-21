@@ -81,24 +81,25 @@ export interface CotacaoComparativaParaPdf {
 const brandBlue = { r: 20, g: 55, b: 110 };       // Azul escuro PRATIC
 const brandRed = { r: 200, g: 30, b: 65 };        // Vermelho PRATIC
 
-// Cores Premium (tema escuro inspirado na área do cliente)
-const premiumDark = { r: 15, g: 23, b: 42 };      // slate-900
-const premiumCard = { r: 30, g: 41, b: 59 };      // slate-800
-const premiumCardLight = { r: 51, g: 65, b: 85 }; // slate-700
-const glowBlue = { r: 59, g: 130, b: 246 };       // blue-500
-const glowRed = { r: 239, g: 68, b: 68 };         // red-500
+// Cores para tema claro
+const cardBg = { r: 255, g: 255, b: 255 };         // white
+const cardBorder = { r: 226, g: 232, b: 240 };      // slate-200
+const sectionHeaderBg = { r: 241, g: 245, b: 249 }; // slate-100
+const stripeBg = { r: 248, g: 250, b: 252 };        // slate-50
+const glowBlue = { r: 59, g: 130, b: 246 };         // blue-500
+const glowRed = { r: 239, g: 68, b: 68 };           // red-500
 
-// Cores de texto e UI
+// Cores de texto (tema claro)
 const textWhite = { r: 255, g: 255, b: 255 };
-const textMuted = { r: 148, g: 163, b: 184 };     // slate-400
-const textLight = { r: 226, g: 232, b: 240 };     // slate-200
-const successGreen = { r: 34, g: 197, b: 94 };    // green-500
-const warningYellow = { r: 234, g: 179, b: 8 };   // yellow-500
-
-// Cores claras para header/footer
-const headerFooterBg = { r: 245, g: 247, b: 250 };   // slate-50
 const textDark = { r: 30, g: 41, b: 59 };             // slate-800
 const textDarkMuted = { r: 100, g: 116, b: 139 };     // slate-500
+const textMuted = { r: 100, g: 116, b: 139 };         // slate-500 (alias)
+const textLight = { r: 30, g: 41, b: 59 };            // slate-800 (alias - agora escuro)
+const successGreen = { r: 22, g: 163, b: 74 };        // green-600 (mais escuro p/ contraste)
+const warningYellow = { r: 202, g: 138, b: 4 };       // yellow-600 (mais escuro p/ contraste)
+
+// Cores para header/footer
+const headerFooterBg = { r: 245, g: 247, b: 250 };   // slate-50
 
 // ============= CONSTANTES DE ESPAÇAMENTO (REDUZIDAS) =============
 const SECTION_GAP = 8;       // Espaço entre seções principais (era 12)
@@ -226,7 +227,7 @@ const drawCheckIndicator = (doc: jsPDF, x: number, y: number) => {
   doc.circle(x, y - 2, 1.5, 'F');
 };
 
-// ============= Função para desenhar card premium escuro =============
+// ============= Função para desenhar card premium (tema claro) =============
 
 const drawPremiumCard = (
   doc: jsPDF,
@@ -242,18 +243,18 @@ const drawPremiumCard = (
 ) => {
   const { isRecommended = false, borderColor, hasGlow = false } = options;
 
-  // Fundo do card (slate-900)
-  doc.setFillColor(premiumDark.r, premiumDark.g, premiumDark.b);
+  // Fundo do card (branco)
+  doc.setFillColor(cardBg.r, cardBg.g, cardBg.b);
   doc.roundedRect(x, y, width, height, 4, 4, 'F');
 
-  // Efeito de "glow" com borda mais grossa para recomendado
+  // Borda colorida para destaque
   if (isRecommended || hasGlow) {
     const glowColor = isRecommended ? glowRed : glowBlue;
     doc.setDrawColor(glowColor.r, glowColor.g, glowColor.b);
-    doc.setLineWidth(2);
+    doc.setLineWidth(1.5);
     doc.roundedRect(x, y, width, height, 4, 4, 'S');
   } else {
-    const border = borderColor || premiumCardLight;
+    const border = borderColor || cardBorder;
     doc.setDrawColor(border.r, border.g, border.b);
     doc.setLineWidth(0.5);
     doc.roundedRect(x, y, width, height, 4, 4, 'S');
@@ -269,16 +270,16 @@ const drawPremiumSectionHeader = (
   width: number,
   title: string
 ) => {
-  // Fundo do header da seção
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  // Fundo do header da seção (claro)
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(x, y, width, HEADER_HEIGHT, 2, 2, 'F');
 
   // Pequeno indicador visual (retângulo azul)
   doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
   doc.rect(x + 5, y + 3.5, 4, 5, 'F');
 
-  // Texto do título
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  // Texto do título (escuro)
+  doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text(title, x + 13, y + 8);
@@ -294,8 +295,8 @@ const drawPageBackground = (
   pageWidth: number,
   pageHeight: number
 ) => {
-  // Fundo escuro premium
-  doc.setFillColor(premiumDark.r, premiumDark.g, premiumDark.b);
+  // Fundo branco
+  doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
 };
 
@@ -311,7 +312,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   // Carregar imagens
   const [logoData, vehicleBase64] = await Promise.all([
-    loadImageWithDimensions('/logos/logo-full-light.png'),
+    loadImageWithDimensions('/logos/logo-full-dark.png'),
     loadImageAsBase64('/vehicle-silhouette.png'),
   ]);
   const logoBase64 = logoData?.base64 || null;
@@ -372,7 +373,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   y = headerHeight + SECTION_GAP;
 
   // ============= BARRA DE VALIDADE =============
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(margin, y, contentWidth, 14, 3, 3, 'F');
 
   const dataValidade = new Date(cotacao.created_at);
@@ -535,7 +536,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     
     // Fundo alternado sutil - alinhado com a linha
     if (index % 2 === 0) {
-      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
       doc.rect(cobCol1X, lineTop, colWidth, coberturaLineHeight, 'F');
     }
     
@@ -552,7 +553,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     const textY = lineTop + coberturaLineHeight / 2 + 2; // Centralizado verticalmente
     
     if (index % 2 === 0) {
-      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
       doc.rect(cobCol2X - 4, lineTop, colWidth + 4, coberturaLineHeight, 'F');
     }
     
@@ -588,11 +589,11 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   y += 24;
 
   // Taxa de adesão
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text('Taxa de Adesão (pagamento único)', labelCol, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(cotacao.valor_adesao), valueCol, y, { align: 'right' });
 
@@ -618,13 +619,13 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   y += 30;
 
   // ============= MENSAGEM INSTITUCIONAL =============
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(margin, y, contentWidth, 26, 3, 3, 'F');
   
   // Borda gradiente no topo
   drawGradientRect(doc, margin, y, contentWidth, 2, glowBlue, brandRed, 40);
   
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'italic');
   doc.text('Será um prazer ter você como nosso associado.', pageWidth / 2, y + 10, { align: 'center' });
@@ -850,7 +851,7 @@ const desenharCardPlanoExpandido = (
   currentY += 4;
   
   // 5. Rodapé: Filiação (taxa de adesão)
-  doc.setDrawColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
+  doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
   doc.line(x + padding, currentY - 4, x + width - padding, currentY - 4);
   
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
@@ -903,7 +904,7 @@ const desenharPaginaCapa = (
   y = headerHeight + 5;
 
   // Barra de validade compacta
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'F');
 
   const dataValidade = new Date(cotacao.created_at);
@@ -920,7 +921,7 @@ const desenharPaginaCapa = (
   y += 14;
 
   // Dados do solicitante e veículo compactos
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'F');
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
@@ -1040,7 +1041,7 @@ const desenharPaginaDetalhesPlano = (
   drawGradientRect(doc, 0, headerHeight - 2, pageWidth, 2, glowBlue, brandRed, 60);
 
   // Badge plano X de Y
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(margin, 8, 55, 12, 2, 2, 'F');
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(7);
@@ -1107,7 +1108,7 @@ const desenharPaginaDetalhesPlano = (
   if (plano.anoMinimo) {
     const anoText = `> ${plano.anoMinimo}`;
     const anoWidth = anoText.length * 3.5 + 10;
-    doc.setFillColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
+    doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
     doc.roundedRect(tagX, cardY - 4, anoWidth, 11, 2, 2, 'F');
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(8);
@@ -1186,7 +1187,7 @@ const desenharPaginaDetalhesPlano = (
     const textY = lineY + 6;
     
     if (index % 2 === 0) {
-      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
       doc.rect(col1X, lineY, colWidth, coberturaLineHeight, 'F');
     }
     
@@ -1202,7 +1203,7 @@ const desenharPaginaDetalhesPlano = (
     const textY = lineY + 6;
     
     if (index % 2 === 0) {
-      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
       doc.rect(col2X, lineY, colWidth, coberturaLineHeight, 'F');
     }
     
@@ -1229,7 +1230,7 @@ const desenharPaginaDetalhesPlano = (
       const textY = lineY + 6;
       
       if (index % 2 === 0) {
-        doc.setFillColor(30, 30, 40);
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
         doc.rect(col1X, lineY, colWidth, coberturaLineHeight, 'F');
       }
       
@@ -1247,7 +1248,7 @@ const desenharPaginaDetalhesPlano = (
       const textY = lineY + 6;
       
       if (index % 2 === 0) {
-        doc.setFillColor(30, 30, 40);
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
         doc.rect(col2X, lineY, colWidth, coberturaLineHeight, 'F');
       }
       
@@ -1282,11 +1283,11 @@ const desenharPaginaDetalhesPlano = (
   y += 26;
 
   // Taxa de adesão
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.text('Taxa de Adesão (pagamento único)', labelCol, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(plano.valorAdesao), valueCol, y, { align: 'right' });
   y += 14;
@@ -1314,7 +1315,7 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   const margin = 15;
 
   // Carregar logo com dimensões
-  const logoData = await loadImageWithDimensions('/logos/logo-full-light.png');
+  const logoData = await loadImageWithDimensions('/logos/logo-full-dark.png');
   const logoBase64 = logoData?.base64 || null;
   const logoAspect = logoData ? logoData.naturalWidth / logoData.naturalHeight : 1;
 
