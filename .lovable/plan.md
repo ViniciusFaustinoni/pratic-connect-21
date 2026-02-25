@@ -1,64 +1,74 @@
 
+Objetivo confirmado: eliminar de vez a assinatura duplicada no Termo de Filiação (e padronizar para os demais termos), mantendo somente:
 
-# Remover blocos de assinatura duplicados dos termos (Autentique ja inclui)
+- título “ASSINATURA”
+- data/local com espaçamento maior
+- sem bloco manual “associado / PraticCar”
 
-## Problema
+Diagnóstico do que está acontecendo hoje (com base no código e dados atuais):
+1) O fluxo de filiação por token (`autentique-create-by-token`) ainda adiciona a seção de assinatura sempre, sem validação de conteúdo já assinado.
+2) O template padrão ativo de filiação no banco (`documento_templates`, código `AF1`) contém trechos finais com assinatura manual (ex.: linha com `{{associado.nome}} - CPF: {{associado.cpf}}`), então ele já leva uma “área de assinatura” embutida.
+3) Resultado: o conteúdo do template + assinatura padrão adicionada pela função = 2 áreas.
+4) Além disso, no fallback hardcoded de filiação (`_shared/termo-afiliacao-template.ts`) ainda existe assinatura no aditivo de rastreador, o que pode gerar duplicidade em cenários de fallback.
 
-Todos os termos gerados pelo sistema incluem um bloco "ASSINATURA" com linhas para assinatura do associado e da PraticCar. Porem, a Autentique ja adiciona automaticamente sua propria pagina de assinaturas. Resultado: o documento final fica com assinatura duplicada.
+Implementação proposta (ajuste definitivo, sem depender do template “estar limpo”):
+1) Centralizar detecção/limpeza de assinatura manual em utilitário compartilhado
+- Arquivo: `supabase/functions/_shared/template-utils.ts`
+- Adicionar helper para:
+  - detectar se conteúdo já contém área/linhas de assinatura manual (classes `signature-*`, título “ASSINATURA”, linhas com nome+CPF em bloco de assinatura, etc.)
+  - limpar blocos manuais conhecidos quando necessário (especialmente blocos que representam assinatura de associado/empresa)
+- Manter uma única função para “decidir se injeta assinatura padrão” para evitar divergência entre edge functions.
 
-## O que manter
+2) Corrigir filiação por token (principal ponto do bug reportado)
+- Arquivo: `supabase/functions/autentique-create-by-token/index.ts`
+- Hoje ele injeta assinatura padrão sem checagem.
+- Ajustar para usar a mesma regra robusta do utilitário compartilhado:
+  - primeiro sanitiza conteúdo manual duplicado
+  - depois só injeta assinatura padrão se realmente não existir assinatura válida no documento final
+- Também aplicar a checagem considerando conteúdo + aditivos (não só um trecho isolado).
 
-- O titulo "ASSINATURA" 
-- A data/local (com espacamento maior acima)
+3) Alinhar filiação normal (sem token) para a mesma regra robusta
+- Arquivo: `supabase/functions/autentique-create/index.ts`
+- A lógica atual checa apenas alguns sinais (`signature-block`, `signature-line`, `ASSINATURA`), o que é insuficiente para casos como “nome + CPF”.
+- Substituir por checagem compartilhada mais completa + sanitização.
 
-## O que remover
+4) Eliminar duplicidade no fallback hardcoded de filiação
+- Arquivo: `supabase/functions/_shared/termo-afiliacao-template.ts`
+- Remover a área de assinatura do “Termo de Responsabilidade - Equipamento Rastreador” (aditivo), deixando assinatura apenas no fechamento principal.
+- Assim, mesmo em fallback, permanece 1 única área de assinatura.
 
-- Os blocos `signature-block` com linhas de assinatura (associado + PraticCar)
+5) Aplicar a mesma política aos demais termos (padronização pedida)
+- Arquivos:
+  - `supabase/functions/autentique-cancelamento-create/index.ts`
+  - `supabase/functions/autentique-evento-create/index.ts`
+  - `supabase/functions/autentique-os-saida-create/index.ts`
+  - `supabase/functions/autentique-vistoria-create/index.ts`
+- Padronizar fluxo:
+  - sanitiza assinatura manual duplicada do conteúdo dinâmico
+  - injeta assinatura padrão somente quando ausente
+- Isso previne regressão caso algum template do banco volte a trazer bloco manual.
 
-## Arquivos afetados
+6) Validação funcional (end-to-end)
+- Cenários de teste obrigatórios:
+  1. Filiação via fluxo de cotação/vendas (interno)
+  2. Filiação via link público/token
+  3. Filiação com e sem aditivos aplicáveis
+  4. Cancelamento, Evento, OS Saída e Vistoria com template dinâmico
+- Critério de aceite em todos:
+  - exatamente 1 área de assinatura visual
+  - sem linhas “associado/praticcar” manuais
+  - mantendo título + local/data com espaçamento maior
 
-### 1. `supabase/functions/_shared/template-utils.ts` (linhas 547-578)
-Funcao `generateSecaoAssinatura`: remover os dois `signature-block` divs, manter apenas titulo e data com espacamento.
+7) Deploy após ajustes
+- Deploy das functions alteradas:
+  - `autentique-create`
+  - `autentique-create-by-token`
+  - `autentique-cancelamento-create`
+  - `autentique-evento-create`
+  - `autentique-os-saida-create`
+  - `autentique-vistoria-create`
+- `_shared` entra como dependência das funções deployadas.
 
-### 2. `supabase/functions/_shared/termo-afiliacao-template.ts` (linhas 754-784)
-Funcao `generateSecao8`: mesma logica -- remover blocos de assinatura, manter titulo e data.
-
-### 3. `supabase/functions/_shared/termo-afiliacao-template.ts` (linhas 986-1000)
-Aditivo de rastreador: remover o `signature-block` do comodatario.
-
-### 4. `supabase/functions/autentique-cancelamento-create/index.ts` (linhas 143-149 e 196-202)
-Dois blocos de assinatura (template dinamico e hardcoded): remover signature-blocks, manter data.
-
-### 5. `supabase/functions/autentique-evento-create/index.ts` (linhas 243-262 e 352-371)
-Dois blocos (template dinamico e fallback): remover signature-blocks, manter data.
-
-### 6. `supabase/functions/autentique-os-saida-create/index.ts` (linhas 229-248 e 344-363)
-Dois blocos (template dinamico e fallback): remover signature-blocks, manter data.
-
-### 7. `supabase/functions/autentique-vistoria-create/index.ts` (linhas 211-218)
-Remover bloco de assinatura do proprietario (Autentique cuida disso).
-
-## Novo formato padrao da area de assinatura
-
-```html
-<div class="signature-area">
-  <h2 class="section-title">ASSINATURA</h2>
-  <br><br>
-  <p class="signature-local-data">
-    LOCAL, DATA
-  </p>
-</div>
-```
-
-O espacamento maior entre o titulo e a data (com `<br><br>`) garante separacao visual.
-
-## Deploy
-
-Apos as alteracoes, fazer deploy de todas as edge functions modificadas:
-- `autentique-cancelamento-create`
-- `autentique-evento-create`
-- `autentique-os-saida-create`
-- `autentique-vistoria-create`
-
-As funcoes `_shared` sao deployadas automaticamente como dependencias.
-
+Risco/mitigação
+- Risco: remover assinatura em excesso por regex agressiva.
+- Mitigação: sanitização focada em padrões de bloco de assinatura (não em qualquer ocorrência de “CPF” no corpo), e validação visual em todos os fluxos antes de fechar.
