@@ -139,6 +139,12 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
     );
   }
   
+  // Remover bloco "Serviços: {{plano.descricao}}" que não deveria existir no termo
+  resultado = resultado.replace(
+    /<p>\s*<strong>\s*Serviços\s*:\s*<\/strong>\s*<\/p>\s*<p>[^<]*<\/p>/gi,
+    ''
+  );
+
   // Limpar variáveis residuais que não foram mapeadas
   resultado = limparVariaveisNaoSubstituidas(resultado);
   
