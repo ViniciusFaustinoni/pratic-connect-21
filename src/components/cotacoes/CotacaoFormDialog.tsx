@@ -995,6 +995,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -1922,7 +1923,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         </Form>
       </DialogContent>
 
-      {/* Dialog de Confirmação de Taxa de Filiação - FORA do Dialog principal para evitar conflito de portais */}
+    </Dialog>
+
+      {/* Dialog de Confirmação de Taxa de Filiação - FORA do Dialog principal */}
       {showConfirmDialog && (
         <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
           <AlertDialogContent>
@@ -1971,6 +1974,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           info={placaDuplicadaInfo}
         />
       )}
-    </Dialog>
+    </>
   );
 }
