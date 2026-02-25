@@ -44,6 +44,10 @@ export interface VeiculoData {
   alienado?: boolean;
   financeira?: string;
   procedencia?: string;
+  cambio?: string;
+  portas?: number;
+  uso_aplicativo?: boolean;
+  leilao?: boolean;
 }
 
 export interface PlanoData {
@@ -87,6 +91,7 @@ export interface TermoAfiliacaoData {
   plano: PlanoData;
   contrato: ContratoData;
   empresa: EmpresaData;
+  consultor?: { nome: string };
 }
 
 // ============= FORMATADORES =============
@@ -222,12 +227,35 @@ export const gerarNumeroTermo = (numeroContrato: string): string => {
 /**
  * Mapeia dados do contrato/cotação para a interface do template
  */
+// ============= INFERÊNCIA =============
+
+function inferirCambio(modelo: string | null | undefined): string {
+  if (!modelo) return '—';
+  const m = modelo.toUpperCase();
+  if (/\b(MANUAL|MECANICO|MECÂNICO|MT)\b/.test(m)) return 'Manual';
+  if (/\b(AUTOMATICO|AUTOMÁTICO|CVT|AT\b|TIPTRONIC|POWERSHIFT|DSG|S.TRONIC)/.test(m)) return 'Automático';
+  return '—';
+}
+
+function inferirPortas(categoria: string | null | undefined): number {
+  if (!categoria) return 4;
+  const c = categoria.toLowerCase();
+  if (c.includes('moto') || c.includes('motocicleta')) return 0;
+  return 4;
+}
+
+function ehLeilao(categoria: string | null | undefined): boolean {
+  if (!categoria) return false;
+  return categoria.toLowerCase().includes('leilão') || categoria.toLowerCase().includes('leilao');
+}
+
 export function mapearDadosParaTemplate(
   contrato: any,
   plano: any,
   empresa: any,
   lead?: any,
-  associado?: any
+  associado?: any,
+  vendedorNome?: string | null
 ): TermoAfiliacaoData {
   // Usar dados do associado se existir, senão do lead
   const cliente = associado || lead || {};
@@ -268,11 +296,15 @@ export function mapearDadosParaTemplate(
       combustivel: contrato.veiculo_combustivel || veiculo.veiculo_combustivel || "",
       categoria: contrato.veiculo_categoria || veiculo.veiculo_categoria || "Automóvel",
       tipo_uso: contrato.veiculo_tipo_uso || veiculo.veiculo_tipo_uso || "Particular",
-      codigo_fipe: veiculo.codigo_fipe || "",
+      codigo_fipe: contrato.codigo_fipe || veiculo.codigo_fipe || "",
       valor_fipe: contrato.veiculo_valor_fipe || veiculo.veiculo_fipe || 0,
       alienado: contrato.veiculo_alienado || veiculo.veiculo_alienado || false,
       financeira: contrato.veiculo_financeira || veiculo.veiculo_financeira || "",
       procedencia: contrato.veiculo_procedencia || veiculo.veiculo_procedencia || "Usado de particular",
+      cambio: inferirCambio(contrato.veiculo_modelo || veiculo.veiculo_modelo),
+      portas: inferirPortas(contrato.veiculo_categoria || veiculo.veiculo_categoria),
+      uso_aplicativo: contrato.uso_aplicativo || false,
+      leilao: ehLeilao(contrato.veiculo_categoria || veiculo.veiculo_categoria),
     },
     plano: {
       nome: plano?.nome || "Plano Padrão",
@@ -306,6 +338,7 @@ export function mapearDadosParaTemplate(
       email: empresa?.empresa_email || "",
       lgpd_email: empresa?.empresa_lgpd_email || "lgpd@praticcar.com.br",
     },
+    consultor: vendedorNome ? { nome: vendedorNome } : undefined,
   };
 }
 

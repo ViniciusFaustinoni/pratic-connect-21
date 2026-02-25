@@ -7035,6 +7035,7 @@ export type Database = {
           cliente_telefone: string | null
           cliente_telefone_secundario: string | null
           cliente_uf: string | null
+          codigo_fipe: string | null
           cotacao_id: string | null
           cotacao_token_publico: string | null
           created_at: string
@@ -7063,6 +7064,7 @@ export type Database = {
           tipo_venda: string | null
           tipo_vistoria: string | null
           updated_at: string
+          uso_aplicativo: boolean | null
           validade_link: string | null
           valor_adesao: number
           valor_mensal: number
@@ -7132,6 +7134,7 @@ export type Database = {
           cliente_telefone?: string | null
           cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
+          codigo_fipe?: string | null
           cotacao_id?: string | null
           cotacao_token_publico?: string | null
           created_at?: string
@@ -7160,6 +7163,7 @@ export type Database = {
           tipo_venda?: string | null
           tipo_vistoria?: string | null
           updated_at?: string
+          uso_aplicativo?: boolean | null
           validade_link?: string | null
           valor_adesao: number
           valor_mensal: number
@@ -7229,6 +7233,7 @@ export type Database = {
           cliente_telefone?: string | null
           cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
+          codigo_fipe?: string | null
           cotacao_id?: string | null
           cotacao_token_publico?: string | null
           created_at?: string
@@ -7257,6 +7262,7 @@ export type Database = {
           tipo_venda?: string | null
           tipo_vistoria?: string | null
           updated_at?: string
+          uso_aplicativo?: boolean | null
           validade_link?: string | null
           valor_adesao?: number
           valor_mensal?: number

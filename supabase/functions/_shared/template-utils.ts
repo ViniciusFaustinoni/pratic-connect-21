@@ -76,6 +76,14 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'veiculo.alienado': dados.veiculo.alienado ? 'Sim' : 'Não',
     'veiculo.financeira': dados.veiculo.financeira || '—',
     'veiculo.procedencia': dados.veiculo.procedencia || 'Usado de particular',
+    'veiculo.cambio': dados.veiculo.cambio || '—',
+    'veiculo.portas': String(dados.veiculo.portas ?? 4),
+    'veiculo.leilao': dados.veiculo.leilao ? 'SIM' : 'NÃO',
+    'veiculo.uso_aplicativo': dados.veiculo.uso_aplicativo ? 'SIM' : 'NÃO',
+    'veiculo.valor_protegido': formatCurrency(dados.veiculo.valor_fipe),
+    
+    // Consultor
+    'consultor.nome': dados.consultor?.nome || '—',
     
     // Plano
     'plano.nome': dados.plano.nome || '—',
