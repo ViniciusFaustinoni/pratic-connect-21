@@ -1,51 +1,51 @@
 
 
-# Alterar Trajeto: de "4h antes do evento" para "1h antes da comunicacao"
+# Fix: Erro ao abrir aba "Historico" nos detalhes do rastreador
 
-## Resumo
+## Problema
 
-Substituir a referencia temporal do trajeto exibido ao analista. Em vez de mostrar o percurso do veiculo nas 4 horas anteriores a data da ocorrencia (`data_ocorrencia`), mostrar o percurso de 1 hora antes da comunicacao ate o momento da comunicacao (`etapa1_completada_em` do link do evento).
+Ao clicar na aba "Historico" no drawer de detalhes do rastreador, a pagina quebra com o erro:
 
-## Logica
+```
+checklistItems.filter is not a function
+```
 
-- **Antes**: `dataRef = sinistro.data_ocorrencia`, janela = 4h antes
-- **Depois**: `dataRef = link.etapa1_completada_em` (momento em que o associado completou a comunicacao), janela = 1h antes
-- Se `etapa1_completada_em` nao existir (comunicacao ainda nao concluida), usar `link.created_at` como fallback
+O campo `checklist_manutencao` vem do banco como string JSON (nao como array), entao `.filter()` falha. O mesmo pode ocorrer com `fotos_manutencao`.
 
-## Alteracoes
+## Solucao
 
-### 1. `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx`
+No componente `HistoricoCompletoRastreador.tsx`, na funcao `ManutencaoCampoItem`, garantir parsing seguro dos campos JSON:
 
-Alterar o bloco do trajeto (linhas 279-291):
+**Arquivo:** `src/components/rastreadores/HistoricoCompletoRastreador.tsx`
 
-- Titulo: de "Trajeto do Veiculo (4h antes)" para "Trajeto do Veiculo (1h antes da comunicacao)"
-- Props do `TrajetoLocalCard`:
-  - `dataOcorrencia` passa a receber `link?.etapa1_completada_em || link?.created_at || sinistro.data_ocorrencia`
-  - `horasAnteriores` muda de `4` para `1`
+Alterar as linhas 388-391:
 
-### 2. `src/pages/eventos/SinistroAnalise.tsx`
+```typescript
+// ANTES
+const checklistItems = data.checklist_manutencao || [];
+const checklistOk = checklistItems.filter((i) => i.status === 'ok').length;
+const fotos: FotoManutencao[] = data.fotos_manutencao || [];
 
-Alterar o bloco do trajeto (linhas 897-911):
+// DEPOIS
+const rawChecklist = data.checklist_manutencao;
+const checklistItems: ChecklistItem[] = Array.isArray(rawChecklist)
+  ? rawChecklist
+  : typeof rawChecklist === 'string'
+    ? (() => { try { const p = JSON.parse(rawChecklist); return Array.isArray(p) ? p : []; } catch { return []; } })()
+    : [];
+const checklistOk = checklistItems.filter((i) => i.status === 'ok').length;
 
-- Titulo: de "Trajeto do Veiculo (4h antes)" para "Trajeto do Veiculo (1h antes da comunicacao)"
-- Props do `TrajetoLocalCard`:
-  - `dataOcorrencia` passa a receber `linkEvento?.etapa1_completada_em || linkEvento?.created_at || sinistro.data_ocorrencia`
-  - `horasAnteriores` muda de `4` para `1`
-
-### 3. `src/components/sinistros/TrajetoLocalCard.tsx`
-
-Alterar a mensagem de fallback (linha 140):
-
-- De "Sem dados de posicao nas ultimas {horasAnteriores}h antes do evento"
-- Para "Sem dados de posicao na 1h anterior a comunicacao do evento"
-
-Nenhuma alteracao estrutural no componente -- ele ja suporta `dataOcorrencia` como data de referencia e `horasAnteriores` como janela.
+const rawFotos = data.fotos_manutencao;
+const fotos: FotoManutencao[] = Array.isArray(rawFotos)
+  ? rawFotos
+  : typeof rawFotos === 'string'
+    ? (() => { try { const p = JSON.parse(rawFotos); return Array.isArray(p) ? p : []; } catch { return []; } })()
+    : [];
+```
 
 ## Arquivos
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/pages/analista-eventos/EventoAnaliseDetalhe.tsx` | Titulo + props do TrajetoLocalCard |
-| `src/pages/eventos/SinistroAnalise.tsx` | Titulo + props do TrajetoLocalCard |
-| `src/components/sinistros/TrajetoLocalCard.tsx` | Mensagem de fallback |
+| `src/components/rastreadores/HistoricoCompletoRastreador.tsx` | Parsing seguro de `checklist_manutencao` e `fotos_manutencao` |
 
