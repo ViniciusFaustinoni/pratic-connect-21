@@ -1,44 +1,34 @@
 
-Objetivo: corrigir imediatamente a logo do PDF de cotação para aparecer na cor escura (visível no fundo claro), sem alterar layout/cor dos demais blocos.
 
-Contexto confirmado na base atual:
-- O PDF (simples e comparativo) está carregando `'/logos/logo-full-dark.png'` em `src/lib/gerarPdfCotacao.ts` (2 pontos).
-- Validação visual dos arquivos públicos mostrou:
-  - `logo-full-dark.png` = versão com texto claro (fica “branca” em fundo claro).
-  - `logo-full-light.png` = versão com texto escuro (a “logo escura/original” que você quer no PDF claro).
-- Portanto, hoje está invertido para o resultado esperado no PDF.
+# Reformular Stats Bar da Página de Cotações
 
-Implementação proposta (rápida e direta):
-1) Ajustar a logo no PDF simples
-- Arquivo: `src/lib/gerarPdfCotacao.ts`
-- Trocar em `gerarPdfCotacao(...)`:
-  - de `loadImageWithDimensions('/logos/logo-full-dark.png')`
-  - para `loadImageWithDimensions('/logos/logo-full-light.png')`
+## Objetivo
+Substituir os 4 KPIs atuais (Total, Enviadas, Aceitas, Conversão) por contadores dos 9 status reais do fluxo de cotação, conforme solicitado.
 
-2) Ajustar a logo no PDF comparativo
-- Mesmo arquivo
-- Trocar em `gerarPdfCotacaoComparativa(...)`:
-  - de `loadImageWithDimensions('/logos/logo-full-dark.png')`
-  - para `loadImageWithDimensions('/logos/logo-full-light.png')`
+## Status a exibir
+1. **Rascunho** - cotações com `status = 'rascunho'`
+2. **Link Enviado** - cotações com `status = 'enviada'`
+3. **Escolhendo Plano** - cotações com `status_contratacao = 'escolhendo_plano'` ou `'plano_escolhido'`
+4. **Enviando Documentos** - cotações com `status_contratacao = 'enviando_documentos'` ou `'dados_preenchidos'`
+5. **Assinando Contrato** - cotações com `status_contratacao = 'assinando_contrato'`
+6. **Pagando Taxa** - cotações com `status_contratacao = 'pagando_taxa'`
+7. **Agendando Vistoria** - cotações com `status_contratacao = 'agendando_vistoria'`
+8. **Em Análise** - cotações com `status_contratacao = 'em_analise'`
+9. **Fechado** - cotações com `status = 'aceita'` ou `status_contratacao = 'concluido'`
 
-3) (Opcional recomendado para evitar nova confusão de nomes)
-- Substituir string literal por constante semântica local, por exemplo:
-  - `const LOGO_FOR_LIGHT_BG = '/logos/logo-full-light.png';`
-- Usar essa constante nos 2 pontos.
-- Não muda comportamento, só reduz risco de regressão futura.
+## Detalhes Técnicos
 
-Validação de aceite (fim a fim):
-1. Entrar como `admin@teste.com` (senha igual ao e-mail).
-2. Ir em `/vendas/cotacoes`.
-3. Abrir uma cotação existente e baixar PDF.
-4. Confirmar:
-   - Logo aparece em cor escura/original.
-   - Fundo claro continua no topo/rodapé e área de planos (como já definido).
-   - Nenhuma outra cor/estrutura do PDF foi alterada.
+### Arquivo: `src/pages/vendas/Cotacoes.tsx`
 
-Risco e impacto:
-- Impacto baixo (apenas troca de asset path em 2 linhas).
-- Sem alteração em dados, regras de negócio ou banco.
-- Sem impacto em telas web; somente geração do PDF.
+1. **Reformular o objeto `stats`** (linhas 552-564): Calcular contagem para cada um dos 9 status, usando os campos `status` e `status_contratacao` das cotações já carregadas.
 
-Após sua aprovação, aplico essa correção imediatamente.
+2. **Redesenhar a Stats Bar** (linhas 606-648): Trocar o grid 2x4 por um layout horizontal com scroll (ou grid responsivo) mostrando 9 mini-cards compactos, cada um com:
+   - Icone colorido representativo
+   - Contagem numérica em destaque
+   - Label do status abaixo
+
+3. **Layout responsivo**: Usar `flex overflow-x-auto` para permitir scroll horizontal em mobile, mantendo todos os 9 status visíveis em desktop com grid ou flex-wrap.
+
+4. **Cores por status**: Cada status terá uma cor distinta (cinza para Rascunho, azul para Link Enviado, indigo para Escolhendo Plano, cyan para Enviando Docs, purple para Assinando Contrato, amber para Pagando Taxa, orange para Agendando Vistoria, yellow para Em Análise, green para Fechado).
+
+Nenhuma alteração em banco de dados ou outros arquivos é necessária -- os dados de `status` e `status_contratacao` já existem nas cotações carregadas pelo hook `useCotacoes`.
