@@ -76,24 +76,30 @@ export interface CotacaoComparativaParaPdf {
   } | null;
 }
 
-// ============= PALETA DE CORES PREMIUM =============
+// ============= PALETA DE CORES PREMIUM (TEMA CLARO) =============
 // Cores principais PRATIC
 const brandBlue = { r: 20, g: 55, b: 110 };       // Azul escuro PRATIC
 const brandRed = { r: 200, g: 30, b: 65 };        // Vermelho PRATIC
 
-// Cores Premium (tema escuro inspirado na área do cliente)
-const premiumDark = { r: 15, g: 23, b: 42 };      // slate-900
-const premiumCard = { r: 30, g: 41, b: 59 };      // slate-800
-const premiumCardLight = { r: 51, g: 65, b: 85 }; // slate-700
+// Cores de fundo (tema claro)
+const premiumDark = { r: 255, g: 255, b: 255 };    // Branco (fundo da página)
+const premiumCard = { r: 241, g: 245, b: 249 };    // slate-100 (fundo de cards/barras)
+const premiumCardLight = { r: 226, g: 232, b: 240 }; // slate-200 (bordas)
 const glowBlue = { r: 59, g: 130, b: 246 };       // blue-500
 const glowRed = { r: 239, g: 68, b: 68 };         // red-500
 
-// Cores de texto e UI
+// Cores de texto e UI (tema claro)
 const textWhite = { r: 255, g: 255, b: 255 };
-const textMuted = { r: 148, g: 163, b: 184 };     // slate-400
-const textLight = { r: 226, g: 232, b: 240 };     // slate-200
-const successGreen = { r: 34, g: 197, b: 94 };    // green-500
-const warningYellow = { r: 234, g: 179, b: 8 };   // yellow-500
+const textMuted = { r: 100, g: 116, b: 139 };     // slate-500
+const textLight = { r: 30, g: 41, b: 59 };        // slate-800 (texto principal escuro)
+const successGreen = { r: 22, g: 163, b: 74 };    // green-600 (mais escuro p/ contraste em fundo claro)
+const warningYellow = { r: 202, g: 138, b: 4 };   // yellow-600 (mais escuro p/ contraste)
+
+// Cores adicionais para tema claro
+const sectionHeaderBg = { r: 239, g: 246, b: 255 }; // blue-50
+const altRowBg = { r: 248, g: 250, b: 252 };        // slate-50
+const cardBorder = { r: 226, g: 232, b: 240 };      // slate-200
+const naoIncluiBg = { r: 254, g: 242, b: 242 };     // red-50
 
 // ============= CONSTANTES DE ESPAÇAMENTO (REDUZIDAS) =============
 const SECTION_GAP = 8;       // Espaço entre seções principais (era 12)
@@ -221,7 +227,7 @@ const drawCheckIndicator = (doc: jsPDF, x: number, y: number) => {
   doc.circle(x, y - 2, 1.5, 'F');
 };
 
-// ============= Função para desenhar card premium escuro =============
+// ============= Função para desenhar card premium (tema claro) =============
 
 const drawPremiumCard = (
   doc: jsPDF,
@@ -237,18 +243,18 @@ const drawPremiumCard = (
 ) => {
   const { isRecommended = false, borderColor, hasGlow = false } = options;
 
-  // Fundo do card (slate-900)
-  doc.setFillColor(premiumDark.r, premiumDark.g, premiumDark.b);
+  // Fundo do card (branco)
+  doc.setFillColor(255, 255, 255);
   doc.roundedRect(x, y, width, height, 4, 4, 'F');
 
-  // Efeito de "glow" com borda mais grossa para recomendado
+  // Borda colorida para recomendado, cinza para padrão
   if (isRecommended || hasGlow) {
-    const glowColor = isRecommended ? glowRed : glowBlue;
+    const glowColor = isRecommended ? brandBlue : glowBlue;
     doc.setDrawColor(glowColor.r, glowColor.g, glowColor.b);
     doc.setLineWidth(2);
     doc.roundedRect(x, y, width, height, 4, 4, 'S');
   } else {
-    const border = borderColor || premiumCardLight;
+    const border = borderColor || cardBorder;
     doc.setDrawColor(border.r, border.g, border.b);
     doc.setLineWidth(0.5);
     doc.roundedRect(x, y, width, height, 4, 4, 'S');
@@ -264,16 +270,16 @@ const drawPremiumSectionHeader = (
   width: number,
   title: string
 ) => {
-  // Fundo do header da seção
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  // Fundo azul claro
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(x, y, width, HEADER_HEIGHT, 2, 2, 'F');
 
   // Pequeno indicador visual (retângulo azul)
   doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
   doc.rect(x + 5, y + 3.5, 4, 5, 'F');
 
-  // Texto do título
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  // Texto do título (escuro)
+  doc.setTextColor(30, 41, 59);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text(title, x + 13, y + 8);
@@ -304,12 +310,14 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
 
-  // Carregar imagens
-  const [logoData, vehicleBase64] = await Promise.all([
+  // Carregar imagens (light para header azul, dark para footer claro)
+  const [logoData, logoDarkData, vehicleBase64] = await Promise.all([
     loadImageWithDimensions('/logos/logo-full-light.png'),
+    loadImageWithDimensions('/logos/logo-full-dark.png'),
     loadImageAsBase64('/vehicle-silhouette.png'),
   ]);
   const logoBase64 = logoData?.base64 || null;
+  const logoDarkBase64 = logoDarkData?.base64 || null;
   const logoAspect = logoData ? logoData.naturalWidth / logoData.naturalHeight : 1;
 
   // Função auxiliar para verificar se precisa nova página (com background persistente)
@@ -366,6 +374,9 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   // ============= BARRA DE VALIDADE =============
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
   doc.roundedRect(margin, y, contentWidth, 14, 3, 3, 'F');
+  doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, y, contentWidth, 14, 3, 3, 'S');
 
   const dataValidade = new Date(cotacao.created_at);
   dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
@@ -466,14 +477,14 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   const planoNome = cotacao.planos?.nome || 'Plano Selecionado';
   const cardHeight = 42;
 
-  // Card escuro com borda brilhante
+  // Card claro com borda destacada
   drawPremiumCard(doc, margin, y, contentWidth, cardHeight, { 
     isRecommended: true, 
     hasGlow: true 
   });
 
   // Nome do plano (truncado para evitar overflow)
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.text(truncateText(planoNome.toUpperCase(), 32), margin + 15, y + 16);
@@ -525,9 +536,9 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     const lineTop = startY + (index * coberturaLineHeight);
     const textY = lineTop + coberturaLineHeight / 2 + 2; // Centralizado verticalmente
     
-    // Fundo alternado sutil - alinhado com a linha
+    // Fundo alternado sutil
     if (index % 2 === 0) {
-      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.setFillColor(altRowBg.r, altRowBg.g, altRowBg.b);
       doc.rect(cobCol1X, lineTop, colWidth, coberturaLineHeight, 'F');
     }
     
@@ -544,7 +555,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     const textY = lineTop + coberturaLineHeight / 2 + 2; // Centralizado verticalmente
     
     if (index % 2 === 0) {
-      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.setFillColor(altRowBg.r, altRowBg.g, altRowBg.b);
       doc.rect(cobCol2X - 4, lineTop, colWidth + 4, coberturaLineHeight, 'F');
     }
     
@@ -610,19 +621,22 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   y += 30;
 
   // ============= MENSAGEM INSTITUCIONAL =============
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(margin, y, contentWidth, 26, 3, 3, 'F');
+  doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, y, contentWidth, 26, 3, 3, 'S');
   
   // Borda gradiente no topo
   drawGradientRect(doc, margin, y, contentWidth, 2, glowBlue, brandRed, 40);
   
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'italic');
   doc.text('Será um prazer ter você como nosso associado.', pageWidth / 2, y + 10, { align: 'center' });
   doc.text('Estaremos aqui para o que precisar.', pageWidth / 2, y + 17, { align: 'center' });
   
-  doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
+  doc.setTextColor(brandBlue.r, brandBlue.g, brandBlue.b);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('Conte com a Praticcar 💙❤️', pageWidth / 2, y + 24, { align: 'center' });
@@ -633,20 +647,20 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   // Linha gradiente superior do rodapé
   drawGradientRect(doc, margin, footerY - 6, contentWidth, 2, glowBlue, brandRed, 50);
 
-  // Fundo do rodapé
+  // Fundo do rodapé (cinza claro)
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
   doc.rect(0, footerY, pageWidth, 30, 'F');
 
-  // Logo pequeno no rodapé (proporcional)
+  // Logo pequeno no rodapé - usar logo escuro sobre fundo claro
   const logoFooterHeight = 14;
   const logoFooterWidth = logoFooterHeight * logoAspect;
-  if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', margin, footerY + 4, logoFooterWidth, logoFooterHeight);
+  if (logoDarkBase64 || logoBase64) {
+    doc.addImage((logoDarkBase64 || logoBase64)!, 'PNG', margin, footerY + 4, logoFooterWidth, logoFooterHeight);
   }
 
-  const footerTextX = logoBase64 ? margin + logoFooterWidth + 4 : margin;
+  const footerTextX = (logoDarkBase64 || logoBase64) ? margin + logoFooterWidth + 4 : margin;
 
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(brandBlue.r, brandBlue.g, brandBlue.b);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('PRATICCAR', footerTextX, footerY + 8);
@@ -686,7 +700,8 @@ const desenharRodapeCompacto = (
   paginaAtual: number,
   totalPaginas: number,
   isUltimaPagina: boolean = false,
-  logoAspect: number = 1
+  logoAspect: number = 1,
+  logoDarkBase64: string | null = null
 ) => {
   // Cor do WhatsApp
   const whatsappGreen = { r: 37, g: 211, b: 102 };
@@ -728,20 +743,21 @@ const desenharRodapeCompacto = (
   // Linha gradiente
   drawGradientRect(doc, margin, footerY - 4, pageWidth - margin * 2, 1.5, glowBlue, brandRed, 40);
 
-  // Fundo do rodapé
+  // Fundo do rodapé (cinza claro)
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
   doc.rect(0, footerY, pageWidth, 20, 'F');
 
-  // Logo pequeno (proporcional)
+  // Logo pequeno (dark para fundo claro)
+  const footerLogo = logoDarkBase64 || logoBase64;
   const logoSmallHeight = 12;
-  const logoSmallWidth = logoSmallHeight * (logoBase64 ? logoAspect : 1);
-  if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', margin, footerY + 3, logoSmallWidth, logoSmallHeight);
+  const logoSmallWidth = logoSmallHeight * (footerLogo ? logoAspect : 1);
+  if (footerLogo) {
+    doc.addImage(footerLogo, 'PNG', margin, footerY + 3, logoSmallWidth, logoSmallHeight);
   }
 
-  const footerTextX = logoBase64 ? margin + logoSmallWidth + 4 : margin;
+  const footerTextX = footerLogo ? margin + logoSmallWidth + 4 : margin;
 
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(brandBlue.r, brandBlue.g, brandBlue.b);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.text('PRATICCAR', footerTextX, footerY + 7);
@@ -866,7 +882,8 @@ const desenharPaginaCapa = (
   margin: number,
   totalPaginas: number,
   isUltimaPagina: boolean = false,
-  logoAspect: number = 1
+  logoAspect: number = 1,
+  logoDarkBase64: string | null = null
 ) => {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
@@ -896,6 +913,9 @@ const desenharPaginaCapa = (
   // Barra de validade compacta
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
   doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'F');
+  doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'S');
 
   const dataValidade = new Date(cotacao.created_at);
   dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
@@ -913,6 +933,9 @@ const desenharPaginaCapa = (
   // Dados do solicitante e veículo compactos
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
   doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'F');
+  doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'S');
 
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(7);
@@ -1000,7 +1023,7 @@ const desenharPaginaCapa = (
   }
 
   // Rodapé (se for única página, passa isUltimaPagina)
-  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas, isUltimaPagina, logoAspect);
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas, isUltimaPagina, logoAspect, logoDarkBase64);
 };
 
 // Função para desenhar página de detalhes de um plano
@@ -1016,7 +1039,8 @@ const desenharPaginaDetalhesPlano = (
   margin: number,
   paginaAtual: number,
   totalPaginas: number,
-  logoAspect: number = 1
+  logoAspect: number = 1,
+  logoDarkBase64: string | null = null
 ) => {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
@@ -1030,7 +1054,7 @@ const desenharPaginaDetalhesPlano = (
   drawGradientRect(doc, 0, headerHeight - 2, pageWidth, 2, glowBlue, brandRed, 60);
 
   // Badge plano X de Y
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(margin, 8, 55, 12, 2, 2, 'F');
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(7);
@@ -1061,7 +1085,7 @@ const desenharPaginaDetalhesPlano = (
   let cardY = y + 10;
 
   // Linha 1: Nome do plano + Badge adicional mensal
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.text(truncateText(plano.nome.toUpperCase(), 26), margin + 10, cardY);
@@ -1097,7 +1121,7 @@ const desenharPaginaDetalhesPlano = (
   if (plano.anoMinimo) {
     const anoText = `> ${plano.anoMinimo}`;
     const anoWidth = anoText.length * 3.5 + 10;
-    doc.setFillColor(premiumCardLight.r, premiumCardLight.g, premiumCardLight.b);
+    doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
     doc.roundedRect(tagX, cardY - 4, anoWidth, 11, 2, 2, 'F');
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(8);
@@ -1176,7 +1200,7 @@ const desenharPaginaDetalhesPlano = (
     const textY = lineY + 6;
     
     if (index % 2 === 0) {
-      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.setFillColor(altRowBg.r, altRowBg.g, altRowBg.b);
       doc.rect(col1X, lineY, colWidth, coberturaLineHeight, 'F');
     }
     
@@ -1192,7 +1216,7 @@ const desenharPaginaDetalhesPlano = (
     const textY = lineY + 6;
     
     if (index % 2 === 0) {
-      doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+      doc.setFillColor(altRowBg.r, altRowBg.g, altRowBg.b);
       doc.rect(col2X, lineY, colWidth, coberturaLineHeight, 'F');
     }
     
@@ -1219,7 +1243,7 @@ const desenharPaginaDetalhesPlano = (
       const textY = lineY + 6;
       
       if (index % 2 === 0) {
-        doc.setFillColor(30, 30, 40);
+        doc.setFillColor(naoIncluiBg.r, naoIncluiBg.g, naoIncluiBg.b);
         doc.rect(col1X, lineY, colWidth, coberturaLineHeight, 'F');
       }
       
@@ -1237,7 +1261,7 @@ const desenharPaginaDetalhesPlano = (
       const textY = lineY + 6;
       
       if (index % 2 === 0) {
-        doc.setFillColor(30, 30, 40);
+        doc.setFillColor(naoIncluiBg.r, naoIncluiBg.g, naoIncluiBg.b);
         doc.rect(col2X, lineY, colWidth, coberturaLineHeight, 'F');
       }
       
@@ -1293,7 +1317,7 @@ const desenharPaginaDetalhesPlano = (
   doc.text(formatCurrency(primeiroPagamento), valueCol, y + 14, { align: 'right' });
 
   // Rodapé
-  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas, false, logoAspect);
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas, false, logoAspect, logoDarkBase64);
 };
 
 
@@ -1303,9 +1327,13 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
 
-  // Carregar logo com dimensões
-  const logoData = await loadImageWithDimensions('/logos/logo-full-light.png');
+  // Carregar logos (light para header azul, dark para footer claro)
+  const [logoData, logoDarkData] = await Promise.all([
+    loadImageWithDimensions('/logos/logo-full-light.png'),
+    loadImageWithDimensions('/logos/logo-full-dark.png'),
+  ]);
   const logoBase64 = logoData?.base64 || null;
+  const logoDarkBase64 = logoDarkData?.base64 || null;
   const logoAspect = logoData ? logoData.naturalWidth / logoData.naturalHeight : 1;
 
   const numPlanos = cotacao.planosComparar.length;
@@ -1313,7 +1341,7 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   const totalPaginas = 1;
 
   // ============= PÁGINA 1: CAPA COM CARDS DOS PLANOS =============
-  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, true, logoAspect);
+  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, true, logoAspect, logoDarkBase64);
 
   // ============= DOWNLOAD =============
   const numeroLimpo = (cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '');
