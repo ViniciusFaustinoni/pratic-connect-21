@@ -69,6 +69,20 @@ const documentosEsperados = [
   { tipo: 'crlv' as const, label: 'CRLV do Veículo' },
 ];
 
+const MIME_TYPE_MAP: Record<string, string> = {
+  'jfif': 'image/jpeg',
+  'jpg': 'image/jpeg',
+  'jpeg': 'image/jpeg',
+  'png': 'image/png',
+  'webp': 'image/webp',
+  'bmp': 'image/bmp',
+  'gif': 'image/gif',
+  'heic': 'image/heic',
+  'tiff': 'image/tiff',
+  'tif': 'image/tiff',
+  'pdf': 'application/pdf',
+};
+
 export function UnifiedDocumentUploader({
   cotacaoId,
   contratoId,
@@ -148,15 +162,24 @@ export function UnifiedDocumentUploader({
       const sanitizedFileName = finalFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
       const filePath = `${entityId}/documentos/${timestamp}_${sanitizedFileName}`;
 
+      const fileExt = sanitizedFileName.split('.').pop()?.toLowerCase() || '';
+      const contentType = MIME_TYPE_MAP[fileExt] || file.type || 'application/octet-stream';
+
       const { data: uploadData, error: uploadError } = await supabaseClient.storage
         .from(bucketName)
         .upload(filePath, fileToUpload, {
           cacheControl: '3600',
           upsert: false,
+          contentType,
         });
 
       if (uploadError) {
-        console.error('Upload error:', uploadError);
+        console.error('Upload error:', uploadError, {
+          fileName: sanitizedFileName,
+          contentType,
+          fileSize: fileToUpload.size,
+          bucket: bucketName,
+        });
         throw new Error('Erro ao enviar arquivo para o storage.');
       }
 
