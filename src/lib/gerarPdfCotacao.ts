@@ -95,6 +95,11 @@ const textLight = { r: 226, g: 232, b: 240 };     // slate-200
 const successGreen = { r: 34, g: 197, b: 94 };    // green-500
 const warningYellow = { r: 234, g: 179, b: 8 };   // yellow-500
 
+// Cores claras para header/footer
+const headerFooterBg = { r: 245, g: 247, b: 250 };   // slate-50
+const textDark = { r: 30, g: 41, b: 59 };             // slate-800
+const textDarkMuted = { r: 100, g: 116, b: 139 };     // slate-500
+
 // ============= CONSTANTES DE ESPAÇAMENTO (REDUZIDAS) =============
 const SECTION_GAP = 8;       // Espaço entre seções principais (era 12)
 const INNER_GAP = 5;         // Espaço interno entre elementos (era 8)
@@ -321,8 +326,10 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
       drawPageBackground(doc, pageWidth, pageHeight);
       
       // Header compacto para páginas subsequentes
-      drawGradientRect(doc, 0, 0, pageWidth, 20, brandBlue, brandRed);
-      doc.setTextColor(255, 255, 255);
+      doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
+      doc.rect(0, 0, pageWidth, 20, 'F');
+      drawGradientRect(doc, 0, 17, pageWidth, 3, glowBlue, brandRed, 60);
+      doc.setTextColor(textDark.r, textDark.g, textDark.b);
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.text('PRATICCAR - Cotação de Proteção', pageWidth / 2, 13, { align: 'center' });
@@ -337,7 +344,8 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   // ============= HEADER PREMIUM COM GRADIENTE =============
   const headerHeight = 55;
   
-  drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, { r: 30, g: 70, b: 130 });
+  doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
   drawGradientRect(doc, 0, headerHeight - 3, pageWidth, 3, glowBlue, brandRed, 60);
 
   // Logo no header (proporcional)
@@ -348,13 +356,13 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   }
 
   // Texto do header
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
   const titleX = logoBase64 ? margin + logoHeaderWidth + 6 : margin;
   doc.text('PRATICCAR', titleX, 26);
 
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.text('Proteção Veicular', titleX, 36);
@@ -633,8 +641,8 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   // Linha gradiente superior do rodapé
   drawGradientRect(doc, margin, footerY - 6, contentWidth, 2, glowBlue, brandRed, 50);
 
-  // Fundo do rodapé
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  // Fundo do rodapé (claro)
+  doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
   doc.rect(0, footerY, pageWidth, 30, 'F');
 
   // Logo pequeno no rodapé (proporcional)
@@ -646,12 +654,12 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   const footerTextX = logoBase64 ? margin + logoFooterWidth + 4 : margin;
 
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('PRATICCAR', footerTextX, footerY + 8);
   
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.text('Proteção Veicular', footerTextX, footerY + 14);
@@ -661,7 +669,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.text(footerDate, footerTextX, footerY + 20);
 
   // Disclaimer (canto direito)
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(6);
   const disclaimer = 'Esta cotação não tem valor contratual';
   doc.text(disclaimer, pageWidth - margin, footerY + 10, { align: 'right' });
@@ -728,8 +736,8 @@ const desenharRodapeCompacto = (
   // Linha gradiente
   drawGradientRect(doc, margin, footerY - 4, pageWidth - margin * 2, 1.5, glowBlue, brandRed, 40);
 
-  // Fundo do rodapé
-  doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
+  // Fundo do rodapé (claro)
+  doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
   doc.rect(0, footerY, pageWidth, 20, 'F');
 
   // Logo pequeno (proporcional)
@@ -741,18 +749,18 @@ const desenharRodapeCompacto = (
 
   const footerTextX = logoBase64 ? margin + logoSmallWidth + 4 : margin;
 
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.text('PRATICCAR', footerTextX, footerY + 7);
 
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(6);
   doc.setFont('helvetica', 'normal');
   doc.text('Proteção Veicular', footerTextX, footerY + 12);
 
   // Número da cotação e página
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(7);
   doc.text(`#${cotacao.numero || 'N/A'} | Página ${paginaAtual} de ${totalPaginas}`, pageWidth - margin, footerY + 10, { align: 'right' });
 };
@@ -874,9 +882,10 @@ const desenharPaginaCapa = (
   // Background
   drawPageBackground(doc, pageWidth, pageHeight);
 
-  // Header compacto
+  // Header compacto (fundo claro)
   const headerHeight = 45;
-  drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, { r: 30, g: 70, b: 130 });
+  doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
   drawGradientRect(doc, 0, headerHeight - 3, pageWidth, 3, glowBlue, brandRed, 60);
 
   const logoCapaHeight = 28;
@@ -886,7 +895,7 @@ const desenharPaginaCapa = (
     doc.addImage(logoBase64, 'PNG', logoX, 7, logoCapaWidth, logoCapaHeight);
   }
 
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.text('COMPARATIVO DE PLANOS', pageWidth / 2, 38, { align: 'center' });
@@ -1024,21 +1033,22 @@ const desenharPaginaDetalhesPlano = (
   // Background
   drawPageBackground(doc, pageWidth, pageHeight);
 
-  // Header compacto
+  // Header compacto (fundo claro)
   const headerHeight = 38;
-  drawGradientRect(doc, 0, 0, pageWidth, headerHeight, brandBlue, { r: 30, g: 70, b: 130 });
+  doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
   drawGradientRect(doc, 0, headerHeight - 2, pageWidth, 2, glowBlue, brandRed, 60);
 
   // Badge plano X de Y
   doc.setFillColor(premiumCard.r, premiumCard.g, premiumCard.b);
   doc.roundedRect(margin, 8, 55, 12, 2, 2, 'F');
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
   doc.text(`PLANO ${numeroPlano} DE ${totalPlanos}`, margin + 27.5, 16, { align: 'center' });
 
   // Nome do plano
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
   doc.text(truncateText(plano.nome.toUpperCase(), 28), margin + 65, 18);
@@ -1046,7 +1056,7 @@ const desenharPaginaDetalhesPlano = (
   // Removido: Código da cotação não é mais exibido
 
   // Dados do veículo resumido
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(8);
   doc.text(`${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}`, pageWidth - margin, 20, { align: 'right' });
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
