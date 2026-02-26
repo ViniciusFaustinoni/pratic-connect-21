@@ -1,94 +1,47 @@
 
-# Corrigir Campos Vazios na Proposta de Filiacao (Autentique)
+# Documentos de Reanalise ao Lado das Fotos da Vistoria
 
-## Problema
-O documento gerado para assinatura no Autentique apresenta varios campos vazios:
-- **Cambio**: vazio
-- **Portas**: vazio
-- **Cod. FIPE**: vazio
-- **Valor FIPE**: mostrando R$ 0,00 em alguns casos
-- **Veiculo proveniente de leilao?**: vazio (deveria mostrar SIM ou NAO)
-- **Utilizado para aplicativo?**: vazio (deveria mostrar SIM ou NAO)
-- **Nome do Consultor**: vazio
+## Objetivo
+Quando o associado reenvia documentos pendentes, exibir esses documentos **ao lado** das fotos da vistoria (na ZONA 2 da pagina), em vez de esconde-los dentro da aba "Docs". Isso permite que o analista de cadastro veja imediatamente os documentos reenviados sem precisar navegar entre abas.
 
-## Causa Raiz
-1. `codigo_fipe` e `uso_aplicativo` nao sao copiados da tabela `cotacoes` para `contratos` quando o contrato e gerado
-2. O campo `categoria` da cotacao (que indica leilao/aplicativo) nao e mapeado para as variaveis do template
-3. O vendedor (consultor) nao e buscado pelo `vendedor_id` na funcao `autentique-create`
-4. O mapeamento de variaveis em `template-utils.ts` nao inclui `veiculo.cambio`, `veiculo.portas`, `veiculo.leilao`, `veiculo.uso_aplicativo`, `consultor.nome`
+## O que muda visualmente
 
-## Solucao
+**Antes**: Fotos da vistoria aparecem na ZONA 2 (grid de midias). Documentos reenviados ficam escondidos dentro da aba "Docs" (ZONA 3).
 
-### 1. Migration: Adicionar colunas faltantes em `contratos`
-Adicionar 2 colunas na tabela `contratos`:
-- `codigo_fipe` (text, nullable)
-- `uso_aplicativo` (boolean, nullable)
+**Depois**: Quando existem documentos de reanalise, a ZONA 2 se reorganiza em layout side-by-side:
 
-A coluna `veiculo_categoria` ja existe e sera reaproveitada para armazenar a categoria de uso (leilao, aplicativo, etc.).
-
-### 2. Edge Function `contrato-gerar/index.ts`
-Nos 3 pontos onde veiculos sao inseridos e no INSERT do contrato, adicionar:
-- `codigo_fipe: cotacao.codigo_fipe`
-- `uso_aplicativo: cotacao.uso_aplicativo`
-- `veiculo_categoria: cotacao.categoria` (usar a categoria de uso da cotacao, nao "Automovel")
-
-### 3. Edge Function `autentique-create/index.ts`
-Apos buscar o contrato, buscar o nome do vendedor/consultor:
-```
-const vendedorNome = contrato.vendedor_id 
-  ? (await supabase.from('profiles').select('nome').eq('id', contrato.vendedor_id).maybeSingle())?.data?.nome 
-  : null;
-```
-Passar `vendedorNome` para `mapearDadosParaTemplate`.
-
-### 4. `_shared/termo-afiliacao-utils.ts`
-Atualizar `VeiculoData` para incluir novos campos:
-- `cambio?: string`
-- `portas?: number`
-- `uso_aplicativo?: boolean`
-
-Atualizar `TermoAfiliacaoData` para incluir:
-- `consultor?: { nome: string }`
-
-Atualizar `mapearDadosParaTemplate` para:
-- Mapear `codigo_fipe` do contrato (nao apenas do lead): `contrato.codigo_fipe || veiculo.codigo_fipe`
-- Mapear `uso_aplicativo` do contrato
-- Inferir `leilao` de `veiculo_categoria`
-- Inferir `cambio` do nome do modelo (se contem "Manual"/"Mecanico" = Manual, "Automatico"/"CVT"/"AT" = Automatico)
-- Inferir `portas` do tipo de veiculo (moto = 0, default = 4)
-- Receber e mapear `consultor.nome`
-
-### 5. `_shared/template-utils.ts`
-Adicionar novas variaveis ao mapeamento:
-```
-'veiculo.cambio': dados.veiculo.cambio || '—',
-'veiculo.portas': String(dados.veiculo.portas || 4),
-'veiculo.leilao': (categoria de uso indica leilao) ? 'SIM' : 'NAO',
-'veiculo.uso_aplicativo': dados.veiculo.uso_aplicativo ? 'SIM' : 'NAO',
-'veiculo.valor_protegido': formatCurrency(dados.veiculo.valor_fipe),
-'consultor.nome': dados.consultor?.nome || '—',
+```text
++-------------------------------+-------------------------------+
+|  Fotos da Vistoria (grid)     |  Documentos da Reanalise      |
+|  Video 360 / Assinatura       |  [Chassi]  [Visualizar]       |
+|                               |  [Odometro] [Visualizar]      |
+|                               |  ...                          |
++-------------------------------+-------------------------------+
 ```
 
-### Arquivos Alterados
-1. Nova migration SQL (adicionar `codigo_fipe` e `uso_aplicativo` em `contratos`)
-2. `supabase/functions/contrato-gerar/index.ts` — copiar campos da cotacao
-3. `supabase/functions/autentique-create/index.ts` — buscar nome do vendedor
-4. `supabase/functions/_shared/termo-afiliacao-utils.ts` — interfaces e mapeamento
-5. `supabase/functions/_shared/template-utils.ts` — novas variaveis
+- Se NAO houver documentos de reanalise, o layout permanece como esta hoje (sem mudanca).
+- Se houver, as midias ocupam a coluna esquerda e os documentos de reanalise a coluna direita.
+- Em telas pequenas (mobile), os documentos ficam empilhados abaixo das fotos.
 
-### Logica de Inferencia
+## Alteracoes Tecnicas
 
-**Cambio**: Analise do campo `modelo` do veiculo:
-- Se contem "Mecanico", "Manual", "MT" -> "Manual"
-- Se contem "Automatico", "CVT", "AT", "Tiptronic" -> "Automatico"
-- Caso contrario -> "—"
+### 1. `src/pages/cadastro/PropostaAnalise.tsx`
+- Passar `proposta.documentos_solicitados_enviados` para o `PropostaMidiaGrid` como nova prop.
+- O componente decidira internamente se renderiza o layout side-by-side ou normal.
 
-**Portas**: Inferido pela categoria:
-- Se moto -> sem portas (0)
-- Se veiculo tipo pickup/SUV com modelo indicando -> 4
-- Default -> 4
+### 2. `src/components/cadastro/proposta/PropostaMidiaGrid.tsx`
+- Adicionar prop opcional `documentosSolicitados` (array de `DocumentoSolicitadoEnviado`).
+- Quando `documentosSolicitados` tem itens:
+  - Envolver tudo em um grid `grid-cols-1 lg:grid-cols-2`.
+  - Coluna esquerda: cards de midia existentes (fotos, video, assinatura).
+  - Coluna direita: renderizar o `DocumentosSolicitadosCard` importado.
+- Quando vazio/undefined: manter layout atual sem alteracao.
 
-**Leilao**: Derivado de `veiculo_categoria` ou `categoria` da cotacao:
-- Se contem "leilao" -> "SIM", senao -> "NAO"
+### 3. `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
+- Remover a renderizacao do `DocumentosSolicitadosCard` de dentro da aba "Docs" (pois agora esta na ZONA 2).
+- Manter o indicador visual (badge/ponto ambar) na aba "Docs" para sinalizar que ha documentos novos, mas sem duplicar o card.
 
-**Uso Aplicativo**: Leitura direta do campo `uso_aplicativo` boolean -> "SIM" ou "NAO"
+### Arquivos alterados
+1. `src/pages/cadastro/PropostaAnalise.tsx` — passar nova prop
+2. `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` — layout side-by-side condicional
+3. `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx` — remover DocumentosSolicitadosCard da aba Docs
