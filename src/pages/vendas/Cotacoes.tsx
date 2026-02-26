@@ -590,53 +590,70 @@ export default function Cotacoes() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Cotações</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight">Cotações</h1>
+          <p className="text-sm text-muted-foreground">
             {permissions.cotacao.viewScope === 'all' 
-              ? 'Gerencie todas as cotações e acompanhe propostas'
-              : 'Gerencie suas cotações e acompanhe propostas'}
+              ? `Gerencie todas as cotações`
+              : 'Gerencie suas cotações'}
+            {cotacoes && cotacoes.length > 0 && (
+              <span className="text-foreground font-medium"> · {cotacoes.length} no total</span>
+            )}
           </p>
         </div>
         <PermissionGate permission="cotacao.canCreate">
-          <Button className="gap-2" onClick={() => setShowCotacaoForm(true)}>
+          <Button 
+            className="gap-2 shadow-md hover:shadow-lg transition-all" 
+            onClick={() => setShowCotacaoForm(true)}
+          >
             <Plus className="h-4 w-4" />
             Nova Cotação
           </Button>
         </PermissionGate>
       </div>
 
-      {/* Stats Bar - 9 Status do Fluxo */}
-      <Card className="border shadow-sm">
-        <CardContent className="p-3">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {statusStats.map((item) => (
-              <div key={item.label} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 min-w-fit">
-                <div className={`h-8 w-8 rounded-md ${item.bg} flex items-center justify-center shrink-0`}>
-                  <item.icon className={`h-4 w-4 ${item.color}`} />
-                </div>
-                <div>
-                  <p className={`text-lg font-bold leading-none ${item.color}`}>{item.count}</p>
-                  <p className="text-[10px] text-muted-foreground whitespace-nowrap">{item.label}</p>
-                </div>
+      {/* Stats Bar - Pills flutuantes */}
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {statusStats.map((item) => {
+          const isInactive = item.count === 0;
+          return (
+            <div 
+              key={item.label} 
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-xl border min-w-fit cursor-default select-none",
+                "transition-all duration-200 hover:scale-[1.03] hover:shadow-sm",
+                isInactive 
+                  ? "opacity-50 bg-muted/20 border-transparent" 
+                  : "bg-card border-border/60 shadow-sm"
+              )}
+            >
+              <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shrink-0", item.bg)}>
+                <item.icon className={cn("h-3.5 w-3.5", item.color)} />
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="flex items-baseline gap-1.5">
+                <span className={cn("text-base font-bold leading-none", item.color)}>{item.count}</span>
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap leading-none">{item.label}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-      {/* Filters - Compactos em linha única */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Filters - Barra unificada */}
+      <div className={cn(
+        "flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl",
+        "bg-muted/30 border border-border/40"
+      )}>
         <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
           <Input
             placeholder="Buscar lead, veículo ou número..."
-            className="pl-9 h-9"
+            className="pl-9 h-9 border-0 bg-background/80 shadow-sm focus-visible:ring-1"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px] h-9">
+          <SelectTrigger className="w-[140px] h-9 border-0 bg-background/80 shadow-sm">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -650,7 +667,7 @@ export default function Cotacoes() {
           </SelectContent>
         </Select>
         <Select value={mesFilter} onValueChange={setMesFilter}>
-          <SelectTrigger className="w-[150px] h-9">
+          <SelectTrigger className="w-[150px] h-9 border-0 bg-background/80 shadow-sm">
             <CalendarIcon className="h-4 w-4 mr-1.5 text-muted-foreground" />
             <SelectValue placeholder="Período" />
           </SelectTrigger>
@@ -668,7 +685,7 @@ export default function Cotacoes() {
               variant="outline" 
               size="sm"
               className={cn(
-                "h-9 px-3",
+                "h-9 px-3 border-0 bg-background/80 shadow-sm",
                 !dataFilter && "text-muted-foreground"
               )}
             >
@@ -701,7 +718,7 @@ export default function Cotacoes() {
 
         {permissions.cotacao.viewScope !== 'own' && (
           <Select value={consultorFilter} onValueChange={setConsultorFilter}>
-            <SelectTrigger className="w-[160px] h-9">
+            <SelectTrigger className="w-[160px] h-9 border-0 bg-background/80 shadow-sm">
               <User className="h-4 w-4 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="Consultor" />
             </SelectTrigger>
@@ -715,9 +732,17 @@ export default function Cotacoes() {
         )}
         
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-muted-foreground hover:text-foreground">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={clearFilters} 
+            className="h-9 text-muted-foreground hover:text-foreground animate-in fade-in-0 slide-in-from-left-2 duration-200"
+          >
             <RefreshCw className="h-3.5 w-3.5 mr-1" />
             Limpar
+            <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
+              {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all'].filter(Boolean).length}
+            </Badge>
           </Button>
         )}
       </div>
@@ -733,13 +758,6 @@ export default function Cotacoes() {
         copiandoWhatsAppId={copiandoWhatsApp}
         getPermissions={getPermissions}
       />
-      
-      {/* Hint de clique */}
-      {sortedCotacoes.length > 0 && (
-        <p className="text-sm text-muted-foreground text-center">
-          Clique em uma linha para ver detalhes e ações
-        </p>
-      )}
 
       {/* Modal de Detalhes */}
       <CotacaoDetalhesModal 
