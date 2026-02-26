@@ -1,53 +1,47 @@
 
-
-# Correcao: Consultores nao mostrando cotacoes
+# Fix: Botao concluir sobreposto e scroll travado na manutencao
 
 ## Problema
-O hook `usePropostasMetricas.ts` calcula as metricas dos consultores usando apenas as tabelas `leads` e `contratos`. A tabela `cotacoes` nunca e consultada. Quando um vendedor cria uma cotacao diretamente (sem lead vinculado, ou seja, `lead_id = null`), essa cotacao nao aparece nas metricas da aba Consultores.
+O modal de resultado da manutencao (`ExecutarManutencao.tsx`) tem dois problemas no mobile:
+1. O botao "Confirmar" fica sobreposto ao conteudo (fotos, descricao)
+2. O scroll dentro do modal trava e o usuario nao consegue rolar
 
-## Causa Raiz
-- `emCotacao` conta `leads` com `etapa === 'cotacao_enviada'` — ignora cotacoes sem lead
-- `contratoEnviado` conta `leads` com `etapa === 'contrato_enviado'` — mesmo problema
-- Nenhuma metrica consulta a tabela `cotacoes` para contar cotacoes reais
+## Causa raiz
+- O `DialogContent` base (dialog.tsx) ja aplica `max-h-[90vh] overflow-y-auto`
+- O modal adiciona OUTRO `max-h-[90vh]` + `flex flex-col` por cima
+- Dentro, ha um `ScrollArea` com `max-h-[calc(90vh-140px)]` criando scroll aninhado
+- No mobile (iOS Safari), scroll aninhado com `ScrollArea` do Radix trava o touch scroll
+- O footer com `flex-shrink-0` acaba ficando por cima do conteudo quando as alturas conflitam
 
 ## Solucao
 
-### Arquivo: `src/hooks/usePropostasMetricas.ts`
+### Arquivo: `src/pages/instalador/ExecutarManutencao.tsx`
 
-1. **Adicionar query a tabela `cotacoes`**: Buscar todas as cotacoes dos vendedores no periodo, filtrando por `vendedor_id` (que armazena `auth.users.id`).
+1. **Remover o `ScrollArea`** — substituir por `div` com `overflow-y-auto` nativo, que funciona bem no mobile
+2. **Ajustar o `DialogContent`** — usar `overflow-hidden` (nao auto) no container pai, e deixar apenas o div interno scrollar
+3. **Garantir footer fixo** — usar layout flex correto para que o footer fique sempre visivel na parte inferior sem sobrepor
 
-2. **Incorporar contagens de cotacoes nas metricas**:
-   - `emCotacao`: Contar cotacoes com status `rascunho` ou `enviada` (cotacoes ativas que ainda nao foram aceitas/recusadas). Usar o MAIOR valor entre a contagem de leads e a contagem de cotacoes reais.
-   - Adicionar campo `cotacoesRealizadas` ao `ConsultorMetricas` para mostrar o total de cotacoes feitas pelo vendedor no periodo.
-
-3. **Atualizar metricas globais**: Incluir cotacoes reais na contagem global de `emCotacao`.
-
-### Detalhes tecnicos
+Mudancas especificas:
 
 ```text
-Query adicionada:
-  supabase.from('cotacoes')
-    .select('id, vendedor_id, status, valor_total_mensal, created_at')
-    .in('vendedor_id', vendedorIds)
+Linha 452: DialogContent
+  De: className="max-w-md max-h-[90vh] flex flex-col p-0"
+  Para: className="max-w-md max-h-[85vh] flex flex-col p-0 overflow-hidden"
 
-Mapeamento por vendedor:
-  - cotacoes com status 'rascunho' ou 'enviada' -> emCotacao
-  - cotacoes com status 'aceita' -> contabilizar como negociacao
-  - total de cotacoes no periodo -> cotacoesRealizadas (novo campo)
+Linha 457: ScrollArea -> div
+  De: <ScrollArea className="flex-1 max-h-[calc(90vh-140px)] px-4 overscroll-contain">
+  Para: <div className="flex-1 overflow-y-auto px-4 overscroll-contain -webkit-overflow-scrolling-touch">
+
+Linha 703: </ScrollArea> -> </div>
+
+Remover import de ScrollArea (linha 18)
 ```
 
-### Interface `ConsultorMetricas`
-- Adicionar campo opcional `cotacoesRealizadas: number` para exibir o total de cotacoes criadas
+### Arquivo: `src/components/ui/dialog.tsx`
 
-### Componentes de exibicao
-- `ConsultoresTable.tsx`: A coluna "Cotacao" ja exibe `consultor.emCotacao`, entao ao corrigir o valor no hook, a tabela atualiza automaticamente.
-- Nenhuma alteracao necessaria nos componentes de UI.
+Nenhuma alteracao necessaria — o problema esta na composicao do modal, nao no componente base.
 
-## Arquivos alterados
-1. `src/hooks/usePropostasMetricas.ts` — Adicionar query de cotacoes e incorporar nas metricas
-
-## O que NAO muda
-- Logica de leads e contratos existente
-- Componentes visuais (ConsultoresTable, ConsultorCard, etc)
-- Ordenacao e ranking dos consultores
-
+## Resultado esperado
+- O conteudo do modal rola suavemente no mobile (touch scroll nativo)
+- O footer com botoes "Cancelar" e "Confirmar" fica sempre visivel e fixo na parte inferior
+- Sem sobreposicao de elementos
