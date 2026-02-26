@@ -1,79 +1,95 @@
 
 
-# Redesign UI - Analista de Cadastro
+# Redesign UI - Pagina de Cotacoes
 
-Redesign completo das 3 telas do analista de cadastro (Dashboard, Propostas Pendentes, Detalhes da Proposta) com foco em fluidez, hierarquia visual e produtividade operacional. A aba Associados nao sera alterada.
-
----
-
-## 1. Dashboard do Analista (`DashboardCadastro.tsx`)
-
-**Problemas atuais:** KPIs genericos sem destaque, grafico ocupa muito espaco, acoes rapidas redundantes, banner decorativo sem valor operacional.
-
-**Mudancas:**
-
-- **Banner compacto com contexto operacional**: Reduzir o banner de boas-vindas. Adicionar resumo inline ("Voce tem X propostas aguardando analise").
-- **KPIs com micro-tendencia**: Adicionar indicador visual de variacao (seta para cima/baixo + percentual vs ontem). Usar cores de fundo sutis com borda lateral colorida ao inves de icone solido.
-- **Fila de trabalho como elemento central**: Substituir o card "Propostas Aguardando" por uma lista estilo kanban cards com preview de dados (placa, nome, tempo de espera). Cada item com indicador visual de prioridade (mais antigo = mais vermelho).
-- **Grafico de performance**: Mover para area secundaria, reduzir altura. Adicionar toggle periodo (7d / 30d).
-- **Remover card "Acoes Rapidas"**: Redundante, pois a navegacao lateral ja cumpre esse papel.
-- **Adicionar mini-pipeline visual**: Barra horizontal mostrando a distribuicao de propostas por status (aguardando / em analise / aprovadas / reprovadas) com proporcao visual.
+Redesign visual da pagina de cotacoes focando em fluidez, intuitividade e experiencia do usuario, sem adicionar ou remover funcionalidades.
 
 ---
 
-## 2. Lista de Propostas Pendentes (`PropostasPendentes.tsx`)
+## 1. Header da Pagina
 
-**Problemas atuais:** Tabela densa, dificulta scan visual. KPIs duplicados com o dashboard. Filtros sem destaque. Secao de ativacao misturada.
+**Atual:** Titulo + subtitulo + botao "Nova Cotacao" alinhados simples.
 
-**Mudancas:**
-
-- **KPIs compactos no topo**: Redesenhar como pills/chips horizontais ao inves de cards grandes. Exemplo: `Aguardando: 12 | Em Analise: 3 | Aprovados Hoje: 5 | Reprovados: 1`.
-- **Substituir tabela por cards de proposta**: Cada proposta vira um card horizontal com:
-  - Borda lateral colorida por status (amarelo=aguardando, azul=analise, laranja=doc pendente)
-  - Placa em destaque (font-mono, grande)
-  - Nome do cliente, modelo do veiculo
-  - Badge de status com icone
-  - Tempo de espera com cor gradual (verde < 24h, amarelo < 48h, vermelho > 48h)
-  - Botao "Analisar" direto no card
-- **Filtros inline**: Busca + filtros de status como toggle pills no topo, sem card wrapper.
-- **Secao "Ativacao de Rastreador"**: Manter separada mas com design mais compacto, usando alert-style banner ao inves de tabela completa.
-- **Ordenacao visual**: Propostas com reanalise (documentos reenviados) aparecem no topo com destaque ambar.
+**Novo:**
+- Header compacto com gradiente sutil no fundo
+- Contador total de cotacoes inline no subtitulo ("142 cotacoes no total")
+- Botao "Nova Cotacao" com destaque visual (gradiente primario, shadow)
 
 ---
 
-## 3. Detalhes da Proposta (`PropostaAnalise.tsx` + subcomponentes)
+## 2. Barra de Status (Stats Bar)
 
-**Problemas atuais:** Header hero muito grande, botoes de acao longe do conteudo analisavel, tabs na parte inferior forcam scroll.
+**Atual:** Cards horizontais com scroll, todos com mesmo peso visual, dentro de um Card com borda.
 
-**Mudancas:**
+**Novo:**
+- Remover o Card wrapper -- pills flutuantes diretas
+- Cada pill com hover interativo e cursor pointer
+- Pill do status ativo (com cotacoes) ganha destaque sutil (borda colorida inferior)
+- Pills com contagem zero ficam com opacidade reduzida
+- Transicao suave no hover (scale + shadow)
+- Icone e numero na mesma linha para compactar
 
-### 3a. Hero Header (`PropostaHeroHeader.tsx`)
-- **Compactar**: Reduzir padding. Mover navegacao (Voltar/Proxima) para barra sticky no topo.
-- **Layout horizontal**: Nome do cliente + Veiculo + Status em uma linha. Botoes de acao (Aprovar/Solicitar Docs/Reprovar) ficam a direita na mesma linha.
-- **Alerta de reanalise**: Manter destaque ambar mas como banner slim acima do header.
+---
 
-### 3b. Midia Grid (`PropostaMidiaGrid.tsx`)
-- **Melhorar grid de fotos**: Thumbnail maior, hover com zoom preview. Manter layout side-by-side com documentos de reanalise.
-- **Indicadores visuais**: Badge com contagem de fotos mais visivel. Video 360 com thumbnail real ao inves de player embutido.
+## 3. Filtros
 
-### 3c. Tabs (`PropostaDetalhesTabs.tsx`)
-- **Tabs sticky**: Fixar a barra de tabs abaixo do header para acesso rapido durante scroll.
-- **Indicadores nas tabs**: Ponto de notificacao mais visivel para docs pendentes. Icone de alerta no tab Veiculo quando falta RENAVAM/CHASSI.
-- **Layout dos dados**: Usar design de "ficha" com grid mais limpo, separadores visuais entre grupos de informacao.
+**Atual:** Filtros em flex-wrap com selects padrao, visual generico.
+
+**Novo:**
+- Agrupar filtros em uma unica barra com fundo sutil (bg-muted/30 rounded-xl)
+- Input de busca com borda arredondada e icone mais visivel
+- Selects com estilo mais limpo (sem borda visivel, apenas underline ou ghost)
+- Botao "Limpar filtros" aparece apenas quando ha filtros ativos, com animacao fade-in
+- Indicador visual de quantos filtros estao ativos (badge numerica)
+
+---
+
+## 4. Tabela de Cotacoes (CotacoesTable)
+
+**Atual:** Tabela HTML padrao com alternancia de cor sutil. Badges de status pequenos. Informacoes condensadas.
+
+**Novo:**
+- Manter estrutura de tabela (nao trocar por cards -- a tabela funciona bem para scan rapido neste contexto)
+- **Linhas com borda lateral colorida** por status (4px left border: amarelo=rascunho, azul=enviada, verde=aceita, etc)
+- **Hover mais expressivo**: bg-primary/8 + shadow-sm + leve translate-x (2px) para dar sensacao de profundidade
+- **Badge de status maior e mais legivel**: padding aumentado, font-size 11px, border-radius pill
+- **Etapa da venda com icone de progresso**: em vez de badge empilhado, usar um chip inline ao lado do status com icone de seta
+- **Coluna Cliente**: Avatar com gradiente de cor baseado na inicial, nome em bold, telefone com link clicavel (tel:)
+- **Coluna Veiculo**: Placa em destaque (font-mono, bg-muted, rounded) separada do modelo
+- **Coluna FIPE**: Valor com formatacao mais destaque (font-semibold, cor primaria)
+- **Coluna Data**: Usar "Hoje", "Ontem" para datas recentes em vez de formato relativo generico
+- **Acoes**: Botoes com tooltip, icones maiores (h-4 w-4), espacamento melhor
+- **Linha selecionada/hover**: efeito de elevacao com ring sutil
+
+---
+
+## 5. Estado Vazio
+
+**Atual:** Icone + 2 linhas de texto centralizado.
+
+**Novo:**
+- Ilustracao mais rica (icone maior com circulo de fundo gradiente)
+- CTA "Nova Cotacao" direto no estado vazio
+- Texto mais amigavel
+
+---
+
+## 6. Hint de Clique
+
+**Atual:** Texto simples abaixo da tabela.
+
+**Novo:** Remover -- o hover expressivo nas linhas ja comunica que sao clicaveis.
 
 ---
 
 ## Arquivos alterados
 
-1. `src/components/cadastro/DashboardCadastro.tsx` — Redesign completo
-2. `src/pages/cadastro/PropostasPendentes.tsx` — Cards ao inves de tabela, KPIs compactos
-3. `src/components/cadastro/proposta/PropostaHeroHeader.tsx` — Header compacto horizontal
-4. `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` — Melhorias visuais no grid
-5. `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx` — Tabs sticky, indicadores melhorados
+1. `src/pages/vendas/Cotacoes.tsx` -- Header, stats bar, filtros, hint
+2. `src/components/cotacoes/CotacoesTable.tsx` -- Visual da tabela, hover, bordas, badges
 
 ## O que NAO muda
-- Logica de negocio (aprovacao, reprovacao, solicitacao de docs)
-- Hooks e queries existentes
-- Aba Associados
-- Dialogs de confirmacao
+- Logica de negocio (filtros, ordenacao, acoes)
+- Hooks e queries
+- Modais (detalhes, form, email, contrato wizard)
+- Funcoes de WhatsApp/PDF/duplicar/excluir
 
