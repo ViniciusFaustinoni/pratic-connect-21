@@ -1,95 +1,53 @@
 
 
-# Redesign UI - Pagina de Cotacoes
+# Correcao: Consultores nao mostrando cotacoes
 
-Redesign visual da pagina de cotacoes focando em fluidez, intuitividade e experiencia do usuario, sem adicionar ou remover funcionalidades.
+## Problema
+O hook `usePropostasMetricas.ts` calcula as metricas dos consultores usando apenas as tabelas `leads` e `contratos`. A tabela `cotacoes` nunca e consultada. Quando um vendedor cria uma cotacao diretamente (sem lead vinculado, ou seja, `lead_id = null`), essa cotacao nao aparece nas metricas da aba Consultores.
 
----
+## Causa Raiz
+- `emCotacao` conta `leads` com `etapa === 'cotacao_enviada'` — ignora cotacoes sem lead
+- `contratoEnviado` conta `leads` com `etapa === 'contrato_enviado'` — mesmo problema
+- Nenhuma metrica consulta a tabela `cotacoes` para contar cotacoes reais
 
-## 1. Header da Pagina
+## Solucao
 
-**Atual:** Titulo + subtitulo + botao "Nova Cotacao" alinhados simples.
+### Arquivo: `src/hooks/usePropostasMetricas.ts`
 
-**Novo:**
-- Header compacto com gradiente sutil no fundo
-- Contador total de cotacoes inline no subtitulo ("142 cotacoes no total")
-- Botao "Nova Cotacao" com destaque visual (gradiente primario, shadow)
+1. **Adicionar query a tabela `cotacoes`**: Buscar todas as cotacoes dos vendedores no periodo, filtrando por `vendedor_id` (que armazena `auth.users.id`).
 
----
+2. **Incorporar contagens de cotacoes nas metricas**:
+   - `emCotacao`: Contar cotacoes com status `rascunho` ou `enviada` (cotacoes ativas que ainda nao foram aceitas/recusadas). Usar o MAIOR valor entre a contagem de leads e a contagem de cotacoes reais.
+   - Adicionar campo `cotacoesRealizadas` ao `ConsultorMetricas` para mostrar o total de cotacoes feitas pelo vendedor no periodo.
 
-## 2. Barra de Status (Stats Bar)
+3. **Atualizar metricas globais**: Incluir cotacoes reais na contagem global de `emCotacao`.
 
-**Atual:** Cards horizontais com scroll, todos com mesmo peso visual, dentro de um Card com borda.
+### Detalhes tecnicos
 
-**Novo:**
-- Remover o Card wrapper -- pills flutuantes diretas
-- Cada pill com hover interativo e cursor pointer
-- Pill do status ativo (com cotacoes) ganha destaque sutil (borda colorida inferior)
-- Pills com contagem zero ficam com opacidade reduzida
-- Transicao suave no hover (scale + shadow)
-- Icone e numero na mesma linha para compactar
+```text
+Query adicionada:
+  supabase.from('cotacoes')
+    .select('id, vendedor_id, status, valor_total_mensal, created_at')
+    .in('vendedor_id', vendedorIds)
 
----
+Mapeamento por vendedor:
+  - cotacoes com status 'rascunho' ou 'enviada' -> emCotacao
+  - cotacoes com status 'aceita' -> contabilizar como negociacao
+  - total de cotacoes no periodo -> cotacoesRealizadas (novo campo)
+```
 
-## 3. Filtros
+### Interface `ConsultorMetricas`
+- Adicionar campo opcional `cotacoesRealizadas: number` para exibir o total de cotacoes criadas
 
-**Atual:** Filtros em flex-wrap com selects padrao, visual generico.
-
-**Novo:**
-- Agrupar filtros em uma unica barra com fundo sutil (bg-muted/30 rounded-xl)
-- Input de busca com borda arredondada e icone mais visivel
-- Selects com estilo mais limpo (sem borda visivel, apenas underline ou ghost)
-- Botao "Limpar filtros" aparece apenas quando ha filtros ativos, com animacao fade-in
-- Indicador visual de quantos filtros estao ativos (badge numerica)
-
----
-
-## 4. Tabela de Cotacoes (CotacoesTable)
-
-**Atual:** Tabela HTML padrao com alternancia de cor sutil. Badges de status pequenos. Informacoes condensadas.
-
-**Novo:**
-- Manter estrutura de tabela (nao trocar por cards -- a tabela funciona bem para scan rapido neste contexto)
-- **Linhas com borda lateral colorida** por status (4px left border: amarelo=rascunho, azul=enviada, verde=aceita, etc)
-- **Hover mais expressivo**: bg-primary/8 + shadow-sm + leve translate-x (2px) para dar sensacao de profundidade
-- **Badge de status maior e mais legivel**: padding aumentado, font-size 11px, border-radius pill
-- **Etapa da venda com icone de progresso**: em vez de badge empilhado, usar um chip inline ao lado do status com icone de seta
-- **Coluna Cliente**: Avatar com gradiente de cor baseado na inicial, nome em bold, telefone com link clicavel (tel:)
-- **Coluna Veiculo**: Placa em destaque (font-mono, bg-muted, rounded) separada do modelo
-- **Coluna FIPE**: Valor com formatacao mais destaque (font-semibold, cor primaria)
-- **Coluna Data**: Usar "Hoje", "Ontem" para datas recentes em vez de formato relativo generico
-- **Acoes**: Botoes com tooltip, icones maiores (h-4 w-4), espacamento melhor
-- **Linha selecionada/hover**: efeito de elevacao com ring sutil
-
----
-
-## 5. Estado Vazio
-
-**Atual:** Icone + 2 linhas de texto centralizado.
-
-**Novo:**
-- Ilustracao mais rica (icone maior com circulo de fundo gradiente)
-- CTA "Nova Cotacao" direto no estado vazio
-- Texto mais amigavel
-
----
-
-## 6. Hint de Clique
-
-**Atual:** Texto simples abaixo da tabela.
-
-**Novo:** Remover -- o hover expressivo nas linhas ja comunica que sao clicaveis.
-
----
+### Componentes de exibicao
+- `ConsultoresTable.tsx`: A coluna "Cotacao" ja exibe `consultor.emCotacao`, entao ao corrigir o valor no hook, a tabela atualiza automaticamente.
+- Nenhuma alteracao necessaria nos componentes de UI.
 
 ## Arquivos alterados
-
-1. `src/pages/vendas/Cotacoes.tsx` -- Header, stats bar, filtros, hint
-2. `src/components/cotacoes/CotacoesTable.tsx` -- Visual da tabela, hover, bordas, badges
+1. `src/hooks/usePropostasMetricas.ts` — Adicionar query de cotacoes e incorporar nas metricas
 
 ## O que NAO muda
-- Logica de negocio (filtros, ordenacao, acoes)
-- Hooks e queries
-- Modais (detalhes, form, email, contrato wizard)
-- Funcoes de WhatsApp/PDF/duplicar/excluir
+- Logica de leads e contratos existente
+- Componentes visuais (ConsultoresTable, ConsultorCard, etc)
+- Ordenacao e ranking dos consultores
 
