@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DocumentosAnexadosPanel } from '@/components/cadastro/DocumentosAnexadosPanel';
-import { DocumentosSolicitadosCard } from '@/components/cadastro/DocumentosSolicitadosCard';
+
 import type { PropostaPendente, DocumentoAnexado } from '@/hooks/usePropostasPendentes';
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 
@@ -298,13 +298,6 @@ export function PropostaDetalhesTabs({
 
       {/* Tab Documentos */}
       <TabsContent value="documentos" className="mt-4 space-y-4">
-        {/* Documentos Solicitados (se houver novos) */}
-        {proposta.documentos_solicitados_enviados && proposta.documentos_solicitados_enviados.length > 0 && (
-          <DocumentosSolicitadosCard 
-            documentosSolicitados={proposta.documentos_solicitados_enviados} 
-          />
-        )}
-        
         {/* Documentos Anexados */}
         <DocumentosAnexadosPanel
           documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}

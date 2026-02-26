@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { VistoriaFotoInfo } from '@/hooks/usePropostasPendentes';
+import { DocumentosSolicitadosCard, type DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
 
 interface PropostaMidiaGridProps {
   video360Url?: string | null;
@@ -31,6 +32,7 @@ interface PropostaMidiaGridProps {
   assinaturaUrl?: string | null;
   assinaturaData?: string | null;
   assinaturaPor?: string | null;
+  documentosSolicitados?: DocumentoSolicitadoEnviado[];
 }
 
 export function PropostaMidiaGrid({
@@ -39,6 +41,7 @@ export function PropostaMidiaGrid({
   assinaturaUrl,
   assinaturaData,
   assinaturaPor,
+  documentosSolicitados,
 }: PropostaMidiaGridProps) {
   const [showVideo, setShowVideo] = useState(false);
   const [showGaleria, setShowGaleria] = useState(false);
@@ -62,151 +65,140 @@ export function PropostaMidiaGrid({
     }
   };
 
+  const hasDocsSolicitados = documentosSolicitados && documentosSolicitados.length > 0;
+
+  // Conteúdo das mídias (fotos, vídeo, assinatura)
+  const midiaContent = (
+    <div className={cn(
+      "grid gap-4 grid-cols-1",
+      hasDocsSolicitados ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"
+    )}>
+      {/* Card Vídeo 360° */}
+      {video360Url && (
+        <Card
+          className="cursor-pointer transition-all hover:shadow-lg hover:border-purple-500/50 group border-2 border-purple-500/30 bg-purple-500/5"
+          onClick={() => setShowVideo(true)}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-purple-500/20">
+                <Video className="h-5 w-5 text-purple-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground">Vídeo 360°</h3>
+                <p className="text-xs text-muted-foreground">Volta completa no veículo</p>
+              </div>
+              <Badge className="bg-purple-500/20 text-purple-500 border-purple-500/30">
+                <Play className="h-3 w-3 mr-1" />
+                360°
+              </Badge>
+            </div>
+            <div className="aspect-video bg-muted rounded-lg flex items-center justify-center relative overflow-hidden">
+              <video src={video360Url} className="w-full h-full object-cover" muted preload="metadata" />
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/30 transition-colors">
+                <div className="w-14 h-14 rounded-full bg-purple-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <Play className="h-7 w-7 text-white ml-1" />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Card Galeria de Fotos */}
+      {fotos.length > 0 && (
+        <Card
+          className="cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group"
+          onClick={() => { setGaleriaIndex(0); setShowGaleria(true); }}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-primary/20">
+                <Camera className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground">Fotos da Vistoria</h3>
+                <p className="text-xs text-muted-foreground">Clique para ver todas</p>
+              </div>
+              <Badge className="bg-primary/20 text-primary border-primary/30">
+                <ImageIcon className="h-3 w-3 mr-1" />
+                {totalFotos}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {fotosPreview.map((foto, idx) => (
+                <div
+                  key={foto.id}
+                  className={cn(
+                    "aspect-square bg-muted rounded-lg overflow-hidden relative",
+                    idx === 3 && totalFotos > 4 && "after:absolute after:inset-0 after:bg-black/50 after:flex after:items-center after:justify-center"
+                  )}
+                >
+                  <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                  {idx === 3 && totalFotos > 4 && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">+{totalFotos - 4}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {fotosPreview.length < 4 && Array.from({ length: 4 - fotosPreview.length }).map((_, idx) => (
+                <div key={`empty-${idx}`} className="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                  <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Card Assinatura */}
+      {assinaturaUrl && (
+        <Card
+          className="cursor-pointer transition-all hover:shadow-lg hover:border-amber-500/50 group border-2 border-amber-500/30 bg-amber-500/5"
+          onClick={() => setShowAssinatura(true)}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-amber-500/20">
+                <PenTool className="h-5 w-5 text-amber-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground">Assinatura</h3>
+                <p className="text-xs text-muted-foreground">Coletada na vistoria</p>
+              </div>
+              <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Válida
+              </Badge>
+            </div>
+            <div className="aspect-video bg-white rounded-lg flex items-center justify-center p-3 relative group-hover:ring-2 group-hover:ring-amber-500/30 transition-all">
+              <img src={assinaturaUrl} alt="Assinatura do cliente" className="max-h-full max-w-full object-contain" />
+              <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ZoomIn className="h-5 w-5 text-amber-500" />
+              </div>
+            </div>
+            {assinaturaData && (
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                {format(new Date(assinaturaData), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Card Vídeo 360° */}
-        {video360Url && (
-          <Card
-            className="cursor-pointer transition-all hover:shadow-lg hover:border-purple-500/50 group border-2 border-purple-500/30 bg-purple-500/5"
-            onClick={() => setShowVideo(true)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2 rounded-lg bg-purple-500/20">
-                  <Video className="h-5 w-5 text-purple-500" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-foreground">Vídeo 360°</h3>
-                  <p className="text-xs text-muted-foreground">Volta completa no veículo</p>
-                </div>
-                <Badge className="bg-purple-500/20 text-purple-500 border-purple-500/30">
-                  <Play className="h-3 w-3 mr-1" />
-                  360°
-                </Badge>
-              </div>
-              
-              {/* Thumbnail area */}
-              <div className="aspect-video bg-muted rounded-lg flex items-center justify-center relative overflow-hidden">
-                <video
-                  src={video360Url}
-                  className="w-full h-full object-cover"
-                  muted
-                  preload="metadata"
-                />
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/30 transition-colors">
-                  <div className="w-14 h-14 rounded-full bg-purple-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                    <Play className="h-7 w-7 text-white ml-1" />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Card Galeria de Fotos */}
-        {fotos.length > 0 && (
-          <Card
-            className="cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group"
-            onClick={() => {
-              setGaleriaIndex(0);
-              setShowGaleria(true);
-            }}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2 rounded-lg bg-primary/20">
-                  <Camera className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-foreground">Fotos da Vistoria</h3>
-                  <p className="text-xs text-muted-foreground">Clique para ver todas</p>
-                </div>
-                <Badge className="bg-primary/20 text-primary border-primary/30">
-                  <ImageIcon className="h-3 w-3 mr-1" />
-                  {totalFotos}
-                </Badge>
-              </div>
-              
-              {/* Grid 2x2 de thumbnails */}
-              <div className="grid grid-cols-2 gap-2">
-                {fotosPreview.map((foto, idx) => (
-                  <div
-                    key={foto.id}
-                    className={cn(
-                      "aspect-square bg-muted rounded-lg overflow-hidden relative",
-                      idx === 3 && totalFotos > 4 && "after:absolute after:inset-0 after:bg-black/50 after:flex after:items-center after:justify-center"
-                    )}
-                  >
-                    <img
-                      src={foto.arquivo_url}
-                      alt={foto.tipo || `Foto ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                    {idx === 3 && totalFotos > 4 && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <span className="text-white font-bold text-lg">+{totalFotos - 4}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {/* Preencher slots vazios se menos de 4 fotos */}
-                {fotosPreview.length < 4 && Array.from({ length: 4 - fotosPreview.length }).map((_, idx) => (
-                  <div
-                    key={`empty-${idx}`}
-                    className="aspect-square bg-muted rounded-lg flex items-center justify-center"
-                  >
-                    <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Card Assinatura */}
-        {assinaturaUrl && (
-          <Card
-            className="cursor-pointer transition-all hover:shadow-lg hover:border-amber-500/50 group border-2 border-amber-500/30 bg-amber-500/5"
-            onClick={() => setShowAssinatura(true)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2 rounded-lg bg-amber-500/20">
-                  <PenTool className="h-5 w-5 text-amber-500" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-foreground">Assinatura</h3>
-                  <p className="text-xs text-muted-foreground">Coletada na vistoria</p>
-                </div>
-                <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Válida
-                </Badge>
-              </div>
-              
-              {/* Preview da assinatura */}
-              <div className="aspect-video bg-white rounded-lg flex items-center justify-center p-3 relative group-hover:ring-2 group-hover:ring-amber-500/30 transition-all">
-                <img
-                  src={assinaturaUrl}
-                  alt="Assinatura do cliente"
-                  className="max-h-full max-w-full object-contain"
-                />
-                <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <ZoomIn className="h-5 w-5 text-amber-500" />
-                </div>
-              </div>
-              
-              {assinaturaData && (
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  {format(new Date(assinaturaData), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {hasDocsSolicitados ? (
+        <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+          {midiaContent}
+          <DocumentosSolicitadosCard documentosSolicitados={documentosSolicitados} />
+        </div>
+      ) : (
+        midiaContent
+      )}
 
       {/* Modal Vídeo 360° */}
       <Dialog open={showVideo} onOpenChange={setShowVideo}>
