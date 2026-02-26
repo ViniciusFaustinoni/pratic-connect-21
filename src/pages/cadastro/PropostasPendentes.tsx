@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -13,13 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +32,8 @@ import {
   MoreHorizontal,
   Trash2,
   Loader2,
+  Car,
+  ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePropostasPendentes, usePropostaStats, PropostaPendente } from '@/hooks/usePropostasPendentes';
@@ -52,114 +47,48 @@ import { supabase } from '@/integrations/supabase/client';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 
 // ============================================
-// COMPONENTE: KPI Card
+// STATUS CONFIG
 // ============================================
-interface KPICardProps {
-  titulo: string;
-  valor: number;
-  icon: React.ReactNode;
-  cor: string;
-  loading?: boolean;
-}
+const statusFilters = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'assinado', label: 'Aguardando' },
+  { value: 'pendente_vistoria', label: 'Pend. Vistoria' },
+  { value: 'em_analise', label: 'Em Análise' },
+];
 
-function KPICard({ titulo, valor, icon, cor, loading }: KPICardProps) {
-  if (loading) {
-    return (
-      <Card className="border-border bg-card">
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="space-y-2 flex-1">
-              <Skeleton className="h-4 w-24 bg-muted" />
-              <Skeleton className="h-8 w-16 bg-muted" />
-            </div>
-            <Skeleton className="h-10 w-10 rounded bg-muted" />
-          </div>
-        </CardContent>
-      </Card>
-    );
+function getStatusBadge(status: string | null, associadoStatus?: string | null, temDocPendente?: boolean) {
+  const aguardandoDoc = (associadoStatus === 'documentacao_pendente' || temDocPendente) && status === 'assinado';
+  
+  if (aguardandoDoc) {
+    return <Badge className="bg-orange-500/15 text-orange-500 border-orange-500/30 text-[10px] px-1.5">Aguard. Doc</Badge>;
   }
 
-  return (
-    <Card className="border-border bg-card hover:border-border-hover transition-all duration-200">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">{titulo}</p>
-            <p className="text-3xl font-bold text-foreground">{valor}</p>
-          </div>
-          <div className={cn("p-3 rounded-lg", cor)}>
-            {icon}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ============================================
-// COMPONENTE: Status Badge
-// ============================================
-interface StatusBadgeProps {
-  status: string | null;
-  associadoStatus?: string | null;
-  temDocumentoPendente?: boolean;
-}
-
-function StatusBadge({ status, associadoStatus, temDocumentoPendente }: StatusBadgeProps) {
-  // Verificar se está aguardando documentos do cliente
-  const aguardandoDocumentoCliente = 
-    (associadoStatus === 'documentacao_pendente' || temDocumentoPendente) && 
-    status === 'assinado';
-
-  if (aguardandoDocumentoCliente) {
-    return (
-      <Badge variant="secondary" className="bg-orange-500/20 text-orange-400 border-orange-500">
-        Aguardando Documento (Cliente)
-      </Badge>
-    );
-  }
-
-  const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-    assinado: { label: 'Aguardando Análise', variant: 'secondary' },
-    em_analise: { label: 'Em Análise', variant: 'default' },
-    pendente_vistoria: { label: 'Pendente de Vistoria', variant: 'outline' },
-    ativo: { label: 'Aprovado', variant: 'default' },
-    reprovado: { label: 'Reprovado', variant: 'destructive' },
+  const configs: Record<string, { label: string; className: string }> = {
+    assinado: { label: 'Aguardando', className: 'bg-warning/15 text-warning border-warning/30' },
+    em_analise: { label: 'Em Análise', className: 'bg-info/15 text-info border-info/30' },
+    pendente_vistoria: { label: 'Pend. Vistoria', className: 'bg-purple-500/15 text-purple-500 border-purple-500/30' },
+    ativo: { label: 'Aprovado', className: 'bg-success/15 text-success border-success/30' },
+    reprovado: { label: 'Reprovado', className: 'bg-destructive/15 text-destructive border-destructive/30' },
   };
 
-  const statusConfig = config[status || ''] || { label: status || 'Desconhecido', variant: 'outline' };
-
-  return (
-    <Badge variant={statusConfig.variant} className={cn(
-      status === 'assinado' && 'bg-warning/20 text-warning-foreground border-warning',
-      status === 'em_analise' && 'bg-info/20 text-info-foreground border-info',
-      status === 'pendente_vistoria' && 'bg-violet-500/20 text-violet-400 border-violet-500',
-      status === 'ativo' && 'bg-success/20 text-success-foreground border-success',
-    )}>
-      {statusConfig.label}
-    </Badge>
-  );
+  const cfg = configs[status || ''] || { label: status || '?', className: 'bg-muted text-muted-foreground' };
+  return <Badge className={cn(cfg.className, "text-[10px] px-1.5")}>{cfg.label}</Badge>;
 }
 
-// ============================================
-// FUNÇÃO: Mascarar CPF
-// ============================================
-function maskCPF(cpf: string | null): string {
-  if (!cpf) return '---';
-  const clean = cpf.replace(/\D/g, '');
-  if (clean.length !== 11) return cpf;
-  return `***.${clean.slice(3, 6)}.***-${clean.slice(9)}`;
+function getWaitColor(date: string | null) {
+  if (!date) return 'border-l-border';
+  const hours = (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60);
+  if (hours > 48) return 'border-l-destructive';
+  if (hours > 24) return 'border-l-warning';
+  return 'border-l-success';
 }
 
-// ============================================
-// FUNÇÃO: Formatar valor
-// ============================================
-function formatCurrency(value: number | null): string {
-  if (value === null || value === undefined) return 'R$ ---';
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
+function getWaitTextColor(date: string | null) {
+  if (!date) return 'text-muted-foreground';
+  const hours = (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60);
+  if (hours > 48) return 'text-destructive';
+  if (hours > 24) return 'text-warning';
+  return 'text-success';
 }
 
 // ============================================
@@ -180,413 +109,270 @@ export default function PropostasPendentes() {
   const { data: stats, isLoading: statsLoading } = usePropostaStats();
   const { data: instalacoesPendentes, isLoading: instalacoesPendentesLoading } = useInstalacoesAguardandoAtivacao();
 
-  // Função para ativar rastreador
+  // Função para ativar rastreador (mantida sem alteração)
   const handleAtivarRastreador = async (proposta: PropostaPendente) => {
     if (!proposta.instalacao_info?.rastreador_id || !proposta.associado_id) {
       toast.error('Dados insuficientes para ativação');
       return;
     }
-    
     setAtivandoRastreadorId(proposta.id);
     try {
-      // Buscar veiculo_id
       const { data: veiculo } = await supabase
-        .from('veiculos')
-        .select('id')
+        .from('veiculos').select('id')
         .eq('associado_id', proposta.associado_id)
-        .eq('placa', proposta.veiculo_placa)
-        .single();
-      
+        .eq('placa', proposta.veiculo_placa).single();
       if (!veiculo) throw new Error('Veículo não encontrado');
-      
-      // Ativar baseado na plataforma
       const plataforma = proposta.instalacao_info.rastreador_plataforma;
-      
       if (plataforma === 'softruck') {
         const { data, error } = await supabase.functions.invoke('softruck-ativar-dispositivo', {
-          body: { 
-            imei: proposta.instalacao_info.rastreador_imei,
-            veiculoId: veiculo.id,
-            associadoId: proposta.associado_id,
-          }
+          body: { imei: proposta.instalacao_info.rastreador_imei, veiculoId: veiculo.id, associadoId: proposta.associado_id }
         });
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error || 'Erro na ativação Softruck');
       } else if (plataforma === 'rede_veiculos') {
         const { data, error } = await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
-          body: { 
-            imei: proposta.instalacao_info.rastreador_imei,
-            veiculoId: veiculo.id,
-            associadoId: proposta.associado_id,
-          }
+          body: { imei: proposta.instalacao_info.rastreador_imei, veiculoId: veiculo.id, associadoId: proposta.associado_id }
         });
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error || 'Erro na ativação Rede Veículos');
       } else {
-        // Ativação local
-        await supabase.from('rastreadores')
-          .update({ status: 'instalado', veiculo_id: veiculo.id })
-          .eq('id', proposta.instalacao_info.rastreador_id);
+        await supabase.from('rastreadores').update({ status: 'instalado', veiculo_id: veiculo.id }).eq('id', proposta.instalacao_info.rastreador_id);
       }
-      
       toast.success('Rastreador ativado com sucesso!');
       refetch();
     } catch (err: any) {
       console.error('Erro ao ativar rastreador:', err);
-      toast.error('Erro ao ativar rastreador', {
-        description: err.message || 'Tente novamente mais tarde'
-      });
+      toast.error('Erro ao ativar rastreador', { description: err.message || 'Tente novamente' });
     } finally {
       setAtivandoRastreadorId(null);
     }
   };
 
-  // Função para excluir associado
   const handleExcluirAssociado = async (motivo: string) => {
     if (!associadoParaExcluir) return;
-    
     deleteAssociado(associadoParaExcluir.id, {
-      onSuccess: () => {
-        setDialogExcluirAberto(false);
-        setAssociadoParaExcluir(null);
-        refetch();
-      }
+      onSuccess: () => { setDialogExcluirAberto(false); setAssociadoParaExcluir(null); refetch(); }
     });
   };
 
-  // Filtrar propostas
-  const propostasFiltradas = propostas?.filter((proposta) => {
-    // Filtro de busca
-    const searchLower = search.toLowerCase();
-    const matchSearch =
-      !search ||
-      proposta.cliente_nome?.toLowerCase().includes(searchLower) ||
-      proposta.cliente_cpf?.includes(search) ||
-      proposta.veiculo_placa?.toLowerCase().includes(searchLower);
-
-    // Filtro de status
-    const matchStatus = statusFilter === 'todos' || proposta.status === statusFilter;
-
-    return matchSearch && matchStatus;
-  });
+  // Ordenar: reanálise no topo, depois por data
+  const propostasFiltradas = propostas
+    ?.filter((proposta) => {
+      const searchLower = search.toLowerCase();
+      const matchSearch = !search ||
+        proposta.cliente_nome?.toLowerCase().includes(searchLower) ||
+        proposta.cliente_cpf?.includes(search) ||
+        proposta.veiculo_placa?.toLowerCase().includes(searchLower);
+      const matchStatus = statusFilter === 'todos' || proposta.status === statusFilter;
+      return matchSearch && matchStatus;
+    })
+    ?.sort((a, b) => {
+      // Reanálise no topo
+      const aReanalise = (a.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
+      const bReanalise = (b.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
+      if (bReanalise !== aReanalise) return bReanalise - aReanalise;
+      return 0;
+    });
 
   return (
-    <div className="space-y-6">
-      {/* HEADER */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Propostas Pendentes</h1>
-          <p className="text-muted-foreground">
-            Contratos assinados aguardando análise e aprovação
-          </p>
+    <div className="space-y-4">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold text-foreground">Propostas Pendentes</h1>
+        <p className="text-sm text-muted-foreground">Contratos assinados aguardando análise</p>
+      </div>
+
+      {/* KPIs como pills compactos */}
+      <div className="flex flex-wrap gap-2">
+        {statsLoading ? (
+          <Skeleton className="h-7 w-64 bg-muted rounded-full" />
+        ) : (
+          <>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warning/10 border border-warning/30">
+              <Clock className="h-3 w-3 text-warning" />
+              <span className="text-xs font-medium text-warning">Aguardando: {stats?.aguardando || 0}</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-info/10 border border-info/30">
+              <Eye className="h-3 w-3 text-info" />
+              <span className="text-xs font-medium text-info">Em Análise: {stats?.emAnalise || 0}</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30">
+              <Zap className="h-3 w-3 text-purple-500" />
+              <span className="text-xs font-medium text-purple-500">Ativação: {instalacoesPendentes?.length || 0}</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 border border-success/30">
+              <CheckCircle className="h-3 w-3 text-success" />
+              <span className="text-xs font-medium text-success">Aprovados: {stats?.aprovadosHoje || 0}</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-destructive/10 border border-destructive/30">
+              <XCircle className="h-3 w-3 text-destructive" />
+              <span className="text-xs font-medium text-destructive">Reprovados: {stats?.reprovadosHoje || 0}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Ativação de Rastreador - Banner compacto */}
+      {instalacoesPendentes && instalacoesPendentes.length > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-purple-500/30 bg-purple-500/5">
+          <Zap className="h-4 w-4 text-purple-500 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {instalacoesPendentes.length} instalação(ões) aguardando ativação
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-purple-500/30 text-purple-500 hover:bg-purple-500/10 text-xs flex-shrink-0"
+            onClick={() => {
+              const first = instalacoesPendentes[0] as any;
+              if (first) navigate(`/cadastro/instalacoes/${first.id}/ativar`);
+            }}
+          >
+            <Zap className="mr-1 h-3 w-3" />
+            Ativar
+          </Button>
+        </div>
+      )}
+
+      {/* Filtros inline */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar nome, CPF ou placa..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10 bg-card border-border h-9 text-sm"
+          />
+        </div>
+        <div className="flex gap-1 bg-muted/50 p-0.5 rounded-lg">
+          {statusFilters.map(f => (
+            <button
+              key={f.value}
+              className={cn(
+                "px-3 py-1.5 text-xs rounded-md transition-colors",
+                statusFilter === f.value
+                  ? 'bg-card shadow-sm text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+              onClick={() => setStatusFilter(f.value)}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
-        <KPICard
-          titulo="Aguardando Análise"
-          valor={stats?.aguardando || 0}
-          icon={<Clock className="h-5 w-5 text-white" />}
-          cor="bg-warning"
-          loading={statsLoading}
-        />
-        <KPICard
-          titulo="Em Análise"
-          valor={stats?.emAnalise || 0}
-          icon={<Eye className="h-5 w-5 text-white" />}
-          cor="bg-info"
-          loading={statsLoading}
-        />
-        <KPICard
-          titulo="Aguard. Ativação"
-          valor={instalacoesPendentes?.length || 0}
-          icon={<Zap className="h-5 w-5 text-white" />}
-          cor="bg-purple-600"
-          loading={instalacoesPendentesLoading}
-        />
-        <KPICard
-          titulo="Aprovados Hoje"
-          valor={stats?.aprovadosHoje || 0}
-          icon={<CheckCircle className="h-5 w-5 text-white" />}
-          cor="bg-success"
-          loading={statsLoading}
-        />
-        <KPICard
-          titulo="Reprovados Hoje"
-          valor={stats?.reprovadosHoje || 0}
-          icon={<XCircle className="h-5 w-5 text-white" />}
-          cor="bg-destructive"
-          loading={statsLoading}
-        />
-      </div>
+      {/* Cards de Propostas */}
+      {propostasLoading ? (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-20 w-full bg-muted rounded-lg" />)}
+        </div>
+      ) : !propostasFiltradas || propostasFiltradas.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <FileText className="h-10 w-10 mx-auto mb-3 opacity-40" />
+          <p className="font-medium text-sm">Nenhuma proposta encontrada</p>
+          <p className="text-xs">Todas as propostas foram analisadas.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">{propostasFiltradas.length} proposta(s)</p>
+          {propostasFiltradas.map((proposta) => {
+            const hasReanalise = (proposta.documentos_solicitados_enviados?.length || 0) > 0;
+            return (
+              <div
+                key={proposta.id}
+                className={cn(
+                  "flex items-center gap-3 p-3 rounded-lg bg-card border border-border hover:border-border-hover transition-all cursor-pointer border-l-4",
+                  getWaitColor(proposta.data_assinatura),
+                  hasReanalise && "ring-1 ring-amber-500/30 bg-amber-500/5"
+                )}
+                onClick={() => navigate(`/cadastro/propostas/${proposta.id}`)}
+              >
+                {/* Reanálise indicator */}
+                {hasReanalise && (
+                  <div className="flex-shrink-0">
+                    <RefreshCw className="h-4 w-4 text-amber-500" />
+                  </div>
+                )}
 
-      {/* SEÇÃO AGUARDANDO ATIVAÇÃO */}
-      {instalacoesPendentes && instalacoesPendentes.length > 0 && (
-        <Card className="border-2 border-purple-500 bg-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <Zap className="h-5 w-5 text-purple-500" />
-              Instalações Aguardando Ativação de Rastreador
-            </CardTitle>
-            <CardDescription>
-              Clique para ativar o rastreador na plataforma e liberar a cobertura total
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableHead className="text-foreground">Associado</TableHead>
-                    <TableHead className="text-foreground">Veículo</TableHead>
-                    <TableHead className="text-foreground">Rastreador</TableHead>
-                    <TableHead className="text-foreground">Concluída em</TableHead>
-                    <TableHead className="text-foreground text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {instalacoesPendentes.map((inst: any) => (
-                    <TableRow key={inst.id} className="hover:bg-muted/30">
-                      <TableCell className="font-medium text-foreground">
-                        {inst.associados?.nome || '---'}
-                        <div className="text-sm text-muted-foreground">
-                          {inst.associados?.telefone || '---'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-foreground">
-                          {inst.veiculos?.marca} {inst.veiculos?.modelo}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {inst.veiculos?.placa || '---'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-foreground font-mono text-sm">
-                          {inst.rastreadores?.imei || '---'}
-                        </div>
-                        <Badge variant="outline" className="text-xs">
-                          {inst.rastreadores?.plataforma || 'N/A'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {inst.concluida_em
-                          ? format(new Date(inst.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                          : '---'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          className="bg-purple-600 hover:bg-purple-700 text-white"
-                          onClick={() => navigate(`/cadastro/instalacoes/${inst.id}/ativar`)}
-                        >
-                          <Zap className="mr-1 h-4 w-4" />
-                          Ativar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                {/* Placa destaque */}
+                <div className="flex-shrink-0 w-20">
+                  <span className="font-mono text-sm font-bold text-foreground">
+                    {proposta.veiculo_placa || '---'}
+                  </span>
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {proposta.cliente_nome || proposta.associado?.nome || '---'}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {proposta.veiculo_modelo || '---'} • {proposta.plano?.nome || proposta.plano_nome || '---'}
+                  </p>
+                </div>
+
+                {/* Status + Tempo */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente)}
+                  <span className={cn("text-[10px] font-medium", getWaitTextColor(proposta.data_assinatura))}>
+                    {proposta.data_assinatura
+                      ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: false })
+                      : '---'}
+                  </span>
+                </div>
+
+                {/* Ações */}
+                <div className="flex-shrink-0">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => e.stopPropagation()}>
+                        {ativandoRastreadorId === proposta.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-popover border-border">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/cadastro/propostas/${proposta.id}`); }}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        Analisar
+                      </DropdownMenuItem>
+                      {proposta.instalacao_info && !proposta.instalacao_info.rastreador_ativado && proposta.instalacao_info.rastreador_id && (
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleAtivarRastreador(proposta); }} disabled={ativandoRastreadorId === proposta.id}>
+                          <Zap className="mr-2 h-4 w-4" />
+                          Ativar Rastreador
+                        </DropdownMenuItem>
+                      )}
+                      {isDiretor && proposta.associado_id && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAssociadoParaExcluir({ id: proposta.associado_id!, nome: proposta.cliente_nome || proposta.associado?.nome || 'Associado' });
+                              setDialogExcluirAberto(true);
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Excluir Associado
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      {/* FILTROS */}
-      <Card className="border-border bg-card">
-        <CardContent className="p-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome, CPF ou placa..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 bg-background border-border"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[200px] bg-background border-border">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os status</SelectItem>
-                <SelectItem value="assinado">Aguardando Análise</SelectItem>
-                <SelectItem value="pendente_vistoria">Pendente de Vistoria</SelectItem>
-                <SelectItem value="em_analise">Em Análise</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* TABELA */}
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <FileText className="h-5 w-5 text-purple-500" />
-            Propostas
-          </CardTitle>
-          <CardDescription>
-            {propostasFiltradas?.length || 0} proposta(s) encontrada(s)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {propostasLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-16 w-full bg-muted" />
-              ))}
-            </div>
-          ) : !propostasFiltradas || propostasFiltradas.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">Nenhuma proposta pendente</p>
-              <p className="text-sm">Todas as propostas foram analisadas.</p>
-            </div>
-          ) : (
-            <div className="rounded-md border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableHead className="text-foreground">Cliente</TableHead>
-                    <TableHead className="text-foreground">CPF</TableHead>
-                    <TableHead className="text-foreground">Veículo</TableHead>
-                    <TableHead className="text-foreground">Plano</TableHead>
-                    <TableHead className="text-foreground">Valor</TableHead>
-                    <TableHead className="text-foreground">Assinado em</TableHead>
-                    <TableHead className="text-foreground">Status</TableHead>
-                    <TableHead className="text-foreground text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {propostasFiltradas.map((proposta) => (
-                    <TableRow
-                      key={proposta.id}
-                      className="hover:bg-muted/30 cursor-pointer"
-                      onClick={() => navigate(`/cadastro/propostas/${proposta.id}`)}
-                    >
-                      <TableCell className="font-medium text-foreground">
-                        {proposta.cliente_nome || proposta.associado?.nome || '---'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {maskCPF(proposta.cliente_cpf || proposta.associado?.cpf)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-foreground">
-                          {proposta.veiculo_modelo || '---'}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {proposta.veiculo_placa || '---'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-foreground">
-                        {proposta.plano?.nome || proposta.plano_nome || '---'}
-                      </TableCell>
-                      <TableCell className="text-foreground font-medium">
-                        {formatCurrency(proposta.valor_mensal)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-foreground">
-                          {proposta.data_assinatura
-                            ? format(new Date(proposta.data_assinatura), 'dd/MM/yyyy', { locale: ptBR })
-                            : '---'}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {proposta.data_assinatura
-                            ? `há ${formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR })}`
-                            : ''}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge 
-                          status={proposta.status}
-                          associadoStatus={proposta.associado_status}
-                          temDocumentoPendente={proposta.tem_documento_pendente}
-                        />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {ativandoRastreadorId === proposta.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <MoreHorizontal className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-popover border-border">
-                            {/* Analisar */}
-                            <DropdownMenuItem 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/cadastro/propostas/${proposta.id}`);
-                              }}
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              Analisar Proposta
-                            </DropdownMenuItem>
-
-                            {/* Ativar Rastreador - se instalação concluída mas não ativado pelo vistoriador */}
-                            {proposta.instalacao_info && 
-                             !proposta.instalacao_info.rastreador_ativado && 
-                             proposta.instalacao_info.rastreador_id && (
-                              <DropdownMenuItem 
-                                onClick={(e) => {
-                                  e.stopPropagation(); 
-                                  handleAtivarRastreador(proposta); 
-                                }}
-                                disabled={ativandoRastreadorId === proposta.id}
-                              >
-                                {ativandoRastreadorId === proposta.id ? (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Zap className="mr-2 h-4 w-4" />
-                                )}
-                                Ativar Rastreador
-                              </DropdownMenuItem>
-                            )}
-
-                            {/* Excluir Associado - apenas diretores */}
-                            {isDiretor && proposta.associado_id && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setAssociadoParaExcluir({ 
-                                      id: proposta.associado_id!, 
-                                      nome: proposta.cliente_nome || proposta.associado?.nome || 'Associado' 
-                                    });
-                                    setDialogExcluirAberto(true);
-                                  }}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Excluir Associado
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Dialog de confirmação de exclusão */}
       <ConfirmacaoAcaoDialog
         open={dialogExcluirAberto}
         onOpenChange={setDialogExcluirAberto}
