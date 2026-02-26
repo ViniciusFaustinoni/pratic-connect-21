@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { useServico, useIniciarServicoMutation } from '@/hooks/useServicos';
 import { 
   useRegistrarResultadoManutencao, 
@@ -449,12 +449,12 @@ export default function ExecutarManutencao() {
 
       {/* Modal de Resultado */}
       <Dialog open={showResultadoModal} onOpenChange={setShowResultadoModal}>
-        <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0">
+        <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 overflow-hidden">
           <DialogHeader className="p-4 pb-2 flex-shrink-0">
             <DialogTitle>Resultado da Manutenção</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 max-h-[calc(90vh-140px)] px-4 overscroll-contain">
+          <div className="flex-1 overflow-y-auto px-4 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
             <div className="space-y-4 pb-4">
               {/* Seleção de Resultado */}
               <div className="space-y-3">
@@ -700,7 +700,7 @@ export default function ExecutarManutencao() {
                 />
               )}
             </div>
-          </ScrollArea>
+          </div>
 
           <DialogFooter className="flex-row gap-2 p-4 border-t flex-shrink-0 bg-background">
             <Button
