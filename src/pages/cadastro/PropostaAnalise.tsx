@@ -276,6 +276,7 @@ export default function PropostaAnalise() {
         assinaturaUrl={proposta.instalacao_info?.assinatura_cliente_url}
         assinaturaData={proposta.instalacao_info?.concluida_em}
         assinaturaPor={proposta.instalacao_info?.instalador_nome}
+        documentosSolicitados={proposta.documentos_solicitados_enviados}
       />
 
       {/* Observações do Vistoriador (se houver) */}
