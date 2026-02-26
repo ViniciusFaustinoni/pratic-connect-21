@@ -36,36 +36,35 @@ import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 interface PropostaDetalhesTabsProps {
   proposta: PropostaPendente;
   onViewDocumento: (documento: DocumentoAnexadoCompleto) => void;
-  // Para edição de RENAVAM/CHASSI
   veiculoRenavam: string;
   setVeiculoRenavam: (value: string) => void;
   veiculoChassi: string;
   setVeiculoChassi: (value: string) => void;
 }
 
-// Componente auxiliar para exibir informações
-function InfoRow({
+// Componente de campo de ficha
+function FichaField({
   icon: Icon,
   label,
   value,
   highlight,
   iconColor = 'text-muted-foreground',
+  className,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | null | undefined;
   highlight?: boolean;
   iconColor?: string;
+  className?: string;
 }) {
   return (
-    <div className="flex items-start gap-3 py-2">
-      <div className="p-1.5 rounded-md bg-muted/50 flex-shrink-0">
-        <Icon className={cn("h-4 w-4", iconColor)} />
-      </div>
+    <div className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/50", className)}>
+      <Icon className={cn("h-4 w-4 flex-shrink-0", iconColor)} />
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
         <p className={cn(
-          "text-foreground break-words", 
+          "text-sm text-foreground truncate", 
           highlight && "font-semibold"
         )}>
           {value || '---'}
@@ -75,7 +74,6 @@ function InfoRow({
   );
 }
 
-// Formatar CPF com máscara
 function maskCPF(cpf: string | null): string {
   if (!cpf) return '---';
   const clean = cpf.replace(/\D/g, '');
@@ -83,7 +81,6 @@ function maskCPF(cpf: string | null): string {
   return `***.${clean.slice(3, 6)}.***-${clean.slice(9)}`;
 }
 
-// Formatar moeda
 function formatCurrency(value: number | null): string {
   if (value === null || value === undefined) return 'R$ ---';
   return new Intl.NumberFormat('pt-BR', {
@@ -102,90 +99,75 @@ export function PropostaDetalhesTabs({
 }: PropostaDetalhesTabsProps) {
   const associado = proposta.associado;
   
-  // Contar documentos
   const totalDocumentos = (proposta.documentos?.length || 0);
   const documentosNovos = proposta.documentos_solicitados_enviados?.length || 0;
   
-  // Verificar se tem instalação
   const temInstalacao = !!proposta.instalacao_info;
   const temAgendamento = !!proposta.instalacao_agendada && !temInstalacao;
   const temVistoriaBase = !!proposta.vistoria_base_info;
 
-  // Verificar campos obrigatórios do veículo
   const faltaRenavam = !proposta.veiculo_renavam && !veiculoRenavam;
   const faltaChassi = !proposta.veiculo_chassi && !veiculoChassi;
 
   return (
     <Tabs defaultValue="cliente" className="w-full">
-      <TabsList className="w-full grid grid-cols-2 sm:grid-cols-5 h-auto gap-1 bg-muted/50 p-1">
-        <TabsTrigger value="cliente" className="gap-1.5 text-xs sm:text-sm">
-          <User className="h-4 w-4" />
-          <span className="hidden sm:inline">Cliente</span>
-        </TabsTrigger>
-        <TabsTrigger value="veiculo" className="gap-1.5 text-xs sm:text-sm relative">
-          <Car className="h-4 w-4" />
-          <span className="hidden sm:inline">Veículo</span>
-          {(faltaRenavam || faltaChassi) && (
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-warning rounded-full" />
-          )}
-        </TabsTrigger>
-        <TabsTrigger value="documentos" className="gap-1.5 text-xs sm:text-sm relative">
-          <FileText className="h-4 w-4" />
-          <span className="hidden sm:inline">Docs</span>
-          <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-            {totalDocumentos}
-          </Badge>
-          {documentosNovos > 0 && (
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-          )}
-        </TabsTrigger>
-        <TabsTrigger value="instalacao" className="gap-1.5 text-xs sm:text-sm">
-          <Wrench className="h-4 w-4" />
-          <span className="hidden sm:inline">Instalação</span>
-        </TabsTrigger>
-        <TabsTrigger value="contrato" className="gap-1.5 text-xs sm:text-sm">
-          <FileCheck className="h-4 w-4" />
-          <span className="hidden sm:inline">Contrato</span>
-        </TabsTrigger>
-      </TabsList>
+      {/* Sticky tabs bar */}
+      <div className="sticky top-[41px] z-10 bg-background/95 backdrop-blur-sm pb-2 pt-1 -mx-1 px-1">
+        <TabsList className="w-full grid grid-cols-5 h-10 bg-muted/50 p-1 rounded-lg">
+          <TabsTrigger value="cliente" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+            <User className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Cliente</span>
+          </TabsTrigger>
+          <TabsTrigger value="veiculo" className="gap-1.5 text-xs relative data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+            <Car className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Veículo</span>
+            {(faltaRenavam || faltaChassi) && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-warning" />
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="documentos" className="gap-1.5 text-xs relative data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+            <FileText className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Docs</span>
+            <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px] leading-none">
+              {totalDocumentos}
+            </Badge>
+            {documentosNovos > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="instalacao" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+            <Wrench className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Instalação</span>
+          </TabsTrigger>
+          <TabsTrigger value="contrato" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+            <FileCheck className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Contrato</span>
+          </TabsTrigger>
+        </TabsList>
+      </div>
 
       {/* Tab Cliente */}
-      <TabsContent value="cliente" className="mt-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
+      <TabsContent value="cliente" className="mt-3">
+        <Card className="border-border">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-primary">
+              <User className="h-4 w-4" />
               Dados do Cliente
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-1 sm:grid-cols-2">
-            <InfoRow
-              icon={User}
-              label="Nome Completo"
-              value={proposta.cliente_nome || associado?.nome}
-              highlight
-              iconColor="text-primary"
-            />
-            <InfoRow
-              icon={FileText}
-              label="CPF"
-              value={maskCPF(proposta.cliente_cpf || associado?.cpf)}
-              iconColor="text-primary"
-            />
-            <InfoRow
-              icon={Phone}
-              label="Telefone"
-              value={proposta.cliente_telefone || associado?.telefone}
-              iconColor="text-primary"
-            />
-            <InfoRow
-              icon={Mail}
-              label="Email"
-              value={proposta.cliente_email || associado?.email}
-              iconColor="text-primary"
-            />
-            <div className="sm:col-span-2">
-              <InfoRow
+          <CardContent className="px-4 pb-4">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <FichaField icon={User} label="Nome Completo" value={proposta.cliente_nome || associado?.nome} highlight iconColor="text-primary" />
+              <FichaField icon={FileText} label="CPF" value={maskCPF(proposta.cliente_cpf || associado?.cpf)} iconColor="text-primary" />
+              <FichaField icon={Phone} label="Telefone" value={proposta.cliente_telefone || associado?.telefone} iconColor="text-primary" />
+              <FichaField icon={Mail} label="Email" value={proposta.cliente_email || associado?.email} iconColor="text-primary" />
+              <FichaField
                 icon={MapPin}
                 label="Endereço"
                 value={
@@ -194,6 +176,7 @@ export function PropostaDetalhesTabs({
                     : proposta.endereco_completo || null
                 }
                 iconColor="text-primary"
+                className="sm:col-span-2"
               />
             </div>
           </CardContent>
@@ -201,94 +184,49 @@ export function PropostaDetalhesTabs({
       </TabsContent>
 
       {/* Tab Veículo */}
-      <TabsContent value="veiculo" className="mt-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Car className="h-5 w-5 text-purple-500" />
+      <TabsContent value="veiculo" className="mt-3">
+        <Card className="border-border">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-purple-500">
+              <Car className="h-4 w-4" />
               Dados do Veículo
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-1 sm:grid-cols-2">
-              <InfoRow
-                icon={Car}
-                label="Modelo/Marca"
-                value={`${proposta.veiculo_modelo || '---'} ${proposta.veiculo_marca || ''}`}
-                highlight
-                iconColor="text-purple-500"
-              />
-              <InfoRow
-                icon={FileText}
-                label="Placa"
-                value={proposta.veiculo_placa}
-                iconColor="text-purple-500"
-              />
-              <InfoRow
-                icon={Calendar}
-                label="Ano"
-                value={proposta.veiculo_ano?.toString()}
-                iconColor="text-purple-500"
-              />
-              <InfoRow
-                icon={FileText}
-                label="Cor"
-                value={proposta.veiculo_cor}
-                iconColor="text-purple-500"
-              />
+          <CardContent className="px-4 pb-4 space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <FichaField icon={Car} label="Modelo/Marca" value={`${proposta.veiculo_modelo || '---'} ${proposta.veiculo_marca || ''}`} highlight iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Placa" value={proposta.veiculo_placa} iconColor="text-purple-500" />
+              <FichaField icon={Calendar} label="Ano" value={proposta.veiculo_ano?.toString()} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Cor" value={proposta.veiculo_cor} iconColor="text-purple-500" />
             </div>
             
-            {/* Alerta de campos obrigatórios */}
             {(faltaRenavam || faltaChassi) && (
-              <div className="rounded-lg border border-warning/50 bg-warning/10 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-warning">Campos obrigatórios para SGA Hinova</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Preencha {[faltaRenavam && 'RENAVAM', faltaChassi && 'CHASSI'].filter(Boolean).join(' e ')} para enviar ao SGA.
-                    </p>
-                  </div>
+              <div className="rounded-lg border border-warning/50 bg-warning/10 p-3 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-warning">Campos obrigatórios para SGA Hinova</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Preencha {[faltaRenavam && 'RENAVAM', faltaChassi && 'CHASSI'].filter(Boolean).join(' e ')}.
+                  </p>
                 </div>
               </div>
             )}
             
-            {/* Campos editáveis */}
-            <div className="grid gap-4 sm:grid-cols-2 pt-2">
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  RENAVAM
-                </Label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">RENAVAM</Label>
                 {proposta.veiculo_renavam ? (
-                  <p className="text-sm font-medium text-foreground h-9 flex items-center">
-                    {proposta.veiculo_renavam}
-                  </p>
+                  <p className="text-sm font-medium text-foreground h-9 flex items-center px-3 bg-muted/30 rounded-lg border border-border/50">{proposta.veiculo_renavam}</p>
                 ) : (
-                  <Input
-                    type="text"
-                    value={veiculoRenavam}
-                    onChange={(e) => setVeiculoRenavam(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Digite o RENAVAM"
-                    maxLength={11}
-                  />
+                  <Input type="text" value={veiculoRenavam} onChange={(e) => setVeiculoRenavam(e.target.value.replace(/\D/g, ''))} placeholder="Digite o RENAVAM" maxLength={11} className="h-9" />
                 )}
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  CHASSI
-                </Label>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">CHASSI</Label>
                 {proposta.veiculo_chassi ? (
-                  <p className="text-sm font-medium text-foreground h-9 flex items-center">
-                    {proposta.veiculo_chassi}
-                  </p>
+                  <p className="text-sm font-medium text-foreground h-9 flex items-center px-3 bg-muted/30 rounded-lg border border-border/50">{proposta.veiculo_chassi}</p>
                 ) : (
-                  <Input
-                    type="text"
-                    value={veiculoChassi}
-                    onChange={(e) => setVeiculoChassi(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                    placeholder="Digite o CHASSI"
-                    maxLength={17}
-                  />
+                  <Input type="text" value={veiculoChassi} onChange={(e) => setVeiculoChassi(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="Digite o CHASSI" maxLength={17} className="h-9" />
                 )}
               </div>
             </div>
@@ -297,8 +235,7 @@ export function PropostaDetalhesTabs({
       </TabsContent>
 
       {/* Tab Documentos */}
-      <TabsContent value="documentos" className="mt-4 space-y-4">
-        {/* Documentos Anexados */}
+      <TabsContent value="documentos" className="mt-3 space-y-3">
         <DocumentosAnexadosPanel
           documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
           onViewDocumento={onViewDocumento}
@@ -306,199 +243,98 @@ export function PropostaDetalhesTabs({
       </TabsContent>
 
       {/* Tab Instalação */}
-      <TabsContent value="instalacao" className="mt-4 space-y-4">
-        {/* Agendamento pendente */}
+      <TabsContent value="instalacao" className="mt-3 space-y-3">
         {temAgendamento && (
-          <Card className="border-2 border-info/30">
-            <CardHeader className="pb-3 bg-info/10">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-info" />
+          <Card className="border border-info/30">
+            <CardHeader className="pb-2 pt-4 px-4 bg-info/5">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-info">
+                <Calendar className="h-4 w-4" />
                 Instalação Agendada
               </CardTitle>
-              <CardDescription>
-                Agendamento realizado pelo cliente após pagamento da adesão
-              </CardDescription>
+              <CardDescription className="text-xs">Agendamento pelo cliente após pagamento da adesão</CardDescription>
             </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              <div className="grid gap-1 sm:grid-cols-2">
-                <InfoRow
-                  icon={Calendar}
-                  label="Data Agendada"
-                  value={format(new Date(proposta.instalacao_agendada!.data), "dd/MM/yyyy", { locale: ptBR })}
-                  highlight
-                  iconColor="text-info"
-                />
-                <InfoRow
-                  icon={Clock}
-                  label="Horário"
-                  value={proposta.instalacao_agendada!.horario}
-                  iconColor="text-info"
-                />
+            <CardContent className="px-4 pb-4 pt-2">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <FichaField icon={Calendar} label="Data Agendada" value={format(new Date(proposta.instalacao_agendada!.data), "dd/MM/yyyy", { locale: ptBR })} highlight iconColor="text-info" />
+                <FichaField icon={Clock} label="Horário" value={proposta.instalacao_agendada!.horario} iconColor="text-info" />
               </div>
-              
               {proposta.instalacao_agendada?.permite_encaixe && (
-                <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/30">
-                  <div className="p-2 rounded-full bg-primary/20">
-                    <Puzzle className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <span className="font-semibold text-primary">Encaixe Permitido</span>
-                    <p className="text-sm text-muted-foreground">
-                      Cliente autorizou atendimento antecipado se houver vistoriador próximo
-                    </p>
-                  </div>
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/30 mt-2">
+                  <Puzzle className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-medium text-primary">Encaixe Permitido</span>
                 </div>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* Vistoria na Base */}
         {temVistoriaBase && (
-          <Card className="border-2 border-success/30">
-            <CardHeader className="pb-3 bg-success/10">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-success" />
+          <Card className="border border-success/30">
+            <CardHeader className="pb-2 pt-4 px-4 bg-success/5">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-success">
+                <Building2 className="h-4 w-4" />
                 Vistoria na Base
               </CardTitle>
-              <CardDescription>
-                Cliente compareceu à base PRATIC para realizar a vistoria presencial
-              </CardDescription>
             </CardHeader>
-            <CardContent className="pt-4 grid gap-1 sm:grid-cols-2">
-              <InfoRow
-                icon={Calendar}
-                label="Data da Vistoria"
-                value={format(new Date(proposta.vistoria_base_info!.data_agendada + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR })}
-                highlight
-                iconColor="text-success"
-              />
-              <InfoRow
-                icon={Clock}
-                label="Horário"
-                value={proposta.vistoria_base_info!.horario}
-                iconColor="text-success"
-              />
-              <InfoRow
-                icon={User}
-                label="Atendido por"
-                value={proposta.vistoria_base_info!.atendido_por_nome}
-                iconColor="text-success"
-              />
-              <div className="flex items-center">
-                <Badge className="bg-success/20 text-success border-success/30">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Vistoria Realizada
-                </Badge>
+            <CardContent className="px-4 pb-4 pt-2">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <FichaField icon={Calendar} label="Data" value={format(new Date(proposta.vistoria_base_info!.data_agendada + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR })} highlight iconColor="text-success" />
+                <FichaField icon={Clock} label="Horário" value={proposta.vistoria_base_info!.horario} iconColor="text-success" />
+                <FichaField icon={User} label="Atendido por" value={proposta.vistoria_base_info!.atendido_por_nome} iconColor="text-success" />
+                <div className="flex items-center px-3">
+                  <Badge className="bg-success/20 text-success border-success/30 text-xs">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Vistoria Realizada
+                  </Badge>
+                </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Instalação Realizada */}
         {temInstalacao && (
-          <Card className="border-2 border-purple-500/30">
-            <CardHeader className="pb-3 bg-purple-500/10">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Wifi className="h-5 w-5 text-purple-500" />
+          <Card className="border border-purple-500/30">
+            <CardHeader className="pb-2 pt-4 px-4 bg-purple-500/5">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-purple-500">
+                <Wifi className="h-4 w-4" />
                 Dados da Instalação
               </CardTitle>
-              <CardDescription>
-                Informações preenchidas pelo instalador durante a instalação do rastreador
-              </CardDescription>
             </CardHeader>
-            <CardContent className="pt-4 grid gap-1 sm:grid-cols-2">
-              <InfoRow
-                icon={Smartphone}
-                label="IMEI do Rastreador"
-                value={proposta.instalacao_info!.rastreador_imei}
-                highlight
-                iconColor="text-blue-500"
-              />
-              <InfoRow
-                icon={Hash}
-                label="Código do Rastreador"
-                value={proposta.instalacao_info!.rastreador_codigo}
-                iconColor="text-blue-500"
-              />
-              <InfoRow
-                icon={Calendar}
-                label="Data da Instalação"
-                value={
-                  proposta.instalacao_info!.concluida_em
-                    ? format(new Date(proposta.instalacao_info!.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                    : null
-                }
-                iconColor="text-blue-500"
-              />
-              <InfoRow
-                icon={Wrench}
-                label="Instalador Responsável"
-                value={proposta.instalacao_info!.instalador_nome}
-                iconColor="text-blue-500"
-              />
+            <CardContent className="px-4 pb-4 pt-2 grid gap-2 sm:grid-cols-2">
+              <FichaField icon={Smartphone} label="IMEI" value={proposta.instalacao_info!.rastreador_imei} highlight iconColor="text-blue-500" />
+              <FichaField icon={Hash} label="Código" value={proposta.instalacao_info!.rastreador_codigo} iconColor="text-blue-500" />
+              <FichaField icon={Calendar} label="Data" value={proposta.instalacao_info!.concluida_em ? format(new Date(proposta.instalacao_info!.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : null} iconColor="text-blue-500" />
+              <FichaField icon={Wrench} label="Instalador" value={proposta.instalacao_info!.instalador_nome} iconColor="text-blue-500" />
             </CardContent>
           </Card>
         )}
 
-        {/* Sem dados de instalação */}
         {!temAgendamento && !temVistoriaBase && !temInstalacao && (
           <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <Wrench className="h-12 w-12 mx-auto mb-4 opacity-30" />
-              <p className="font-medium">Nenhuma informação de instalação</p>
-              <p className="text-sm">Os dados aparecerão aqui após o agendamento ou instalação</p>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              <Wrench className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="font-medium text-sm">Nenhuma informação de instalação</p>
+              <p className="text-xs">Os dados aparecerão aqui após o agendamento</p>
             </CardContent>
           </Card>
         )}
       </TabsContent>
 
       {/* Tab Contrato */}
-      <TabsContent value="contrato" className="mt-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <FileCheck className="h-5 w-5 text-emerald-500" />
+      <TabsContent value="contrato" className="mt-3">
+        <Card className="border-border">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-emerald-500">
+              <FileCheck className="h-4 w-4" />
               Dados do Contrato
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-1 sm:grid-cols-2">
-            <InfoRow
-              icon={FileText}
-              label="Número do Contrato"
-              value={proposta.numero}
-              iconColor="text-emerald-500"
-            />
-            <InfoRow
-              icon={FileCheck}
-              label="Plano Escolhido"
-              value={proposta.plano?.nome || proposta.plano_nome}
-              highlight
-              iconColor="text-emerald-500"
-            />
-            <InfoRow
-              icon={DollarSign}
-              label="Valor Mensal"
-              value={formatCurrency(proposta.valor_mensal)}
-              highlight
-              iconColor="text-emerald-500"
-            />
-            <InfoRow
-              icon={Calendar}
-              label="Data de Assinatura"
-              value={
-                proposta.data_assinatura
-                  ? format(new Date(proposta.data_assinatura), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
-                  : null
-              }
-              iconColor="text-emerald-500"
-            />
-            <InfoRow
-              icon={User}
-              label="Vendedor"
-              value={proposta.vendedor?.nome}
-              iconColor="text-emerald-500"
-            />
+          <CardContent className="px-4 pb-4 grid gap-2 sm:grid-cols-2">
+            <FichaField icon={FileText} label="Número do Contrato" value={proposta.numero} iconColor="text-emerald-500" />
+            <FichaField icon={FileCheck} label="Plano" value={proposta.plano?.nome || proposta.plano_nome} highlight iconColor="text-emerald-500" />
+            <FichaField icon={DollarSign} label="Valor Mensal" value={formatCurrency(proposta.valor_mensal)} highlight iconColor="text-emerald-500" />
+            <FichaField icon={Calendar} label="Data de Assinatura" value={proposta.data_assinatura ? format(new Date(proposta.data_assinatura), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null} iconColor="text-emerald-500" />
+            <FichaField icon={User} label="Vendedor" value={proposta.vendedor?.nome} iconColor="text-emerald-500" />
           </CardContent>
         </Card>
       </TabsContent>
