@@ -1,47 +1,42 @@
 
-# Fix: Botao concluir sobreposto e scroll travado na manutencao
+
+# Fix: Auto-finalizar almoco quando tempo expirar
 
 ## Problema
-O modal de resultado da manutencao (`ExecutarManutencao.tsx`) tem dois problemas no mobile:
-1. O botao "Confirmar" fica sobreposto ao conteudo (fotos, descricao)
-2. O scroll dentro do modal trava e o usuario nao consegue rolar
+Quando o contador de almoco chega a zero, o profissional fica travado na tela de almoco (overlay bloqueante) sem poder receber tarefas. O codigo atual tem um comentario explicito dizendo "NAO finalizar almoco automaticamente", mas nao oferece nenhuma alternativa para o profissional sair desse estado.
 
-## Causa raiz
-- O `DialogContent` base (dialog.tsx) ja aplica `max-h-[90vh] overflow-y-auto`
-- O modal adiciona OUTRO `max-h-[90vh]` + `flex flex-col` por cima
-- Dentro, ha um `ScrollArea` com `max-h-[calc(90vh-140px)]` criando scroll aninhado
-- No mobile (iOS Safari), scroll aninhado com `ScrollArea` do Radix trava o touch scroll
-- O footer com `flex-shrink-0` acaba ficando por cima do conteudo quando as alturas conflitam
+## Causa Raiz
+No `useJornadaTrabalho.ts` (linha 314), o almoco nunca e finalizado automaticamente. O overlay `AlmocoBloqueioOverlay.tsx` bloqueia toda a interface, entao o profissional nao consegue interagir com nada para voltar.
 
 ## Solucao
 
-### Arquivo: `src/pages/instalador/ExecutarManutencao.tsx`
+### Arquivo: `src/hooks/useJornadaTrabalho.ts`
 
-1. **Remover o `ScrollArea`** — substituir por `div` com `overflow-y-auto` nativo, que funciona bem no mobile
-2. **Ajustar o `DialogContent`** — usar `overflow-hidden` (nao auto) no container pai, e deixar apenas o div interno scrollar
-3. **Garantir footer fixo** — usar layout flex correto para que o footer fique sempre visivel na parte inferior sem sobrepor
-
-Mudancas especificas:
+Adicionar um `useEffect` que chama `finalizarAlmocoMutation.mutate()` automaticamente quando os 60 minutos de almoco se completam:
 
 ```text
-Linha 452: DialogContent
-  De: className="max-w-md max-h-[90vh] flex flex-col p-0"
-  Para: className="max-w-md max-h-[85vh] flex flex-col p-0 overflow-hidden"
-
-Linha 457: ScrollArea -> div
-  De: <ScrollArea className="flex-1 max-h-[calc(90vh-140px)] px-4 overscroll-contain">
-  Para: <div className="flex-1 overflow-y-auto px-4 overscroll-contain -webkit-overflow-scrolling-touch">
-
-Linha 703: </ScrollArea> -> </div>
-
-Remover import de ScrollArea (linha 18)
+useEffect:
+  Condicao: turno.status === 'em_almoco' && tempoReal.minutosAlmoco >= 60
+  Acao: chamar finalizarAlmocoMutation.mutate()
 ```
 
-### Arquivo: `src/components/ui/dialog.tsx`
+Isso vai:
+1. Mudar o status do turno de `em_almoco` para `ativo`
+2. Registrar `fim_almoco` e `minutos_atraso_almoco` (se houver)
+3. O overlay some automaticamente (ja verifica `emAlmoco`)
+4. O profissional volta a receber tarefas pela Edge Function de atribuicao
 
-Nenhuma alteracao necessaria — o problema esta na composicao do modal, nao no componente base.
+Remover o comentario antigo que dizia para nao finalizar automaticamente.
+
+### Arquivo: `src/components/vistoriador/AlmocoBloqueioOverlay.tsx`
+
+Adicionar um botao "Retornar ao trabalho" visivel quando o tempo acabar (emAtraso = true), como alternativa de seguranca caso o auto-finalize demore pelo intervalo de 1 minuto do calculo de tempo real.
+
+O botao chamara `finalizarAlmoco()` diretamente.
 
 ## Resultado esperado
-- O conteudo do modal rola suavemente no mobile (touch scroll nativo)
-- O footer com botoes "Cancelar" e "Confirmar" fica sempre visivel e fixo na parte inferior
-- Sem sobreposicao de elementos
+- Ao completar 60 minutos de almoco, o sistema automaticamente volta o profissional para status ativo
+- O overlay desaparece e ele volta a receber tarefas
+- Se houver atraso, o tempo extra e registrado como acrescimo na jornada (logica ja existente)
+- Botao manual de retorno visivel como fallback
+
