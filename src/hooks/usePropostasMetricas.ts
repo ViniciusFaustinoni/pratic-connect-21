@@ -25,6 +25,8 @@ export interface ConsultorMetricas {
   tempoMedioFechamento: number;
   // Ranking
   ranking: number;
+  // Total de cotações reais criadas
+  cotacoesRealizadas: number;
 }
 
 export interface PropostasMetricasGlobais {
@@ -106,6 +108,12 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         .select('id, vendedor_id, etapa, created_at')
         .in('vendedor_id', vendedorIds);
 
+      // Buscar cotações reais da tabela cotacoes (vendedor_id = auth.users.id via profiles.user_id)
+      const { data: cotacoes } = await supabase
+        .from('cotacoes')
+        .select('id, vendedor_id, status, valor_total_mensal, created_at')
+        .in('vendedor_id', vendedorIds);
+
       // Buscar contratos período atual - usar data_assinatura para contratos assinados
       const { data: contratosAtuais } = await supabase
         .from('contratos')
@@ -145,6 +153,8 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
       profiles?.forEach(profile => {
         // Para leads: usar user_id diretamente
         const vendedorLeads = leads?.filter(l => l.vendedor_id === profile.user_id) || [];
+        // Para cotações: vendedor_id = auth.users.id (via profiles.user_id FK)
+        const vendedorCotacoes = cotacoes?.filter(c => c.vendedor_id === profile.user_id) || [];
         // Para contratos: usar profiles.id (já que contratos.vendedor_id = profiles.id)
         const vendedorContratosAtuais = contratosAtuais?.filter(c => c.vendedor_id === profile.id) || [];
         const vendedorContratosAnteriores = contratosAnteriores?.filter(c => c.vendedor_id === profile.id) || [];
@@ -166,9 +176,18 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
           !['ganho', 'perdido'].includes(l.etapa)
         ).length;
 
-        const emCotacao = vendedorLeads.filter(l => 
+        // emCotacao de leads
+        const emCotacaoLeads = vendedorLeads.filter(l => 
           l.etapa === 'cotacao_enviada'
         ).length;
+
+        // emCotacao de cotações reais (rascunho ou enviada)
+        const emCotacaoCotacoes = vendedorCotacoes.filter(c => 
+          ['rascunho', 'enviada'].includes(c.status)
+        ).length;
+
+        // Usar o maior valor entre leads e cotações reais
+        const emCotacao = Math.max(emCotacaoLeads, emCotacaoCotacoes);
 
         const emNegociacao = vendedorLeads.filter(l => 
           l.etapa === 'negociacao'
@@ -181,6 +200,9 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         const leadsGanhos = vendedorLeads.filter(l => l.etapa === 'ganho').length;
         const totalLeads = vendedorLeads.length;
         const taxaConversao = totalLeads > 0 ? (leadsGanhos / totalLeads) * 100 : 0;
+
+        // Total de cotações realizadas pelo vendedor
+        const cotacoesRealizadas = vendedorCotacoes.length;
 
         // Usar user_id como chave do consultor (para consistência com auth.uid())
         consultoresMap.set(profile.user_id!, {
@@ -198,6 +220,7 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
           taxaConversao,
           tempoMedioFechamento: 0, // TODO: calcular
           ranking: 0,
+          cotacoesRealizadas,
         });
       });
 
@@ -241,10 +264,13 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         })
         .map((c, idx) => ({ ...c, ranking: idx + 1 }));
 
+      const globalEmCotacaoLeads = leads?.filter(l => l.etapa === 'cotacao_enviada').length || 0;
+      const globalEmCotacaoCotacoes = cotacoes?.filter(c => ['rascunho', 'enviada'].includes(c.status)).length || 0;
+
       // Calcular métricas globais
       const globais: PropostasMetricasGlobais = {
         totalPropostas: todosContratos?.length || 0,
-        emCotacao: leads?.filter(l => l.etapa === 'cotacao_enviada').length || 0,
+        emCotacao: Math.max(globalEmCotacaoLeads, globalEmCotacaoCotacoes),
         aguardandoAssinatura: todosContratos?.filter(c => c.status === 'enviado').length || 0,
         assinadas: contratosAssinadosAtuais?.length || 0,
         valorTotalMensal: todosContratos
