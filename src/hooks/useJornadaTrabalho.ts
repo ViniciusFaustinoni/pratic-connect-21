@@ -311,8 +311,18 @@ export function useJornadaTrabalho() {
     }
   }, [turno?.status, turno?.inicio_almoco, tempoReal.minutosTrabalhados]);
 
-  // NÃO finalizar almoço automaticamente - o vistoriador pode demorar mais e terá acréscimo
-  // O almoço só termina quando ele voltar a receber tarefas (ação do sistema) ou manualmente
+  // Auto-finalizar almoço quando os 60 minutos se completam
+  useEffect(() => {
+    if (
+      turno?.status === 'em_almoco' &&
+      tempoReal.minutosAlmoco >= DURACAO_ALMOCO_MINUTOS &&
+      !finalizarAlmocoMutation.isPending
+    ) {
+      console.log('[useJornadaTrabalho] Almoço de 60min completo - finalizando automaticamente');
+      finalizarAlmocoMutation.mutate();
+    }
+  }, [turno?.status, tempoReal.minutosAlmoco]);
+
   // Calcular atraso de almoço em tempo real
   const calcularAtrasoAlmocoAtual = (): number => {
     if (turno?.status !== 'em_almoco' || !turno?.inicio_almoco) {

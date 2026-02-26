@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Coffee, Clock } from 'lucide-react';
+import { Coffee, Clock, ArrowRight } from 'lucide-react';
 import { useJornadaTrabalho, formatarMinutos } from '@/hooks/useJornadaTrabalho';
+import { Button } from '@/components/ui/button';
 
 /**
  * Overlay que aparece durante o horário de almoço obrigatório
  * Bloqueia a interface e mostra contador regressivo
  */
 export function AlmocoBloqueioOverlay() {
-  const { emAlmoco, minutosAlmocoRestantes, turno } = useJornadaTrabalho();
+  const { emAlmoco, minutosAlmocoRestantes, turno, finalizarAlmoco, isFinalizandoAlmoco } = useJornadaTrabalho();
   const [segundosRestantes, setSegundosRestantes] = useState(0);
 
   // Calcular segundos restantes em tempo real
@@ -85,16 +86,26 @@ export function AlmocoBloqueioOverlay() {
 
         {/* Aviso de atraso */}
         {emAtraso && (
-          <div className="bg-red-900/30 rounded-lg p-4 border border-red-700/50">
-            <p className="text-red-400 font-medium text-lg">
-              ⚠️ +{minutosAtraso} minutos de acréscimo
-            </p>
-            <p className="text-sm text-red-300/70 mt-1">
-              Este tempo será acrescido à sua jornada de hoje.
-            </p>
-            <p className="text-xs text-red-300/50 mt-2">
-              Você terá que trabalhar {minutosAtraso} minutos a mais.
-            </p>
+          <div className="space-y-4">
+            <div className="bg-red-900/30 rounded-lg p-4 border border-red-700/50">
+              <p className="text-red-400 font-medium text-lg">
+                ⚠️ +{minutosAtraso} minutos de acréscimo
+              </p>
+              <p className="text-sm text-red-300/70 mt-1">
+                Este tempo será acrescido à sua jornada de hoje.
+              </p>
+              <p className="text-xs text-red-300/50 mt-2">
+                Você terá que trabalhar {minutosAtraso} minutos a mais.
+              </p>
+            </div>
+            <Button
+              onClick={() => finalizarAlmoco()}
+              disabled={isFinalizandoAlmoco}
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg"
+            >
+              <ArrowRight className="h-5 w-5 mr-2" />
+              {isFinalizandoAlmoco ? 'Retornando...' : 'Retornar ao trabalho'}
+            </Button>
           </div>
         )}
 
