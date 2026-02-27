@@ -866,6 +866,8 @@ export function useAprovarVeiculoServico() {
       decisaoInstalador?: 'aprovado' | 'aprovado_ressalva';
       ressalvasInstalador?: string;
       fotosRessalva?: string[];
+      localInstalacao?: string;
+      descricaoInstalacao?: string;
     }) => {
       const agora = new Date().toISOString();
 
@@ -911,15 +913,44 @@ export function useAprovarVeiculoServico() {
 
       // 3. Vincular rastreador ao veículo e remover do porte (se rastreador fornecido)
       if (rastreadorId) {
-        const { error: rastreadorUpdateError } = await supabase
+        // Buscar foto do local_rastreador da vistoria associada ao serviço
+        let fotoLocalUrl: string | null = null;
+        try {
+          // @ts-ignore - vistorias table query
+          const { data: vistoriaData } = await supabase
+            .from('vistorias')
+            .select('id')
+            .eq('servico_id', data.servicoId)
+            .maybeSingle();
+
+          if (vistoriaData?.id) {
+            // @ts-ignore - vistoria_fotos table query
+            const { data: fotoLocal } = await supabase
+              .from('vistoria_fotos')
+              .select('arquivo_url')
+              .eq('vistoria_id', vistoriaData.id)
+              .eq('tipo', 'local_rastreador')
+              .maybeSingle();
+            fotoLocalUrl = fotoLocal?.arquivo_url || null;
+          }
+        } catch (err) {
+          console.warn('[aprovar-veiculo-servico] Erro ao buscar foto local_rastreador (não crítico):', err);
+        }
+
+        const rastreadorUpdate: Record<string, any> = {
+          status: 'instalado',
+          veiculo_id: data.veiculoId,
+          portador_id: null,
+          updated_at: agora,
+        };
+        if (data.localInstalacao) rastreadorUpdate.local_instalacao = data.localInstalacao;
+        if (data.descricaoInstalacao) rastreadorUpdate.descricao_instalacao = data.descricaoInstalacao;
+        if (fotoLocalUrl) rastreadorUpdate.foto_local_instalacao_url = fotoLocalUrl;
+
+        const { error: rastreadorUpdateError } = await (supabase
           .from('rastreadores')
-          .update({
-            status: 'instalado',
-            veiculo_id: data.veiculoId,
-            portador_id: null,
-            updated_at: agora,
-          })
-          .eq('id', rastreadorId);
+          .update(rastreadorUpdate as any)
+          .eq('id', rastreadorId) as any);
 
         if (rastreadorUpdateError) throw rastreadorUpdateError;
 

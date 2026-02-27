@@ -115,6 +115,10 @@ export default function InstaladorChecklist() {
   const [fotosRessalva, setFotosRessalva] = useState<{ file: File; preview: string }[]>([]);
   const [uploadingRessalvaFoto, setUploadingRessalvaFoto] = useState(false);
   
+  // Estados para local de instalação do rastreador
+  const [localInstalacao, setLocalInstalacao] = useState('');
+  const [descricaoInstalacao, setDescricaoInstalacao] = useState('');
+
   // Estados para validação em tempo real do IMEI
   const [imeiValidando, setImeiValidando] = useState(false);
   const [imeiStatus, setImeiStatus] = useState<'idle' | 'validando' | 'disponivel' | 'nao_encontrado' | 'indisponivel'>('idle');
@@ -433,11 +437,19 @@ export default function InstaladorChecklist() {
       return;
     }
     
-    // Se veículo precisa de rastreador, validar IMEI
+    // Se veículo precisa de rastreador, validar IMEI e local de instalação
     if (veiculoPrecisaRastreador && decisaoInstalador !== 'negado') {
       const rastreadorValido = rastreadorSelecionadoId || imeiStatus === 'disponivel';
       if (!rastreadorValido || !imeiRastreador) {
         toast.error('Selecione ou informe o rastreador instalado');
+        return;
+      }
+      if (!localInstalacao) {
+        toast.error('Selecione o local de instalação do rastreador');
+        return;
+      }
+      if (!descricaoInstalacao.trim()) {
+        toast.error('Descreva o ponto exato de instalação do rastreador');
         return;
       }
     }
@@ -451,6 +463,8 @@ export default function InstaladorChecklist() {
         decisaoInstalador: decisaoInstalador as 'aprovado' | 'aprovado_ressalva',
         ressalvasInstalador: ressalvasTexto.trim() || undefined,
         fotosRessalva: fotosRessalva.length > 0 ? fotosRessalva.map(f => f.preview) : undefined,
+        localInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? localInstalacao : undefined,
+        descricaoInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? descricaoInstalacao.trim() : undefined,
       });
       navigate('/instalador');
     } catch (err) {
@@ -1251,6 +1265,51 @@ export default function InstaladorChecklist() {
               </Alert>
             )}
 
+            {/* Local de Instalação do Rastreador */}
+            {veiculoPrecisaRastreador && decisaoInstalador !== 'negado' && (
+              <Card className="border-cyan-500/50 bg-cyan-500/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base text-white">
+                    <MapPin className="h-5 w-5 text-cyan-400" />
+                    Local de Instalação do Rastreador
+                  </CardTitle>
+                  <p className="text-sm text-slate-400">
+                    Informe onde o rastreador foi instalado fisicamente no veículo
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm text-slate-300">Local de Instalação *</Label>
+                    <Select value={localInstalacao} onValueChange={setLocalInstalacao}>
+                      <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                        <SelectValue placeholder="Selecione o local" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="painel">Painel</SelectItem>
+                        <SelectItem value="sob_banco">Sob o banco</SelectItem>
+                        <SelectItem value="parachoque_dianteiro">Para-choque dianteiro</SelectItem>
+                        <SelectItem value="parachoque_traseiro">Para-choque traseiro</SelectItem>
+                        <SelectItem value="caixa_roda">Caixa de roda</SelectItem>
+                        <SelectItem value="vao_motor">Vão do motor</SelectItem>
+                        <SelectItem value="console_central">Console central</SelectItem>
+                        <SelectItem value="porta_malas">Porta-malas</SelectItem>
+                        <SelectItem value="outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm text-slate-300">Descrição do ponto exato *</Label>
+                    <Textarea
+                      placeholder="Ex: Sob o volante, lado esquerdo, fixado com abraçadeira no chicote principal"
+                      value={descricaoInstalacao}
+                      onChange={(e) => setDescricaoInstalacao(e.target.value)}
+                      className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 min-h-[80px]"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Seleção de Rastreador - apenas se precisa e não negado */}
             {veiculoPrecisaRastreador && decisaoInstalador !== 'negado' && (
             <Card className={cn(
@@ -1509,6 +1568,7 @@ export default function InstaladorChecklist() {
                     !decisaoInstalador ||
                     (decisaoInstalador === 'aprovado_ressalva' && !ressalvasTexto.trim()) ||
                     (veiculoPrecisaRastreador && !rastreadorSelecionadoId && imeiStatus !== 'disponivel') ||
+                    (veiculoPrecisaRastreador && (!localInstalacao || !descricaoInstalacao.trim())) ||
                     aprovarVeiculoMutation.isPending ||
                     recusarVeiculoMutation.isPending
                   }
