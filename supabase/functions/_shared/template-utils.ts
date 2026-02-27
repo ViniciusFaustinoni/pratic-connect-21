@@ -701,11 +701,11 @@ export function exigeRastreador(
   const thresholdMoto = config?.fipeMinMoto ?? 9000;
   const thresholdCarro = config?.fipeMinCarro ?? 30000;
   
-  if (isMoto && valorFipe > thresholdMoto) {
+  if (isMoto && valorFipe >= thresholdMoto) {
     return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdMoto.toLocaleString('pt-BR')}` };
   }
   
-  if (!isMoto && valorFipe > thresholdCarro) {
+  if (!isMoto && valorFipe >= thresholdCarro) {
     return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdCarro.toLocaleString('pt-BR')}` };
   }
   
