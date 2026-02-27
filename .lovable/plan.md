@@ -1,46 +1,27 @@
 
-# Exibir Valor Adicional na Proposta de Contrato (Termo de Afiliacao)
+# Dispensar Rastreador para Motos com FIPE abaixo de R$9.000
 
 ## Problema
-O valor adicional da mensalidade (campo `valor_adicional` da cotacao) nao aparece discriminado na proposta/termo de afiliacao assinado pelo associado. Atualmente, o `valor_mensal` do contrato ja inclui o adicional (pois e copiado de `valor_total_mensal`), mas o associado nao consegue ver a composicao do valor.
+A funcao `precisaRastreador` usa um unico limite FIPE (R$30.000) para todos os tipos de veiculo. Motos com FIPE abaixo de R$9.000 deveriam ser dispensadas, mas o sistema aplica o mesmo corte de carros, impedindo a conclusao da instalacao.
 
 ## Solucao
 
-### 1. Passar `valor_adicional` da cotacao para o contrato
+### 1. Nova configuracao no banco de dados
+Inserir nova chave `operacional_fipe_minimo_rastreador_moto` com valor `9000` na tabela `configuracoes`.
 
-**Arquivo:** `supabase/functions/contrato-gerar/index.ts`
-- Na insercao do contrato (linha ~540), adicionar: `valor_adicional: cotacao.valor_adicional || 0`
+### 2. Atualizar hook `useConfigRastreador.ts`
+- Adicionar novo hook `useConfigFipeRastreadorMoto()` que busca a chave `operacional_fipe_minimo_rastreador_moto` (fallback: R$9.000)
+- Atualizar a funcao `precisaRastreador` para aceitar um parametro opcional `tipoVeiculo` (default `'automovel'`), aplicando o limite correto conforme o tipo
 
-### 2. Adicionar `valor_adicional` ao mapeamento de dados do template
+### 3. Atualizar `InstaladorChecklist.tsx`
+- Importar e usar o novo hook para motos
+- Passar `tipoVeiculo` na chamada de `precisaRastreador` para que motos usem o limite de R$9.000
 
-**Arquivo:** `supabase/functions/_shared/termo-afiliacao-utils.ts`
-- Adicionar campo `valor_adicional` na interface `ContratoData` (linha ~64)
-- No `mapearDadosParaTemplate`, mapear: `valor_adicional: contrato.valor_adicional || 0`
+### 4. Atualizar `ExecutarVistoriaCompleta.tsx`
+- Mesma logica: detectar tipo de veiculo e passar para `precisaRastreador`
 
-### 3. Criar variavel de template para valor adicional
-
-**Arquivo:** `supabase/functions/_shared/template-utils.ts`
-- No `criarMapeamentoVariaveis`, adicionar:
-  - `'contrato.valor_adicional'`: valor formatado em moeda
-  - `'contrato.valor_mensal_base'`: valor mensal SEM o adicional (para mostrar composicao)
-  - `'contrato.valor_mensal_total'`: alias de `contrato.valor_mensal` (ja existente, que inclui adicional)
-
-### 4. Atualizar template hardcoded (fallback)
-
-**Arquivo:** `supabase/functions/_shared/termo-afiliacao-template.ts`
-- Na tabela de valores, apos "Quota Mensal Estimada", adicionar linha condicional mostrando "Valor Adicional" quando > 0, e exibir o total mensal
-
-### 5. Deploy das edge functions afetadas
-
-Funcoes a redeployar: `contrato-gerar`, `autentique-create`, `autentique-create-by-token`
-
-## Resultado
-- O template tera as variaveis `{{contrato.valor_adicional}}` e `{{contrato.valor_mensal_base}}` disponiveis
-- O template hardcoded (fallback) exibira automaticamente a linha de valor adicional quando houver
-- Templates personalizados no banco poderao usar as novas variaveis
-
-## Arquivos Modificados (4)
-1. `supabase/functions/contrato-gerar/index.ts`
-2. `supabase/functions/_shared/termo-afiliacao-utils.ts`
-3. `supabase/functions/_shared/template-utils.ts`
-4. `supabase/functions/_shared/termo-afiliacao-template.ts`
+## Arquivos Modificados (3) + Migracao (1)
+1. **Migracao SQL** -- inserir config `operacional_fipe_minimo_rastreador_moto = 9000`
+2. `src/hooks/useConfigRastreador.ts` -- novo hook + funcao atualizada
+3. `src/pages/instalador/InstaladorChecklist.tsx` -- usar limite correto por tipo
+4. `src/pages/instalador/ExecutarVistoriaCompleta.tsx` -- usar limite correto por tipo
