@@ -19252,6 +19252,33 @@ export type Database = {
         }
         Relationships: []
       }
+      role_module_visibility: {
+        Row: {
+          created_at: string | null
+          id: string
+          module_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string | null
+          visible: boolean
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          module_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+          visible?: boolean
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          module_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+          visible?: boolean
+        }
+        Relationships: []
+      }
       rota_instaladores: {
         Row: {
           created_at: string | null
@@ -25538,6 +25565,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["tipo_usuario"]
       }
+      get_visible_modules: { Args: { _user_id: string }; Returns: string[] }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

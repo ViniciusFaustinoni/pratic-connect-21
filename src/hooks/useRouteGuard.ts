@@ -1,21 +1,30 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { usePermissions } from './usePermissions';
+import { useModuleVisibility, MODULE_ROUTES } from './useModuleVisibility';
+
+const ALWAYS_ALLOWED = ['/perfil', '/notificacoes', '/definir-senha', '/acesso-negado'];
 
 /**
  * Hook para proteger rotas baseado no perfil do usuário.
- * Redireciona usuários que tentam acessar rotas não permitidas.
+ * Usa a tabela role_module_visibility para determinar quais rotas são acessíveis.
+ * Mantém redirects hardcoded para perfis com layouts especiais (regulador, instalador, sindicante).
  */
 export function useRouteGuard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isAnalistaEventosOnly, isSindicanteOnly } = usePermissions();
+  const { isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isSindicanteOnly } = usePermissions();
+  const { visibleModules, isLoading } = useModuleVisibility();
 
   useEffect(() => {
+    // Não guardar enquanto carrega
+    if (isLoading) return;
+
+    // === Perfis com layout especial (redirects hardcoded) ===
+
     // Regulador só pode acessar /regulador/*
     if (isReguladorOnly) {
-      const isInReguladorArea = location.pathname.startsWith('/regulador');
-      if (!isInReguladorArea) {
+      if (!location.pathname.startsWith('/regulador')) {
         navigate('/regulador', { replace: true });
         return;
       }
@@ -23,8 +32,7 @@ export function useRouteGuard() {
 
     // Instalador/Vistoriador só pode acessar /instalador/*
     if (isInstaladorVistoriadorOnly) {
-      const isInInstaladorArea = location.pathname.startsWith('/instalador');
-      if (!isInInstaladorArea) {
+      if (!location.pathname.startsWith('/instalador')) {
         navigate('/instalador', { replace: true });
         return;
       }
@@ -40,38 +48,9 @@ export function useRouteGuard() {
       }
     }
 
-    // Analista de eventos - redirecionar das rotas mobile antigas para o sistema web
-    if (isAnalistaEventosOnly) {
-      if (location.pathname.startsWith('/analista-eventos')) {
-        navigate('/dashboard', { replace: true });
-        return;
-      }
-      const allowedPaths = [
-        '/dashboard',
-        '/eventos',
-        '/perfil',
-        '/notificacoes',
-        '/eventos/solicitacoes-ia',
-        '/assistencia',
-        '/oficinas',
-        '/ordens-servico',
-      ];
-      const isAllowed = allowedPaths.some(path =>
-        location.pathname === path || location.pathname.startsWith(path + '/')
-      );
-      if (!isAllowed) {
-        navigate('/dashboard', { replace: true });
-      }
-    }
-
     // Sindicante só pode acessar /sindicante/*, /perfil, /definir-senha
     if (isSindicanteOnly) {
-      const allowedPaths = [
-        '/sindicante',
-        '/perfil',
-        '/definir-senha',
-        '/notificacoes',
-      ];
+      const allowedPaths = ['/sindicante', '/perfil', '/definir-senha', '/notificacoes'];
       const isAllowed = allowedPaths.some(path =>
         location.pathname === path || location.pathname.startsWith(path + '/')
       );
@@ -81,22 +60,27 @@ export function useRouteGuard() {
       }
     }
 
-    // Analista de cadastro - rotas permitidas específicas
-    if (isAnalistaCadastroOnly) {
-      const allowedPaths = [
-        '/dashboard',
-        '/cadastro/propostas',
-        '/cadastro/documentos',
-        '/cadastro/associados',
-        '/perfil',
-        '/notificacoes',
-      ];
-      const isAllowed = allowedPaths.some(path => 
+    // === Guard dinâmico baseado em visibilidade de módulos ===
+    if (visibleModules.length > 0) {
+      // Rotas sempre permitidas
+      const isAlwaysAllowed = ALWAYS_ALLOWED.some(path =>
         location.pathname === path || location.pathname.startsWith(path + '/')
       );
+      if (isAlwaysAllowed) return;
+
+      // Construir prefixos de rota permitidos a partir dos módulos visíveis
+      const allowedPrefixes = visibleModules.flatMap(m => MODULE_ROUTES[m] || []);
+
+      const isAllowed = allowedPrefixes.some(prefix =>
+        location.pathname === prefix || location.pathname.startsWith(prefix + '/')
+      );
+
       if (!isAllowed) {
-        navigate('/dashboard', { replace: true });
+        // Redirecionar para a primeira rota do primeiro módulo visível
+        const firstModule = visibleModules.includes('dashboard') ? 'dashboard' : visibleModules[0];
+        const firstRoute = MODULE_ROUTES[firstModule]?.[0] || '/dashboard';
+        navigate(firstRoute, { replace: true });
       }
     }
-  }, [location.pathname, isAnalistaCadastroOnly, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isAnalistaEventosOnly, isSindicanteOnly, navigate]);
+  }, [location.pathname, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isSindicanteOnly, visibleModules, isLoading, navigate]);
 }
