@@ -1,31 +1,31 @@
 
-# Fix: 1a Parcela deve exibir apenas o valor da Adesao
+
+# Fix: Erro "removeChild" ao abrir Nova Cotacao
 
 ## Problema
-Atualmente, o campo "1a Parcela" no Resumo da Cotacao soma Adesao + Mensalidade. O correto e exibir apenas o valor da Adesao, pois a mensalidade sera cobrada separadamente conforme regras de afiliacao.
+Ao clicar em "Nova Cotacao" (tanto pelo botao direto quanto pelas Acoes Rapidas), a pagina crasha com o erro:
+`Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.`
 
-## Alteracoes
+## Causa Raiz
+O componente `CotacaoFormDialog.tsx` usa `AnimatePresence` + `motion.div` do framer-motion dentro de um Radix Dialog (portal). Quando o Dialog abre/fecha ou quando os planos expandem/recolhem, o framer-motion manipula o DOM diretamente (animacao de height), criando conflito com o React 18 que tenta remover nos que ja foram movidos pelo portal/animacao.
 
-### 1. `src/pages/vendas/Cotador.tsx`
+Este e um bug conhecido da combinacao React 18 + Radix Dialog portals + framer-motion AnimatePresence.
 
-Tres pontos de correcao:
+## Solucao
 
-- **Linha 1421** (card de comparacao de planos): Mudar de `planoAtual.valorAdesao + planoAtual.valorMensal + valorExtra` para apenas `planoAtual.valorAdesao`
+### Arquivo: `src/components/cotacoes/CotacaoFormDialog.tsx`
 
-- **Linha 1519** (resumo final da cotacao): Mudar de `planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal + valorExtra` para apenas `planoFinalSelecionado.valorAdesao`
+Substituir os 2 blocos de `AnimatePresence` + `motion.div` por renderizacao condicional simples com transicao CSS:
 
-- **Linha 758** (mensagem WhatsApp): Mudar de `planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal` para apenas `planoFinalSelecionado.valorAdesao`
+1. **Linhas ~1600-1630** (lista de coberturas no card de selecao de plano): Trocar `AnimatePresence`/`motion.div` por um `div` com classes CSS de transicao (`transition-all duration-200`) e renderizacao condicional direta.
 
-### 2. `src/hooks/useCalcularCotacao.ts`
+2. **Linhas ~1789-1818** (lista de coberturas no preview do plano selecionado): Mesma substituicao.
 
-- **Linha 88**: Mudar `valor_primeira_parcela: valores.mensal + valores.adesao` para `valor_primeira_parcela: valores.adesao`
+3. **Remover import** de `motion` e `AnimatePresence` de `framer-motion` (linha 2), ja que nao serao mais usados neste componente.
 
-Isso corrige automaticamente a pagina publica da cotacao (`CotacaoPublicaCompleta.tsx`) que ja usa `plano.valor_primeira_parcela`.
+A animacao de expand/collapse sera mantida visualmente usando `overflow-hidden` + `max-h-0`/`max-h-[500px]` com `transition-all duration-200`, sem manipulacao direta do DOM.
 
-## Arquivos alterados
-1. `src/pages/vendas/Cotador.tsx` — 3 pontos de calculo
-2. `src/hooks/useCalcularCotacao.ts` — 1 ponto de calculo
-
-## Resultado
-- "1a Parcela" exibe apenas o valor de Adesao em todas as telas (cotador, resumo, WhatsApp, pagina publica)
-- Mensalidade continua sendo exibida separadamente no campo "Mensal"
+## Resultado esperado
+- O botao "Nova Cotacao" abre o formulario sem erros
+- A funcionalidade de expandir/recolher coberturas continua funcionando com transicao suave
+- Sem conflitos de DOM entre React, Radix e framer-motion
