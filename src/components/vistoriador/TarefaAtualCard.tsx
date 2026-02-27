@@ -27,6 +27,7 @@ import { isRetirada } from '@/hooks/useCriarRetirada';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ImprevistoBotao } from './ImprevistoBotao';
 
 interface TarefaAtualCardProps {
   tarefa: TarefaAtual & {
@@ -332,6 +333,18 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                 </p>
               </div>
             </div>
+          )}
+
+          {/* Botão de Imprevisto */}
+          {(tarefa as any).profissional_id && 
+           (isAgendada || isEmRota || isEmAndamento) && 
+           !(tarefa as any).imprevisto_registrado_em && (
+            <ImprevistoBotao
+              tarefaId={tarefa.id}
+              clienteNome={tarefa.cliente.nome}
+              clienteTelefone={tarefa.cliente.telefone}
+              clienteWhatsapp={tarefa.cliente.whatsapp}
+            />
           )}
 
           {/* Ações */}

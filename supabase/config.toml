@@ -32,3 +32,12 @@ verify_jwt = false
 
 [functions.salvar-posicao-comunicacao]
 verify_jwt = false
+
+[functions.enviar-link-reagendamento]
+verify_jwt = false
+
+[functions.reagendar-vistoria-publica]
+verify_jwt = false
+
+[functions.cron-reagendamento-automatico]
+verify_jwt = false
