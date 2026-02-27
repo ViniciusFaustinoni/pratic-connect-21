@@ -1,53 +1,42 @@
 
-# Substituir valores hardcoded por valores dinamicos da tabela configuracoes
+# Correcao: Texto "Rastreador Veicular" condicional no termo
 
 ## Problema
 
-Dois arquivos exibem textos informativos com thresholds de rastreador fixos no codigo. Se o threshold for alterado na tabela `configuracoes`, esses textos ficam desatualizados.
+Na linha 494 de `supabase/functions/_shared/termo-afiliacao-template.ts`, dentro de `generateSecao3`, o texto "Rastreador Veicular: Obrigatorio" e fixo e aparece mesmo para veiculos isentos.
 
-## Abordagem
+## Correcao
 
-**Abordagem B** (hooks diretos) para ambos os casos, pois nenhum componente pai ja possui os valores disponíveis para passar como props.
+Na funcao `generateSecao3`, chamar `exigeRastreador(data.veiculo, data.configRastreador)` e usar o resultado para exibir "Obrigatorio" ou "Opcional" dinamicamente.
 
-## Alteracoes
-
-### 1. `src/components/planos/GlossarioSection.tsx`
-
-O componente `RegrasImportantes` atualmente renderiza `REGRAS_IMPORTANTES` que vem do arquivo de dados estaticos. A estrategia:
-
-- Importar `useConfigFipeRastreador` e `useConfigFipeRastreadorMoto`
-- Dentro do componente `RegrasImportantes`, buscar os valores dinamicos
-- Substituir o array estatico `REGRAS_IMPORTANTES` por uma versao computada onde os itens de "Rastreador Obrigatorio" usam os valores do banco
-- Manter os itens que nao sao de threshold (Plano Especial, diesel) inalterados
-
-Exemplo do resultado:
-```
-'Carros >R$30.000' -> `Carros >R$ ${fipeCarro.toLocaleString('pt-BR')}`
-'Motos >R$9.000'   -> `Motos >R$ ${fipeMoto.toLocaleString('pt-BR')}`
+**De (linha 493-495):**
+```html
+<div class="highlight-box">
+  <strong>Rastreador Veicular:</strong> Obrigatório (instalação por técnico credenciado)
+</div>
 ```
 
-### 2. `src/components/planos/VeiculosAceitos.tsx`
+**Para:**
+```typescript
+const rastreador = exigeRastreador(data.veiculo, data.configRastreador);
+const textoRastreador = rastreador.exige ? 'Obrigatório' : 'Opcional';
+```
+```html
+<div class="highlight-box">
+  <strong>Rastreador Veicular:</strong> ${textoRastreador} (instalação por técnico credenciado)
+</div>
+```
 
-O componente `VeiculosAceitosMotos` tem dois textos hardcoded nas linhas 89-90. A estrategia:
-
-- Importar `useConfigFipeRastreador` e `useConfigFipeRastreadorMoto`
-- Usar os valores retornados para gerar os textos dinamicamente
-- Linha 89: `FIPE acima de R$9.000` -> usar valor de moto do hook
-- Linha 90: `Acima de R$30.000` -> usar valor de carro do hook
-
-### 3. `src/data/planosPrecos.ts` (sem alteracao direta)
-
-Os textos hardcoded nas linhas 193-194 continuam existindo como fallback no array estatico, mas nao serao mais exibidos diretamente -- o componente `RegrasImportantes` os substituira em tempo de renderizacao.
-
-## Arquivos alterados
+## Arquivo alterado
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/planos/GlossarioSection.tsx` | Importar hooks e substituir valores de rastreador por dinamicos |
-| `src/components/planos/VeiculosAceitos.tsx` | Importar hooks e substituir textos hardcoded por dinamicos |
+| `supabase/functions/_shared/termo-afiliacao-template.ts` | Linha ~467 (inicio de generateSecao3): adicionar chamada a exigeRastreador; Linha ~494: usar variavel dinamica |
 
-## Arquivos NAO alterados
+## Validacao
 
-- `src/data/planosPrecos.ts` (os dados estaticos servem como fallback)
-- `src/hooks/useConfigRastreador.ts`
-- Nenhum outro arquivo
+- Carro R$ 25k gasolina -> "Opcional"
+- Carro R$ 35k gasolina -> "Obrigatorio"
+- Carro R$ 15k diesel -> "Obrigatorio"
+- Moto R$ 7k -> "Opcional"
+- Moto R$ 12k -> "Obrigatorio"
