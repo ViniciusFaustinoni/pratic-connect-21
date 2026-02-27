@@ -19517,6 +19517,10 @@ export type Database = {
           hora_agendada: string | null
           id: string
           imei_rastreador: string | null
+          imprevisto_duplo_check: boolean | null
+          imprevisto_duplo_check_em: string | null
+          imprevisto_motivo: string | null
+          imprevisto_registrado_em: string | null
           iniciada_em: string | null
           instalacao_origem_id: string | null
           integridade_aparelho: string | null
@@ -19554,6 +19558,8 @@ export type Database = {
           rastreador_destino_pos_substituicao: string | null
           rastreador_id: string | null
           rastreador_substituto_id: string | null
+          reagendamento_enviado_em: string | null
+          reagendamento_token: string | null
           ressalvas: string | null
           resultado_manutencao: string | null
           retirada_video_360_url: string | null
@@ -19616,6 +19622,10 @@ export type Database = {
           hora_agendada?: string | null
           id?: string
           imei_rastreador?: string | null
+          imprevisto_duplo_check?: boolean | null
+          imprevisto_duplo_check_em?: string | null
+          imprevisto_motivo?: string | null
+          imprevisto_registrado_em?: string | null
           iniciada_em?: string | null
           instalacao_origem_id?: string | null
           integridade_aparelho?: string | null
@@ -19653,6 +19663,8 @@ export type Database = {
           rastreador_destino_pos_substituicao?: string | null
           rastreador_id?: string | null
           rastreador_substituto_id?: string | null
+          reagendamento_enviado_em?: string | null
+          reagendamento_token?: string | null
           ressalvas?: string | null
           resultado_manutencao?: string | null
           retirada_video_360_url?: string | null
@@ -19715,6 +19727,10 @@ export type Database = {
           hora_agendada?: string | null
           id?: string
           imei_rastreador?: string | null
+          imprevisto_duplo_check?: boolean | null
+          imprevisto_duplo_check_em?: string | null
+          imprevisto_motivo?: string | null
+          imprevisto_registrado_em?: string | null
           iniciada_em?: string | null
           instalacao_origem_id?: string | null
           integridade_aparelho?: string | null
@@ -19752,6 +19768,8 @@ export type Database = {
           rastreador_destino_pos_substituicao?: string | null
           rastreador_id?: string | null
           rastreador_substituto_id?: string | null
+          reagendamento_enviado_em?: string | null
+          reagendamento_token?: string | null
           ressalvas?: string | null
           resultado_manutencao?: string | null
           retirada_video_360_url?: string | null

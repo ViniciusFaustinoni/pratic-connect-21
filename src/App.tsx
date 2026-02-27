@@ -321,6 +321,7 @@ import RetiradaVeiculo from "./pages/public/RetiradaVeiculo";
 import DespachoReboquistaPublico from "./pages/assistencia/DespachoReboquistaPublico";
 import AcompanhamentoReboquePublico from "./pages/public/AcompanhamentoReboquePublico";
 import PortalTerceiro from "./pages/public/PortalTerceiro";
+import ReagendarVistoria from "./pages/ReagendarVistoria";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -400,6 +401,9 @@ const App = () => (
             
             {/* Public Portal Terceiro */}
             <Route path="/terceiro/:token" element={<PortalTerceiro />} />
+            
+            {/* Public Reagendamento Vistoria */}
+            <Route path="/reagendar/:token" element={<ReagendarVistoria />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
