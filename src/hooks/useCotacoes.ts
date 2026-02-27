@@ -143,7 +143,14 @@ export function useCotacao(id: string | undefined) {
         .select(`
           *,
           leads:leads!fk_cotacoes_lead_id(*),
-          planos:planos!plano_id(*)
+          planos:planos!plano_id(*),
+          contrato:contratos!contratos_cotacao_id_fkey(
+            id, 
+            numero, 
+            status,
+            adesao_paga,
+            associados:associados!fk_contratos_associado(id, status)
+          )
         `)
         .eq('id', id)
         .single();
@@ -161,7 +168,12 @@ export function useCotacao(id: string | undefined) {
         vendedor = v ? { id: v.user_id, nome: v.nome, email: v.email } : null;
       }
       
-      return { ...data, vendedor } as CotacaoWithRelations;
+      // Garantir que contrato seja objeto ou null (não array)
+      const contrato = Array.isArray(data.contrato) 
+        ? data.contrato[0] || null 
+        : data.contrato || null;
+      
+      return { ...data, vendedor, contrato } as CotacaoWithRelations;
     },
     enabled: !!id,
   });

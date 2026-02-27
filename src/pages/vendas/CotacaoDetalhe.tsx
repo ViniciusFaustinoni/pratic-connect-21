@@ -173,8 +173,11 @@ Ficou com alguma dúvida? Estou à disposição!
     });
   };
 
+  // Verificar se contrato foi assinado/ativo (bloqueia edição)
+  const contratoAssinado = !!(cotacao?.contrato && ['assinado', 'ativo'].includes(cotacao.contrato.status));
+
   const handleEditar = () => {
-    if (cotacao?.status === 'rascunho') {
+    if (!contratoAssinado) {
       setShowEditarModal(true);
     }
   };
@@ -464,6 +467,7 @@ Ficou com alguma dúvida? Estou à disposição!
             isGerando={isGerando}
             isDuplicando={duplicarMutation.isPending}
             canDelete={isDiretor}
+            contratoAssinado={contratoAssinado}
           />
 
           {/* TIMELINE */}
@@ -514,8 +518,8 @@ Ficou com alguma dúvida? Estou à disposição!
         />
       )}
 
-      {/* Modal de Edição */}
-      {cotacao.status === 'rascunho' && (
+      {/* Modal de Edição - disponível até assinatura do contrato */}
+      {!contratoAssinado && (
         <CotacaoFormDialog
           open={showEditarModal}
           onOpenChange={setShowEditarModal}
