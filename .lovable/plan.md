@@ -1,76 +1,56 @@
 
 
-# Melhorar Exibicao do Prompt de Instalacao PWA
+# Permitir Edicao de Cotacoes (Exceto Apos Assinatura)
 
-## Problemas Identificados
-
-1. **Banner temporario**: O prompt atual e um banner flutuante que, ao ser dispensado ("Agora nao"), fica oculto por 7 dias — o usuario perde a oportunidade de instalar
-2. **Sem icone permanente**: Nao existe nenhum icone fixo no menu ou header que permita ao usuario instalar o PWA a qualquer momento
-3. **iOS limitado ao Safari**: O hook so mostra como instalavel em iOS se o navegador for Safari (`isIOS && isSafari`). Usuarios usando Chrome ou outros browsers no iOS nao veem nada
-4. **Sem indicacao no menu lateral**: O `AppMobileMenu` (hamburger) e o `AppUserDropdown` (desktop) nao tem opcao de instalacao
+## Problema Atual
+A edicao de cotacoes esta restrita apenas ao status `rascunho`. Cotacoes em outros status (enviada, visualizada, etc.) nao podem ser editadas, mesmo quando ainda nao possuem contrato assinado. A edicao so deve ser bloqueada apos a assinatura do contrato.
 
 ## Solucao
 
-### 1. Icone permanente de download no `AppBottomNav`
+### Regra de Negocio
+- **Pode editar**: qualquer cotacao que NAO possua um contrato com status `assinado` ou `ativo`
+- **Nao pode editar**: cotacoes cujo contrato vinculado ja foi assinado (`contrato.status` in `['assinado', 'ativo']`)
 
-Quando o app NAO estiver instalado como PWA, substituir o ultimo item da barra inferior (Perfil) por um item "Instalar" com icone de download, ou adicionar um indicador visual (badge/dot) no icone existente.
+### Mudancas
 
-**Abordagem escolhida**: Adicionar um botao de download fixo na barra inferior, visivel apenas quando o app nao esta instalado. Ao clicar, dispara o prompt nativo (Android) ou abre o guia iOS.
+#### 1. `CotacaoAcoes.tsx` — Expandir condicao de edicao
 
-### 2. Opcao "Instalar App" no menu lateral (`AppMobileMenu`)
+Substituir `podeEditar = cotacao.status === 'rascunho'` por uma logica que verifica se existe contrato assinado. O componente recebera uma nova prop `contratoAssinado` (boolean).
 
-Adicionar item "Instalar App" no menu hamburger com icone `Download`, visivel apenas quando `!isInstalled`. Ao clicar, dispara instalacao ou mostra guia iOS.
-
-### 3. Opcao "Instalar App" no dropdown desktop (`AppUserDropdown`)
-
-Adicionar item no dropdown do usuario com icone `Download`, mesma logica.
-
-### 4. Corrigir deteccao iOS para todos os browsers
-
-No hook `usePWAInstall`, remover a restricao `isSafari` para iOS. Em qualquer browser no iOS, mostrar as instrucoes (pois apenas Safari suporta "Add to Home Screen", mas o usuario precisa ser informado disso).
-
-### 5. Manter o banner flutuante como lembrete inicial
-
-O banner continua existindo como lembrete nos primeiros acessos, mas agora o icone permanente no menu garante que o usuario sempre tenha acesso a instalacao.
-
----
-
-## Arquivos Modificados (5)
-
-1. **`src/hooks/usePWAInstall.ts`** — Corrigir deteccao iOS (aceitar qualquer browser), exportar `isInstalled` de forma independente para uso nos menus
-2. **`src/components/app/AppBottomNav.tsx`** — Adicionar botao de download quando nao instalado
-3. **`src/components/app/AppMobileMenu.tsx`** — Adicionar item "Instalar App" no menu
-4. **`src/components/app/AppUserDropdown.tsx`** — Adicionar item "Instalar App" no dropdown
-5. **`src/components/app/AppHeader.tsx`** — Adicionar icone de download visivel no header (desktop)
-
-## Detalhes Tecnicos
-
-### Hook `usePWAInstall` — Mudancas
-
-```typescript
-// ANTES: iOS so mostra se for Safari
-if (isIOS && isSafari) return true;
-
-// DEPOIS: iOS mostra em qualquer browser (instrui a abrir no Safari)
-if (isIOS) return true;
+```text
+ANTES:  const podeEditar = cotacao.status === 'rascunho';
+DEPOIS: const podeEditar = !contratoAssinado;
 ```
 
-Exportar tambem um hook simplificado `usePWAStatus` que retorna apenas `{ isInstalled, isIOS, promptInstall, showIOSInstructions, setShowIOSInstructions }` para uso nos menus sem depender de autenticacao (a autenticacao ja e garantida pelo layout).
+Atualizar o tooltip do botao para refletir: "Nao e possivel editar apos a assinatura do contrato".
 
-### `AppBottomNav` — Botao de download
+#### 2. `CotacaoDetalhe.tsx` — Permitir edicao em qualquer status pre-assinatura
 
-- Quando `!isInstalled`: adicionar um icone `Download` com um badge/indicador verde pulsante na barra inferior
-- Ao clicar: chama `promptInstall()` ou abre guia iOS
-- Posicao: como item extra ou substituindo temporariamente um dos itens menos prioritarios
+- Remover a condicao `cotacao.status === 'rascunho'` que envolve o `CotacaoFormDialog`
+- Calcular `contratoAssinado` baseado em `cotacao.contrato?.status` (verificar se e `assinado` ou `ativo`)
+- Passar `contratoAssinado` para `CotacaoAcoes`
+- O `cotacaoParaEditar` continuara sendo passado normalmente ao dialog
 
-### `AppMobileMenu` — Item no menu
+#### 3. `CotacaoFormDialog.tsx` — Garantir que aceita cotacoes de qualquer status
 
-- Adicionar antes do "Sair da conta"
-- Icone `Download` + texto "Instalar App"
-- Visivel apenas quando `!isInstalled`
+O dialog ja suporta edicao via `cotacaoParaEditar`. Nenhuma mudanca significativa — apenas garantir que o comentario `"somente rascunhos"` na tipagem seja atualizado para refletir a nova regra.
 
-### `AppUserDropdown` — Item no dropdown
+#### 4. `Cotacoes.tsx` (listagem) — Verificar se ha botao de edicao na tabela
 
-- Adicionar antes do separador de "Sair"
-- Mesma logica
+Se a listagem tiver acoes de edicao inline, aplicar a mesma regra: permitir exceto quando contrato assinado.
 
+#### 5. Atualizacao automatica no link do associado
+
+O link publico (`CotacaoPublica`, `CotacaoContratacao`) ja le os dados diretamente da tabela `cotacoes` via token. Como o `useUpdateCotacao` atualiza a tabela, qualquer edicao reflete automaticamente no link do associado sem mudancas adicionais.
+
+## Arquivos Modificados (3-4)
+
+1. **`src/components/cotacoes/CotacaoAcoes.tsx`** — Nova prop `contratoAssinado`, logica de `podeEditar` atualizada
+2. **`src/pages/vendas/CotacaoDetalhe.tsx`** — Remover restricao de status rascunho, calcular `contratoAssinado`, passar ao componente de acoes
+3. **`src/components/cotacoes/CotacaoFormDialog.tsx`** — Atualizar comentario da tipagem (mudanca menor)
+4. **`src/pages/vendas/Cotacoes.tsx`** — Se houver edicao inline, aplicar mesma regra
+
+## Impacto
+- Cotacoes enviadas, visualizadas ou em negociacao poderao ser editadas normalmente
+- O link publico do associado refletira as alteracoes automaticamente (ja funciona assim)
+- Apos assinatura do contrato, a edicao sera bloqueada definitivamente
