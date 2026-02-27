@@ -78,6 +78,39 @@ const CHECKLIST_ITEMS = [
   { id: 'cliente_ciente', label: 'Associado ciente do procedimento' },
 ];
 
+const CHECKLIST_ITEMS_MOTO = [
+  { id: 'veiculo_confere', label: 'Moto corresponde aos dados cadastrados' },
+  { id: 'placa_confere', label: 'Placa confere com o documento' },
+  { id: 'chassi_confere', label: 'Chassi visível e confere' },
+  { id: 'condicoes_veiculo', label: 'Condições gerais da moto adequadas' },
+  { id: 'local_seguro', label: 'Local de instalação seguro' },
+  { id: 'eletrica_ok', label: 'Sistema elétrico funcionando' },
+  { id: 'cliente_ciente', label: 'Associado ciente do procedimento' },
+];
+
+const LOCAIS_INSTALACAO_CARRO = [
+  { value: 'painel', label: 'Painel' },
+  { value: 'sob_banco', label: 'Sob o banco' },
+  { value: 'parachoque_dianteiro', label: 'Para-choque dianteiro' },
+  { value: 'parachoque_traseiro', label: 'Para-choque traseiro' },
+  { value: 'caixa_roda', label: 'Caixa de roda' },
+  { value: 'vao_motor', label: 'Vão do motor' },
+  { value: 'console_central', label: 'Console central' },
+  { value: 'porta_malas', label: 'Porta-malas' },
+  { value: 'outro', label: 'Outro' },
+];
+
+const LOCAIS_INSTALACAO_MOTO = [
+  { value: 'sob_banco', label: 'Sob o banco' },
+  { value: 'carenagem_lateral', label: 'Carenagem lateral' },
+  { value: 'caixa_filtro_ar', label: 'Caixa do filtro de ar' },
+  { value: 'compartimento_ferramentas', label: 'Compartimento de ferramentas' },
+  { value: 'sob_tanque', label: 'Sob o tanque' },
+  { value: 'rabeta', label: 'Rabeta/Cola' },
+  { value: 'paralama', label: 'Paralama' },
+  { value: 'outro', label: 'Outro' },
+];
+
 const ETAPAS = [
   { id: 1, label: 'Dados', icon: User },
   { id: 2, label: 'Checklist', icon: ClipboardCheck },
@@ -207,9 +240,26 @@ export default function InstaladorChecklist() {
     }
   }, [categoriasComFotos, fotosEnviadas, openCategorias.length]);
 
+  const checklistItems = useMemo(() =>
+    tipoVeiculo === 'moto' ? CHECKLIST_ITEMS_MOTO : CHECKLIST_ITEMS
+  , [tipoVeiculo]);
+
+  const locaisInstalacao = useMemo(() =>
+    tipoVeiculo === 'moto' ? LOCAIS_INSTALACAO_MOTO : LOCAIS_INSTALACAO_CARRO
+  , [tipoVeiculo]);
+
+  // Reinicializar checklist quando tipoVeiculo muda (e não há checklist salvo)
+  useEffect(() => {
+    const savedChecklist = (servico as any)?.checklist_data;
+    const hasSaved = savedChecklist && typeof savedChecklist === 'object' && Object.keys(savedChecklist).length > 0;
+    if (!hasSaved) {
+      setChecklist(checklistItems.reduce((acc, item) => ({ ...acc, [item.id]: { status: 'pendente' as ChecklistStatus } }), {}));
+    }
+  }, [checklistItems, servico]);
+
   const checklistCompleto = useMemo(() => 
-    CHECKLIST_ITEMS.every(item => checklist[item.id]?.status === 'ok'),
-    [checklist]
+    checklistItems.every(item => checklist[item.id]?.status === 'ok'),
+    [checklist, checklistItems]
   );
 
   // Verificar se todas as fotos obrigatórias foram enviadas (dinâmico por tipo)
@@ -787,7 +837,7 @@ export default function InstaladorChecklist() {
             </Card>
 
             {/* Itens do Checklist */}
-            {CHECKLIST_ITEMS.map((item) => (
+            {checklistItems.map((item) => (
               <ChecklistItem
                 key={item.id}
                 label={item.label}
@@ -1285,15 +1335,9 @@ export default function InstaladorChecklist() {
                         <SelectValue placeholder="Selecione o local" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="painel">Painel</SelectItem>
-                        <SelectItem value="sob_banco">Sob o banco</SelectItem>
-                        <SelectItem value="parachoque_dianteiro">Para-choque dianteiro</SelectItem>
-                        <SelectItem value="parachoque_traseiro">Para-choque traseiro</SelectItem>
-                        <SelectItem value="caixa_roda">Caixa de roda</SelectItem>
-                        <SelectItem value="vao_motor">Vão do motor</SelectItem>
-                        <SelectItem value="console_central">Console central</SelectItem>
-                        <SelectItem value="porta_malas">Porta-malas</SelectItem>
-                        <SelectItem value="outro">Outro</SelectItem>
+                        {locaisInstalacao.map(local => (
+                          <SelectItem key={local.value} value={local.value}>{local.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
