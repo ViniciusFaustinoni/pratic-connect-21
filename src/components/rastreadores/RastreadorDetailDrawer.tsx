@@ -257,6 +257,43 @@ export function RastreadorDetailDrawer({
 
                 <Separator />
 
+                {/* Local de Instalação */}
+                {isInstalled && (rastreador.local_instalacao || rastreador.descricao_instalacao || rastreador.foto_local_instalacao_url) && (
+                  <>
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Local de Instalação
+                      </h3>
+                      {rastreador.local_instalacao && (
+                        <Badge variant="secondary" className="text-xs">
+                          {rastreador.local_instalacao.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                        </Badge>
+                      )}
+                      {rastreador.descricao_instalacao && (
+                        <p className="text-sm text-muted-foreground">
+                          {rastreador.descricao_instalacao}
+                        </p>
+                      )}
+                      {rastreador.foto_local_instalacao_url && (
+                        <a
+                          href={rastreador.foto_local_instalacao_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          <img
+                            src={rastreador.foto_local_instalacao_url}
+                            alt="Local de instalação"
+                            className="w-full max-w-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                          />
+                        </a>
+                      )}
+                    </div>
+                    <Separator />
+                  </>
+                )}
+
                 {/* Veículo Associado */}
                 {rastreador.veiculos && (
                   <>

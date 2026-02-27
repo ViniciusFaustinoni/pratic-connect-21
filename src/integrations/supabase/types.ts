@@ -18113,9 +18113,12 @@ export type Database = {
           config_plataforma: Json | null
           created_at: string
           dados_extras: Json | null
+          descricao_instalacao: string | null
+          foto_local_instalacao_url: string | null
           id: string
           id_plataforma: string | null
           imei: string | null
+          local_instalacao: string | null
           modo_ativado_em: string | null
           modo_ativado_por: string | null
           modo_rastreamento: string | null
@@ -18150,9 +18153,12 @@ export type Database = {
           config_plataforma?: Json | null
           created_at?: string
           dados_extras?: Json | null
+          descricao_instalacao?: string | null
+          foto_local_instalacao_url?: string | null
           id?: string
           id_plataforma?: string | null
           imei?: string | null
+          local_instalacao?: string | null
           modo_ativado_em?: string | null
           modo_ativado_por?: string | null
           modo_rastreamento?: string | null
@@ -18187,9 +18193,12 @@ export type Database = {
           config_plataforma?: Json | null
           created_at?: string
           dados_extras?: Json | null
+          descricao_instalacao?: string | null
+          foto_local_instalacao_url?: string | null
           id?: string
           id_plataforma?: string | null
           imei?: string | null
+          local_instalacao?: string | null
           modo_ativado_em?: string | null
           modo_ativado_por?: string | null
           modo_rastreamento?: string | null

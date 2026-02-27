@@ -171,6 +171,27 @@ export function RastreadorCard({
                   </span>
                 </div>
               )}
+
+              {/* Local de instalação */}
+              {isInstalled && rastreador.local_instalacao && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2 text-sm">
+                        <MapPin className="h-4 w-4 text-cyan-500 flex-shrink-0" />
+                        <span className="truncate text-muted-foreground">
+                          {rastreador.local_instalacao.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                          {rastreador.descricao_instalacao && ` - ${rastreador.descricao_instalacao}`}
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p className="font-medium">{rastreador.local_instalacao.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</p>
+                      {rastreador.descricao_instalacao && <p className="text-xs mt-1">{rastreador.descricao_instalacao}</p>}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           )}
 
