@@ -89,6 +89,7 @@ import {
 } from '@/components/ui/popover';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions, PermissionKey } from '@/hooks/usePermissions';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
 import { ROLE_LABELS } from '@/types/database';
@@ -491,6 +492,7 @@ export function AppSidebar() {
   };
   const location = useLocation();
   const permissions = usePermissions();
+  const { visibleModules } = useModuleVisibility();
 
   const isActive = (path: string) => {
     if (path === '/dashboard') return location.pathname === path;
@@ -515,36 +517,41 @@ export function AppSidebar() {
       }))
       .filter(group => group.items.length > 0);
 
-  // Se é apenas analista de cadastro, filtrar menu para mostrar apenas Cadastro
+  // Filtra grupos visíveis usando visibilidade dinâmica do banco
   const getVisibleGroups = () => {
     if (permissions.isSindicanteOnly) {
       return []; // Sindicante não vê nenhum grupo de menu
     }
 
-    const baseGroups = filterGroups(menuConfig.groups);
+    let baseGroups = filterGroups(menuConfig.groups);
     
+    // Filtrar por visibilidade de módulos do banco (se carregado)
+    if (visibleModules.length > 0) {
+      baseGroups = baseGroups.filter(g => visibleModules.includes(g.id));
+    }
+
+    // Ajustes de itens específicos por perfil (mantém lógica existente)
     if (permissions.isAnalistaCadastroOnly) {
-      // Mostrar apenas grupo Cadastro com itens específicos
-      return baseGroups
-        .filter(g => g.id === 'cadastro')
-        .map(group => ({
-          ...group,
-          items: group.items.filter(item => 
-            item.url === '/cadastro/propostas' ||
-            item.url === '/cadastro/associados'
-          ),
-        }));
+      baseGroups = baseGroups.map(group => {
+        if (group.id === 'cadastro') {
+          return {
+            ...group,
+            items: group.items.filter(item => 
+              item.url === '/cadastro/propostas' ||
+              item.url === '/cadastro/associados'
+            ),
+          };
+        }
+        return group;
+      });
     }
     
-    // Se é apenas vendedor, ajustar menu de Vendas
     if (permissions.isVendedorOnly) {
-      return baseGroups.map(group => {
+      baseGroups = baseGroups.map(group => {
         if (group.id === 'vendas') {
           return {
             ...group,
-            items: group.items
-              .filter(item => item.url !== '/vendas/ativacoes')
-              ,
+            items: group.items.filter(item => item.url !== '/vendas/ativacoes'),
           };
         }
         return group;
@@ -559,10 +566,17 @@ export function AppSidebar() {
         { title: 'Dashboard', url: '/sindicante', icon: LayoutDashboard, color: MENU_COLORS.dashboard },
         { title: 'Meus Casos', url: '/sindicante', icon: Search, color: MENU_COLORS.eventos },
       ]
-    : filterByPermission(menuConfig.main);
+    : filterByPermission(menuConfig.main).filter(item => {
+        // Dashboard visível se módulo 'dashboard' está nos visíveis
+        if (item.url === '/dashboard') {
+          return visibleModules.length === 0 || visibleModules.includes('dashboard');
+        }
+        return true;
+      });
   const visibleGroups = getVisibleGroups();
-  // Perfis limitados (analista de cadastro e vendedor CLT) não veem Configurações no menu (só via /perfil)
-  const visibleConfigItems = permissions.isPerfilLimitado ? [] : filterByPermission(configItems);
+  // Visibilidade de configurações baseada no banco
+  const showConfigModule = visibleModules.length === 0 || visibleModules.includes('configuracoes');
+  const visibleConfigItems = (permissions.isPerfilLimitado || !showConfigModule) ? [] : filterByPermission(configItems);
 
   const [openGroups, setOpenGroups] = useState<string[]>(() => 
     visibleGroups.filter(g => isGroupActive(g.items)).map(g => g.id)
@@ -793,7 +807,7 @@ export function AppSidebar() {
 
       {!collapsed && (
         <SidebarFooter className="p-3 border-t border-border">
-          {permissions.isPerfilLimitado ? (
+          {(!showConfigModule || permissions.isPerfilLimitado) ? (
             <NavLink 
               to="/perfil" 
               onClick={handleNavigation}
