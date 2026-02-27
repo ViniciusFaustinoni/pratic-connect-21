@@ -1,31 +1,89 @@
 
 
-# Fix: Erro "removeChild" ao abrir Nova Cotacao
+# Redesign UI: Dashboard, Propostas Pendentes e Detalhes da Proposta
 
-## Problema
-Ao clicar em "Nova Cotacao" (tanto pelo botao direto quanto pelas Acoes Rapidas), a pagina crasha com o erro:
-`Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.`
+## Objetivo
+Aprimorar a experiencia do analista de cadastro com um design mais fluido, visual e produtivo nas tres telas principais, sem alterar conteudo exibido nem a tela de Associados.
 
-## Causa Raiz
-O componente `CotacaoFormDialog.tsx` usa `AnimatePresence` + `motion.div` do framer-motion dentro de um Radix Dialog (portal). Quando o Dialog abre/fecha ou quando os planos expandem/recolhem, o framer-motion manipula o DOM diretamente (animacao de height), criando conflito com o React 18 que tenta remover nos que ja foram movidos pelo portal/animacao.
+---
 
-Este e um bug conhecido da combinacao React 18 + Radix Dialog portals + framer-motion AnimatePresence.
+## 1. Dashboard do Analista (`DashboardCadastro.tsx`)
 
-## Solucao
+**Melhorias planejadas:**
 
-### Arquivo: `src/components/cotacoes/CotacaoFormDialog.tsx`
+- **Banner de boas-vindas**: Adicionar gradiente sutil e icone de avatar com iniciais do usuario, tornando o greeting mais acolhedor
+- **KPIs**: Redesenhar com icones maiores, micro-animacao de pulse no indicador principal (aguardando), e adicionar uma linha de "tendencia" comparando com ontem (ex: "+3 vs ontem")
+- **Pipeline visual**: Transformar a barra segmentada em cards mini-funil com setas entre eles (Aguardando -> Em Analise -> Aprovado/Reprovado) para visualizacao mais intuitiva do fluxo
+- **Fila de trabalho**: Adicionar indicador visual de prioridade (dot pulsante vermelho para >48h), hover com preview rapido (nome + placa + tempo) e transicao de hover mais suave com elevacao
+- **Grafico de performance**: Adicionar tooltip customizado com mais contexto e melhorar legenda visual
 
-Substituir os 2 blocos de `AnimatePresence` + `motion.div` por renderizacao condicional simples com transicao CSS:
+**Componentes afetados:**
+- `src/components/cadastro/DashboardCadastro.tsx` (componente unico, refatorar internamente)
 
-1. **Linhas ~1600-1630** (lista de coberturas no card de selecao de plano): Trocar `AnimatePresence`/`motion.div` por um `div` com classes CSS de transicao (`transition-all duration-200`) e renderizacao condicional direta.
+---
 
-2. **Linhas ~1789-1818** (lista de coberturas no preview do plano selecionado): Mesma substituicao.
+## 2. Propostas Pendentes (`PropostasPendentes.tsx`)
 
-3. **Remover import** de `motion` e `AnimatePresence` de `framer-motion` (linha 2), ja que nao serao mais usados neste componente.
+**Melhorias planejadas:**
 
-A animacao de expand/collapse sera mantida visualmente usando `overflow-hidden` + `max-h-0`/`max-h-[500px]` com `transition-all duration-200`, sem manipulacao direta do DOM.
+- **Header**: Adicionar icone decorativo e subtitulo mais descritivo, similar ao padrao `LeadsHeader`
+- **KPIs pills**: Transformar em cards pequenos com fundo mais destacado e hover interativo (ao clicar, filtra automaticamente)
+- **Cards de proposta**: 
+  - Aumentar altura levemente para melhor legibilidade
+  - Adicionar avatar com iniciais do cliente (circulo colorido com letras)
+  - Separar visualmente placa em badge estilizado (fundo escuro, mono font)
+  - Adicionar preview do plano como chip colorido
+  - Indicador de reanalise mais proeminente com badge "NOVO" pulsante
+  - Hover com translate-x sutil (deslize para direita) como ja existe na CotacoesTable
+- **Estado vazio**: Ilustracao mais amigavel com mensagem motivacional
+- **Contador de resultados**: Mover para dentro da barra de filtros
 
-## Resultado esperado
-- O botao "Nova Cotacao" abre o formulario sem erros
-- A funcionalidade de expandir/recolher coberturas continua funcionando com transicao suave
-- Sem conflitos de DOM entre React, Radix e framer-motion
+**Componentes afetados:**
+- `src/pages/cadastro/PropostasPendentes.tsx`
+
+---
+
+## 3. Detalhes da Proposta (`PropostaAnalise.tsx` + subcomponentes)
+
+**Melhorias planejadas:**
+
+### 3a. Hero Header (`PropostaHeroHeader.tsx`)
+- Adicionar gradiente de fundo sutil baseado no status (amarelo para aguardando, azul para em analise)
+- Botoes de acao maiores e mais visiveis com cores cheias (nao outline) e icones mais claros
+- Badge de reanalise mais proeminente com contagem de documentos novos
+- Adicionar "quick stats" inline: placa em destaque, valor mensal, plano
+
+### 3b. Grid de Midia (`PropostaMidiaGrid.tsx`)
+- Layout mais organizado com fotos em grid maior (3 colunas em desktop)
+- Card de documentos solicitados com badge "NOVO" pulsante nos itens novos
+- Thumbnails de fotos maiores para facilitar visualizacao rapida antes de abrir galeria
+
+### 3c. Tabs de Detalhes (`PropostaDetalhesTabs.tsx`)
+- Tab bar com icones mais claros e labels sempre visiveis (remover hidden em sm)
+- Badge de notificacao nos tabs mais visivel (maior, com numero)
+- Cards internos com bordas superiores coloridas por categoria (azul para cliente, roxo para veiculo, etc.)
+- Campos de ficha com hover highlight para facilitar leitura
+- Separadores visuais entre grupos de campos
+
+**Componentes afetados:**
+- `src/components/cadastro/proposta/PropostaHeroHeader.tsx`
+- `src/components/cadastro/proposta/PropostaMidiaGrid.tsx`
+- `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
+- `src/pages/cadastro/PropostaAnalise.tsx` (ajustes menores de spacing)
+
+---
+
+## Principios de Design Aplicados
+- **Hierarquia visual**: Elementos mais importantes (acoes, alertas) com maior destaque
+- **Feedback visual**: Hover states, transicoes suaves, indicadores pulsantes
+- **Densidade informacional**: Mais dados visiveis sem scroll, layouts compactos mas legíveis
+- **Consistencia**: Seguir padroes ja existentes no sistema (cores de status, badges, cards com borda lateral)
+- **Produtividade**: Reducao de cliques, informacoes criticas visiveis de imediato
+
+## Arquivos Modificados (total: 5)
+1. `src/components/cadastro/DashboardCadastro.tsx`
+2. `src/pages/cadastro/PropostasPendentes.tsx`
+3. `src/components/cadastro/proposta/PropostaHeroHeader.tsx`
+4. `src/components/cadastro/proposta/PropostaMidiaGrid.tsx`
+5. `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
+
