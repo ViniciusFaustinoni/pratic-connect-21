@@ -1,58 +1,56 @@
 
-# Etapa 2B: Alinhar termo-filiacao.ts com a Tabela de Configuracoes
+# Etapa 3: Conectar GerarTermo.tsx aos Hooks de Configuracao
 
 ## Diagnostico
 
-A funcao `exigeRastreador` em `src/types/termo-filiacao.ts` usa R$ 20.000 hardcoded para carros (deveria ser R$ 30.000). Ela e importada em `GerarTermo.tsx` mas **nunca e chamada** no corpo do componente — apenas importada. Nenhum outro arquivo frontend a utiliza.
+`exigeRastreador` e importada em `GerarTermo.tsx` mas **nao e chamada** em nenhum lugar do componente. A tela usa dados mock e renderiza o template diretamente, sem verificar obrigatoriedade de rastreador no frontend.
 
-## Alteracoes
+## Alteracoes em `src/pages/cadastro/GerarTermo.tsx`
 
-### 1. `src/types/termo-filiacao.ts` (linhas 191-208)
+### 1. Importar os hooks
 
-Parametrizar `exigeRastreador` para aceitar config opcional, identico ao padrao das edge functions:
+Adicionar import dos dois hooks existentes:
 
 ```typescript
-export const exigeRastreador = (
-  veiculo: VeiculoData,
-  config?: { fipeMinCarro: number; fipeMinMoto: number }
-): { exige: boolean; motivo: string | null } => {
-  if (veiculo.combustivel?.toLowerCase() === 'diesel') {
-    return { exige: true, motivo: 'Veiculo a diesel' };
-  }
-
-  const thresholdCarro = config?.fipeMinCarro ?? 30000;
-  const thresholdMoto = config?.fipeMinMoto ?? 9000;
-
-  if (veiculo.tipo === 'carro' && veiculo.valorFipe > thresholdCarro) {
-    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdCarro.toLocaleString('pt-BR')}` };
-  }
-
-  if (veiculo.tipo === 'moto' && veiculo.valorFipe > thresholdMoto) {
-    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdMoto.toLocaleString('pt-BR')}` };
-  }
-
-  return { exige: false, motivo: null };
-};
+import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
 ```
 
-Mudancas concretas:
-- Segundo parametro opcional `config?: { fipeMinCarro: number; fipeMinMoto: number }`
-- Fallback de R$ 20.000 corrigido para R$ 30.000 (carro)
-- Mensagem de motivo agora usa o valor dinamico em vez de string fixa
+### 2. Usar os hooks no componente
 
-### 2. `src/pages/cadastro/GerarTermo.tsx`
+Dentro de `GerarTermo()`, chamar os hooks para ter os valores disponiveis:
 
-Nenhuma alteracao necessaria. A funcao e importada mas nao chamada no componente. A assinatura continua compativel (parametro config e opcional).
+```typescript
+const { data: fipeMinCarro = 30000 } = useConfigFipeRastreador();
+const { data: fipeMinMoto = 9000 } = useConfigFipeRastreadorMoto();
+```
 
-## Impacto
+### 3. Calcular resultado do rastreador
 
-- Retrocompativel: chamadas sem config continuam funcionando, agora com fallback correto (30k)
-- Quando futuramente o GerarTermo ou outro componente chamar a funcao, podera passar valores do hook `useConfigFipeRastreador`
-- Diesel inalterado, formato de retorno inalterado
+Adicionar chamada efetiva a `exigeRastreador` usando os valores dos hooks:
+
+```typescript
+const rastreadorInfo = exigeRastreador(associado.veiculo, { fipeMinCarro, fipeMinMoto });
+```
+
+### 4. Exibir informacao visual (opcional mas util)
+
+Adicionar um Badge na secao de dados do veiculo indicando se rastreador e obrigatorio:
+
+```typescript
+{rastreadorInfo.exige && (
+  <Badge variant="destructive">Rastreador obrigatorio</Badge>
+)}
+```
+
+Isso sera adicionado proximo ao campo "Valor FIPE" na grid de dados do veiculo.
 
 ## Arquivos nao alterados
 
-- Edge functions (ja corrigidas na Etapa 2A)
-- Hooks (`useConfigRastreador.ts`)
-- Componentes do instalador
+- `src/types/termo-filiacao.ts` (funcao ja parametrizada)
+- `src/hooks/useConfigRastreador.ts` (hooks ja prontos)
+- Edge functions (ja corrigidas)
 - Tabela `configuracoes`
+
+## Resultado
+
+Quando o valor na tabela `configuracoes` mudar, o hook do React Query buscara o novo valor (com staleTime de 10 min) e a tela refletira automaticamente se o rastreador e obrigatorio ou nao para aquele veiculo.
