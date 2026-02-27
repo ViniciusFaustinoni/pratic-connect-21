@@ -57,6 +57,8 @@ import { ComandoRastreadorDialog } from './ComandoRastreadorDialog';
 import { HistoricoComandos } from './HistoricoComandos';
 import { SubstituirEquipamentoDialog } from './SubstituirEquipamentoDialog';
 import { useEnviarComando } from '@/hooks/useComandosRastreador';
+import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
+import { AlertTriangle } from 'lucide-react';
 
 interface RastreadorDetailDrawerProps {
   rastreadorId: string | null;
@@ -82,6 +84,7 @@ export function RastreadorDetailDrawer({
   }>({ open: false, tipo: 'bloquear' });
 
   const [substituirDialogOpen, setSubstituirDialogOpen] = useState(false);
+  const [fotoViewerOpen, setFotoViewerOpen] = useState(false);
 
   const handleStatusChange = async (status: StatusRastreador) => {
     if (!rastreadorId) return;
@@ -257,14 +260,14 @@ export function RastreadorDetailDrawer({
 
                 <Separator />
 
-                {/* Local de Instalação */}
-                {isInstalled && (rastreador.local_instalacao || rastreador.descricao_instalacao || rastreador.foto_local_instalacao_url) && (
-                  <>
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        Local de Instalação
-                      </h3>
+                {/* Local de Instalação - sempre visível */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Local de Instalação
+                  </h3>
+                  {(rastreador.local_instalacao || rastreador.descricao_instalacao || rastreador.foto_local_instalacao_url) ? (
+                    <>
                       {rastreador.local_instalacao && (
                         <Badge variant="secondary" className="text-xs">
                           {rastreador.local_instalacao.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
@@ -276,23 +279,37 @@ export function RastreadorDetailDrawer({
                         </p>
                       )}
                       {rastreador.foto_local_instalacao_url && (
-                        <a
-                          href={rastreador.foto_local_instalacao_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block"
-                        >
-                          <img
-                            src={rastreador.foto_local_instalacao_url}
-                            alt="Local de instalação"
-                            className="w-full max-w-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                        <>
+                          <button
+                            onClick={() => setFotoViewerOpen(true)}
+                            className="block"
+                          >
+                            <img
+                              src={rastreador.foto_local_instalacao_url}
+                              alt="Local de instalação"
+                              className="w-full max-w-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                            />
+                          </button>
+                          <VisualizadorFoto
+                            fotos={[{ url: rastreador.foto_local_instalacao_url, label: 'Local de Instalação' }]}
+                            indexInicial={0}
+                            open={fotoViewerOpen}
+                            onClose={() => setFotoViewerOpen(false)}
                           />
-                        </a>
+                        </>
                       )}
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                      <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-yellow-800">Local de instalação não registrado</p>
+                        <p className="text-xs text-yellow-600">Informação pendente de preenchimento</p>
+                      </div>
                     </div>
-                    <Separator />
-                  </>
-                )}
+                  )}
+                </div>
+                <Separator />
 
                 {/* Veículo Associado */}
                 {rastreador.veiculos && (
