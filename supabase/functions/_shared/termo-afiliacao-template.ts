@@ -466,6 +466,8 @@ const generateSecao2 = (data: TermoAfiliacaoData): string => `
 
 const generateSecao3 = (data: TermoAfiliacaoData): string => {
   const coberturas = data.plano.coberturas || [];
+  const rastreador = exigeRastreador(data.veiculo, data.configRastreador);
+  const textoRastreador = rastreador.exige ? 'Obrigatório' : 'Opcional';
   const coberturasHTML = coberturas.map(c => 
     `<div class="cobertura-item"><span class="cobertura-check">[X]</span> ${c}</div>`
   ).join('\n');
@@ -491,7 +493,7 @@ const generateSecao3 = (data: TermoAfiliacaoData): string => {
   </div>
   
   <div class="highlight-box">
-    <strong>Rastreador Veicular:</strong> Obrigatório (instalação por técnico credenciado)
+    <strong>Rastreador Veicular:</strong> ${textoRastreador} (instalação por técnico credenciado)
   </div>
 </div>
 `;
