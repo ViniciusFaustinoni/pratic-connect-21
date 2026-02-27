@@ -29,6 +29,7 @@ import {
   Lock,
   Unlock,
   RefreshCw,
+  Camera,
 } from 'lucide-react';
 import {
   useRastreador,
@@ -267,19 +268,10 @@ export function RastreadorDetailDrawer({
                     Local de Instalação
                   </h3>
                   {(rastreador.local_instalacao || rastreador.descricao_instalacao || rastreador.foto_local_instalacao_url) ? (
-                    <>
-                      {rastreador.local_instalacao && (
-                        <Badge variant="secondary" className="text-xs">
-                          {rastreador.local_instalacao.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                        </Badge>
-                      )}
-                      {rastreador.descricao_instalacao && (
-                        <p className="text-sm text-muted-foreground">
-                          {rastreador.descricao_instalacao}
-                        </p>
-                      )}
-                      {rastreador.foto_local_instalacao_url && (
-                        <>
+                    <div className="flex gap-4 items-start">
+                      {/* Foto à esquerda */}
+                      {rastreador.foto_local_instalacao_url ? (
+                        <div className="flex-shrink-0">
                           <button
                             onClick={() => setFotoViewerOpen(true)}
                             className="block"
@@ -287,7 +279,7 @@ export function RastreadorDetailDrawer({
                             <img
                               src={rastreador.foto_local_instalacao_url}
                               alt="Local de instalação"
-                              className="w-full max-w-[200px] rounded-lg border object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                              className="w-28 h-28 rounded-lg border object-cover cursor-pointer hover:opacity-80 transition-opacity"
                             />
                           </button>
                           <VisualizadorFoto
@@ -296,9 +288,39 @@ export function RastreadorDetailDrawer({
                             open={fotoViewerOpen}
                             onClose={() => setFotoViewerOpen(false)}
                           />
-                        </>
+                        </div>
+                      ) : (
+                        <div className="flex-shrink-0 w-28 h-28 rounded-lg border border-dashed border-yellow-300 bg-yellow-50 flex items-center justify-center">
+                          <div className="text-center">
+                            <Camera className="h-5 w-5 text-yellow-500 mx-auto mb-1" />
+                            <span className="text-[10px] text-yellow-600 font-medium">Foto pendente</span>
+                          </div>
+                        </div>
                       )}
-                    </>
+
+                      {/* Texto à direita */}
+                      <div className="flex-1 space-y-2 min-w-0">
+                        {rastreador.local_instalacao ? (
+                          <Badge variant="secondary" className="text-xs">
+                            {rastreador.local_instalacao.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs text-yellow-700 border-yellow-300 bg-yellow-50">
+                            Local não informado
+                          </Badge>
+                        )}
+
+                        {rastreador.descricao_instalacao ? (
+                          <p className="text-sm text-muted-foreground">
+                            {rastreador.descricao_instalacao}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-yellow-600 italic">
+                            Descrição pendente de preenchimento
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
                       <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
