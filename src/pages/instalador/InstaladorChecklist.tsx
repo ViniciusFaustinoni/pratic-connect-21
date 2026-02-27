@@ -1254,7 +1254,7 @@ export default function InstaladorChecklist() {
                   <strong className="text-blue-300">Rastreador dispensado</strong>
                   <br />
                   <span className="text-slate-400">
-                    Veículo com FIPE abaixo de R$ {fipeMinRastreador.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} não requer instalação de rastreador.
+                    Veículo com FIPE abaixo de R$ {(tipoVeiculo === 'moto' ? fipeMinRastreadorMoto : fipeMinRastreador).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} não requer instalação de rastreador.
                     {valorFipeVeiculo && (
                       <span className="block mt-1">
                         FIPE do veículo: R$ {valorFipeVeiculo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
