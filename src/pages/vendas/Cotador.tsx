@@ -755,7 +755,7 @@ ${planoFinalSelecionado.naoInclui.length > 0 ? `*Não incluído:*\n${planoFinalS
 
 *Taxa de Filiação:* ${formatCurrency(planoFinalSelecionado.valorAdesao)}
 *Mensalidade:* ${formatCurrency(planoFinalSelecionado.valorMensal)}
-*1ª Parcela:* ${formatCurrency(planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal)}
+*1ª Parcela:* ${formatCurrency(planoFinalSelecionado.valorAdesao)}
 
 _Cotação válida por 7 dias_
 
@@ -1418,7 +1418,7 @@ _Cotação válida por 7 dias_
                         <div>
                           <p className="text-xs text-muted-foreground uppercase">1ª Parcela</p>
                           <p className="text-lg font-bold text-primary">
-                            {formatCurrency(planoAtual.valorAdesao + planoAtual.valorMensal + valorExtra)}
+                            {formatCurrency(planoAtual.valorAdesao)}
                           </p>
                         </div>
                       </div>
@@ -1516,7 +1516,7 @@ _Cotação válida por 7 dias_
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">1ª Parcela</p>
                   <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal + valorExtra)}
+                    {formatCurrency(planoFinalSelecionado.valorAdesao)}
                   </p>
                 </div>
               </div>

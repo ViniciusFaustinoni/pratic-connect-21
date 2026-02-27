@@ -57,7 +57,7 @@ export function PlanoCardComparativo({
   onVerDetalhes,
   isCoberturaRemovida,
 }: PlanoCardComparativoProps) {
-  const primeiroPagamento = (plano.valorAdesao ?? valorAdesao ?? 0) + (plano.valorMensal ?? 0);
+  const primeiroPagamento = plano.valorAdesao ?? valorAdesao ?? 0;
   const coberturas = plano.coberturas || [];
   const naoInclui = plano.naoInclui || [];
 

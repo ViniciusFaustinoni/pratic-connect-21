@@ -85,7 +85,7 @@ export function useCalcularCotacao() {
           categoria,
           valor_mensal: valores.mensal,
           valor_adesao: valores.adesao,
-          valor_primeira_parcela: valores.mensal + valores.adesao,
+          valor_primeira_parcela: valores.adesao,
           coberturas: COBERTURAS_POR_PLANO[categoria],
           tag: categoria === 'Completo' ? 'Mais Popular' : categoria === 'Premium' ? 'Mais Completo' : undefined,
           destaque: categoria === 'Completo',
