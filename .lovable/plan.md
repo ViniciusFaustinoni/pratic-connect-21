@@ -1,40 +1,41 @@
 
 
-# Exibir Local de Instalacao na Aba Informacoes do Rastreador
+# Melhorar Layout do Local de Instalacao no Drawer
 
 ## Problema
 
-A secao "Local de Instalacao" no drawer de detalhes do rastreador so aparece quando o status e `instalado` E quando existe algum dado preenchido. Isso significa que durante operacoes de **manutencao**, **retirada** ou **vistoria** (quando o status muda para outro valor), a informacao desaparece -- justamente quando o profissional mais precisa dela.
+Na secao "Local de Instalacao" do drawer, a foto aparece mas o texto descritivo (local padronizado e descricao) nao esta visivel. Dois motivos:
 
-Alem disso, quando nenhum dado de local esta preenchido, nao ha nenhuma indicacao visual de que essa informacao esta faltando.
+1. Para rastreadores ja instalados (como o do Vinicius Faustinoni), apenas a `foto_local_instalacao_url` foi preenchida via migracao. Os campos `local_instalacao` e `descricao_instalacao` estao vazios no banco.
+2. O layout atual empilha os elementos verticalmente - o ideal e colocar a foto e o texto lado a lado para melhor aproveitamento do espaco.
 
 ## Solucao
 
-### 1. Remover condicao de status `instalado` para exibicao
+### 1. Melhorar layout da secao (RastreadorDetailDrawer.tsx)
 
-A secao "Local de Instalacao" passara a ser exibida **sempre**, independente do status do rastreador. Se os dados existirem, mostra normalmente. Se nao existirem, mostra um aviso de "informacao pendente" com fundo amarelo claro.
+Reorganizar a secao para exibir foto e texto lado a lado:
 
-### 2. Melhorar layout da secao
-
-- Exibir badge com local padronizado
-- Exibir descricao do ponto
-- Exibir foto clicavel com visualizador (usando o `VisualizadorFoto` ja existente no projeto)
-- Quando dados ausentes: card de alerta "Local de instalacao nao registrado"
-
-## Arquivo modificado
-
-**`src/components/rastreadores/RastreadorDetailDrawer.tsx`** -- Alterar a condicao da linha 261 para remover `isInstalled &&`, e adicionar fallback visual quando nao ha dados.
-
-## Detalhes tecnicos
-
-A condicao atual:
 ```
-isInstalled && (rastreador.local_instalacao || rastreador.descricao_instalacao || rastreador.foto_local_instalacao_url)
++-----------------------------+
+| Local de Instalacao         |
+| +--------+  Local: Painel   |
+| | FOTO   |  Descricao:      |
+| |        |  "Sob o volante, |
+| +--------+  lado esquerdo"  |
++-----------------------------+
 ```
 
-Sera substituida por uma secao que sempre aparece:
-- Se ha dados: mostra local, descricao e foto normalmente
-- Se nao ha dados: mostra card informativo "Local de instalacao nao registrado" com icone de alerta
+- Foto a esquerda (miniatura clicavel)
+- Ao lado: badge do local + descricao textual
+- Se apenas foto sem texto: mostrar foto com aviso "Descricao pendente"
+- Se apenas texto sem foto: mostrar texto com aviso "Foto pendente"
 
-A foto usara o componente `VisualizadorFoto` ja existente em `src/components/analise/VisualizadorFoto.tsx` para abrir em modal com zoom, em vez de abrir em nova aba.
+### 2. Backfill dos dados existentes (migracao SQL)
+
+Criar migracao para preencher `local_instalacao` e `descricao_instalacao` dos rastreadores que ja foram instalados mas nao tiveram esses campos preenchidos (como o caso do Vinicius). Para esses casos, setar um valor padrao indicando que a informacao precisa ser atualizada manualmente.
+
+## Arquivos modificados
+
+1. **`src/components/rastreadores/RastreadorDetailDrawer.tsx`** -- Reorganizar layout da secao "Local de Instalacao" com foto e texto lado a lado, incluindo indicadores visuais para dados faltantes
+2. **Nova migracao SQL** -- Atualizar rastreadores com status `instalado` que tem foto mas nao tem `local_instalacao`/`descricao_instalacao`, setando valor padrao "A preencher"
 
