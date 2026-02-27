@@ -65,6 +65,7 @@ export interface ContratoData {
   numero: string;
   valor_adesao: number;
   valor_mensal: number;
+  valor_adicional?: number;
   dia_vencimento: number;
   data_inicio?: string;
   forma_pagamento?: string;
@@ -320,6 +321,7 @@ export function mapearDadosParaTemplate(
       numero: contrato.numero || "",
       valor_adesao: contrato.valor_adesao || 0,
       valor_mensal: contrato.valor_mensal || 0,
+      valor_adicional: contrato.valor_adicional || 0,
       dia_vencimento: contrato.dia_vencimento || 10,
       data_inicio: contrato.data_inicio || "",
       forma_pagamento: "Boleto Bancário",

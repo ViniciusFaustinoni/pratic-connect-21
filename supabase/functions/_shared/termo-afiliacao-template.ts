@@ -521,8 +521,18 @@ const generateSecao4 = (data: TermoAfiliacaoData): string => {
     </tr>
     <tr>
       <td>Quota Mensal Estimada:</td>
-      <td>${formatCurrency(data.contrato.valor_mensal)}</td>
+      <td>${formatCurrency((data.contrato.valor_mensal || 0) - (data.contrato.valor_adicional || 0))}</td>
     </tr>
+    ${(data.contrato.valor_adicional || 0) > 0 ? `
+    <tr>
+      <td>Valor Adicional:</td>
+      <td>${formatCurrency(data.contrato.valor_adicional)}</td>
+    </tr>
+    <tr>
+      <td><strong>Total Mensal:</strong></td>
+      <td><strong>${formatCurrency(data.contrato.valor_mensal)}</strong></td>
+    </tr>
+    ` : ''}
     <tr>
       <td>Cota de Participação (${data.plano.cota_participacao || 10}%):</td>
       <td>${formatCurrency(cotaParticipacao)}</td>
