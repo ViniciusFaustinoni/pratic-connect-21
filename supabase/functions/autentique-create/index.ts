@@ -30,6 +30,36 @@ const AUTENTIQUE_API_URL = "https://api.autentique.com.br/v2/graphql";
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+// ============= BUSCAR CONFIG RASTREADOR =============
+async function buscarConfigRastreador(supabase: any) {
+  try {
+    const { data, error } = await supabase
+      .from('configuracoes')
+      .select('chave, valor')
+      .in('chave', [
+        'operacional_fipe_minimo_rastreador',
+        'operacional_fipe_minimo_rastreador_moto'
+      ]);
+    
+    if (error) throw error;
+    
+    const config: Record<string, string> = {};
+    for (const row of (data || [])) {
+      config[row.chave] = row.valor;
+    }
+    
+    const result = {
+      fipeMinCarro: Number(config['operacional_fipe_minimo_rastreador']) || 30000,
+      fipeMinMoto: Number(config['operacional_fipe_minimo_rastreador_moto']) || 9000,
+    };
+    console.log('[autentique-create] Config rastreador:', result);
+    return result;
+  } catch (err) {
+    console.warn('[autentique-create] Fallback: erro ao buscar config rastreador:', err);
+    return { fipeMinCarro: 30000, fipeMinMoto: 9000 };
+  }
+}
+
 // ============= GERAR HTML A PARTIR DO TEMPLATE DO BANCO =============
 
 async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dados: any): Promise<string> {
@@ -162,6 +192,9 @@ serve(async (req) => {
 
     // ============= BUSCAR CONFIGURAÇÕES DA EMPRESA =============
     const empresaConfig = await buscarConfiguracoesEmpresa(supabase);
+
+    // ============= BUSCAR CONFIG RASTREADOR =============
+    const configRastreador = await buscarConfigRastreador(supabase);
     
     // ============= MAPEAR DADOS PARA O TEMPLATE =============
     const templateData = mapearDadosParaTemplate(
@@ -178,6 +211,7 @@ serve(async (req) => {
       contrato.associados,
       vendedorNome
     );
+    templateData.configRastreador = configRastreador;
 
     // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============
     let contratoHTML: string;

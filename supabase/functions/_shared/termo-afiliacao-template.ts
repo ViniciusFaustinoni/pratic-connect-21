@@ -859,7 +859,10 @@ const generateSecaoCarroZero = (data: TermoAfiliacaoData): string => {
  * - Moto: FIPE > R$ 9.000
  * - Carro: FIPE > R$ 20.000
  */
-const exigeRastreador = (veiculo: any): { exige: boolean; motivo: string | null } => {
+const exigeRastreador = (
+  veiculo: any,
+  config?: { fipeMinCarro: number; fipeMinMoto: number }
+): { exige: boolean; motivo: string | null } => {
   // Diesel sempre exige rastreador
   if (veiculo.combustivel?.toLowerCase() === 'diesel') {
     return { exige: true, motivo: 'Veículo a diesel' };
@@ -869,21 +872,22 @@ const exigeRastreador = (veiculo: any): { exige: boolean; motivo: string | null 
   const categoria = (veiculo.categoria || '').toLowerCase();
   const isMoto = categoria.includes('moto') || categoria.includes('ciclomotor');
   
-  // Moto com FIPE > R$ 9.000
-  if (isMoto && valorFipe > 9000) {
-    return { exige: true, motivo: `Valor FIPE acima de R$ 9.000` };
+  const thresholdMoto = config?.fipeMinMoto ?? 9000;
+  const thresholdCarro = config?.fipeMinCarro ?? 30000;
+  
+  if (isMoto && valorFipe > thresholdMoto) {
+    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdMoto.toLocaleString('pt-BR')}` };
   }
   
-  // Carro com FIPE > R$ 20.000
-  if (!isMoto && valorFipe > 20000) {
-    return { exige: true, motivo: `Valor FIPE acima de R$ 20.000` };
+  if (!isMoto && valorFipe > thresholdCarro) {
+    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdCarro.toLocaleString('pt-BR')}` };
   }
   
   return { exige: false, motivo: null };
 };
 
 const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
-  const rastreador = exigeRastreador(data.veiculo);
+  const rastreador = exigeRastreador(data.veiculo, data.configRastreador);
   
   // Só gera a seção se rastreador for obrigatório
   if (!rastreador.exige) return '';
