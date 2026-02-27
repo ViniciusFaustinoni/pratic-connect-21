@@ -1,18 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,17 +25,20 @@ import {
   Loader2,
   Car,
   ArrowRight,
+  ClipboardList,
+  Inbox,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePropostasPendentes, usePropostaStats, PropostaPendente } from '@/hooks/usePropostasPendentes';
 import { useInstalacoesAguardandoAtivacao } from '@/hooks/useVistoriaCompletaAnalise';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDeleteAssociado } from '@/hooks/useAssociados';
 import { supabase } from '@/integrations/supabase/client';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
+import { UserAvatar } from '@/components/UserAvatar';
 
 // ============================================
 // STATUS CONFIG
@@ -167,7 +161,6 @@ export default function PropostasPendentes() {
       return matchSearch && matchStatus;
     })
     ?.sort((a, b) => {
-      // Reanálise no topo
       const aReanalise = (a.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
       const bReanalise = (b.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
       if (bReanalise !== aReanalise) return bReanalise - aReanalise;
@@ -175,56 +168,67 @@ export default function PropostasPendentes() {
     });
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-foreground">Propostas Pendentes</h1>
-        <p className="text-sm text-muted-foreground">Contratos assinados aguardando análise</p>
+    <div className="space-y-5 animate-fade-in">
+      {/* Header melhorado */}
+      <div className="flex items-start gap-3">
+        <div className="p-2.5 rounded-xl bg-primary/10">
+          <ClipboardList className="h-6 w-6 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold text-foreground">Propostas Pendentes</h1>
+          <p className="text-sm text-muted-foreground">Contratos assinados aguardando análise e aprovação</p>
+        </div>
       </div>
 
-      {/* KPIs como pills compactos */}
-      <div className="flex flex-wrap gap-2">
+      {/* KPIs como cards interativos */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         {statsLoading ? (
-          <Skeleton className="h-7 w-64 bg-muted rounded-full" />
+          Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl bg-muted" />)
         ) : (
           <>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warning/10 border border-warning/30">
-              <Clock className="h-3 w-3 text-warning" />
-              <span className="text-xs font-medium text-warning">Aguardando: {stats?.aguardando || 0}</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-info/10 border border-info/30">
-              <Eye className="h-3 w-3 text-info" />
-              <span className="text-xs font-medium text-info">Em Análise: {stats?.emAnalise || 0}</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30">
-              <Zap className="h-3 w-3 text-purple-500" />
-              <span className="text-xs font-medium text-purple-500">Ativação: {instalacoesPendentes?.length || 0}</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 border border-success/30">
-              <CheckCircle className="h-3 w-3 text-success" />
-              <span className="text-xs font-medium text-success">Aprovados: {stats?.aprovadosHoje || 0}</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-destructive/10 border border-destructive/30">
-              <XCircle className="h-3 w-3 text-destructive" />
-              <span className="text-xs font-medium text-destructive">Reprovados: {stats?.reprovadosHoje || 0}</span>
-            </div>
+            {[
+              { label: 'Aguardando', value: stats?.aguardando || 0, icon: <Clock className="h-3.5 w-3.5" />, color: 'warning', filter: 'assinado' },
+              { label: 'Em Análise', value: stats?.emAnalise || 0, icon: <Eye className="h-3.5 w-3.5" />, color: 'info', filter: 'em_analise' },
+              { label: 'Ativação', value: instalacoesPendentes?.length || 0, icon: <Zap className="h-3.5 w-3.5" />, color: 'purple-500', filter: null },
+              { label: 'Aprovados', value: stats?.aprovadosHoje || 0, icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'success', filter: null },
+              { label: 'Reprovados', value: stats?.reprovadosHoje || 0, icon: <XCircle className="h-3.5 w-3.5" />, color: 'destructive', filter: null },
+            ].map((kpi) => (
+              <button
+                key={kpi.label}
+                className={cn(
+                  "rounded-xl border p-3 text-left transition-all hover:shadow-sm hover:-translate-y-0.5",
+                  `bg-${kpi.color}/10 border-${kpi.color}/30`,
+                  kpi.filter && statusFilter === kpi.filter && "ring-2 ring-offset-1 ring-offset-background",
+                  kpi.filter && statusFilter === kpi.filter && `ring-${kpi.color}/50`
+                )}
+                onClick={() => kpi.filter && setStatusFilter(statusFilter === kpi.filter ? 'todos' : kpi.filter)}
+              >
+                <div className={cn("flex items-center gap-1.5 mb-1", `text-${kpi.color}`)}>
+                  {kpi.icon}
+                  <span className="text-[10px] font-medium">{kpi.label}</span>
+                </div>
+                <p className={cn("text-xl font-bold", `text-${kpi.color}`)}>{kpi.value}</p>
+              </button>
+            ))}
           </>
         )}
       </div>
 
-      {/* Ativação de Rastreador - Banner compacto */}
+      {/* Ativação de Rastreador */}
       {instalacoesPendentes && instalacoesPendentes.length > 0 && (
-        <div className="flex items-center gap-3 p-3 rounded-lg border border-purple-500/30 bg-purple-500/5">
-          <Zap className="h-4 w-4 text-purple-500 flex-shrink-0" />
+        <div className="flex items-center gap-3 p-3.5 rounded-xl border-2 border-purple-500/30 bg-purple-500/5">
+          <div className="p-2 rounded-lg bg-purple-500/20">
+            <Zap className="h-4 w-4 text-purple-500" />
+          </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm font-semibold text-foreground">
               {instalacoesPendentes.length} instalação(ões) aguardando ativação
             </p>
+            <p className="text-xs text-muted-foreground">Rastreadores instalados prontos para ativação</p>
           </div>
           <Button
             size="sm"
-            variant="outline"
-            className="border-purple-500/30 text-purple-500 hover:bg-purple-500/10 text-xs flex-shrink-0"
+            className="bg-purple-500 hover:bg-purple-600 text-white text-xs flex-shrink-0"
             onClick={() => {
               const first = instalacoesPendentes[0] as any;
               if (first) navigate(`/cadastro/instalacoes/${first.id}/ativar`);
@@ -236,7 +240,7 @@ export default function PropostasPendentes() {
         </div>
       )}
 
-      {/* Filtros inline */}
+      {/* Filtros */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -244,63 +248,82 @@ export default function PropostasPendentes() {
             placeholder="Buscar nome, CPF ou placa..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-card border-border h-9 text-sm"
+            className="pl-10 bg-card border-border h-10 text-sm rounded-xl"
           />
         </div>
-        <div className="flex gap-1 bg-muted/50 p-0.5 rounded-lg">
-          {statusFilters.map(f => (
-            <button
-              key={f.value}
-              className={cn(
-                "px-3 py-1.5 text-xs rounded-md transition-colors",
-                statusFilter === f.value
-                  ? 'bg-card shadow-sm text-foreground font-medium'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-              onClick={() => setStatusFilter(f.value)}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-0.5 bg-muted/50 p-0.5 rounded-xl">
+            {statusFilters.map(f => (
+              <button
+                key={f.value}
+                className={cn(
+                  "px-3 py-2 text-xs rounded-lg transition-all",
+                  statusFilter === f.value
+                    ? 'bg-card shadow-sm text-foreground font-semibold'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setStatusFilter(f.value)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {propostasFiltradas && (
+            <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:block">
+              {propostasFiltradas.length} resultado(s)
+            </span>
+          )}
         </div>
       </div>
 
       {/* Cards de Propostas */}
       {propostasLoading ? (
         <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-20 w-full bg-muted rounded-lg" />)}
+          {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-20 w-full bg-muted rounded-xl" />)}
         </div>
       ) : !propostasFiltradas || propostasFiltradas.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <FileText className="h-10 w-10 mx-auto mb-3 opacity-40" />
-          <p className="font-medium text-sm">Nenhuma proposta encontrada</p>
-          <p className="text-xs">Todas as propostas foram analisadas.</p>
+        <div className="text-center py-16 text-muted-foreground">
+          <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+            <Inbox className="h-8 w-8 text-muted-foreground/40" />
+          </div>
+          <p className="font-semibold text-foreground text-base">Nenhuma proposta encontrada</p>
+          <p className="text-sm mt-1">Todas as propostas foram analisadas. Bom trabalho! 🎉</p>
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">{propostasFiltradas.length} proposta(s)</p>
           {propostasFiltradas.map((proposta) => {
             const hasReanalise = (proposta.documentos_solicitados_enviados?.length || 0) > 0;
             return (
               <div
                 key={proposta.id}
                 className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg bg-card border border-border hover:border-border-hover transition-all cursor-pointer border-l-4",
+                  "group flex items-center gap-3 p-3.5 rounded-xl bg-card border border-border transition-all cursor-pointer border-l-4",
+                  "hover:bg-accent/30 hover:shadow-sm hover:translate-x-1",
                   getWaitColor(proposta.data_assinatura),
                   hasReanalise && "ring-1 ring-amber-500/30 bg-amber-500/5"
                 )}
                 onClick={() => navigate(`/cadastro/propostas/${proposta.id}`)}
               >
+                {/* Avatar com iniciais */}
+                <UserAvatar
+                  name={proposta.cliente_nome || proposta.associado?.nome}
+                  size="sm"
+                  className="flex-shrink-0"
+                />
+
                 {/* Reanálise indicator */}
                 {hasReanalise && (
-                  <div className="flex-shrink-0">
-                    <RefreshCw className="h-4 w-4 text-amber-500" />
+                  <div className="flex-shrink-0 relative">
+                    <Badge className="bg-amber-500 text-white text-[9px] px-1.5 py-0 animate-pulse">
+                      <RefreshCw className="h-2.5 w-2.5 mr-0.5" />
+                      NOVO
+                    </Badge>
                   </div>
                 )}
 
                 {/* Placa destaque */}
-                <div className="flex-shrink-0 w-20">
-                  <span className="font-mono text-sm font-bold text-foreground">
+                <div className="flex-shrink-0">
+                  <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-1 rounded-md">
                     {proposta.veiculo_placa || '---'}
                   </span>
                 </div>
@@ -310,15 +333,23 @@ export default function PropostasPendentes() {
                   <p className="text-sm font-medium text-foreground truncate">
                     {proposta.cliente_nome || proposta.associado?.nome || '---'}
                   </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {proposta.veiculo_modelo || '---'} • {proposta.plano?.nome || proposta.plano_nome || '---'}
-                  </p>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="truncate">{proposta.veiculo_modelo || '---'}</span>
+                    {(proposta.plano?.nome || proposta.plano_nome) && (
+                      <>
+                        <span className="text-border">•</span>
+                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">
+                          {proposta.plano?.nome || proposta.plano_nome}
+                        </Badge>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Status + Tempo */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente)}
-                  <span className={cn("text-[10px] font-medium", getWaitTextColor(proposta.data_assinatura))}>
+                  <span className={cn("text-[10px] font-semibold tabular-nums", getWaitTextColor(proposta.data_assinatura))}>
                     {proposta.data_assinatura
                       ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: false })
                       : '---'}
@@ -329,7 +360,7 @@ export default function PropostasPendentes() {
                 <div className="flex-shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                         {ativandoRastreadorId === proposta.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (

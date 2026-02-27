@@ -10,9 +10,10 @@ import {
   RefreshCw,
   ShieldCheck,
   Car,
-  User,
+  DollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { UserAvatar } from '@/components/UserAvatar';
 import type { PropostaPendente } from '@/hooks/usePropostasPendentes';
 
 interface PropostaHeroHeaderProps {
@@ -32,6 +33,7 @@ const statusConfig: Record<string, {
   color: string; 
   bgColor: string; 
   borderColor: string;
+  gradientFrom: string;
   icon: React.ReactNode;
 }> = {
   assinado: { 
@@ -39,6 +41,7 @@ const statusConfig: Record<string, {
     color: 'text-warning', 
     bgColor: 'bg-warning/10',
     borderColor: 'border-warning/30',
+    gradientFrom: 'from-warning/5',
     icon: <Clock className="h-4 w-4" />
   },
   em_analise: { 
@@ -46,6 +49,7 @@ const statusConfig: Record<string, {
     color: 'text-info', 
     bgColor: 'bg-info/10',
     borderColor: 'border-info/30',
+    gradientFrom: 'from-info/5',
     icon: <Clock className="h-4 w-4" />
   },
   ativo: { 
@@ -53,6 +57,7 @@ const statusConfig: Record<string, {
     color: 'text-success', 
     bgColor: 'bg-success/10',
     borderColor: 'border-success/30',
+    gradientFrom: 'from-success/5',
     icon: <CheckCircle className="h-4 w-4" />
   },
   reprovado: { 
@@ -60,9 +65,15 @@ const statusConfig: Record<string, {
     color: 'text-destructive', 
     bgColor: 'bg-destructive/10',
     borderColor: 'border-destructive/30',
+    gradientFrom: 'from-destructive/5',
     icon: <XCircle className="h-4 w-4" />
   },
 };
+
+function formatCurrency(value: number | null): string {
+  if (value === null || value === undefined) return '---';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
 
 export function PropostaHeroHeader({
   proposta,
@@ -80,6 +91,7 @@ export function PropostaHeroHeader({
     color: 'text-muted-foreground',
     bgColor: 'bg-muted',
     borderColor: 'border-border',
+    gradientFrom: 'from-muted/5',
     icon: <Clock className="h-4 w-4" />
   };
 
@@ -92,21 +104,28 @@ export function PropostaHeroHeader({
   const temDocumentosNovos = proposta.documentos_solicitados_enviados && proposta.documentos_solicitados_enviados.length > 0;
 
   return (
-    <div className="space-y-0">
-      {/* Alerta de Reanálise - banner slim acima */}
+    <div className="space-y-0 animate-fade-in">
+      {/* Alerta de Reanálise */}
       {temDocumentosNovos && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/15 border border-amber-500/30 rounded-t-xl">
-          <RefreshCw className="h-4 w-4 text-amber-500 flex-shrink-0" />
-          <span className="text-sm font-medium text-amber-700 dark:text-amber-300 flex-1">
+        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-amber-500/15 border-2 border-amber-500/30 rounded-t-2xl">
+          <div className="relative">
+            <RefreshCw className="h-4 w-4 text-amber-500 flex-shrink-0" />
+            <span className="absolute -top-1 -right-1 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+            </span>
+          </div>
+          <span className="text-sm font-semibold text-amber-700 dark:text-amber-300 flex-1">
             Reanálise — {proposta.documentos_solicitados_enviados?.length} documento(s) reenviado(s)
           </span>
+          <Badge className="bg-amber-500 text-white text-[9px] px-2 animate-pulse">NOVO</Badge>
         </div>
       )}
 
-      {/* Sticky navigation bar */}
+      {/* Navigation bar */}
       <div className={cn(
         "sticky top-0 z-20 flex items-center justify-between px-4 py-2 bg-card/95 backdrop-blur-sm border border-border",
-        temDocumentosNovos ? "rounded-none border-t-0" : "rounded-t-xl"
+        temDocumentosNovos ? "rounded-none border-t-0" : "rounded-t-2xl"
       )}>
         <Button
           variant="ghost"
@@ -137,23 +156,27 @@ export function PropostaHeroHeader({
         )}
       </div>
 
-      {/* Conteúdo principal - layout horizontal */}
-      <div className="border border-border border-t-0 rounded-b-xl bg-card px-4 py-3">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-          {/* Lado esquerdo: Info do cliente + veículo + status */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Avatar placeholder */}
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <User className="h-5 w-5 text-primary" />
-            </div>
+      {/* Conteúdo principal com gradiente */}
+      <div className={cn(
+        "border border-border border-t-0 rounded-b-2xl bg-gradient-to-br to-card px-5 py-4",
+        config.gradientFrom
+      )}>
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          {/* Lado esquerdo: Avatar + Info */}
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <UserAvatar
+              name={proposta.cliente_nome || proposta.associado?.nome}
+              size="lg"
+              className="ring-2 ring-primary/20"
+            />
             
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-semibold text-foreground truncate">
+                <h2 className="text-lg font-bold text-foreground truncate">
                   {proposta.cliente_nome || proposta.associado?.nome || '---'}
                 </h2>
                 <Badge className={cn(
-                  "text-xs px-2 py-0.5 gap-1",
+                  "text-xs px-2.5 py-0.5 gap-1",
                   config.color,
                   config.bgColor,
                   "border",
@@ -163,32 +186,45 @@ export function PropostaHeroHeader({
                   {config.label}
                 </Badge>
               </div>
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Car className="h-3.5 w-3.5" />
-                <span>{veiculoDescricao || '---'}</span>
+              
+              {/* Quick stats inline */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Car className="h-3.5 w-3.5" />
+                  <span className="truncate">{veiculoDescricao || '---'}</span>
+                </div>
                 {proposta.veiculo_placa && (
-                  <>
-                    <span className="text-border">•</span>
-                    <span className="font-mono font-medium text-foreground">{proposta.veiculo_placa}</span>
-                  </>
+                  <span className="font-mono font-bold text-sm bg-foreground/10 text-foreground px-2 py-0.5 rounded-md">
+                    {proposta.veiculo_placa}
+                  </span>
+                )}
+                {proposta.valor_mensal && (
+                  <div className="flex items-center gap-1 text-sm">
+                    <DollarSign className="h-3.5 w-3.5 text-success" />
+                    <span className="font-semibold text-success">{formatCurrency(proposta.valor_mensal)}</span>
+                  </div>
+                )}
+                {(proposta.plano?.nome || proposta.plano_nome) && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {proposta.plano?.nome || proposta.plano_nome}
+                  </Badge>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Lado direito: Botões de ação */}
+          {/* Lado direito: Botões de ação maiores */}
           {podeAprovar && (
             <div className="flex items-center gap-2 flex-shrink-0">
               <Button
-                className="bg-success hover:bg-success/90 text-white"
-                size="sm"
+                className="bg-success hover:bg-success/90 text-white shadow-sm"
                 onClick={onAprovar}
                 disabled={isAprovando}
               >
                 {isAutovistoria ? (
-                  <ShieldCheck className="mr-1.5 h-4 w-4" />
+                  <ShieldCheck className="mr-2 h-4 w-4" />
                 ) : (
-                  <CheckCircle className="mr-1.5 h-4 w-4" />
+                  <CheckCircle className="mr-2 h-4 w-4" />
                 )}
                 {isAprovando 
                   ? 'Aprovando...' 
@@ -199,22 +235,18 @@ export function PropostaHeroHeader({
               </Button>
 
               <Button
-                variant="outline"
-                className="border-warning text-warning hover:bg-warning/10"
-                size="sm"
+                className="bg-warning hover:bg-warning/90 text-warning-foreground shadow-sm"
                 onClick={onSolicitarDocs}
               >
-                <FileText className="mr-1.5 h-4 w-4" />
+                <FileText className="mr-2 h-4 w-4" />
                 Docs
               </Button>
 
               <Button
-                variant="outline"
-                className="border-destructive text-destructive hover:bg-destructive/10"
-                size="sm"
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-sm"
                 onClick={onReprovar}
               >
-                <XCircle className="mr-1.5 h-4 w-4" />
+                <XCircle className="mr-2 h-4 w-4" />
                 Reprovar
               </Button>
             </div>
@@ -222,22 +254,22 @@ export function PropostaHeroHeader({
 
           {/* Mensagem quando não pode aprovar */}
           {!podeAprovar && (
-            <div className="text-xs text-muted-foreground flex-shrink-0">
+            <div className="flex-shrink-0">
               {proposta.tem_documento_pendente ? (
-                <div className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-warning" />
-                  <span>Aguardando docs do cliente</span>
-                </div>
+                <Badge className="bg-warning/15 text-warning border-warning/30 gap-1.5 px-3 py-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  Aguardando docs do cliente
+                </Badge>
               ) : proposta.status === 'ativo' ? (
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle className="h-3.5 w-3.5 text-success" />
-                  <span>Proposta aprovada</span>
-                </div>
+                <Badge className="bg-success/15 text-success border-success/30 gap-1.5 px-3 py-1.5">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  Proposta aprovada
+                </Badge>
               ) : proposta.status === 'reprovado' ? (
-                <div className="flex items-center gap-1.5">
-                  <XCircle className="h-3.5 w-3.5 text-destructive" />
-                  <span>Proposta reprovada</span>
-                </div>
+                <Badge className="bg-destructive/15 text-destructive border-destructive/30 gap-1.5 px-3 py-1.5">
+                  <XCircle className="h-3.5 w-3.5" />
+                  Proposta reprovada
+                </Badge>
               ) : null}
             </div>
           )}

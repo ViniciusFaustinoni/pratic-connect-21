@@ -11,8 +11,10 @@ import {
   XCircle,
   ArrowRight,
   TrendingUp,
-  TrendingDown,
   Car,
+  ChevronRight,
+  BarChart3,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePropostaStats, usePropostasPendentes } from '@/hooks/usePropostasPendentes';
@@ -20,6 +22,7 @@ import { useCadastroPerformance } from '@/hooks/useCadastroPerformance';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { UserAvatar } from '@/components/UserAvatar';
 import {
   BarChart,
   Bar,
@@ -28,36 +31,50 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
 
 // ============================================
-// COMPONENTE: KPI Compacto com tendência
+// KPI Card com ícone grande e animação
 // ============================================
 interface KPIProps {
   titulo: string;
   valor: number | string;
-  borderColor: string;
+  icon: React.ReactNode;
+  bgColor: string;
   textColor: string;
   loading?: boolean;
+  pulse?: boolean;
 }
 
-function KPICompact({ titulo, valor, borderColor, textColor, loading }: KPIProps) {
+function KPICard({ titulo, valor, icon, bgColor, textColor, loading, pulse }: KPIProps) {
   if (loading) {
-    return <Skeleton className="h-20 w-full rounded-lg bg-muted" />;
+    return <Skeleton className="h-24 w-full rounded-xl bg-muted" />;
   }
   return (
-    <div className={cn("rounded-lg border-l-4 bg-card border border-border p-4", borderColor)}>
-      <p className="text-xs text-muted-foreground font-medium">{titulo}</p>
-      <p className={cn("text-2xl font-bold mt-1", textColor)}>{valor}</p>
+    <div className={cn(
+      "relative rounded-xl border border-border bg-card p-4 overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5",
+    )}>
+      <div className="flex items-start justify-between">
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground font-medium">{titulo}</p>
+          <p className={cn("text-3xl font-bold tracking-tight", textColor)}>{valor}</p>
+        </div>
+        <div className={cn(
+          "rounded-xl p-2.5 transition-transform",
+          bgColor,
+          pulse && "animate-pulse"
+        )}>
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }
 
 // ============================================
-// BANNER COMPACTO
+// BANNER com avatar e gradiente
 // ============================================
-function CompactBanner({ nome, aguardando }: { nome: string; aguardando: number }) {
+function WelcomeBanner({ nome, aguardando }: { nome: string; aguardando: number }) {
   const getSaudacao = () => {
     const hora = new Date().getHours();
     if (hora < 12) return 'Bom dia';
@@ -66,74 +83,78 @@ function CompactBanner({ nome, aguardando }: { nome: string; aguardando: number 
   };
 
   return (
-    <div className="flex items-center justify-between rounded-xl border border-border bg-card px-5 py-4">
-      <div>
-        <p className="text-sm text-muted-foreground">
-          {getSaudacao()}, <span className="font-semibold text-foreground">{nome}</span>
-        </p>
-        {aguardando > 0 ? (
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Você tem <span className="font-semibold text-warning">{aguardando} proposta(s)</span> aguardando análise
+    <div className="relative rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-5 overflow-hidden">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -translate-y-8 translate-x-8" />
+      <div className="absolute bottom-0 left-1/2 w-24 h-24 bg-primary/3 rounded-full translate-y-12" />
+      <div className="relative flex items-center gap-4">
+        <UserAvatar name={nome} size="lg" className="ring-2 ring-primary/20" />
+        <div className="flex-1">
+          <p className="text-lg font-semibold text-foreground">
+            {getSaudacao()}, {nome}!
           </p>
-        ) : (
-          <p className="text-sm text-success mt-0.5 font-medium">Sua fila está vazia! 🎉</p>
-        )}
+          {aguardando > 0 ? (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Você tem <span className="font-bold text-warning">{aguardando}</span> proposta{aguardando !== 1 ? 's' : ''} aguardando sua análise
+            </p>
+          ) : (
+            <p className="text-sm text-success mt-0.5 font-medium flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              Sua fila está vazia! Parabéns!
+            </p>
+          )}
+        </div>
+        <Badge className="bg-primary/10 text-primary border-primary/30 text-xs hidden sm:flex">
+          Analista de Cadastro
+        </Badge>
       </div>
-      <Badge className="bg-primary/10 text-primary border-primary/30 text-xs">
-        Analista de Cadastro
-      </Badge>
     </div>
   );
 }
 
 // ============================================
-// MINI PIPELINE VISUAL
+// PIPELINE FUNIL VISUAL
 // ============================================
-function PipelineVisual({ stats, loading }: { stats: any; loading: boolean }) {
-  if (loading) return <Skeleton className="h-8 w-full rounded-full bg-muted" />;
+function PipelineFunnel({ stats, loading }: { stats: any; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-4 gap-2">
+        {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 rounded-xl bg-muted" />)}
+      </div>
+    );
+  }
 
-  const aguardando = stats?.aguardando || 0;
-  const emAnalise = stats?.emAnalise || 0;
-  const aprovados = stats?.aprovadosHoje || 0;
-  const reprovados = stats?.reprovadosHoje || 0;
-  const total = aguardando + emAnalise + aprovados + reprovados;
-
-  if (total === 0) return null;
-
-  const segments = [
-    { label: 'Aguardando', value: aguardando, color: 'bg-warning', textColor: 'text-warning' },
-    { label: 'Em Análise', value: emAnalise, color: 'bg-info', textColor: 'text-info' },
-    { label: 'Aprovados', value: aprovados, color: 'bg-success', textColor: 'text-success' },
-    { label: 'Reprovados', value: reprovados, color: 'bg-destructive', textColor: 'text-destructive' },
-  ].filter(s => s.value > 0);
+  const stages = [
+    { label: 'Aguardando', value: stats?.aguardando || 0, icon: <Clock className="h-4 w-4" />, bgColor: 'bg-warning/10', textColor: 'text-warning', borderColor: 'border-warning/30' },
+    { label: 'Em Análise', value: stats?.emAnalise || 0, icon: <FileText className="h-4 w-4" />, bgColor: 'bg-info/10', textColor: 'text-info', borderColor: 'border-info/30' },
+    { label: 'Aprovados', value: stats?.aprovadosHoje || 0, icon: <CheckCircle className="h-4 w-4" />, bgColor: 'bg-success/10', textColor: 'text-success', borderColor: 'border-success/30' },
+    { label: 'Reprovados', value: stats?.reprovadosHoje || 0, icon: <XCircle className="h-4 w-4" />, bgColor: 'bg-destructive/10', textColor: 'text-destructive', borderColor: 'border-destructive/30' },
+  ];
 
   return (
-    <div className="space-y-2">
-      <div className="flex rounded-full overflow-hidden h-3 bg-muted">
-        {segments.map((seg) => (
-          <div
-            key={seg.label}
-            className={cn("h-full transition-all", seg.color)}
-            style={{ width: `${(seg.value / total) * 100}%` }}
-          />
-        ))}
-      </div>
-      <div className="flex gap-4 flex-wrap">
-        {segments.map((seg) => (
-          <div key={seg.label} className="flex items-center gap-1.5">
-            <div className={cn("w-2.5 h-2.5 rounded-full", seg.color)} />
-            <span className="text-xs text-muted-foreground">
-              {seg.label}: <span className={cn("font-semibold", seg.textColor)}>{seg.value}</span>
-            </span>
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      {stages.map((stage, idx) => (
+        <div key={stage.label} className="relative flex items-center">
+          <div className={cn(
+            "flex-1 rounded-xl border p-3 text-center transition-all hover:shadow-sm",
+            stage.bgColor, stage.borderColor
+          )}>
+            <div className={cn("flex justify-center mb-1", stage.textColor)}>
+              {stage.icon}
+            </div>
+            <p className={cn("text-xl font-bold", stage.textColor)}>{stage.value}</p>
+            <p className="text-[10px] text-muted-foreground font-medium">{stage.label}</p>
           </div>
-        ))}
-      </div>
+          {idx < stages.length - 1 && (
+            <ChevronRight className="h-4 w-4 text-muted-foreground/30 -mr-1 hidden sm:block flex-shrink-0" />
+          )}
+        </div>
+      ))}
     </div>
   );
 }
 
 // ============================================
-// FILA DE TRABALHO (KANBAN CARDS)
+// FILA DE TRABALHO com prioridade visual
 // ============================================
 function FilaTrabalho() {
   const navigate = useNavigate();
@@ -142,7 +163,7 @@ function FilaTrabalho() {
   if (isLoading) {
     return (
       <div className="space-y-2">
-        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full bg-muted rounded-lg" />)}
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full bg-muted rounded-xl" />)}
       </div>
     );
   }
@@ -151,60 +172,74 @@ function FilaTrabalho() {
 
   if (pendentes.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        <CheckCircle className="h-10 w-10 mx-auto mb-2 text-success" />
-        <p className="text-sm font-medium">Fila vazia</p>
+      <div className="text-center py-10 text-muted-foreground">
+        <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-3">
+          <CheckCircle className="h-7 w-7 text-success" />
+        </div>
+        <p className="text-sm font-semibold text-foreground">Fila vazia!</p>
+        <p className="text-xs mt-1">Todas as propostas foram analisadas</p>
       </div>
     );
   }
 
-  // Color based on waiting time
-  const getWaitColor = (date: string | null) => {
-    if (!date) return 'border-l-border';
+  const getWaitInfo = (date: string | null) => {
+    if (!date) return { border: 'border-l-border', dot: 'bg-muted-foreground', pulse: false };
     const hours = (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60);
-    if (hours > 48) return 'border-l-destructive';
-    if (hours > 24) return 'border-l-warning';
-    return 'border-l-success';
+    if (hours > 48) return { border: 'border-l-destructive', dot: 'bg-destructive', pulse: true };
+    if (hours > 24) return { border: 'border-l-warning', dot: 'bg-warning', pulse: false };
+    return { border: 'border-l-success', dot: 'bg-success', pulse: false };
   };
 
   return (
-    <div className="space-y-2">
-      {pendentes.map((proposta) => (
-        <div
-          key={proposta.id}
-          className={cn(
-            "flex items-center gap-3 p-3 rounded-lg bg-card border border-border hover:border-border-hover transition-all cursor-pointer border-l-4",
-            getWaitColor(proposta.data_assinatura)
-          )}
-          onClick={() => navigate(`/cadastro/propostas/${proposta.id}`)}
-        >
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {proposta.cliente_nome || 'Sem nome'}
-            </p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Car className="h-3 w-3" />
-              <span className="font-mono">{proposta.veiculo_placa || '---'}</span>
-              <span className="text-border">•</span>
-              <span>{proposta.veiculo_modelo || '---'}</span>
+    <div className="space-y-1.5">
+      {pendentes.map((proposta) => {
+        const wait = getWaitInfo(proposta.data_assinatura);
+        return (
+          <div
+            key={proposta.id}
+            className={cn(
+              "group flex items-center gap-3 p-3 rounded-xl bg-card border border-border transition-all cursor-pointer border-l-4",
+              "hover:bg-accent/50 hover:shadow-sm hover:translate-x-1",
+              wait.border
+            )}
+            onClick={() => navigate(`/cadastro/propostas/${proposta.id}`)}
+          >
+            {/* Priority dot */}
+            <div className="relative flex-shrink-0">
+              <span className={cn("block w-2.5 h-2.5 rounded-full", wait.dot)} />
+              {wait.pulse && (
+                <span className={cn("absolute inset-0 rounded-full animate-ping opacity-75", wait.dot)} />
+              )}
             </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {proposta.cliente_nome || 'Sem nome'}
+              </p>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Car className="h-3 w-3" />
+                <span className="font-mono font-semibold text-foreground/80">{proposta.veiculo_placa || '---'}</span>
+                <span className="text-border">•</span>
+                <span className="truncate">{proposta.veiculo_modelo || '---'}</span>
+              </div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <span className="text-[10px] text-muted-foreground">
+                {proposta.data_assinatura
+                  ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: true })
+                  : '---'}
+              </span>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
           </div>
-          <div className="text-right flex-shrink-0">
-            <span className="text-[10px] text-muted-foreground">
-              {proposta.data_assinatura
-                ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: true })
-                : '---'}
-            </span>
-          </div>
-          <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        </div>
-      ))}
+        );
+      })}
       
       {(propostas?.length || 0) > 6 && (
         <Button
           variant="outline"
           size="sm"
-          className="w-full text-xs"
+          className="w-full text-xs mt-2 rounded-xl"
           onClick={() => navigate('/cadastro/propostas')}
         >
           Ver todas as {propostas?.length} propostas
@@ -216,56 +251,60 @@ function FilaTrabalho() {
 }
 
 // ============================================
-// GRÁFICO COMPACTO
+// GRÁFICO COM TOOLTIP MELHORADO
 // ============================================
-function PerformanceChartCompact() {
+function PerformanceChart() {
   const [periodo, setPeriodo] = useState<'7d' | '30d'>('7d');
   const { data, isLoading } = useCadastroPerformance();
 
-  if (isLoading) return <Skeleton className="h-[180px] w-full bg-muted" />;
+  if (isLoading) return <Skeleton className="h-[200px] w-full bg-muted rounded-xl" />;
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload) return null;
+    return (
+      <div className="bg-popover border border-border rounded-xl shadow-lg p-3 text-xs">
+        <p className="font-semibold text-foreground mb-1.5">{label}</p>
+        {payload.map((entry: any) => (
+          <div key={entry.name} className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="text-muted-foreground">{entry.name}:</span>
+            <span className="font-bold text-foreground">{entry.value}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-          <TrendingUp className="h-4 w-4 text-primary" />
+          <BarChart3 className="h-4 w-4 text-primary" />
           Performance
         </h3>
-        <div className="flex gap-1 bg-muted rounded-md p-0.5">
-          <button
-            className={cn("px-2.5 py-1 text-xs rounded-md transition-colors",
-              periodo === '7d' ? 'bg-card shadow-sm text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
-            )}
-            onClick={() => setPeriodo('7d')}
-          >
-            7d
-          </button>
-          <button
-            className={cn("px-2.5 py-1 text-xs rounded-md transition-colors",
-              periodo === '30d' ? 'bg-card shadow-sm text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
-            )}
-            onClick={() => setPeriodo('30d')}
-          >
-            30d
-          </button>
+        <div className="flex gap-0.5 bg-muted rounded-lg p-0.5">
+          {(['7d', '30d'] as const).map(p => (
+            <button
+              key={p}
+              className={cn("px-3 py-1.5 text-xs rounded-md transition-all",
+                periodo === p ? 'bg-card shadow-sm text-foreground font-semibold' : 'text-muted-foreground hover:text-foreground'
+              )}
+              onClick={() => setPeriodo(p)}
+            >
+              {p}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="h-[180px]">
+      <div className="h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data || []}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-            <XAxis dataKey="dia" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} allowDecimals={false} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '8px',
-                fontSize: '12px',
-              }}
-            />
-            <Bar dataKey="aprovados" fill="hsl(var(--success))" name="Aprovadas" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="reprovados" fill="hsl(var(--destructive))" name="Reprovadas" radius={[3, 3, 0, 0]} />
+          <BarChart data={data || []} barGap={2}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+            <XAxis dataKey="dia" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} allowDecimals={false} axisLine={false} tickLine={false} />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="aprovados" fill="hsl(var(--success))" name="Aprovadas" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="reprovados" fill="hsl(var(--destructive))" name="Reprovadas" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -287,38 +326,32 @@ export function DashboardCadastro() {
   const taxaAprovacao = totalHoje > 0 ? Math.round((aprovadosHoje / totalHoje) * 100) : 0;
 
   return (
-    <div className="space-y-5">
-      {/* Banner Compacto */}
-      <CompactBanner
+    <div className="space-y-5 animate-fade-in">
+      {/* Banner */}
+      <WelcomeBanner
         nome={profile?.nome?.split(' ')[0] || 'Analista'}
         aguardando={stats?.aguardando || 0}
       />
 
-      {/* KPIs */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <KPICompact titulo="Aguardando" valor={stats?.aguardando || 0} borderColor="border-l-warning" textColor="text-warning" loading={statsLoading} />
-        <KPICompact titulo="Aprovadas Hoje" valor={aprovadosHoje} borderColor="border-l-success" textColor="text-success" loading={statsLoading} />
-        <KPICompact titulo="Reprovadas Hoje" valor={reprovadosHoje} borderColor="border-l-destructive" textColor="text-destructive" loading={statsLoading} />
-        <KPICompact titulo="Taxa Aprovação" valor={`${taxaAprovacao}%`} borderColor="border-l-primary" textColor="text-primary" loading={statsLoading} />
-      </div>
-
-      {/* Pipeline Visual */}
-      <PipelineVisual stats={stats} loading={statsLoading} />
+      {/* Pipeline Funil */}
+      <PipelineFunnel stats={stats} loading={statsLoading} />
 
       {/* Conteúdo em 2 colunas */}
-      <div className="grid gap-5 lg:grid-cols-5">
-        {/* Fila de trabalho - 3 colunas */}
-        <Card className="lg:col-span-3 border-border">
+      <div className="grid gap-4 lg:grid-cols-5">
+        {/* Fila de trabalho */}
+        <Card className="lg:col-span-3 border-border rounded-xl">
           <CardHeader className="pb-2 pt-4 px-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                <Clock className="h-4 w-4 text-warning" />
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                <div className="p-1.5 rounded-lg bg-warning/10">
+                  <Clock className="h-4 w-4 text-warning" />
+                </div>
                 Fila de Trabalho
               </CardTitle>
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-muted-foreground h-7"
+                className="text-xs text-muted-foreground h-7 hover:text-primary"
                 onClick={() => navigate('/cadastro/propostas')}
               >
                 Ver Todas <ArrowRight className="ml-1 h-3 w-3" />
@@ -330,10 +363,10 @@ export function DashboardCadastro() {
           </CardContent>
         </Card>
 
-        {/* Gráfico - 2 colunas */}
-        <Card className="lg:col-span-2 border-border">
+        {/* Gráfico */}
+        <Card className="lg:col-span-2 border-border rounded-xl">
           <CardContent className="p-4">
-            <PerformanceChartCompact />
+            <PerformanceChart />
           </CardContent>
         </Card>
       </div>
