@@ -33,7 +33,7 @@ import {
   FOTOS_VISTORIA_COMPLETA,
   agruparFotosFiltradas
 } from '@/data/vistoriaConfigCompleta';
-import { useConfigFipeRastreador, precisaRastreador } from '@/hooks/useConfigRastreador';
+import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 
 export default function ExecutarVistoriaCompleta() {
   const { id: instalacaoId } = useParams<{ id: string }>();
@@ -42,6 +42,7 @@ export default function ExecutarVistoriaCompleta() {
   // Hooks - busca por instalacao_id
   const { data: vistoria, isLoading, error } = useVistoriaCompleta(instalacaoId || null);
   const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
+  const { data: fipeMinRastreadorMoto = 9000 } = useConfigFipeRastreadorMoto();
   const uploadFoto = useUploadFotoVistoriaCompleta();
   const uploadVideo = useUploadVideo360();
   const aprovarVeiculo = useAprovarVeiculoVistoria();
@@ -163,13 +164,20 @@ export default function ExecutarVistoriaCompleta() {
   const valorFipeVeiculo = useMemo(() => {
     return (veiculo as any)?.valor_fipe || null;
   }, [veiculo]);
+
+  // Detectar tipo de veículo
+  const tipoVeiculoDetectado = useMemo(() => {
+    const tipo = (veiculo as any)?.tipo_veiculo as string | undefined;
+    if (!tipo) return 'automovel' as const;
+    return tipo.toLowerCase().includes('moto') ? 'moto' as const : 'automovel' as const;
+  }, [veiculo]);
   
   const veiculoPrecisaRastreador = useMemo(() => {
-    return precisaRastreador(valorFipeVeiculo, fipeMinRastreador);
-  }, [valorFipeVeiculo, fipeMinRastreador]);
+    return precisaRastreador(valorFipeVeiculo, fipeMinRastreador, tipoVeiculoDetectado, fipeMinRastreadorMoto);
+  }, [valorFipeVeiculo, fipeMinRastreador, tipoVeiculoDetectado, fipeMinRastreadorMoto]);
   
   // Categorias filtradas baseado na necessidade de rastreador
-  const categorias = useMemo(() => agruparFotosFiltradas('automovel', veiculoPrecisaRastreador), [veiculoPrecisaRastreador]);
+  const categorias = useMemo(() => agruparFotosFiltradas(tipoVeiculoDetectado, veiculoPrecisaRastreador), [tipoVeiculoDetectado, veiculoPrecisaRastreador]);
 
   // Mapa de fotos
   const fotosMap = useMemo(() => {
