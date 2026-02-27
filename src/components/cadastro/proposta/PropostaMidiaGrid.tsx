@@ -15,7 +15,6 @@ import {
   Play,
   ChevronLeft,
   ChevronRight,
-  X,
   ZoomIn,
   CheckCircle,
   Image as ImageIcon,
@@ -48,13 +47,11 @@ export function PropostaMidiaGrid({
   const [galeriaIndex, setGaleriaIndex] = useState(0);
   const [showAssinatura, setShowAssinatura] = useState(false);
 
-  // Se não tem nenhuma mídia, não renderiza
   if (!video360Url && fotos.length === 0 && !assinaturaUrl) {
     return null;
   }
 
-  // Pegar as 4 primeiras fotos para preview
-  const fotosPreview = fotos.slice(0, 4);
+  const fotosPreview = fotos.slice(0, 6);
   const totalFotos = fotos.length;
 
   const navegarGaleria = (direcao: 'prev' | 'next') => {
@@ -67,37 +64,35 @@ export function PropostaMidiaGrid({
 
   const hasDocsSolicitados = documentosSolicitados && documentosSolicitados.length > 0;
 
-  // Conteúdo das mídias (fotos, vídeo, assinatura)
   const midiaContent = (
     <div className={cn(
-      "grid gap-4 grid-cols-1",
-      hasDocsSolicitados ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"
+      "grid gap-3",
+      hasDocsSolicitados ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
     )}>
       {/* Card Vídeo 360° */}
       {video360Url && (
         <Card
-          className="cursor-pointer transition-all hover:shadow-lg hover:border-purple-500/50 group border-2 border-purple-500/30 bg-purple-500/5"
+          className="cursor-pointer transition-all hover:shadow-lg hover:border-purple-500/50 group border-2 border-purple-500/30 bg-purple-500/5 rounded-xl overflow-hidden"
           onClick={() => setShowVideo(true)}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-3">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2.5 mb-2.5">
               <div className="p-2 rounded-lg bg-purple-500/20">
-                <Video className="h-5 w-5 text-purple-500" />
+                <Video className="h-4 w-4 text-purple-500" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-foreground">Vídeo 360°</h3>
-                <p className="text-xs text-muted-foreground">Volta completa no veículo</p>
+                <h3 className="font-semibold text-sm text-foreground">Vídeo 360°</h3>
               </div>
-              <Badge className="bg-purple-500/20 text-purple-500 border-purple-500/30">
-                <Play className="h-3 w-3 mr-1" />
+              <Badge className="bg-purple-500/20 text-purple-500 border-purple-500/30 text-[10px]">
+                <Play className="h-2.5 w-2.5 mr-0.5" />
                 360°
               </Badge>
             </div>
             <div className="aspect-video bg-muted rounded-lg flex items-center justify-center relative overflow-hidden">
               <video src={video360Url} className="w-full h-full object-cover" muted preload="metadata" />
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/30 transition-colors">
-                <div className="w-14 h-14 rounded-full bg-purple-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                  <Play className="h-7 w-7 text-white ml-1" />
+                <div className="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <Play className="h-6 w-6 text-white ml-0.5" />
                 </div>
               </div>
             </div>
@@ -105,46 +100,44 @@ export function PropostaMidiaGrid({
         </Card>
       )}
 
-      {/* Card Galeria de Fotos */}
+      {/* Card Galeria de Fotos - Grid 3 colunas */}
       {fotos.length > 0 && (
         <Card
-          className="cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group"
+          className="cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group rounded-xl overflow-hidden"
           onClick={() => { setGaleriaIndex(0); setShowGaleria(true); }}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-3">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2.5 mb-2.5">
               <div className="p-2 rounded-lg bg-primary/20">
-                <Camera className="h-5 w-5 text-primary" />
+                <Camera className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-foreground">Fotos da Vistoria</h3>
-                <p className="text-xs text-muted-foreground">Clique para ver todas</p>
+                <h3 className="font-semibold text-sm text-foreground">Fotos da Vistoria</h3>
               </div>
-              <Badge className="bg-primary/20 text-primary border-primary/30">
-                <ImageIcon className="h-3 w-3 mr-1" />
+              <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
+                <ImageIcon className="h-2.5 w-2.5 mr-0.5" />
                 {totalFotos}
               </Badge>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               {fotosPreview.map((foto, idx) => (
                 <div
                   key={foto.id}
                   className={cn(
-                    "aspect-square bg-muted rounded-lg overflow-hidden relative",
-                    idx === 3 && totalFotos > 4 && "after:absolute after:inset-0 after:bg-black/50 after:flex after:items-center after:justify-center"
+                    "aspect-square bg-muted rounded-lg overflow-hidden relative"
                   )}
                 >
                   <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
-                  {idx === 3 && totalFotos > 4 && (
+                  {idx === 5 && totalFotos > 6 && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <span className="text-white font-bold text-lg">+{totalFotos - 4}</span>
+                      <span className="text-white font-bold text-sm">+{totalFotos - 6}</span>
                     </div>
                   )}
                 </div>
               ))}
-              {fotosPreview.length < 4 && Array.from({ length: 4 - fotosPreview.length }).map((_, idx) => (
+              {fotosPreview.length < 6 && Array.from({ length: Math.min(6, 3) - fotosPreview.length }).map((_, idx) => (
                 <div key={`empty-${idx}`} className="aspect-square bg-muted rounded-lg flex items-center justify-center">
-                  <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
+                  <ImageIcon className="h-5 w-5 text-muted-foreground/20" />
                 </div>
               ))}
             </div>
@@ -155,20 +148,19 @@ export function PropostaMidiaGrid({
       {/* Card Assinatura */}
       {assinaturaUrl && (
         <Card
-          className="cursor-pointer transition-all hover:shadow-lg hover:border-amber-500/50 group border-2 border-amber-500/30 bg-amber-500/5"
+          className="cursor-pointer transition-all hover:shadow-lg hover:border-amber-500/50 group border-2 border-amber-500/30 bg-amber-500/5 rounded-xl overflow-hidden"
           onClick={() => setShowAssinatura(true)}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-3">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2.5 mb-2.5">
               <div className="p-2 rounded-lg bg-amber-500/20">
-                <PenTool className="h-5 w-5 text-amber-500" />
+                <PenTool className="h-4 w-4 text-amber-500" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-foreground">Assinatura</h3>
-                <p className="text-xs text-muted-foreground">Coletada na vistoria</p>
+                <h3 className="font-semibold text-sm text-foreground">Assinatura</h3>
               </div>
-              <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30">
-                <CheckCircle className="h-3 w-3 mr-1" />
+              <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px]">
+                <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
                 Válida
               </Badge>
             </div>
@@ -179,7 +171,7 @@ export function PropostaMidiaGrid({
               </div>
             </div>
             {assinaturaData && (
-              <p className="text-xs text-muted-foreground mt-2 text-center">
+              <p className="text-[10px] text-muted-foreground mt-2 text-center">
                 {format(new Date(assinaturaData), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
               </p>
             )}
@@ -210,13 +202,7 @@ export function PropostaMidiaGrid({
             </DialogTitle>
           </DialogHeader>
           <div className="bg-black">
-            <video
-              src={video360Url || ''}
-              controls
-              autoPlay
-              className="w-full max-h-[70vh] object-contain"
-              playsInline
-            />
+            <video src={video360Url || ''} controls autoPlay className="w-full max-h-[70vh] object-contain" playsInline />
           </div>
         </DialogContent>
       </Dialog>
@@ -243,17 +229,13 @@ export function PropostaMidiaGrid({
               />
             )}
             
-            {/* Navegação */}
             {totalFotos > 1 && (
               <>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navegarGaleria('prev');
-                  }}
+                  onClick={(e) => { e.stopPropagation(); navegarGaleria('prev'); }}
                 >
                   <ChevronLeft className="h-6 w-6" />
                 </Button>
@@ -261,10 +243,7 @@ export function PropostaMidiaGrid({
                   variant="ghost"
                   size="icon"
                   className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navegarGaleria('next');
-                  }}
+                  onClick={(e) => { e.stopPropagation(); navegarGaleria('next'); }}
                 >
                   <ChevronRight className="h-6 w-6" />
                 </Button>
@@ -272,25 +251,21 @@ export function PropostaMidiaGrid({
             )}
           </div>
           
-          {/* Thumbnails */}
-          <div className="p-4 border-t bg-muted/50 overflow-x-auto">
+          {/* Thumbnails maiores */}
+          <div className="p-3 border-t bg-muted/50 overflow-x-auto">
             <div className="flex gap-2 justify-center">
               {fotos.map((foto, idx) => (
                 <button
                   key={foto.id}
                   onClick={() => setGaleriaIndex(idx)}
                   className={cn(
-                    "w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all",
+                    "w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all",
                     idx === galeriaIndex
-                      ? "border-primary ring-2 ring-primary/30"
-                      : "border-transparent hover:border-primary/50"
+                      ? "border-primary ring-2 ring-primary/30 scale-105"
+                      : "border-transparent hover:border-primary/50 opacity-70 hover:opacity-100"
                   )}
                 >
-                  <img
-                    src={foto.arquivo_url}
-                    alt={foto.tipo || `Foto ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
@@ -308,11 +283,7 @@ export function PropostaMidiaGrid({
             </DialogTitle>
           </DialogHeader>
           <div className="bg-white rounded-lg p-6 flex flex-col items-center">
-            <img
-              src={assinaturaUrl || ''}
-              alt="Assinatura do cliente"
-              className="max-h-[50vh] max-w-full object-contain"
-            />
+            <img src={assinaturaUrl || ''} alt="Assinatura do cliente" className="max-h-[50vh] max-w-full object-contain" />
             <div className="mt-4 text-center text-sm text-muted-foreground space-y-1">
               {assinaturaData && (
                 <p>Coletada em {format(new Date(assinaturaData), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}</p>

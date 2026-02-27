@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,14 +22,13 @@ import {
   Puzzle,
   Building2,
   CheckCircle,
-  FileWarning,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DocumentosAnexadosPanel } from '@/components/cadastro/DocumentosAnexadosPanel';
 
-import type { PropostaPendente, DocumentoAnexado } from '@/hooks/usePropostasPendentes';
+import type { PropostaPendente } from '@/hooks/usePropostasPendentes';
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 
 interface PropostaDetalhesTabsProps {
@@ -42,7 +40,7 @@ interface PropostaDetalhesTabsProps {
   setVeiculoChassi: (value: string) => void;
 }
 
-// Componente de campo de ficha
+// Componente de campo com hover highlight
 function FichaField({
   icon: Icon,
   label,
@@ -59,7 +57,10 @@ function FichaField({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/50", className)}>
+    <div className={cn(
+      "flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/50 transition-colors hover:bg-muted/60",
+      className
+    )}>
       <Icon className={cn("h-4 w-4 flex-shrink-0", iconColor)} />
       <div className="min-w-0 flex-1">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
@@ -83,11 +84,16 @@ function maskCPF(cpf: string | null): string {
 
 function formatCurrency(value: number | null): string {
   if (value === null || value === undefined) return 'R$ ---';
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
+
+// Cores de borda superior por categoria
+const categoryBorderColors: Record<string, string> = {
+  cliente: 'border-t-primary',
+  veiculo: 'border-t-purple-500',
+  contrato: 'border-t-emerald-500',
+  instalacao: 'border-t-info',
+};
 
 export function PropostaDetalhesTabs({
   proposta,
@@ -111,50 +117,52 @@ export function PropostaDetalhesTabs({
 
   return (
     <Tabs defaultValue="cliente" className="w-full">
-      {/* Sticky tabs bar */}
+      {/* Sticky tabs bar - labels sempre visíveis */}
       <div className="sticky top-[41px] z-10 bg-background/95 backdrop-blur-sm pb-2 pt-1 -mx-1 px-1">
-        <TabsList className="w-full grid grid-cols-5 h-10 bg-muted/50 p-1 rounded-lg">
-          <TabsTrigger value="cliente" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+        <TabsList className="w-full grid grid-cols-5 h-11 bg-muted/50 p-1 rounded-xl">
+          <TabsTrigger value="cliente" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg">
             <User className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Cliente</span>
+            <span>Cliente</span>
           </TabsTrigger>
-          <TabsTrigger value="veiculo" className="gap-1.5 text-xs relative data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+          <TabsTrigger value="veiculo" className="gap-1.5 text-xs relative data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg">
             <Car className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Veículo</span>
+            <span>Veículo</span>
             {(faltaRenavam || faltaChassi) && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-warning" />
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-warning text-[8px] text-warning-foreground font-bold flex items-center justify-center">!</span>
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="documentos" className="gap-1.5 text-xs relative data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+          <TabsTrigger value="documentos" className="gap-1.5 text-xs relative data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg">
             <FileText className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Docs</span>
-            <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px] leading-none">
+            <span>Docs</span>
+            <Badge variant="secondary" className="ml-0.5 h-5 w-5 p-0 text-[10px] leading-none flex items-center justify-center rounded-full">
               {totalDocumentos}
             </Badge>
             {documentosNovos > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 text-[8px] text-white font-bold items-center justify-center">
+                  {documentosNovos}
+                </span>
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="instalacao" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+          <TabsTrigger value="instalacao" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg">
             <Wrench className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Instalação</span>
+            <span>Instal.</span>
           </TabsTrigger>
-          <TabsTrigger value="contrato" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-md">
+          <TabsTrigger value="contrato" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg">
             <FileCheck className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Contrato</span>
+            <span>Contrato</span>
           </TabsTrigger>
         </TabsList>
       </div>
 
       {/* Tab Cliente */}
       <TabsContent value="cliente" className="mt-3">
-        <Card className="border-border">
+        <Card className={cn("border-border rounded-xl border-t-2", categoryBorderColors.cliente)}>
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-primary">
               <User className="h-4 w-4" />
@@ -185,7 +193,7 @@ export function PropostaDetalhesTabs({
 
       {/* Tab Veículo */}
       <TabsContent value="veiculo" className="mt-3">
-        <Card className="border-border">
+        <Card className={cn("border-border rounded-xl border-t-2", categoryBorderColors.veiculo)}>
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-purple-500">
               <Car className="h-4 w-4" />
@@ -201,7 +209,7 @@ export function PropostaDetalhesTabs({
             </div>
             
             {(faltaRenavam || faltaChassi) && (
-              <div className="rounded-lg border border-warning/50 bg-warning/10 p-3 flex items-start gap-2">
+              <div className="rounded-xl border border-warning/50 bg-warning/10 p-3 flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-warning">Campos obrigatórios para SGA Hinova</p>
@@ -212,22 +220,26 @@ export function PropostaDetalhesTabs({
               </div>
             )}
             
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">RENAVAM</Label>
-                {proposta.veiculo_renavam ? (
-                  <p className="text-sm font-medium text-foreground h-9 flex items-center px-3 bg-muted/30 rounded-lg border border-border/50">{proposta.veiculo_renavam}</p>
-                ) : (
-                  <Input type="text" value={veiculoRenavam} onChange={(e) => setVeiculoRenavam(e.target.value.replace(/\D/g, ''))} placeholder="Digite o RENAVAM" maxLength={11} className="h-9" />
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">CHASSI</Label>
-                {proposta.veiculo_chassi ? (
-                  <p className="text-sm font-medium text-foreground h-9 flex items-center px-3 bg-muted/30 rounded-lg border border-border/50">{proposta.veiculo_chassi}</p>
-                ) : (
-                  <Input type="text" value={veiculoChassi} onChange={(e) => setVeiculoChassi(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="Digite o CHASSI" maxLength={17} className="h-9" />
-                )}
+            {/* Separador visual */}
+            <div className="border-t border-border/50 pt-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">Dados complementares</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">RENAVAM</Label>
+                  {proposta.veiculo_renavam ? (
+                    <p className="text-sm font-medium text-foreground h-9 flex items-center px-3 bg-muted/30 rounded-lg border border-border/50">{proposta.veiculo_renavam}</p>
+                  ) : (
+                    <Input type="text" value={veiculoRenavam} onChange={(e) => setVeiculoRenavam(e.target.value.replace(/\D/g, ''))} placeholder="Digite o RENAVAM" maxLength={11} className="h-9 rounded-lg" />
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">CHASSI</Label>
+                  {proposta.veiculo_chassi ? (
+                    <p className="text-sm font-medium text-foreground h-9 flex items-center px-3 bg-muted/30 rounded-lg border border-border/50">{proposta.veiculo_chassi}</p>
+                  ) : (
+                    <Input type="text" value={veiculoChassi} onChange={(e) => setVeiculoChassi(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="Digite o CHASSI" maxLength={17} className="h-9 rounded-lg" />
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -245,8 +257,8 @@ export function PropostaDetalhesTabs({
       {/* Tab Instalação */}
       <TabsContent value="instalacao" className="mt-3 space-y-3">
         {temAgendamento && (
-          <Card className="border border-info/30">
-            <CardHeader className="pb-2 pt-4 px-4 bg-info/5">
+          <Card className={cn("border rounded-xl border-t-2", categoryBorderColors.instalacao, "border-info/30")}>
+            <CardHeader className="pb-2 pt-4 px-4 bg-info/5 rounded-t-xl">
               <CardTitle className="text-sm font-semibold flex items-center gap-2 text-info">
                 <Calendar className="h-4 w-4" />
                 Instalação Agendada
@@ -269,8 +281,8 @@ export function PropostaDetalhesTabs({
         )}
 
         {temVistoriaBase && (
-          <Card className="border border-success/30">
-            <CardHeader className="pb-2 pt-4 px-4 bg-success/5">
+          <Card className="border border-success/30 rounded-xl border-t-2 border-t-success">
+            <CardHeader className="pb-2 pt-4 px-4 bg-success/5 rounded-t-xl">
               <CardTitle className="text-sm font-semibold flex items-center gap-2 text-success">
                 <Building2 className="h-4 w-4" />
                 Vistoria na Base
@@ -293,8 +305,8 @@ export function PropostaDetalhesTabs({
         )}
 
         {temInstalacao && (
-          <Card className="border border-purple-500/30">
-            <CardHeader className="pb-2 pt-4 px-4 bg-purple-500/5">
+          <Card className="border border-purple-500/30 rounded-xl border-t-2 border-t-purple-500">
+            <CardHeader className="pb-2 pt-4 px-4 bg-purple-500/5 rounded-t-xl">
               <CardTitle className="text-sm font-semibold flex items-center gap-2 text-purple-500">
                 <Wifi className="h-4 w-4" />
                 Dados da Instalação
@@ -310,11 +322,13 @@ export function PropostaDetalhesTabs({
         )}
 
         {!temAgendamento && !temVistoriaBase && !temInstalacao && (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              <Wrench className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="font-medium text-sm">Nenhuma informação de instalação</p>
-              <p className="text-xs">Os dados aparecerão aqui após o agendamento</p>
+          <Card className="rounded-xl">
+            <CardContent className="py-10 text-center text-muted-foreground">
+              <div className="w-14 h-14 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                <Wrench className="h-7 w-7 text-muted-foreground/30" />
+              </div>
+              <p className="font-semibold text-sm text-foreground">Nenhuma informação de instalação</p>
+              <p className="text-xs mt-1">Os dados aparecerão aqui após o agendamento</p>
             </CardContent>
           </Card>
         )}
@@ -322,7 +336,7 @@ export function PropostaDetalhesTabs({
 
       {/* Tab Contrato */}
       <TabsContent value="contrato" className="mt-3">
-        <Card className="border-border">
+        <Card className={cn("border-border rounded-xl border-t-2", categoryBorderColors.contrato)}>
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-emerald-500">
               <FileCheck className="h-4 w-4" />
