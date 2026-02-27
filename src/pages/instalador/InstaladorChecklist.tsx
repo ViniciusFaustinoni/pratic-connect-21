@@ -24,7 +24,9 @@ import {
   Bike,
   Router,
   Search,
-  Package
+  Package,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,10 +34,12 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   useServicoDetalhes, 
@@ -57,7 +61,7 @@ import { useSaveAssinatura } from '@/hooks/useAssinatura';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
 import { VistoriaFotoCard } from '@/components/vistorias/VistoriaFotoCard';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
-import { ModalRecusaVeiculo } from '@/components/instalador/ModalRecusaVeiculo';
+import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { useRastreadoresDoPortador, type RastreadorEmPorte } from '@/hooks/useRastreadoresPortador';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
@@ -104,6 +108,12 @@ export default function InstaladorChecklist() {
   const [rastreadorSelecionadoId, setRastreadorSelecionadoId] = useState<string | null>(null);
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
   const [processandoOCR, setProcessandoOCR] = useState(false);
+  
+  // Estados para decisão do instalador (3 opções)
+  const [decisaoInstalador, setDecisaoInstalador] = useState<'aprovado' | 'aprovado_ressalva' | 'negado' | null>(null);
+  const [ressalvasTexto, setRessalvasTexto] = useState('');
+  const [fotosRessalva, setFotosRessalva] = useState<{ file: File; preview: string }[]>([]);
+  const [uploadingRessalvaFoto, setUploadingRessalvaFoto] = useState(false);
   
   // Estados para validação em tempo real do IMEI
   const [imeiValidando, setImeiValidando] = useState(false);
@@ -380,14 +390,51 @@ export default function InstaladorChecklist() {
     return () => clearTimeout(timeout);
   }, [imeiRastreador, isImeiValido]);
 
+  // Upload de fotos de ressalva para o storage
+  const handleAddFotoRessalva = async (file: File) => {
+    if (!id) return;
+    setUploadingRessalvaFoto(true);
+    try {
+      const fileName = `ressalvas/${id}/${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('instalacoes')
+        .upload(fileName, file, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) throw uploadError;
+      
+      const { data: urlData } = supabase.storage.from('instalacoes').getPublicUrl(fileName);
+      const preview = urlData.publicUrl;
+      setFotosRessalva(prev => [...prev, { file, preview }]);
+      toast.success('Foto adicionada');
+    } catch (err) {
+      toast.error('Erro ao enviar foto');
+    } finally {
+      setUploadingRessalvaFoto(false);
+    }
+  };
+
+  const handleRemoveFotoRessalva = (index: number) => {
+    setFotosRessalva(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleConcluirInstalacao = async () => {
     if (!id || !servico?.veiculos?.id || !servico?.associados?.id) {
       toast.error('Dados incompletos');
       return;
     }
+
+    if (!decisaoInstalador) {
+      toast.error('Selecione a decisão da instalação');
+      return;
+    }
+
+    // Validar ressalvas obrigatórias
+    if (decisaoInstalador === 'aprovado_ressalva' && !ressalvasTexto.trim()) {
+      toast.error('Descreva as ressalvas identificadas');
+      return;
+    }
     
     // Se veículo precisa de rastreador, validar IMEI
-    if (veiculoPrecisaRastreador) {
+    if (veiculoPrecisaRastreador && decisaoInstalador !== 'negado') {
       const rastreadorValido = rastreadorSelecionadoId || imeiStatus === 'disponivel';
       if (!rastreadorValido || !imeiRastreador) {
         toast.error('Selecione ou informe o rastreador instalado');
@@ -400,8 +447,10 @@ export default function InstaladorChecklist() {
         servicoId: id,
         veiculoId: servico.veiculos.id,
         associadoId: servico.associados.id,
-        // Só passa IMEI se precisa de rastreador
         imeiRastreador: veiculoPrecisaRastreador ? imeiRastreador : undefined,
+        decisaoInstalador: decisaoInstalador as 'aprovado' | 'aprovado_ressalva',
+        ressalvasInstalador: ressalvasTexto.trim() || undefined,
+        fotosRessalva: fotosRessalva.length > 0 ? fotosRessalva.map(f => f.preview) : undefined,
       });
       navigate('/instalador');
     } catch (err) {
@@ -1002,23 +1051,189 @@ export default function InstaladorChecklist() {
           </div>
         )}
 
-        {/* Etapa 5: Confirmação */}
+        {/* Etapa 5: Decisão do Instalador */}
         {etapaAtual === 5 && (
           <div className="space-y-4">
-            <Card className="border-green-500/50 bg-green-500/10">
-              <CardContent className="flex items-center gap-3 p-4">
-                <CheckCircle2 className="h-8 w-8 text-green-400" />
-                <div>
-                  <p className="font-semibold text-white">Tudo pronto!</p>
-                  <p className="text-sm text-slate-400">
-                    Revise os dados e conclua a instalação
-                  </p>
+            {/* Resumo dos dados */}
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between rounded-lg bg-slate-800 p-3">
+                <span className="text-slate-400">Associado</span>
+                <span className="text-white">{(servico as any).associados?.nome}</span>
+              </div>
+              <div className="flex justify-between rounded-lg bg-slate-800 p-3">
+                <span className="text-slate-400">Veículo</span>
+                <span className="text-white">{(servico as any).veiculos?.placa}</span>
+              </div>
+              {quilometragem && (
+                <div className="flex justify-between rounded-lg bg-slate-800 p-3">
+                  <span className="text-slate-400">Quilometragem</span>
+                  <span className="text-white">{parseInt(quilometragem).toLocaleString('pt-BR')} km</span>
                 </div>
+              )}
+              <div className="flex justify-between rounded-lg bg-slate-800 p-3">
+                <span className="text-slate-400">Fotos / Vídeo 360°</span>
+                <span className="text-white">
+                  {totalFotosEnviadas}/{totalObrigatorias} • {video360Enviado ? '✓' : '—'}
+                </span>
+              </div>
+            </div>
+
+            {/* Decisão obrigatória */}
+            <Card className="border-slate-700 bg-slate-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-white">Decisão da Instalação *</CardTitle>
+                <p className="text-sm text-slate-400">Selecione o resultado da análise do veículo</p>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup
+                  value={decisaoInstalador || ''}
+                  onValueChange={(v) => {
+                    setDecisaoInstalador(v as 'aprovado' | 'aprovado_ressalva' | 'negado');
+                    if (v === 'aprovado') {
+                      setRessalvasTexto('');
+                      setFotosRessalva([]);
+                    }
+                  }}
+                  className="space-y-3"
+                >
+                  {/* Aprovado */}
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-all",
+                      decisaoInstalador === 'aprovado'
+                        ? "border-emerald-500 bg-emerald-500/10"
+                        : "border-slate-600 hover:border-slate-500"
+                    )}
+                  >
+                    <RadioGroupItem value="aprovado" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-white flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                        Aprovado
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Instalação realizada normalmente, sem irregularidades
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Aprovado com ressalva */}
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-all",
+                      decisaoInstalador === 'aprovado_ressalva'
+                        ? "border-amber-500 bg-amber-500/10"
+                        : "border-slate-600 hover:border-slate-500"
+                    )}
+                  >
+                    <RadioGroupItem value="aprovado_ressalva" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-white flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-400" />
+                        Aprovado com Ressalva
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Instalação realizada com observações registradas (bateria fraca, pequenas avarias, etc.)
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Negado */}
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-all",
+                      decisaoInstalador === 'negado'
+                        ? "border-red-500 bg-red-500/10"
+                        : "border-slate-600 hover:border-slate-500"
+                    )}
+                  >
+                    <RadioGroupItem value="negado" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-white flex items-center gap-2">
+                        <XCircle className="h-4 w-4 text-red-400" />
+                        Negado (Não Instalar)
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Irregularidade grave: chassi divergente, documento irregular, sinistro relevante, etc.
+                      </p>
+                    </div>
+                  </label>
+                </RadioGroup>
               </CardContent>
             </Card>
 
+            {/* Campos condicionais: Ressalva */}
+            {decisaoInstalador === 'aprovado_ressalva' && (
+              <Card className="border-amber-500/30 bg-amber-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-amber-300 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Descreva as Ressalvas *
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Textarea
+                    placeholder="Ex: Bateria fraca, pneus desgastados, pequena avaria no para-choque..."
+                    value={ressalvasTexto}
+                    onChange={(e) => setRessalvasTexto(e.target.value)}
+                    rows={3}
+                    className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                  />
+                  {!ressalvasTexto.trim() && (
+                    <p className="text-xs text-amber-400">Descrição obrigatória</p>
+                  )}
+
+                  {/* Fotos de evidência */}
+                  <div>
+                    <Label className="text-sm text-slate-300">Fotos de Evidência (opcional)</Label>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {fotosRessalva.map((foto, index) => (
+                        <div key={index} className="relative aspect-square">
+                          <img src={foto.preview} alt={`Evidência ${index + 1}`} className="h-full w-full rounded-lg object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFotoRessalva(index)}
+                            className="absolute -right-1 -top-1 rounded-full bg-red-500 p-1 text-white shadow-lg"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {fotosRessalva.length < 5 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.capture = 'environment';
+                            input.onchange = (e) => {
+                              const file = (e.target as HTMLInputElement).files?.[0];
+                              if (file) handleAddFotoRessalva(file);
+                            };
+                            input.click();
+                          }}
+                          disabled={uploadingRessalvaFoto}
+                          className="flex aspect-square flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-600 bg-slate-800 hover:border-slate-500"
+                        >
+                          {uploadingRessalvaFoto ? (
+                            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                          ) : (
+                            <>
+                              <Camera className="h-6 w-6 text-slate-400" />
+                              <span className="mt-1 text-xs text-slate-500">Adicionar</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Alerta de dispensa de rastreador */}
-            {!veiculoPrecisaRastreador && (
+            {!veiculoPrecisaRastreador && decisaoInstalador !== 'negado' && (
               <Alert className="border-blue-500/50 bg-blue-500/10">
                 <Router className="h-4 w-4 text-blue-400" />
                 <AlertDescription className="text-blue-200">
@@ -1036,8 +1251,8 @@ export default function InstaladorChecklist() {
               </Alert>
             )}
 
-            {/* Seleção de Rastreador - apenas se precisa */}
-            {veiculoPrecisaRastreador && (
+            {/* Seleção de Rastreador - apenas se precisa e não negado */}
+            {veiculoPrecisaRastreador && decisaoInstalador !== 'negado' && (
             <Card className={cn(
               "border-purple-500/50 bg-purple-500/10",
               (imeiStatus === 'disponivel' || rastreadorSelecionadoId) && "border-green-500/50 bg-green-500/10",
@@ -1117,7 +1332,6 @@ export default function InstaladorChecklist() {
                             </SelectItem>
                           </SelectContent>
                         </Select>
-
                         <p className="text-xs text-slate-400">
                           {rastreadoresEmPorte.length} rastreador(es) em seu porte
                         </p>
@@ -1213,18 +1427,10 @@ export default function InstaladorChecklist() {
                         )}
                       />
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        {imeiValidando && (
-                          <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
-                        )}
-                        {imeiStatus === 'disponivel' && (
-                          <CheckCircle2 className="h-5 w-5 text-green-500" />
-                        )}
-                        {imeiStatus === 'nao_encontrado' && (
-                          <XCircle className="h-5 w-5 text-destructive" />
-                        )}
-                        {imeiStatus === 'indisponivel' && (
-                          <AlertCircle className="h-5 w-5 text-amber-500" />
-                        )}
+                        {imeiValidando && <Loader2 className="h-5 w-5 animate-spin text-blue-400" />}
+                        {imeiStatus === 'disponivel' && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+                        {imeiStatus === 'nao_encontrado' && <XCircle className="h-5 w-5 text-destructive" />}
+                        {imeiStatus === 'indisponivel' && <AlertCircle className="h-5 w-5 text-amber-500" />}
                       </div>
                     </div>
 
@@ -1244,12 +1450,8 @@ export default function InstaladorChecklist() {
                           Rastreador disponível no estoque
                         </p>
                         <div className="mt-2 text-xs text-slate-300 space-y-1">
-                          {imeiInfo.codigo && (
-                            <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>
-                          )}
-                          {imeiInfo.plataforma && (
-                            <p>Plataforma: <span className="capitalize">{imeiInfo.plataforma.replace('_', ' ')}</span></p>
-                          )}
+                          {imeiInfo.codigo && <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>}
+                          {imeiInfo.plataforma && <p>Plataforma: <span className="capitalize">{imeiInfo.plataforma.replace('_', ' ')}</span></p>}
                         </div>
                       </div>
                     )}
@@ -1273,9 +1475,7 @@ export default function InstaladorChecklist() {
                           Rastreador não disponível
                         </p>
                         <div className="mt-2 text-xs text-slate-300 space-y-1">
-                          {imeiInfo.codigo && (
-                            <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>
-                          )}
+                          {imeiInfo.codigo && <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>}
                           <p>Status atual: <Badge variant="outline" className="text-amber-400 border-amber-400/50 ml-1">{imeiInfo.status}</Badge></p>
                         </div>
                       </div>
@@ -1290,73 +1490,59 @@ export default function InstaladorChecklist() {
             </Card>
             )}
 
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between rounded-lg bg-slate-800 p-3">
-                <span className="text-slate-400">Associado</span>
-                <span className="text-white">{(servico as any).associados?.nome}</span>
-              </div>
-              <div className="flex justify-between rounded-lg bg-slate-800 p-3">
-                <span className="text-slate-400">Veículo</span>
-                <span className="text-white">{(servico as any).veiculos?.placa}</span>
-              </div>
-              {quilometragem && (
-                <div className="flex justify-between rounded-lg bg-slate-800 p-3">
-                  <span className="text-slate-400">Quilometragem</span>
-                  <span className="text-white">{parseInt(quilometragem).toLocaleString('pt-BR')} km</span>
-                </div>
-              )}
-              <div className="flex justify-between rounded-lg bg-slate-800 p-3">
-                <span className="text-slate-400">Fotos capturadas</span>
-                <span className="text-white">{totalFotosEnviadas}/{totalObrigatorias}</span>
-              </div>
-              <div className="flex justify-between rounded-lg bg-slate-800 p-3">
-                <span className="text-slate-400">Vídeo 360°</span>
-                <span className={video360Enviado ? "text-green-400" : "text-red-400"}>
-                  {video360Enviado ? 'Enviado ✓' : 'Pendente'}
-                </span>
-              </div>
-              <div className="flex justify-between rounded-lg bg-slate-800 p-3">
-                <span className="text-slate-400">Assinatura</span>
-                <span className="text-green-400">Coletada ✓</span>
-              </div>
-            </div>
-
-            {/* Botões de Decisão */}
+            {/* Botões de ação */}
             <div className="space-y-3 mt-6">
-              <Button
-                onClick={handleConcluirInstalacao}
-                disabled={(!rastreadorSelecionadoId && imeiStatus !== 'disponivel') || aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
-                className="w-full bg-emerald-600 py-6 text-lg font-semibold hover:bg-emerald-700"
-              >
-                {aprovarVeiculoMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Finalizando...
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="mr-2 h-5 w-5" />
-                    Concluir Instalação
-                  </>
-                )}
-              </Button>
-
-              <Button
-                variant="destructive"
-                onClick={() => setShowModalRecusa(true)}
-                disabled={aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
-                className="w-full py-6 text-lg font-semibold"
-              >
-                <XCircle className="mr-2 h-5 w-5" />
-                Recusar Veículo
-              </Button>
+              {decisaoInstalador === 'negado' ? (
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowModalRecusa(true)}
+                  disabled={aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
+                  className="w-full py-6 text-lg font-semibold"
+                >
+                  <XCircle className="mr-2 h-5 w-5" />
+                  Registrar Recusa do Veículo
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleConcluirInstalacao}
+                  disabled={
+                    !decisaoInstalador ||
+                    (decisaoInstalador === 'aprovado_ressalva' && !ressalvasTexto.trim()) ||
+                    (veiculoPrecisaRastreador && !rastreadorSelecionadoId && imeiStatus !== 'disponivel') ||
+                    aprovarVeiculoMutation.isPending ||
+                    recusarVeiculoMutation.isPending
+                  }
+                  className={cn(
+                    "w-full py-6 text-lg font-semibold",
+                    decisaoInstalador === 'aprovado_ressalva'
+                      ? "bg-amber-600 hover:bg-amber-700"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  )}
+                >
+                  {aprovarVeiculoMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Finalizando...
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="mr-2 h-5 w-5" />
+                      {decisaoInstalador === 'aprovado_ressalva' 
+                        ? 'Concluir com Ressalva' 
+                        : 'Concluir Instalação'}
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
-            {/* Modal de Recusa */}
-            <ModalRecusaVeiculo
+            {/* Modal de Recusa (para decisão Negado) */}
+            <ModalRecusaVeiculoComFotos
               open={showModalRecusa}
               onClose={() => setShowModalRecusa(false)}
-              onConfirm={handleRecusarVeiculo}
+              onConfirm={({ motivoCompleto, fotos }) => {
+                handleRecusarVeiculo(motivoCompleto.split(':')[0]?.trim() || 'outro', motivoCompleto);
+              }}
               isPending={recusarVeiculoMutation.isPending}
               veiculoInfo={{
                 placa: (servico as any).veiculos?.placa,

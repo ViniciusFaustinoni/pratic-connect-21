@@ -19539,11 +19539,13 @@ export type Database = {
           data_suspensao: string | null
           debitos_conferidos_em: string | null
           debitos_conferidos_por: string | null
+          decisao_instalador: string | null
           em_rota_em: string | null
           encaixe_executado: boolean | null
           fios_isolados: boolean | null
           fotos_manutencao: Json | null
           fotos_recusa: string[] | null
+          fotos_ressalva: string[] | null
           hora_agendada: string | null
           id: string
           imei_rastreador: string | null
@@ -19591,6 +19593,7 @@ export type Database = {
           reagendamento_enviado_em: string | null
           reagendamento_token: string | null
           ressalvas: string | null
+          ressalvas_instalador: string | null
           resultado_manutencao: string | null
           retirada_video_360_url: string | null
           rota_id: string | null
@@ -19644,11 +19647,13 @@ export type Database = {
           data_suspensao?: string | null
           debitos_conferidos_em?: string | null
           debitos_conferidos_por?: string | null
+          decisao_instalador?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           fios_isolados?: boolean | null
           fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
+          fotos_ressalva?: string[] | null
           hora_agendada?: string | null
           id?: string
           imei_rastreador?: string | null
@@ -19696,6 +19701,7 @@ export type Database = {
           reagendamento_enviado_em?: string | null
           reagendamento_token?: string | null
           ressalvas?: string | null
+          ressalvas_instalador?: string | null
           resultado_manutencao?: string | null
           retirada_video_360_url?: string | null
           rota_id?: string | null
@@ -19749,11 +19755,13 @@ export type Database = {
           data_suspensao?: string | null
           debitos_conferidos_em?: string | null
           debitos_conferidos_por?: string | null
+          decisao_instalador?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           fios_isolados?: boolean | null
           fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
+          fotos_ressalva?: string[] | null
           hora_agendada?: string | null
           id?: string
           imei_rastreador?: string | null
@@ -19801,6 +19809,7 @@ export type Database = {
           reagendamento_enviado_em?: string | null
           reagendamento_token?: string | null
           ressalvas?: string | null
+          ressalvas_instalador?: string | null
           resultado_manutencao?: string | null
           retirada_video_360_url?: string | null
           rota_id?: string | null
