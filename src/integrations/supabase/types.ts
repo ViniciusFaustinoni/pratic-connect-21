@@ -7067,6 +7067,7 @@ export type Database = {
           uso_aplicativo: boolean | null
           validade_link: string | null
           valor_adesao: number
+          valor_adicional: number | null
           valor_mensal: number
           veiculo_alienado: boolean | null
           veiculo_ano: number | null
@@ -7166,6 +7167,7 @@ export type Database = {
           uso_aplicativo?: boolean | null
           validade_link?: string | null
           valor_adesao: number
+          valor_adicional?: number | null
           valor_mensal: number
           veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
@@ -7265,6 +7267,7 @@ export type Database = {
           uso_aplicativo?: boolean | null
           validade_link?: string | null
           valor_adesao?: number
+          valor_adicional?: number | null
           valor_mensal?: number
           veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
