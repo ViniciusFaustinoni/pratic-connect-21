@@ -363,33 +363,59 @@ export function useIniciarServico() {
 
       // PRIMEIRO: Criar turno imediatamente ao ativar localização
       // A jornada começa AGORA, independente de tarefa atribuída
+      // IMPORTANTE: Se já existe turno hoje, NÃO sobrescrever inicio_turno
       if (profile?.id) {
         try {
           const hoje = format(getHojeBrasilia(), 'yyyy-MM-dd');
           
-          // Buscar saldo do dia anterior
-          const { data: turnoAnterior } = await supabase
+          // Verificar se já existe turno para hoje
+          const { data: turnoExistente } = await supabase
             .from('turnos_profissionais')
-            .select('saldo_anterior_minutos')
+            .select('id, inicio_turno, status')
             .eq('profissional_id', profile.id)
-            .lt('data', hoje)
-            .order('data', { ascending: false })
-            .limit(1)
+            .eq('data', hoje)
             .maybeSingle();
 
-          const saldoAnterior = turnoAnterior?.saldo_anterior_minutos || 0;
+          if (turnoExistente?.inicio_turno) {
+            // Turno já existe - apenas reativar se estava encerrado
+            if (turnoExistente.status === 'encerrado') {
+              await supabase
+                .from('turnos_profissionais')
+                .update({ status: 'ativo', fim_turno: null })
+                .eq('id', turnoExistente.id);
+              console.log('[useIniciarServico] Turno reativado (mantendo inicio_turno original)');
+            } else {
+              console.log('[useIniciarServico] Turno já existe e está ativo - mantendo inicio_turno original');
+            }
+          } else {
+            // Turno não existe - criar novo
+            // Buscar saldo do dia anterior
+            const { data: turnoAnterior } = await supabase
+              .from('turnos_profissionais')
+              .select('minutos_extras, minutos_faltantes')
+              .eq('profissional_id', profile.id)
+              .lt('data', hoje)
+              .order('data', { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
-          await supabase
-            .from('turnos_profissionais')
-            .upsert({
-              profissional_id: profile.id,
-              data: hoje,
-              inicio_turno: new Date().toISOString(),
-              status: 'ativo',
-              saldo_anterior_minutos: saldoAnterior,
-            }, { onConflict: 'profissional_id,data' });
+            const saldoAnterior = turnoAnterior 
+              ? (turnoAnterior.minutos_extras || 0) - (turnoAnterior.minutos_faltantes || 0) 
+              : 0;
 
-          console.log('[useIniciarServico] Turno criado/atualizado - jornada iniciada a partir da ativação de localização');
+            await supabase
+              .from('turnos_profissionais')
+              .insert({
+                profissional_id: profile.id,
+                data: hoje,
+                inicio_turno: new Date().toISOString(),
+                status: 'ativo',
+                saldo_anterior_minutos: saldoAnterior,
+              });
+
+            console.log('[useIniciarServico] Novo turno criado - jornada iniciada a partir da ativação de localização');
+          }
+          
           queryClient.invalidateQueries({ queryKey: ['turno-profissional'] });
           queryClient.invalidateQueries({ queryKey: ['jornadas-profissionais'] });
         } catch (turnoError) {

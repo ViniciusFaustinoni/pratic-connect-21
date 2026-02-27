@@ -97,7 +97,7 @@ export function useJornadaTrabalho() {
     refetchInterval: 60000, // Refetch a cada 1 minuto
   });
 
-  // Buscar saldo do dia anterior
+  // Buscar saldo acumulado do dia anterior (extras - faltantes)
   const { data: saldoAnterior } = useQuery({
     queryKey: ['saldo-anterior', profile?.id, hojeStr],
     queryFn: async () => {
@@ -105,7 +105,7 @@ export function useJornadaTrabalho() {
 
       const { data, error } = await supabase
         .from('turnos_profissionais')
-        .select('minutos_extras, minutos_faltantes')
+        .select('minutos_extras, minutos_faltantes, saldo_anterior_minutos')
         .eq('profissional_id', profile.id)
         .lt('data', hojeStr)
         .order('data', { ascending: false })
@@ -114,7 +114,9 @@ export function useJornadaTrabalho() {
 
       if (error || !data) return 0;
 
-      return (data.minutos_extras || 0) - (data.minutos_faltantes || 0);
+      // Saldo acumulado = saldo anterior do dia + extras - faltantes daquele dia
+      const saldoDoDia = (data.minutos_extras || 0) - (data.minutos_faltantes || 0);
+      return saldoDoDia + (data.saldo_anterior_minutos || 0);
     },
     enabled: !!profile?.id,
     staleTime: 300000, // 5 minutos
@@ -129,22 +131,23 @@ export function useJornadaTrabalho() {
 
     const agora = new Date();
     const inicio = new Date(turno.inicio_turno);
-    let minutosDesdeInicio = Math.floor((agora.getTime() - inicio.getTime()) / 60000);
+    const minutosDesdeInicio = Math.floor((agora.getTime() - inicio.getTime()) / 60000);
 
     let minutosAlmoco = 0;
 
-    // Se está em almoço, calcular tempo de almoço
     if (turno.status === 'em_almoco' && turno.inicio_almoco) {
+      // Em almoço: calcular tempo de almoço decorrido
       const inicioAlmoco = new Date(turno.inicio_almoco);
       minutosAlmoco = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
     } else if (turno.fim_almoco && turno.inicio_almoco) {
-      // Almoço já finalizado
+      // Almoço já finalizado: usar tempo real gasto (pode incluir atraso)
       const inicioAlmoco = new Date(turno.inicio_almoco);
       const fimAlmoco = new Date(turno.fim_almoco);
       minutosAlmoco = Math.floor((fimAlmoco.getTime() - inicioAlmoco.getTime()) / 60000);
     }
 
     // Descontar almoço do tempo trabalhado
+    // Durante o almoço, o tempo trabalhado para de avançar (minutosAlmoco acompanha o clock)
     const minutosTrabalhados = Math.max(0, minutosDesdeInicio - minutosAlmoco);
 
     setTempoReal({ minutosTrabalhados, minutosAlmoco });
@@ -164,20 +167,45 @@ export function useJornadaTrabalho() {
     }
   }, [turno?.status, calcularTempoReal]);
 
-  // Mutation para criar/iniciar turno
+  // Mutation para criar/iniciar turno (protege contra sobrescrita de inicio_turno)
   const iniciarTurnoMutation = useMutation({
     mutationFn: async () => {
       if (!profile?.id) throw new Error('Usuário não autenticado');
 
+      // Verificar se já existe turno hoje
+      const { data: existente } = await supabase
+        .from('turnos_profissionais')
+        .select('id, inicio_turno, status')
+        .eq('profissional_id', profile.id)
+        .eq('data', hojeStr)
+        .maybeSingle();
+
+      if (existente?.inicio_turno) {
+        // Turno já existe - apenas reativar se encerrado
+        if (existente.status === 'encerrado') {
+          const { data, error } = await supabase
+            .from('turnos_profissionais')
+            .update({ status: 'ativo', fim_turno: null })
+            .eq('id', existente.id)
+            .select()
+            .single();
+          if (error) throw error;
+          return data;
+        }
+        // Já ativo - retornar como está
+        return existente;
+      }
+
+      // Criar novo turno
       const { data, error } = await supabase
         .from('turnos_profissionais')
-        .upsert({
+        .insert({
           profissional_id: profile.id,
           data: hojeStr,
           inicio_turno: new Date().toISOString(),
           saldo_anterior_minutos: saldoAnterior || 0,
           status: 'ativo'
-        }, { onConflict: 'profissional_id,data' })
+        })
         .select()
         .single();
 
@@ -337,12 +365,13 @@ export function useJornadaTrabalho() {
 
   // Calcular estado da jornada
   // A jornada é ajustada pelo saldo anterior E pelo atraso de almoço (se houver)
-  const atrasoRegistrado = turno?.minutos_atraso_almoco || 0;
+  // Usar atraso em tempo real se ainda em almoço, senão usar registrado
+  const atrasoEfetivo = turno?.status === 'em_almoco' ? minutosAtrasoAlmoco : (turno?.minutos_atraso_almoco || 0);
   const jornadaBase = JORNADA_PADRAO_MINUTOS - (saldoAnterior || 0);
-  const jornadaAjustada = jornadaBase + atrasoRegistrado; // Atraso AUMENTA a jornada
+  const jornadaAjustada = jornadaBase + atrasoEfetivo; // Atraso AUMENTA a jornada
   
   const minutosRestantes = Math.max(0, jornadaAjustada - tempoReal.minutosTrabalhados);
-  const percentualJornada = Math.min(100, (tempoReal.minutosTrabalhados / jornadaAjustada) * 100);
+  const percentualJornada = jornadaAjustada > 0 ? Math.min(100, (tempoReal.minutosTrabalhados / jornadaAjustada) * 100) : 0;
   const minutosAlmocoRestantes = Math.max(0, DURACAO_ALMOCO_MINUTOS - tempoReal.minutosAlmoco);
   const deveIniciarAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco && tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS;
 
