@@ -913,14 +913,16 @@ export function useAprovarVeiculoServico() {
 
       // 3. Vincular rastreador ao veículo e remover do porte (se rastreador fornecido)
       if (rastreadorId) {
-        // Buscar foto do local_rastreador da vistoria associada ao serviço
+        // Buscar foto do local_rastreador da vistoria mais recente do veículo
         let fotoLocalUrl: string | null = null;
         try {
           // @ts-ignore - vistorias table query
           const { data: vistoriaData } = await supabase
             .from('vistorias')
             .select('id')
-            .eq('servico_id', data.servicoId)
+            .eq('veiculo_id', data.veiculoId)
+            .order('created_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
 
           if (vistoriaData?.id) {
