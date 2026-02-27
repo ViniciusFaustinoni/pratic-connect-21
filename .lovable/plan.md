@@ -1,42 +1,31 @@
 
-
-# Fix: Auto-finalizar almoco quando tempo expirar
+# Fix: 1a Parcela deve exibir apenas o valor da Adesao
 
 ## Problema
-Quando o contador de almoco chega a zero, o profissional fica travado na tela de almoco (overlay bloqueante) sem poder receber tarefas. O codigo atual tem um comentario explicito dizendo "NAO finalizar almoco automaticamente", mas nao oferece nenhuma alternativa para o profissional sair desse estado.
+Atualmente, o campo "1a Parcela" no Resumo da Cotacao soma Adesao + Mensalidade. O correto e exibir apenas o valor da Adesao, pois a mensalidade sera cobrada separadamente conforme regras de afiliacao.
 
-## Causa Raiz
-No `useJornadaTrabalho.ts` (linha 314), o almoco nunca e finalizado automaticamente. O overlay `AlmocoBloqueioOverlay.tsx` bloqueia toda a interface, entao o profissional nao consegue interagir com nada para voltar.
+## Alteracoes
 
-## Solucao
+### 1. `src/pages/vendas/Cotador.tsx`
 
-### Arquivo: `src/hooks/useJornadaTrabalho.ts`
+Tres pontos de correcao:
 
-Adicionar um `useEffect` que chama `finalizarAlmocoMutation.mutate()` automaticamente quando os 60 minutos de almoco se completam:
+- **Linha 1421** (card de comparacao de planos): Mudar de `planoAtual.valorAdesao + planoAtual.valorMensal + valorExtra` para apenas `planoAtual.valorAdesao`
 
-```text
-useEffect:
-  Condicao: turno.status === 'em_almoco' && tempoReal.minutosAlmoco >= 60
-  Acao: chamar finalizarAlmocoMutation.mutate()
-```
+- **Linha 1519** (resumo final da cotacao): Mudar de `planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal + valorExtra` para apenas `planoFinalSelecionado.valorAdesao`
 
-Isso vai:
-1. Mudar o status do turno de `em_almoco` para `ativo`
-2. Registrar `fim_almoco` e `minutos_atraso_almoco` (se houver)
-3. O overlay some automaticamente (ja verifica `emAlmoco`)
-4. O profissional volta a receber tarefas pela Edge Function de atribuicao
+- **Linha 758** (mensagem WhatsApp): Mudar de `planoFinalSelecionado.valorAdesao + planoFinalSelecionado.valorMensal` para apenas `planoFinalSelecionado.valorAdesao`
 
-Remover o comentario antigo que dizia para nao finalizar automaticamente.
+### 2. `src/hooks/useCalcularCotacao.ts`
 
-### Arquivo: `src/components/vistoriador/AlmocoBloqueioOverlay.tsx`
+- **Linha 88**: Mudar `valor_primeira_parcela: valores.mensal + valores.adesao` para `valor_primeira_parcela: valores.adesao`
 
-Adicionar um botao "Retornar ao trabalho" visivel quando o tempo acabar (emAtraso = true), como alternativa de seguranca caso o auto-finalize demore pelo intervalo de 1 minuto do calculo de tempo real.
+Isso corrige automaticamente a pagina publica da cotacao (`CotacaoPublicaCompleta.tsx`) que ja usa `plano.valor_primeira_parcela`.
 
-O botao chamara `finalizarAlmoco()` diretamente.
+## Arquivos alterados
+1. `src/pages/vendas/Cotador.tsx` — 3 pontos de calculo
+2. `src/hooks/useCalcularCotacao.ts` — 1 ponto de calculo
 
-## Resultado esperado
-- Ao completar 60 minutos de almoco, o sistema automaticamente volta o profissional para status ativo
-- O overlay desaparece e ele volta a receber tarefas
-- Se houver atraso, o tempo extra e registrado como acrescimo na jornada (logica ja existente)
-- Botao manual de retorno visivel como fallback
-
+## Resultado
+- "1a Parcela" exibe apenas o valor de Adesao em todas as telas (cotador, resumo, WhatsApp, pagina publica)
+- Mensalidade continua sendo exibida separadamente no campo "Mensal"
