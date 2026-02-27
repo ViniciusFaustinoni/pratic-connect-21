@@ -862,65 +862,79 @@ export function useAprovarVeiculoServico() {
       servicoId: string;
       veiculoId: string;
       associadoId: string;
-      imeiRastreador: string;
+      imeiRastreador?: string;
+      decisaoInstalador?: 'aprovado' | 'aprovado_ressalva';
+      ressalvasInstalador?: string;
+      fotosRessalva?: string[];
     }) => {
       const agora = new Date().toISOString();
 
-      // 1. Buscar e validar rastreador
-      const { data: rastreador, error: rastreadorError } = await supabase
-        .from('rastreadores')
-        .select('id, status, portador_id, codigo')
-        .eq('imei', data.imeiRastreador)
-        .single();
+      // 1. Buscar e validar rastreador (apenas se IMEI fornecido)
+      let rastreadorId: string | null = null;
+      if (data.imeiRastreador) {
+        const { data: rastreador, error: rastreadorError } = await supabase
+          .from('rastreadores')
+          .select('id, status, portador_id, codigo')
+          .eq('imei', data.imeiRastreador)
+          .single();
 
-      if (rastreadorError || !rastreador) {
-        throw new Error('Rastreador não encontrado');
-      }
+        if (rastreadorError || !rastreador) {
+          throw new Error('Rastreador não encontrado');
+        }
 
-      if (rastreador.status !== 'estoque') {
-        throw new Error('Rastreador não está disponível');
+        if (rastreador.status !== 'estoque') {
+          throw new Error('Rastreador não está disponível');
+        }
+        rastreadorId = rastreador.id;
       }
 
       // 2. Atualizar serviço
+      const servicoUpdate: Record<string, any> = {
+        status: 'concluida',
+        concluida_em: agora,
+        imei_rastreador: data.imeiRastreador || null,
+        decisao_instalador: data.decisaoInstalador || 'aprovado',
+        ressalvas_instalador: data.ressalvasInstalador || null,
+        fotos_ressalva: data.fotosRessalva || null,
+        updated_at: agora,
+      };
+      if (rastreadorId) {
+        servicoUpdate.rastreador_id = rastreadorId;
+      }
+
       const { error: servicoError } = await supabase
         .from('servicos')
-        .update({
-          status: 'concluida',
-          concluida_em: agora,
-          rastreador_id: rastreador.id,
-          imei_rastreador: data.imeiRastreador,
-          updated_at: agora,
-        })
+        .update(servicoUpdate)
         .eq('id', data.servicoId);
 
       if (servicoError) throw servicoError;
 
-      // 3. Vincular rastreador ao veículo e remover do porte
-      const { error: rastreadorUpdateError } = await supabase
-        .from('rastreadores')
-        .update({
-          status: 'instalado',
+      // 3. Vincular rastreador ao veículo e remover do porte (se rastreador fornecido)
+      if (rastreadorId) {
+        const { error: rastreadorUpdateError } = await supabase
+          .from('rastreadores')
+          .update({
+            status: 'instalado',
+            veiculo_id: data.veiculoId,
+            portador_id: null,
+            updated_at: agora,
+          })
+          .eq('id', rastreadorId);
+
+        if (rastreadorUpdateError) throw rastreadorUpdateError;
+
+        // 4. Registrar movimentação de estoque
+        await supabase.from('estoque_movimentacoes').insert({
+          rastreador_id: rastreadorId,
+          tipo: 'instalacao',
+          quantidade: 1,
+          status_anterior: 'estoque',
+          status_novo: 'instalado',
           veiculo_id: data.veiculoId,
-          portador_id: null, // Remove do porte do instalador
-          updated_at: agora,
-        })
-        .eq('id', rastreador.id);
-
-      if (rastreadorUpdateError) throw rastreadorUpdateError;
-
-      // 4. Registrar movimentação de estoque
-      await supabase.from('estoque_movimentacoes').insert({
-        rastreador_id: rastreador.id,
-        tipo: 'instalacao',
-        quantidade: 1,
-        status_anterior: 'estoque',
-        status_novo: 'instalado',
-        veiculo_id: data.veiculoId,
-        observacoes: `Instalado pelo profissional no veículo`,
-        usuario_id: profile?.id,
-      });
-
-      // 4. Verificar se veículo já tinha cobertura_roubo_furto (autovistoria aprovada)
+          observacoes: `Instalado pelo profissional no veículo`,
+          usuario_id: profile?.id,
+        });
+      }
       const { data: veiculoAtual } = await supabase
         .from('veiculos')
         .select('cobertura_roubo_furto, cobertura_total')
@@ -1042,15 +1056,24 @@ export function useAprovarVeiculoServico() {
       }
 
       // 6. Registrar histórico
+      const decisaoLabel = data.decisaoInstalador === 'aprovado_ressalva' 
+        ? 'Instalação concluída com ressalvas' 
+        : 'Instalação concluída';
+      const descricaoHistorico = data.imeiRastreador 
+        ? `${decisaoLabel} - Rastreador ${data.imeiRastreador} instalado`
+        : `${decisaoLabel} - Sem rastreador`;
+      
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
         tipo: 'instalacao_concluida',
-        descricao: `Instalação concluída pelo técnico - Rastreador ${data.imeiRastreador} instalado`,
+        descricao: descricaoHistorico,
         dados_novos: {
           servico_id: data.servicoId,
           veiculo_id: data.veiculoId,
-          rastreador_id: rastreador.id,
+          rastreador_id: rastreadorId,
           imei: data.imeiRastreador,
+          decisao_instalador: data.decisaoInstalador || 'aprovado',
+          ressalvas: data.ressalvasInstalador,
         },
         usuario_id: profile?.id,
       });
