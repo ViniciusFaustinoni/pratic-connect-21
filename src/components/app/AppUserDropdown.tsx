@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { User, FileCheck, AlertTriangle, Settings, LogOut } from 'lucide-react';
+import { User, FileCheck, AlertTriangle, Settings, LogOut, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,10 +11,21 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { IOSInstallGuide } from '@/components/pwa/IOSInstallGuide';
 
 export function AppUserDropdown() {
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
+  const { canInstall, isIOS, promptInstall, showIOSInstructions, setShowIOSInstructions } = usePWAInstall();
+
+  const handleInstall = async () => {
+    if (isIOS) {
+      setShowIOSInstructions(true);
+    } else {
+      await promptInstall();
+    }
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -29,6 +40,7 @@ export function AppUserDropdown() {
     .toUpperCase() || 'U';
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="min-h-[44px] min-w-[44px]">
@@ -61,6 +73,15 @@ export function AppUserDropdown() {
           <span className="text-sm">Tema</span>
           <ThemeToggle />
         </div>
+        {canInstall && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleInstall} className="text-primary focus:text-primary">
+              <Download className="mr-2 h-4 w-4" />
+              Instalar App
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleLogout}
@@ -71,5 +92,11 @@ export function AppUserDropdown() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    <IOSInstallGuide 
+      open={showIOSInstructions} 
+      onOpenChange={setShowIOSInstructions} 
+    />
+    </>
   );
 }

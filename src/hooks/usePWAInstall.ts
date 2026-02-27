@@ -9,6 +9,7 @@ interface BeforeInstallPromptEvent extends Event {
 interface PWAInstallState {
   isInstallable: boolean;
   isInstalled: boolean;
+  canInstall: boolean;
   isIOS: boolean;
   isAndroid: boolean;
   isSafari: boolean;
@@ -109,7 +110,7 @@ export function usePWAInstall(): PWAInstallState {
     localStorage.setItem(PWA_DISMISSED_UNTIL_KEY, dismissedUntil.toString());
   }, []);
 
-  // Verificar se pode mostrar (não foi dispensado recentemente)
+  // Verificar se pode mostrar o banner (não foi dispensado recentemente)
   const isInstallable = (() => {
     // Primeiro: verificar se está autenticado como associado
     if (!isAuthenticated) return false;
@@ -126,8 +127,8 @@ export function usePWAInstall(): PWAInstallState {
       return !!deferredPrompt;
     }
 
-    // iOS com Safari: sempre pode mostrar instruções
-    if (isIOS && isSafari) {
+    // iOS: sempre pode mostrar instruções (qualquer browser)
+    if (isIOS) {
       return true;
     }
 
@@ -135,9 +136,17 @@ export function usePWAInstall(): PWAInstallState {
     return !!deferredPrompt;
   })();
 
+  // Flag independente para menus permanentes (não depende de dismiss)
+  const canInstall = (() => {
+    if (isInstalled) return false;
+    if (isIOS) return true;
+    return !!deferredPrompt;
+  })();
+
   return {
     isInstallable,
     isInstalled,
+    canInstall,
     isIOS,
     isAndroid,
     isSafari,

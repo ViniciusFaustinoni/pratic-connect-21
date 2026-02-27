@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, User, FileCheck, AlertTriangle, Settings, LogOut, MessageCircle } from 'lucide-react';
+import { Menu, User, FileCheck, AlertTriangle, Settings, LogOut, MessageCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { IOSInstallGuide } from '@/components/pwa/IOSInstallGuide';
 
 const menuItems = [
   { path: '/app/perfil', label: 'Meus Dados', icon: User },
@@ -24,9 +26,19 @@ export function AppMobileMenu() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
+  const { canInstall, isIOS, promptInstall, showIOSInstructions, setShowIOSInstructions } = usePWAInstall();
 
   const handleNavigate = (path: string) => {
     navigate(path);
+    setOpen(false);
+  };
+
+  const handleInstall = async () => {
+    if (isIOS) {
+      setShowIOSInstructions(true);
+    } else {
+      await promptInstall();
+    }
     setOpen(false);
   };
 
@@ -37,6 +49,7 @@ export function AppMobileMenu() {
   };
 
   return (
+    <>
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button variant="ghost" size="icon" className="min-h-[44px] min-w-[44px]">
@@ -71,6 +84,20 @@ export function AppMobileMenu() {
           ))}
         </nav>
 
+        {canInstall && (
+          <>
+            <Separator className="my-4" />
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 text-primary"
+              onClick={handleInstall}
+            >
+              <Download className="h-5 w-5" />
+              Instalar App
+            </Button>
+          </>
+        )}
+
         <Separator className="my-4" />
 
         {/* Logout */}
@@ -84,5 +111,11 @@ export function AppMobileMenu() {
         </Button>
       </SheetContent>
     </Sheet>
+
+    <IOSInstallGuide 
+      open={showIOSInstructions} 
+      onOpenChange={setShowIOSInstructions} 
+    />
+    </>
   );
 }
