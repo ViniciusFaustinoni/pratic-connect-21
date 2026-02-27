@@ -24,6 +24,7 @@ import {
   calcularCotaParticipacao,
   calcularPrimeiraMensalidade,
 } from "./termo-afiliacao-utils.ts";
+import { exigeRastreador } from "./template-utils.ts";
 
 // ============= ESTILOS CSS =============
 
@@ -854,39 +855,6 @@ const generateSecaoCarroZero = (data: TermoAfiliacaoData): string => {
 };
 
 // ============= SEÇÃO CONDICIONAL: TERMO RESPONSABILIDADE RASTREADOR =============
-
-/**
- * Verifica se o rastreador é obrigatório com base nas regras:
- * - Diesel: SEMPRE obrigatório
- * - Moto: FIPE > R$ 9.000
- * - Carro: FIPE > R$ 20.000
- */
-const exigeRastreador = (
-  veiculo: any,
-  config?: { fipeMinCarro: number; fipeMinMoto: number }
-): { exige: boolean; motivo: string | null } => {
-  // Diesel sempre exige rastreador
-  if (veiculo.combustivel?.toLowerCase() === 'diesel') {
-    return { exige: true, motivo: 'Veículo a diesel' };
-  }
-  
-  const valorFipe = veiculo.valor_fipe || 0;
-  const categoria = (veiculo.categoria || '').toLowerCase();
-  const isMoto = categoria.includes('moto') || categoria.includes('ciclomotor');
-  
-  const thresholdMoto = config?.fipeMinMoto ?? 9000;
-  const thresholdCarro = config?.fipeMinCarro ?? 30000;
-  
-  if (isMoto && valorFipe > thresholdMoto) {
-    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdMoto.toLocaleString('pt-BR')}` };
-  }
-  
-  if (!isMoto && valorFipe > thresholdCarro) {
-    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdCarro.toLocaleString('pt-BR')}` };
-  }
-  
-  return { exige: false, motivo: null };
-};
 
 const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
   const rastreador = exigeRastreador(data.veiculo, data.configRastreador);
