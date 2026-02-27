@@ -538,6 +538,7 @@ serve(async (req) => {
             plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
             valor_adesao: cotacao.valor_adesao || 0,
             valor_mensal: cotacao.valor_total_mensal || cotacao.valor_mensal,
+            valor_adicional: cotacao.valor_adicional || 0,
             vendedor_id: vendedorIdFinal, // CORREÇÃO: Usar profile.id validado
             status: 'rascunho',
             

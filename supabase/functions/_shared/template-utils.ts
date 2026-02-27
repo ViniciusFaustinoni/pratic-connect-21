@@ -31,6 +31,9 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'contrato.dia_vencimento': String(dados.contrato.dia_vencimento || 10),
     'contrato.valor_adesao': formatCurrency(dados.contrato.valor_adesao),
     'contrato.valor_mensal': formatCurrency(dados.contrato.valor_mensal),
+    'contrato.valor_adicional': formatCurrency(dados.contrato.valor_adicional || 0),
+    'contrato.valor_mensal_base': formatCurrency((dados.contrato.valor_mensal || 0) - (dados.contrato.valor_adicional || 0)),
+    'contrato.valor_mensal_total': formatCurrency(dados.contrato.valor_mensal),
     'contrato.forma_pagamento': dados.contrato.forma_pagamento || 'Boleto Bancário',
     'contrato.primeira_mensalidade': primeiraMensalidade,
     
