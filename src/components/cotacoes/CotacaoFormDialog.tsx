@@ -137,7 +137,7 @@ export interface CotacaoFormDialogProps {
   onOpenChange: (open: boolean) => void;
   leadId?: string;
   cotacaoBase?: CotacaoBaseParaFormulario | null;
-  /** Cotação existente para edição (somente rascunhos) */
+  /** Cotação existente para edição (qualquer status, exceto após contrato assinado) */
   cotacaoParaEditar?: CotacaoBaseParaFormulario & { id: string } | null;
   /** Callback após salvar com sucesso */
   onSuccess?: () => void;

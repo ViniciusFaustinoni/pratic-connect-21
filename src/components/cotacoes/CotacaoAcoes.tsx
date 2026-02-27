@@ -58,6 +58,7 @@ interface CotacaoAcoesProps {
   isGerando?: boolean;
   isDuplicando?: boolean;
   canDelete?: boolean; // Apenas diretores podem excluir
+  contratoAssinado?: boolean; // Bloqueia edição após assinatura
 }
 
 export function CotacaoAcoes({
@@ -76,11 +77,12 @@ export function CotacaoAcoes({
   isGerando,
   isDuplicando,
   canDelete = true, // Por padrão exibe, mas CotacaoDetalhe passa false se não for diretor
+  contratoAssinado = false,
 }: CotacaoAcoesProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
   const temLead = !!cotacao.lead_id;
-  const podeEditar = cotacao.status === 'rascunho';
+  const podeEditar = !contratoAssinado;
 
   const handleAcessarLink = () => {
     if (!cotacao.token_publico) {
@@ -186,7 +188,7 @@ export function CotacaoAcoes({
             className="justify-start"
             onClick={onEditar}
             disabled={!podeEditar}
-            title={!podeEditar ? 'Apenas rascunhos podem ser editados' : undefined}
+            title={!podeEditar ? 'Não é possível editar após a assinatura do contrato' : undefined}
           >
             <Pencil className="mr-2 h-4 w-4" />
             Editar
