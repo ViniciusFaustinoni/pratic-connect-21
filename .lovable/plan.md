@@ -1,113 +1,58 @@
 
-# Etapa 2A: Conectar Edge Functions a Tabela de Configuracoes
+# Etapa 2B: Alinhar termo-filiacao.ts com a Tabela de Configuracoes
 
-## Resumo
+## Diagnostico
 
-Modificar a funcao `exigeRastreador` nos dois arquivos de edge functions para aceitar thresholds como parametro, e buscar esses valores da tabela `configuracoes` nos pontos de entrada (callers).
+A funcao `exigeRastreador` em `src/types/termo-filiacao.ts` usa R$ 20.000 hardcoded para carros (deveria ser R$ 30.000). Ela e importada em `GerarTermo.tsx` mas **nunca e chamada** no corpo do componente — apenas importada. Nenhum outro arquivo frontend a utiliza.
 
-## Estrategia
+## Alteracoes
 
-A funcao `exigeRastreador` e sincrona e chamada dentro de uma cadeia de funcoes sincronas (`generateSecaoRastreador` -> `generateTermoAfiliacao`). Para evitar refatorar toda a cadeia para async, a abordagem sera:
+### 1. `src/types/termo-filiacao.ts` (linhas 191-208)
 
-1. **Parametrizar** `exigeRastreador` para receber thresholds opcionais
-2. **Buscar** os valores da tabela `configuracoes` nos callers (edge functions principais)
-3. **Passar** os valores pela cadeia de dados existente (`TermoAfiliacaoData`)
+Parametrizar `exigeRastreador` para aceitar config opcional, identico ao padrao das edge functions:
 
-## Arquivos a modificar
-
-### 1. `supabase/functions/_shared/termo-afiliacao-utils.ts`
-- Adicionar campo opcional `configRastreador` na interface `TermoAfiliacaoData`:
 ```typescript
-configRastreador?: {
-  fipeMinCarro: number;
-  fipeMinMoto: number;
-};
-```
-
-### 2. `supabase/functions/_shared/termo-afiliacao-template.ts`
-- Modificar `exigeRastreador` (L862) para aceitar config opcional:
-```typescript
-const exigeRastreador = (
-  veiculo: any, 
+export const exigeRastreador = (
+  veiculo: VeiculoData,
   config?: { fipeMinCarro: number; fipeMinMoto: number }
 ): { exige: boolean; motivo: string | null } => {
   if (veiculo.combustivel?.toLowerCase() === 'diesel') {
     return { exige: true, motivo: 'Veiculo a diesel' };
   }
-  
-  const valorFipe = veiculo.valor_fipe || 0;
-  const categoria = (veiculo.categoria || '').toLowerCase();
-  const isMoto = categoria.includes('moto') || categoria.includes('ciclomotor');
-  
-  const thresholdMoto = config?.fipeMinMoto ?? 9000;
+
   const thresholdCarro = config?.fipeMinCarro ?? 30000;
-  
-  if (isMoto && valorFipe > thresholdMoto) {
-    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdMoto.toLocaleString('pt-BR')}` };
-  }
-  
-  if (!isMoto && valorFipe > thresholdCarro) {
+  const thresholdMoto = config?.fipeMinMoto ?? 9000;
+
+  if (veiculo.tipo === 'carro' && veiculo.valorFipe > thresholdCarro) {
     return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdCarro.toLocaleString('pt-BR')}` };
   }
-  
+
+  if (veiculo.tipo === 'moto' && veiculo.valorFipe > thresholdMoto) {
+    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdMoto.toLocaleString('pt-BR')}` };
+  }
+
   return { exige: false, motivo: null };
 };
 ```
-- Modificar `generateSecaoRastreador` (L885) para passar o config:
-```typescript
-const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
-  const rastreador = exigeRastreador(data.veiculo, data.configRastreador);
-  // ... resto inalterado
-};
-```
 
-### 3. `supabase/functions/_shared/template-utils.ts`
-- Mesma alteracao na funcao `exigeRastreador` exportada (L689): aceitar config opcional com fallback identico
+Mudancas concretas:
+- Segundo parametro opcional `config?: { fipeMinCarro: number; fipeMinMoto: number }`
+- Fallback de R$ 20.000 corrigido para R$ 30.000 (carro)
+- Mensagem de motivo agora usa o valor dinamico em vez de string fixa
 
-### 4. `supabase/functions/autentique-create/index.ts`
-- Adicionar funcao utilitaria para buscar configuracoes:
-```typescript
-async function buscarConfigRastreador(supabase: any) {
-  try {
-    const { data, error } = await supabase
-      .from('configuracoes')
-      .select('chave, valor')
-      .in('chave', [
-        'operacional_fipe_minimo_rastreador',
-        'operacional_fipe_minimo_rastreador_moto'
-      ]);
-    
-    if (error) throw error;
-    
-    const config: Record<string, string> = {};
-    for (const row of (data || [])) {
-      config[row.chave] = row.valor;
-    }
-    
-    return {
-      fipeMinCarro: Number(config['operacional_fipe_minimo_rastreador']) || 30000,
-      fipeMinMoto: Number(config['operacional_fipe_minimo_rastreador_moto']) || 9000,
-    };
-  } catch (err) {
-    console.warn('[autentique-create] Fallback: erro ao buscar config rastreador:', err);
-    return { fipeMinCarro: 30000, fipeMinMoto: 9000 };
-  }
-}
-```
-- Chamar essa funcao antes de montar `templateData` e incluir o resultado em `configRastreador`
+### 2. `src/pages/cadastro/GerarTermo.tsx`
 
-### 5. `supabase/functions/autentique-create-by-token/index.ts`
-- Mesma funcao `buscarConfigRastreador` e mesmo uso no fluxo
+Nenhuma alteracao necessaria. A funcao e importada mas nao chamada no componente. A assinatura continua compativel (parametro config e opcional).
 
-## O que NAO sera alterado
-- Logica de diesel (continua sempre exigindo)
-- Formato de retorno de `exigeRastreador` (`{ exige, motivo }`)
-- Nenhum arquivo frontend
-- `src/types/termo-filiacao.ts`
-- Estrutura da tabela `configuracoes`
-- Hooks existentes
+## Impacto
 
-## Riscos e mitigacoes
-- **Fallback seguro**: se a query falhar, usa R$ 30.000 (carro) e R$ 9.000 (moto) com log de aviso
-- **Retrocompatibilidade**: o parametro config e opcional, entao qualquer chamada existente sem parametro continua funcionando com os fallbacks
-- **Performance**: uma query simples a mais por geracao de termo (impacto negligivel)
+- Retrocompativel: chamadas sem config continuam funcionando, agora com fallback correto (30k)
+- Quando futuramente o GerarTermo ou outro componente chamar a funcao, podera passar valores do hook `useConfigFipeRastreador`
+- Diesel inalterado, formato de retorno inalterado
+
+## Arquivos nao alterados
+
+- Edge functions (ja corrigidas na Etapa 2A)
+- Hooks (`useConfigRastreador.ts`)
+- Componentes do instalador
+- Tabela `configuracoes`
