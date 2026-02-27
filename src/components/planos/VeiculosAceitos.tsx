@@ -7,6 +7,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { VEICULOS_ACEITOS, MOTOS_ACEITAS } from '@/data/planosPrecos';
+import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
 import { Car, Bike } from 'lucide-react';
 
 export function VeiculosAceitosCarros() {
@@ -58,6 +59,8 @@ export function VeiculosAceitosCarros() {
 
 export function VeiculosAceitosMotos() {
   const marcas = Object.entries(MOTOS_ACEITAS);
+  const { data: fipeCarro = 30000 } = useConfigFipeRastreador();
+  const { data: fipeMoto = 9000 } = useConfigFipeRastreadorMoto();
 
   return (
     <Card>
@@ -86,8 +89,8 @@ export function VeiculosAceitosMotos() {
           </p>
           <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
             <li>• Honda/Yamaha acima de R$35.000: Apenas Advanced</li>
-            <li>• FIPE acima de R$9.000: Rastreador obrigatório</li>
-            <li>• Acima de R$30.000: Requer autorização por email</li>
+            <li>• FIPE acima de R$ {fipeMoto.toLocaleString('pt-BR')}: Rastreador obrigatório</li>
+            <li>• Acima de R$ {fipeCarro.toLocaleString('pt-BR')}: Requer autorização por email</li>
           </ul>
         </div>
       </CardContent>
