@@ -93,6 +93,10 @@ export interface TermoAfiliacaoData {
   contrato: ContratoData;
   empresa: EmpresaData;
   consultor?: { nome: string };
+  configRastreador?: {
+    fipeMinCarro: number;
+    fipeMinMoto: number;
+  };
 }
 
 // ============= FORMATADORES =============
