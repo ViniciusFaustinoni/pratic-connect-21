@@ -60,7 +60,7 @@ import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { ModalRecusaVeiculo } from '@/components/instalador/ModalRecusaVeiculo';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { useRastreadoresDoPortador, type RastreadorEmPorte } from '@/hooks/useRastreadoresPortador';
-import { useConfigFipeRastreador, precisaRastreador } from '@/hooks/useConfigRastreador';
+import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -114,6 +114,7 @@ export default function InstaladorChecklist() {
   const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompletaPorServico(id ?? null);
   const { data: rastreadoresEmPorte, isLoading: isLoadingRastreadores } = useRastreadoresDoPortador();
   const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
+  const { data: fipeMinRastreadorMoto = 9000 } = useConfigFipeRastreadorMoto();
   const uploadFotoMutation = useUploadFotoVistoriaCompleta();
   const uploadVideoMutation = useUploadVideo360();
   const saveAssinaturaMutation = useSaveAssinatura();
@@ -141,8 +142,8 @@ export default function InstaladorChecklist() {
   }, [servico?.veiculos]);
 
   const veiculoPrecisaRastreador = useMemo(() => {
-    return precisaRastreador(valorFipeVeiculo, fipeMinRastreador);
-  }, [valorFipeVeiculo, fipeMinRastreador]);
+    return precisaRastreador(valorFipeVeiculo, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto);
+  }, [valorFipeVeiculo, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto]);
 
   // Configuração dinâmica baseada no tipo de veículo (e se precisa rastreador)
   const fotosConfig = useMemo(() => getFotosByTipoVeiculo(tipoVeiculo), [tipoVeiculo]);
