@@ -361,10 +361,8 @@ export function useIniciarServico() {
 
       console.log(`[useIniciarServico] Localização obtida: (${latitude}, ${longitude}) precisão: ${accuracy}m`);
 
-      // Chamar a edge function para atribuir tarefa
-      await atribuirTarefaMutation.mutateAsync({ latitude, longitude });
-
-      // Criar turno automaticamente ao iniciar serviço
+      // PRIMEIRO: Criar turno imediatamente ao ativar localização
+      // A jornada começa AGORA, independente de tarefa atribuída
       if (profile?.id) {
         try {
           const hoje = format(getHojeBrasilia(), 'yyyy-MM-dd');
@@ -391,13 +389,16 @@ export function useIniciarServico() {
               saldo_anterior_minutos: saldoAnterior,
             }, { onConflict: 'profissional_id,data' });
 
-          console.log('[useIniciarServico] Turno criado/atualizado automaticamente');
+          console.log('[useIniciarServico] Turno criado/atualizado - jornada iniciada a partir da ativação de localização');
           queryClient.invalidateQueries({ queryKey: ['turno-profissional'] });
           queryClient.invalidateQueries({ queryKey: ['jornadas-profissionais'] });
         } catch (turnoError) {
           console.error('[useIniciarServico] Erro ao criar turno automático:', turnoError);
         }
       }
+
+      // DEPOIS: Chamar a edge function para atribuir tarefa (não bloqueia a contagem de jornada)
+      await atribuirTarefaMutation.mutateAsync({ latitude, longitude });
 
       // Verificar se está em plataforma nativa para usar background location
       if (backgroundLocationService.isNativePlatform() && profile?.id) {
