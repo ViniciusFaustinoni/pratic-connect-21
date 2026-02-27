@@ -1,89 +1,142 @@
 
 
-# Redesign UI: Dashboard, Propostas Pendentes e Detalhes da Proposta
+# Registro de Imprevistos e Reagendamento Automatico de Vistorias
 
-## Objetivo
-Aprimorar a experiencia do analista de cadastro com um design mais fluido, visual e produtivo nas tres telas principais, sem alterar conteudo exibido nem a tela de Associados.
+## Visao Geral
 
----
-
-## 1. Dashboard do Analista (`DashboardCadastro.tsx`)
-
-**Melhorias planejadas:**
-
-- **Banner de boas-vindas**: Adicionar gradiente sutil e icone de avatar com iniciais do usuario, tornando o greeting mais acolhedor
-- **KPIs**: Redesenhar com icones maiores, micro-animacao de pulse no indicador principal (aguardando), e adicionar uma linha de "tendencia" comparando com ontem (ex: "+3 vs ontem")
-- **Pipeline visual**: Transformar a barra segmentada em cards mini-funil com setas entre eles (Aguardando -> Em Analise -> Aprovado/Reprovado) para visualizacao mais intuitiva do fluxo
-- **Fila de trabalho**: Adicionar indicador visual de prioridade (dot pulsante vermelho para >48h), hover com preview rapido (nome + placa + tempo) e transicao de hover mais suave com elevacao
-- **Grafico de performance**: Adicionar tooltip customizado com mais contexto e melhorar legenda visual
-
-**Componentes afetados:**
-- `src/components/cadastro/DashboardCadastro.tsx` (componente unico, refatorar internamente)
+Implementar 3 funcionalidades interligadas:
+1. **Botao de Imprevisto** no app do instalador/vistoriador (apos tarefa atribuida)
+2. **Duplo Check** com o associado antes de finalizar o imprevisto
+3. **Reagendamento automatico** via WhatsApp (link publico) + cron para vistorias nao iniciadas ate fim do expediente
 
 ---
 
-## 2. Propostas Pendentes (`PropostasPendentes.tsx`)
+## 1. Migracao de Banco de Dados
 
-**Melhorias planejadas:**
+Adicionar colunas na tabela `servicos`:
 
-- **Header**: Adicionar icone decorativo e subtitulo mais descritivo, similar ao padrao `LeadsHeader`
-- **KPIs pills**: Transformar em cards pequenos com fundo mais destacado e hover interativo (ao clicar, filtra automaticamente)
-- **Cards de proposta**: 
-  - Aumentar altura levemente para melhor legibilidade
-  - Adicionar avatar com iniciais do cliente (circulo colorido com letras)
-  - Separar visualmente placa em badge estilizado (fundo escuro, mono font)
-  - Adicionar preview do plano como chip colorido
-  - Indicador de reanalise mais proeminente com badge "NOVO" pulsante
-  - Hover com translate-x sutil (deslize para direita) como ja existe na CotacoesTable
-- **Estado vazio**: Ilustracao mais amigavel com mensagem motivacional
-- **Contador de resultados**: Mover para dentro da barra de filtros
-
-**Componentes afetados:**
-- `src/pages/cadastro/PropostasPendentes.tsx`
+```sql
+ALTER TABLE servicos ADD COLUMN IF NOT EXISTS imprevisto_registrado_em timestamptz;
+ALTER TABLE servicos ADD COLUMN IF NOT EXISTS imprevisto_motivo text;
+ALTER TABLE servicos ADD COLUMN IF NOT EXISTS imprevisto_duplo_check boolean DEFAULT false;
+ALTER TABLE servicos ADD COLUMN IF NOT EXISTS imprevisto_duplo_check_em timestamptz;
+ALTER TABLE servicos ADD COLUMN IF NOT EXISTS reagendamento_token uuid DEFAULT gen_random_uuid();
+ALTER TABLE servicos ADD COLUMN IF NOT EXISTS reagendamento_enviado_em timestamptz;
+```
 
 ---
 
-## 3. Detalhes da Proposta (`PropostaAnalise.tsx` + subcomponentes)
+## 2. Componente: Botao de Imprevisto (`ImprevistoBotao.tsx`)
 
-**Melhorias planejadas:**
+**Novo arquivo**: `src/components/vistoriador/ImprevistoBotao.tsx`
 
-### 3a. Hero Header (`PropostaHeroHeader.tsx`)
-- Adicionar gradiente de fundo sutil baseado no status (amarelo para aguardando, azul para em analise)
-- Botoes de acao maiores e mais visiveis com cores cheias (nao outline) e icones mais claros
-- Badge de reanalise mais proeminente com contagem de documentos novos
-- Adicionar "quick stats" inline: placa em destaque, valor mensal, plano
-
-### 3b. Grid de Midia (`PropostaMidiaGrid.tsx`)
-- Layout mais organizado com fotos em grid maior (3 colunas em desktop)
-- Card de documentos solicitados com badge "NOVO" pulsante nos itens novos
-- Thumbnails de fotos maiores para facilitar visualizacao rapida antes de abrir galeria
-
-### 3c. Tabs de Detalhes (`PropostaDetalhesTabs.tsx`)
-- Tab bar com icones mais claros e labels sempre visiveis (remover hidden em sm)
-- Badge de notificacao nos tabs mais visivel (maior, com numero)
-- Cards internos com bordas superiores coloridas por categoria (azul para cliente, roxo para veiculo, etc.)
-- Campos de ficha com hover highlight para facilitar leitura
-- Separadores visuais entre grupos de campos
-
-**Componentes afetados:**
-- `src/components/cadastro/proposta/PropostaHeroHeader.tsx`
-- `src/components/cadastro/proposta/PropostaMidiaGrid.tsx`
-- `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
-- `src/pages/cadastro/PropostaAnalise.tsx` (ajustes menores de spacing)
+- Visivel no `TarefaAtualCard` quando status e `agendada`, `em_rota` ou `em_andamento` e a tarefa ja foi atribuida (tem `profissional_id`)
+- Ao clicar, abre modal com:
+  - Campo de motivo do imprevisto (select com opcoes: "Associado ausente", "Endereco incorreto", "Problema no veiculo", "Desistencia do associado", "Outro")
+  - Campo de observacoes (textarea)
+- Ao confirmar, grava `imprevisto_registrado_em` e `imprevisto_motivo` no servico
+- Em seguida, abre a etapa de Duplo Check
 
 ---
 
-## Principios de Design Aplicados
-- **Hierarquia visual**: Elementos mais importantes (acoes, alertas) com maior destaque
-- **Feedback visual**: Hover states, transicoes suaves, indicadores pulsantes
-- **Densidade informacional**: Mais dados visiveis sem scroll, layouts compactos mas legíveis
-- **Consistencia**: Seguir padroes ja existentes no sistema (cores de status, badges, cards com borda lateral)
-- **Produtividade**: Reducao de cliques, informacoes criticas visiveis de imediato
+## 3. Componente: Duplo Check (`DuploCheckImprevisto.tsx`)
 
-## Arquivos Modificados (total: 5)
-1. `src/components/cadastro/DashboardCadastro.tsx`
-2. `src/pages/cadastro/PropostasPendentes.tsx`
-3. `src/components/cadastro/proposta/PropostaHeroHeader.tsx`
-4. `src/components/cadastro/proposta/PropostaMidiaGrid.tsx`
-5. `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
+**Novo arquivo**: `src/components/vistoriador/DuploCheckImprevisto.tsx`
+
+- Modal/etapa que aparece apos registrar imprevisto
+- Instrucao: "Confirme com o associado que nao sera possivel prosseguir"
+- Botoes de contato: WhatsApp e Ligacao (reutiliza logica existente do `TarefaAtualCard`)
+- Apos contato, botao "Confirmar Duplo Check" fica habilitado
+- Ao confirmar:
+  - Atualiza `imprevisto_duplo_check = true` e `imprevisto_duplo_check_em = now()`
+  - Muda status do servico para `nao_compareceu`
+  - Dispara envio de link de reagendamento via WhatsApp (chama edge function)
+
+---
+
+## 4. Edge Function: `enviar-link-reagendamento`
+
+**Novo arquivo**: `supabase/functions/enviar-link-reagendamento/index.ts`
+
+- Recebe `servico_id`
+- Busca dados do servico (associado, telefone, token de reagendamento)
+- Gera URL publica: `{APP_URL}/reagendar/{reagendamento_token}`
+- Envia WhatsApp via `whatsapp-send-text` com mensagem:
+  > "Ola [nome], sua vistoria nao pode ser realizada. Acesse o link abaixo para agendar um novo dia, horario e endereco: [LINK]"
+- Atualiza `reagendamento_enviado_em` no servico
+
+---
+
+## 5. Pagina Publica: Reagendamento (`/reagendar/:token`)
+
+**Novo arquivo**: `src/pages/ReagendarVistoria.tsx`
+
+- Pagina publica (sem autenticacao)
+- Valida token via query no banco (`servicos` onde `reagendamento_token = token`)
+- Formulario com:
+  - Selecao de nova data (calendario, excluindo domingos)
+  - Selecao de periodo (Manha/Tarde)
+  - Endereco completo (com busca por CEP, reutilizando logica existente do `AgendamentoVistoria`)
+  - O endereco pode ser diferente do cadastro
+- Ao confirmar:
+  - Cria novo servico com os mesmos dados (associado, veiculo, tipo, cotacao) mas nova data/endereco
+  - Marca servico antigo como `reagendada` com referencia ao novo
+  - Exibe tela de sucesso
+
+**Edge Function**: `reagendar-vistoria-publica` para processar o reagendamento server-side
+
+---
+
+## 6. Cron: Vistorias nao iniciadas no fim do expediente
+
+**Novo arquivo**: `supabase/functions/cron-reagendamento-automatico/index.ts`
+
+- Executado diariamente as 18h (fim do expediente)
+- Busca servicos com:
+  - `data_agendada = hoje`
+  - `status = 'agendada'` (nunca foi iniciada)
+  - `tipo` de vistoria (nao instalacao)
+  - `reagendamento_enviado_em IS NULL` (evita duplicidade)
+- Para cada servico encontrado:
+  - Muda status para `nao_compareceu`
+  - Chama `enviar-link-reagendamento` para enviar WhatsApp com link
+- Registrar no cron via `pg_cron` + `pg_net`
+
+---
+
+## 7. Integracao no `TarefaAtualCard.tsx`
+
+Modificar `src/components/vistoriador/TarefaAtualCard.tsx`:
+
+- Adicionar botao "Comunicar Imprevisto" (icone AlertTriangle, cor amber) visivel quando:
+  - Tarefa tem `profissional_id` (foi atribuida)
+  - Status e `agendada`, `em_rota` ou `em_andamento`
+  - Nao tem imprevisto ja registrado
+- Botao abre o componente `ImprevistoBotao`
+
+---
+
+## 8. Rota no App.tsx
+
+Adicionar rota publica:
+```tsx
+<Route path="/reagendar/:token" element={<ReagendarVistoria />} />
+```
+
+---
+
+## Arquivos Criados (5)
+1. `src/components/vistoriador/ImprevistoBotao.tsx`
+2. `src/components/vistoriador/DuploCheckImprevisto.tsx`
+3. `src/pages/ReagendarVistoria.tsx`
+4. `supabase/functions/enviar-link-reagendamento/index.ts`
+5. `supabase/functions/cron-reagendamento-automatico/index.ts`
+
+## Arquivos Modificados (3)
+1. `src/components/vistoriador/TarefaAtualCard.tsx` — botao de imprevisto
+2. `src/App.tsx` — rota publica de reagendamento
+3. `supabase/config.toml` — config da nova edge function
+
+## Migracao SQL (1)
+- Novas colunas em `servicos` + RLS para acesso publico ao reagendamento por token
 
