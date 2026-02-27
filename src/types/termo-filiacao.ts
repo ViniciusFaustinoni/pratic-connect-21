@@ -188,22 +188,25 @@ export const ehVeiculoZeroKm = (veiculo: VeiculoData): boolean => {
 /**
  * Verifica se o rastreador é obrigatório
  */
-export const exigeRastreador = (veiculo: VeiculoData): { exige: boolean; motivo: string | null } => {
-  // Diesel sempre exige
+export const exigeRastreador = (
+  veiculo: VeiculoData,
+  config?: { fipeMinCarro: number; fipeMinMoto: number }
+): { exige: boolean; motivo: string | null } => {
   if (veiculo.combustivel?.toLowerCase() === 'diesel') {
     return { exige: true, motivo: 'Veículo a diesel' };
   }
-  
-  // Carro > R$ 20.000
-  if (veiculo.tipo === 'carro' && veiculo.valorFipe > 20000) {
-    return { exige: true, motivo: 'Valor FIPE acima de R$ 20.000' };
+
+  const thresholdCarro = config?.fipeMinCarro ?? 30000;
+  const thresholdMoto = config?.fipeMinMoto ?? 9000;
+
+  if (veiculo.tipo === 'carro' && veiculo.valorFipe > thresholdCarro) {
+    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdCarro.toLocaleString('pt-BR')}` };
   }
-  
-  // Moto > R$ 9.000
-  if (veiculo.tipo === 'moto' && veiculo.valorFipe > 9000) {
-    return { exige: true, motivo: 'Valor FIPE acima de R$ 9.000' };
+
+  if (veiculo.tipo === 'moto' && veiculo.valorFipe > thresholdMoto) {
+    return { exige: true, motivo: `Valor FIPE acima de R$ ${thresholdMoto.toLocaleString('pt-BR')}` };
   }
-  
+
   return { exige: false, motivo: null };
 };
 
