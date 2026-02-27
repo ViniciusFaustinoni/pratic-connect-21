@@ -1,56 +1,35 @@
 
 
-# Permitir Edicao de Cotacoes (Exceto Apos Assinatura)
+# Corrigir Geração de Contrato - Coluna `valor_adicional` Ausente
 
-## Problema Atual
-A edicao de cotacoes esta restrita apenas ao status `rascunho`. Cotacoes em outros status (enviada, visualizada, etc.) nao podem ser editadas, mesmo quando ainda nao possuem contrato assinado. A edicao so deve ser bloqueada apos a assinatura do contrato.
+## Problema Identificado
 
-## Solucao
+Os logs da edge function `contrato-gerar` mostram claramente o erro:
 
-### Regra de Negocio
-- **Pode editar**: qualquer cotacao que NAO possua um contrato com status `assinado` ou `ativo`
-- **Nao pode editar**: cotacoes cujo contrato vinculado ja foi assinado (`contrato.status` in `['assinado', 'ativo']`)
-
-### Mudancas
-
-#### 1. `CotacaoAcoes.tsx` — Expandir condicao de edicao
-
-Substituir `podeEditar = cotacao.status === 'rascunho'` por uma logica que verifica se existe contrato assinado. O componente recebera uma nova prop `contratoAssinado` (boolean).
-
-```text
-ANTES:  const podeEditar = cotacao.status === 'rascunho';
-DEPOIS: const podeEditar = !contratoAssinado;
+```
+Could not find the 'valor_adicional' column of 'contratos' in the schema cache
 ```
 
-Atualizar o tooltip do botao para refletir: "Nao e possivel editar apos a assinatura do contrato".
+A tabela `cotacoes` possui a coluna `valor_adicional`, mas a tabela `contratos` não. Quando a edge function tenta inserir o contrato copiando o `valor_adicional` da cotação, o Supabase rejeita a operação.
 
-#### 2. `CotacaoDetalhe.tsx` — Permitir edicao em qualquer status pre-assinatura
+## Solução
 
-- Remover a condicao `cotacao.status === 'rascunho'` que envolve o `CotacaoFormDialog`
-- Calcular `contratoAssinado` baseado em `cotacao.contrato?.status` (verificar se e `assinado` ou `ativo`)
-- Passar `contratoAssinado` para `CotacaoAcoes`
-- O `cotacaoParaEditar` continuara sendo passado normalmente ao dialog
+### 1. Migração SQL - Adicionar coluna `valor_adicional` na tabela `contratos`
 
-#### 3. `CotacaoFormDialog.tsx` — Garantir que aceita cotacoes de qualquer status
+```sql
+ALTER TABLE contratos
+ADD COLUMN IF NOT EXISTS valor_adicional NUMERIC DEFAULT 0;
 
-O dialog ja suporta edicao via `cotacaoParaEditar`. Nenhuma mudanca significativa — apenas garantir que o comentario `"somente rascunhos"` na tipagem seja atualizado para refletir a nova regra.
+COMMENT ON COLUMN contratos.valor_adicional IS 'Valor adicional mensal (ex: cobertura extra, serviços opcionais)';
+```
 
-#### 4. `Cotacoes.tsx` (listagem) — Verificar se ha botao de edicao na tabela
+### 2. Nenhuma alteração de código necessária
 
-Se a listagem tiver acoes de edicao inline, aplicar a mesma regra: permitir exceto quando contrato assinado.
+A edge function `contrato-gerar` já está corretamente mapeando `cotacao.valor_adicional` para `contratos.valor_adicional` (linha 541). Uma vez que a coluna exista no banco, o fluxo funcionará sem erros.
 
-#### 5. Atualizacao automatica no link do associado
+## Arquivos Modificados
 
-O link publico (`CotacaoPublica`, `CotacaoContratacao`) ja le os dados diretamente da tabela `cotacoes` via token. Como o `useUpdateCotacao` atualiza a tabela, qualquer edicao reflete automaticamente no link do associado sem mudancas adicionais.
+1. **Migração SQL** - Adicionar coluna `valor_adicional` na tabela `contratos`
 
-## Arquivos Modificados (3-4)
+Nenhum arquivo de código precisa ser alterado.
 
-1. **`src/components/cotacoes/CotacaoAcoes.tsx`** — Nova prop `contratoAssinado`, logica de `podeEditar` atualizada
-2. **`src/pages/vendas/CotacaoDetalhe.tsx`** — Remover restricao de status rascunho, calcular `contratoAssinado`, passar ao componente de acoes
-3. **`src/components/cotacoes/CotacaoFormDialog.tsx`** — Atualizar comentario da tipagem (mudanca menor)
-4. **`src/pages/vendas/Cotacoes.tsx`** — Se houver edicao inline, aplicar mesma regra
-
-## Impacto
-- Cotacoes enviadas, visualizadas ou em negociacao poderao ser editadas normalmente
-- O link publico do associado refletira as alteracoes automaticamente (ja funciona assim)
-- Apos assinatura do contrato, a edicao sera bloqueada definitivamente
