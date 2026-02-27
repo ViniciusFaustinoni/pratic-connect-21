@@ -33,6 +33,7 @@ import {
 } from '@/types/termo-filiacao';
 import { useAvaliarAditivos } from '@/hooks/useAvaliarAditivos';
 import { useAditivos, type TermoAditivo } from '@/hooks/useAditivos';
+import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
 
 // Mock do associado selecionado
 const mockAssociado: DadosTermoFiliacao = {
@@ -120,6 +121,11 @@ export default function GerarTermo() {
   
   // Dados do associado selecionado (usando mock por enquanto)
   const associado = mockAssociado;
+  
+  // Configurações dinâmicas de FIPE para rastreador
+  const { data: fipeMinCarro = 30000 } = useConfigFipeRastreador();
+  const { data: fipeMinMoto = 9000 } = useConfigFipeRastreadorMoto();
+  const rastreadorInfo = exigeRastreador(associado.veiculo, { fipeMinCarro, fipeMinMoto });
   
   // Buscar aditivos e avaliar quais se aplicam
   const { data: aditivos = [], isLoading: loadingAditivos } = useAditivos(true);
@@ -264,9 +270,14 @@ export default function GerarTermo() {
             </div>
             <div>
               <Label className="text-muted-foreground text-xs">Valor FIPE</Label>
-              <p className="font-medium text-primary">
-                {formatCurrency(associado.veiculo.valorFipe)}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-primary">
+                  {formatCurrency(associado.veiculo.valorFipe)}
+                </p>
+                {rastreadorInfo.exige && (
+                  <Badge variant="destructive">Rastreador obrigatório</Badge>
+                )}
+              </div>
             </div>
             <div>
               <Label className="text-muted-foreground text-xs">Plano</Label>
