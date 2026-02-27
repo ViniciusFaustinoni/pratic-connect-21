@@ -21,6 +21,7 @@ import {
   COTAS_TAXAS, 
   TAXAS_PROCEDIMENTOS 
 } from '@/data/planosPrecos';
+import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
 import { BookOpen, AlertTriangle, DollarSign } from 'lucide-react';
 
 export function GlossarioTermos() {
@@ -56,6 +57,21 @@ export function GlossarioTermos() {
 }
 
 export function RegrasImportantes() {
+  const { data: fipeCarro = 30000 } = useConfigFipeRastreador();
+  const { data: fipeMoto = 9000 } = useConfigFipeRastreadorMoto();
+
+  const regras = REGRAS_IMPORTANTES.map((regra) => {
+    if (regra.titulo !== 'Rastreador Obrigatório') return regra;
+    return {
+      ...regra,
+      itens: regra.itens.map((item) => {
+        if (item.startsWith('Carros')) return `Carros >R$ ${fipeCarro.toLocaleString('pt-BR')}`;
+        if (item.startsWith('Motos')) return `Motos >R$ ${fipeMoto.toLocaleString('pt-BR')}`;
+        return item;
+      }),
+    };
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -64,7 +80,7 @@ export function RegrasImportantes() {
       </div>
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {REGRAS_IMPORTANTES.map((regra, index) => (
+        {regras.map((regra, index) => (
           <Card 
             key={index}
             className="overflow-hidden border-l-4 border-l-primary"
