@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -1597,15 +1597,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                               </li>
                             );
                           })}
-                          <AnimatePresence initial={false}>
-                            {expandedPlanos[plano.id] && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.2, ease: "easeInOut" }}
-                                className="overflow-hidden"
-                              >
+                          <div className={`overflow-hidden transition-all duration-200 ${expandedPlanos[plano.id] ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
                                 {plano.coberturas.slice(4).map((cobertura, idx) => {
                                   const isRemovida = isCoberturaRemovida(cobertura, categoria);
                                   return (
@@ -1625,9 +1617,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                     </li>
                                   );
                                 })}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </div>
                           {plano.coberturas.length > 4 && (
                             <li className="pt-1">
                               <button
@@ -1786,15 +1776,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                     </li>
                                   );
                                 })}
-                                <AnimatePresence initial={false}>
-                                  {isExpanded && hasMore && (
-                                    <motion.div
-                                      initial={{ height: 0, opacity: 0 }}
-                                      animate={{ height: "auto", opacity: 1 }}
-                                      exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.2, ease: "easeInOut" }}
-                                      className="overflow-hidden"
-                                    >
+                                <div className={`overflow-hidden transition-all duration-200 ${isExpanded && hasMore ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
                                       {plano.coberturas.slice(LIMIT).map((cobertura, i) => {
                                         const isRemovida = isCoberturaRemovida(cobertura, categoria);
                                         return (
@@ -1813,9 +1795,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                           </li>
                                         );
                                       })}
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
+                                </div>
                                 {hasMore && (
                                   <li className="pt-1">
                                     <button
