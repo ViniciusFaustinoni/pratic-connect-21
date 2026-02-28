@@ -19,22 +19,36 @@ interface AlocacaoDiaria {
  * Hook para consultar a alocação diária do profissional logado.
  * Retorna 'rota', 'base' ou null (sem alocação definida = comportamento de rota).
  */
+/**
+ * Verifica se uma data é dia útil (segunda a sexta)
+ */
+export function isDiaUtil(date: Date): boolean {
+  const day = date.getDay();
+  return day >= 1 && day <= 5; // 1=seg, 5=sex
+}
+
 export function useAlocacaoDiaria(profissionalId?: string) {
   const { profile } = useAuth();
   const id = profissionalId || profile?.id;
+
+  const hoje = getHojeBrasilia();
+  const diaUtil = isDiaUtil(hoje);
 
   const { data, isLoading } = useQuery({
     queryKey: ['alocacao-diaria', id],
     queryFn: async () => {
       if (!id) return null;
 
-      const hoje = format(getHojeBrasilia(), 'yyyy-MM-dd');
+      // Dia útil: todos disponíveis (rota), sem consultar banco
+      if (diaUtil) return null;
+
+      const hojeStr = format(hoje, 'yyyy-MM-dd');
 
       const { data: alocacao, error } = await supabase
         .from('alocacoes_diarias')
         .select('*')
         .eq('profissional_id', id)
-        .eq('data', hoje)
+        .eq('data', hojeStr)
         .maybeSingle();
 
       if (error) {
@@ -45,14 +59,15 @@ export function useAlocacaoDiaria(profissionalId?: string) {
       return alocacao as AlocacaoDiaria | null;
     },
     enabled: !!id,
-    staleTime: 60000, // 1 minuto
+    staleTime: 60000,
   });
 
   return {
-    alocacao: data,
-    tipoAlocacao: (data?.tipo_alocacao as TipoAlocacao) || null,
-    isBase: data?.tipo_alocacao === 'base',
-    isRota: data?.tipo_alocacao === 'rota' || !data, // sem alocação = rota (default)
-    isLoading,
+    alocacao: diaUtil ? null : data,
+    tipoAlocacao: diaUtil ? null : (data?.tipo_alocacao as TipoAlocacao) || null,
+    isBase: diaUtil ? false : data?.tipo_alocacao === 'base',
+    isRota: diaUtil ? true : data?.tipo_alocacao === 'rota' || !data,
+    isDiaUtil: diaUtil,
+    isLoading: diaUtil ? false : isLoading,
   };
 }

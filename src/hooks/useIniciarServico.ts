@@ -363,51 +363,58 @@ export function useIniciarServico() {
       console.log(`[useIniciarServico] Localização obtida: (${latitude}, ${longitude}) precisão: ${accuracy}m`);
 
       // Verificar alocação do dia para validação de proximidade da base
+      // Em dias úteis (seg-sex), pular validação — todos trabalham normalmente
       if (profile?.id) {
-        const hoje = format(getHojeBrasilia(), 'yyyy-MM-dd');
-        
-        const { data: alocacao } = await supabase
-          .from('alocacoes_diarias')
-          .select('tipo_alocacao')
-          .eq('profissional_id', profile.id)
-          .eq('data', hoje)
-          .maybeSingle();
+        const hoje = getHojeBrasilia();
+        const diaDaSemana = hoje.getDay();
+        const isDiaUtil = diaDaSemana >= 1 && diaDaSemana <= 5;
 
-        if (alocacao?.tipo_alocacao === 'base') {
-          // Vistoriador em BASE — validar proximidade com oficina base
-          const { data: bases } = await supabase
-            .from('oficinas')
-            .select('id, razao_social, nome_fantasia, latitude, longitude')
-            .eq('is_base_pratic', true)
-            .not('latitude', 'is', null)
-            .not('longitude', 'is', null);
+        if (!isDiaUtil) {
+          const hojeStr = format(hoje, 'yyyy-MM-dd');
+          
+          const { data: alocacao } = await supabase
+            .from('alocacoes_diarias')
+            .select('tipo_alocacao')
+            .eq('profissional_id', profile.id)
+            .eq('data', hojeStr)
+            .maybeSingle();
 
-          if (!bases || bases.length === 0) {
-            toast.error('Nenhuma base cadastrada no sistema. Contate o coordenador.');
-            return;
-          }
+          if (alocacao?.tipo_alocacao === 'base') {
+            // Vistoriador em BASE — validar proximidade com oficina base
+            const { data: bases } = await supabase
+              .from('oficinas')
+              .select('id, razao_social, nome_fantasia, latitude, longitude')
+              .eq('is_base_pratic', true)
+              .not('latitude', 'is', null)
+              .not('longitude', 'is', null);
 
-          // Verificar se está próximo de alguma base (200m)
-          const DISTANCIA_MAXIMA = 200;
-          let baseProxima = false;
-          let menorDistancia = Infinity;
+            if (!bases || bases.length === 0) {
+              toast.error('Nenhuma base cadastrada no sistema. Contate o coordenador.');
+              return;
+            }
 
-          for (const base of bases) {
-            const dist = calcularDistanciaMetros(latitude, longitude, base.latitude!, base.longitude!);
-            if (dist < menorDistancia) menorDistancia = dist;
-            if (dist <= DISTANCIA_MAXIMA) {
-              baseProxima = true;
-              console.log(`[useIniciarServico] Base próxima: ${base.nome_fantasia || base.razao_social} (${Math.round(dist)}m)`);
-              break;
+            // Verificar se está próximo de alguma base (200m)
+            const DISTANCIA_MAXIMA = 200;
+            let baseProxima = false;
+            let menorDistancia = Infinity;
+
+            for (const base of bases) {
+              const dist = calcularDistanciaMetros(latitude, longitude, base.latitude!, base.longitude!);
+              if (dist < menorDistancia) menorDistancia = dist;
+              if (dist <= DISTANCIA_MAXIMA) {
+                baseProxima = true;
+                console.log(`[useIniciarServico] Base próxima: ${base.nome_fantasia || base.razao_social} (${Math.round(dist)}m)`);
+                break;
+              }
+            }
+
+            if (!baseProxima) {
+              toast.error(`Aproxime-se da base para registrar ponto (distância: ${Math.round(menorDistancia)}m, máximo: ${DISTANCIA_MAXIMA}m)`);
+              setGeoState({ status: 'idle' });
+              return;
             }
           }
-
-          if (!baseProxima) {
-            toast.error(`Aproxime-se da base para registrar ponto (distância: ${Math.round(menorDistancia)}m, máximo: ${DISTANCIA_MAXIMA}m)`);
-            setGeoState({ status: 'idle' });
-            return;
-          }
-        }
+        } // fim if (!isDiaUtil)
       }
 
       // PRIMEIRO: Criar turno imediatamente ao ativar localização
