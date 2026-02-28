@@ -127,7 +127,14 @@ export function usePermissions() {
     !isDiretor && 
     !isGerencia() && 
     !isDesenvolvedor && 
-    !isAdminMaster;
+    !isAdminMaster &&
+    !hasRole('instalador_vistoriador') &&
+    !hasRoleByName('analista_plataforma') &&
+    !isAnalistaCadastro &&
+    !hasRoleByName('analista_eventos') &&
+    !hasRoleByName('regulador') &&
+    !hasRoleByName('sindicante') &&
+    !isVendedor();
 
   // Verifica se é APENAS instalador/vistoriador (sem perfis de gerência ou admin)
   const isInstaladorVistoriador = hasRole('instalador_vistoriador');
@@ -135,7 +142,14 @@ export function usePermissions() {
     !isDiretor && 
     !isGerencia() && 
     !isDesenvolvedor && 
-    !isAdminMaster;
+    !isAdminMaster &&
+    !isCoordenadorMonitoramento &&
+    !hasRoleByName('analista_plataforma') &&
+    !isAnalistaCadastro &&
+    !hasRoleByName('analista_eventos') &&
+    !hasRoleByName('regulador') &&
+    !hasRoleByName('sindicante') &&
+    !isVendedor();
 
   // NOTA: isVistoriadorBase agora é determinado pela alocação diária, não pela role.
   // Mantemos as flags para compatibilidade, mas sempre false pois a role foi migrada.
@@ -149,7 +163,14 @@ export function usePermissions() {
     !isDiretor &&
     !isGerencia() &&
     !isDesenvolvedor &&
-    !isAdminMaster;
+    !isAdminMaster &&
+    !isCoordenadorMonitoramento &&
+    !isInstaladorVistoriador &&
+    !hasRoleByName('analista_plataforma') &&
+    !isAnalistaCadastro &&
+    !hasRoleByName('analista_eventos') &&
+    !hasRoleByName('sindicante') &&
+    !isVendedor();
 
   // Analista de Eventos
   const isAnalistaEventos = hasRoleByName('analista_eventos');
@@ -157,7 +178,14 @@ export function usePermissions() {
     !isDiretor &&
     !isGerencia() &&
     !isDesenvolvedor &&
-    !isAdminMaster;
+    !isAdminMaster &&
+    !isCoordenadorMonitoramento &&
+    !isInstaladorVistoriador &&
+    !hasRoleByName('analista_plataforma') &&
+    !isAnalistaCadastro &&
+    !hasRoleByName('regulador') &&
+    !hasRoleByName('sindicante') &&
+    !isVendedor();
 
   // Sindicante
   const isSindicante = hasRoleByName('sindicante');
@@ -165,7 +193,14 @@ export function usePermissions() {
     !isDiretor &&
     !isGerencia() &&
     !isDesenvolvedor &&
-    !isAdminMaster;
+    !isAdminMaster &&
+    !isCoordenadorMonitoramento &&
+    !isInstaladorVistoriador &&
+    !hasRoleByName('analista_plataforma') &&
+    !isAnalistaCadastro &&
+    !hasRoleByName('analista_eventos') &&
+    !hasRoleByName('regulador') &&
+    !isVendedor();
 
   // Perfis que devem ver "Perfil" ao invés de "Configurações"
   const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly || isVistoriadorBaseOnly || isReguladorOnly || isAnalistaEventosOnly || isSindicanteOnly;
