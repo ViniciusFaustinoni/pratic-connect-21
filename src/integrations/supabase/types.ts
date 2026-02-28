@@ -1678,6 +1678,7 @@ export type Database = {
           primeiro_boleto_gerado: boolean | null
           profissao: string | null
           qtd_boletos_pagos: number | null
+          revistoria_pendente: boolean | null
           rg: string | null
           sexo: string | null
           sincronizado_hinova: boolean | null
@@ -1734,6 +1735,7 @@ export type Database = {
           primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
           qtd_boletos_pagos?: number | null
+          revistoria_pendente?: boolean | null
           rg?: string | null
           sexo?: string | null
           sincronizado_hinova?: boolean | null
@@ -1790,6 +1792,7 @@ export type Database = {
           primeiro_boleto_gerado?: boolean | null
           profissao?: string | null
           qtd_boletos_pagos?: number | null
+          revistoria_pendente?: boolean | null
           rg?: string | null
           sexo?: string | null
           sincronizado_hinova?: boolean | null

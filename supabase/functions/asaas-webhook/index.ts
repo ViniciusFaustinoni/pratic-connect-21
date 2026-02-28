@@ -599,10 +599,10 @@ serve(async (req) => {
               }
             }
 
-            // CORREÇÃO 7.5.6: Verificar se associado suspenso deve ser reativado
+            // Verificar se associado suspenso deve ser reativado (com regras de dias de atraso)
             const { data: associadoStatus } = await supabase
               .from('associados')
-              .select('id, status')
+              .select('id, status, data_bloqueio')
               .eq('id', cobranca.associado_id)
               .single();
 
@@ -615,48 +615,95 @@ serve(async (req) => {
                 .in('status', ['PENDING', 'OVERDUE']);
 
               if (cobrancasPendentes === 0) {
-                // Reativar associado
-                await supabase
-                  .from('associados')
-                  .update({ 
-                    status: 'ativo',
-                    bloqueado: false,
-                    motivo_bloqueio: null,
-                    data_bloqueio: null,
-                  })
-                  .eq('id', cobranca.associado_id);
+                // Calcular dias de atraso desde a suspensão
+                let diasAtraso = 0;
+                if (associadoStatus.data_bloqueio) {
+                  const dataBloqueio = new Date(associadoStatus.data_bloqueio);
+                  const hoje = new Date();
+                  diasAtraso = Math.floor((hoje.getTime() - dataBloqueio.getTime()) / (1000 * 60 * 60 * 24));
+                }
 
-                // Notificar reativação
-                await supabase.from('notificacoes').insert({
-                  user_id: cobranca.associado_id,
-                  titulo: 'Conta Reativada',
-                  mensagem: 'Sua conta foi reativada após quitação das pendências financeiras.',
-                  tipo: 'sucesso',
-                });
+                console.log(`[asaas-webhook] Associado ${cobranca.associado_id} - dias de atraso: ${diasAtraso}`);
 
-                // Registrar no histórico
-                await supabase.from('associados_historico').insert({
-                  associado_id: cobranca.associado_id,
-                  tipo: 'status_alterado',
-                  descricao: 'Associado reativado automaticamente após quitação de débitos',
-                  dados_anteriores: { status: 'suspenso' },
-                  dados_novos: { status: 'ativo' },
-                });
+                if (diasAtraso >= 120) {
+                  // 120+ dias: NÃO reativar, já está em processo de exclusão
+                  console.log(`[asaas-webhook] Associado ${cobranca.associado_id} com ${diasAtraso} dias - exclusão pendente, não reativar`);
 
-                console.log(`[asaas-webhook] Associado ${cobranca.associado_id} reativado automaticamente`);
-
-                // NOVO: Notificar Rede Veículos sobre adimplência
-                try {
-                  await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
-                    body: {
-                      associadoId: cobranca.associado_id,
-                      motivo: 'pagamento_confirmado',
-                    },
+                  await supabase.from('notificacoes').insert({
+                    user_id: cobranca.associado_id,
+                    titulo: 'Pagamento Recebido - Exclusão Pendente',
+                    mensagem: 'Recebemos seu pagamento, porém devido ao período prolongado de inadimplência (120+ dias), sua reativação requer análise especial. Entre em contato com a associação.',
+                    tipo: 'alerta',
                   });
-                  console.log(`[asaas-webhook] Adimplência notificada à Rede Veículos para ${cobranca.associado_id}`);
-                } catch (redeErr) {
-                  console.warn(`[asaas-webhook] Erro ao notificar Rede Veículos:`, redeErr);
-                  // Não bloqueia o fluxo
+
+                } else if (diasAtraso > 5) {
+                  // 6-119 dias: paga mas precisa de revistoria para reativar
+                  console.log(`[asaas-webhook] Associado ${cobranca.associado_id} com ${diasAtraso} dias - revistoria obrigatória`);
+
+                  await supabase
+                    .from('associados')
+                    .update({
+                      revistoria_pendente: true,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', cobranca.associado_id);
+
+                  await supabase.from('notificacoes').insert({
+                    user_id: cobranca.associado_id,
+                    titulo: 'Pagamento Recebido - Revistoria Necessária',
+                    mensagem: `Recebemos seu pagamento! Como sua proteção ficou suspensa por ${diasAtraso} dias, é necessário realizar uma revistoria para reativação. Acesse o app para iniciar.`,
+                    tipo: 'alerta',
+                  });
+
+                  await supabase.from('associados_historico').insert({
+                    associado_id: cobranca.associado_id,
+                    tipo: 'status_alterado',
+                    descricao: `Pagamento confirmado após ${diasAtraso} dias de suspensão. Revistoria obrigatória para reativação.`,
+                    dados_anteriores: { status: 'suspenso', revistoria_pendente: false },
+                    dados_novos: { status: 'suspenso', revistoria_pendente: true },
+                  });
+
+                } else {
+                  // 0-5 dias: janela de tolerância, reativar automaticamente
+                  await supabase
+                    .from('associados')
+                    .update({
+                      status: 'ativo',
+                      bloqueado: false,
+                      motivo_bloqueio: null,
+                      data_bloqueio: null,
+                      revistoria_pendente: false,
+                    })
+                    .eq('id', cobranca.associado_id);
+
+                  await supabase.from('notificacoes').insert({
+                    user_id: cobranca.associado_id,
+                    titulo: 'Conta Reativada',
+                    mensagem: 'Sua conta foi reativada após quitação das pendências financeiras.',
+                    tipo: 'sucesso',
+                  });
+
+                  await supabase.from('associados_historico').insert({
+                    associado_id: cobranca.associado_id,
+                    tipo: 'status_alterado',
+                    descricao: `Associado reativado automaticamente após quitação (${diasAtraso} dias de atraso - dentro da tolerância)`,
+                    dados_anteriores: { status: 'suspenso' },
+                    dados_novos: { status: 'ativo' },
+                  });
+
+                  console.log(`[asaas-webhook] Associado ${cobranca.associado_id} reativado automaticamente (${diasAtraso} dias)`);
+
+                  // Notificar Rede Veículos sobre adimplência
+                  try {
+                    await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
+                      body: {
+                        associadoId: cobranca.associado_id,
+                        motivo: 'pagamento_confirmado',
+                      },
+                    });
+                  } catch (redeErr) {
+                    console.warn(`[asaas-webhook] Erro ao notificar Rede Veículos:`, redeErr);
+                  }
                 }
               }
             }

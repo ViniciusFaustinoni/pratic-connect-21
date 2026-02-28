@@ -1,0 +1,1 @@
+ALTER TABLE associados ADD COLUMN IF NOT EXISTS revistoria_pendente boolean DEFAULT false;
