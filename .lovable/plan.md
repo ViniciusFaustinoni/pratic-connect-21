@@ -1,82 +1,25 @@
 
-# Adicionar Fotos de Evidencia no Checklist do Instalador (itens NOK)
+# Remover Seleção Manual de Tipo de Veículo na Autovistoria
 
-## Resumo
+## Problema
 
-Quando o instalador marca um item do checklist como "Nao" (nok), alem da descricao ja existente, deve ser possivel anexar fotos de evidencia. O checklist deve permitir avanco mesmo com itens nok (desde que tenham descricao obrigatoria), e os itens nok devem influenciar a decisao final.
+Na etapa de vistoria do link público, o sistema já sabe se o veículo é carro ou moto (campo `categoria` da cotação, extraído via CRLV/placa). Porém, ao clicar em "Autovistoria", o usuário é levado a uma tela intermediária pedindo para escolher manualmente entre "Automóvel" e "Moto" -- desnecessário e confuso.
 
-## Estado Atual
+## Solução
 
-- **ChecklistItem** (`src/components/instalador/ChecklistItem.tsx`): Mostra botoes OK/NOK. Quando NOK, exibe textarea para observacao. **Nao tem upload de fotos.**
-- **checklistCompleto**: Exige que TODOS os itens sejam 'ok' para avancar (linha 260-263). Isso bloqueia o avanco se qualquer item for 'nok'.
-- **Decisao** (etapa 5): Ja tem aprovado/ressalva/negado com campos condicionais.
+Eliminar a tela de seleção manual e usar diretamente o `tipoVeiculo` que já vem como prop (derivado de `cotacao.categoria`).
 
-## Alteracoes
+## Alteração
 
-### 1. Componente ChecklistItem -- Adicionar upload de fotos
+**Arquivo**: `src/components/cotacao-publica/EtapaVistoria.tsx`
 
-**Arquivo**: `src/components/instalador/ChecklistItem.tsx`
+1. **Botão "Autovistoria"** (linha 114): Ao clicar, ir direto para `'autovistoria'` em vez de `'selecao-veiculo'`
+2. **Autovistoria** (linha 359): Usar `tipoVeiculo` (prop) diretamente, sem depender de `tipoSelecionado`
+3. **Botão "Voltar" na autovistoria** (linha 349): Voltar para `'escolha'` em vez de `'selecao-veiculo'`
+4. **Remover bloco inteiro** da tela de seleção de veículo (linhas 228-334) e o estado `tipoSelecionado` (linha 43), já que não serão mais necessários
+5. **Remover `'selecao-veiculo'`** do type `ModoVistoria` (linha 27)
 
-- Adicionar prop `fotos` (array de `{ preview: string }`) e callbacks `onAddFoto` / `onRemoveFoto`
-- Quando status = 'nok', exibir area de upload de fotos abaixo do textarea (grid 3 colunas, ate 3 fotos)
-- Botao de camera para capturar/selecionar foto
-- Miniaturas com botao de remover
+## Resultado
 
-### 2. Estado de fotos por item no InstaladorChecklist
-
-**Arquivo**: `src/pages/instalador/InstaladorChecklist.tsx`
-
-- Expandir `ChecklistState` para incluir `fotos?: string[]` por item:
-  ```text
-  Record<string, { status: ChecklistStatus; observacao?: string; fotos?: string[] }>
-  ```
-- Adicionar funcoes `handleAddFotoChecklist(itemId, file)` e `handleRemoveFotoChecklist(itemId, index)` que fazem upload para o bucket `instalacoes` em `checklist/{servicoId}/{itemId}/`
-- Passar as fotos e callbacks para cada `<ChecklistItem />`
-
-### 3. Logica de avanco do checklist -- permitir NOK com evidencia
-
-**Arquivo**: `src/pages/instalador/InstaladorChecklist.tsx`
-
-Alterar `checklistCompleto` (linha 260):
-
-De: todos devem ser 'ok'
-Para: todos devem ser 'ok' **OU** 'nok' com observacao obrigatoria preenchida
-
-```text
-checklistItems.every(item => {
-  const state = checklist[item.id];
-  if (state?.status === 'ok') return true;
-  if (state?.status === 'nok' && state.observacao?.trim()) return true;
-  return false;
-});
-```
-
-Nenhum item pode ficar 'pendente' para avancar.
-
-### 4. Influencia na decisao final
-
-Quando existem itens NOK no checklist, na etapa 5 (Decisao):
-
-- Exibir um alerta informativo listando os itens marcados como NOK
-- Se algum item for NOK, bloquear a opcao "Aprovado" (so permitir "Aprovado com Ressalva" ou "Negado")
-- Pre-preencher o texto de ressalvas com os itens NOK e suas observacoes
-
-### 5. Dados salvos no checklist_data
-
-O `salvarChecklistMutation` ja salva o objeto `checklist` inteiro. Como vamos adicionar `fotos: string[]` ao state, as URLs das fotos serao persistidas automaticamente junto com o checklist no campo `checklist_data` do servico.
-
-## Arquivos Alterados
-
-| Arquivo | Alteracao |
-|---|---|
-| `src/components/instalador/ChecklistItem.tsx` | Adicionar props e UI de fotos quando NOK |
-| `src/pages/instalador/InstaladorChecklist.tsx` | Estado de fotos, upload, logica de avanco, influencia na decisao |
-
-## Fluxo Resultante
-
-1. Instalador marca item como NOK
-2. Textarea de descricao aparece (obrigatorio)
-3. Area de upload de fotos aparece (opcional mas recomendado)
-4. Com todos itens OK ou NOK+descricao, pode avancar
-5. Na etapa de Decisao, itens NOK sao listados e bloqueiam "Aprovado"
-6. Se "Negado", abre modal de recusa com fotos obrigatorias (ja implementado)
+- Clicou em "Autovistoria" -> vai direto para as fotos (15 se carro, 10 se moto), sem etapa intermediária
+- O tipo de veículo é determinado automaticamente pelo sistema com base nos dados do CRLV/placa
