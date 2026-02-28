@@ -119,7 +119,7 @@ const ETAPAS = [
   { id: 5, label: 'Decisão', icon: ShieldCheck },
 ];
 
-type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: string }>;
+type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: string; fotos?: string[] }>;
 
 export default function InstaladorChecklist() {
   const { id } = useParams<{ id: string }>();
@@ -131,6 +131,7 @@ export default function InstaladorChecklist() {
   );
   const [quilometragem, setQuilometragem] = useState<string>('');
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
+  const [uploadingChecklistFoto, setUploadingChecklistFoto] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
   const [showModalRecusa, setShowModalRecusa] = useState(false);
@@ -258,9 +259,21 @@ export default function InstaladorChecklist() {
   }, [checklistItems, servico]);
 
   const checklistCompleto = useMemo(() => 
-    checklistItems.every(item => checklist[item.id]?.status === 'ok'),
+    checklistItems.every(item => {
+      const state = checklist[item.id];
+      if (state?.status === 'ok') return true;
+      if (state?.status === 'nok' && state.observacao?.trim()) return true;
+      return false;
+    }),
     [checklist, checklistItems]
   );
+
+  // Itens NOK do checklist (para influenciar decisão)
+  const itensNok = useMemo(() => 
+    checklistItems.filter(item => checklist[item.id]?.status === 'nok'),
+    [checklist, checklistItems]
+  );
+  const temItensNok = itensNok.length > 0;
 
   // Verificar se todas as fotos obrigatórias foram enviadas (dinâmico por tipo)
   const fotosObrigatoriasCompletas = useMemo(() => {
@@ -306,6 +319,36 @@ export default function InstaladorChecklist() {
     setChecklist(prev => ({
       ...prev,
       [itemId]: { ...prev[itemId], observacao },
+    }));
+  };
+
+
+  const handleAddFotoChecklist = async (itemId: string, file: File) => {
+    if (!id) return;
+    setUploadingChecklistFoto(itemId);
+    try {
+      const fileName = `checklist/${id}/${itemId}/${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('instalacoes')
+        .upload(fileName, file, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('instalacoes').getPublicUrl(fileName);
+      setChecklist(prev => ({
+        ...prev,
+        [itemId]: { ...prev[itemId], fotos: [...(prev[itemId]?.fotos || []), urlData.publicUrl] },
+      }));
+      toast.success('Foto adicionada');
+    } catch (err) {
+      toast.error('Erro ao enviar foto');
+    } finally {
+      setUploadingChecklistFoto(null);
+    }
+  };
+
+  const handleRemoveFotoChecklist = (itemId: string, index: number) => {
+    setChecklist(prev => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], fotos: (prev[itemId]?.fotos || []).filter((_, i) => i !== index) },
     }));
   };
 
@@ -863,8 +906,12 @@ export default function InstaladorChecklist() {
                 label={item.label}
                 status={checklist[item.id]?.status || 'pendente'}
                 observacao={checklist[item.id]?.observacao}
+                fotos={checklist[item.id]?.fotos}
+                uploadingFoto={uploadingChecklistFoto === item.id}
                 onStatusChange={(status) => handleChecklistChange(item.id, status)}
                 onObservacaoChange={(obs) => handleObservacaoChange(item.id, obs)}
+                onAddFoto={(file) => handleAddFotoChecklist(item.id, file)}
+                onRemoveFoto={(index) => handleRemoveFotoChecklist(item.id, index)}
               />
             ))}
           </div>
@@ -1162,6 +1209,32 @@ export default function InstaladorChecklist() {
               </div>
             </div>
 
+            {/* Alerta de itens NOK no checklist */}
+            {temItensNok && (
+              <Alert className="border-amber-500/50 bg-amber-500/10">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                <AlertDescription className="text-amber-200">
+                  <strong className="text-amber-300">Itens reprovados no checklist:</strong>
+                  <ul className="mt-2 space-y-1 text-sm text-slate-300">
+                    {itensNok.map(item => (
+                      <li key={item.id} className="flex items-start gap-2">
+                        <XCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                        <span>
+                          <strong>{item.label}</strong>
+                          {checklist[item.id]?.observacao && (
+                            <span className="text-slate-400"> — {checklist[item.id].observacao}</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-amber-400">
+                    A opção "Aprovado" está bloqueada. Selecione "Aprovado com Ressalva" ou "Negado".
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Decisão obrigatória */}
             <Card className="border-slate-700 bg-slate-800">
               <CardHeader className="pb-2">
@@ -1172,10 +1245,18 @@ export default function InstaladorChecklist() {
                 <RadioGroup
                   value={decisaoInstalador || ''}
                   onValueChange={(v) => {
+                    if (v === 'aprovado' && temItensNok) return;
                     setDecisaoInstalador(v as 'aprovado' | 'aprovado_ressalva' | 'negado');
                     if (v === 'aprovado') {
                       setRessalvasTexto('');
                       setFotosRessalva([]);
+                    }
+                    // Pre-preencher ressalvas com itens NOK
+                    if (v === 'aprovado_ressalva' && temItensNok && !ressalvasTexto.trim()) {
+                      const textoNok = itensNok.map(item => 
+                        `${item.label}${checklist[item.id]?.observacao ? ': ' + checklist[item.id].observacao : ''}`
+                      ).join('\n');
+                      setRessalvasTexto(textoNok);
                     }
                   }}
                   className="space-y-3"
@@ -1183,17 +1264,20 @@ export default function InstaladorChecklist() {
                   {/* Aprovado */}
                   <label
                     className={cn(
-                      "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-all",
-                      decisaoInstalador === 'aprovado'
-                        ? "border-emerald-500 bg-emerald-500/10"
-                        : "border-slate-600 hover:border-slate-500"
+                      "flex items-start gap-3 rounded-lg border p-4 transition-all",
+                      temItensNok
+                        ? "border-slate-700 opacity-50 cursor-not-allowed"
+                        : decisaoInstalador === 'aprovado'
+                          ? "border-emerald-500 bg-emerald-500/10 cursor-pointer"
+                          : "border-slate-600 hover:border-slate-500 cursor-pointer"
                     )}
                   >
-                    <RadioGroupItem value="aprovado" className="mt-0.5" />
+                    <RadioGroupItem value="aprovado" className="mt-0.5" disabled={temItensNok} />
                     <div>
                       <p className="font-medium text-white flex items-center gap-2">
                         <ShieldCheck className="h-4 w-4 text-emerald-400" />
                         Aprovado
+                        {temItensNok && <Lock className="h-3 w-3 text-slate-500" />}
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
                         Instalação realizada normalmente, sem irregularidades
