@@ -97,14 +97,14 @@ async function enviarViaMeta(
   templateName?: string,
   templateParams?: string[]
 ) {
-  const accessToken = Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
-  if (!accessToken) throw new Error("META_WHATSAPP_ACCESS_TOKEN não configurado");
-
   const { data: metaConfig } = await supabase
     .from("whatsapp_meta_config")
-    .select("phone_number_id")
+    .select("phone_number_id, access_token")
     .eq("ativo", true)
     .single();
+
+  const accessToken = metaConfig?.access_token || Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
+  if (!accessToken) throw new Error("Access Token da Meta não configurado");
 
   if (!metaConfig?.phone_number_id) throw new Error("Configuração da Meta não encontrada");
 

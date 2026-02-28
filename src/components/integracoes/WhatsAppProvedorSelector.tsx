@@ -46,6 +46,7 @@ export function WhatsAppProvedorSelector() {
 
   const [phoneId, setPhoneId] = useState('');
   const [wabaId, setWabaId] = useState('');
+  const [accessToken, setAccessToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<'evolution' | 'meta_oficial' | null>(null);
   const [instrOpen, setInstrOpen] = useState(false);
@@ -53,6 +54,7 @@ export function WhatsAppProvedorSelector() {
   // Sync form with loaded data
   const effectivePhoneId = phoneId || metaConfig?.phone_number_id || '';
   const effectiveWabaId = wabaId || metaConfig?.waba_id || '';
+  const effectiveToken = accessToken || (metaConfig as any)?.access_token || '';
 
   const metaAtivo = metaConfig?.ativo === true;
   const evolutionAtivo = !metaAtivo;
@@ -64,7 +66,7 @@ export function WhatsAppProvedorSelector() {
       toast.error('Preencha Phone Number ID e WABA ID');
       return;
     }
-    salvarConfig.mutate({ phone_number_id: effectivePhoneId, waba_id: effectiveWabaId });
+    salvarConfig.mutate({ phone_number_id: effectivePhoneId, waba_id: effectiveWabaId, access_token: effectiveToken || undefined });
   };
 
   const handleTestarMeta = () => {
@@ -183,20 +185,20 @@ export function WhatsAppProvedorSelector() {
                 />
               </div>
               <div>
-                <Label className="text-xs">Access Token</Label>
+                <Label className="text-xs">Access Token *</Label>
                 <div className="flex gap-1">
                   <Input
                     type={showToken ? 'text' : 'password'}
-                    placeholder="Configurado via Secrets"
+                    placeholder="Cole o token permanente aqui"
                     className="h-8 text-xs"
-                    disabled
-                    value="••••••••••••••••"
+                    value={effectiveToken}
+                    onChange={(e) => setAccessToken(e.target.value)}
                   />
                   <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setShowToken(!showToken)}>
                     {showToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Gerencie via Supabase Edge Function Secrets</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Token permanente do sistema (System User Token)</p>
               </div>
 
               <Separator />
