@@ -15,17 +15,18 @@ import { useNavigate } from 'react-router-dom';
 import { JornadaStatusBar } from '@/components/vistoriador/JornadaStatusBar';
 import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOverlay';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
+import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 
 export default function InstaladorHome() {
-  const { profile, hasRole } = useAuth();
+  const { profile } = useAuth();
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
   const { emServico } = useIniciarServico();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // Verificar se é vistoriador base (sem acesso a mapa)
-  const isVistoriadorBase = hasRole('vistoriador_base') && !hasRole('instalador_vistoriador');
+  // Verificar alocação diária (rota ou base)
+  const { isBase: isVistoriadorBase } = useAlocacaoDiaria();
 
   // Monitorar status online/offline
   useEffect(() => {

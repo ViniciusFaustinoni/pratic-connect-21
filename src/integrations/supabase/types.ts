@@ -856,6 +856,82 @@ export type Database = {
           },
         ]
       }
+      alocacoes_diarias: {
+        Row: {
+          created_at: string
+          data: string
+          definido_por: string | null
+          id: string
+          observacoes: string | null
+          profissional_id: string
+          tipo_alocacao: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          definido_por?: string | null
+          id?: string
+          observacoes?: string | null
+          profissional_id: string
+          tipo_alocacao: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          definido_por?: string | null
+          id?: string
+          observacoes?: string | null
+          profissional_id?: string
+          tipo_alocacao?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alocacoes_diarias_definido_por_fkey"
+            columns: ["definido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alocacoes_diarias_definido_por_fkey"
+            columns: ["definido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "alocacoes_diarias_definido_por_fkey"
+            columns: ["definido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "alocacoes_diarias_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alocacoes_diarias_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "alocacoes_diarias_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           ativa: boolean | null

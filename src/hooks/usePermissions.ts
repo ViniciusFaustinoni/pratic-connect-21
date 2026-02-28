@@ -137,14 +137,11 @@ export function usePermissions() {
     !isDesenvolvedor && 
     !isAdminMaster;
 
-  // Verifica se é vistoriador base (apenas vistorias na base, sem mapa)
-  const isVistoriadorBase = hasRoleByName('vistoriador_base');
-  const isVistoriadorBaseOnly = isVistoriadorBase && 
-    !isInstaladorVistoriador &&
-    !isDiretor && 
-    !isGerencia() && 
-    !isDesenvolvedor && 
-    !isAdminMaster;
+  // NOTA: isVistoriadorBase agora é determinado pela alocação diária, não pela role.
+  // Mantemos as flags para compatibilidade, mas sempre false pois a role foi migrada.
+  // O comportamento de "base" é controlado pelo hook useAlocacaoDiaria.
+  const isVistoriadorBase = false;
+  const isVistoriadorBaseOnly = false;
 
   // Regulador
   const isRegulador = hasRoleByName('regulador');

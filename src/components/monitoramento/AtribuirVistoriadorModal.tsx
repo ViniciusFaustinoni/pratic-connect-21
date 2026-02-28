@@ -118,7 +118,7 @@ export function AtribuirVistoriadorModal({
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
-        .in('role', ['instalador_vistoriador', 'vistoriador_base']);
+        .eq('role', 'instalador_vistoriador');
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];

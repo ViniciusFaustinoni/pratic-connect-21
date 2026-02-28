@@ -43,7 +43,7 @@ export function useProfissionaisEquipe() {
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
-        .in('role', ['instalador_vistoriador', 'vistoriador_base']);
+        .eq('role', 'instalador_vistoriador');
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];
@@ -219,7 +219,7 @@ export function useSaveProfissional() {
       regioes_atendimento?: string[];
       capacidade_diaria?: number;
       ativo?: boolean;
-      tipoVistoriador?: 'instalador_vistoriador' | 'vistoriador_base';
+      tipoVistoriador?: 'instalador_vistoriador';
       senhaProvisoria?: string;
     }) => {
       if (data.id) {
