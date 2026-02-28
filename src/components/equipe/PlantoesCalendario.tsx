@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, isWeekend } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Building2, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -157,6 +157,28 @@ export function PlantoesCalendario() {
                 const countRota = alocsDia.filter(a => a.tipo_alocacao === 'rota').length;
                 const countBase = alocsDia.filter(a => a.tipo_alocacao === 'base').length;
                 const isHoje = isSameDay(dia, hoje);
+                const isFimDeSemana = isWeekend(dia);
+
+                // Dia útil: visual desabilitado
+                if (!isFimDeSemana) {
+                  return (
+                    <div
+                      key={diaStr}
+                      className={cn(
+                        "min-h-[80px] rounded-md border border-dashed border-border/30 p-1 flex flex-col bg-muted/30 opacity-60",
+                        isHoje && "border-primary/30 bg-primary/5"
+                      )}
+                    >
+                      <span className={cn(
+                        "text-xs font-medium",
+                        isHoje ? "text-primary/70" : "text-muted-foreground"
+                      )}>
+                        {format(dia, 'd')}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground mt-auto">Todos disponíveis</span>
+                    </div>
+                  );
+                }
 
                 return (
                   <button
@@ -188,7 +210,6 @@ export function PlantoesCalendario() {
                         </Badge>
                       )}
                     </div>
-                    {/* Nomes abreviados nos primeiros 2 */}
                     {alocsDia.slice(0, 2).map(a => (
                       <span key={a.id} className="text-[9px] text-muted-foreground truncate block">
                         {a.profissional_nome?.split(' ')[0]}
