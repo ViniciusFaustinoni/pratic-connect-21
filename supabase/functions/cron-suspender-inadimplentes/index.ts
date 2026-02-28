@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // Configurações padrão
-const DIAS_CARENCIA_PADRAO = 7; // Dias após vencimento para suspender
+const DIAS_CARENCIA_PADRAO = 0; // Suspensão imediata no dia seguinte ao vencimento
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {

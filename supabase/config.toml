@@ -41,3 +41,9 @@ verify_jwt = false
 
 [functions.cron-reagendamento-automatico]
 verify_jwt = false
+
+[functions.cron-excluir-inadimplentes-120]
+verify_jwt = false
+
+[functions.cron-marcar-candidatos-spc]
+verify_jwt = false
