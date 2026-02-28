@@ -1,40 +1,33 @@
 
 
-# Plantoes apenas nos Finais de Semana
+# Corrigir a pagina de Perfis em /diretoria/perfis
 
-## Resumo
+## Problema
 
-Restringir o sistema de plantoes para funcionar **somente nos finais de semana** (sabado e domingo). Durante a semana, todos os profissionais estarao disponiveis automaticamente sem necessidade de alocacao.
+A rota `/diretoria/perfis` esta renderizando o componente `PerfisAcesso` (pagina simples de atribuicao de roles), enquanto a funcionalidade completa de **Matriz de Visibilidade** (controle de quais modulos e abas cada perfil pode ver/editar) esta no componente `Perfis` de `src/pages/configuracoes/Perfis.tsx`.
+
+O usuario espera encontrar o controle de visibilidade em `/diretoria/perfis`, mas la so aparece uma lista basica de cards de perfis e atribuicao de roles por usuario.
+
+## Solucao
+
+Unificar as duas paginas: fazer `/diretoria/perfis` renderizar o componente completo que ja inclui a matriz de visibilidade, lista de perfis e gerenciamento de roles.
 
 ## Alteracoes
 
-### 1. Calendario Mensal (`PlantoesCalendario.tsx`)
+### 1. Atualizar rota em `src/App.tsx`
 
-- Dias de segunda a sexta aparecem com visual desabilitado (cinza, sem clique)
-- Exibir label "Todos disponíveis" nos dias uteis
-- Somente sabados e domingos serao clicaveis para abrir o modal de alocacao
-- Resumo do mes conta apenas dias de final de semana
+Trocar o componente usado na rota `/diretoria/perfis` de `PerfisAcesso` para o componente `Perfis` de configuracoes que ja possui toda a funcionalidade:
 
-### 2. Modal de edicao (`PlantaoDiaModal.tsx`)
+- Importar `Perfis` de `src/pages/configuracoes/Perfis.tsx` (ja importado como `Perfis` na linha 116)
+- Alterar a rota `/diretoria/perfis` de `<PerfisAcesso />` para `<Perfis />`
 
-- Sem alteracao funcional — o calendario ja impede abertura em dias uteis
+### 2. Manter `PerfisAcesso` como fallback
 
-### 3. Validacao de ponto (`useIniciarServico.ts`)
+O arquivo `src/pages/diretoria/PerfisAcesso.tsx` pode ser mantido sem alteracoes por enquanto, caso seja usado em outro lugar futuramente.
 
-- Na verificacao de alocacao "base", adicionar checagem do dia da semana
-- Se for dia util (segunda a sexta): pular validacao de proximidade, todos trabalham normalmente
-- Se for final de semana: manter a logica atual (verificar se esta alocado como "base" e validar proximidade)
-
-### 4. Hook de alocacao diaria (`useAlocacaoDiaria.ts`)
-
-- Se o dia atual for dia util: retornar `isRota: true` sem consultar o banco
-- Se for final de semana: manter consulta normal
-
-## Resumo de Arquivos
+## Resumo de arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/equipe/PlantoesCalendario.tsx` | Desabilitar clique em dias uteis, visual diferenciado |
-| `src/hooks/useIniciarServico.ts` | Pular validacao de base em dias uteis |
-| `src/hooks/useAlocacaoDiaria.ts` | Retornar rota automaticamente em dias uteis |
+| `src/App.tsx` (linha 613) | Trocar `PerfisAcesso` por `Perfis` na rota `/diretoria/perfis` |
 
