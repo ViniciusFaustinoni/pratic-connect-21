@@ -52,11 +52,8 @@ export const CATEGORIAS_AUTOMOVEL: VistoriaCategoriaConfig[] = [
 
 // Categorias para Moto
 export const CATEGORIAS_MOTO: VistoriaCategoriaConfig[] = [
-  { id: 'identificacao', nome: 'Identificação', ordem: 1 },
-  { id: 'exterior', nome: 'Exterior', ordem: 2 },
-  { id: 'motor', nome: 'Motor', ordem: 3 },
-  { id: 'interior', nome: 'Interior', ordem: 4 },
-  { id: 'pneus', nome: 'Pneus', ordem: 5 },
+  { id: 'veiculo', nome: 'Fotos do Veículo', ordem: 1 },
+  { id: 'rastreador', nome: 'Fotos Técnicas do Rastreador', ordem: 2 },
 ];
 
 // Checklist de 30 fotos para Automóvel
@@ -109,31 +106,21 @@ export const FOTOS_AUTOMOVEL: VistoriaFotoConfig[] = [
   { id: 'banco_passageiro', nome: 'Banco direito passageiro', icone: Armchair, categoria: 'interior_bancos', ordem: 31 },
 ];
 
-// Checklist de 14 fotos para Moto
+// Checklist de 10 fotos para Moto (7 veículo + 3 rastreador)
 export const FOTOS_MOTO: VistoriaFotoConfig[] = [
-  // Identificação (5 fotos)
-  { id: 'vistoriador', nome: 'Foto do Vistoriador (veículo ao fundo)', icone: User, categoria: 'identificacao', ordem: 1 },
-  { id: 'farol', nome: 'Farol', icone: Lightbulb, categoria: 'identificacao', ordem: 2 },
-  { id: 'frente', nome: 'Frente', icone: ArrowUp, categoria: 'identificacao', ordem: 3 },
-  { id: 'chave', nome: 'Chave', icone: Key, categoria: 'identificacao', ordem: 4 },
-  { id: 'chassi', nome: 'Chassi', icone: Hash, categoria: 'identificacao', ordem: 5 },
-  
-  // Exterior (3 fotos)
-  { id: 'lateral_esquerda', nome: 'Lateral esquerda', icone: ArrowLeft, categoria: 'exterior', ordem: 6 },
-  { id: 'lateral_direita', nome: 'Lateral direita', icone: ArrowRight, categoria: 'exterior', ordem: 7 },
-  { id: 'traseira', nome: 'Traseira', icone: ArrowDown, categoria: 'exterior', ordem: 8 },
-  
-  // Motor (2 fotos)
-  { id: 'motor_esquerdo', nome: 'Motor lado esquerdo', icone: Settings, categoria: 'motor', ordem: 9 },
-  { id: 'motor_direito', nome: 'Motor lado direito', icone: Settings, categoria: 'motor', ordem: 10 },
-  
-  // Interior (2 fotos)
-  { id: 'banco', nome: 'Banco', icone: Armchair, categoria: 'interior', ordem: 11 },
-  { id: 'painel_odometro', nome: 'Painel com odômetro ligado', icone: Gauge, categoria: 'interior', ordem: 12 },
-  
-  // Pneus (2 fotos)
-  { id: 'pneu_dianteiro', nome: 'Sola do pneu dianteiro', icone: Circle, categoria: 'pneus', ordem: 13 },
-  { id: 'pneu_traseiro', nome: 'Sola do pneu traseiro', icone: Circle, categoria: 'pneus', ordem: 14 },
+  // Fotos do veículo (7 fotos)
+  { id: 'frente', nome: 'Frente', icone: ArrowUp, categoria: 'veiculo', ordem: 1 },
+  { id: 'traseira', nome: 'Traseira', icone: ArrowDown, categoria: 'veiculo', ordem: 2 },
+  { id: 'lateral_direita', nome: 'Lateral direita', icone: ArrowRight, categoria: 'veiculo', ordem: 3 },
+  { id: 'lateral_esquerda', nome: 'Lateral esquerda', icone: ArrowLeft, categoria: 'veiculo', ordem: 4 },
+  { id: 'painel_km', nome: 'Painel com KM atual', icone: Gauge, categoria: 'veiculo', ordem: 5 },
+  { id: 'motor_chassi', nome: 'Motor / Chassi', icone: Settings, categoria: 'veiculo', ordem: 6 },
+  { id: 'avarias', nome: 'Avarias (se houver)', icone: Wrench, categoria: 'veiculo', ordem: 7 },
+
+  // Fotos técnicas do rastreador (3 fotos)
+  { id: 'local_rastreador', nome: 'Local exato da instalação', icone: Settings, categoria: 'rastreador', ordem: 8 },
+  { id: 'codigo_rastreador', nome: 'Código do rastreador visível', icone: Hash, categoria: 'rastreador', ordem: 9 },
+  { id: 'teste_comunicacao', nome: 'Teste de comunicação (online)', icone: Settings, categoria: 'rastreador', ordem: 10 },
 ];
 
 // Função para obter fotos por tipo de veículo

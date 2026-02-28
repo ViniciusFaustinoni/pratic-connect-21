@@ -275,31 +275,13 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
   },
 ];
 
-// MOTOS (10 fotos)
+// MOTOS (7 fotos)
 export const FOTOS_AUTOVISTORIA_MOTO: FotoAutovistoria[] = [
-  { 
-    id: 'selfie_veiculo', 
-    label: 'Selfie com a Moto ao Fundo', 
-    descricao: 'Tire uma selfie com a moto aparecendo atrás de você',
-    ordem: 1,
-    instrucoes: [
-      'Posicione-se ao lado ou à frente da moto',
-      'Seu rosto deve aparecer claramente na foto',
-      'A moto deve estar visível ao fundo',
-      'Mantenha boa iluminação no rosto',
-    ],
-    evitar: [
-      'Óculos escuros ou capacete',
-      'Fotos muito escuras ou com flash estourado',
-      'Moto cortada ou muito distante',
-    ],
-    dicaExtra: 'Esta foto comprova que você está presente no local da vistoria.',
-  },
   { 
     id: 'frente', 
     label: 'Frente da Moto', 
     descricao: 'Foto da frente da moto, mostrando farol e placa',
-    ordem: 2,
+    ordem: 1,
     instrucoes: [
       'Posicione-se a 1-2 metros de distância',
       'Centralize a moto na foto',
@@ -316,7 +298,7 @@ export const FOTOS_AUTOVISTORIA_MOTO: FotoAutovistoria[] = [
     id: 'traseira', 
     label: 'Traseira da Moto', 
     descricao: 'Foto da traseira da moto, mostrando lanterna e placa',
-    ordem: 3,
+    ordem: 2,
     instrucoes: [
       'Posicione-se atrás da moto',
       'A placa traseira deve estar legível',
@@ -333,7 +315,7 @@ export const FOTOS_AUTOVISTORIA_MOTO: FotoAutovistoria[] = [
     id: 'lateral_direita', 
     label: 'Lateral Direita', 
     descricao: 'Foto da lateral direita completa da moto',
-    ordem: 4,
+    ordem: 3,
     instrucoes: [
       'Enquadre a moto inteira',
       'Mantenha a câmera na altura do banco',
@@ -350,7 +332,7 @@ export const FOTOS_AUTOVISTORIA_MOTO: FotoAutovistoria[] = [
     id: 'lateral_esquerda', 
     label: 'Lateral Esquerda', 
     descricao: 'Foto da lateral esquerda completa da moto',
-    ordem: 5,
+    ordem: 4,
     instrucoes: [
       'Enquadre a moto inteira',
       'Mantenha a câmera na altura do banco',
@@ -364,10 +346,10 @@ export const FOTOS_AUTOVISTORIA_MOTO: FotoAutovistoria[] = [
     ],
   },
   { 
-    id: 'odometro', 
-    label: 'Painel com Odômetro (ligado)', 
-    descricao: 'Foto do painel com odômetro visível (moto ligada)',
-    ordem: 6,
+    id: 'painel_km', 
+    label: 'Painel com KM visível', 
+    descricao: 'Foto do painel com quilometragem visível (moto ligada)',
+    ordem: 5,
     instrucoes: [
       'LIGUE A MOTO antes de fotografar',
       'A quilometragem (KM) deve estar visível e legível',
@@ -382,74 +364,40 @@ export const FOTOS_AUTOVISTORIA_MOTO: FotoAutovistoria[] = [
     dicaExtra: 'A quilometragem será identificada automaticamente pela nossa IA.',
   },
   { 
-    id: 'chassi', 
-    label: 'Número do Chassi', 
-    descricao: 'Foto do número do chassi gravado na moto',
-    ordem: 7,
+    id: 'motor_chassi', 
+    label: 'Motor / Chassi visível', 
+    descricao: 'Foto do motor com o chassi visível',
+    ordem: 6,
     instrucoes: [
-      'Localize o chassi (geralmente no tubo da direção)',
-      'Aproxime a câmera para que TODOS os números fiquem legíveis',
-      'Use flash se necessário',
-      'O número deve aparecer por completo',
+      'Fotografe o motor mostrando o número do chassi',
+      'O chassi geralmente está no tubo do garfo dianteiro',
+      'Os números devem estar legíveis',
+      'Boa iluminação é essencial',
     ],
     evitar: [
-      'Foto de longe onde não se lê os números',
-      'Chassi sujo ou coberto',
-      'Reflexos que atrapalhem a leitura',
+      'Motor muito sujo que esconda detalhes',
+      'Chassi ilegível',
+      'Foto escura ou desfocada',
     ],
     dicaExtra: 'O chassi da moto geralmente está gravado no tubo do garfo dianteiro.',
   },
   { 
-    id: 'motor', 
-    label: 'Motor', 
-    descricao: 'Foto do motor da moto',
-    ordem: 8,
+    id: 'avarias', 
+    label: 'Avarias (se houver)', 
+    descricao: 'Fotografe qualquer avaria existente na moto',
+    ordem: 7,
     instrucoes: [
-      'Fotografe o motor pelo lado',
-      'Mostre o motor por inteiro',
-      'Cilindro, cabeçote e cárter visíveis',
-      'Boa iluminação',
+      'Fotografe cada avaria de perto',
+      'Mostre riscos, amassados ou peças quebradas',
+      'Se não houver avarias, tire uma foto geral da moto',
+      'Descreva a avaria ao enviar',
     ],
     evitar: [
-      'Motor muito sujo',
-      'Foto escura',
-      'Apenas parte do motor',
+      'Fotos de longe onde não se vê o dano',
+      'Foto desfocada',
+      'Ignorar avarias existentes',
     ],
-  },
-  { 
-    id: 'pneu_dianteiro', 
-    label: 'Sola do Pneu Dianteiro', 
-    descricao: 'Foto da sola do pneu dianteiro mostrando estado',
-    ordem: 9,
-    instrucoes: [
-      'Fotografe a SOLA (banda de rodagem) do pneu',
-      'Mostre os sulcos e o estado da borracha',
-      'Aproxime para ver os detalhes do desgaste',
-      'Abaixe-se para melhor ângulo',
-    ],
-    evitar: [
-      'Apenas a lateral do pneu',
-      'Foto de longe sem detalhes',
-      'Pneu sujo demais',
-    ],
-  },
-  { 
-    id: 'pneu_traseiro', 
-    label: 'Sola do Pneu Traseiro', 
-    descricao: 'Foto da sola do pneu traseiro mostrando estado',
-    ordem: 10,
-    instrucoes: [
-      'Fotografe a SOLA (banda de rodagem) do pneu',
-      'Mostre os sulcos e o estado da borracha',
-      'Aproxime para ver os detalhes do desgaste',
-      'Abaixe-se para melhor ângulo',
-    ],
-    evitar: [
-      'Apenas a lateral do pneu',
-      'Foto de longe sem detalhes',
-      'Pneu sujo demais',
-    ],
-    dicaExtra: 'Esta é a última foto! Após enviar, você poderá prosseguir para o pagamento.',
+    dicaExtra: 'Toda avaria deve ser fotografada e descrita. Se não houver, registre uma foto geral.',
   },
 ];
 

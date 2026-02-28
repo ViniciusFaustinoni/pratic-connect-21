@@ -106,33 +106,24 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
 // =============================================
 
 export const CATEGORIAS_VISTORIA_MOTO: VistoriaCategoriaConfig[] = [
-  { id: 'identificacao_detalhes', nome: 'Identificação e Detalhes', ordem: 1, descricao: '6 fotos' },
-  { id: 'exterior_360', nome: 'Exterior (Giro 360°)', ordem: 2, descricao: '4 fotos' },
-  { id: 'pneus', nome: 'Pneus', ordem: 3, descricao: '2 fotos - Sola/Sulcos' },
-  { id: 'instalacao', nome: 'Instalação', ordem: 4, descricao: 'Local do rastreador (oculto do cliente)' },
+  { id: 'veiculo', nome: 'Fotos do Veículo (Refazer)', ordem: 1, descricao: '7 fotos - Mesmas da autovistoria' },
+  { id: 'rastreador', nome: 'Fotos Técnicas do Rastreador', ordem: 2, descricao: '3 fotos' },
 ];
 
 export const FOTOS_VISTORIA_MOTO: VistoriaFotoConfig[] = [
-  // 1. Identificação e Detalhes (6 fotos)
-  { id: 'vistoriador_selfie', nome: 'Selfie do Vistoriador (ao lado da moto)', icone: User, categoria: 'identificacao_detalhes', ordem: 1 },
-  { id: 'chave', nome: 'Foto da Chave', icone: Key, categoria: 'identificacao_detalhes', ordem: 2 },
-  { id: 'chassi', nome: 'Chassi (Nítido/Legível)', icone: Hash, categoria: 'identificacao_detalhes', ordem: 3 },
-  { id: 'numero_motor', nome: 'Número do Motor (Nítido)', icone: Settings, categoria: 'identificacao_detalhes', ordem: 4 },
-  { id: 'placa_traseira', nome: 'Placa Traseira (Legível)', icone: Square, categoria: 'identificacao_detalhes', ordem: 5 },
-  { id: 'odometro', nome: 'Odômetro (Painel ligado com KM)', icone: Gauge, categoria: 'identificacao_detalhes', ordem: 6 },
+  // 1. Fotos do veículo - refazer todas da autovistoria (7 fotos)
+  { id: 'frente', nome: 'Frente', icone: ArrowUp, categoria: 'veiculo', ordem: 1 },
+  { id: 'traseira', nome: 'Traseira', icone: ArrowDown, categoria: 'veiculo', ordem: 2 },
+  { id: 'lateral_direita', nome: 'Lateral Direita', icone: ArrowRight, categoria: 'veiculo', ordem: 3 },
+  { id: 'lateral_esquerda', nome: 'Lateral Esquerda', icone: ArrowLeft, categoria: 'veiculo', ordem: 4 },
+  { id: 'painel_km', nome: 'Painel com KM atual', icone: Gauge, categoria: 'veiculo', ordem: 5 },
+  { id: 'motor_chassi', nome: 'Motor / Chassi', icone: Settings, categoria: 'veiculo', ordem: 6 },
+  { id: 'avarias', nome: 'Avarias novas (se houver)', icone: Wrench, categoria: 'veiculo', ordem: 7 },
 
-  // 2. Exterior 360° (4 fotos)
-  { id: 'frente', nome: 'Frente Completa', icone: ArrowUp, categoria: 'exterior_360', ordem: 7 },
-  { id: 'lateral_direita', nome: 'Lateral Direita Completa', icone: ArrowRight, categoria: 'exterior_360', ordem: 8 },
-  { id: 'traseira', nome: 'Traseira Completa (Rabeta/Lanterna)', icone: ArrowDown, categoria: 'exterior_360', ordem: 9 },
-  { id: 'lateral_esquerda', nome: 'Lateral Esquerda Completa', icone: ArrowLeft, categoria: 'exterior_360', ordem: 10 },
-
-  // 3. Pneus (2 fotos)
-  { id: 'pneu_dianteiro', nome: 'Sola do Pneu Dianteiro', icone: Circle, categoria: 'pneus', ordem: 11 },
-  { id: 'pneu_traseiro', nome: 'Sola do Pneu Traseiro', icone: Circle, categoria: 'pneus', ordem: 12 },
-
-  // 4. Instalação (1 foto - OCULTA DO CLIENTE)
-  { id: 'local_rastreador', nome: 'Local de Instalação do Rastreador', icone: MapPin, categoria: 'instalacao', ordem: 13, visivelCliente: false },
+  // 2. Fotos técnicas do rastreador (3 fotos)
+  { id: 'local_rastreador', nome: 'Local exato da instalação', icone: MapPin, categoria: 'rastreador', ordem: 8, visivelCliente: false },
+  { id: 'codigo_rastreador', nome: 'Código do rastreador visível', icone: Hash, categoria: 'rastreador', ordem: 9, visivelCliente: false },
+  { id: 'teste_comunicacao', nome: 'Teste de comunicação (online)', icone: Settings, categoria: 'rastreador', ordem: 10, visivelCliente: false },
 ];
 
 // =============================================
@@ -162,7 +153,7 @@ export function agruparFotosPorCategoriaCompleta(tipo: TipoVeiculo = 'automovel'
 // Total de fotos obrigatórias (por tipo)
 export function getTotalFotosObrigatorias(tipo: TipoVeiculo): number {
   const fotos = getFotosByTipoVeiculo(tipo);
-  return fotos.filter(f => f.categoria !== 'instalacao').length; // 31 para automóvel, 12 para moto
+  return fotos.filter(f => f.categoria !== 'instalacao' && f.categoria !== 'rastreador').length;
 }
 
 // Detectar tipo de veículo a partir de string
@@ -188,13 +179,13 @@ export function getCategoriasFiltradas(
 ): VistoriaCategoriaConfig[] {
   const categorias = getCategoriasByTipoVeiculo(tipo);
   if (!incluirInstalacao) {
-    return categorias.filter(c => c.id !== 'instalacao');
+    return categorias.filter(c => c.id !== 'instalacao' && c.id !== 'rastreador');
   }
   return categorias;
 }
 
 /**
- * Retorna fotos filtradas, opcionalmente excluindo categoria 'instalacao'
+ * Retorna fotos filtradas, opcionalmente excluindo categoria 'instalacao'/'rastreador'
  */
 export function getFotosFiltradas(
   tipo: TipoVeiculo,
@@ -202,7 +193,7 @@ export function getFotosFiltradas(
 ): VistoriaFotoConfig[] {
   const fotos = getFotosByTipoVeiculo(tipo);
   if (!incluirInstalacao) {
-    return fotos.filter(f => f.categoria !== 'instalacao');
+    return fotos.filter(f => f.categoria !== 'instalacao' && f.categoria !== 'rastreador');
   }
   return fotos;
 }
