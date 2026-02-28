@@ -1,47 +1,41 @@
 
-# Centralizar gestao de permissoes em Configuracoes > Usuarios e Acessos
 
-## Situacao atual
+# Exibir visibilidade de modulos na edicao de usuario
 
-A pagina **Usuarios e Acessos** (`/configuracoes/usuarios-acessos`) possui 4 abas:
-- Usuarios
-- Vendedores
-- Perfis de Acesso (atribuicao basica de roles)
-- Logs de Atividade
+## Problema
 
-A **Matriz de Visibilidade** (controle de quais modulos/abas cada perfil pode ver e editar) esta separada em outro componente (`Perfis.tsx`), acessivel apenas em `/diretoria/perfis`.
+Ao editar um usuario em Configuracoes > Usuarios > Detalhes, so aparece a secao "Perfis de Acesso" (checkboxes de roles). Nao ha nenhuma indicacao visual de quais modulos/areas aquele usuario pode **visualizar** ou **editar** com base nos perfis selecionados.
 
-O usuario quer que **tudo** fique centralizado em Configuracoes > Usuarios e Acessos.
+O usuario espera ver essa informacao diretamente na tela de edicao do usuario.
 
-## Plano
+## Solucao
 
-### 1. Adicionar aba "Visibilidade" ao UsuariosAcessos
+Adicionar um novo Card **"Acesso a Modulos"** no formulario de edicao (`UsuarioForm.tsx`) que mostra, em tempo real, a **uniao dos modulos visiveis e editaveis** com base nos perfis selecionados. Este card sera **somente leitura** (a configuracao por perfil continua sendo feita na Matriz de Visibilidade em Usuarios e Acessos > aba Visibilidade).
 
-Adicionar uma 5a aba chamada **"Visibilidade de Modulos"** (com icone `Grid3X3` ou `Eye`) na pagina `UsuariosAcessos.tsx`. O conteudo dessa aba sera o componente `Perfis` importado de `src/pages/configuracoes/Perfis.tsx`, renderizado diretamente como conteudo da tab.
+### Comportamento
 
-Isso traz para dentro de Usuarios e Acessos:
-- Cards de perfis com descricoes e contagem de usuarios
-- Matriz de Visibilidade (toggles por modulo x perfil)
-- Controle de can_edit (permissao de edicao por modulo)
-- Visibilidade de sub-itens (abas especificas dentro de cada modulo)
-- Gerenciamento de roles
-- Solicitacoes de alteracao
+- Conforme o usuario marca/desmarca perfis nos checkboxes, o card atualiza automaticamente
+- Consulta a tabela `role_module_visibility` com os perfis selecionados
+- Mostra lista de modulos com indicadores visuais:
+  - Icone de olho = pode visualizar
+  - Icone de lapis = pode editar
+  - Modulos sem acesso aparecem esmaecidos ou ocultos
+- Inclui um link "Configurar permissoes por perfil" que leva a aba Visibilidade
 
-### 2. Atualizar rota /diretoria/perfis
+### Onde sera posicionado
 
-Redirecionar `/diretoria/perfis` para `/configuracoes/usuarios-acessos?tab=visibilidade` para que quem acessar pelo menu antigo chegue ao local correto.
+Logo abaixo do card "Perfis de Acesso", na coluna principal (col-span-2), para que o usuario veja imediatamente o impacto dos perfis selecionados.
 
-### 3. Atualizar sidebar de Configuracoes
-
-O menu lateral ja aponta para `/configuracoes/usuarios-acessos`. Nenhuma alteracao necessaria no sidebar.
-
-## Resumo de arquivos
+## Alteracoes tecnicas
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/configuracoes/UsuariosAcessos.tsx` | Adicionar aba "Visibilidade" que renderiza o componente Perfis |
-| `src/App.tsx` | Alterar rota `/diretoria/perfis` para redirect a `/configuracoes/usuarios-acessos?tab=visibilidade` |
+| `src/pages/configuracoes/UsuarioForm.tsx` | Adicionar card "Acesso a Modulos" que consulta `role_module_visibility` com base nos perfis selecionados e exibe a uniao dos modulos visiveis/editaveis em tempo real |
 
-## Resultado
+### Detalhes da implementacao
 
-Toda a gestao de usuarios, roles, visibilidade de modulos/abas, permissoes de edicao e logs ficara centralizada em um unico local: **Configuracoes > Usuarios e Acessos**, com 5 abas organizadas.
+1. **Query reativa**: Criar uma query com `useQuery` que recebe `formData.perfis` como dependencia e busca os registros de `role_module_visibility` para os perfis selecionados
+2. **Calculo de uniao**: Agregar os resultados (uniao de `visible=true` e `can_edit=true`) para exibir o acesso consolidado
+3. **UI**: Grid com badges coloridas por modulo mostrando status de visualizacao e edicao
+4. **Link**: Botao discreto "Gerenciar na Matriz de Visibilidade" apontando para `/configuracoes/usuarios-acessos?tab=visibilidade`
+
