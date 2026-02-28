@@ -18,6 +18,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCreateOficina, useUpdateOficina } from '@/hooks/useOficinas';
@@ -60,6 +61,7 @@ export function OficinaFormDialog({ open, onOpenChange, oficina }: Props) {
   const createOficina = useCreateOficina();
   const updateOficina = useUpdateOficina();
   const [marcas, setMarcas] = useState<string[]>([]);
+  const [isBasePratic, setIsBasePratic] = useState(false);
   const [especialidades, setEspecialidades] = useState<string[]>([]);
 
   const form = useForm<FormData>({
@@ -99,10 +101,12 @@ export function OficinaFormDialog({ open, onOpenChange, oficina }: Props) {
         });
         setMarcas((oficina as any).marcas_atendidas || []);
         setEspecialidades(oficina.especialidades || []);
+        setIsBasePratic((oficina as any).is_base_pratic || false);
       } else {
         form.reset({ razao_social: '', nome_fantasia: '', cnpj: '', cidade: '', estado: '' });
         setMarcas([]);
         setEspecialidades([]);
+        setIsBasePratic(false);
       }
     }
   }, [open, oficina]);
@@ -143,8 +147,9 @@ export function OficinaFormDialog({ open, onOpenChange, oficina }: Props) {
       pix_tipo: data.pix_tipo || undefined,
       especialidades,
       marcas_atendidas: marcas,
+      is_base_pratic: isBasePratic,
       status: 'ativo' as const,
-    };
+    } as any;
     if (oficina) {
       await updateOficina.mutateAsync({ id: oficina.id, ...payload });
       geocodificarEmBackground('oficina', oficina.id, {
@@ -262,6 +267,23 @@ export function OficinaFormDialog({ open, onOpenChange, oficina }: Props) {
                 <FormField control={form.control} name="pix_chave" render={({ field }) => (
                   <FormItem className="sm:col-span-2"><FormLabel>Chave PIX</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
+              </div>
+            </div>
+
+            {/* Base da Pratic */}
+            <div className="flex items-center gap-3 rounded-lg border p-3 bg-amber-50/50 dark:bg-amber-950/20">
+              <Checkbox
+                id="is_base_pratic"
+                checked={isBasePratic}
+                onCheckedChange={(checked) => setIsBasePratic(!!checked)}
+              />
+              <div>
+                <label htmlFor="is_base_pratic" className="text-sm font-medium cursor-pointer">
+                  Base da Pratic
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Marcar como ponto de apoio para controle de ponto por geolocalização
+                </p>
               </div>
             </div>
 
