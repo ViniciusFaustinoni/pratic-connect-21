@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { ArrowLeft, Save, Loader2, User, Shield, TrendingUp, History, Lock, Mail, MapPin } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, User, Shield, TrendingUp, History, Lock, Mail, MapPin, Eye, Pencil, ExternalLink } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +33,110 @@ const perfisDisponiveis = [
   { value: 'regulador', label: 'Regulador', desc: 'Vistorias e oficina' },
   { value: 'analista_eventos', label: 'Analista de Eventos', desc: 'Análise de sinistros' },
 ];
+
+const MODULE_LABELS: Record<string, string> = {
+  dashboard: 'Dashboard',
+  vendas: 'Vendas',
+  cadastro: 'Cadastro',
+  monitoramento: 'Monitoramento',
+  eventos: 'Eventos',
+  assistencia: 'Assistência',
+  oficinas: 'Oficinas',
+  financeiro: 'Financeiro',
+  cobranca: 'Cobrança',
+  contabilidade: 'Contabilidade',
+  juridico: 'Jurídico',
+  rh: 'RH',
+  marketing: 'Marketing',
+  ouvidoria: 'Ouvidoria',
+  diretoria: 'Diretoria',
+  relatorios: 'Relatórios',
+  documentos: 'Documentos',
+  configuracoes: 'Configurações',
+};
+
+function ModuleAccessCard({ selectedRoles }: { selectedRoles: string[] }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['module-visibility-preview', selectedRoles],
+    queryFn: async () => {
+      if (selectedRoles.length === 0) return { visible: [] as string[], editable: [] as string[] };
+
+      const { data: rows, error } = await (supabase as any)
+        .from('role_module_visibility')
+        .select('module_id, visible, can_edit')
+        .in('role', selectedRoles)
+        .eq('visible', true);
+
+      if (error) throw error;
+
+      const visible = [...new Set((rows || []).map((r: any) => r.module_id))] as string[];
+      const editable = [...new Set((rows || []).filter((r: any) => r.can_edit).map((r: any) => r.module_id))] as string[];
+      return { visible, editable };
+    },
+    enabled: selectedRoles.length > 0,
+    staleTime: 30_000,
+  });
+
+  const allModules = Object.keys(MODULE_LABELS);
+  const visible = data?.visible || [];
+  const editable = data?.editable || [];
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Eye className="w-5 h-5" />
+          Acesso a Módulos
+        </CardTitle>
+        <CardDescription>
+          Visualização consolidada com base nos perfis selecionados (somente leitura)
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {selectedRoles.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Selecione ao menos um perfil para ver os acessos.</p>
+        ) : isLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-8 rounded-full" />)}
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {allModules.map(mod => {
+                const isVisible = visible.includes(mod);
+                const isEditable = editable.includes(mod);
+                if (!isVisible) return null;
+                return (
+                  <Badge
+                    key={mod}
+                    variant="secondary"
+                    className="gap-1.5 py-1 px-3"
+                  >
+                    <Eye className="w-3 h-3 text-muted-foreground" />
+                    {MODULE_LABELS[mod]}
+                    {isEditable && <Pencil className="w-3 h-3 text-primary" />}
+                  </Badge>
+                );
+              })}
+            </div>
+            {visible.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhum módulo visível para os perfis selecionados.</p>
+            )}
+            <div className="mt-4">
+              <Link
+                to="/configuracoes/usuarios-acessos?tab=visibilidade"
+                className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Gerenciar na Matriz de Visibilidade
+              </Link>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 // Componente para métricas de vendedor
 function VendedorMetricasCard({ userId, navigate }: { userId: string; navigate: (path: string) => void }) {
@@ -529,6 +634,9 @@ export default function UsuarioForm() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Acesso a Módulos - read-only, reativo aos perfis selecionados */}
+            <ModuleAccessCard selectedRoles={formData.perfis} />
 
             {/* Card de Configurações de Campo - apenas para vistoriadores */}
             {formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p)) && (
