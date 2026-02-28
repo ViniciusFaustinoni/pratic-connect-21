@@ -1,56 +1,108 @@
 
 
-# Ajustar Fotos de Autovistoria e Instalacao para Moto
+# Implementar Regras de Inadimplencia -- Suspensao, Revistoria, SPC e Exclusao
 
-## Contexto
+## Resumo das Lacunas
 
-Existem 3 arquivos de configuracao de fotos que tratam motos de formas diferentes. O usuario definiu exatamente quais fotos devem ser exigidas em cada etapa do processo de ativacao de moto.
+O sistema atual tem partes da logica, mas nao segue as regras operacionais descritas. Segue o mapeamento:
+
+| Regra | Estado Atual | Precisa Mudar |
+|-------|-------------|---------------|
+| Suspensao no dia 1 | Suspende apos 7 dias (configuravel) | Alterar para 0 dias de carencia |
+| Ate 5 dias: paga e volta | Reativa sempre que paga, sem condicao | Adicionar verificacao de dias de atraso |
+| 6+ dias: paga + revistoria | Nao existe essa condicao | Bloquear reativacao automatica se atraso > 5 dias |
+| 30+ dias: SPC | Existe como alerta manual apenas | Adicionar flag/marcacao automatica |
+| 120+ dias: exclusao | Nao existe | Criar logica no cron |
 
 ## Alteracoes
 
-### 1. Autovistoria Moto (`src/data/autovistoriaConfig.ts`)
+### 1. Cron de Suspensao -- Suspender Imediatamente (dia 1)
 
-Reduzir de 10 para 7 fotos, conforme especificacao:
+**Arquivo**: `supabase/functions/cron-suspender-inadimplentes/index.ts`
 
-| # | Foto | Status Atual |
-|---|------|-------------|
-| 1 | Frente | Ja existe |
-| 2 | Traseira | Ja existe |
-| 3 | Lateral Direita | Ja existe |
-| 4 | Lateral Esquerda | Ja existe |
-| 5 | Painel com KM visivel | Ja existe (odometro) |
-| 6 | Motor / Chassi visivel | Unificar chassi + motor em 1 foto |
-| 7 | Avarias (se houver) | **NOVO** - foto opcional para registro de avarias |
+- Alterar `DIAS_CARENCIA_PADRAO` de `7` para `0` (suspensao no dia seguinte ao vencimento)
+- Isso ja e configuravel pela tabela `configuracoes`, entao basta mudar o default
 
-**Remover**: selfie_veiculo, pneu_dianteiro, pneu_traseiro (nao constam na especificacao de moto)
+### 2. Webhook Asaas -- Reativacao Condicional por Dias de Atraso
 
-### 2. Instalacao Moto (`src/data/vistoriaConfigCompleta.ts`)
+**Arquivo**: `supabase/functions/asaas-webhook/index.ts`
 
-Ajustar `FOTOS_VISTORIA_MOTO` para conter as mesmas 7 fotos da autovistoria (refeitas) + fotos tecnicas do rastreador:
+Na logica de reativacao (linhas 602-662), ao invés de reativar direto quando `cobrancasPendentes === 0`:
 
-**Fotos do veiculo (refazer todas da autovistoria):**
-1. Frente
-2. Traseira
-3. Lateral Direita
-4. Lateral Esquerda
-5. Painel com KM atual
-6. Motor / Chassi
-7. Avarias novas (se houver)
+- Calcular `diasAtraso` usando `data_bloqueio` do associado
+- Se `diasAtraso <= 5`: reativar automaticamente (janela de tolerancia)
+- Se `diasAtraso > 5`: NAO reativar. Marcar `status = 'suspenso'` com flag `revistoria_pendente = true`. Notificar associado que precisa fazer revistoria para reativar
+- Se `diasAtraso >= 120`: NAO reativar. Manter como exclusao (ver item 4)
 
-**Fotos tecnicas do rastreador (ja existem parcialmente):**
-8. Local exato da instalacao (ja existe)
-9. Codigo do rastreador visivel (**NOVO**)
-10. Teste de comunicacao / online (**NOVO**)
+### 3. Cron de Exclusao Automatica aos 120 dias
 
-### 3. Checklist do Instalador (`src/data/vistoriaConfig.ts`)
+**Novo arquivo**: `supabase/functions/cron-excluir-inadimplentes-120/index.ts`
 
-Ajustar `FOTOS_MOTO` para alinhar com a mesma estrutura da instalacao, removendo fotos que nao constam na especificacao (vistoriador, farol, chave, banco, pneus).
+Criar edge function que roda diariamente e:
+- Busca associados com `status = 'suspenso'` e `data_bloqueio` ha 120+ dias
+- Altera status para `cancelado` com `tipo_saida = 'inadimplencia'` e `pode_reativar = true`
+- Cancela recorrencia no Asaas
+- Registra historico
+- Notifica associado sobre exclusao
 
-## Arquivos Alterados
+### 4. Cron de Marcacao SPC aos 30 dias
 
-| Arquivo | O que muda |
+**Novo arquivo**: `supabase/functions/cron-marcar-candidatos-spc/index.ts`
+
+Criar edge function que:
+- Busca associados suspensos com `data_bloqueio` ha 30+ dias
+- Cria registro na tabela `negativacoes` (ja existe) com status `elegivel`
+- Notifica setor de cobranca
+
+### 5. Frontend -- Campo `revistoria_pendente` na Reativacao
+
+**Arquivo**: `src/components/app/RevistoriaBanner.tsx`
+
+Ja existe e funciona com base em `diasAtraso`. Apenas garantir que o campo `revistoria_pendente` do banco seja lido corretamente.
+
+**Arquivo**: `src/pages/app/RevistoriaPage.tsx` (se existir)
+
+Garantir que a revistoria use o tipo "REVISTORIA" (nomenclatura diferente de "INSTALACAO") para visualizacao posterior.
+
+### 6. Adicionar coluna `revistoria_pendente` na tabela associados
+
+**Nova migration SQL**:
+
+```text
+ALTER TABLE associados
+ADD COLUMN IF NOT EXISTS revistoria_pendente boolean DEFAULT false;
+```
+
+Essa coluna sera usada pelo webhook (item 2) para bloquear reativacao automatica e pelo app do associado para exibir o banner de revistoria.
+
+## Arquivos Alterados/Criados
+
+| Arquivo | Acao |
 |---|---|
-| `src/data/autovistoriaConfig.ts` | Reduzir FOTOS_AUTOVISTORIA_MOTO de 10 para 7 fotos |
-| `src/data/vistoriaConfigCompleta.ts` | Ajustar FOTOS_VISTORIA_MOTO para 7 fotos veiculo + 3 tecnicas |
-| `src/data/vistoriaConfig.ts` | Alinhar FOTOS_MOTO com a especificacao |
+| `supabase/functions/cron-suspender-inadimplentes/index.ts` | Alterar carencia para 0 dias |
+| `supabase/functions/asaas-webhook/index.ts` | Reativacao condicional por dias de atraso |
+| `supabase/functions/cron-excluir-inadimplentes-120/index.ts` | **NOVO** - Exclusao automatica 120 dias |
+| `supabase/functions/cron-marcar-candidatos-spc/index.ts` | **NOVO** - Marcacao SPC 30 dias |
+| Nova migration SQL | Adicionar coluna `revistoria_pendente` |
+
+## Fluxo Resultante
+
+```text
+Dia 0: Venceu e nao pagou
+  |
+  v
+Dia 1: SUSPENSO automaticamente (cron diario)
+  |
+  +-- Pagou ate dia 5? --> Reativa automaticamente (webhook)
+  |
+  +-- Pagou apos dia 5? --> Marca revistoria_pendente = true
+  |                          Associado faz revistoria no app
+  |                          Aprovacao reativa manualmente
+  |
+  +-- Dia 30: Marcado como candidato SPC (cron)
+  |
+  +-- Dia 120: EXCLUIDO automaticamente (cron)
+              tipo_saida = 'inadimplencia'
+              pode_reativar = true (como cliente novo)
+```
 
