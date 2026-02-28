@@ -9,6 +9,14 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 
 type Cotacao = Tables<'cotacoes'>;
 
+const MOTO_KEYWORDS = ['moto', 'motocicleta', 'ciclomotor', 'triciclo', 'nxr', 'cg ', 'cg-', 'bros', 'cb ', 'cb-', 'cbr', 'pcx', 'factor', 'biz', 'pop', 'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr', 'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'dl ', 'scooter'];
+
+function detectarCategoriaPorModelo(modelo?: string | null): string {
+  if (!modelo) return 'carro';
+  const m = modelo.toLowerCase();
+  return MOTO_KEYWORDS.some(kw => m.includes(kw)) ? 'moto' : 'carro';
+}
+
 export type StatusContratacao = 
   | 'aguardando'
   | 'plano_escolhido'
@@ -431,6 +439,8 @@ export function useCotacaoContratacao(token: string | undefined) {
           veiculo_cor: dados.veiculo_cor || null,
           veiculo_combustivel: truncar(dados.veiculo_combustivel, 50),
           veiculo_ano_fabricacao: dados.veiculo_ano_fabricacao || null,
+          // Persistir categoria se ainda não definida
+          ...((!cotacao.categoria) ? { categoria: detectarCategoriaPorModelo(cotacao.veiculo_modelo) } : {}),
         })
         .eq('id', cotacao.id);
 
