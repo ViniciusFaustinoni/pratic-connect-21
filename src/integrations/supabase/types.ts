@@ -19264,8 +19264,39 @@ export type Database = {
         }
         Relationships: []
       }
+      role_module_item_visibility: {
+        Row: {
+          created_at: string | null
+          id: string
+          item_id: string
+          module_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string | null
+          visible: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          item_id: string
+          module_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+          visible?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          item_id?: string
+          module_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+          visible?: boolean | null
+        }
+        Relationships: []
+      }
       role_module_visibility: {
         Row: {
+          can_edit: boolean | null
           created_at: string | null
           id: string
           module_id: string
@@ -19274,6 +19305,7 @@ export type Database = {
           visible: boolean
         }
         Insert: {
+          can_edit?: boolean | null
           created_at?: string | null
           id?: string
           module_id: string
@@ -19282,6 +19314,7 @@ export type Database = {
           visible?: boolean
         }
         Update: {
+          can_edit?: boolean | null
           created_at?: string | null
           id?: string
           module_id?: string

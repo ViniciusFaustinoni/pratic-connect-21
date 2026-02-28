@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   Check, X, Info, Search, ChevronDown, ChevronUp, Grid3X3, Settings2,
   Crown, Briefcase, FileText, Radio, Megaphone, Scale, Smartphone,
-  Shield, Users, Clock, Eye, Pencil, Save
+  Shield, Users, Clock, Eye, Pencil, Save, ChevronRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,7 @@ import { SolicitacoesTab } from '@/components/configuracoes/SolicitacoesTab';
 import { AreaSection } from '@/components/configuracoes/AreaSection';
 import { PerfilSheet } from '@/components/configuracoes/PerfilSheet';
 import { Perfil } from '@/components/configuracoes/PerfilCard';
+import { MENU_ITEM_IDS } from '@/hooks/useModuleItemVisibility';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,6 +46,134 @@ const modulos = [
   { id: 'documentos', label: 'Documentos' },
   { id: 'configuracoes', label: 'Configurações' },
 ];
+
+// Sub-itens de cada módulo (mapeados a partir do menu do sidebar)
+const MODULE_ITEMS: Record<string, { id: string; label: string }[]> = {
+  vendas: [
+    { id: 'leads', label: 'Leads' },
+    { id: 'cotacoes', label: 'Cotação' },
+    { id: 'propostas', label: 'Propostas' },
+    { id: 'ativacoes', label: 'Ativações' },
+    { id: 'consultores', label: 'Consultores' },
+    { id: 'planos', label: 'Planos e Benefícios' },
+  ],
+  cadastro: [
+    { id: 'propostas_pendentes', label: 'Propostas Pendentes' },
+    { id: 'associados', label: 'Associados' },
+    { id: 'veiculos', label: 'Veículos' },
+    { id: 'substituicoes', label: 'Substituições' },
+  ],
+  monitoramento: [
+    { id: 'equipe', label: 'Equipe' },
+    { id: 'instalacoes', label: 'Instalações' },
+    { id: 'vistorias', label: 'Vistorias' },
+    { id: 'retiradas', label: 'Retiradas' },
+    { id: 'calendario', label: 'Calendário' },
+    { id: 'estoque', label: 'Estoque' },
+    { id: 'rastreadores', label: 'Rastreadores' },
+    { id: 'mapa', label: 'Mapa' },
+    { id: 'alertas', label: 'Alertas' },
+  ],
+  eventos: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'sinistros', label: 'Sinistros' },
+    { id: 'pre_analise', label: 'Pré-Análise' },
+    { id: 'sla', label: 'SLA' },
+    { id: 'sindicancias', label: 'Sindicâncias' },
+    { id: 'sindicantes', label: 'Sindicantes' },
+    { id: 'solicitacoes_ia', label: 'Solicitações IA' },
+  ],
+  assistencia: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'chamados', label: 'Fila de Chamados' },
+    { id: 'prestadores', label: 'Prestadores' },
+  ],
+  oficinas: [
+    { id: 'oficinas', label: 'Oficinas' },
+    { id: 'auto_centers', label: 'Auto Centers' },
+    { id: 'ordens_servico', label: 'Ordens de Serviço' },
+    { id: 'relatorios', label: 'Relatórios' },
+  ],
+  financeiro: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'cobrancas', label: 'Cobranças' },
+    { id: 'contas_pagar', label: 'Contas a Pagar' },
+    { id: 'faturamento', label: 'Faturamento' },
+    { id: 'extrato', label: 'Extrato' },
+    { id: 'extratos_bancarios', label: 'Extratos Bancários' },
+    { id: 'contas_bancarias', label: 'Contas Bancárias' },
+  ],
+  cobranca: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'inadimplentes', label: 'Inadimplentes' },
+    { id: 'fila', label: 'Fila de Trabalho' },
+    { id: 'acordos', label: 'Acordos' },
+    { id: 'negativacao', label: 'Negativação' },
+    { id: 'regua', label: 'Régua' },
+  ],
+  contabilidade: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'plano_contas', label: 'Plano de Contas' },
+    { id: 'lancamentos', label: 'Lançamentos' },
+    { id: 'balancete', label: 'Balancete' },
+    { id: 'balanco_patrimonial', label: 'Balanço Patrimonial' },
+    { id: 'dre', label: 'DRE' },
+    { id: 'fechamento', label: 'Fechamento' },
+  ],
+  juridico: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'casos', label: 'Casos' },
+    { id: 'processos', label: 'Processos' },
+    { id: 'advogados', label: 'Advogados' },
+    { id: 'prazos', label: 'Prazos' },
+    { id: 'audiencias', label: 'Audiências' },
+    { id: 'consultas', label: 'Consultas 360' },
+    { id: 'pareceres', label: 'Pareceres' },
+  ],
+  rh: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'funcionarios', label: 'Funcionários' },
+    { id: 'jornadas', label: 'Jornadas' },
+    { id: 'folha_pagamento', label: 'Folha de Pagamento' },
+    { id: 'ponto', label: 'Ponto' },
+    { id: 'ferias', label: 'Férias' },
+    { id: 'organograma', label: 'Organograma' },
+    { id: 'departamentos', label: 'Departamentos' },
+    { id: 'beneficios', label: 'Benefícios' },
+  ],
+  marketing: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'campanhas', label: 'Campanhas' },
+    { id: 'canais', label: 'Canais' },
+    { id: 'indicacoes', label: 'Indicações' },
+    { id: 'utms', label: 'UTMs' },
+    { id: 'distribuicao', label: 'Distribuição' },
+    { id: 'relatorios', label: 'Relatórios' },
+  ],
+  ouvidoria: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'fila', label: 'Fila' },
+  ],
+  diretoria: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'produtos', label: 'Produtos' },
+    { id: 'planos_beneficios', label: 'Planos/Benefícios' },
+    { id: 'precos', label: 'Tabela de Preços' },
+    { id: 'rateio', label: 'Rateio' },
+    { id: 'atuarial', label: 'Atuarial' },
+    { id: 'blacklist', label: 'Blacklist' },
+    { id: 'configuracoes', label: 'Configurações' },
+    { id: 'perfis', label: 'Perfis' },
+    { id: 'logs', label: 'Logs' },
+    { id: 'relatorios', label: 'Relatórios' },
+  ],
+  documentos: [
+    { id: 'gerar', label: 'Gerar Documento' },
+    { id: 'historico', label: 'Histórico' },
+    { id: 'templates', label: 'Templates' },
+    { id: 'aditivos', label: 'Aditivos' },
+  ],
+};
 
 // Perfis do sistema com descrições
 const perfis: Perfil[] = [
@@ -181,8 +310,14 @@ export default function Perfis() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [showMatriz, setShowMatriz] = useState(false);
   
-  // Estado para edição de visibilidade
+  // Estado para edição de visibilidade (módulos)
   const [editedVisibility, setEditedVisibility] = useState<Record<string, Record<string, boolean>>>({});
+  // Estado para edição de can_edit
+  const [editedCanEdit, setEditedCanEdit] = useState<Record<string, Record<string, boolean>>>({});
+  // Estado para edição de item visibility
+  const [editedItemVisibility, setEditedItemVisibility] = useState<Record<string, Record<string, Record<string, boolean>>>>({});
+  // Módulos expandidos na matriz (para mostrar sub-itens)
+  const [expandedModules, setExpandedModules] = useState<string[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -192,23 +327,33 @@ export default function Perfis() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('role_module_visibility')
-        .select('role, module_id, visible');
+        .select('role, module_id, visible, can_edit');
       if (error) throw error;
-      return data as { role: string; module_id: string; visible: boolean }[];
+      return data as { role: string; module_id: string; visible: boolean; can_edit: boolean }[];
+    },
+  });
+
+  // Busca dados de visibilidade de itens do banco
+  const { data: itemVisibilityData, isLoading: isLoadingItemVisibility } = useQuery({
+    queryKey: ['role-module-item-visibility-all'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('role_module_item_visibility')
+        .select('role, module_id, item_id, visible');
+      if (error) throw error;
+      return data as { role: string; module_id: string; item_id: string; visible: boolean }[];
     },
   });
 
   // Converte dados do banco para formato de matriz
   const matrizFromDB = useMemo(() => {
     const matriz: Record<string, Record<string, boolean>> = {};
-    // Inicializar todos os perfis com todos os módulos como false
     perfis.forEach(p => {
       matriz[p.id] = {};
       modulos.forEach(m => {
         matriz[p.id][m.id] = false;
       });
     });
-    // Preencher com dados do banco
     if (visibilityData) {
       visibilityData.forEach(row => {
         if (matriz[row.role]) {
@@ -218,6 +363,38 @@ export default function Perfis() {
     }
     return matriz;
   }, [visibilityData]);
+
+  // can_edit do banco
+  const canEditFromDB = useMemo(() => {
+    const map: Record<string, Record<string, boolean>> = {};
+    perfis.forEach(p => {
+      map[p.id] = {};
+      modulos.forEach(m => {
+        map[p.id][m.id] = true; // default true
+      });
+    });
+    if (visibilityData) {
+      visibilityData.forEach(row => {
+        if (map[row.role]) {
+          map[row.role][row.module_id] = row.can_edit ?? true;
+        }
+      });
+    }
+    return map;
+  }, [visibilityData]);
+
+  // item visibility do banco
+  const itemVisFromDB = useMemo(() => {
+    const map: Record<string, Record<string, Record<string, boolean>>> = {};
+    if (itemVisibilityData) {
+      itemVisibilityData.forEach(row => {
+        if (!map[row.role]) map[row.role] = {};
+        if (!map[row.role][row.module_id]) map[row.role][row.module_id] = {};
+        map[row.role][row.module_id][row.item_id] = row.visible;
+      });
+    }
+    return map;
+  }, [itemVisibilityData]);
 
   // Busca usuários do perfil selecionado
   const { data: usuariosDoPerfil = [] } = useUsuariosPorPerfil(selectedPerfil?.id || '');
@@ -263,29 +440,67 @@ export default function Perfis() {
   // Handler para alterar visibilidade na matriz
   const handleVisibilityChange = useCallback((perfilId: string, moduloId: string, newValue: boolean) => {
     if (!canManagePermissions) return;
-    
     setEditedVisibility(prev => ({
+      ...prev,
+      [perfilId]: { ...prev[perfilId], [moduloId]: newValue }
+    }));
+    setHasChanges(true);
+  }, [canManagePermissions]);
+
+  // Handler para alterar can_edit
+  const handleCanEditChange = useCallback((perfilId: string, moduloId: string, newValue: boolean) => {
+    if (!canManagePermissions) return;
+    setEditedCanEdit(prev => ({
+      ...prev,
+      [perfilId]: { ...prev[perfilId], [moduloId]: newValue }
+    }));
+    setHasChanges(true);
+  }, [canManagePermissions]);
+
+  // Handler para alterar item visibility
+  const handleItemVisibilityChange = useCallback((perfilId: string, moduloId: string, itemId: string, newValue: boolean) => {
+    if (!canManagePermissions) return;
+    setEditedItemVisibility(prev => ({
       ...prev,
       [perfilId]: {
         ...prev[perfilId],
-        [moduloId]: newValue
+        [moduloId]: { ...prev[perfilId]?.[moduloId], [itemId]: newValue }
       }
     }));
     setHasChanges(true);
   }, [canManagePermissions]);
+
+  // Toggle expandir sub-itens de um módulo
+  const toggleModuleExpand = useCallback((moduleId: string) => {
+    setExpandedModules(prev => 
+      prev.includes(moduleId) ? prev.filter(id => id !== moduleId) : [...prev, moduleId]
+    );
+  }, []);
 
   // Handler para salvar alterações no banco
   const handleSaveChanges = useCallback(async () => {
     try {
       setIsSaving(true);
       
+      // 1. Upsert module visibility (com can_edit)
       const upsertData: any[] = [];
-      Object.entries(editedVisibility).forEach(([perfilId, modulos]) => {
-        Object.entries(modulos).forEach(([moduloId, visible]) => {
+      // Combinar editedVisibility e editedCanEdit
+      const allEditedPerfilIds = new Set([
+        ...Object.keys(editedVisibility),
+        ...Object.keys(editedCanEdit),
+      ]);
+      
+      allEditedPerfilIds.forEach(perfilId => {
+        const editedMods = new Set([
+          ...Object.keys(editedVisibility[perfilId] || {}),
+          ...Object.keys(editedCanEdit[perfilId] || {}),
+        ]);
+        editedMods.forEach(moduloId => {
           upsertData.push({
             role: perfilId,
             module_id: moduloId,
-            visible,
+            visible: editedVisibility[perfilId]?.[moduloId] ?? getVisibility(perfilId, moduloId),
+            can_edit: editedCanEdit[perfilId]?.[moduloId] ?? getCanEdit(perfilId, moduloId),
             updated_at: new Date().toISOString(),
           });
         });
@@ -295,28 +510,56 @@ export default function Perfis() {
         const { error } = await (supabase as any)
           .from('role_module_visibility')
           .upsert(upsertData, { onConflict: 'role,module_id' });
-        
+        if (error) throw error;
+      }
+
+      // 2. Upsert item visibility
+      const itemUpsertData: any[] = [];
+      Object.entries(editedItemVisibility).forEach(([perfilId, modules]) => {
+        Object.entries(modules).forEach(([moduleId, items]) => {
+          Object.entries(items).forEach(([itemId, visible]) => {
+            itemUpsertData.push({
+              role: perfilId,
+              module_id: moduleId,
+              item_id: itemId,
+              visible,
+              updated_at: new Date().toISOString(),
+            });
+          });
+        });
+      });
+
+      if (itemUpsertData.length > 0) {
+        const { error } = await (supabase as any)
+          .from('role_module_item_visibility')
+          .upsert(itemUpsertData, { onConflict: 'role,module_id,item_id' });
         if (error) throw error;
       }
 
       // Invalidar caches
       queryClient.invalidateQueries({ queryKey: ['role-module-visibility-all'] });
+      queryClient.invalidateQueries({ queryKey: ['role-module-item-visibility-all'] });
       queryClient.invalidateQueries({ queryKey: ['module-visibility'] });
+      queryClient.invalidateQueries({ queryKey: ['module-item-visibility'] });
       
       setEditedVisibility({});
+      setEditedCanEdit({});
+      setEditedItemVisibility({});
       setHasChanges(false);
-      toast.success('Visibilidade dos módulos atualizada com sucesso!');
+      toast.success('Visibilidade atualizada com sucesso!');
     } catch (error) {
       console.error('Erro ao salvar:', error);
       toast.error('Erro ao salvar alterações de visibilidade');
     } finally {
       setIsSaving(false);
     }
-  }, [editedVisibility, queryClient]);
+  }, [editedVisibility, editedCanEdit, editedItemVisibility, queryClient]);
 
   // Handler para descartar alterações
   const handleDiscardChanges = useCallback(() => {
     setEditedVisibility({});
+    setEditedCanEdit({});
+    setEditedItemVisibility({});
     setHasChanges(false);
     toast.info('Alterações descartadas');
   }, []);
@@ -326,10 +569,18 @@ export default function Perfis() {
     return editedVisibility[perfilId]?.[moduloId] ?? matrizFromDB[perfilId]?.[moduloId] ?? false;
   }, [editedVisibility, matrizFromDB]);
 
+  const getCanEdit = useCallback((perfilId: string, moduloId: string): boolean => {
+    return editedCanEdit[perfilId]?.[moduloId] ?? canEditFromDB[perfilId]?.[moduloId] ?? true;
+  }, [editedCanEdit, canEditFromDB]);
+
+  const getItemVisibility = useCallback((perfilId: string, moduloId: string, itemId: string): boolean => {
+    return editedItemVisibility[perfilId]?.[moduloId]?.[itemId] ?? itemVisFromDB[perfilId]?.[moduloId]?.[itemId] ?? true;
+  }, [editedItemVisibility, itemVisFromDB]);
+
   // Verificar se célula foi editada
   const isCellEdited = useCallback((perfilId: string, moduloId: string): boolean => {
-    return editedVisibility[perfilId]?.[moduloId] !== undefined;
-  }, [editedVisibility]);
+    return editedVisibility[perfilId]?.[moduloId] !== undefined || editedCanEdit[perfilId]?.[moduloId] !== undefined;
+  }, [editedVisibility, editedCanEdit]);
 
   // Criar uma matriz simplificada para o PerfilSheet (compatibilidade)
   const matrizForSheet = useMemo(() => {
@@ -496,15 +747,15 @@ export default function Perfis() {
                 )}
               </CardHeader>
               <CardContent className="p-0">
-                {isLoadingVisibility ? (
+                {(isLoadingVisibility || isLoadingItemVisibility) ? (
                   <div className="p-8 text-center text-muted-foreground">Carregando visibilidade...</div>
                 ) : (
                   <ScrollArea className="w-full">
-                    <div className="min-w-[1200px]">
+                    <div className="min-w-[1400px]">
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-border/50">
-                            <th className="text-left p-4 font-medium text-muted-foreground sticky left-0 bg-card z-10 min-w-[140px]">
+                            <th className="text-left p-4 font-medium text-muted-foreground sticky left-0 bg-card z-10 min-w-[180px]">
                               Módulo
                             </th>
                             {perfis.map((p) => (
@@ -532,37 +783,133 @@ export default function Perfis() {
                                 </TooltipProvider>
                               </th>
                             ))}
+                            <th className="p-3 text-center min-w-[70px]">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex flex-col items-center gap-1">
+                                      <Pencil className="w-3 h-3 text-muted-foreground" />
+                                      <span className="text-[10px] font-medium text-muted-foreground">Editar</span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Coluna "Pode Editar" — apenas a primeira role visível</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
-                          {modulos.map((m, idx) => (
-                            <tr 
-                              key={m.id} 
-                              className={cn(
-                                "border-b border-border/50 transition-colors",
-                                idx % 2 === 0 ? 'bg-muted/20' : ''
-                              )}
-                            >
-                              <td className="p-4 font-medium text-foreground sticky left-0 bg-inherit z-10">
-                                {m.label}
-                              </td>
-                              {perfis.map((p) => {
-                                const currentValue = getVisibility(p.id, m.id);
-                                const isEdited = isCellEdited(p.id, m.id);
-                                
-                                return (
-                                  <td key={p.id} className="p-2 text-center">
-                                    <VisibilityCell
-                                      visible={currentValue}
-                                      editable={canManagePermissions}
-                                      isEdited={isEdited}
-                                      onChange={(v) => handleVisibilityChange(p.id, m.id, v)}
-                                    />
+                          {modulos.map((m, idx) => {
+                            const hasSubItems = MODULE_ITEMS[m.id] && MODULE_ITEMS[m.id].length > 0;
+                            const isExpanded = expandedModules.includes(m.id);
+
+                            return (
+                              <>
+                                {/* Linha do módulo */}
+                                <tr 
+                                  key={m.id} 
+                                  className={cn(
+                                    "border-b border-border/50 transition-colors",
+                                    idx % 2 === 0 ? 'bg-muted/20' : ''
+                                  )}
+                                >
+                                  <td className="p-4 font-medium text-foreground sticky left-0 bg-inherit z-10">
+                                    <div className="flex items-center gap-2">
+                                      {hasSubItems && canManagePermissions && (
+                                        <button 
+                                          onClick={() => toggleModuleExpand(m.id)}
+                                          className="p-0.5 rounded hover:bg-muted/50 transition-colors"
+                                        >
+                                          <ChevronRight className={cn(
+                                            "w-3.5 h-3.5 text-muted-foreground transition-transform",
+                                            isExpanded && "rotate-90"
+                                          )} />
+                                        </button>
+                                      )}
+                                      {!hasSubItems && <span className="w-4" />}
+                                      {m.label}
+                                    </div>
                                   </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
+                                  {perfis.map((p) => {
+                                    const currentValue = getVisibility(p.id, m.id);
+                                    const isEdited = isCellEdited(p.id, m.id);
+                                    return (
+                                      <td key={p.id} className="p-2 text-center">
+                                        <VisibilityCell
+                                          visible={currentValue}
+                                          editable={canManagePermissions}
+                                          isEdited={isEdited}
+                                          onChange={(v) => handleVisibilityChange(p.id, m.id, v)}
+                                        />
+                                      </td>
+                                    );
+                                  })}
+                                  {/* Coluna Pode Editar — mostra switch se pelo menos algum perfil tem módulo visível */}
+                                  <td className="p-2 text-center">
+                                    {canManagePermissions ? (
+                                      <div className="flex justify-center">
+                                        <Switch
+                                          checked={getCanEdit(perfis[0]?.id || '', m.id)}
+                                          onCheckedChange={(v) => {
+                                            // Aplica can_edit a todos os perfis que têm o módulo visível
+                                            perfis.forEach(p => {
+                                              if (getVisibility(p.id, m.id)) {
+                                                handleCanEditChange(p.id, m.id, v);
+                                              }
+                                            });
+                                          }}
+                                          className="scale-75"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="flex justify-center">
+                                        {getCanEdit(perfis[0]?.id || '', m.id) ? (
+                                          <Pencil className="w-3.5 h-3.5 text-primary" />
+                                        ) : (
+                                          <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+
+                                {/* Linhas de sub-itens (se expandido) */}
+                                {isExpanded && hasSubItems && MODULE_ITEMS[m.id].map((item) => (
+                                  <tr 
+                                    key={`${m.id}-${item.id}`}
+                                    className="border-b border-border/30 bg-muted/10"
+                                  >
+                                    <td className="pl-10 pr-4 py-2 text-sm text-muted-foreground sticky left-0 bg-inherit z-10">
+                                      <span className="text-muted-foreground/50 mr-1">›</span>
+                                      {item.label}
+                                    </td>
+                                    {perfis.map((p) => {
+                                      const moduleVisible = getVisibility(p.id, m.id);
+                                      if (!moduleVisible) {
+                                        return (
+                                          <td key={p.id} className="p-2 text-center">
+                                            <span className="text-muted-foreground/20">—</span>
+                                          </td>
+                                        );
+                                      }
+                                      const itemVisible = getItemVisibility(p.id, m.id, item.id);
+                                      return (
+                                        <td key={p.id} className="p-2 text-center">
+                                          <VisibilityCell
+                                            visible={itemVisible}
+                                            editable={canManagePermissions}
+                                            isEdited={editedItemVisibility[p.id]?.[m.id]?.[item.id] !== undefined}
+                                            onChange={(v) => handleItemVisibilityChange(p.id, m.id, item.id, v)}
+                                          />
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="p-2" /> {/* empty can_edit cell for sub-items */}
+                                  </tr>
+                                ))}
+                              </>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

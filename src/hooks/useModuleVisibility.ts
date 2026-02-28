@@ -14,27 +14,37 @@ import { useAuth } from '@/contexts/AuthContext';
 export function useModuleVisibility() {
   const { user, roles } = useAuth();
 
-  const { data: visibleModules = [], isLoading } = useQuery({
+  const { data: visibilityResult = { visibleModules: [], editableModules: [] }, isLoading } = useQuery({
     queryKey: ['module-visibility', user?.id, roles],
     queryFn: async () => {
-      if (!roles || roles.length === 0) return [];
+      if (!roles || roles.length === 0) return { visibleModules: [], editableModules: [] };
 
       const { data, error } = await (supabase as any)
         .from('role_module_visibility')
-        .select('module_id')
+        .select('module_id, visible, can_edit')
         .in('role', roles)
         .eq('visible', true);
 
       if (error) throw error;
 
-      // União de todos os módulos visíveis de todos os roles
-      return [...new Set((data || []).map((r: any) => r.module_id))] as string[];
+      const visibleModules = [...new Set((data || []).map((r: any) => r.module_id))] as string[];
+      
+      // Módulos editáveis: união de todos onde can_edit = true
+      const editableModules = [...new Set(
+        (data || []).filter((r: any) => r.can_edit === true).map((r: any) => r.module_id)
+      )] as string[];
+
+      return { visibleModules, editableModules };
     },
     enabled: !!user?.id && roles.length > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: 5 * 60 * 1000,
   });
 
-  return { visibleModules, isLoading };
+  return { 
+    visibleModules: visibilityResult.visibleModules, 
+    editableModules: visibilityResult.editableModules, 
+    isLoading 
+  };
 }
 
 /**

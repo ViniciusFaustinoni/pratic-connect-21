@@ -259,7 +259,7 @@ export function usePermissions() {
     isGerencia: isGerencia(),
 
     // Permissões de sistema
-    canManagePermissions: isDesenvolvedor || isDiretor || isAdminMaster,
+    canManagePermissions: isDesenvolvedor || isDiretor,
     canApprovePermissionChanges: isDesenvolvedor || isDiretor,
     canCreateRoles: isDesenvolvedor || isDiretor || isAdminMaster,
 
