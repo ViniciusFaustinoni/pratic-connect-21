@@ -1,45 +1,56 @@
 
-# Corrigir Deteccao Automatica de Tipo de Veiculo na Autovistoria
 
-## Problema
+# Ajustar Fotos de Autovistoria e Instalacao para Moto
 
-O campo `cotacao.categoria` esta **null** no banco de dados para cotacoes criadas pelo fluxo publico (link do associado). Apenas cotacoes criadas pelo Cotador interno tem esse campo preenchido (via dropdown manual). Como o codigo usa `cotacao.categoria === 'moto'` para determinar o tipo de veiculo, ele sempre retorna `false` e mostra as 15 fotos de carro, mesmo para motos.
+## Contexto
 
-Exemplo no banco: a cotacao com modelo "nxr160 Bros Esdd" (uma moto) tem `categoria: null`.
+Existem 3 arquivos de configuracao de fotos que tratam motos de formas diferentes. O usuario definiu exatamente quais fotos devem ser exigidas em cada etapa do processo de ativacao de moto.
 
-## Solucao
+## Alteracoes
 
-Duas alteracoes complementares:
+### 1. Autovistoria Moto (`src/data/autovistoriaConfig.ts`)
 
-### 1. Corrigir a derivacao de tipo na tela (imediato)
+Reduzir de 10 para 7 fotos, conforme especificacao:
 
-**Arquivo**: `src/pages/public/CotacaoContratacao.tsx`
+| # | Foto | Status Atual |
+|---|------|-------------|
+| 1 | Frente | Ja existe |
+| 2 | Traseira | Ja existe |
+| 3 | Lateral Direita | Ja existe |
+| 4 | Lateral Esquerda | Ja existe |
+| 5 | Painel com KM visivel | Ja existe (odometro) |
+| 6 | Motor / Chassi visivel | Unificar chassi + motor em 1 foto |
+| 7 | Avarias (se houver) | **NOVO** - foto opcional para registro de avarias |
 
-Alterar a logica de `tipoVeiculo` na linha 523 para usar uma funcao de deteccao inteligente que verifica multiplos campos, em vez de depender apenas de `cotacao.categoria`:
+**Remover**: selfie_veiculo, pneu_dianteiro, pneu_traseiro (nao constam na especificacao de moto)
 
-- Primeiro, verificar `cotacao.categoria` (funciona para cotacoes do Cotador)
-- Se null, verificar `cotacao.veiculo_categoria`
-- Se ambos null, analisar `cotacao.veiculo_modelo` usando a funcao `detectarTipoVeiculo` que ja existe em `src/data/vistoriaConfigCompleta.ts` (reconhece palavras como "moto", "motocicleta", "nxr", "cg", "bros", etc.)
+### 2. Instalacao Moto (`src/data/vistoriaConfigCompleta.ts`)
 
-### 2. Preencher `categoria` ao salvar dados pessoais (preventivo)
+Ajustar `FOTOS_VISTORIA_MOTO` para conter as mesmas 7 fotos da autovistoria (refeitas) + fotos tecnicas do rastreador:
 
-**Arquivo**: `src/hooks/useCotacaoContratacao.ts`
+**Fotos do veiculo (refazer todas da autovistoria):**
+1. Frente
+2. Traseira
+3. Lateral Direita
+4. Lateral Esquerda
+5. Painel com KM atual
+6. Motor / Chassi
+7. Avarias novas (se houver)
 
-No `salvarDadosPessoais`, ao salvar dados do CRLV, tambem derivar e persistir a `categoria` no banco se ela estiver null. Isso garante que futuras consultas ja tenham o campo preenchido.
+**Fotos tecnicas do rastreador (ja existem parcialmente):**
+8. Local exato da instalacao (ja existe)
+9. Codigo do rastreador visivel (**NOVO**)
+10. Teste de comunicacao / online (**NOVO**)
 
-Sera adicionado ao update da cotacao:
-- `categoria: cotacao.categoria || detectarCategoria(cotacao.veiculo_modelo)`
+### 3. Checklist do Instalador (`src/data/vistoriaConfig.ts`)
 
-Onde `detectarCategoria` retorna `'moto'` se o modelo contiver palavras como "moto", "nxr", "cg", "bros", "cb", "pcx", "factor", "biz", "pop", "titan", etc.
+Ajustar `FOTOS_MOTO` para alinhar com a mesma estrutura da instalacao, removendo fotos que nao constam na especificacao (vistoriador, farol, chave, banco, pneus).
 
 ## Arquivos Alterados
 
-| Arquivo | Alteracao |
+| Arquivo | O que muda |
 |---|---|
-| `src/pages/public/CotacaoContratacao.tsx` | Usar deteccao inteligente em vez de `cotacao.categoria === 'moto'` |
-| `src/hooks/useCotacaoContratacao.ts` | Persistir `categoria` derivada ao salvar dados pessoais |
+| `src/data/autovistoriaConfig.ts` | Reduzir FOTOS_AUTOVISTORIA_MOTO de 10 para 7 fotos |
+| `src/data/vistoriaConfigCompleta.ts` | Ajustar FOTOS_VISTORIA_MOTO para 7 fotos veiculo + 3 tecnicas |
+| `src/data/vistoriaConfig.ts` | Alinhar FOTOS_MOTO com a especificacao |
 
-## Resultado
-
-- Motos ja cadastradas passam a mostrar as 10 fotos corretas automaticamente
-- Novas cotacoes terao o campo `categoria` preenchido no banco para consultas futuras
