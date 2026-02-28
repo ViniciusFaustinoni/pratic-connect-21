@@ -1,127 +1,132 @@
 
-# Unificar Tipo de Vistoriador — Alocacao Diaria Rota/Base
 
-## Problema Atual
+# Tela de Plantoes Mensal + Ponto por Geolocalizacao da Base
 
-Hoje existem **duas roles separadas** no sistema:
-- `instalador_vistoriador` (campo/rota)
-- `vistoriador_base` (base fixa)
+## Resumo
 
-Isso e fixo — o profissional e cadastrado como um OU outro. Porem na realidade, o mesmo profissional pode estar na rua num dia e na base no outro. O coordenador precisa poder definir isso diariamente.
-
-## Solucao
-
-Unificar em uma unica role `instalador_vistoriador` e criar uma **tabela de alocacao diaria** que o coordenador preenche, definindo onde cada profissional trabalha naquele dia.
+Substituir o painel simples "Escala do Dia" por uma tela completa de **Plantoes Mensais**, onde o coordenador visualiza um calendario mensal e atribui vistoriadores como "Rota" ou "Base" em cada dia. Alem disso, adicionar a tag "Base da Pratic" nas oficinas e usar a geolocalizacao da oficina marcada para validar o ponto de entrada do vistoriador em base.
 
 ## Alteracoes
 
-### 1. Nova tabela `alocacoes_diarias`
+### 1. Nova coluna `is_base_pratic` na tabela `oficinas`
 
-Registra onde cada profissional esta alocado por dia, com historico automatico.
+Adicionar flag booleana para marcar oficinas como base operacional da Pratic. A geolocalizacao (latitude/longitude) ja existe na tabela.
 
 ```text
-alocacoes_diarias
-- id (uuid, PK)
-- profissional_id (uuid, FK profiles.id)
-- data (date)
-- tipo_alocacao ('rota' | 'base')
-- definido_por (uuid, FK profiles.id) -- coordenador
-- observacoes (text, nullable)
-- created_at, updated_at
-- UNIQUE(profissional_id, data)
+ALTER TABLE oficinas ADD COLUMN is_base_pratic boolean DEFAULT false;
 ```
 
-RLS: leitura para authenticated, escrita para coordenadores/diretores.
+### 2. Substituir EscalaDiaPanel por tela de Plantoes Mensal
 
-### 2. Migrar role `vistoriador_base` para `instalador_vistoriador`
+**Remover**: `src/components/equipe/EscalaDiaPanel.tsx` (conteudo substituido)
 
-- Todos os usuarios com role `vistoriador_base` recebem role `instalador_vistoriador` via SQL
-- Remover registros antigos de `vistoriador_base` do `user_roles`
-- Manter o enum no banco por compatibilidade (nao e possivel remover valores de enum no Postgres facilmente)
+**Novo componente**: `src/components/equipe/PlantoesCalendario.tsx`
 
-### 3. UI do Coordenador — Definir Alocacao do Dia
+Tela com:
+- Seletor de mes/ano no topo
+- Grade tipo calendario mostrando todos os dias do mes
+- Cada dia mostra os vistoriadores alocados com badge Rota (azul) ou Base (amarelo)
+- Clique em um dia abre modal para editar alocacoes daquele dia
+- Botao "Copiar semana anterior" para facilitar o preenchimento
+- Resumo lateral com total de dias alocados por profissional
 
-Na pagina **Monitoramento > Equipe**, adicionar um painel/secao "Escala do Dia" onde o coordenador:
-- Ve a lista de profissionais ativos
-- Para cada um, seleciona "Rota" ou "Base" (toggle/select)
-- Salva as alocacoes de uma vez
-- Pode ver historico de alocacoes anteriores
+### 3. Modal de edicao de dia
 
-### 4. Atualizar logica de `isVistoriadorBase` para consultar alocacao do dia
+**Novo componente**: `src/components/equipe/PlantaoDiaModal.tsx`
 
-Em vez de checar a role, consultar `alocacoes_diarias` para o dia atual:
-- Se `tipo_alocacao = 'base'` → comportamento de vistoriador base (sem mapa, sem GPS obrigatorio)
-- Se `tipo_alocacao = 'rota'` ou sem registro → comportamento de campo (mapa, GPS, rotas)
+Ao clicar em um dia do calendario:
+- Lista todos os vistoriadores ativos
+- Toggle Rota/Base para cada um (igual ao EscalaDiaPanel atual)
+- Botao salvar (upsert em `alocacoes_diarias`)
 
-**Arquivos afetados:**
-- `src/hooks/usePermissions.ts` — `isVistoriadorBase` passa a consultar alocacao
-- `src/components/instalador/InstaladorLayout.tsx` — usar alocacao ao inves de role
-- `src/components/instalador/InstaladorGuard.tsx` — aceitar apenas `instalador_vistoriador`
-- `src/pages/instalador/InstaladorHome.tsx` — usar alocacao
-- `src/hooks/useRouteGuard.ts` — ajustar bloqueio de mapa
+A tabela `alocacoes_diarias` ja existente continua sendo usada — a unica mudanca e a interface que passa de diaria para mensal.
 
-### 5. Criar hook `useAlocacaoDiaria`
+### 4. Integrar na pagina Equipe
 
-Novo hook que:
-- Consulta `alocacoes_diarias` para o profissional logado no dia atual
-- Retorna `tipoAlocacao: 'rota' | 'base' | null`
-- Usado pelo InstaladorLayout, InstaladorHome e usePermissions
+**Arquivo**: `src/pages/monitoramento/Equipe.tsx`
 
-### 6. Atualizar jornada de trabalho
+Substituir `<EscalaDiaPanel />` pelo novo `<PlantoesCalendario />` com uma aba ou secao dedicada.
 
-No `useJornadaTrabalho.ts` e `useIniciarServico.ts`:
-- Se alocacao do dia = 'base': nao exigir GPS para iniciar turno
-- Se alocacao do dia = 'rota': manter exigencia de GPS
+### 5. Tag "Base da Pratic" no cadastro de oficinas
 
-### 7. Remover referencia a `vistoriador_base` nos formularios
+**Arquivo**: `src/components/oficinas/OficinaForm.tsx` (ou equivalente)
 
-- `ProfissionalModal.tsx` — remover campo `tipoVistoriador` (todos sao `instalador_vistoriador`)
-- `UsuarioForm.tsx` — manter role `vistoriador_base` apenas para compatibilidade visual, mas direcionar para `instalador_vistoriador`
-- `NovoFuncionarioModal.tsx` — remover opcao separada
-- `ImportarUsuariosDialog.tsx` — remover opcao VB separada
+Adicionar checkbox "Marcar como Base da Pratic" no formulario de cadastro/edicao de oficina. Quando marcado, salva `is_base_pratic = true`.
 
-### 8. Atualizar atribuicao de tarefas
+### 6. Ponto de entrada por geolocalizacao da base
 
-- `AtribuirVistoriadorModal.tsx` — buscar apenas `instalador_vistoriador`, filtrar por alocacao do dia se relevante
-- `useEquipe.ts` — buscar apenas `instalador_vistoriador`
+**Arquivo**: `src/hooks/useIniciarServico.ts`
+
+Na funcao `iniciarServico`, apos obter a geolocalizacao do vistoriador:
+
+1. Consultar `useAlocacaoDiaria` para verificar se o profissional esta alocado como "base" hoje
+2. Se sim:
+   - Buscar oficinas com `is_base_pratic = true`
+   - Calcular distancia entre a posicao do vistoriador e a oficina-base
+   - Se distancia <= 200 metros: ponto validado, criar turno normalmente
+   - Se distancia > 200 metros: exibir erro "Voce precisa estar na base para iniciar o turno"
+3. Se rota: manter comportamento atual (GPS obrigatorio, sem validacao de local)
+
+### 7. Hook auxiliar para buscar bases Pratic
+
+**Novo arquivo**: `src/hooks/useBasesPratic.ts`
+
+Hook simples que busca oficinas com `is_base_pratic = true` e retorna suas coordenadas. Usado pelo `useIniciarServico` para validar proximidade.
 
 ## Resumo de Arquivos
 
 | Arquivo | Acao |
 |---|---|
-| Nova migration SQL | Criar `alocacoes_diarias` + migrar roles |
-| `src/hooks/useAlocacaoDiaria.ts` | **NOVO** — hook de alocacao do dia |
-| `src/pages/monitoramento/Equipe.tsx` | Adicionar secao "Escala do Dia" |
-| `src/components/equipe/EscalaDiaPanel.tsx` | **NOVO** — painel de definicao de escala |
-| `src/hooks/usePermissions.ts` | `isVistoriadorBase` usa alocacao |
-| `src/components/instalador/InstaladorLayout.tsx` | Usar alocacao |
-| `src/components/instalador/InstaladorGuard.tsx` | Aceitar apenas `instalador_vistoriador` |
-| `src/pages/instalador/InstaladorHome.tsx` | Usar alocacao |
-| `src/hooks/useRouteGuard.ts` | Ajustar bloqueio mapa |
-| `src/hooks/useIniciarServico.ts` | GPS condicional por alocacao |
-| `src/components/monitoramento/ProfissionalModal.tsx` | Remover tipoVistoriador |
-| `src/hooks/useEquipe.ts` | Buscar apenas `instalador_vistoriador` |
-| `src/components/monitoramento/AtribuirVistoriadorModal.tsx` | Ajustar query de roles |
+| Nova migration SQL | Adicionar `is_base_pratic` em `oficinas` |
+| `src/components/equipe/EscalaDiaPanel.tsx` | Substituir por `PlantoesCalendario.tsx` |
+| `src/components/equipe/PlantoesCalendario.tsx` | **NOVO** — Calendario mensal de plantoes |
+| `src/components/equipe/PlantaoDiaModal.tsx` | **NOVO** — Modal de edicao de dia |
+| `src/pages/monitoramento/Equipe.tsx` | Usar PlantoesCalendario no lugar de EscalaDiaPanel |
+| `src/hooks/useBasesPratic.ts` | **NOVO** — Buscar oficinas marcadas como base |
+| `src/hooks/useIniciarServico.ts` | Validar proximidade da base para vistoriadores em base |
+| Formulario de oficina (cadastro/edicao) | Adicionar toggle "Base da Pratic" |
 
-## Fluxo Resultante
+## Fluxo do Ponto para Vistoriador em Base
+
+```text
+Vistoriador abre o app e clica "Iniciar Turno"
+  |
+  v
+Sistema obtem geolocalizacao do dispositivo
+  |
+  v
+Consulta alocacao do dia → tipo = 'base'?
+  |
+  +-- NAO (rota) → fluxo normal (GPS + atribuir tarefa)
+  |
+  +-- SIM (base) → busca oficinas com is_base_pratic = true
+                     |
+                     v
+                   Calcula distancia (Haversine)
+                     |
+                     +-- <= 200m → Ponto validado! Turno criado.
+                     |
+                     +-- > 200m → Erro: "Aproxime-se da base para registrar ponto"
+```
+
+## Fluxo do Calendario de Plantoes
 
 ```text
 Coordenador abre Monitoramento > Equipe
   |
   v
-Secao "Escala do Dia" mostra lista de profissionais
+Secao "Plantoes" mostra calendario do mes atual
   |
   v
-Para cada um, define: [Rota] ou [Base]
+Cada dia mostra badges dos vistoriadores alocados
   |
   v
-Salva → grava em alocacoes_diarias (profissional_id, data, tipo)
+Clica em um dia → Modal abre com lista de vistoriadores
   |
   v
-Profissional abre App:
-  - tipo = 'rota' → ve mapa, GPS obrigatorio, recebe rotas
-  - tipo = 'base' → sem mapa, sem GPS, recebe tarefas de base
+Define Rota/Base para cada um → Salva
   |
   v
-Historico fica salvo por data (auditoria)
+Dados salvos em alocacoes_diarias (historico automatico)
 ```
+
