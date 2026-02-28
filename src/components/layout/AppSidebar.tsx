@@ -90,6 +90,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions, PermissionKey } from '@/hooks/usePermissions';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
+import { useModuleItemVisibility, MENU_ITEM_IDS } from '@/hooks/useModuleItemVisibility';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
 import { ROLE_LABELS } from '@/types/database';
@@ -493,6 +494,7 @@ export function AppSidebar() {
   const location = useLocation();
   const permissions = usePermissions();
   const { visibleModules } = useModuleVisibility();
+  const { isItemVisible } = useModuleItemVisibility();
 
   const isActive = (path: string) => {
     if (path === '/dashboard') return location.pathname === path;
@@ -513,7 +515,11 @@ export function AppSidebar() {
       .filter(group => !group.permission || permissions.hasPermission(group.permission))
       .map(group => ({
         ...group,
-        items: filterByPermission(group.items),
+        items: filterByPermission(group.items).filter(item => {
+          const itemId = MENU_ITEM_IDS[item.url];
+          if (!itemId) return true;
+          return isItemVisible(group.id, itemId);
+        }),
       }))
       .filter(group => group.items.length > 0);
 
