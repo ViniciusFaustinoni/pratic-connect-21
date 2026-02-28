@@ -1,25 +1,45 @@
 
-# Remover Seleção Manual de Tipo de Veículo na Autovistoria
+# Corrigir Deteccao Automatica de Tipo de Veiculo na Autovistoria
 
 ## Problema
 
-Na etapa de vistoria do link público, o sistema já sabe se o veículo é carro ou moto (campo `categoria` da cotação, extraído via CRLV/placa). Porém, ao clicar em "Autovistoria", o usuário é levado a uma tela intermediária pedindo para escolher manualmente entre "Automóvel" e "Moto" -- desnecessário e confuso.
+O campo `cotacao.categoria` esta **null** no banco de dados para cotacoes criadas pelo fluxo publico (link do associado). Apenas cotacoes criadas pelo Cotador interno tem esse campo preenchido (via dropdown manual). Como o codigo usa `cotacao.categoria === 'moto'` para determinar o tipo de veiculo, ele sempre retorna `false` e mostra as 15 fotos de carro, mesmo para motos.
 
-## Solução
+Exemplo no banco: a cotacao com modelo "nxr160 Bros Esdd" (uma moto) tem `categoria: null`.
 
-Eliminar a tela de seleção manual e usar diretamente o `tipoVeiculo` que já vem como prop (derivado de `cotacao.categoria`).
+## Solucao
 
-## Alteração
+Duas alteracoes complementares:
 
-**Arquivo**: `src/components/cotacao-publica/EtapaVistoria.tsx`
+### 1. Corrigir a derivacao de tipo na tela (imediato)
 
-1. **Botão "Autovistoria"** (linha 114): Ao clicar, ir direto para `'autovistoria'` em vez de `'selecao-veiculo'`
-2. **Autovistoria** (linha 359): Usar `tipoVeiculo` (prop) diretamente, sem depender de `tipoSelecionado`
-3. **Botão "Voltar" na autovistoria** (linha 349): Voltar para `'escolha'` em vez de `'selecao-veiculo'`
-4. **Remover bloco inteiro** da tela de seleção de veículo (linhas 228-334) e o estado `tipoSelecionado` (linha 43), já que não serão mais necessários
-5. **Remover `'selecao-veiculo'`** do type `ModoVistoria` (linha 27)
+**Arquivo**: `src/pages/public/CotacaoContratacao.tsx`
+
+Alterar a logica de `tipoVeiculo` na linha 523 para usar uma funcao de deteccao inteligente que verifica multiplos campos, em vez de depender apenas de `cotacao.categoria`:
+
+- Primeiro, verificar `cotacao.categoria` (funciona para cotacoes do Cotador)
+- Se null, verificar `cotacao.veiculo_categoria`
+- Se ambos null, analisar `cotacao.veiculo_modelo` usando a funcao `detectarTipoVeiculo` que ja existe em `src/data/vistoriaConfigCompleta.ts` (reconhece palavras como "moto", "motocicleta", "nxr", "cg", "bros", etc.)
+
+### 2. Preencher `categoria` ao salvar dados pessoais (preventivo)
+
+**Arquivo**: `src/hooks/useCotacaoContratacao.ts`
+
+No `salvarDadosPessoais`, ao salvar dados do CRLV, tambem derivar e persistir a `categoria` no banco se ela estiver null. Isso garante que futuras consultas ja tenham o campo preenchido.
+
+Sera adicionado ao update da cotacao:
+- `categoria: cotacao.categoria || detectarCategoria(cotacao.veiculo_modelo)`
+
+Onde `detectarCategoria` retorna `'moto'` se o modelo contiver palavras como "moto", "nxr", "cg", "bros", "cb", "pcx", "factor", "biz", "pop", "titan", etc.
+
+## Arquivos Alterados
+
+| Arquivo | Alteracao |
+|---|---|
+| `src/pages/public/CotacaoContratacao.tsx` | Usar deteccao inteligente em vez de `cotacao.categoria === 'moto'` |
+| `src/hooks/useCotacaoContratacao.ts` | Persistir `categoria` derivada ao salvar dados pessoais |
 
 ## Resultado
 
-- Clicou em "Autovistoria" -> vai direto para as fotos (15 se carro, 10 se moto), sem etapa intermediária
-- O tipo de veículo é determinado automaticamente pelo sistema com base nos dados do CRLV/placa
+- Motos ja cadastradas passam a mostrar as 10 fotos corretas automaticamente
+- Novas cotacoes terao o campo `categoria` preenchido no banco para consultas futuras
