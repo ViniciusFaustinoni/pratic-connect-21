@@ -522,14 +522,34 @@ export default function InstaladorChecklist() {
     }
   };
 
-  const handleRecusarVeiculo = async (motivoCodigo: string, motivoCompleto: string) => {
+  const handleRecusarVeiculo = async (motivoCompleto: string, fotos: File[]) => {
     if (!id || !servico?.veiculos?.id || !servico?.associados?.id) return;
     try {
+      // Upload das fotos de evidência para o storage
+      const fotosUrls: string[] = [];
+      for (const foto of fotos) {
+        const timestamp = Date.now();
+        const fileName = `recusas/${id}/${timestamp}_${foto.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('instalacoes')
+          .upload(fileName, foto, { cacheControl: '3600', upsert: false });
+        
+        if (uploadError) {
+          console.error('Erro ao fazer upload de foto de recusa:', uploadError);
+          continue;
+        }
+        const { data: urlData } = supabase.storage
+          .from('instalacoes')
+          .getPublicUrl(uploadData.path);
+        fotosUrls.push(urlData.publicUrl);
+      }
+
       await recusarVeiculoMutation.mutateAsync({
         servicoId: id,
         veiculoId: servico.veiculos.id,
         associadoId: servico.associados.id,
         motivo: motivoCompleto,
+        fotosRecusa: fotosUrls,
       });
       setShowModalRecusa(false);
       navigate('/instalador');
@@ -1645,7 +1665,7 @@ export default function InstaladorChecklist() {
               open={showModalRecusa}
               onClose={() => setShowModalRecusa(false)}
               onConfirm={({ motivoCompleto, fotos }) => {
-                handleRecusarVeiculo(motivoCompleto.split(':')[0]?.trim() || 'outro', motivoCompleto);
+                handleRecusarVeiculo(motivoCompleto, fotos);
               }}
               isPending={recusarVeiculoMutation.isPending}
               veiculoInfo={{

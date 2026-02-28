@@ -1146,145 +1146,37 @@ export function useRecusarVeiculoServico() {
       veiculoId: string;
       associadoId: string;
       motivo: string;
-      contratoId?: string;
-      vistoriaId?: string;
-      cotacaoId?: string;
+      fotosRecusa?: string[];
     }) => {
       const agora = new Date().toISOString();
 
-      // 1. Buscar dados do serviço para obter contrato_id e cotacao_id se não fornecidos
-      let contratoId = data.contratoId;
-      let cotacaoId = data.cotacaoId;
-      
-      if (!contratoId || !cotacaoId) {
-        const { data: servicoData } = await supabase
-          .from('servicos')
-          .select('contrato_id, cotacao_id')
-          .eq('id', data.servicoId)
-          .single();
-        
-        contratoId = contratoId || servicoData?.contrato_id;
-        cotacaoId = cotacaoId || servicoData?.cotacao_id;
-      }
-
-      // 2. Atualizar serviço como cancelado
+      // 1. Atualizar serviço para pendente_analise (NÃO cancelar imediatamente)
       const { error: servicoError } = await supabase
         .from('servicos')
         .update({
-          status: 'cancelada',
-          observacoes: `Veículo recusado: ${data.motivo}`,
-          concluida_em: agora,
+          status: 'em_analise',
+          decisao_instalador: 'negado',
+          ressalvas_instalador: data.motivo,
+          fotos_ressalva: data.fotosRecusa || [],
+          observacoes: `Veículo negado pelo instalador - pendente análise interna: ${data.motivo}`,
           updated_at: agora,
         })
         .eq('id', data.servicoId);
 
       if (servicoError) throw servicoError;
 
-      // 3. Atualizar veículo como RECUSADO (não mais suspenso) e obter dados para blacklist
-      const { data: veiculoData, error: veiculoError } = await supabase
-        .from('veiculos')
-        .update({
-          status: 'recusado',
-          motivo_recusa_veiculo: data.motivo,
-          recusado_por: profile?.id,
-          recusado_em: agora,
-          updated_at: agora,
-        })
-        .eq('id', data.veiculoId)
-        .select('placa, chassi')
-        .single();
-
-      if (veiculoError) throw veiculoError;
-
-      // 4. NOVO: Buscar vistoria para reprovada (antes de inserir na blacklist)
-      const vistoriaFilter = contratoId 
-        ? `contrato_id.eq.${contratoId}` 
-        : cotacaoId 
-          ? `cotacao_id.eq.${cotacaoId}` 
-          : null;
-      
-      let vistoriaId: string | null = null;
-      if (vistoriaFilter) {
-        const { data: vistoriaData } = await supabase
-          .from('vistorias')
-          .select('id')
-          .or(vistoriaFilter)
-          .maybeSingle();
-        
-        if (vistoriaData?.id) {
-          vistoriaId = vistoriaData.id;
-          await supabase
-            .from('vistorias')
-            .update({
-              status: 'reprovada',
-              observacoes: data.motivo,
-              updated_at: agora,
-            })
-            .eq('id', vistoriaData.id);
-        }
-      }
-
-      // 5. NOVO: Adicionar veículo à blacklist
-      if (veiculoData) {
-        await supabase
-          .from('blacklist_veiculos')
-          .insert({
-            placa: veiculoData.placa?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '',
-            chassi: veiculoData.chassi,
-            motivo: data.motivo,
-            justificativa: `Veículo recusado pelo técnico: ${data.motivo}`,
-            tipo_reprovacao: 'vistoria_reprovada',
-            veiculo_id: data.veiculoId,
-            associado_id: data.associadoId,
-            contrato_id: contratoId,
-            cotacao_id: cotacaoId,
-            adicionado_por: profile?.id,
-            vistoria_id: vistoriaId,
-            ativo: true,
-          });
-      }
-
-      // 6. NOVO: Atualizar associado para recusado
-      await supabase
-        .from('associados')
-        .update({
-          status: 'recusado',
-          updated_at: agora,
-        })
-        .eq('id', data.associadoId);
-
-      // 7. NOVO: Atualizar contrato para cancelado
-      if (contratoId) {
-        await supabase
-          .from('contratos')
-          .update({
-            status: 'cancelado',
-          })
-          .eq('id', contratoId);
-      }
-
-      // 8. ATUALIZADO: Atualizar cotação - status E status_contratacao
-      if (cotacaoId) {
-        await supabase
-          .from('cotacoes')
-          .update({ 
-            status: 'recusada',                    // Mudar status principal para aparecer correto na UI
-            status_contratacao: 'veiculo_recusado' 
-          })
-          .eq('id', cotacaoId);
-      }
-
-      // 9. Registrar histórico
+      // 2. Registrar histórico como pendente de análise (sem ações destrutivas)
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
-        tipo: 'veiculo_recusado',
-        descricao: `Veículo recusado pelo técnico: ${data.motivo}`,
+        tipo: 'negado_pelo_instalador_pendente_analise',
+        descricao: `Veículo negado pelo instalador - encaminhado para análise interna: ${data.motivo}`,
         dados_novos: {
           servico_id: data.servicoId,
           veiculo_id: data.veiculoId,
           motivo: data.motivo,
-          contrato_id: contratoId,
-          cotacao_id: cotacaoId,
+          fotos_recusa: data.fotosRecusa || [],
+          decisao: 'negado',
+          status_encaminhamento: 'pendente_analise',
         },
         usuario_id: profile?.id,
       });
@@ -1295,11 +1187,7 @@ export function useRecusarVeiculoServico() {
       queryClient.invalidateQueries({ queryKey: ['servico-detalhes'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
-      queryClient.invalidateQueries({ queryKey: ['blacklist-veiculos'] });
-      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
-      queryClient.invalidateQueries({ queryKey: ['associados'] });
-      queryClient.invalidateQueries({ queryKey: ['contratos'] });
-      toast.success('Veículo recusado. Adicionado à blacklist e associado suspenso.');
+      toast.success('Veículo negado. Encaminhado para análise interna.');
     },
     onError: (error) => {
       console.error('Erro ao recusar veículo:', error);
