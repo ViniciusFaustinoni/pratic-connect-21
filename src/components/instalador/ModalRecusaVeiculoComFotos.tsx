@@ -105,7 +105,8 @@ export function ModalRecusaVeiculoComFotos({
 
   const isValid = motivoSelecionado && 
     (motivoSelecionado !== 'outro' || detalhes.trim().length > 10) &&
-    detalhes.trim().length > 0; // Observações agora são obrigatórias
+    detalhes.trim().length > 0 &&
+    fotos.length > 0; // Observações e fotos são obrigatórias
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -165,7 +166,7 @@ export function ModalRecusaVeiculoComFotos({
 
           {/* Fotos de evidência */}
           <div className="space-y-2">
-            <Label>Fotos de Evidência (opcional, até {MAX_FOTOS})</Label>
+            <Label>Fotos de Evidência (obrigatório, até {MAX_FOTOS}) *</Label>
             <input
               ref={inputRef}
               type="file"
@@ -204,6 +205,11 @@ export function ModalRecusaVeiculoComFotos({
                 </button>
               )}
             </div>
+            {fotos.length === 0 && (
+              <p className="text-xs text-amber-500">
+                É obrigatório anexar pelo menos uma foto de evidência
+              </p>
+            )}
             <p className="text-xs text-slate-500">
               Anexe fotos dos problemas identificados no veículo
             </p>
