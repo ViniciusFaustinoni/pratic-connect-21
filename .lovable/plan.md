@@ -1,33 +1,41 @@
 
-
-# Corrigir a pagina de Perfis em /diretoria/perfis
+# Corrigir visibilidade para usuarios com multiplos perfis
 
 ## Problema
 
-A rota `/diretoria/perfis` esta renderizando o componente `PerfisAcesso` (pagina simples de atribuicao de roles), enquanto a funcionalidade completa de **Matriz de Visibilidade** (controle de quais modulos e abas cada perfil pode ver/editar) esta no componente `Perfis` de `src/pages/configuracoes/Perfis.tsx`.
+Quando um usuario tem `coordenador_monitoramento` + `instalador_vistoriador`, o sistema trata como "apenas instalador" e redireciona forcadamente para `/instalador`, impedindo acesso ao painel de coordenador.
 
-O usuario espera encontrar o controle de visibilidade em `/diretoria/perfis`, mas la so aparece uma lista basica de cards de perfis e atribuicao de roles por usuario.
+A causa esta em `usePermissions.ts`: a flag `isInstaladorVistoriadorOnly` so exclui diretor, gerencia, desenvolvedor e admin_master da condicao "Only". Nao considera outros perfis operacionais como `coordenador_monitoramento`.
 
 ## Solucao
 
-Unificar as duas paginas: fazer `/diretoria/perfis` renderizar o componente completo que ja inclui a matriz de visibilidade, lista de perfis e gerenciamento de roles.
+Alterar as flags "Only" para excluir mutuamente todos os perfis operacionais relevantes, nao apenas os de gerencia/admin.
 
 ## Alteracoes
 
-### 1. Atualizar rota em `src/App.tsx`
+### `src/hooks/usePermissions.ts`
 
-Trocar o componente usado na rota `/diretoria/perfis` de `PerfisAcesso` para o componente `Perfis` de configuracoes que ja possui toda a funcionalidade:
+1. **`isInstaladorVistoriadorOnly` (linha 134)**: Adicionar exclusao de `coordenador_monitoramento`, `analista_plataforma`, `analista_cadastro`, `analista_eventos`, `regulador`, `sindicante` — ou seja, se tem qualquer outro perfil alem de instalador, NAO e "only".
 
-- Importar `Perfis` de `src/pages/configuracoes/Perfis.tsx` (ja importado como `Perfis` na linha 116)
-- Alterar a rota `/diretoria/perfis` de `<PerfisAcesso />` para `<Perfis />`
+2. **`isCoordenadorMonitoramentoOnly` (linha 126)**: Adicionar exclusao de `instalador_vistoriador` e outros perfis operacionais.
 
-### 2. Manter `PerfisAcesso` como fallback
+3. **Mesma logica para os demais "Only"**: `isAnalistaEventosOnly`, `isReguladorOnly`, `isSindicanteOnly` — cada um deve excluir os outros perfis operacionais.
 
-O arquivo `src/pages/diretoria/PerfisAcesso.tsx` pode ser mantido sem alteracoes por enquanto, caso seja usado em outro lugar futuramente.
+### `src/hooks/useRouteGuard.ts`
 
-## Resumo de arquivos
+4. **Adicionar tratamento para perfis mistos**: Quando um usuario tem perfis que incluem tanto layouts especiais (instalador, regulador, sindicante) quanto perfis do sistema principal (coordenador, analista), ele deve acessar o **sistema principal** (nao ser forcado ao app mobile). O guard dinamico baseado em `visibleModules` ja cobre isso — basta que as flags "Only" estejam corretas.
+
+## Resumo tecnico
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/App.tsx` (linha 613) | Trocar `PerfisAcesso` por `Perfis` na rota `/diretoria/perfis` |
+| `src/hooks/usePermissions.ts` | Expandir exclusoes nas flags "Only" para considerar todos os perfis operacionais |
+| `src/hooks/useRouteGuard.ts` | Nenhuma alteracao necessaria (depende das flags corrigidas) |
 
+## Resultado esperado
+
+Um usuario com `coordenador_monitoramento` + `instalador_vistoriador`:
+- `isInstaladorVistoriadorOnly` = false
+- `isCoordenadorMonitoramentoOnly` = false
+- Nao sofre redirect forcado para `/instalador`
+- Acessa o sistema principal com os modulos visiveis definidos pela uniao dos dois perfis na tabela `role_module_visibility`
