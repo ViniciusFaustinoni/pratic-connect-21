@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Users, UserCheck, UserX, BadgeDollarSign, Shield, FileText, 
   Search, Plus, MoreHorizontal, Edit, Key, ExternalLink, 
   Upload, Download, Crown, Briefcase, UserPlus, FileCheck, 
   Megaphone, Scale, MapPin, Monitor, Wrench, User, LogIn, 
-  LogOut, AlertTriangle, Trash, Settings, LucideIcon, Eye, EyeOff,
+  LogOut, AlertTriangle, Trash, Settings, LucideIcon, Eye, EyeOff, Grid3X3,
   RefreshCw, ChevronLeft, ChevronRight, Trash2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -51,6 +51,8 @@ import { Label } from '@/components/ui/label';
 import { useUsuarios, useUsuarioActions, ProfileWithRoles } from '@/hooks/useUsuarios';
 import { useVendedores, useVendedoresContagem } from '@/hooks/useVendedores';
 import { ImportarUsuariosDialog } from '@/components/usuarios/ImportarUsuariosDialog';
+
+const PerfisVisibilidade = lazy(() => import('@/pages/configuracoes/Perfis'));
 
 // ==================== CONFIGS ====================
 
@@ -450,6 +452,10 @@ export default function UsuariosAcessos() {
           <TabsTrigger value="logs" className="gap-2">
             <FileText className="h-4 w-4" />
             Logs de Atividade
+          </TabsTrigger>
+          <TabsTrigger value="visibilidade" className="gap-2">
+            <Grid3X3 className="h-4 w-4" />
+            Visibilidade
           </TabsTrigger>
         </TabsList>
 
@@ -879,6 +885,13 @@ export default function UsuariosAcessos() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* TAB: VISIBILIDADE */}
+        <TabsContent value="visibilidade" className="mt-6">
+          <Suspense fallback={<div className="flex items-center justify-center py-12"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+            <PerfisVisibilidade />
+          </Suspense>
         </TabsContent>
       </Tabs>
 

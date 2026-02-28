@@ -610,7 +610,7 @@ const App = () => (
               <Route path="/diretoria/rateios" element={<RateioSinistros />} />
               <Route path="/diretoria/indicadores" element={<IndicadoresAtuariais />} />
               <Route path="/diretoria/configuracoes" element={<ConfiguracoesSistema />} />
-              <Route path="/diretoria/perfis" element={<Perfis />} />
+              <Route path="/diretoria/perfis" element={<Navigate to="/configuracoes/usuarios-acessos?tab=visibilidade" replace />} />
               <Route path="/diretoria/usuarios" element={<UsuariosPage />} />
               <Route path="/diretoria/usuarios/:id" element={<UsuarioDetalhePage />} />
               <Route path="/diretoria/usuarios/:id/editar" element={<UsuarioEditarPage />} />
