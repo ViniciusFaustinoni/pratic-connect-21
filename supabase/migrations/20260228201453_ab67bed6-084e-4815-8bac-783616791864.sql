@@ -1,0 +1,1 @@
+ALTER TABLE whatsapp_meta_config ADD COLUMN IF NOT EXISTS access_token text;

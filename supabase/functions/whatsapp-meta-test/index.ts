@@ -21,10 +21,22 @@ serve(async (req) => {
       );
     }
 
-    const accessToken = Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
+    // Buscar token do banco ou fallback para env
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const { data: metaConfig } = await supabase
+      .from("whatsapp_meta_config")
+      .select("access_token")
+      .limit(1)
+      .maybeSingle();
+
+    const accessToken = metaConfig?.access_token || Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
     if (!accessToken) {
       return new Response(
-        JSON.stringify({ success: false, error: "META_WHATSAPP_ACCESS_TOKEN não configurado" }),
+        JSON.stringify({ success: false, error: "Access Token da Meta não configurado. Vá em Integrações > WhatsApp e configure o token." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -52,11 +64,7 @@ serve(async (req) => {
       );
     }
 
-    // Atualizar config no banco
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    // Atualizar config no banco (supabase já criado acima)
 
     await supabase
       .from("whatsapp_meta_config")

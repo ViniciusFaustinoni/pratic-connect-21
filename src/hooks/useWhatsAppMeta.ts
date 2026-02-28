@@ -22,7 +22,7 @@ export function useMetaConfig() {
 export function useSalvarMetaConfig() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: { phone_number_id: string; waba_id: string }) => {
+    mutationFn: async (values: { phone_number_id: string; waba_id: string; access_token?: string }) => {
       // Verificar se já existe
       const { data: existing } = await supabase
         .from('whatsapp_meta_config')
@@ -30,23 +30,25 @@ export function useSalvarMetaConfig() {
         .limit(1)
         .maybeSingle();
 
+      const updateData: any = {
+        phone_number_id: values.phone_number_id,
+        waba_id: values.waba_id,
+        updated_at: new Date().toISOString(),
+      };
+      if (values.access_token !== undefined) {
+        updateData.access_token = values.access_token;
+      }
+
       if (existing) {
         const { error } = await supabase
           .from('whatsapp_meta_config')
-          .update({
-            phone_number_id: values.phone_number_id,
-            waba_id: values.waba_id,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('id', existing.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('whatsapp_meta_config')
-          .insert({
-            phone_number_id: values.phone_number_id,
-            waba_id: values.waba_id,
-          });
+          .insert(updateData);
         if (error) throw error;
       }
     },

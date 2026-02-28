@@ -24401,6 +24401,7 @@ export type Database = {
       }
       whatsapp_meta_config: {
         Row: {
+          access_token: string | null
           ativo: boolean | null
           created_at: string | null
           id: string
@@ -24412,6 +24413,7 @@ export type Database = {
           waba_id: string
         }
         Insert: {
+          access_token?: string | null
           ativo?: boolean | null
           created_at?: string | null
           id?: string
@@ -24423,6 +24425,7 @@ export type Database = {
           waba_id?: string
         }
         Update: {
+          access_token?: string | null
           ativo?: boolean | null
           created_at?: string | null
           id?: string

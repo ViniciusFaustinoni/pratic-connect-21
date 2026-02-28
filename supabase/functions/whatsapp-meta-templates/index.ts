@@ -16,7 +16,7 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  const accessToken = Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
+  // accessToken será resolvido após buscar config
 
   try {
     const body = await req.json();
@@ -36,9 +36,10 @@ serve(async (req) => {
       );
     }
 
+    const accessToken = config.access_token || Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
     if (!accessToken) {
       return new Response(
-        JSON.stringify({ success: false, error: "META_WHATSAPP_ACCESS_TOKEN não configurado" }),
+        JSON.stringify({ success: false, error: "Access Token da Meta não configurado. Vá em Integrações > WhatsApp e configure o token." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
