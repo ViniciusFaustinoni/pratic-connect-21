@@ -38,15 +38,8 @@ export function useRouteGuard() {
       }
     }
 
-    // Vistoriador Base só pode acessar /instalador/* (sem mapa)
-    if (isVistoriadorBaseOnly) {
-      const isInInstaladorArea = location.pathname.startsWith('/instalador');
-      const isMapaRoute = location.pathname === '/instalador/mapa';
-      if (!isInInstaladorArea || isMapaRoute) {
-        navigate('/instalador', { replace: true });
-        return;
-      }
-    }
+    // NOTA: Bloqueio de mapa para vistoriador base agora é feito
+    // pelo InstaladorLayout via useAlocacaoDiaria, não mais por role.
 
     // Sindicante só pode acessar /sindicante/*, /perfil, /definir-senha
     if (isSindicanteOnly) {

@@ -15,6 +15,7 @@ import {
 import { InstaladorGuard } from './InstaladorGuard';
 import { TelaLocalizacaoBloqueada } from '@/components/vistoriador/TelaLocalizacaoBloqueada';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
+import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 import { useTarefaAtual } from '@/hooks/useTarefaAtual';
 import { toast } from 'sonner';
 import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptProfissional';
@@ -29,14 +30,14 @@ const NAV_ITEMS = [
 ];
 
 export function InstaladorLayout() {
-  const { profile, signOut, hasRole } = useAuth();
+  const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isRetrying, setIsRetrying] = useState(false);
 
-  // Verificar se é vistoriador base (sem acesso a mapa)
-  const isVistoriadorBase = hasRole('vistoriador_base') && !hasRole('instalador_vistoriador');
+  // Verificar alocação diária (rota ou base)
+  const { isBase: isVistoriadorBase } = useAlocacaoDiaria();
 
   // Hooks para verificar localização e tarefa ativa
   const { geoState } = useIniciarServico();

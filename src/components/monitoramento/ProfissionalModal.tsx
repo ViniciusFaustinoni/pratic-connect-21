@@ -77,7 +77,7 @@ export interface ProfissionalFormData {
   status: StatusProfissional;
   criarAcesso: boolean;
   senhaProvisoria: string;
-  tipoVistoriador: 'instalador_vistoriador' | 'vistoriador_base';
+  tipoVistoriador: 'instalador_vistoriador';
 }
 
 interface ProfissionalModalProps {
@@ -144,7 +144,7 @@ const profissionalSchema = z.object({
   status: z.enum(['disponivel', 'indisponivel']),
   criarAcesso: z.boolean().default(true),
   senhaProvisoria: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
-  tipoVistoriador: z.enum(['instalador_vistoriador', 'vistoriador_base']),
+  tipoVistoriador: z.literal('instalador_vistoriador'),
 });
 
 type FormSchema = z.infer<typeof profissionalSchema>;
@@ -457,37 +457,7 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                 Configurações de Trabalho
               </h3>
 
-              {/* Tipo de Vistoriador - apenas para novos profissionais */}
-              {!isEditing && (
-                <FormField
-                  control={form.control}
-                  name="tipoVistoriador"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo de Acesso *</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="instalador_vistoriador">
-                            Vistoriador de Campo (rota)
-                          </SelectItem>
-                          <SelectItem value="vistoriador_base">
-                            Vistoriador de Base
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        Define qual interface o profissional terá acesso no app
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+              {/* Tipo unificado - alocação diária é feita pelo coordenador na Escala do Dia */}
               
               {/* Regiões de atuação */}
               <FormField

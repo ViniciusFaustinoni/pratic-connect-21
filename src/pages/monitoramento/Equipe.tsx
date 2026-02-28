@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { EscalaDiaPanel } from '@/components/equipe/EscalaDiaPanel';
 import { Plus, Loader2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -151,6 +152,9 @@ export default function Equipe() {
       </div>
 
       {/* Modal de Edição */}
+      
+      {/* Painel Escala do Dia */}
+      <EscalaDiaPanel />
       <ProfissionalModal
         open={modalOpen}
         onOpenChange={setModalOpen}
