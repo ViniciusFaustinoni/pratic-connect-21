@@ -14208,6 +14208,7 @@ export type Database = {
           estado: string
           id: string
           inscricao_estadual: string | null
+          is_base_pratic: boolean | null
           latitude: number | null
           logradouro: string | null
           longitude: number | null
@@ -14239,6 +14240,7 @@ export type Database = {
           estado: string
           id?: string
           inscricao_estadual?: string | null
+          is_base_pratic?: boolean | null
           latitude?: number | null
           logradouro?: string | null
           longitude?: number | null
@@ -14270,6 +14272,7 @@ export type Database = {
           estado?: string
           id?: string
           inscricao_estadual?: string | null
+          is_base_pratic?: boolean | null
           latitude?: number | null
           logradouro?: string | null
           longitude?: number | null

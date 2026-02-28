@@ -1,0 +1,1 @@
+ALTER TABLE oficinas ADD COLUMN IF NOT EXISTS is_base_pratic boolean DEFAULT false;
