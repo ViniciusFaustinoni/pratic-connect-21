@@ -631,29 +631,29 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         });
       }
 
-      // 3. Criar lead retroativo se cotação não tem lead vinculado
+      // 3. Resolver vendedor_id (cotação ou usuário logado)
+      let vendedorId = cotacao.vendedor_id || null;
+      if (!vendedorId) {
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user) {
+            const { data: perfil } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('user_id', userData.user.id)
+              .single();
+            vendedorId = perfil?.id || null;
+          }
+        } catch (err) {
+          console.warn('[Contrato] Não foi possível obter vendedor atual:', err);
+        }
+      }
+
+      // 4. Criar lead retroativo se cotação não tem lead vinculado
       let leadId = cotacao.lead_id;
       
       if (!leadId && data.nome) {
         console.log('[Contrato] Criando lead retroativo a partir da cotação');
-        
-        // Buscar vendedor_id da cotação ou do usuário atual
-        let vendedorId = cotacao.vendedor_id;
-        if (!vendedorId) {
-          try {
-            const { data: userData } = await supabase.auth.getUser();
-            if (userData?.user) {
-              const { data: perfil } = await supabase
-                .from('profiles')
-                .select('id')
-                .eq('user_id', userData.user.id)
-                .single();
-              vendedorId = perfil?.id || null;
-            }
-          } catch (err) {
-            console.warn('[Contrato] Não foi possível obter vendedor atual:', err);
-          }
-        }
         
         // Criar lead usando array syntax para satisfazer o TypeScript
         const { data: novoLead, error: leadError } = await supabase
@@ -714,8 +714,9 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         codigo_fipe: cotacao.codigo_fipe || null,
         veiculo_combustivel: data.combustivel || cotacao.veiculo_combustivel || null,
         veiculo_categoria: cotacao.categoria || cotacao.veiculo_categoria || 'Automóvel',
+        veiculo_procedencia: cotacao.veiculo_procedencia || null,
         uso_aplicativo: cotacao.uso_aplicativo || false,
-        vendedor_id: cotacao.vendedor_id || null,
+        vendedor_id: cotacao.vendedor_id || vendedorId || null,
         // Dados do cliente
         cliente_nome: data.nome || null,
         cliente_cpf: data.cpf || null,
@@ -724,6 +725,17 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         cliente_cep: data.cep || null,
         cliente_cidade: data.cidade || null,
         cliente_uf: data.uf || null,
+        // CNH, RG e endereço extraídos via OCR
+        cliente_cnh: data.cnh || null,
+        cliente_cnh_validade: data.cnh_validade || null,
+        cliente_cnh_categoria: data.cnh_categoria || null,
+        cliente_rg: data.rg || null,
+        cliente_rg_orgao: data.rg_orgao || null,
+        cliente_data_nascimento: data.data_nascimento || null,
+        cliente_logradouro: data.logradouro || null,
+        cliente_numero: data.numero || null,
+        cliente_complemento: data.complemento || null,
+        cliente_bairro: data.bairro || null,
       });
 
       // 5. Atualizar status da cotação
