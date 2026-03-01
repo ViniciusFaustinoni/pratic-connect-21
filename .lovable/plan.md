@@ -1,44 +1,91 @@
 
-# Adicionar botao "Comunicar Imprevisto" nas telas de execucao do instalador
+
+# Redesign de Layout - Area do Instalador/Vistoriador
 
 ## Problema
 
-O botao "Comunicar Imprevisto" existe apenas no card pre-execucao (`TarefaAtualCard`), mas **nao aparece** nas telas de execucao onde o instalador esta efetivamente realizando o servico:
+As telas da area do instalador/vistoriador tem problemas de scroll e sobreposicao porque:
 
-- `InstaladorChecklist.tsx` (Instalacao)
-- `ExecutarManutencao.tsx` (Manutencao)
-- `ExecutarRetirada.tsx` (Retirada)
-
-Ou seja, uma vez que o instalador clica em "Iniciar" e entra na tela de execucao, ele perde a opcao de comunicar imprevistos.
+1. O **InstaladorLayout** usa `sticky` header + `fixed` bottom nav com `pb-16` no main
+2. As paginas filhas (ExecutarManutencao, ExecutarVistoriaCompleta, InstaladorChecklist, etc.) criam seus **proprios** headers `sticky top-0` e footers `fixed bottom-0` que conflitam com o layout pai
+3. Varias paginas usam `min-h-screen` dentro de um container que ja tem altura controlada, causando overflow duplo
+4. O `InstaladorChecklist` e `ExecutarRetirada` ja foram parcialmente corrigidos com `h-[100dvh]`, mas isso tambem conflita com o layout pai que ja fornece a estrutura
 
 ## Solucao
 
-Reutilizar o componente `ImprevistoBotao` (que ja esta pronto com modal, motivos, duplo check e reagendamento) e adiciona-lo nas 3 telas de execucao.
+Padronizar todas as paginas para funcionar **dentro** do container de scroll do `InstaladorLayout`, sem criar seus proprios containers de viewport completa.
 
-### Arquivo 1: `src/pages/instalador/InstaladorChecklist.tsx`
+### Principio: Paginas normais vs Paginas de execucao
 
-- Importar `ImprevistoBotao` de `@/components/vistoriador/ImprevistoBotao`
-- Adicionar o botao no header ou no rodape da tela, visivel em todas as etapas
-- Passar os dados do servico (`id`, `associado.nome`, `associado.telefone`, `associado.whatsapp`)
+- **Paginas normais** (Home, Tarefas, Perfil, Configuracoes): Conteudo simples que rola dentro do `main` do layout. Remover `min-h-screen` redundante.
 
-### Arquivo 2: `src/pages/instalador/ExecutarManutencao.tsx`
+- **Paginas de execucao** (InstaladorChecklist, ExecutarManutencao, ExecutarRetirada, ExecutarVistoriaCompleta): Precisam de header proprio + footer fixo. Usar `h-full` com flex column para ocupar o espaco disponivel do layout pai, nao da viewport.
 
-- Importar `ImprevistoBotao`
-- Adicionar o botao abaixo das informacoes do cliente, antes das acoes principais
-- Usar os dados do servico para preencher as props
+### Alteracoes por arquivo
 
-### Arquivo 3: `src/pages/instalador/ExecutarRetirada.tsx`
+**1. `src/components/instalador/InstaladorLayout.tsx`**
+- Mudar o `main` de `overflow-hidden pb-16` para um container flex que permite as paginas de execucao controlarem seu proprio scroll
+- Garantir que a area de conteudo ocupa `flex-1 min-h-0` corretamente
+- Mudar a bottom nav de `fixed` para estar dentro do flow do flex (evita conflito de z-index)
 
-- Importar `ImprevistoBotao`
-- Adicionar o botao no mesmo local (abaixo das informacoes do cliente)
-- Usar os dados do servico para preencher as props
+**2. `src/pages/instalador/InstaladorHome.tsx`**
+- Remover `min-h-screen` do container principal (o layout pai ja fornece isso)
+- Manter o conteudo como flow normal
 
-## Posicionamento do botao
+**3. `src/pages/instalador/InstaladorTarefas.tsx`**
+- Remover `min-h-screen` do container principal
 
-Em todas as 3 telas, o botao sera colocado de forma visivel mas nao intrusiva:
-- Nos headers das telas de execucao, logo abaixo dos dados do associado/veiculo
-- Respeitando o estilo dark/slate ja usado nestas telas
+**4. `src/pages/instalador/InstaladorPerfil.tsx`**
+- Remover `min-h-screen` (se existir)
 
-## Resultado esperado
+**5. `src/pages/instalador/InstaladorConfiguracoes.tsx`**
+- Remover `min-h-screen`
 
-O instalador podera comunicar imprevistos a qualquer momento durante a execucao de uma instalacao, manutencao ou retirada, sem precisar voltar para a tela anterior.
+**6. `src/pages/instalador/InstaladorChecklist.tsx`**
+- Remover `h-[100dvh]` e `overflow-hidden` do container raiz
+- Usar `flex flex-col h-full` para se encaixar no espaco do layout pai
+- Progress bar: `flex-shrink-0` (ja feito)
+- Content: `flex-1 overflow-y-auto` com `-webkit-overflow-scrolling: touch`
+- Footer: `flex-shrink-0` (ja feito), remover `fixed`
+
+**7. `src/pages/instalador/ExecutarRetirada.tsx`**
+- Mesma abordagem: trocar `h-[100dvh]` por `flex flex-col h-full`
+- Header e progress como `flex-shrink-0`
+- Content como `flex-1 overflow-y-auto`
+
+**8. `src/pages/instalador/ExecutarManutencao.tsx`**
+- Trocar `min-h-screen bg-background` por `flex flex-col h-full bg-background`
+- Header `sticky top-0` vira `flex-shrink-0`
+- Content area recebe `flex-1 overflow-y-auto`
+
+**9. `src/pages/instalador/ExecutarVistoriaCompleta.tsx`**
+- Trocar `min-h-screen pb-32` por `flex flex-col h-full`
+- Header e progress bar como `flex-shrink-0`
+- Main como `flex-1 overflow-y-auto`
+- Footer: trocar `fixed bottom-0` por `flex-shrink-0`
+
+### Ajuste chave no InstaladorLayout
+
+O layout precisa esconder a bottom nav nas rotas de execucao (checklist, manutencao, retirada, vistoria) para que o footer proprio da pagina de execucao nao conflite:
+
+```text
+// Detectar se esta numa rota de execucao
+const isRotaExecucao = location.pathname.match(
+  /\/instalador\/(retirada|vistoria|manutencao|instalacao)\//
+);
+
+// Esconder bottom nav em rotas de execucao
+{!isRotaExecucao && <nav>...</nav>}
+```
+
+Isso elimina o conflito de dois footers sobrepostos e libera o espaco para o footer da pagina de execucao.
+
+### Resultado esperado
+
+- Scroll funciona fluido em todas as telas, sem travamento no iOS
+- Nenhum elemento sobreposto (header do layout + header da pagina, ou bottom nav + footer de execucao)
+- Paginas normais rolam naturalmente no container do layout
+- Paginas de execucao tem seu proprio scroll interno sem conflitos
+
+### Total: 9 arquivos alterados
+
