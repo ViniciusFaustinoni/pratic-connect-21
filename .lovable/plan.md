@@ -1,91 +1,83 @@
 
 
-# Redesign de Layout - Area do Instalador/Vistoriador
+# Corrigir erro "Erro ao confirmar duplo check"
 
-## Problema
+## Problema Identificado
 
-As telas da area do instalador/vistoriador tem problemas de scroll e sobreposicao porque:
+O erro ocorre porque a politica de seguranca (RLS) da tabela `servicos` **nao permite que prestadores (instaladores/vistoriadores) facam updates**. A unica politica de update existente exige que o usuario seja do tipo `funcionario`, mas instaladores e vistoriadores sao do tipo `prestador`.
 
-1. O **InstaladorLayout** usa `sticky` header + `fixed` bottom nav com `pb-16` no main
-2. As paginas filhas (ExecutarManutencao, ExecutarVistoriaCompleta, InstaladorChecklist, etc.) criam seus **proprios** headers `sticky top-0` e footers `fixed bottom-0` que conflitam com o layout pai
-3. Varias paginas usam `min-h-screen` dentro de um container que ja tem altura controlada, causando overflow duplo
-4. O `InstaladorChecklist` e `ExecutarRetirada` ja foram parcialmente corrigidos com `h-[100dvh]`, mas isso tambem conflita com o layout pai que ja fornece a estrutura
+Quando o prestador clica em "Confirmar Duplo Check", o frontend tenta fazer um UPDATE na tabela `servicos` (campos `imprevisto_duplo_check`, `status`, etc.), mas o Supabase bloqueia a operacao silenciosamente por causa da RLS.
 
 ## Solucao
 
-Padronizar todas as paginas para funcionar **dentro** do container de scroll do `InstaladorLayout`, sem criar seus proprios containers de viewport completa.
+Criar uma politica RLS que permita prestadores atualizarem servicos **atribuidos a eles**, limitando os campos que podem ser alterados via uma funcao de validacao.
 
-### Principio: Paginas normais vs Paginas de execucao
+### Alteracao 1: Criar funcao auxiliar `is_prestador`
 
-- **Paginas normais** (Home, Tarefas, Perfil, Configuracoes): Conteudo simples que rola dentro do `main` do layout. Remover `min-h-screen` redundante.
-
-- **Paginas de execucao** (InstaladorChecklist, ExecutarManutencao, ExecutarRetirada, ExecutarVistoriaCompleta): Precisam de header proprio + footer fixo. Usar `h-full` com flex column para ocupar o espaco disponivel do layout pai, nao da viewport.
-
-### Alteracoes por arquivo
-
-**1. `src/components/instalador/InstaladorLayout.tsx`**
-- Mudar o `main` de `overflow-hidden pb-16` para um container flex que permite as paginas de execucao controlarem seu proprio scroll
-- Garantir que a area de conteudo ocupa `flex-1 min-h-0` corretamente
-- Mudar a bottom nav de `fixed` para estar dentro do flow do flex (evita conflito de z-index)
-
-**2. `src/pages/instalador/InstaladorHome.tsx`**
-- Remover `min-h-screen` do container principal (o layout pai ja fornece isso)
-- Manter o conteudo como flow normal
-
-**3. `src/pages/instalador/InstaladorTarefas.tsx`**
-- Remover `min-h-screen` do container principal
-
-**4. `src/pages/instalador/InstaladorPerfil.tsx`**
-- Remover `min-h-screen` (se existir)
-
-**5. `src/pages/instalador/InstaladorConfiguracoes.tsx`**
-- Remover `min-h-screen`
-
-**6. `src/pages/instalador/InstaladorChecklist.tsx`**
-- Remover `h-[100dvh]` e `overflow-hidden` do container raiz
-- Usar `flex flex-col h-full` para se encaixar no espaco do layout pai
-- Progress bar: `flex-shrink-0` (ja feito)
-- Content: `flex-1 overflow-y-auto` com `-webkit-overflow-scrolling: touch`
-- Footer: `flex-shrink-0` (ja feito), remover `fixed`
-
-**7. `src/pages/instalador/ExecutarRetirada.tsx`**
-- Mesma abordagem: trocar `h-[100dvh]` por `flex flex-col h-full`
-- Header e progress como `flex-shrink-0`
-- Content como `flex-1 overflow-y-auto`
-
-**8. `src/pages/instalador/ExecutarManutencao.tsx`**
-- Trocar `min-h-screen bg-background` por `flex flex-col h-full bg-background`
-- Header `sticky top-0` vira `flex-shrink-0`
-- Content area recebe `flex-1 overflow-y-auto`
-
-**9. `src/pages/instalador/ExecutarVistoriaCompleta.tsx`**
-- Trocar `min-h-screen pb-32` por `flex flex-col h-full`
-- Header e progress bar como `flex-shrink-0`
-- Main como `flex-1 overflow-y-auto`
-- Footer: trocar `fixed bottom-0` por `flex-shrink-0`
-
-### Ajuste chave no InstaladorLayout
-
-O layout precisa esconder a bottom nav nas rotas de execucao (checklist, manutencao, retirada, vistoria) para que o footer proprio da pagina de execucao nao conflite:
-
-```text
-// Detectar se esta numa rota de execucao
-const isRotaExecucao = location.pathname.match(
-  /\/instalador\/(retirada|vistoria|manutencao|instalacao)\//
-);
-
-// Esconder bottom nav em rotas de execucao
-{!isRotaExecucao && <nav>...</nav>}
+```sql
+CREATE OR REPLACE FUNCTION public.is_prestador(_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE user_id = _user_id
+      AND tipo = 'prestador'
+      AND ativo = true
+  )
+$$;
 ```
 
-Isso elimina o conflito de dois footers sobrepostos e libera o espaco para o footer da pagina de execucao.
+### Alteracao 2: Criar politica RLS para prestadores
 
-### Resultado esperado
+Permitir que prestadores atualizem servicos que estao atribuidos a eles (campo `profissional_id` igual ao seu `profile.id`):
 
-- Scroll funciona fluido em todas as telas, sem travamento no iOS
-- Nenhum elemento sobreposto (header do layout + header da pagina, ou bottom nav + footer de execucao)
-- Paginas normais rolam naturalmente no container do layout
-- Paginas de execucao tem seu proprio scroll interno sem conflitos
+```sql
+CREATE POLICY "Prestadores podem atualizar seus servicos"
+ON public.servicos
+FOR UPDATE
+USING (
+  is_prestador(auth.uid())
+  AND profissional_id = (
+    SELECT id FROM public.profiles WHERE user_id = auth.uid()
+  )
+)
+WITH CHECK (
+  is_prestador(auth.uid())
+  AND profissional_id = (
+    SELECT id FROM public.profiles WHERE user_id = auth.uid()
+  )
+);
+```
 
-### Total: 9 arquivos alterados
+### Alteracao 3: Permitir SELECT para prestadores
+
+Os prestadores tambem precisam ler seus proprios servicos (para o hook `useTarefaAtual` funcionar). Verificar se ja existe uma politica SELECT para prestadores; se nao, criar:
+
+```sql
+CREATE POLICY "Prestadores podem ver seus servicos"
+ON public.servicos
+FOR SELECT
+USING (
+  is_prestador(auth.uid())
+  AND profissional_id = (
+    SELECT id FROM public.profiles WHERE user_id = auth.uid()
+  )
+);
+```
+
+## Nenhuma alteracao no frontend
+
+O codigo do `DuploCheckImprevisto.tsx` esta correto. O problema e exclusivamente de permissao no banco de dados.
+
+## Resultado esperado
+
+Apos a migracao, prestadores poderao:
+- Ler servicos atribuidos a eles
+- Atualizar campos dos seus servicos (status, imprevisto, duplo check, etc.)
+- Confirmar o duplo check sem erro
+
+## Resumo: 1 migracao SQL com 2-3 comandos
 
