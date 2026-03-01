@@ -1,91 +1,72 @@
 
 
-# Reagendamento pos-imprevisto com regras de rota e encaixe
+# Correcao do payload de veiculo na sincronizacao SGA Hinova
 
-## Problema Atual
+## Problema Identificado
 
-Quando um imprevisto ocorre e o associado recebe o link de reagendamento (`/reagendar/:token`), a pagina publica atual:
-- Nao valida vagas disponiveis por periodo (manha/tarde)
-- Nao verifica disponibilidade de profissionais
-- Nao oferece opcao de encaixe
-- Cria o novo servico sem profissional atribuido (fica "solto" sem entrar na fila de rotas)
-- Nao respeita limite de capacidade diaria dos profissionais
+O payload enviado para a API Hinova no endpoint `veiculo/cadastrar` esta faltando campos criticos e referenciando colunas que nao existem na tabela `veiculos`:
 
-O servico reagendado fica com status `agendada` mas sem `profissional_id`, sem `rota_id`, e sem coordenadas -- ou seja, nao entra no sistema de rotas automaticamente.
+### Campos ausentes no payload
+- **marca** -- existe no banco mas NAO e enviado
+- **modelo** -- existe no banco mas NAO e enviado
+
+### Campos referenciando colunas inexistentes (sempre vao como vazio/zero)
+- `veiculo.km` e `veiculo.quilometragem` -- nao existem na tabela, `kilometragem` sempre vai como 0
+- `veiculo.numero_motor` -- nao existe na tabela, sempre vai como string vazia
+- `veiculo.tipo` -- nao existe na tabela, `codigo_tipo_veiculo` sempre vai como fallback 1 (automovel)
+
+### Mapeamento de combustivel falha
+- O banco armazena valores como `GASOLINA/ALCOOL/GAS NATURAL` ou `FLEX`, mas o mapeamento busca correspondencia exata com `gasolina`, `flex`, etc. Valores compostos como `GASOLINA/ALCOOL/GAS NATURAL` nunca encontram match e vao como null.
 
 ## Solucao
 
-### 1. Frontend: Validacao de vagas no `ReagendarVistoria.tsx`
+### Arquivo: `supabase/functions/sga-hinova-sync/index.ts`
 
-Ao selecionar uma data no calendario, consultar vagas disponiveis por periodo (mesma logica do `useVagasPeriodo`). Desabilitar periodos sem vaga e mostrar indicador visual de disponibilidade.
+**1. Adicionar `marca` e `modelo` ao payload do veiculo (linhas 807-825)**
 
-Alteracoes:
-- Importar e usar `useVagasPeriodo` para a data selecionada
-- Desabilitar radio de periodo quando nao ha vagas
-- Mostrar "X vagas disponiveis" ao lado de cada periodo
-- Bloquear dias que ja estejam lotados em ambos os periodos (opcional, requer query adicional)
+Incluir os campos `marca` e `modelo` diretamente do registro do veiculo.
 
-### 2. Frontend: Opcao de encaixe no `ReagendarVistoria.tsx`
+**2. Inferir `codigo_tipo_veiculo` a partir da categoria do contrato**
 
-Adicionar uma terceira opcao de periodo: "Primeiro horario disponivel (encaixe)" que marca o servico como `permite_encaixe = true`. Isso permite que o sistema atribua automaticamente ao vistoriador mais proximo.
+Buscar `veiculo_categoria` da tabela `contratos` (que ja esta sendo consultada para o vendedor). Usar isso para mapear o tipo de veiculo corretamente (moto, carro, caminhao, etc.) em vez de depender de um campo inexistente.
 
-### 3. Backend: Validacao e atribuicao no `reagendar-vistoria-publica` Edge Function
+**3. Melhorar o mapeamento de combustivel**
 
-Atualizar a edge function para:
-- Validar vagas disponiveis na data/periodo escolhidos (contar servicos existentes vs limite)
-- Rejeitar se nao houver vagas
-- Se encaixe marcado, setar `permite_encaixe = true` no novo servico
-- Geocodificar endereco (chamar API de geocodificacao) para que o servico entre corretamente no sistema de rotas
-- Copiar campos relevantes do servico original: `local_vistoria`, `tipo`, `rastreador_id`, `contrato_id` etc.
+Criar logica de normalizacao que converta valores compostos do banco (ex: `GASOLINA/ALCOOL/GAS NATURAL`) para o valor mapeavel mais proximo (`flex` ou `gnv`). Tratar tambem `ALCOOL/GASOLINA` como `flex`.
 
-### 4. Backend: Garantir entrada na fila de rotas
+**4. Remover referencias a campos inexistentes**
 
-O novo servico criado deve ter:
-- `status: 'pendente'` (para entrar na fila de montagem de rotas) OU `status: 'agendada'` com encaixe habilitado
-- Coordenadas de latitude/longitude (geocodificadas a partir do endereco)
-- `permite_encaixe` quando solicitado
-- Campos de endereco completos
+- Substituir `veiculo.km || veiculo.quilometragem || 0` por apenas `0` (ou buscar de outra fonte se disponivel)
+- Substituir `veiculo.numero_motor || ''` por string vazia (campo nao existe)
 
-Isso garante que quando o coordenador montar a proxima rota, o servico reagendado apareca na lista de servicos disponiveis para distribuicao.
+**5. Buscar dados complementares do contrato**
 
-## Arquivos a Modificar
+Expandir a query existente do contrato (ja buscando `vendedor_id`) para tambem trazer `veiculo_categoria` e usar para inferir o tipo de veiculo.
 
-### `src/pages/ReagendarVistoria.tsx`
-- Adicionar consulta de vagas por periodo usando logica similar a `useVagasPeriodo`
-- Mostrar disponibilidade visual nos radio buttons de periodo
-- Adicionar opcao "Encaixe" com explicacao para o associado
-- Desabilitar periodos sem vagas
-- Enviar flag `permite_encaixe` para a edge function
-
-### `supabase/functions/reagendar-vistoria-publica/index.ts`
-- Validar vagas antes de criar o servico (contar servicos existentes na data/periodo)
-- Copiar campos adicionais do servico original (`rastreador_id`, `contrato_id`, `local_vistoria`)
-- Setar `permite_encaixe` quando solicitado
-- Geocodificar endereco usando API ViaCEP + Nominatim para obter lat/lng
-- Retornar erro claro se nao houver vagas
-
-## Fluxo Revisado
+## Resumo das alteracoes no payload
 
 ```text
-Imprevisto confirmado (duplo check)
-        |
-Link enviado via WhatsApp
-        |
-Associado abre /reagendar/:token
-        |
-Seleciona data -> sistema mostra vagas por periodo
-        |
-Seleciona periodo (manha/tarde/encaixe)
-        |
-Preenche/confirma endereco
-        |
-Edge function valida vagas + cria servico
-        |
-Servico entra na fila de rotas com coordenadas
-        |
-Coordenador inclui na proxima rota OU encaixe automatico
+ANTES (campos faltando/errados):
+  placa, chassi, renavam, ano_fabricacao, ano_modelo,
+  codigo_fipe, valor_fipe,
+  kilometragem: 0 (campo inexistente),
+  numero_motor: '' (campo inexistente),
+  codigo_tipo_veiculo: 1 (sempre fallback),
+  codigo_cor: null (se cor nao mapeada),
+  codigo_combustivel: null (valor composto nao mapeavel)
+
+DEPOIS (corrigido):
+  marca, modelo,  <-- NOVOS
+  placa, chassi, renavam, ano_fabricacao, ano_modelo,
+  codigo_fipe, valor_fipe,
+  kilometragem: 0,
+  numero_motor: '',
+  codigo_tipo_veiculo: inferido da categoria do contrato,
+  codigo_cor: mapeado (ja funciona para valores simples),
+  codigo_combustivel: normalizado antes do mapeamento
 ```
 
-## Resultado Esperado
+## Arquivo a modificar
 
-O reagendamento feito pelo associado respeitara as mesmas regras do sistema: vagas limitadas por periodo, possibilidade de encaixe urgente, e o servico entrara automaticamente na fila de rotas com endereco geocodificado.
+- `supabase/functions/sga-hinova-sync/index.ts` -- corrigir o payload do veiculo, expandir query do contrato, normalizar combustivel
+
