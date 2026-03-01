@@ -237,15 +237,25 @@ export const gerarNumeroTermo = (numeroContrato: string): string => {
 function inferirCambio(modelo: string | null | undefined): string {
   if (!modelo) return '—';
   const m = modelo.toUpperCase();
-  if (/\b(MANUAL|MECANICO|MECÂNICO|MT)\b/.test(m)) return 'Manual';
-  if (/\b(AUTOMATICO|AUTOMÁTICO|CVT|AT\b|TIPTRONIC|POWERSHIFT|DSG|S.TRONIC)/.test(m)) return 'Automático';
+  // Manual patterns
+  if (/\b(MANUAL|MECANICO|MECÂNICO|MT|MEC)\b/.test(m)) return 'Manual';
+  // Automático patterns (FIPE names, common abbreviations)
+  if (/\b(AUTOMATICO|AUTOMÁTICO|CVT|AT\b|AUT|TIPTRONIC|POWERSHIFT|DSG|S[\.\-]?TRONIC|I[\.\-]?MOTION|MULTITRONIC|STEPTRONIC|E[\.\-]?CVT|DIRECT[\.\-]?SHIFT|PDK|EDC|XTRONIC|LINEARTRONIC|SKYACTIV[\.\-]?DRIVE)\b/.test(m)) return 'Automático';
+  // Additional patterns often found in FIPE model names
+  if (/\bFLEX\s*(AUT|AT)\b/.test(m)) return 'Automático';
+  if (/\bFLEX\s*(MEC|MT)\b/.test(m)) return 'Manual';
+  // Pattern: "1.0 AT" or "2.0 AUT" anywhere in the string
+  if (/\d\.\d\s*(AUT|AT)\b/.test(m)) return 'Automático';
+  if (/\d\.\d\s*(MEC|MT)\b/.test(m)) return 'Manual';
   return '—';
 }
 
 function inferirPortas(categoria: string | null | undefined): number {
   if (!categoria) return 4;
   const c = categoria.toLowerCase();
-  if (c.includes('moto') || c.includes('motocicleta')) return 0;
+  if (c.includes('moto') || c.includes('motocicleta') || c.includes('scooter') || c.includes('triciclo')) return 0;
+  if (c.includes('coupe') || c.includes('cupê') || c.includes('esportivo') || c.includes('conversível') || c.includes('conversivel') || c.includes('roadster')) return 2;
+  if (c.includes('utilitário') || c.includes('utilitario') || c.includes('van') || c.includes('furgão') || c.includes('furgao')) return 4;
   return 4;
 }
 

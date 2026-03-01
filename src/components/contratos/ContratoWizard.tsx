@@ -710,6 +710,12 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         veiculo_chassi: data.chassi || null,
         veiculo_renavam: data.renavam || null,
         veiculo_valor_fipe: data.valor_fipe || null,
+        // Campos para Termo de Afiliação
+        codigo_fipe: cotacao.codigo_fipe || null,
+        veiculo_combustivel: data.combustivel || cotacao.veiculo_combustivel || null,
+        veiculo_categoria: cotacao.categoria || cotacao.veiculo_categoria || 'Automóvel',
+        uso_aplicativo: cotacao.uso_aplicativo || false,
+        vendedor_id: cotacao.vendedor_id || null,
         // Dados do cliente
         cliente_nome: data.nome || null,
         cliente_cpf: data.cpf || null,
