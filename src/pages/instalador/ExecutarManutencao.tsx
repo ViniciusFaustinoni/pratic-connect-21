@@ -71,8 +71,12 @@ export default function ExecutarManutencao() {
 
   const handleChecklistChange = useCallback((items: ChecklistManutencaoItem[]) => {
     setChecklistItems(items);
-    const allChecked = items.every(item => item.checked);
-    setChecklistCompleto(allChecked);
+    const allComplete = items.every(item => {
+      if (item.status === 'ok') return true;
+      if (item.status === 'nok' && item.observacao?.trim()) return true;
+      return false;
+    });
+    setChecklistCompleto(allComplete);
   }, []);
 
   // Resetar estados ao fechar modal
@@ -127,7 +131,16 @@ export default function ExecutarManutencao() {
     }
   };
 
+  // Dialog de confirmação de condição
+  const [showDialogCondicao, setShowDialogCondicao] = useState(false);
+
   const handleConcluir = () => {
+    // Verificar se há itens NOK no checklist
+    const itensNok = checklistItems.filter(item => item.status === 'nok');
+    if (itensNok.length > 0) {
+      setShowDialogCondicao(true);
+      return;
+    }
     setShowResultadoModal(true);
   };
 
@@ -739,6 +752,71 @@ export default function ExecutarManutencao() {
               ) : (
                 'Confirmar'
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Confirmação de Condição (Checklist com NOK) */}
+      <Dialog open={showDialogCondicao} onOpenChange={setShowDialogCondicao}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {checklistItems.some(i => i.status === 'nok' && i.critico) ? (
+                <>
+                  <XCircle className="h-5 w-5 text-red-500" />
+                  Irregularidade Crítica Detectada
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  Itens com Ressalva
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {checklistItems.filter(i => i.status === 'nok').map(item => (
+              <div key={item.id} className={cn(
+                "flex items-start gap-2 p-2 rounded border",
+                item.critico 
+                  ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800" 
+                  : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800"
+              )}>
+                {item.critico ? (
+                  <XCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                )}
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  {item.observacao && (
+                    <p className="text-xs text-muted-foreground">{item.observacao}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Deseja prosseguir com a conclusão da manutenção?
+          </p>
+
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              onClick={() => { setShowDialogCondicao(false); setShowResultadoModal(true); }}
+              className="w-full"
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Sim, continuar para resultado
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowDialogCondicao(false)}
+              className="w-full"
+            >
+              Revisar checklist
             </Button>
           </DialogFooter>
         </DialogContent>

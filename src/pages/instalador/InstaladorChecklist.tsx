@@ -70,23 +70,23 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const CHECKLIST_ITEMS = [
-  { id: 'veiculo_confere', label: 'Veículo corresponde aos dados cadastrados' },
-  { id: 'placa_confere', label: 'Placa confere com o documento' },
-  { id: 'condicoes_veiculo', label: 'Condições do veículo adequadas' },
-  { id: 'local_seguro', label: 'Local de instalação seguro' },
-  { id: 'bateria_ok', label: 'Bateria do veículo em boas condições' },
-  { id: 'eletrica_ok', label: 'Acessórios elétricos funcionando' },
-  { id: 'cliente_ciente', label: 'Associado ciente do procedimento' },
+  { id: 'veiculo_confere', label: 'Veículo corresponde aos dados cadastrados', critico: true },
+  { id: 'placa_confere', label: 'Placa confere com o documento', critico: true },
+  { id: 'condicoes_veiculo', label: 'Condições do veículo adequadas', critico: false },
+  { id: 'local_seguro', label: 'Local de instalação seguro', critico: false },
+  { id: 'bateria_ok', label: 'Bateria do veículo em boas condições', critico: false },
+  { id: 'eletrica_ok', label: 'Acessórios elétricos funcionando', critico: false },
+  { id: 'cliente_ciente', label: 'Associado ciente do procedimento', critico: false },
 ];
 
 const CHECKLIST_ITEMS_MOTO = [
-  { id: 'veiculo_confere', label: 'Moto corresponde aos dados cadastrados' },
-  { id: 'placa_confere', label: 'Placa confere com o documento' },
-  { id: 'chassi_confere', label: 'Chassi visível e confere' },
-  { id: 'condicoes_veiculo', label: 'Condições gerais da moto adequadas' },
-  { id: 'local_seguro', label: 'Local de instalação seguro' },
-  { id: 'eletrica_ok', label: 'Sistema elétrico funcionando' },
-  { id: 'cliente_ciente', label: 'Associado ciente do procedimento' },
+  { id: 'veiculo_confere', label: 'Moto corresponde aos dados cadastrados', critico: true },
+  { id: 'placa_confere', label: 'Placa confere com o documento', critico: true },
+  { id: 'chassi_confere', label: 'Chassi visível e confere', critico: true },
+  { id: 'condicoes_veiculo', label: 'Condições gerais da moto adequadas', critico: false },
+  { id: 'local_seguro', label: 'Local de instalação seguro', critico: false },
+  { id: 'eletrica_ok', label: 'Sistema elétrico funcionando', critico: false },
+  { id: 'cliente_ciente', label: 'Associado ciente do procedimento', critico: false },
 ];
 
 const LOCAIS_INSTALACAO_CARRO = [
@@ -136,6 +136,8 @@ export default function InstaladorChecklist() {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
   const [showModalRecusa, setShowModalRecusa] = useState(false);
+  const [showDialogCondicao, setShowDialogCondicao] = useState(false);
+  const [motivoPrePreenchido, setMotivoPrePreenchido] = useState('');
   const [openCategorias, setOpenCategorias] = useState<string[]>([]);
   const [imeiRastreador, setImeiRastreador] = useState('');
   const [imeiError, setImeiError] = useState('');
@@ -275,6 +277,17 @@ export default function InstaladorChecklist() {
     [checklist, checklistItems]
   );
   const temItensNok = itensNok.length > 0;
+
+  // Separar NOK críticos e condicionais
+  const itensNokCriticos = useMemo(() => 
+    itensNok.filter(item => item.critico),
+    [itensNok]
+  );
+  const itensNokCondicionais = useMemo(() => 
+    itensNok.filter(item => !item.critico),
+    [itensNok]
+  );
+  const temCritico = itensNokCriticos.length > 0;
 
   // Verificar se todas as fotos obrigatórias foram enviadas (dinâmico por tipo)
   const fotosObrigatoriasCompletas = useMemo(() => {
@@ -612,23 +625,48 @@ export default function InstaladorChecklist() {
     }
   };
 
+  const salvarEAvancar = async () => {
+    // Salvar checklist e quilometragem ao sair da etapa 2
+    if (etapaAtual === 2 && id) {
+      try {
+        await salvarChecklistMutation.mutateAsync({
+          id,
+          checklist_data: checklist,
+          quilometragem: quilometragem ? parseInt(quilometragem) : undefined,
+        });
+      } catch (err) {
+        toast.error('Erro ao salvar checklist');
+        return;
+      }
+    }
+    setEtapaAtual(etapaAtual + 1);
+  };
+
   const avancar = async () => {
     if (etapaAtual < ETAPAS.length && podeAvancar()) {
-      // Salvar checklist e quilometragem ao sair da etapa 2
-      if (etapaAtual === 2 && id) {
-        try {
-          await salvarChecklistMutation.mutateAsync({
-            id,
-            checklist_data: checklist,
-            quilometragem: quilometragem ? parseInt(quilometragem) : undefined,
-          });
-        } catch (err) {
-          toast.error('Erro ao salvar checklist');
-          return;
-        }
+      // Interceptar transição etapa 2->3 quando houver itens NOK
+      if (etapaAtual === 2 && temItensNok) {
+        setShowDialogCondicao(true);
+        return;
       }
-      setEtapaAtual(etapaAtual + 1);
+      await salvarEAvancar();
     }
+  };
+
+  const handleContinuarComRessalva = async () => {
+    setShowDialogCondicao(false);
+    await salvarEAvancar();
+  };
+
+  const handleEncerrarSemCondicao = () => {
+    setShowDialogCondicao(false);
+    // Montar motivo pré-preenchido com os itens NOK
+    const motivos = itensNok.map(item => {
+      const obs = checklist[item.id]?.observacao;
+      return `• ${item.label}${obs ? `: ${obs}` : ''}`;
+    }).join('\n');
+    setMotivoPrePreenchido(`Itens reprovados no checklist:\n${motivos}`);
+    setShowModalRecusa(true);
   };
 
   const voltar = () => {
@@ -1758,7 +1796,7 @@ export default function InstaladorChecklist() {
             {/* Modal de Recusa (para decisão Negado) */}
             <ModalRecusaVeiculoComFotos
               open={showModalRecusa}
-              onClose={() => setShowModalRecusa(false)}
+              onClose={() => { setShowModalRecusa(false); setMotivoPrePreenchido(''); }}
               onConfirm={({ motivoCompleto, fotos }) => {
                 handleRecusarVeiculo(motivoCompleto, fotos);
               }}
@@ -1767,7 +1805,97 @@ export default function InstaladorChecklist() {
                 placa: (servico as any).veiculos?.placa,
                 modelo: (servico as any).veiculos?.modelo,
               }}
+              detalhesInicial={motivoPrePreenchido}
             />
+
+            {/* Dialog de Confirmação de Condição (Checklist com NOK) */}
+            <Dialog open={showDialogCondicao} onOpenChange={setShowDialogCondicao}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    {temCritico ? (
+                      <>
+                        <XCircle className="h-5 w-5 text-red-500" />
+                        Irregularidade Crítica Detectada
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="h-5 w-5 text-amber-500" />
+                        Itens com Ressalva
+                      </>
+                    )}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {temCritico 
+                      ? 'Foram identificados itens críticos reprovados que podem impedir a instalação:'
+                      : 'Alguns itens foram marcados como não conformes:'
+                    }
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {itensNokCriticos.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-red-600 uppercase">Críticos</p>
+                      {itensNokCriticos.map(item => (
+                        <div key={item.id} className="flex items-start gap-2 p-2 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                          <XCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium">{item.label}</p>
+                            {checklist[item.id]?.observacao && (
+                              <p className="text-xs text-muted-foreground">{checklist[item.id].observacao}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {itensNokCondicionais.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-amber-600 uppercase">Condicionais</p>
+                      {itensNokCondicionais.map(item => (
+                        <div key={item.id} className="flex items-start gap-2 p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                          <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium">{item.label}</p>
+                            {checklist[item.id]?.observacao && (
+                              <p className="text-xs text-muted-foreground">{checklist[item.id].observacao}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <DialogFooter className="flex-col gap-2 sm:flex-col">
+                  {!temCritico && (
+                    <Button
+                      onClick={handleContinuarComRessalva}
+                      className="w-full bg-amber-600 hover:bg-amber-700"
+                    >
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Há condição de continuar
+                    </Button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    onClick={handleEncerrarSemCondicao}
+                    className="w-full"
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Não há condição - Encerrar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDialogCondicao(false)}
+                    className="w-full"
+                  >
+                    Revisar checklist
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
       </div>
