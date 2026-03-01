@@ -31,6 +31,7 @@ import { ChecklistManutencao, type ChecklistManutencaoItem } from '@/components/
 import { FotosManutencao, type FotoManutencao } from '@/components/instalador/FotosManutencao';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ImprevistoBotao } from '@/components/vistoriador/ImprevistoBotao';
 
 export default function ExecutarManutencao() {
   const { id } = useParams<{ id: string }>();
@@ -376,6 +377,14 @@ export default function ExecutarManutencao() {
             </CardContent>
           </Card>
         )}
+
+        {/* Comunicar Imprevisto */}
+        <ImprevistoBotao
+          tarefaId={id!}
+          clienteNome={servico.associado?.nome || 'Cliente'}
+          clienteTelefone={servico.associado?.telefone || ''}
+          clienteWhatsapp={servico.associado?.whatsapp}
+        />
 
         {/* Ações */}
         <div className="pt-4 space-y-3">

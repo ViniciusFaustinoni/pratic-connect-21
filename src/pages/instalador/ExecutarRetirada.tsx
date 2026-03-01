@@ -21,6 +21,7 @@ import { FotoCapture } from '@/components/instalador/FotoCapture';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
+import { ImprevistoBotao } from '@/components/vistoriador/ImprevistoBotao';
 import { ChecklistRetirada, type ChecklistRetiradaItem } from '@/components/instalador/ChecklistRetirada';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -462,6 +463,16 @@ export default function ExecutarRetirada() {
       {servico?.iniciada_em && (
         <TemporizadorExecucao iniciadaEm={servico.iniciada_em} className="mx-4 mt-2" />
       )}
+
+      {/* Botão Comunicar Imprevisto */}
+      <div className="mx-4 mt-2">
+        <ImprevistoBotao
+          tarefaId={servicoId!}
+          clienteNome={associado?.nome || 'Cliente'}
+          clienteTelefone={associado?.telefone || ''}
+          clienteWhatsapp={associado?.whatsapp}
+        />
+      </div>
 
       <main className="flex-1 space-y-4 p-4">
         {/* SEÇÃO 1: Localização do Rastreador (fotos da instalação) */}

@@ -63,6 +63,7 @@ import { VistoriaFotoCard } from '@/components/vistorias/VistoriaFotoCard';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
+import { ImprevistoBotao } from '@/components/vistoriador/ImprevistoBotao';
 import { useRastreadoresDoPortador, type RastreadorEmPorte } from '@/hooks/useRastreadoresPortador';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 import { toast } from 'sonner';
@@ -753,6 +754,16 @@ export default function InstaladorChecklist() {
           className="mx-4 mt-4"
         />
       )}
+
+      {/* Botão Comunicar Imprevisto */}
+      <div className="mx-4 mt-2">
+        <ImprevistoBotao
+          tarefaId={id!}
+          clienteNome={(servico as any).associados?.nome || 'Cliente'}
+          clienteTelefone={(servico as any).associados?.telefone || ''}
+          clienteWhatsapp={(servico as any).associados?.whatsapp}
+        />
+      </div>
 
       {/* Content */}
       <div className="flex-1 p-4 pb-24">
