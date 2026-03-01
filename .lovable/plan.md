@@ -1,88 +1,62 @@
 
+# Corrigir propagacao de dados para Proposta de Filiacao
 
-# Migrar Matriz de Visibilidade de "por perfil" para "por usuario"
+## Problema identificado
 
-## Contexto
+Ao criar o contrato no `ContratoWizard.tsx`, varios campos disponiveis na cotacao/lead **nao estao sendo propagados** para a tabela `contratos`. Isso causa campos vazios na Proposta de Filiacao.
 
-Atualmente, a visibilidade de modulos e sub-itens e configurada **por perfil** (role) nas tabelas `role_module_visibility` e `role_module_item_visibility`. Quando um usuario tem multiplos perfis, o sistema calcula a uniao. O usuario quer que a configuracao seja **por usuario individual**.
+### Campos faltantes na criacao do contrato
 
-## Plano
+| Campo | Status | Motivo |
+|---|---|---|
+| Cambio | Backend infere, mas falha frequentemente | `inferirCambio()` so detecta se o nome do modelo contem "MANUAL", "CVT", "AT" etc. — modelos FIPE geralmente nao incluem isso |
+| Portas | Backend infere como 4 (padrao) | `inferirPortas()` usa apenas a categoria para decidir 0 (moto) ou 4 |
+| Cod. FIPE | **Nao propagado** | `ContratoWizard` nao envia `codigo_fipe` ao criar contrato, mesmo estando disponivel na cotacao |
+| Valor FIPE | Propagado parcialmente | Enviado como `veiculo_valor_fipe`, mas pode vir nulo se cotacao nao tem esse dado |
+| Leilao (SIM/NAO) | Backend infere da categoria | `ehLeilao()` funciona, mas `veiculo_categoria` nao e propagada ao contrato |
+| Uso aplicativo (SIM/NAO) | **Nao propagado** | `uso_aplicativo` nao e enviado ao criar contrato |
+| Nome do Consultor | **Nao propagado** | `vendedor_id` nao e enviado ao criar contrato no `ContratoWizard` |
+| Combustivel | **Nao propagado** | `veiculo_combustivel` nao e enviado ao contrato |
 
-### 1. Criar tabelas de visibilidade por usuario
+## Solucao
 
-Criar duas novas tabelas no banco:
+### 1. Propagar campos faltantes no ContratoWizard.tsx
 
-```text
-user_module_visibility
-- id (uuid, PK)
-- user_id (uuid, FK profiles.id)
-- module_id (text)
-- visible (boolean)
-- can_edit (boolean)
-- created_at, updated_at
-- UNIQUE(user_id, module_id)
+Adicionar os seguintes campos na chamada `createContrato.mutateAsync()`:
 
-user_module_item_visibility
-- id (uuid, PK)
-- user_id (uuid, FK profiles.id)
-- module_id (text)
-- item_id (text)
-- visible (boolean)
-- created_at, updated_at
-- UNIQUE(user_id, module_id, item_id)
-```
+- `codigo_fipe` (da cotacao)
+- `veiculo_combustivel` (da cotacao ou dados do formulario)
+- `veiculo_categoria` (da cotacao)
+- `uso_aplicativo` (da cotacao)
+- `vendedor_id` (da cotacao ou usuario logado)
+- `veiculo_procedencia` (da cotacao, se disponivel)
 
-Ambas com RLS habilitado e politicas para diretores/desenvolvedores gerenciarem.
+### 2. Propagar campos faltantes no ContratoFormDialog.tsx
 
-### 2. Adaptar a Matriz de Visibilidade (Perfis.tsx)
+Mesma logica: garantir que o formulario de criacao de contrato tambem envie esses campos.
 
-Alterar a aba "Visibilidade" para operar por usuario:
+### 3. Melhorar inferencia de Cambio no backend
 
-- Trocar o eixo horizontal de "perfis" para **usuarios** (lista de profiles)
-- Adicionar filtro/busca de usuarios por nome
-- As queries passam a ler/gravar em `user_module_visibility` e `user_module_item_visibility`
-- Manter a mesma UI de toggles (Switch) e sub-itens expandiveis
-- Manter a logica de can_edit por modulo
+A funcao `inferirCambio()` em `termo-afiliacao-utils.ts` e muito limitada. Melhorar adicionando mais padroes comuns de nomes FIPE (ex: "AUT", "MEC", "I-MOTION", "FLEX") e tambem tentar inferir a partir da tabela `veiculos` se existir o veiculo vinculado.
 
-### 3. Adaptar useModuleVisibility.ts
+### 4. Propagar campos na cotacao publica (EtapaPagamentoCotacao.tsx)
 
-Alterar o hook para consultar `user_module_visibility` usando `user.id` diretamente, em vez de buscar por roles na tabela antiga.
+Verificar se o fluxo de cotacao publica tambem propaga esses campos ao gerar o contrato.
 
-Logica:
-- Buscar registros de `user_module_visibility` onde `user_id = auth.uid()` e `visible = true`
-- Calcular `editableModules` da mesma forma (onde `can_edit = true`)
-- Se nao houver registros para o usuario, retornar vazio (sem acesso)
-
-### 4. Adaptar useModuleItemVisibility.ts
-
-Mesma logica: consultar `user_module_item_visibility` por `user_id` em vez de `role`.
-
-### 5. Adaptar ModuleAccessCard no UsuarioForm.tsx
-
-O card "Acesso a Modulos" na edicao de usuario passa a:
-- Consultar `user_module_visibility` pelo `user_id` do usuario sendo editado
-- Tornar-se **editavel** (nao mais somente leitura) com toggles para cada modulo
-- Permitir salvar diretamente as permissoes do usuario
-
-### 6. Remover dependencia das tabelas role_module_visibility
-
-As tabelas `role_module_visibility` e `role_module_item_visibility` deixam de ser usadas no runtime. Podem ser mantidas como referencia ou removidas posteriormente.
-
-## Resumo de arquivos
+## Arquivos a alterar
 
 | Arquivo | Alteracao |
 |---|---|
-| **Migracao SQL** | Criar tabelas `user_module_visibility` e `user_module_item_visibility` com RLS |
-| `src/pages/configuracoes/Perfis.tsx` | Reescrever matriz para eixo de usuarios em vez de perfis |
-| `src/hooks/useModuleVisibility.ts` | Consultar `user_module_visibility` por `user_id` |
-| `src/hooks/useModuleItemVisibility.ts` | Consultar `user_module_item_visibility` por `user_id` |
-| `src/pages/configuracoes/UsuarioForm.tsx` | Card editavel com toggles por modulo, gravando em `user_module_visibility` |
-| `src/hooks/useRouteGuard.ts` | Nenhuma alteracao (ja usa `visibleModules` do hook) |
+| `src/components/contratos/ContratoWizard.tsx` | Adicionar `codigo_fipe`, `veiculo_combustivel`, `veiculo_categoria`, `uso_aplicativo`, `vendedor_id`, `veiculo_procedencia` na criacao do contrato |
+| `src/components/contratos/ContratoFormDialog.tsx` | Adicionar campos faltantes na criacao do contrato |
+| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Melhorar `inferirCambio()` com mais padroes de nomes FIPE |
+| `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx` | Verificar e corrigir propagacao de campos no fluxo publico |
 
-## Resultado esperado
+## Resultado
 
-- A matriz de visibilidade mostra **usuarios** nas colunas (com busca/filtro)
-- Cada usuario tem sua propria configuracao de modulos visiveis e editaveis
-- O formulario de edicao de usuario permite configurar diretamente os acessos
-- O route guard continua funcionando sem alteracoes (consome o mesmo hook)
-
+Todos os campos da Proposta de Filiacao serao preenchidos automaticamente sem necessidade de conferencia manual:
+- Cambio: inferido com mais precisao do nome do modelo
+- Portas: inferido da categoria (0 para motos, 4 para carros, 2 para coupe/esportivos)
+- Cod. FIPE e Valor FIPE: propagados da cotacao
+- Leilao e Uso aplicativo: propagados da cotacao
+- Nome do Consultor: resolvido via `vendedor_id` no contrato
