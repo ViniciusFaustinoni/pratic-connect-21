@@ -154,7 +154,8 @@ export default function ExecutarVistoriaCompleta() {
 
   const ligarCliente = () => {
     if (associado?.telefone) {
-      window.open(`tel:${associado.telefone}`, '_self');
+      const numeroLimpo = associado.telefone.replace(/\D/g, '');
+      window.location.href = `tel:${numeroLimpo}`;
     }
   };
 
@@ -423,7 +424,7 @@ export default function ExecutarVistoriaCompleta() {
         />
       )}
 
-      <main className="flex-1 overflow-y-auto space-y-4 p-4" style={{ WebkitOverflowScrolling: 'touch' as any }}>
+      <main className="flex-1 overflow-y-auto overscroll-contain space-y-4 p-4" style={{ WebkitOverflowScrolling: 'touch' as any }}>
         {/* Conferência de Dados */}
         <Card className="border-slate-700 bg-slate-800">
           <CardHeader className="pb-2">

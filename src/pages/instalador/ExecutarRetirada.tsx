@@ -221,7 +221,8 @@ export default function ExecutarRetirada() {
 
   const ligarCliente = () => {
     if (associado?.telefone) {
-      window.open(`tel:${associado.telefone}`, '_self');
+      const numeroLimpo = associado.telefone.replace(/\D/g, '');
+      window.location.href = `tel:${numeroLimpo}`;
     }
   };
 
@@ -474,7 +475,7 @@ export default function ExecutarRetirada() {
         />
       </div>
 
-      <main className="flex-1 overflow-y-auto space-y-4 p-4 pb-8" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <main className="flex-1 overflow-y-auto overscroll-contain space-y-4 p-4 pb-8" style={{ WebkitOverflowScrolling: 'touch' }}>
         {/* SEÇÃO 1: Localização do Rastreador (fotos da instalação) */}
         <Card className="border-amber-600/50 bg-amber-950/20">
           <CardHeader className="pb-2">

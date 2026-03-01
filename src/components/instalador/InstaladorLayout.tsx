@@ -174,7 +174,7 @@ export function InstaladorLayout() {
           )}
 
           {/* Main content area */}
-          <main className="flex-1 min-h-0 flex flex-col">
+          <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
             {location.pathname.includes('/mapa') ? (
               <div className="flex-1 relative">
                 <div className="absolute inset-0">
@@ -182,7 +182,9 @@ export function InstaladorLayout() {
                 </div>
               </div>
             ) : isRotaExecucao ? (
-              <Outlet />
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <Outlet />
+              </div>
             ) : (
               <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' as any }}>
                 {location.pathname === '/instalador' && (

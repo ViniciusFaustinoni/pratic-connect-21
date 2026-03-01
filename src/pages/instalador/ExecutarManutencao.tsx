@@ -104,7 +104,8 @@ export default function ExecutarManutencao() {
 
   const handleLigar = () => {
     if (servico?.associado?.telefone) {
-      window.open(`tel:${servico.associado.telefone}`, '_self');
+      const numeroLimpo = servico.associado.telefone.replace(/\D/g, '');
+      window.location.href = `tel:${numeroLimpo}`;
     }
   };
 
@@ -251,7 +252,7 @@ export default function ExecutarManutencao() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' as any }}>
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' as any }}>
         {/* Status */}
         <div className="flex items-center justify-between">
           <Badge 
