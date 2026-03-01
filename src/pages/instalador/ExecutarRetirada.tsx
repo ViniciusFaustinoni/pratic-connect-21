@@ -411,9 +411,9 @@ export default function ExecutarRetirada() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-900 pb-56 max-w-md mx-auto">
+    <div className="flex h-[100dvh] flex-col bg-slate-900 max-w-md mx-auto overflow-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-800 px-4 py-3">
+      <header className="flex-shrink-0 border-b border-slate-700 bg-slate-800 px-4 py-3">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate('/instalador/tarefas')} className="text-slate-400">
             <ArrowLeft className="h-5 w-5" />
@@ -447,7 +447,7 @@ export default function ExecutarRetirada() {
       </header>
 
       {/* Progresso */}
-      <div className="border-b border-slate-700 bg-slate-800 px-4 py-2">
+      <div className="flex-shrink-0 border-b border-slate-700 bg-slate-800 px-4 py-2">
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-400">Fotos obrigatórias:</span>
           <span className="font-medium text-white">{fotosObrigatoriasEnviadas}/{totalFotosObrigatorias}</span>
@@ -474,7 +474,7 @@ export default function ExecutarRetirada() {
         />
       </div>
 
-      <main className="flex-1 space-y-4 p-4">
+      <main className="flex-1 overflow-y-auto space-y-4 p-4 pb-8" style={{ WebkitOverflowScrolling: 'touch' }}>
         {/* SEÇÃO 1: Localização do Rastreador (fotos da instalação) */}
         <Card className="border-amber-600/50 bg-amber-950/20">
           <CardHeader className="pb-2">

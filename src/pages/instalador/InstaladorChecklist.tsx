@@ -723,9 +723,9 @@ export default function InstaladorChecklist() {
   }
 
   return (
-    <div className="flex flex-col bg-slate-900">
+    <div className="flex flex-col h-[100dvh] bg-slate-900 overflow-hidden">
       {/* Progress Bar */}
-      <div className="sticky top-0 z-40 border-b border-slate-700 bg-slate-800 px-4 py-3">
+      <div className="flex-shrink-0 z-40 border-b border-slate-700 bg-slate-800 px-4 py-3">
         <div className="mb-2 flex justify-between">
           {ETAPAS.map((etapa) => {
             const Icon = etapa.icon;
@@ -766,7 +766,7 @@ export default function InstaladorChecklist() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-4 pb-24">
+      <div className="flex-1 overflow-y-auto p-4 pb-28" style={{ WebkitOverflowScrolling: 'touch' }}>
         {/* Etapa 1: Dados */}
         {etapaAtual === 1 && (
           <div className="space-y-4">
@@ -1772,8 +1772,8 @@ export default function InstaladorChecklist() {
         )}
       </div>
 
-      {/* Footer com navegação - FIXO na parte inferior - z-index maior que o menu do layout */}
-      <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-slate-700 bg-slate-800 p-4 safe-area-pb">
+      {/* Footer com navegação */}
+      <div className="flex-shrink-0 border-t border-slate-700 bg-slate-800 p-4 safe-area-pb">
         <div className="flex gap-3 max-w-lg mx-auto">
           <Button
             variant="outline"
