@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { AlertTriangle, Camera, X, Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -52,6 +52,7 @@ interface ModalRecusaVeiculoComFotosProps {
     placa?: string;
     modelo?: string;
   };
+  detalhesInicial?: string;
 }
 
 export function ModalRecusaVeiculoComFotos({
@@ -60,11 +61,19 @@ export function ModalRecusaVeiculoComFotos({
   onConfirm,
   isPending = false,
   veiculoInfo,
+  detalhesInicial = '',
 }: ModalRecusaVeiculoComFotosProps) {
   const [motivoSelecionado, setMotivoSelecionado] = useState<string>('');
-  const [detalhes, setDetalhes] = useState('');
+  const [detalhes, setDetalhes] = useState(detalhesInicial);
   const [fotos, setFotos] = useState<FotoRecusa[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sincronizar detalhesInicial quando modal abre
+  useEffect(() => {
+    if (open && detalhesInicial) {
+      setDetalhes(detalhesInicial);
+    }
+  }, [open, detalhesInicial]);
 
   const handleAddFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
