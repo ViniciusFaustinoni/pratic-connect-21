@@ -1,41 +1,88 @@
 
 
-# Exibir visibilidade de modulos na edicao de usuario
+# Migrar Matriz de Visibilidade de "por perfil" para "por usuario"
 
-## Problema
+## Contexto
 
-Ao editar um usuario em Configuracoes > Usuarios > Detalhes, so aparece a secao "Perfis de Acesso" (checkboxes de roles). Nao ha nenhuma indicacao visual de quais modulos/areas aquele usuario pode **visualizar** ou **editar** com base nos perfis selecionados.
+Atualmente, a visibilidade de modulos e sub-itens e configurada **por perfil** (role) nas tabelas `role_module_visibility` e `role_module_item_visibility`. Quando um usuario tem multiplos perfis, o sistema calcula a uniao. O usuario quer que a configuracao seja **por usuario individual**.
 
-O usuario espera ver essa informacao diretamente na tela de edicao do usuario.
+## Plano
 
-## Solucao
+### 1. Criar tabelas de visibilidade por usuario
 
-Adicionar um novo Card **"Acesso a Modulos"** no formulario de edicao (`UsuarioForm.tsx`) que mostra, em tempo real, a **uniao dos modulos visiveis e editaveis** com base nos perfis selecionados. Este card sera **somente leitura** (a configuracao por perfil continua sendo feita na Matriz de Visibilidade em Usuarios e Acessos > aba Visibilidade).
+Criar duas novas tabelas no banco:
 
-### Comportamento
+```text
+user_module_visibility
+- id (uuid, PK)
+- user_id (uuid, FK profiles.id)
+- module_id (text)
+- visible (boolean)
+- can_edit (boolean)
+- created_at, updated_at
+- UNIQUE(user_id, module_id)
 
-- Conforme o usuario marca/desmarca perfis nos checkboxes, o card atualiza automaticamente
-- Consulta a tabela `role_module_visibility` com os perfis selecionados
-- Mostra lista de modulos com indicadores visuais:
-  - Icone de olho = pode visualizar
-  - Icone de lapis = pode editar
-  - Modulos sem acesso aparecem esmaecidos ou ocultos
-- Inclui um link "Configurar permissoes por perfil" que leva a aba Visibilidade
+user_module_item_visibility
+- id (uuid, PK)
+- user_id (uuid, FK profiles.id)
+- module_id (text)
+- item_id (text)
+- visible (boolean)
+- created_at, updated_at
+- UNIQUE(user_id, module_id, item_id)
+```
 
-### Onde sera posicionado
+Ambas com RLS habilitado e politicas para diretores/desenvolvedores gerenciarem.
 
-Logo abaixo do card "Perfis de Acesso", na coluna principal (col-span-2), para que o usuario veja imediatamente o impacto dos perfis selecionados.
+### 2. Adaptar a Matriz de Visibilidade (Perfis.tsx)
 
-## Alteracoes tecnicas
+Alterar a aba "Visibilidade" para operar por usuario:
+
+- Trocar o eixo horizontal de "perfis" para **usuarios** (lista de profiles)
+- Adicionar filtro/busca de usuarios por nome
+- As queries passam a ler/gravar em `user_module_visibility` e `user_module_item_visibility`
+- Manter a mesma UI de toggles (Switch) e sub-itens expandiveis
+- Manter a logica de can_edit por modulo
+
+### 3. Adaptar useModuleVisibility.ts
+
+Alterar o hook para consultar `user_module_visibility` usando `user.id` diretamente, em vez de buscar por roles na tabela antiga.
+
+Logica:
+- Buscar registros de `user_module_visibility` onde `user_id = auth.uid()` e `visible = true`
+- Calcular `editableModules` da mesma forma (onde `can_edit = true`)
+- Se nao houver registros para o usuario, retornar vazio (sem acesso)
+
+### 4. Adaptar useModuleItemVisibility.ts
+
+Mesma logica: consultar `user_module_item_visibility` por `user_id` em vez de `role`.
+
+### 5. Adaptar ModuleAccessCard no UsuarioForm.tsx
+
+O card "Acesso a Modulos" na edicao de usuario passa a:
+- Consultar `user_module_visibility` pelo `user_id` do usuario sendo editado
+- Tornar-se **editavel** (nao mais somente leitura) com toggles para cada modulo
+- Permitir salvar diretamente as permissoes do usuario
+
+### 6. Remover dependencia das tabelas role_module_visibility
+
+As tabelas `role_module_visibility` e `role_module_item_visibility` deixam de ser usadas no runtime. Podem ser mantidas como referencia ou removidas posteriormente.
+
+## Resumo de arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/configuracoes/UsuarioForm.tsx` | Adicionar card "Acesso a Modulos" que consulta `role_module_visibility` com base nos perfis selecionados e exibe a uniao dos modulos visiveis/editaveis em tempo real |
+| **Migracao SQL** | Criar tabelas `user_module_visibility` e `user_module_item_visibility` com RLS |
+| `src/pages/configuracoes/Perfis.tsx` | Reescrever matriz para eixo de usuarios em vez de perfis |
+| `src/hooks/useModuleVisibility.ts` | Consultar `user_module_visibility` por `user_id` |
+| `src/hooks/useModuleItemVisibility.ts` | Consultar `user_module_item_visibility` por `user_id` |
+| `src/pages/configuracoes/UsuarioForm.tsx` | Card editavel com toggles por modulo, gravando em `user_module_visibility` |
+| `src/hooks/useRouteGuard.ts` | Nenhuma alteracao (ja usa `visibleModules` do hook) |
 
-### Detalhes da implementacao
+## Resultado esperado
 
-1. **Query reativa**: Criar uma query com `useQuery` que recebe `formData.perfis` como dependencia e busca os registros de `role_module_visibility` para os perfis selecionados
-2. **Calculo de uniao**: Agregar os resultados (uniao de `visible=true` e `can_edit=true`) para exibir o acesso consolidado
-3. **UI**: Grid com badges coloridas por modulo mostrando status de visualizacao e edicao
-4. **Link**: Botao discreto "Gerenciar na Matriz de Visibilidade" apontando para `/configuracoes/usuarios-acessos?tab=visibilidade`
+- A matriz de visibilidade mostra **usuarios** nas colunas (com busca/filtro)
+- Cada usuario tem sua propria configuracao de modulos visiveis e editaveis
+- O formulario de edicao de usuario permite configurar diretamente os acessos
+- O route guard continua funcionando sem alteracoes (consome o mesmo hook)
 
