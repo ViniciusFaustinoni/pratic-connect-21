@@ -355,6 +355,38 @@ serve(async (req) => {
       return map?.codigo_hinova || null;
     };
 
+    // Normalizar combustível composto para valor mapeável
+    const normalizarCombustivel = (combustivel: string | null): string | null => {
+      if (!combustivel) return null;
+      const c = combustivel.toUpperCase().trim();
+      // Valores compostos com múltiplos combustíveis → flex
+      if (c.includes('/') && (c.includes('GASOLINA') || c.includes('ALCOOL') || c.includes('ÁLCOOL') || c.includes('ETANOL'))) {
+        if (c.includes('GAS NATURAL') || c.includes('GNV')) return 'gnv';
+        return 'flex';
+      }
+      // Valores diretos
+      if (c === 'FLEX' || c === 'BICOMBUSTÍVEL' || c === 'BICOMBUSTIVEL') return 'flex';
+      if (c === 'GASOLINA') return 'gasolina';
+      if (c === 'ETANOL' || c === 'ÁLCOOL' || c === 'ALCOOL') return 'etanol';
+      if (c === 'DIESEL') return 'diesel';
+      if (c === 'GNV' || c === 'GAS NATURAL' || c === 'GÁS NATURAL') return 'gnv';
+      if (c === 'ELÉTRICO' || c === 'ELETRICO') return 'eletrico';
+      if (c === 'HÍBRIDO' || c === 'HIBRIDO') return 'hibrido';
+      return combustivel.toLowerCase();
+    };
+
+    // Inferir tipo de veículo a partir da categoria do contrato
+    const inferirTipoVeiculo = (categoria: string | null): number => {
+      if (!categoria) return 1; // automóvel padrão
+      const cat = categoria.toUpperCase().trim();
+      if (cat.includes('MOTO') || cat.includes('MOTOCICLETA')) return 2; // moto
+      if (cat.includes('CAMINHÃO') || cat.includes('CAMINHAO') || cat.includes('TRUCK')) return 3;
+      if (cat.includes('VAN') || cat.includes('UTILITÁRIO') || cat.includes('UTILITARIO')) return 4;
+      if (cat.includes('ÔNIBUS') || cat.includes('ONIBUS')) return 5;
+      if (cat.includes('REBOQUE') || cat.includes('SEMI-REBOQUE')) return 6;
+      return 1; // automóvel
+    };
+
     // ========================================
     // PASSO 3.5: Buscar código voluntário do vendedor responsável
     // Prioridade: código do vendedor > código global da integração
@@ -364,7 +396,7 @@ serve(async (req) => {
     // Primeiro, buscar o contrato associado para encontrar o vendedor_id
     const { data: contrato } = await supabase
       .from('contratos')
-      .select('vendedor_id')
+      .select('vendedor_id, veiculo_categoria')
       .eq('associado_id', associado_id)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -803,9 +835,19 @@ serve(async (req) => {
     console.log('[SGA Sync] Cadastrando veículo no Hinova...');
     console.log(`[SGA Sync] codigo_voluntario configurado: ${hinovaCodigoVoluntario}`);
 
+    // Normalizar combustível antes do mapeamento
+    const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
+    console.log(`[SGA Sync] Combustível original: "${veiculo.combustivel}" → normalizado: "${combustivelNormalizado}"`);
+
+    // Inferir tipo de veículo da categoria do contrato
+    const tipoVeiculoInferido = inferirTipoVeiculo(contrato?.veiculo_categoria);
+    console.log(`[SGA Sync] Categoria contrato: "${contrato?.veiculo_categoria}" → tipo veículo: ${tipoVeiculoInferido}`);
+
     // Payload SEM credenciais - autenticação já está no header com token_usuario
     const veiculoPayload = {
       codigo_associado: codigoAssociadoHinova,
+      marca: veiculo.marca || '',
+      modelo: veiculo.modelo || '',
       placa: veiculo.placa || '',
       chassi: veiculo.chassi.trim(),
       renavam: veiculo.renavam.trim(),
@@ -813,13 +855,13 @@ serve(async (req) => {
       ano_modelo: veiculo.ano_modelo,
       codigo_fipe: veiculo.codigo_fipe || '',
       valor_fipe: veiculo.valor_fipe || 0,
-      kilometragem: veiculo.km || veiculo.quilometragem || 0,
-      numero_motor: veiculo.numero_motor || '',
+      kilometragem: 0,
+      numero_motor: '',
       dia_vencimento: associado.dia_vencimento || 10,
       codigo_conta: 2, // Fixo = 2 (API) conforme orientação
       codigo_cor: getMapeamento('cor', veiculo.cor),
-      codigo_combustivel: getMapeamento('combustivel', veiculo.combustivel),
-      codigo_tipo_veiculo: getMapeamento('tipo_veiculo', veiculo.tipo) || 1,
+      codigo_combustivel: getMapeamento('combustivel', combustivelNormalizado),
+      codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase()) || tipoVeiculoInferido,
       codigo_voluntario: parseInt(hinovaCodigoVoluntario), // OBRIGATÓRIO
       ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
     };
