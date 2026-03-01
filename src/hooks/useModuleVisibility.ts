@@ -3,40 +3,31 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
- * Hook que consulta a tabela role_module_visibility e calcula a UNIÃO
- * dos módulos visíveis para todos os roles do usuário atual.
- * 
- * Exemplo: usuário com roles [coordenador_monitoramento, analista_eventos]
- *   -> coord_monitoramento vê: [dashboard, monitoramento]
- *   -> analista_eventos vê: [dashboard, eventos, assistencia, oficinas]
- *   -> UNIÃO FINAL: [dashboard, monitoramento, eventos, assistencia, oficinas]
+ * Hook que consulta a tabela user_module_visibility para o usuário atual.
+ * Retorna os módulos visíveis e editáveis configurados diretamente para o usuário.
  */
 export function useModuleVisibility() {
-  const { user, roles } = useAuth();
+  const { user } = useAuth();
 
   const { data: visibilityResult = { visibleModules: [], editableModules: [] }, isLoading } = useQuery({
-    queryKey: ['module-visibility', user?.id, roles],
+    queryKey: ['module-visibility', user?.id],
     queryFn: async () => {
-      if (!roles || roles.length === 0) return { visibleModules: [], editableModules: [] };
+      if (!user?.id) return { visibleModules: [], editableModules: [] };
 
       const { data, error } = await (supabase as any)
-        .from('role_module_visibility')
+        .from('user_module_visibility')
         .select('module_id, visible, can_edit')
-        .in('role', roles)
+        .eq('user_id', user.id)
         .eq('visible', true);
 
       if (error) throw error;
 
-      const visibleModules = [...new Set((data || []).map((r: any) => r.module_id))] as string[];
-      
-      // Módulos editáveis: união de todos onde can_edit = true
-      const editableModules = [...new Set(
-        (data || []).filter((r: any) => r.can_edit === true).map((r: any) => r.module_id)
-      )] as string[];
+      const visibleModules = (data || []).map((r: any) => r.module_id) as string[];
+      const editableModules = (data || []).filter((r: any) => r.can_edit === true).map((r: any) => r.module_id) as string[];
 
       return { visibleModules, editableModules };
     },
-    enabled: !!user?.id && roles.length > 0,
+    enabled: !!user?.id,
     staleTime: 5 * 60 * 1000,
   });
 

@@ -23099,6 +23099,110 @@ export type Database = {
           },
         ]
       }
+      user_module_item_visibility: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          module_id: string
+          updated_at: string
+          user_id: string
+          visible: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          module_id: string
+          updated_at?: string
+          user_id: string
+          visible?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          module_id?: string
+          updated_at?: string
+          user_id?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_module_item_visibility_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_module_item_visibility_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "user_module_item_visibility_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      user_module_visibility: {
+        Row: {
+          can_edit: boolean
+          created_at: string
+          id: string
+          module_id: string
+          updated_at: string
+          user_id: string
+          visible: boolean
+        }
+        Insert: {
+          can_edit?: boolean
+          created_at?: string
+          id?: string
+          module_id: string
+          updated_at?: string
+          user_id: string
+          visible?: boolean
+        }
+        Update: {
+          can_edit?: boolean
+          created_at?: string
+          id?: string
+          module_id?: string
+          updated_at?: string
+          user_id?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_module_visibility_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_module_visibility_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "user_module_visibility_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
