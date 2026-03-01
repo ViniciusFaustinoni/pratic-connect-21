@@ -1,17 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Calendar, CheckCircle2, Clock, Loader2, MapPin, Search } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, Loader2, MapPin, Search, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { buscarCep } from '@/lib/cep';
 import { toast } from 'sonner';
-import { format, addDays, isSunday } from 'date-fns';
+import { format, addDays, isSunday, isSaturday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { LIMITE_VAGAS_POR_PERIODO } from '@/data/autovistoriaConfig';
+
+interface VagasInfo {
+  manha: number;
+  tarde: number;
+}
 
 export default function ReagendarVistoria() {
   const { token } = useParams<{ token: string }>();
@@ -22,7 +30,7 @@ export default function ReagendarVistoria() {
 
   // Form state
   const [dataSelecionada, setDataSelecionada] = useState<Date | undefined>();
-  const [periodo, setPeriodo] = useState('manha');
+  const [periodo, setPeriodo] = useState('');
   const [cep, setCep] = useState('');
   const [logradouro, setLogradouro] = useState('');
   const [numero, setNumero] = useState('');
@@ -33,15 +41,29 @@ export default function ReagendarVistoria() {
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
+  // Vagas state
+  const [vagas, setVagas] = useState<VagasInfo | null>(null);
+  const [carregandoVagas, setCarregandoVagas] = useState(false);
+
   useEffect(() => {
     if (token) carregarServico();
   }, [token]);
 
+  // Buscar vagas quando data muda
+  useEffect(() => {
+    if (dataSelecionada) {
+      buscarVagas(format(dataSelecionada, 'yyyy-MM-dd'));
+      setPeriodo(''); // Reset period selection
+    } else {
+      setVagas(null);
+    }
+  }, [dataSelecionada]);
+
   const carregarServico = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await publicSupabase
         .from('servicos')
-        .select('id, tipo, associado_id, veiculo_id, cotacao_id, status, reagendamento_token, logradouro, numero, bairro, cidade, uf, cep')
+        .select('id, tipo, associado_id, veiculo_id, cotacao_id, status, reagendamento_token, logradouro, numero, bairro, cidade, uf, cep, local_vistoria, rastreador_id, contrato_id')
         .eq('reagendamento_token', token)
         .single();
 
@@ -70,6 +92,39 @@ export default function ReagendarVistoria() {
     }
   };
 
+  const buscarVagas = async (data: string) => {
+    setCarregandoVagas(true);
+    try {
+      const { data: servicos, error } = await publicSupabase
+        .from('servicos')
+        .select('periodo')
+        .eq('data_agendada', data)
+        .eq('local_vistoria', 'cliente')
+        .not('status', 'in', '("cancelada","recusada","reagendada")');
+
+      if (error) {
+        console.error('[ReagendarVistoria] Erro ao buscar vagas:', error);
+        setVagas({ manha: LIMITE_VAGAS_POR_PERIODO, tarde: LIMITE_VAGAS_POR_PERIODO });
+        return;
+      }
+
+      const contagem = { manha: 0, tarde: 0 };
+      servicos?.forEach(s => {
+        if (s.periodo === 'manha') contagem.manha++;
+        else if (s.periodo === 'tarde') contagem.tarde++;
+      });
+
+      setVagas({
+        manha: Math.max(0, LIMITE_VAGAS_POR_PERIODO - contagem.manha),
+        tarde: Math.max(0, LIMITE_VAGAS_POR_PERIODO - contagem.tarde),
+      });
+    } catch {
+      setVagas({ manha: LIMITE_VAGAS_POR_PERIODO, tarde: LIMITE_VAGAS_POR_PERIODO });
+    } finally {
+      setCarregandoVagas(false);
+    }
+  };
+
   const handleBuscarCep = async () => {
     if (cep.replace(/\D/g, '').length !== 8) return;
     setBuscandoCep(true);
@@ -89,9 +144,18 @@ export default function ReagendarVistoria() {
   };
 
   const handleReagendar = async () => {
-    if (!dataSelecionada || !logradouro || !bairro || !cidade || !uf) {
+    if (!dataSelecionada || !periodo || !logradouro || !bairro || !cidade || !uf) {
       toast.error('Preencha todos os campos obrigatórios');
       return;
+    }
+
+    // Validate availability for non-encaixe
+    if (periodo !== 'encaixe' && vagas) {
+      const vagasPeriodo = periodo === 'manha' ? vagas.manha : vagas.tarde;
+      if (vagasPeriodo <= 0) {
+        toast.error('Não há vagas disponíveis neste período');
+        return;
+      }
     }
 
     setEnviando(true);
@@ -101,7 +165,8 @@ export default function ReagendarVistoria() {
           servico_id: servico.id,
           token,
           nova_data: format(dataSelecionada, 'yyyy-MM-dd'),
-          periodo,
+          periodo: periodo === 'encaixe' ? 'manha' : periodo,
+          permite_encaixe: periodo === 'encaixe',
           endereco: {
             cep: cep.replace(/\D/g, ''),
             logradouro,
@@ -133,6 +198,8 @@ export default function ReagendarVistoria() {
     return date < addDays(hoje, 1) || isSunday(date);
   };
 
+  const isSabado = dataSelecionada ? isSaturday(dataSelecionada) : false;
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -154,6 +221,10 @@ export default function ReagendarVistoria() {
   }
 
   if (sucesso) {
+    const periodoLabel = periodo === 'encaixe'
+      ? 'primeiro horário disponível (encaixe)'
+      : periodo === 'manha' ? 'manhã' : 'tarde';
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="max-w-md w-full">
@@ -163,7 +234,7 @@ export default function ReagendarVistoria() {
             <p className="text-muted-foreground">
               Sua vistoria foi reagendada para{' '}
               <strong>{dataSelecionada && format(dataSelecionada, "dd/MM/yyyy", { locale: ptBR })}</strong>
-              {' '}no período da <strong>{periodo === 'manha' ? 'manhã' : 'tarde'}</strong>.
+              {' '}no período da <strong>{periodoLabel}</strong>.
             </p>
             <p className="text-sm text-muted-foreground">
               Você receberá uma confirmação por WhatsApp em breve.
@@ -214,16 +285,76 @@ export default function ReagendarVistoria() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <RadioGroup value={periodo} onValueChange={setPeriodo} className="flex gap-4">
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="manha" id="manha" />
-                <Label htmlFor="manha">Manhã (08h - 12h)</Label>
+            {!dataSelecionada ? (
+              <p className="text-sm text-muted-foreground">Selecione uma data primeiro</p>
+            ) : carregandoVagas ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Verificando disponibilidade...
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="tarde" id="tarde" />
-                <Label htmlFor="tarde">Tarde (13h - 17h)</Label>
-              </div>
-            </RadioGroup>
+            ) : (
+              <RadioGroup value={periodo} onValueChange={setPeriodo} className="space-y-3">
+                {/* Manhã */}
+                <div className={`flex items-center justify-between rounded-lg border p-3 ${
+                  vagas && vagas.manha <= 0 ? 'opacity-50' : ''
+                }`}>
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem
+                      value="manha"
+                      id="manha"
+                      disabled={vagas ? vagas.manha <= 0 : false}
+                    />
+                    <Label htmlFor="manha" className="cursor-pointer">
+                      ☀️ Manhã (08h - 12h)
+                    </Label>
+                  </div>
+                  {vagas && (
+                    <Badge variant={vagas.manha > 0 ? 'secondary' : 'destructive'} className="text-xs">
+                      {vagas.manha > 0 ? `${vagas.manha} vagas` : 'Lotado'}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Tarde - hidden on Saturday */}
+                {!isSabado && (
+                  <div className={`flex items-center justify-between rounded-lg border p-3 ${
+                    vagas && vagas.tarde <= 0 ? 'opacity-50' : ''
+                  }`}>
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem
+                        value="tarde"
+                        id="tarde"
+                        disabled={vagas ? vagas.tarde <= 0 : false}
+                      />
+                      <Label htmlFor="tarde" className="cursor-pointer">
+                        🌅 Tarde (13h - 17h)
+                      </Label>
+                    </div>
+                    {vagas && (
+                      <Badge variant={vagas.tarde > 0 ? 'secondary' : 'destructive'} className="text-xs">
+                        {vagas.tarde > 0 ? `${vagas.tarde} vagas` : 'Lotado'}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+
+                {/* Encaixe */}
+                <div className="flex items-center justify-between rounded-lg border border-dashed border-primary/40 p-3 bg-primary/5">
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem value="encaixe" id="encaixe" />
+                    <div>
+                      <Label htmlFor="encaixe" className="cursor-pointer flex items-center gap-1.5">
+                        <Zap className="h-3.5 w-3.5 text-primary" />
+                        Primeiro horário disponível
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Encaixe prioritário — atribuído ao vistoriador mais próximo
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </RadioGroup>
+            )}
           </CardContent>
         </Card>
 
@@ -290,7 +421,7 @@ export default function ReagendarVistoria() {
         {/* Submit */}
         <Button
           onClick={handleReagendar}
-          disabled={enviando || !dataSelecionada}
+          disabled={enviando || !dataSelecionada || !periodo}
           className="w-full gap-2"
           size="lg"
         >
