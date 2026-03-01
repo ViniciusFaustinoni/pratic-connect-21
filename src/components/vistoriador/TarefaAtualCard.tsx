@@ -115,7 +115,8 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
       if (!tarefa.contato_realizado_em) {
         registrarContato({ tarefaId: tarefa.id, tipo: 'ligacao' });
       }
-      window.open(`tel:${tarefa.cliente.telefone}`, '_self');
+      const numeroLimpo = tarefa.cliente.telefone.replace(/\D/g, '');
+      window.location.href = `tel:${numeroLimpo}`;
     }
   };
 

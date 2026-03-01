@@ -51,7 +51,7 @@ export default function InstaladorHome() {
   };
 
   const ligarCoordenador = () => {
-    window.open('tel:+5521970048549', '_self');
+    window.location.href = 'tel:+5521970048549';
   };
 
   const dataFormatada = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
