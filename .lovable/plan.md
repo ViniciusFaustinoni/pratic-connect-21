@@ -1,52 +1,90 @@
 
 
-# Adicionar variaveis faltantes ao seletor de templates
+# Analise do Processo de Imprevistos no App do Instalador
 
-## Problema
+## O que JA esta funcionando corretamente
 
-O backend ja resolve corretamente todas essas variaveis no mapeamento (`criarMapeamentoVariaveis` em `template-utils.ts`). Porem, o componente `VariaveisSelector.tsx` -- que e o painel lateral usado ao editar templates -- nao lista varias delas. Isso impede o usuario de inseri-las nos templates.
+O processo de imprevistos **ja existe e funciona** no app do instalador. O card de tarefa atual (`TarefaAtualCard`) e compartilhado entre vistoriadores e instaladores, e ja inclui:
 
-## Variaveis que existem no backend mas faltam no seletor
+1. **Botao "Comunicar Imprevisto"** -- aparece para qualquer tarefa atribuida (instalacao, manutencao, retirada, vistoria) nos status agendada, em rota ou em andamento
+2. **Modal de registro** -- com selecao de motivo (Associado ausente, Endereco incorreto, Problema no veiculo, Desistencia, Outro) e campo de observacoes
+3. **Duplo Check obrigatorio** -- apos registrar o imprevisto, exige que o instalador entre em contato com o associado (WhatsApp ou Ligacao) antes de confirmar
+4. **Envio automatico de link de reagendamento** -- apos o duplo check, o status muda para "nao_compareceu" e um link de reagendamento e enviado via WhatsApp
 
-| Variavel | Grupo | Backend | Seletor |
-|---|---|---|---|
-| `associado.cnh` | associado | Mapeado (linha 59) | NAO listado |
-| `associado.cnh_validade` | associado | Mapeado (linha 60) | NAO listado |
-| `associado.cnh_categoria` | associado | Mapeado (linha 61) | NAO listado |
-| `associado.rg_orgao` | associado | Mapeado (linha 44) | NAO listado |
-| `veiculo.cambio` | veiculo | Mapeado (linha 82) | NAO listado |
-| `veiculo.portas` | veiculo | Mapeado (linha 83) | NAO listado |
-| `veiculo.leilao` | veiculo | Mapeado (linha 84) | NAO listado |
-| `veiculo.uso_aplicativo` | veiculo | Mapeado (linha 85) | NAO listado |
-| `veiculo.valor_protegido` | veiculo | Mapeado (linha 86) | NAO listado |
-| `consultor.nome` | consultor | Mapeado (linha 89) | Grupo inteiro NAO existe |
+## Problemas identificados (2 gaps)
 
-## Solucao
+### Gap 1: Cron de reagendamento automatico ignora instalacoes/manutencoes/retiradas
 
-### Arquivo: `src/components/documentos/VariaveisSelector.tsx`
+O job diario que roda as 18h (BRT) para tarefas nao iniciadas **so processa vistorias**. Ele filtra apenas por:
+- `vistoria_adesao`
+- `vistoria_transferencia`
+- `vistoria_substituicao`
+- `revistoria`
 
-1. Adicionar ao grupo `associado`:
-   - `associado.cnh` - Numero da CNH
-   - `associado.cnh_validade` - Validade da CNH
-   - `associado.cnh_categoria` - Categoria da CNH (A, B, AB...)
-   - `associado.rg_orgao` - Orgao emissor do RG
+Isso significa que se uma instalacao, manutencao ou retirada agendada nao for iniciada no dia, o sistema NAO envia automaticamente o link de reagendamento ao associado.
 
-2. Adicionar ao grupo `veiculo`:
-   - `veiculo.cambio` - Tipo de cambio (Manual/Automatico)
-   - `veiculo.portas` - Numero de portas
-   - `veiculo.leilao` - Veiculo proveniente de leilao (SIM/NAO)
-   - `veiculo.uso_aplicativo` - Utilizado para aplicativo (SIM/NAO)
-   - `veiculo.valor_protegido` - Valor protegido (R$)
+**Correcao**: Adicionar os tipos `instalacao`, `manutencao` e `retirada` ao filtro `.in("tipo", [...])` da edge function `cron-reagendamento-automatico`.
 
-3. Criar novo grupo `consultor`:
-   - `consultor.nome` - Nome do consultor/vendedor
+### Gap 2: Mensagem de reagendamento menciona apenas "vistoria"
 
-4. Adicionar icone do grupo consultor ao mapa `iconesPorGrupo` (usar icone `User`)
+A edge function `enviar-link-reagendamento` envia a mensagem: *"sua **vistoria** nao pode ser realizada"*. Quando o servico e uma instalacao ou manutencao, isso confunde o associado.
 
-5. Adicionar estado inicial `consultor: false` no `expandido`
+**Correcao**: Buscar o campo `tipo` do servico e adaptar a mensagem:
+- Vistoria: "sua vistoria"
+- Instalacao: "a instalacao do rastreador"
+- Manutencao: "a manutencao do rastreador"
+- Retirada: "a retirada do rastreador"
 
-## Resultado
+## Alteracoes necessarias
 
-Apos essa alteracao, ao editar qualquer template, o painel lateral de variaveis mostrara todas as variaveis acima. O usuario podera inseri-las no corpo do template e elas serao preenchidas automaticamente na geracao do documento.
+### Arquivo 1: `supabase/functions/cron-reagendamento-automatico/index.ts`
 
-Apenas **1 arquivo** precisa ser alterado: `src/components/documentos/VariaveisSelector.tsx`.
+Expandir o filtro de tipos para incluir todos os servicos de campo:
+
+```text
+.in("tipo", [
+  "vistoria_adesao",
+  "vistoria_transferencia",
+  "vistoria_substituicao",
+  "revistoria",
+  "instalacao",
+  "manutencao",
+  "retirada",
+])
+```
+
+### Arquivo 2: `supabase/functions/enviar-link-reagendamento/index.ts`
+
+1. Adicionar `tipo` ao select do servico
+2. Criar mapa de labels por tipo de servico
+3. Usar o label correto na mensagem de WhatsApp
+
+```text
+// Mapa de labels
+const TIPO_LABELS = {
+  vistoria_adesao: "vistoria",
+  vistoria_transferencia: "vistoria",
+  vistoria_substituicao: "vistoria",
+  revistoria: "vistoria",
+  instalacao: "instalação do rastreador",
+  manutencao: "manutenção do rastreador",
+  retirada: "retirada do rastreador",
+};
+
+// Mensagem adaptada
+const tipoLabel = TIPO_LABELS[servico.tipo] || "serviço";
+const mensagem = `Olá ${primeiroNome}, seu(sua) ${tipoLabel} não pôde ser realizado(a). ...`;
+```
+
+## Resumo
+
+| Item do Processo | Status | Acao |
+|---|---|---|
+| Botao de imprevisto no card do instalador | Funcionando | Nenhuma |
+| Modal com motivos e observacoes | Funcionando | Nenhuma |
+| Duplo check com associado | Funcionando | Nenhuma |
+| Link de reagendamento via WhatsApp | Funcionando | Corrigir mensagem |
+| Cron diario as 18h para tarefas nao iniciadas | Parcial | Incluir instalacao/manutencao/retirada |
+
+Apenas **2 arquivos** de edge functions precisam ser ajustados. Nenhuma alteracao no frontend e necessaria.
+
