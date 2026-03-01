@@ -225,6 +225,16 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         status: 'rascunho',
         cotacao_id: cotacaoPrioritaria?.id || null,
         vendedor_id: usuarioEhVendedor ? profile?.id : (pendingFormData.vendedor_id || null),
+        // Campos para Termo de Afiliação (da cotação prioritária)
+        codigo_fipe: cotacaoPrioritaria?.codigo_fipe || null,
+        veiculo_combustivel: cotacaoPrioritaria?.veiculo_combustivel || null,
+        veiculo_categoria: cotacaoPrioritaria?.categoria || cotacaoPrioritaria?.veiculo_categoria || null,
+        uso_aplicativo: cotacaoPrioritaria?.uso_aplicativo || false,
+        veiculo_marca: cotacaoPrioritaria?.veiculo_marca || selectedLead?.veiculo_marca || null,
+        veiculo_modelo: cotacaoPrioritaria?.veiculo_modelo || selectedLead?.veiculo_modelo || null,
+        veiculo_ano: cotacaoPrioritaria?.veiculo_ano || selectedLead?.veiculo_ano || null,
+        veiculo_placa: cotacaoPrioritaria?.veiculo_placa || selectedLead?.veiculo_placa || null,
+        veiculo_valor_fipe: cotacaoPrioritaria?.valor_fipe || selectedLead?.veiculo_fipe || null,
         // Dados do cliente (quando não há lead)
         cliente_nome: pendingFormData.cliente_nome || selectedLead?.nome || null,
         cliente_email: pendingFormData.cliente_email || selectedLead?.email || null,
