@@ -1,100 +1,71 @@
 
 
-# Confirmacao de Condicao apos Checklist com Itens Negativos
+# Fluxo pos-imprevisto: transicao suave para proxima tarefa
 
-## Contexto Atual
+## Situacao Atual
 
-Hoje, quando o vistoriador/instalador marca itens como "NOK" (negativo) no checklist e clica em "Proximo", o sistema simplesmente avanca para a etapa de fotos. Os itens negativos so aparecem na etapa final (Decisao), onde bloqueiam a opcao "Aprovado". Isso faz com que o profissional percorra todas as etapas (fotos, video, assinatura) para so no final descobrir que a decisao esta limitada.
+Quando o instalador confirma o imprevisto (duplo check), o status do servico muda para `nao_compareceu`. A RPC `buscar_tarefa_atual_profissional` so retorna servicos com status `em_rota`, `em_andamento` ou `agendada`, entao a tarefa desaparece imediatamente e o instalador ve a tela "Aguardando tarefas".
 
-## Problema
+Tecnicamente o fluxo esta correto -- o servico foi encerrado e o profissional deve receber a proxima tarefa. Porem a transicao e abrupta: a tela muda instantaneamente sem feedback, deixando o instalador sem saber o que aconteceu.
 
-- Tempo desperdicado: o profissional tira 30+ fotos e coleta assinatura para depois negar o servico
-- Falta de triagem: nao ha validacao intermediaria sobre a gravidade dos itens negativos
-- Processo cego: o sistema nao diferencia itens criticos (chassi, placa) de itens menos graves (bateria fraca)
+## Problemas de UX
+
+1. **Transicao abrupta**: a tarefa simplesmente some sem confirmacao visual
+2. **Sem busca imediata**: o sistema espera o polling de 30s para tentar atribuir a proxima tarefa, em vez de buscar imediatamente
+3. **Sem resumo**: o instalador nao ve um feedback claro de que o imprevisto foi registrado com sucesso e o que acontecera a seguir
 
 ## Solucao Proposta
 
-### 1. Classificacao de Itens do Checklist por Criticidade
+### 1. Tela de confirmacao temporaria apos duplo check
 
-Dividir os itens em duas categorias:
+Apos confirmar o duplo check, em vez de fechar o dialog e voltar direto para "Aguardando", mostrar uma tela de transicao por 4 segundos com:
+- Icone de sucesso
+- "Imprevisto registrado com sucesso"
+- "O associado recebera o link de reagendamento"
+- "Buscando proxima tarefa..."
 
-**Criticos (impedem o servico):**
-- Veiculo/moto nao corresponde aos dados cadastrados
-- Placa nao confere com o documento
-- Chassi nao confere (motos)
+### 2. Disparo imediato de busca da proxima tarefa
 
-**Condicionais (podem prosseguir com ressalva):**
-- Condicoes do veiculo inadequadas
-- Local de instalacao inseguro
-- Bateria em mas condicoes
-- Acessorios eletricos com problema
-- Associado nao ciente do procedimento
+Apos o duplo check, chamar a edge function `atribuir-proxima-tarefa` imediatamente (com a localizacao atual), em vez de esperar os 30 segundos do polling. Isso reduz o tempo ocioso.
 
-### 2. Modal de Confirmacao ao Clicar "Proximo" (Etapa 2 -> 3)
+### 3. Invalidar queries com timing correto
 
-Quando houver itens NOK e o profissional clicar "Proximo", exibir um dialog com:
-
-**Cenario A - Item CRITICO negativo:**
-- Titulo: "Irregularidade Critica Detectada"
-- Mensagem: lista dos itens criticos reprovados
-- Opcoes:
-  - **"Nao ha condicao - Encerrar"**: abre o modal de recusa direto (pula fotos/assinatura)
-  - **"Revisar checklist"**: volta ao checklist
-
-**Cenario B - Apenas itens CONDICIONAIS negativos:**
-- Titulo: "Itens com Ressalva"
-- Mensagem: lista dos itens condicionais reprovados
-- Opcoes:
-  - **"Ha condicao de continuar"**: avanca para fotos normalmente (decisao sera limitada a "Aprovado com Ressalva" ou "Negado")
-  - **"Nao ha condicao - Encerrar"**: abre o modal de recusa direto
-  - **"Revisar checklist"**: volta ao checklist
-
-### 3. Atalho de Encerramento Rapido
-
-Quando o profissional escolhe "Nao ha condicao", o sistema:
-- Pula diretamente para o modal de recusa (ja existente: `ModalRecusaVeiculoComFotos`)
-- Pre-preenche o motivo com os itens NOK
-- Exige fotos de evidencia (ja obrigatorio na recusa)
-- Status do servico vai para `em_analise` (fluxo existente)
-
-### 4. Aplicar a Mesma Logica na Manutencao
-
-Atualizar o `ChecklistManutencao` para suportar OK/NOK (em vez de apenas checkbox), com a mesma logica de triagem. Itens criticos para manutencao:
-- Verificar conexao eletrica do rastreador
-- Testar sinal GPS
-
-Itens condicionais:
-- LED de status
-- Tensao da bateria
-- Estado fisico
-- Fixacao e posicionamento
+Garantir que a invalidacao de `tarefa-atual` so aconteca apos a tela de transicao, para evitar a mudanca abrupta.
 
 ## Arquivos a Modificar
 
-1. **`src/pages/instalador/InstaladorChecklist.tsx`**
-   - Adicionar campo `critico: boolean` nos arrays `CHECKLIST_ITEMS` e `CHECKLIST_ITEMS_MOTO`
-   - Modificar a funcao `avancar()` para interceptar a transicao etapa 2->3 quando houver itens NOK
-   - Adicionar estado e Dialog de confirmacao com as 3 opcoes
-   - Adicionar logica de encerramento rapido que abre o modal de recusa pre-preenchido
+### `src/components/vistoriador/DuploCheckImprevisto.tsx`
+- Apos `handleConfirmar` com sucesso, trocar o dialog de duplo check por um dialog de "sucesso/transicao"
+- Adicionar estado `etapa: 'contato' | 'sucesso'` para controlar o que o dialog mostra
+- Na etapa `sucesso`, exibir mensagem de confirmacao e spinner de "buscando proxima tarefa"
+- Chamar `atribuir-proxima-tarefa` via edge function com a geolocalizacao atual
+- Apos 3-4 segundos (ou apos resposta da edge function), fechar o dialog e invalidar as queries
 
-2. **`src/components/instalador/ChecklistManutencao.tsx`**
-   - Evoluir de checkbox simples para OK/NOK (usar o componente `ChecklistItem` ja existente)
-   - Adicionar campo `critico` nos itens
-   - Expor informacao de itens NOK via callback
+### `src/components/vistoriador/ImprevistoBotao.tsx`
+- Ajustar para manter o dialog de duplo check controlando toda a transicao (nao fechar prematuramente)
 
-3. **`src/pages/instalador/ExecutarManutencao.tsx`**
-   - Adicionar modal de confirmacao antes de "Concluir Manutencao" quando houver itens NOK
-   - Permitir encerramento rapido da manutencao
+## Fluxo Revisado
 
-4. **Nenhuma migracao SQL necessaria** - toda a logica e frontend
+```text
+Imprevisto registrado
+        |
+  Duplo Check (contato + confirmar)
+        |
+  Status -> nao_compareceu
+        |
+  Dialog muda para tela de sucesso:
+  "Imprevisto registrado com sucesso"
+  "Buscando proxima tarefa..."
+        |
+  Chama atribuir-proxima-tarefa (background)
+        |
+  Apos 3s ou resposta: fecha dialog, invalida queries
+        |
+  Se ha proxima tarefa -> aparece automaticamente
+  Se nao ha -> tela "Aguardando tarefas" (comportamento normal)
+```
 
-## Cenarios Cobertos
+## Resultado Esperado
 
-| Cenario | Checklist | Acao |
-|---|---|---|
-| Tudo OK | Avanca normalmente | Decisao livre |
-| Chassi diverge | Dialog critico | Encerrar ou revisar |
-| Bateria fraca | Dialog condicional | Continuar com ressalva ou encerrar |
-| Chassi + bateria | Dialog critico (prevalece) | Encerrar ou revisar |
-| Manutencao: GPS sem sinal | Dialog critico | Encerrar ou continuar para substituicao |
+O instalador tera uma transicao suave e informativa: ve a confirmacao do imprevisto, entende que o reagendamento foi enviado, e o sistema ja busca automaticamente a proxima tarefa sem esperar o ciclo de polling.
 
