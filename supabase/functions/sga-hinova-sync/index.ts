@@ -849,47 +849,107 @@ serve(async (req) => {
       if (statusCode === 406 || mensagem.includes('já cadastrad') || mensagem.includes('duplicad') || mensagem.includes('existe')) {
         console.log('[SGA Sync] Placa já cadastrada no Hinova, tentando buscar código existente...');
         
-        // Tentar buscar veículo por placa
-        const buscaResponse = await fetchWithRetry(
-          `${hinovaApiUrl}/veiculo/consultar/placa/${veiculo.placa}`,
-          {
-            method: 'GET',
-            headers: operationHeaders
-          }
-        );
+        let codigoVeiculoExistente: number | null = null;
 
-        if (buscaResponse.ok) {
-          const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_veiculo_placa');
-          console.log('[SGA Sync] Resultado busca por placa:', buscaData);
-          
-          // Tentar extrair código do veículo da resposta
-          codigoVeiculoHinova = buscaData.codigo_veiculo || buscaData.codigo || 
-                                (buscaData.data && buscaData.data[0]?.codigo_veiculo);
-          
-          if (codigoVeiculoHinova) {
-            console.log(`[SGA Sync] Código do veículo existente recuperado: ${codigoVeiculoHinova}`);
-            await logSync(veiculo_id, associado_id, 'buscar_veiculo_existente', 'success', 
-              { placa: veiculo.placa }, buscaData, null);
+        // ESTRATÉGIA 1: GET /veiculo/consultar/placa/{placa}
+        try {
+          console.log('[SGA Sync] Estratégia 1: GET /veiculo/consultar/placa/...');
+          const buscaResponse = await fetchWithRetry(
+            `${hinovaApiUrl}/veiculo/consultar/placa/${veiculo.placa}`,
+            { method: 'GET', headers: operationHeaders }
+          );
+          if (buscaResponse.ok) {
+            const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_veiculo_placa');
+            console.log('[SGA Sync] Resultado busca por placa:', JSON.stringify(buscaData));
+            codigoVeiculoExistente = buscaData.codigo_veiculo || buscaData.codigo || 
+                                     (buscaData.data && (Array.isArray(buscaData.data) ? buscaData.data[0]?.codigo_veiculo : buscaData.data.codigo_veiculo));
           } else {
-            console.warn('[SGA Sync] Veículo encontrado mas código não identificado na resposta');
-            await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-            return new Response(
-              JSON.stringify({ 
-                success: false, 
-                error: 'Placa já cadastrada no Hinova mas não foi possível obter o código. Verifique manualmente.',
-                step: 'veiculo',
-                details: { cadastro: veiculoData, busca: buscaData }
-              }),
-              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            const errText = await buscaResponse.text();
+            console.log(`[SGA Sync] Estratégia 1 falhou (${buscaResponse.status}):`, errText.substring(0, 200));
           }
+        } catch (e) {
+          console.log('[SGA Sync] Estratégia 1 erro:', e);
+        }
+
+        // ESTRATÉGIA 2: POST /veiculo/consultar com body { placa }
+        if (!codigoVeiculoExistente) {
+          try {
+            console.log('[SGA Sync] Estratégia 2: POST /veiculo/consultar...');
+            const buscaResponse2 = await fetchWithRetry(
+              `${hinovaApiUrl}/veiculo/consultar`,
+              { method: 'POST', headers: operationHeaders, body: JSON.stringify({ placa: veiculo.placa }) }
+            );
+            if (buscaResponse2.ok) {
+              const buscaData2 = await safeJsonParse<any>(buscaResponse2, 'buscar_veiculo_post');
+              console.log('[SGA Sync] Resultado POST consultar:', JSON.stringify(buscaData2));
+              codigoVeiculoExistente = buscaData2.codigo_veiculo || buscaData2.codigo || 
+                                       (buscaData2.data && (Array.isArray(buscaData2.data) ? buscaData2.data[0]?.codigo_veiculo : buscaData2.data.codigo_veiculo));
+            }
+          } catch (e) {
+            console.log('[SGA Sync] Estratégia 2 falhou:', e);
+          }
+        }
+
+        // ESTRATÉGIA 3: Buscar em logs anteriores de sincronização bem-sucedida
+        if (!codigoVeiculoExistente) {
+          console.log('[SGA Sync] Estratégia 3: Buscando código em logs anteriores...');
+          try {
+            const { data: logAnterior } = await supabase
+              .from('sga_sync_logs')
+              .select('response_payload')
+              .eq('action', 'cadastrar_veiculo')
+              .eq('status', 'success')
+              .not('response_payload', 'is', null)
+              .order('created_at', { ascending: false })
+              .limit(50);
+            
+            if (logAnterior) {
+              for (const log of logAnterior) {
+                const resp = log.response_payload as any;
+                if (resp?.codigo_veiculo) {
+                  codigoVeiculoExistente = resp.codigo_veiculo;
+                  console.log(`[SGA Sync] Código encontrado em log: ${codigoVeiculoExistente}`);
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            console.log('[SGA Sync] Estratégia 3 falhou:', e);
+          }
+        }
+
+        // ESTRATÉGIA 4: Buscar no banco local por placa
+        if (!codigoVeiculoExistente) {
+          console.log('[SGA Sync] Estratégia 4: Buscando código no banco local pela placa...');
+          const { data: veiculoLocal } = await supabase
+            .from('veiculos')
+            .select('codigo_hinova')
+            .eq('placa', veiculo.placa)
+            .not('codigo_hinova', 'is', null)
+            .limit(1)
+            .maybeSingle();
+          
+          if (veiculoLocal?.codigo_hinova) {
+            codigoVeiculoExistente = veiculoLocal.codigo_hinova;
+            console.log(`[SGA Sync] Código encontrado no banco local: ${codigoVeiculoExistente}`);
+          }
+        }
+
+        // Resultado final
+        if (codigoVeiculoExistente) {
+          codigoVeiculoHinova = codigoVeiculoExistente;
+          console.log(`[SGA Sync] Código do veículo existente recuperado: ${codigoVeiculoHinova}`);
+          await logSync(veiculo_id, associado_id, 'buscar_veiculo_existente', 'success', 
+            { placa: veiculo.placa }, { codigo_veiculo: codigoVeiculoExistente }, null);
         } else {
-          // Não conseguiu buscar veículo existente
+          console.log('[SGA Sync] Não foi possível recuperar o código do veículo por nenhuma estratégia');
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+          await logSync(veiculo_id, associado_id, 'buscar_veiculo_existente', 'error', 
+            { placa: veiculo.placa }, veiculoData, 'Não foi possível recuperar código do veículo existente');
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'Placa já cadastrada no Hinova. Não foi possível recuperar o código automaticamente.',
+              error: 'Placa já cadastrada no Hinova. Não foi possível recuperar o código automaticamente. Verifique no painel Hinova o código do veículo.',
               step: 'veiculo',
               details: veiculoData
             }),
