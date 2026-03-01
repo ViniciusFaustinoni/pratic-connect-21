@@ -3,40 +3,33 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
- * Hook que consulta a tabela role_module_item_visibility e calcula a UNIÃO
- * dos sub-itens visíveis para todos os roles do usuário atual.
+ * Hook que consulta a tabela user_module_item_visibility para o usuário atual.
  */
 export function useModuleItemVisibility() {
-  const { user, roles } = useAuth();
+  const { user } = useAuth();
 
   const { data: visibleItems = [], isLoading } = useQuery({
-    queryKey: ['module-item-visibility', user?.id, roles],
+    queryKey: ['module-item-visibility', user?.id],
     queryFn: async () => {
-      if (!roles || roles.length === 0) return [];
+      if (!user?.id) return [];
 
       const { data, error } = await (supabase as any)
-        .from('role_module_item_visibility')
+        .from('user_module_item_visibility')
         .select('module_id, item_id, visible')
-        .in('role', roles)
+        .eq('user_id', user.id)
         .eq('visible', true);
 
       if (error) throw error;
 
-      // Retorna pares module_id:item_id visíveis (união de todos os roles)
       return [...new Set(
         (data || []).map((r: any) => `${r.module_id}:${r.item_id}`)
       )] as string[];
     },
-    enabled: !!user?.id && roles.length > 0,
+    enabled: !!user?.id,
     staleTime: 5 * 60 * 1000,
   });
 
-  /**
-   * Verifica se um sub-item específico está visível.
-   * Se não há dados de item visibility no banco, retorna true (permissivo por padrão).
-   */
   const isItemVisible = (moduleId: string, itemId: string): boolean => {
-    // Se não há dados de visibilidade de itens, tudo é visível
     if (visibleItems.length === 0) return true;
     return visibleItems.includes(`${moduleId}:${itemId}`);
   };
