@@ -235,6 +235,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         veiculo_ano: cotacaoPrioritaria?.veiculo_ano || selectedLead?.veiculo_ano || null,
         veiculo_placa: cotacaoPrioritaria?.veiculo_placa || selectedLead?.veiculo_placa || null,
         veiculo_valor_fipe: cotacaoPrioritaria?.valor_fipe || selectedLead?.veiculo_fipe || null,
+        veiculo_procedencia: cotacaoPrioritaria?.veiculo_procedencia || null,
         // Dados do cliente (quando não há lead)
         cliente_nome: pendingFormData.cliente_nome || selectedLead?.nome || null,
         cliente_email: pendingFormData.cliente_email || selectedLead?.email || null,

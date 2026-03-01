@@ -259,9 +259,12 @@ function inferirPortas(categoria: string | null | undefined): number {
   return 4;
 }
 
-function ehLeilao(categoria: string | null | undefined): boolean {
-  if (!categoria) return false;
-  return categoria.toLowerCase().includes('leilão') || categoria.toLowerCase().includes('leilao');
+function ehLeilao(categoria: string | null | undefined, procedencia?: string | null): boolean {
+  if (!categoria && !procedencia) return false;
+  const c = (categoria || '').toLowerCase();
+  const p = (procedencia || '').toLowerCase();
+  return c.includes('leilão') || c.includes('leilao') ||
+         p.includes('leilão') || p.includes('leilao');
 }
 
 export function mapearDadosParaTemplate(
@@ -319,7 +322,7 @@ export function mapearDadosParaTemplate(
       cambio: inferirCambio(contrato.veiculo_modelo || veiculo.veiculo_modelo),
       portas: inferirPortas(contrato.veiculo_categoria || veiculo.veiculo_categoria),
       uso_aplicativo: contrato.uso_aplicativo || false,
-      leilao: ehLeilao(contrato.veiculo_categoria || veiculo.veiculo_categoria),
+      leilao: ehLeilao(contrato.veiculo_categoria || veiculo.veiculo_categoria, contrato.veiculo_procedencia || veiculo.veiculo_procedencia),
     },
     plano: {
       nome: plano?.nome || "Plano Padrão",
