@@ -25,6 +25,7 @@ const iconesPorGrupo: Record<string, React.ComponentType<{ className?: string }>
   veiculo: Car,
   contrato: FileText,
   plano: Shield,
+  consultor: User,
   evento: Calendar,
   os: FileText,
   oficina: Building,
@@ -53,6 +54,10 @@ const VARIAVEIS_DISPONIVEIS: Record<string, { codigo: string; descricao: string 
     { codigo: 'associado.cep', descricao: 'CEP' },
     { codigo: 'associado.profissao', descricao: 'Profissão' },
     { codigo: 'associado.estado_civil', descricao: 'Estado civil' },
+    { codigo: 'associado.cnh', descricao: 'Número da CNH' },
+    { codigo: 'associado.cnh_validade', descricao: 'Validade da CNH' },
+    { codigo: 'associado.cnh_categoria', descricao: 'Categoria da CNH (A, B, AB...)' },
+    { codigo: 'associado.rg_orgao', descricao: 'Órgão emissor do RG' },
   ],
   veiculo: [
     { codigo: 'veiculo.marca', descricao: 'Marca do veículo' },
@@ -72,6 +77,11 @@ const VARIAVEIS_DISPONIVEIS: Record<string, { codigo: string; descricao: string 
     { codigo: 'veiculo.alienado', descricao: 'Veículo alienado (Sim/Não)' },
     { codigo: 'veiculo.financeira', descricao: 'Financeira (se alienado)' },
     { codigo: 'veiculo.procedencia', descricao: 'Procedência do veículo' },
+    { codigo: 'veiculo.cambio', descricao: 'Tipo de câmbio (Manual/Automático)' },
+    { codigo: 'veiculo.portas', descricao: 'Número de portas' },
+    { codigo: 'veiculo.leilao', descricao: 'Proveniente de leilão (SIM/NÃO)' },
+    { codigo: 'veiculo.uso_aplicativo', descricao: 'Utilizado para aplicativo (SIM/NÃO)' },
+    { codigo: 'veiculo.valor_protegido', descricao: 'Valor protegido (R$)' },
   ],
   contrato: [
     { codigo: 'contrato.numero', descricao: 'Número do contrato' },
@@ -93,6 +103,9 @@ const VARIAVEIS_DISPONIVEIS: Record<string, { codigo: string; descricao: string 
     { codigo: 'plano.cota_participacao', descricao: 'Percentual cota participação' },
     { codigo: 'plano.cota_participacao_valor', descricao: 'Valor cota participação (R$)' },
     { codigo: 'plano.cota_minima', descricao: 'Valor mínimo da cota (R$)' },
+  ],
+  consultor: [
+    { codigo: 'consultor.nome', descricao: 'Nome do consultor/vendedor' },
   ],
   sistema: [
     { codigo: 'sistema.data_atual', descricao: 'Data atual (DD/MM/AAAA)' },
@@ -151,6 +164,7 @@ export function VariaveisSelector({ onSelect }: VariaveisSelectorProps) {
     veiculo: false,
     contrato: false,
     plano: false,
+    consultor: false,
     evento: false,
     os: false,
     oficina: false,
