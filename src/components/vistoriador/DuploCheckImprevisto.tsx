@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle2, Loader2, MessageCircle, Phone, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,7 +32,47 @@ export function DuploCheckImprevisto({
 }: DuploCheckImprevistoProps) {
   const [contatoFeito, setContatoFeito] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
+  const [etapa, setEtapa] = useState<'contato' | 'sucesso'>('contato');
   const queryClient = useQueryClient();
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setContatoFeito(false);
+      setEtapa('contato');
+    }
+  }, [open]);
+
+  // Transition timer: after success, wait then close and invalidate
+  useEffect(() => {
+    if (etapa !== 'sucesso') return;
+
+    const buscarProximaTarefa = async () => {
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
+        );
+        await supabase.functions.invoke('atribuir-proxima-tarefa', {
+          body: {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            acao: 'polling',
+          },
+        });
+      } catch (e) {
+        console.warn('Não foi possível buscar próxima tarefa imediatamente:', e);
+      }
+    };
+
+    buscarProximaTarefa();
+
+    const timer = setTimeout(() => {
+      onOpenChange(false);
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [etapa, onOpenChange, queryClient]);
 
   const abrirWhatsApp = () => {
     const numero = clienteWhatsapp || clienteTelefone;
@@ -58,7 +98,6 @@ export function DuploCheckImprevisto({
   const handleConfirmar = async () => {
     setConfirmando(true);
     try {
-      // Atualizar duplo check e status
       const { error } = await supabase
         .from('servicos')
         .update({
@@ -71,7 +110,7 @@ export function DuploCheckImprevisto({
 
       if (error) throw error;
 
-      // Disparar envio de link de reagendamento
+      // Enviar link de reagendamento (não crítico)
       try {
         await supabase.functions.invoke('enviar-link-reagendamento', {
           body: { servico_id: tarefaId },
@@ -80,10 +119,8 @@ export function DuploCheckImprevisto({
         console.warn('Erro ao enviar link de reagendamento (não crítico):', e);
       }
 
-      toast.success('Duplo check confirmado. Link de reagendamento enviado ao associado.');
-      onOpenChange(false);
-      setContatoFeito(false);
-      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      toast.success('Duplo check confirmado.');
+      setEtapa('sucesso');
     } catch (error: any) {
       console.error('Erro ao confirmar duplo check:', error);
       toast.error('Erro ao confirmar duplo check');
@@ -93,72 +130,91 @@ export function DuploCheckImprevisto({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" />
-            Duplo Check com o Associado
-          </DialogTitle>
-          <DialogDescription>
-            Confirme com o associado que não será possível prosseguir com o serviço. 
-            Entre em contato via WhatsApp ou Ligação antes de confirmar.
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog open={open} onOpenChange={etapa === 'sucesso' ? undefined : onOpenChange}>
+      <DialogContent className={etapa === 'sucesso' ? '[&>button]:hidden' : ''}>
+        {etapa === 'contato' ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                Duplo Check com o Associado
+              </DialogTitle>
+              <DialogDescription>
+                Confirme com o associado que não será possível prosseguir com o serviço. 
+                Entre em contato via WhatsApp ou Ligação antes de confirmar.
+              </DialogDescription>
+            </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Botões de contato */}
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              onClick={abrirWhatsApp}
-              className="gap-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-            >
-              <MessageCircle className="h-4 w-4" />
-              WhatsApp
-            </Button>
-            <Button
-              variant="outline"
-              onClick={ligar}
-              className="gap-2"
-            >
-              <Phone className="h-4 w-4" />
-              Ligar
-            </Button>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  onClick={abrirWhatsApp}
+                  className="gap-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={ligar}
+                  className="gap-2"
+                >
+                  <Phone className="h-4 w-4" />
+                  Ligar
+                </Button>
+              </div>
+
+              {contatoFeito && (
+                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-500/10 rounded-md py-2 px-3">
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                  <span>Contato realizado com o associado</span>
+                </div>
+              )}
+
+              {!contatoFeito && (
+                <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md py-2 px-3">
+                  <MessageCircle className="h-4 w-4 flex-shrink-0" />
+                  <span>Entre em contato com o associado para habilitar a confirmação</span>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={confirmando}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleConfirmar}
+                disabled={!contatoFeito || confirmando}
+                className="gap-2"
+              >
+                {confirmando ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Confirmando...</>
+                ) : (
+                  <><CheckCircle2 className="h-4 w-4" /> Confirmar Duplo Check</>
+                )}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          /* Etapa de sucesso / transição */
+          <div className="flex flex-col items-center justify-center py-8 space-y-4 text-center">
+            <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-8 w-8 text-green-500" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold">Imprevisto registrado com sucesso</h3>
+              <p className="text-sm text-muted-foreground">
+                O associado receberá o link de reagendamento.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Buscando próxima tarefa...</span>
+            </div>
           </div>
-
-          {/* Status do contato */}
-          {contatoFeito && (
-            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-500/10 rounded-md py-2 px-3">
-              <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-              <span>Contato realizado com o associado</span>
-            </div>
-          )}
-
-          {!contatoFeito && (
-            <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md py-2 px-3">
-              <MessageCircle className="h-4 w-4 flex-shrink-0" />
-              <span>Entre em contato com o associado para habilitar a confirmação</span>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={confirmando}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleConfirmar}
-            disabled={!contatoFeito || confirmando}
-            className="gap-2"
-          >
-            {confirmando ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Confirmando...</>
-            ) : (
-              <><CheckCircle2 className="h-4 w-4" /> Confirmar Duplo Check</>
-            )}
-          </Button>
-        </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
