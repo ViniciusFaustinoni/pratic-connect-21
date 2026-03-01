@@ -1,62 +1,90 @@
 
-# Corrigir propagacao de dados para Proposta de Filiacao
 
-## Problema identificado
+# Corrigir preenchimento automatico de CNH, Leilao, Consultor e Uso Aplicativo na Proposta
 
-Ao criar o contrato no `ContratoWizard.tsx`, varios campos disponiveis na cotacao/lead **nao estao sendo propagados** para a tabela `contratos`. Isso causa campos vazios na Proposta de Filiacao.
+## Problemas identificados
 
-### Campos faltantes na criacao do contrato
+### 1. CNH nao preenche automaticamente
+**Causa raiz**: O `ContratoWizard.tsx` coleta os dados de CNH via OCR (campos `cnh`, `cnh_validade`, `cnh_categoria` do formulario), mas **nao os envia** na chamada `createContrato.mutateAsync()`. Os campos `cliente_cnh`, `cliente_cnh_validade` e `cliente_cnh_categoria` ficam nulos no contrato.
 
-| Campo | Status | Motivo |
-|---|---|---|
-| Cambio | Backend infere, mas falha frequentemente | `inferirCambio()` so detecta se o nome do modelo contem "MANUAL", "CVT", "AT" etc. — modelos FIPE geralmente nao incluem isso |
-| Portas | Backend infere como 4 (padrao) | `inferirPortas()` usa apenas a categoria para decidir 0 (moto) ou 4 |
-| Cod. FIPE | **Nao propagado** | `ContratoWizard` nao envia `codigo_fipe` ao criar contrato, mesmo estando disponivel na cotacao |
-| Valor FIPE | Propagado parcialmente | Enviado como `veiculo_valor_fipe`, mas pode vir nulo se cotacao nao tem esse dado |
-| Leilao (SIM/NAO) | Backend infere da categoria | `ehLeilao()` funciona, mas `veiculo_categoria` nao e propagada ao contrato |
-| Uso aplicativo (SIM/NAO) | **Nao propagado** | `uso_aplicativo` nao e enviado ao criar contrato |
-| Nome do Consultor | **Nao propagado** | `vendedor_id` nao e enviado ao criar contrato no `ContratoWizard` |
-| Combustivel | **Nao propagado** | `veiculo_combustivel` nao e enviado ao contrato |
+O fluxo publico (`contrato-gerar` edge function) ja propaga esses campos corretamente (linhas 573-575), entao o problema e exclusivo do fluxo do vendedor via `ContratoWizard`.
+
+### 2. Leilao sempre mostra "NAO"
+**Causa raiz**: A funcao `ehLeilao()` verifica se `veiculo_categoria` contem "leilao". Porem a categoria do veiculo e tipicamente "Automovel", "Motocicleta", etc. -- nunca contem "leilao". A informacao real de leilao deveria vir de um campo especifico ou da `procedencia` do veiculo (ex: "Leilao").
+
+### 3. Consultor nao aparece
+**Causa raiz**: O `ContratoWizard.tsx` envia `vendedor_id: cotacao.vendedor_id`. A funcao `autentique-create` ja resolve o nome via `profiles`. O problema e que `cotacao.vendedor_id` pode estar vazio se a cotacao foi criada sem vincular vendedor. Precisa garantir fallback para o usuario logado.
+
+### 4. Uso aplicativo nao persiste
+**Causa raiz**: O `ContratoWizard.tsx` envia `uso_aplicativo: cotacao.uso_aplicativo || false`. Isso funciona SE a cotacao tiver `uso_aplicativo` preenchido. Precisa verificar se o campo esta sendo buscado corretamente na query da cotacao.
 
 ## Solucao
 
-### 1. Propagar campos faltantes no ContratoWizard.tsx
+### Arquivo 1: `src/components/contratos/ContratoWizard.tsx`
 
-Adicionar os seguintes campos na chamada `createContrato.mutateAsync()`:
+Adicionar os campos faltantes na chamada `createContrato.mutateAsync()`:
 
-- `codigo_fipe` (da cotacao)
-- `veiculo_combustivel` (da cotacao ou dados do formulario)
-- `veiculo_categoria` (da cotacao)
-- `uso_aplicativo` (da cotacao)
-- `vendedor_id` (da cotacao ou usuario logado)
-- `veiculo_procedencia` (da cotacao, se disponivel)
+```text
+// Campos que serao adicionados (apos linha 726):
+cliente_cnh: data.cnh || null,
+cliente_cnh_validade: data.cnh_validade || null,
+cliente_cnh_categoria: data.cnh_categoria || null,
+cliente_rg: data.rg || null,
+cliente_rg_orgao: data.rg_orgao || null,
+cliente_data_nascimento: data.data_nascimento || null,
+cliente_logradouro: data.logradouro || null,
+cliente_numero: data.numero || null,
+cliente_complemento: data.complemento || null,
+cliente_bairro: data.bairro || null,
+```
 
-### 2. Propagar campos faltantes no ContratoFormDialog.tsx
+Tambem corrigir `vendedor_id` para usar fallback do usuario logado:
 
-Mesma logica: garantir que o formulario de criacao de contrato tambem envie esses campos.
+```text
+vendedor_id: cotacao.vendedor_id || profile?.id || null,
+```
 
-### 3. Melhorar inferencia de Cambio no backend
+Onde `profile` e o perfil do usuario logado (ja disponivel no componente via hook `useAuth` ou similar).
 
-A funcao `inferirCambio()` em `termo-afiliacao-utils.ts` e muito limitada. Melhorar adicionando mais padroes comuns de nomes FIPE (ex: "AUT", "MEC", "I-MOTION", "FLEX") e tambem tentar inferir a partir da tabela `veiculos` se existir o veiculo vinculado.
+### Arquivo 2: `supabase/functions/_shared/termo-afiliacao-utils.ts`
 
-### 4. Propagar campos na cotacao publica (EtapaPagamentoCotacao.tsx)
+Corrigir a funcao `ehLeilao()` para verificar tambem o campo `procedencia`:
 
-Verificar se o fluxo de cotacao publica tambem propaga esses campos ao gerar o contrato.
+```text
+function ehLeilao(categoria: string | null | undefined, procedencia?: string | null): boolean {
+  if (!categoria && !procedencia) return false;
+  const c = (categoria || '').toLowerCase();
+  const p = (procedencia || '').toLowerCase();
+  return c.includes('leilão') || c.includes('leilao') ||
+         p.includes('leilão') || p.includes('leilao');
+}
+```
 
-## Arquivos a alterar
+Atualizar `mapearDadosParaTemplate` para passar `procedencia` para `ehLeilao`:
 
-| Arquivo | Alteracao |
+```text
+leilao: ehLeilao(
+  contrato.veiculo_categoria || veiculo.veiculo_categoria,
+  contrato.veiculo_procedencia || veiculo.veiculo_procedencia
+),
+```
+
+### Arquivo 3: `src/components/contratos/ContratoFormDialog.tsx`
+
+Mesma correcao: adicionar campos de CNH e corrigir vendedor_id com fallback.
+
+## Resumo das alteracoes
+
+| Arquivo | O que muda |
 |---|---|
-| `src/components/contratos/ContratoWizard.tsx` | Adicionar `codigo_fipe`, `veiculo_combustivel`, `veiculo_categoria`, `uso_aplicativo`, `vendedor_id`, `veiculo_procedencia` na criacao do contrato |
-| `src/components/contratos/ContratoFormDialog.tsx` | Adicionar campos faltantes na criacao do contrato |
-| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Melhorar `inferirCambio()` com mais padroes de nomes FIPE |
-| `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx` | Verificar e corrigir propagacao de campos no fluxo publico |
+| `src/components/contratos/ContratoWizard.tsx` | Propagar CNH, RG, endereco completo e vendedor_id com fallback |
+| `src/components/contratos/ContratoFormDialog.tsx` | Mesma propagacao de campos faltantes |
+| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Corrigir `ehLeilao()` para verificar `procedencia` alem de `categoria` |
 
-## Resultado
+## Resultado esperado
 
-Todos os campos da Proposta de Filiacao serao preenchidos automaticamente sem necessidade de conferencia manual:
-- Cambio: inferido com mais precisao do nome do modelo
-- Portas: inferido da categoria (0 para motos, 4 para carros, 2 para coupe/esportivos)
-- Cod. FIPE e Valor FIPE: propagados da cotacao
-- Leilao e Uso aplicativo: propagados da cotacao
-- Nome do Consultor: resolvido via `vendedor_id` no contrato
+- **CNH**: Numero, validade e categoria preenchidos automaticamente (dados extraidos via OCR no wizard)
+- **Leilao**: Marcado como "SIM" se a procedencia do veiculo indicar leilao, "NAO" caso contrario
+- **Consultor**: Nome resolvido via `vendedor_id` com fallback para o usuario logado
+- **Uso aplicativo**: Ja propagado corretamente -- sera verificado se a query da cotacao inclui o campo
+
