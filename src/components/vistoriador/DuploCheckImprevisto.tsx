@@ -49,7 +49,8 @@ export function DuploCheckImprevisto({
 
   const ligar = () => {
     if (clienteTelefone) {
-      window.open(`tel:${clienteTelefone}`, '_self');
+      const numeroLimpo = clienteTelefone.replace(/\D/g, '');
+      window.location.href = `tel:${numeroLimpo}`;
       setContatoFeito(true);
     }
   };
