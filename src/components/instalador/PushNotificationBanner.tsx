@@ -35,12 +35,31 @@ export function PushNotificationBanner() {
   }, [isSupported, isSubscribed, permission, isLoading]);
 
   const handleSubscribe = async () => {
-    const success = await subscribe();
-    if (success) {
+    const result = await subscribe();
+    if (result.success) {
       toast.success('Notificações ativadas com sucesso!');
       setIsVisible(false);
     } else {
-      toast.error('Não foi possível ativar as notificações');
+      // Mensagens específicas por tipo de erro
+      switch (result.reason) {
+        case 'ios_not_installed':
+          toast.error('No iPhone, instale o app na tela inicial primeiro para ativar notificações.', { duration: 6000 });
+          break;
+        case 'not_supported':
+          toast.error('Seu navegador não suporta notificações push.');
+          break;
+        case 'permission_denied':
+          toast.error('Permissão de notificações bloqueada. Desbloqueie nas configurações do navegador.', { duration: 6000 });
+          break;
+        case 'permission_dismissed':
+          toast.info('Você pode ativar as notificações a qualquer momento.');
+          break;
+        case 'rls_blocked':
+          toast.error('Erro de permissão ao salvar. Contate o suporte.');
+          break;
+        default:
+          toast.error('Não foi possível ativar as notificações. Tente novamente.');
+      }
     }
   };
 

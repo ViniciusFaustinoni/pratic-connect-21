@@ -104,10 +104,24 @@ export function usePushNotificationsProfissional() {
   }, [state.isSupported, user]);
 
   // Função para se inscrever
-  const subscribe = useCallback(async (): Promise<boolean> => {
-    if (!state.isSupported || !user) {
-      console.error('[Push] Push não suportado ou usuário não logado');
-      return false;
+  const subscribe = useCallback(async (): Promise<{ success: boolean; reason?: string }> => {
+    if (!state.isSupported) {
+      console.error('[Push] Push não suportado neste navegador');
+      return { success: false, reason: 'not_supported' };
+    }
+    if (!user) {
+      console.error('[Push] Usuário não logado');
+      return { success: false, reason: 'not_logged_in' };
+    }
+
+    // Verificar se está em modo standalone (PWA instalada) - necessário no iOS
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as any).standalone === true;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    if (isIOS && !isStandalone) {
+      console.warn('[Push] iOS requer que o app seja instalado na tela inicial para push');
+      return { success: false, reason: 'ios_not_installed' };
     }
 
     setState(prev => ({ ...prev, isLoading: true }));
@@ -118,9 +132,9 @@ export function usePushNotificationsProfissional() {
       setState(prev => ({ ...prev, permission }));
 
       if (permission !== 'granted') {
-        console.log('[Push] Permissão negada');
+        console.log('[Push] Permissão negada pelo usuário');
         setState(prev => ({ ...prev, isLoading: false }));
-        return false;
+        return { success: false, reason: permission === 'denied' ? 'permission_denied' : 'permission_dismissed' };
       }
 
       // Aguardar service worker estar pronto
@@ -171,7 +185,10 @@ export function usePushNotificationsProfissional() {
           onConflict: 'endpoint',
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Push] Erro ao salvar subscription no banco:', error);
+        throw error;
+      }
 
       setState(prev => ({
         ...prev,
@@ -180,12 +197,23 @@ export function usePushNotificationsProfissional() {
       }));
 
       console.log('[Push] ✅ Inscrito em notificações push');
-      return true;
+      return { success: true };
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Push] Erro ao inscrever:', error);
       setState(prev => ({ ...prev, isLoading: false }));
-      return false;
+      
+      // Identificar tipo de erro
+      if (error?.name === 'AbortError') {
+        return { success: false, reason: 'sw_not_ready' };
+      }
+      if (error?.message?.includes('push service')) {
+        return { success: false, reason: 'push_service_error' };
+      }
+      if (error?.code === '42501' || error?.message?.includes('row-level security')) {
+        return { success: false, reason: 'rls_blocked' };
+      }
+      return { success: false, reason: 'unknown' };
     }
   }, [state.isSupported, user]);
 
