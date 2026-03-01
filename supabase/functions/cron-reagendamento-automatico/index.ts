@@ -40,6 +40,9 @@ Deno.serve(async (req) => {
         "vistoria_transferencia",
         "vistoria_substituicao",
         "revistoria",
+        "instalacao",
+        "manutencao",
+        "retirada",
       ]);
 
     if (error) throw error;

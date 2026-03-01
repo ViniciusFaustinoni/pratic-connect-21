@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     // Buscar serviço com dados do associado
     const { data: servico, error: sErr } = await supabase
       .from("servicos")
-      .select("id, reagendamento_token, associado_id")
+      .select("id, reagendamento_token, associado_id, tipo")
       .eq("id", servico_id)
       .single();
 
@@ -44,7 +44,18 @@ Deno.serve(async (req) => {
     const linkReagendamento = `${appUrl}/reagendar/${servico.reagendamento_token}`;
     const primeiroNome = associado.nome?.split(" ")[0] || "Associado";
 
-    const mensagem = `Olá ${primeiroNome}, sua vistoria não pôde ser realizada. ` +
+    const TIPO_LABELS: Record<string, string> = {
+      vistoria_adesao: "vistoria",
+      vistoria_transferencia: "vistoria",
+      vistoria_substituicao: "vistoria",
+      revistoria: "vistoria",
+      instalacao: "instalação do rastreador",
+      manutencao: "manutenção do rastreador",
+      retirada: "retirada do rastreador",
+    };
+    const tipoLabel = TIPO_LABELS[servico.tipo] || "serviço";
+
+    const mensagem = `Olá ${primeiroNome}, seu(sua) ${tipoLabel} não pôde ser realizado(a). ` +
       `Acesse o link abaixo para agendar um novo dia, horário e endereço:\n\n` +
       `${linkReagendamento}\n\n` +
       `Equipe PRATIC 🚗`;
