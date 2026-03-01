@@ -60,7 +60,7 @@ export default function InstaladorHome() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="flex-1 bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
           <p className="text-slate-400">Carregando...</p>
@@ -74,7 +74,7 @@ export default function InstaladorHome() {
       {/* Overlay de bloqueio durante almoço */}
       <AlmocoBloqueioOverlay />
       
-      <div className="min-h-screen bg-slate-900">
+      <div className="bg-slate-900">
       {/* Banner Offline */}
       {!isOnline && (
         <div className="bg-yellow-600 text-yellow-100 px-4 py-2 flex items-center gap-2 text-sm">

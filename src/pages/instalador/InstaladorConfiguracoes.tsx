@@ -17,7 +17,7 @@ export default function InstaladorConfiguracoes() {
   const [temaEscuro, setTemaEscuro] = useState(true);
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="bg-slate-900">
       <div className="p-4 space-y-4">
         {/* Header */}
         <div className="flex items-center gap-3">

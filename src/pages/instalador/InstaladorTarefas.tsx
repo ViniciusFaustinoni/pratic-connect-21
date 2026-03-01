@@ -47,7 +47,7 @@ export default function InstaladorTarefas() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="flex-1 bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
           <p className="text-slate-400">Carregando tarefas...</p>
@@ -57,7 +57,7 @@ export default function InstaladorTarefas() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="bg-slate-900">
       <div className="p-4 space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">

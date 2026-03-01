@@ -411,7 +411,7 @@ export default function ExecutarRetirada() {
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-slate-900 max-w-md mx-auto overflow-hidden">
+    <div className="flex h-full flex-col bg-slate-900 overflow-hidden">
       {/* Header */}
       <header className="flex-shrink-0 border-b border-slate-700 bg-slate-800 px-4 py-3">
         <div className="flex items-center gap-3">
@@ -814,7 +814,7 @@ export default function ExecutarRetirada() {
 
       {/* Footer */}
       {isEmAndamento && (
-        <footer className="fixed bottom-16 left-0 right-0 border-t border-slate-700 bg-slate-800 p-4 pb-2 space-y-2 z-40 max-w-md mx-auto">
+        <footer className="flex-shrink-0 border-t border-slate-700 bg-slate-800 p-4 pb-2 space-y-2">
           <Button 
             onClick={handleConcluir} 
             disabled={!podeConfirmar || processando} 

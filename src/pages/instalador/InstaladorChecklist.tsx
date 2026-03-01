@@ -723,7 +723,7 @@ export default function InstaladorChecklist() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-900 overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
       {/* Progress Bar */}
       <div className="flex-shrink-0 z-40 border-b border-slate-700 bg-slate-800 px-4 py-3">
         <div className="mb-2 flex justify-between">
