@@ -35,7 +35,7 @@ export default function InstaladorPerfil() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="bg-slate-900">
       <div className="p-4 space-y-4">
         <h1 className="text-lg font-bold text-white flex items-center gap-2">
           <User className="h-5 w-5 text-blue-400" />
