@@ -1,17 +1,37 @@
-# Sistema de Notificacoes de Cobranca e Regua Automatica
 
-## Status: IMPLEMENTADO ✅
+# Adicionar Template Padrao para Rastreador
 
-### O que foi feito:
+## Resumo
 
-1. **Edge function `disparar-boletos-lote`** — Disparo em lote de WhatsApp + Email após emissão, processando em lotes de 10 com delay de 1s
-2. **Ajuste D-5** — `enviar-lembretes-vencimento` agora usa `[5, 1, 0]` em vez de `[3, 1, 0]`
-3. **Tela Notificações de Cobrança** — `/financeiro/notificacoes-cobranca` com painel de resumo, faixas de atraso, lista de inadimplentes, disparo manual e histórico
-4. **Botão "Disparar Notificações"** — Adicionado à tela de Emissão de Cobranças
-5. **Menu sidebar** — Item "Notificações Cobrança" com ícone Bell no menu Financeiro
+Adicionar uma nova regra "Usar como padrao para Termo de Rastreador" nos templates de documentos, seguindo o mesmo padrao ja existente para Autentique, Entrada de Evento e Saida de Evento.
 
-### Fluxo completo ativo:
+## O que sera feito
 
-```
-Emissão → Disparar Notificações → Régua automática (D-5, D-1, D0, D+1, D+3, D+5) → Suspensão → SPC D+30
-```
+### 1. Migration: nova coluna `is_default_rastreador`
+
+Adicionar coluna `is_default_rastreador` (boolean, default false) na tabela `documento_templates`, seguindo o padrao das colunas `is_default_autentique`, `is_default_evento` e `is_default_saida`.
+
+### 2. Atualizar `src/pages/documentos/TemplateForm.tsx`
+
+- Adicionar `is_default_rastreador: z.boolean().default(false)` no schema Zod
+- Adicionar campo no form default e no reset ao carregar template existente
+- Passar `is_default_rastreador` no submit (create e update)
+- Adicionar checkbox com icone `Radio` (ou `MapPin`), borda azul-ciano, com texto:
+  - Label: "Usar como padrao para Termo de Rastreador"
+  - Descricao: "Este template sera usado para gerar o Termo de Instalacao de Rastreador quando houver necessidade. Apenas um template pode ser marcado."
+
+### 3. Atualizar `src/hooks/useDocumentoTemplates.ts`
+
+- Adicionar `is_default_rastreador` nas interfaces `CreateTemplateInput`, `UpdateTemplateInput`, `TemplateData`
+- Incluir no `mapTemplateData` (parse do banco)
+- Incluir no `mutationFn` de create e update
+
+### 4. Garantir exclusividade (apenas 1 padrao)
+
+Ao salvar um template com `is_default_rastreador = true`, limpar o flag dos demais templates. Isso sera feito no hook de update/create com uma chamada extra ao Supabase antes de salvar (mesmo padrao que poderia ser feito para os outros flags -- atualmente nao ha essa protecao, mas vou adicionar para o rastreador).
+
+## Arquivos a modificar
+
+- `documento_templates` (migration) -- nova coluna
+- `src/pages/documentos/TemplateForm.tsx` -- checkbox no formulario
+- `src/hooks/useDocumentoTemplates.ts` -- interfaces e logica de persistencia
