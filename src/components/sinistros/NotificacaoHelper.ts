@@ -173,6 +173,14 @@ export async function notificarAguardandoDiretoria(sinistroId: string, protocolo
 }
 
 // 9. Laudo de sindicância emitido → notifica analistas de eventos + diretores
+async function getRoleIds(role: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('role', role as any);
+  return (data || []).map(r => r.user_id);
+}
+
 async function getAnalistasEventosIds(): Promise<string[]> {
   const { data } = await supabase
     .from('user_roles')
@@ -193,5 +201,25 @@ export async function notificarLaudoEmitido(sinistroId: string, protocolo: strin
     prioridade: 'alta',
     referenciaId: sinistroId,
     referenciaTipo: 'sinistro',
+  });
+}
+
+// 10. Recusa do instalador → notifica analista_cadastro, coordenador_monitoramento e diretores
+export async function notificarRecusaInstalador(servicoId: string, placa: string, motivo: string) {
+  const [analistas, coordenadores, diretores] = await Promise.all([
+    getRoleIds('analista_cadastro'),
+    getRoleIds('coordenador_monitoramento'),
+    getDiretoresIds(),
+  ]);
+  const unicos = [...new Set([...analistas, ...coordenadores, ...diretores])];
+  await inserirParaMultiplos(unicos, {
+    titulo: 'Veículo Negado pelo Instalador',
+    mensagem: `🚫 Veículo placa ${placa} foi negado pelo instalador. Motivo: ${motivo}`,
+    tipo: 'sistema',
+    subtipo: 'recusa_instalador',
+    link: '/cadastro/recusas-instalador',
+    prioridade: 'urgente',
+    referenciaId: servicoId,
+    referenciaTipo: 'servico',
   });
 }
