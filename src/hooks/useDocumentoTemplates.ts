@@ -34,6 +34,7 @@ interface TemplateFromDB {
   template_html?: string;
   is_default_evento?: boolean;
   is_default_saida?: boolean;
+  is_default_rastreador?: boolean;
 }
 
 // Tipo transformado para uso no frontend
@@ -65,6 +66,7 @@ export interface DocumentoTemplateView {
   template_html?: string;
   is_default_evento?: boolean;
   is_default_saida?: boolean;
+  is_default_rastreador?: boolean;
 }
 
 // Função para transformar dados do banco para o tipo do frontend
@@ -89,6 +91,7 @@ function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategori
     template_html: data.template_html || undefined,
     is_default_evento: data.is_default_evento || false,
     is_default_saida: (data as any).is_default_saida || false,
+    is_default_rastreador: (data as any).is_default_rastreador || false,
   };
 }
 
@@ -171,6 +174,7 @@ interface CreateTemplateInput {
   is_default_autentique?: boolean;
   is_default_evento?: boolean;
   is_default_saida?: boolean;
+  is_default_rastreador?: boolean;
 }
 
 export function useCreateTemplate() {
@@ -178,6 +182,14 @@ export function useCreateTemplate() {
 
   return useMutation({
     mutationFn: async (input: CreateTemplateInput) => {
+      // Garantir exclusividade do is_default_rastreador
+      if (input.is_default_rastreador) {
+        await supabase
+          .from('documento_templates')
+          .update({ is_default_rastreador: false } as any)
+          .eq('is_default_rastreador', true);
+      }
+
       const { data, error } = await supabase
         .from('documento_templates')
         .insert({
@@ -199,6 +211,7 @@ export function useCreateTemplate() {
           is_default_autentique: input.is_default_autentique || false,
           is_default_evento: input.is_default_evento || false,
           is_default_saida: input.is_default_saida || false,
+          is_default_rastreador: input.is_default_rastreador || false,
         })
         .select()
         .single();
@@ -235,6 +248,7 @@ interface UpdateTemplateInput {
   is_default_autentique?: boolean;
   is_default_evento?: boolean;
   is_default_saida?: boolean;
+  is_default_rastreador?: boolean;
 }
 
 export function useUpdateTemplate() {
@@ -242,6 +256,15 @@ export function useUpdateTemplate() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: UpdateTemplateInput) => {
+      // Garantir exclusividade do is_default_rastreador
+      if (input.is_default_rastreador) {
+        await supabase
+          .from('documento_templates')
+          .update({ is_default_rastreador: false } as any)
+          .eq('is_default_rastreador', true)
+          .neq('id', id);
+      }
+
       const updateData: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
@@ -262,6 +285,7 @@ export function useUpdateTemplate() {
       if (input.is_default_autentique !== undefined) updateData.is_default_autentique = input.is_default_autentique;
       if (input.is_default_evento !== undefined) updateData.is_default_evento = input.is_default_evento;
       if (input.is_default_saida !== undefined) updateData.is_default_saida = input.is_default_saida;
+      if (input.is_default_rastreador !== undefined) updateData.is_default_rastreador = input.is_default_rastreador;
 
       const { data, error } = await supabase
         .from('documento_templates')

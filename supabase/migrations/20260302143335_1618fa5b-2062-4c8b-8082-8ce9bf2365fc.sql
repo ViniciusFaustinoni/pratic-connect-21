@@ -1,0 +1,1 @@
+ALTER TABLE documento_templates ADD COLUMN IF NOT EXISTS is_default_rastreador boolean DEFAULT false;
