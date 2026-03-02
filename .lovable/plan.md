@@ -1,43 +1,49 @@
 
 
-# Diferenciar fotos obrigatorias por tipo de veiculo (carro vs moto)
+# Correcao: Deteccao moto/carro na instalacao
 
-## Problema
+## Diagnostico
 
-A funcao `detectarTipoVeiculo` em `src/data/vistoriaConfigCompleta.ts` so aceita um parametro `tipoVeiculoStr`, que vem de `veiculos.tipo_veiculo` -- uma coluna que **nao existe** na tabela. O resultado: sempre retorna `'automovel'`, exibindo 31 fotos de carro mesmo para motos.
+Analisei toda a cadeia de dados e logica de deteccao. Os 3 arquivos foram corrigidos corretamente no ultimo commit:
 
-## Solucao
+1. `detectarTipoVeiculo` agora aceita `modelo` e `marca`
+2. `InstaladorChecklist.tsx` passa `servico?.veiculos?.modelo` e `servico?.veiculos?.marca`
+3. `ExecutarVistoriaCompleta.tsx` faz o mesmo
 
-Expandir a deteccao para usar tambem `marca` e `modelo` do veiculo (campos que ja existem na tabela). Sao 3 arquivos com alteracoes minimas:
+O veiculo em andamento no banco e: **Honda nxr160 Bros Esdd** -- as keywords `nxr` e `bros` existem na lista e a funcao deveria retornar `'moto'`.
 
-### 1. `src/data/vistoriaConfigCompleta.ts` -- Melhorar `detectarTipoVeiculo`
+**Porem, identifiquei um problema potencial de timing/dependencia**: o `useMemo` depende de `[servico?.veiculos]`, mas quando o `servico` carrega, a referencia do objeto `veiculos` pode nao mudar se o React comparar por referencia. Alem disso, nao ha nenhum log de debug para confirmar que a deteccao esta sendo executada.
 
-Adicionar listas de keywords e marcas exclusivas de moto, e aceitar `modelo` e `marca` como parametros opcionais:
+## Correcoes
 
-- Keywords de modelo: 'moto', 'motocicleta', 'nxr', 'bros', 'cg', 'cb', 'cbr', 'pcx', 'biz', 'pop', 'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr', 'neo', 'burgman', 'intruder', 'factor', 'scooter', 'ciclomotor', 'triciclo'
-- Marcas exclusivas: YAMAHA, SUZUKI, KAWASAKI, HARLEY-DAVIDSON, TRIUMPH, DUCATI, KTM, DAFRA, SHINERAY, KASINSKI
+### 1. `src/pages/instalador/InstaladorChecklist.tsx` - Melhorar dependencia do useMemo
 
-Ordem de deteccao:
-1. Se `tipo_veiculo` explicito contem 'moto' -> moto
-2. Se `modelo` contem keyword de moto -> moto
-3. Se `marca` e exclusiva de moto -> moto
-4. Senao -> automovel
+Trocar a dependencia de `[servico?.veiculos]` para campos primitivos `[servico?.veiculos?.modelo, servico?.veiculos?.marca]` que garantem re-avaliacao quando os dados carregam. Adicionar `console.log` temporario para debug.
 
-### 2. `src/pages/instalador/InstaladorChecklist.tsx` (linha 185-188)
-
-Passar `modelo` e `marca` do veiculo para a funcao de deteccao:
-
+```typescript
+const tipoVeiculo: TipoVeiculo = useMemo(() => {
+  const veiculoData = servico?.veiculos as { ... } | undefined;
+  const resultado = detectarTipoVeiculo(veiculoData?.tipo_veiculo, veiculoData?.modelo, veiculoData?.marca);
+  console.log('[InstaladorChecklist] Deteccao tipo veiculo:', {
+    modelo: veiculoData?.modelo,
+    marca: veiculoData?.marca,
+    resultado
+  });
+  return resultado;
+}, [servico?.veiculos?.modelo, servico?.veiculos?.marca]);
 ```
-detectarTipoVeiculo(veiculoData?.tipo_veiculo, veiculoData?.modelo, veiculoData?.marca)
-```
 
-### 3. `src/pages/instalador/ExecutarVistoriaCompleta.tsx` (linha 170-174)
+### 2. `src/pages/instalador/ExecutarVistoriaCompleta.tsx` - Mesma correcao
 
-Mesma correcao -- usar `detectarTipoVeiculo` importada com os 3 parametros em vez da logica inline atual.
+Trocar dependencia de `[veiculo]` para `[(veiculo as any)?.modelo, (veiculo as any)?.marca]`.
+
+### 3. `src/data/vistoriaConfigCompleta.ts` - Tornar deteccao HONDA mais robusta
+
+Adicionar `console.log` na funcao de deteccao para rastrear o fluxo. Tambem adicionar keyword `'honda'` com tratamento especial: se marca for HONDA **e** modelo conter qualquer keyword de moto, detectar como moto (redundante mas defensivo).
 
 ## Resultado
 
-- Motos detectadas automaticamente: exibem 10 fotos (7 veiculo + 3 rastreador)
-- Carros continuam com 31 fotos
-- Sem migration de banco -- usa campos `marca` e `modelo` ja existentes
-- 3 arquivos editados
+- Dependencias do `useMemo` usando valores primitivos garantem re-render correto
+- Logs de debug permitem confirmar a deteccao no console do navegador
+- Mesma logica, mais robusta contra edge cases de referencia React
+- 3 arquivos editados, sem migration
