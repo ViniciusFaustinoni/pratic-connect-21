@@ -1,39 +1,102 @@
 
-# Substituir "Cobertura Total" por "Proteção 360º" em todas as interfaces
+# Corrigir propagacao de dados para o SGA Hinova
 
-## Diagnostico
+## Diagnostico (baseado nos logs reais do banco)
 
-O template `cobertura_total_ativada` no `notificar-cliente` **ja foi atualizado** para "Proteção 360º" no codigo-fonte, mas a **edge function nao foi reimplantada** -- por isso a mensagem do WhatsApp ainda chega como "COBERTURA TOTAL".
+Analisei os logs de sincronizacao e identifiquei **3 problemas na raiz** que impedem a propagacao correta:
 
-Alem disso, existem **diversas outras ocorrencias** de "cobertura total" em textos voltados ao usuario que precisam ser corrigidas.
+### Problema 1: Tipo de veiculo errado para motos
+O ultimo sync (01/03) enviou `codigo_tipo_veiculo: 1` (automovel) para uma **Honda NXR160 Bros** (moto). A funcao `inferirTipoVeiculo` no edge function so olha `contrato.veiculo_categoria` -- que nao contem "moto" para muitos contratos. Precisa usar `marca` e `modelo` do veiculo como fallback, igual ao que ja foi feito no frontend (`detectarTipoVeiculo`).
 
-## Alteracoes Necessarias
+### Problema 2: Recuperacao de placa duplicada falha
+Quando o Hinova retorna "Ja existe um veiculo com a placa LMS3B44", as 4 estrategias de fallback nao encontram o codigo:
+- Estrategia 1 (GET /veiculo/consultar/placa/): endpoint pode nao existir na API v2
+- Estrategia 2 (POST /veiculo/consultar): idem
+- Estrategia 3 (logs anteriores): busca generica sem filtrar pelo veiculo_id/placa especifico
+- Estrategia 4 (banco local): so funciona se o veiculo ja foi sincronizado antes
 
-### 1. Reimplantar edge function `notificar-cliente`
-A funcao ja tem o texto correto no codigo mas precisa ser deployada para que a mudanca surta efeito no WhatsApp.
+O resultado: a sync para no passo do veiculo e nunca completa. O associado fica cadastrado no Hinova mas sem veiculo vinculado.
 
-### 2. `supabase/functions/whatsapp-webhook/index.ts` (2 ocorrencias)
-- Linha 799: `"Total (todos os serviços)"` -> `"Proteção 360º (todos os serviços)"`
-- Linha 1775: `"TOTAL (tudo liberado)"` -> `"PROTEÇÃO 360º (tudo liberado)"`
+### Problema 3: Edge functions desatualizadas
+As correcoes feitas anteriormente nos arquivos de edge functions (notificar-cliente, whatsapp-webhook) precisam ser reimplantadas para surtirem efeito.
 
-### 3. `src/hooks/usePropostasPendentes.ts` (4 ocorrencias)
-- Linha 1570: `"Cobertura total ativada."` -> `"Proteção 360º ativada."`
-- Linha 1571: `"Aguardando instalação para cobertura total."` -> `"Aguardando instalação para Proteção 360º."`
-- Linha 1691: `"Cobertura total ativada."` -> `"Proteção 360º ativada."`
-- Linha 1692: `"Aguardando instalação para cobertura total."` -> `"Aguardando instalação para Proteção 360º."`
+## Correcoes Propostas
 
-### 4. `src/pages/cadastro/PropostaAnalise.tsx` (1 ocorrencia)
-- Linha 466: `"cobertura total"` -> `"Proteção 360º"`
+### 1. `supabase/functions/sga-hinova-sync/index.ts` -- Deteccao inteligente de tipo de veiculo
 
-### 5. Reimplantar edge function `whatsapp-webhook`
-Para que as correcoes das linhas 799 e 1775 entrem em vigor.
+Substituir a funcao `inferirTipoVeiculo` para aceitar `marca` e `modelo` alem da categoria:
 
-## O que NAO sera alterado
-- Colunas do banco (`cobertura_total`) -- permanecem iguais (logica interna)
-- Comentarios de codigo e logs de debug -- nao sao voltados ao usuario
-- Variaveis e nomes de funcoes -- nao afetam o usuario
+```typescript
+const inferirTipoVeiculo = (categoria, marca, modelo): number => {
+  // Prioridade 1: categoria explicita
+  if (categoria?.toUpperCase().includes('MOTO')) return 2;
+  
+  // Prioridade 2: modelo com keywords de moto
+  const MOTO_KEYWORDS = ['nxr', 'bros', 'cg', 'cb', 'cbr', 'pcx', 'biz', 'pop', 
+    'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr', 'neo',
+    'burgman', 'intruder', 'factor', 'scooter'];
+  if (modelo && MOTO_KEYWORDS.some(kw => modelo.toLowerCase().includes(kw))) return 2;
+  
+  // Prioridade 3: marca exclusiva de moto
+  const MARCAS_MOTO = ['YAMAHA', 'SUZUKI', 'KAWASAKI', 'HARLEY', 'TRIUMPH', 
+    'DUCATI', 'KTM', 'DAFRA', 'SHINERAY', 'KASINSKI'];
+  if (marca && MARCAS_MOTO.some(m => marca.toUpperCase().includes(m))) return 2;
+  
+  // Demais categorias (caminhao, van, etc.)
+  // ... manter logica existente
+  return 1;
+};
+```
 
-## Resultado
-- Mensagens do WhatsApp mostrarao "Proteção 360º" em vez de "Cobertura Total"
-- Textos internos do sistema (historico, toasts, modais) tambem atualizados
-- 3 arquivos editados + 2 edge functions reimplantadas
+Passar `veiculo.marca` e `veiculo.modelo` para a funcao (linha 843).
+
+### 2. `supabase/functions/sga-hinova-sync/index.ts` -- Corrigir recuperacao de placa duplicada
+
+Na **Estrategia 3** (busca em logs): filtrar pelo `veiculo_id` especifico em vez de buscar qualquer log generico:
+
+```typescript
+// ANTES: busca generica em todos os logs
+const { data: logAnterior } = await supabase
+  .from('sga_sync_logs')
+  .select('response_payload')
+  .eq('action', 'cadastrar_veiculo')
+  .eq('status', 'success')
+  .order('created_at', { ascending: false })
+  .limit(50);
+
+// DEPOIS: filtrar por veiculo_id
+const { data: logAnterior } = await supabase
+  .from('sga_sync_logs')
+  .select('response_payload')
+  .eq('veiculo_id', veiculo_id)
+  .eq('action', 'cadastrar_veiculo')
+  .eq('status', 'success')
+  .order('created_at', { ascending: false })
+  .limit(5);
+```
+
+Tambem adicionar uma **Estrategia 5**: tentar associar o veiculo existente ao associado recem-criado usando outro endpoint Hinova, ou pelo menos salvar o estado parcial:
+
+```typescript
+// Se nenhuma estrategia encontrou o codigo,
+// marcar sync como parcial (associado OK, veiculo pendente)
+// e salvar o codigo_associado para nao perder progresso
+await supabase.from('associados')
+  .update({ codigo_hinova: codigoAssociadoHinova })
+  .eq('id', associado_id);
+```
+
+### 3. Reimplantar edge functions
+
+Apos as alteracoes, reimplantar:
+- `sga-hinova-sync` (correcoes de tipo e recuperacao)
+- `notificar-cliente` (ja corrigido para "Protecao 360")
+- `whatsapp-webhook` (ja corrigido para "Protecao 360")
+
+## Resultado Esperado
+
+- Motos serao enviadas como `codigo_tipo_veiculo: 2` no SGA
+- Recuperacao de placa duplicada sera mais precisa (filtra por veiculo_id)
+- Mesmo quando o veiculo ja existe no Hinova, o `codigo_associado` sera preservado
+- Mensagens do WhatsApp mostrarao "Protecao 360" corretamente
+- 1 arquivo editado + 3 edge functions reimplantadas
