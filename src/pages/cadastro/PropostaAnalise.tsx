@@ -463,7 +463,7 @@ export default function PropostaAnalise() {
                 <p>Esta ação irá:</p>
                 <ul className="list-disc list-inside space-y-1 text-sm">
                   <li>Ativar o rastreador na plataforma <strong className="text-foreground">SOFTRUCK</strong></li>
-                  <li>Liberar a <strong className="text-foreground">cobertura total</strong> para o veículo {proposta?.veiculo_placa}</li>
+                  <li>Liberar a <strong className="text-foreground">Proteção 360º</strong> para o veículo {proposta?.veiculo_placa}</li>
                   <li>Criar veículo/device na Softruck se necessário</li>
                 </ul>
                 <p className="font-medium text-foreground">Deseja continuar?</p>

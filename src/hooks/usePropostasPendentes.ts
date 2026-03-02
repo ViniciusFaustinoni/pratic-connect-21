@@ -1567,8 +1567,8 @@ export function useAprovarProposta() {
 
       // 7. Registrar histórico com mensagem apropriada
       const mensagemHistorico = jaTemInstalacaoConcluida
-        ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Cobertura total ativada.'
-        : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.';
+        ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Proteção 360º ativada.'
+        : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.';
       
       await supabase
         .from('associados_historico')
@@ -1688,8 +1688,8 @@ export function useAprovarProposta() {
       }
 
       const mensagemRetorno = jaTemInstalacaoConcluida
-        ? 'Proposta aprovada! Instalação já concluída. Cobertura total ativada.'
-        : 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para cobertura total.';
+        ? 'Proposta aprovada! Instalação já concluída. Proteção 360º ativada.'
+        : 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.';
 
       return {
         contratoId, 
