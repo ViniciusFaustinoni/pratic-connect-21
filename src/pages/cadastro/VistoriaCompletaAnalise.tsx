@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/integrations/supabase/client';
+import { ResolverRecusaDialog } from '@/components/cadastro/ResolverRecusaDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -81,6 +84,7 @@ export default function VistoriaCompletaAnalise() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [showConfirmAtivacao, setShowConfirmAtivacao] = useState(false);
+  const [showRecusaDialog, setShowRecusaDialog] = useState(false);
 
   const {
     instalacao,
@@ -90,6 +94,28 @@ export default function VistoriaCompletaAnalise() {
     ativarRastreador,
     isAtivando,
   } = useVistoriaCompletaAnalise(id);
+
+  // Query para buscar dados de recusa do serviço vinculado à instalação
+  const { data: servicoRecusa } = useQuery({
+    queryKey: ['servico-recusa-instalacao', id],
+    queryFn: async () => {
+      if (!id) return null;
+      // Buscar serviço de instalação vinculado que tenha decisao_instalador = 'negado'
+      const { data } = await supabase
+        .from('servicos')
+        .select('id, decisao_instalador, ressalvas_instalador, fotos_ressalva, veiculo_id, associado_id')
+        .eq('tipo', 'instalacao')
+        .eq('decisao_instalador', 'negado')
+        .limit(1);
+      
+      // Filtrar pelo veículo da instalação se disponível
+      if (!data || data.length === 0) return null;
+      return data[0];
+    },
+    enabled: !!id && !!instalacao,
+  });
+
+  const temRecusaPendente = servicoRecusa?.decisao_instalador === 'negado';
 
   const handleAtivarRastreador = () => {
     setShowConfirmAtivacao(true);
@@ -171,6 +197,45 @@ export default function VistoriaCompletaAnalise() {
           {instalacao.status === 'concluida' ? 'Instalação Concluída' : instalacao.status}
         </Badge>
       </div>
+
+      {/* BANNER DE RECUSA DO INSTALADOR */}
+      {temRecusaPendente && servicoRecusa && (
+        <Card className="border-destructive bg-destructive/5">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-6 w-6 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-destructive text-lg">
+                  Veículo NEGADO pelo Instalador — Pendente de Revisão
+                </h3>
+                {servicoRecusa.ressalvas_instalador && (
+                  <p className="text-sm text-foreground mt-1">
+                    <strong>Motivo:</strong> {servicoRecusa.ressalvas_instalador}
+                  </p>
+                )}
+                {servicoRecusa.fotos_ressalva && (servicoRecusa.fotos_ressalva as string[]).length > 0 && (
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {(servicoRecusa.fotos_ressalva as string[]).map((url: string, i: number) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                        <img src={url} alt={`Evidência ${i + 1}`} className="h-16 w-16 rounded-md object-cover border" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  className="mt-3"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowRecusaDialog(true)}
+                >
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Tomar Decisão
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* CONTEÚDO */}
       <div className="grid gap-6 lg:grid-cols-5">
@@ -325,71 +390,86 @@ export default function VistoriaCompletaAnalise() {
           />
 
           {/* Ações */}
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <CardTitle className="text-foreground">Ações</CardTitle>
-              <CardDescription>
-                {podeAtivar
-                  ? 'Clique para ativar o rastreador na plataforma e liberar a cobertura total'
-                  : veiculos?.cobertura_total
-                  ? 'Rastreador já ativado - Cobertura total liberada'
-                  : 'Ativação não disponível no momento'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {podeAtivar ? (
-                <Button
-                  className="w-full bg-success hover:bg-success/90 text-white"
-                  size="lg"
-                  onClick={handleAtivarRastreador}
-                  disabled={isAtivando}
-                >
-                  {isAtivando ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Ativando...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="mr-2 h-4 w-4" />
-                      Ativar Rastreador
-                    </>
-                  )}
+          {temRecusaPendente ? (
+            <Card className="border-destructive/50 bg-card">
+              <CardContent className="p-6 text-center">
+                <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" />
+                <p className="font-medium text-destructive">Ativação Bloqueada</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Veículo negado pelo instalador. Resolva a pendência antes de ativar.
+                </p>
+                <Button variant="destructive" className="mt-3" onClick={() => setShowRecusaDialog(true)}>
+                  Tomar Decisão
                 </Button>
-              ) : veiculos?.cobertura_total ? (
-                <div className="p-4 rounded-lg bg-success/10 border border-success/30 text-center">
-                  <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
-                  <p className="font-medium text-success">Rastreador Ativado</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Cobertura total liberada para este veículo
-                  </p>
-                </div>
-              ) : (
-                <div className="p-4 rounded-lg bg-muted text-center">
-                  <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="font-medium text-muted-foreground">
-                    Ativação Indisponível
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {!rastreadores
-                      ? 'Nenhum rastreador vinculado'
-                      : !veiculos?.cobertura_roubo_furto
-                      ? 'Cobertura roubo/furto não aprovada'
-                      : 'Instalação não concluída'}
-                  </p>
-                </div>
-              )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="text-foreground">Ações</CardTitle>
+                <CardDescription>
+                  {podeAtivar
+                    ? 'Clique para ativar o rastreador na plataforma e liberar a cobertura total'
+                    : veiculos?.cobertura_total
+                    ? 'Rastreador já ativado - Cobertura total liberada'
+                    : 'Ativação não disponível no momento'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {podeAtivar ? (
+                  <Button
+                    className="w-full bg-success hover:bg-success/90 text-white"
+                    size="lg"
+                    onClick={handleAtivarRastreador}
+                    disabled={isAtivando}
+                  >
+                    {isAtivando ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Ativando...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="mr-2 h-4 w-4" />
+                        Ativar Rastreador
+                      </>
+                    )}
+                  </Button>
+                ) : veiculos?.cobertura_total ? (
+                  <div className="p-4 rounded-lg bg-success/10 border border-success/30 text-center">
+                    <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
+                    <p className="font-medium text-success">Rastreador Ativado</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Cobertura total liberada para este veículo
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-lg bg-muted text-center">
+                    <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="font-medium text-muted-foreground">
+                      Ativação Indisponível
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {!rastreadores
+                        ? 'Nenhum rastreador vinculado'
+                        : !veiculos?.cobertura_roubo_furto
+                        ? 'Cobertura roubo/furto não aprovada'
+                        : 'Instalação não concluída'}
+                    </p>
+                  </div>
+                )}
 
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => navigate(-1)}
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Voltar
-              </Button>
-            </CardContent>
-          </Card>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => navigate(-1)}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Voltar
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -422,6 +502,20 @@ export default function VistoriaCompletaAnalise() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog de Recusa do Instalador */}
+      {servicoRecusa && (
+        <ResolverRecusaDialog
+          open={showRecusaDialog}
+          onOpenChange={setShowRecusaDialog}
+          servicoId={servicoRecusa.id}
+          veiculoId={servicoRecusa.veiculo_id}
+          associadoId={servicoRecusa.associado_id}
+          placa={veiculos?.placa || ''}
+          motivo={servicoRecusa.ressalvas_instalador}
+          fotosRessalva={servicoRecusa.fotos_ressalva as string[] | null}
+        />
+      )}
     </div>
   );
 }

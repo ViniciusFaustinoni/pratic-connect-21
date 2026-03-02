@@ -1183,11 +1183,23 @@ export function useRecusarVeiculoServico() {
 
       return { sucesso: true };
     },
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['servico-detalhes'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['recusas-instalador'] });
+      queryClient.invalidateQueries({ queryKey: ['recusas-instalador-count'] });
       toast.success('Veículo negado. Encaminhado para análise interna.');
+
+      // Dispara notificação para analistas/coordenadores (fire-and-forget)
+      import('@/components/sinistros/NotificacaoHelper').then(({ notificarRecusaInstalador }) => {
+        // Buscar placa do veículo
+        supabase.from('veiculos').select('placa').eq('id', variables.veiculoId).single()
+          .then(({ data: veiculo }) => {
+            const placa = veiculo?.placa || 'N/A';
+            notificarRecusaInstalador(variables.servicoId, placa, variables.motivo);
+          });
+      });
     },
     onError: (error) => {
       console.error('Erro ao recusar veículo:', error);
