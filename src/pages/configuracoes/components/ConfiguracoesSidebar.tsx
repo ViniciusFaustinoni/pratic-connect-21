@@ -2,14 +2,16 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { 
   User, Shield, Bell, Building2, Settings,
-  Users, KeyRound, Plug, ScrollText
+  Users, KeyRound, Plug, ScrollText, Calculator
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface MenuItem {
   path: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  diretorOnly?: boolean;
 }
 
 interface MenuSection {
@@ -32,6 +34,7 @@ const menuItems: MenuSection[] = [
     adminOnly: true,
     items: [
       { path: '/configuracoes/usuarios-acessos', label: 'Usuários e Acessos', icon: Users },
+      { path: '/configuracoes/rateio', label: 'Rateio', icon: Calculator, diretorOnly: true },
     ]
   },
   {
@@ -47,6 +50,7 @@ const menuItems: MenuSection[] = [
 export function ConfiguracoesSidebar() {
   const location = useLocation();
   const { profile } = useAuth();
+  const { isDiretor, isDesenvolvedor } = usePermissions();
   
   const isAdmin = profile?.tipo === 'funcionario';
 
@@ -65,7 +69,9 @@ export function ConfiguracoesSidebar() {
               {section.category}
             </p>
             <div className="space-y-1">
-              {section.items.map((item) => {
+              {section.items
+                .filter(item => !item.diretorOnly || isDiretor || isDesenvolvedor)
+                .map((item) => {
                 const Icon = item.icon;
                 const isActive = isItemActive(item.path);
 

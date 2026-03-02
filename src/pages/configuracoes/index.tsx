@@ -13,3 +13,4 @@ export { default as Perfis } from './Perfis';
 export { default as Integracoes } from './Integracoes';
 export { default as Logs } from './Logs';
 export { default as Sistema } from './Sistema';
+export { default as RateioConfig } from './RateioConfig';
