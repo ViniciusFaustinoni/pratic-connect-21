@@ -1,10 +1,11 @@
 import { 
   FileText, Eye, CheckCircle, Shield, Clock, XCircle,
-  CreditCard, Car, Home, Camera, FileSignature, Image, AlertCircle
+  CreditCard, Car, Home, Camera, FileSignature, Image, AlertCircle, Loader2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useState } from 'react';
 import type { DocumentoAnexadoCompleto, TipoDocumentoAnexo } from '@/types/documentos';
 import type { StatusDocumento } from '@/types/database';
 import { format } from 'date-fns';
@@ -13,6 +14,8 @@ import { ptBR } from 'date-fns/locale';
 interface DocumentoAnexadoCardProps {
   documento: DocumentoAnexadoCompleto;
   onView: (documento: DocumentoAnexadoCompleto) => void;
+  onAprovar?: (docId: string) => Promise<void>;
+  onReprovar?: (docId: string, motivo: string) => Promise<void>;
 }
 
 // Mapeamento de ícones por tipo
@@ -87,9 +90,34 @@ function formatDateTime(dateString: string): string {
   return format(new Date(dateString), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 }
 
-export function DocumentoAnexadoCard({ documento, onView }: DocumentoAnexadoCardProps) {
+export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar }: DocumentoAnexadoCardProps) {
   const isContrato = documento.tipo === 'contrato_assinado';
   const status = statusConfig[documento.status] || statusConfig.pendente;
+  const podeAnalisar = (documento.status === 'pendente' || documento.status === 'em_analise') && (onAprovar || onReprovar);
+
+  const [loadingAction, setLoadingAction] = useState<'aprovar' | 'reprovar' | null>(null);
+
+  const handleAprovar = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onAprovar) return;
+    setLoadingAction('aprovar');
+    try {
+      await onAprovar(documento.id);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleReprovar = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onReprovar) return;
+    setLoadingAction('reprovar');
+    try {
+      await onReprovar(documento.id, 'Documento reprovado pelo analista');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
 
   return (
     <div
@@ -144,6 +172,36 @@ export function DocumentoAnexadoCard({ documento, onView }: DocumentoAnexadoCard
                   <CheckCircle className="h-3 w-3 mr-1" />
                   Validado Autentique
                 </Badge>
+              )}
+            </div>
+          )}
+
+          {/* Botões de ação rápida para documentos pendentes */}
+          {podeAnalisar && (
+            <div className="flex items-center gap-2 mt-2">
+              {onAprovar && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs border-success/30 text-success hover:bg-success/10"
+                  onClick={handleAprovar}
+                  disabled={!!loadingAction}
+                >
+                  {loadingAction === 'aprovar' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle className="h-3 w-3 mr-1" />}
+                  Aprovar
+                </Button>
+              )}
+              {onReprovar && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
+                  onClick={handleReprovar}
+                  disabled={!!loadingAction}
+                >
+                  {loadingAction === 'reprovar' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                  Reprovar
+                </Button>
               )}
             </div>
           )}
