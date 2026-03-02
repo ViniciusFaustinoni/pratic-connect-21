@@ -1,36 +1,61 @@
 
-# Correcao: Instalador nao volta para tela principal apos imprevisto
+# Correcao: Botao "Proximo" nao funcional quando item NOK no checklist
 
 ## Diagnostico
 
-O fluxo de imprevisto segue estas etapas:
-1. Instalador clica "Comunicar Imprevisto" (modal `ImprevistoBotao`)
-2. Seleciona motivo e clica "Registrar Imprevisto"
-3. Abre o Duplo Check (`DuploCheckImprevisto`) -- contato com associado
-4. Confirma duplo check -- tela de sucesso por 4 segundos
-5. Timer fecha o dialog e invalida cache
+O botao "Proximo" fica desabilitado (mesmo parecendo azul) porque a validacao `checklistCompleto` exige que itens marcados como NOK tenham uma observacao preenchida (`state.observacao?.trim()`). Sem essa observacao, `podeAvancar()` retorna `false` e o botao nao responde ao clique.
 
-O problema esta no passo 5: o componente `DuploCheckImprevisto` apenas fecha o dialog (`onOpenChange(false)`) e invalida `tarefa-atual`, mas **nao navega** o instalador de volta para `/instalador`. Ele fica preso na pagina de execucao (ex: `/instalador/checklist/:id`).
+Alem disso, o estilo `bg-blue-600` aplicado diretamente no botao sobrescreve o estilo visual de "disabled", fazendo o botao parecer ativo quando na verdade esta desabilitado — confundindo o instalador.
 
 ## Correcao
 
-### Arquivo: `src/components/vistoriador/DuploCheckImprevisto.tsx`
+### Arquivo: `src/pages/instalador/InstaladorChecklist.tsx`
 
-Adicionar `useNavigate` do react-router-dom e, no callback do timer de sucesso (linha 69-72), alem de fechar o dialog e invalidar cache, chamar `navigate('/instalador')` para levar o instalador de volta a tela principal.
+**1. Simplificar validacao do checklist (linha 264-270)**
 
-```
-// Antes (linha 69-72):
-const timer = setTimeout(() => {
-  onOpenChange(false);
-  queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
-}, 4000);
+Remover a exigencia de observacao para considerar o checklist completo. Basta que todos os itens tenham status `ok` ou `nok` (nao `pendente`):
+
+```typescript
+// Antes:
+const checklistCompleto = useMemo(() => 
+  checklistItems.every(item => {
+    const state = checklist[item.id];
+    if (state?.status === 'ok') return true;
+    if (state?.status === 'nok' && state.observacao?.trim()) return true;
+    return false;
+  }),
+  [checklist, checklistItems]
+);
 
 // Depois:
-const timer = setTimeout(() => {
-  onOpenChange(false);
-  queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
-  navigate('/instalador');
-}, 4000);
+const checklistCompleto = useMemo(() => 
+  checklistItems.every(item => {
+    const state = checklist[item.id];
+    return state?.status === 'ok' || state?.status === 'nok';
+  }),
+  [checklist, checklistItems]
+);
 ```
+
+A observacao continua disponivel e incentivada na interface (o campo aparece quando o item e NOK), mas nao bloqueia o avanco. O dialog de confirmacao (etapa intermediaria) ja serve como ponto de decisao.
+
+**2. Corrigir estilo do botao desabilitado (linha 1918-1925)**
+
+Adicionar classe condicional para que o botao fique visualmente apagado quando desabilitado:
+
+```typescript
+// Antes:
+className="flex-1 bg-blue-600 hover:bg-blue-700"
+
+// Depois:
+className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+```
+
+## Resultado
+
+- Instalador marca todos os itens (ok ou nok) → botao "Proximo" fica ativo
+- Se houver itens NOK → clique abre o dialog de confirmacao (ja implementado)
+- Se algum item ainda estiver pendente → botao fica visivelmente desabilitado (opaco)
+- Observacoes continuam opcionais mas disponiveis
 
 Apenas 1 arquivo editado. Nenhuma migration necessaria.
