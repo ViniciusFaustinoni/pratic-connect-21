@@ -184,8 +184,10 @@ export default function InstaladorChecklist() {
   // Detectar tipo de veículo (moto ou automóvel) usando tipo_veiculo, modelo e marca
   const tipoVeiculo: TipoVeiculo = useMemo(() => {
     const veiculoData = servico?.veiculos as { tipo_veiculo?: string; modelo?: string; marca?: string } | undefined;
-    return detectarTipoVeiculo(veiculoData?.tipo_veiculo, veiculoData?.modelo, veiculoData?.marca);
-  }, [servico?.veiculos]);
+    const resultado = detectarTipoVeiculo(veiculoData?.tipo_veiculo, veiculoData?.modelo, veiculoData?.marca);
+    console.log('[InstaladorChecklist] Deteccao tipo veiculo:', { modelo: veiculoData?.modelo, marca: veiculoData?.marca, resultado });
+    return resultado;
+  }, [servico?.veiculos?.modelo, servico?.veiculos?.marca]);
 
   // Verificar valor FIPE do veículo e se precisa de rastreador
   const valorFipeVeiculo = useMemo(() => {
