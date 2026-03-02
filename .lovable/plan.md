@@ -1,41 +1,36 @@
 
-# Correcao: Checklist com itens NOK criticos bloqueia progresso na instalacao
+# Correcao: Instalador nao volta para tela principal apos imprevisto
 
 ## Diagnostico
 
-A logica de criticidade dos itens do checklist esta definida assim:
+O fluxo de imprevisto segue estas etapas:
+1. Instalador clica "Comunicar Imprevisto" (modal `ImprevistoBotao`)
+2. Seleciona motivo e clica "Registrar Imprevisto"
+3. Abre o Duplo Check (`DuploCheckImprevisto`) -- contato com associado
+4. Confirma duplo check -- tela de sucesso por 4 segundos
+5. Timer fecha o dialog e invalida cache
 
-**Itens criticos** (`critico: true`): veiculo_confere, placa_confere, chassi_confere (moto)
-**Itens condicionais** (`critico: false`): condicoes_veiculo, local_seguro, **bateria_ok**, eletrica_ok, cliente_ciente
-
-Bateria e um item **condicional** (nao critico). O problema nao e com bateria especificamente -- e que quando qualquer item **critico** e marcado como NOK, o botao "Ha condicao de continuar" e **completamente escondido** (linha 1872: `{!temCritico && ...}`), impedindo o instalador de prosseguir para fotos, assinatura e decisao final.
-
-O fluxo de manutencao (`ExecutarManutencao.tsx`) ja funciona corretamente: **sempre** mostra o botao "Sim, continuar para resultado", independente de criticidade.
+O problema esta no passo 5: o componente `DuploCheckImprevisto` apenas fecha o dialog (`onOpenChange(false)`) e invalida `tarefa-atual`, mas **nao navega** o instalador de volta para `/instalador`. Ele fica preso na pagina de execucao (ex: `/instalador/checklist/:id`).
 
 ## Correcao
 
-### Arquivo: `src/pages/instalador/InstaladorChecklist.tsx` (linhas 1871-1896)
+### Arquivo: `src/components/vistoriador/DuploCheckImprevisto.tsx`
 
-Remover a condicao `{!temCritico && (...)}` que esconde o botao de continuar. O botao deve estar **sempre visivel**, com texto adaptado:
-
-- **Sem criticos**: "Ha condicao de continuar" (amber)
-- **Com criticos**: "Prosseguir mesmo assim" (amber, com aviso de que "Aprovado" estara bloqueado na etapa final)
-
-O botao "Nao ha condicao - Encerrar" continua disponivel em ambos os cenarios.
-
-A logica da etapa 5 (decisao final) ja bloqueia "Aprovado" quando ha itens NOK, entao a seguranca do fluxo esta garantida -- o dialog serve apenas como alerta, nao como bloqueio.
-
-### Resultado
+Adicionar `useNavigate` do react-router-dom e, no callback do timer de sucesso (linha 69-72), alem de fechar o dialog e invalidar cache, chamar `navigate('/instalador')` para levar o instalador de volta a tela principal.
 
 ```
-Dialog com criticos (ANTES):
-  [Nao ha condicao - Encerrar]
-  [Revisar checklist]
+// Antes (linha 69-72):
+const timer = setTimeout(() => {
+  onOpenChange(false);
+  queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+}, 4000);
 
-Dialog com criticos (DEPOIS):
-  [Prosseguir mesmo assim]        (amber)
-  [Nao ha condicao - Encerrar]    (destructive)
-  [Revisar checklist]             (outline)
+// Depois:
+const timer = setTimeout(() => {
+  onOpenChange(false);
+  queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+  navigate('/instalador');
+}, 4000);
 ```
 
-Nenhuma migration necessaria. Apenas 1 arquivo editado.
+Apenas 1 arquivo editado. Nenhuma migration necessaria.
