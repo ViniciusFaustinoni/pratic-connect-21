@@ -1,49 +1,27 @@
 
-# Fix: Checklist being reset by background refetch
 
-## Root Cause
+# Fix: Botao "Proximo" travado quando ha itens NOK
 
-There's a `useEffect` (line 256-262) that resets the checklist to all `pendente` whenever `servico` changes AND there's no saved checklist in the database. The problem:
+## Causa Raiz
 
-1. User fills out checklist items (ok/nok) -- state is local only
-2. React-query refetches `servico` (window focus, polling, etc.)
-3. The effect sees no saved `checklist_data` in DB (it's only saved when user clicks "Proximo")
-4. Resets ALL items back to `pendente`
-5. `checklistCompleto` becomes `false` -- button disabled again
+O Dialog de confirmacao de itens NOK (linhas 1812-1902) esta **dentro** do bloco condicional `{etapaAtual === 5 && (...)}`. Isso significa que ele so e renderizado quando o instalador esta na etapa 5 (Decisao).
 
-The user never gets to click "Proximo" because the checklist keeps resetting before they can.
+Porem, o dialog precisa aparecer na **etapa 2** (Checklist), quando o instalador clica "Proximo" com itens NOK marcados. O fluxo atual:
 
-## Fix
+1. Instalador esta na etapa 2 e marca itens como NOK
+2. Clica "Proximo" -- funcao `avancar()` detecta `temItensNok` e faz `setShowDialogCondicao(true)`
+3. O Dialog NAO aparece porque ele so existe dentro do bloco da etapa 5
+4. O `return` na funcao `avancar()` impede o avanco
+5. O instalador fica travado -- o botao "funciona" (nao esta disabled), mas nada acontece
 
-### File: `src/pages/instalador/InstaladorChecklist.tsx`
+## Correcao
 
-**Add a ref to track local modifications** (after line 132):
+### Arquivo: `src/pages/instalador/InstaladorChecklist.tsx`
 
-```typescript
-const checklistModificadoLocal = useRef(false);
-```
+Mover o bloco do Dialog de confirmacao (Dialog + ModalRecusaVeiculoComFotos relacionado ao NOK) para **fora** de qualquer bloco condicional de etapa, colocando-o no nivel raiz do componente (antes do footer de navegacao). Assim ele sera renderizado independentemente da etapa atual e aparecera corretamente quando `showDialogCondicao` for `true` na etapa 2.
 
-**Mark checklist as locally modified** when user changes any item status. Find the `handleStatusChange` function and add:
+Concretamente:
+- Extrair o `Dialog open={showDialogCondicao}` (linhas 1812-1902) de dentro do bloco `etapaAtual === 5`
+- Coloca-lo logo antes do footer de navegacao (antes da linha 1908), fora de qualquer condicional de etapa
 
-```typescript
-checklistModificadoLocal.current = true;
-```
-
-**Guard the reset effect** (line 256-262) to skip reset if user has already modified the checklist locally:
-
-```typescript
-useEffect(() => {
-  if (checklistModificadoLocal.current) return; // Don't reset if user already filled items
-  const savedChecklist = (servico as any)?.checklist_data;
-  const hasSaved = savedChecklist && typeof savedChecklist === 'object' && Object.keys(savedChecklist).length > 0;
-  if (!hasSaved) {
-    setChecklist(checklistItems.reduce((acc, item) => ({
-      ...acc, [item.id]: { status: 'pendente' as ChecklistStatus }
-    }), {}));
-  }
-}, [checklistItems, servico]);
-```
-
-This ensures the reset only happens on initial load or when vehicle type genuinely changes, never after the user has started filling out the checklist.
-
-Only 1 file edited. No migration needed.
+Apenas 1 arquivo editado. Nenhuma migration necessaria.
