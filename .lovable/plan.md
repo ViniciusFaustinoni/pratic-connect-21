@@ -1,84 +1,43 @@
 
 
-# Fix: Botao "Proximo" nao funciona no mobile com itens NOK
+# Diferenciar fotos obrigatorias por tipo de veiculo (carro vs moto)
 
-## Diagnostico
+## Problema
 
-O codigo nao tem NENHUMA logica especifica de mobile/desktop -- o mesmo JavaScript roda em ambos. As causas mais provaveis no mobile sao:
+A funcao `detectarTipoVeiculo` em `src/data/vistoriaConfigCompleta.ts` so aceita um parametro `tipoVeiculoStr`, que vem de `veiculos.tipo_veiculo` -- uma coluna que **nao existe** na tabela. O resultado: sempre retorna `'automovel'`, exibindo 31 fotos de carro mesmo para motos.
 
-1. **Botao desabilitado silenciosamente**: O `disabled:opacity-50` sobre `bg-blue-600` em fundo escuro e quase imperceptivel no mobile. O usuario acha que o botao esta ativo, mas ele esta disabled porque nem todos os itens foram marcados (precisa rolar para ver todos)
-2. **Sem feedback ao usuario**: Quando o botao esta disabled, nada acontece -- nenhum toast, nenhuma mensagem explicando o que falta
-3. **Dialog pode nao ser visivel**: No mobile, o Dialog pode ficar atras de outros elementos
+## Solucao
 
-## Correcao (3 mudancas no mesmo arquivo)
+Expandir a deteccao para usar tambem `marca` e `modelo` do veiculo (campos que ja existem na tabela). Sao 3 arquivos com alteracoes minimas:
 
-### Arquivo: `src/pages/instalador/InstaladorChecklist.tsx`
+### 1. `src/data/vistoriaConfigCompleta.ts` -- Melhorar `detectarTipoVeiculo`
 
-**1. Adicionar contador de progresso do checklist na etapa 2**
+Adicionar listas de keywords e marcas exclusivas de moto, e aceitar `modelo` e `marca` como parametros opcionais:
 
-Mostrar "X de Y itens verificados" acima da lista para o usuario saber quantos faltam. Usar os valores de `checklist` e `checklistItems` ja disponiveis:
+- Keywords de modelo: 'moto', 'motocicleta', 'nxr', 'bros', 'cg', 'cb', 'cbr', 'pcx', 'biz', 'pop', 'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr', 'neo', 'burgman', 'intruder', 'factor', 'scooter', 'ciclomotor', 'triciclo'
+- Marcas exclusivas: YAMAHA, SUZUKI, KAWASAKI, HARLEY-DAVIDSON, TRIUMPH, DUCATI, KTM, DAFRA, SHINERAY, KASINSKI
 
-```typescript
-// Na etapa 2, logo antes dos items do checklist
-const itensVerificados = checklistItems.filter(item => 
-  checklist[item.id]?.status === 'ok' || checklist[item.id]?.status === 'nok'
-).length;
+Ordem de deteccao:
+1. Se `tipo_veiculo` explicito contem 'moto' -> moto
+2. Se `modelo` contem keyword de moto -> moto
+3. Se `marca` e exclusiva de moto -> moto
+4. Senao -> automovel
+
+### 2. `src/pages/instalador/InstaladorChecklist.tsx` (linha 185-188)
+
+Passar `modelo` e `marca` do veiculo para a funcao de deteccao:
+
+```
+detectarTipoVeiculo(veiculoData?.tipo_veiculo, veiculoData?.modelo, veiculoData?.marca)
 ```
 
-Renderizar badge: `{itensVerificados}/{checklistItems.length} verificados`
+### 3. `src/pages/instalador/ExecutarVistoriaCompleta.tsx` (linha 170-174)
 
-**2. Substituir button disabled por handler com toast**
-
-Em vez de desabilitar o botao silenciosamente, SEMPRE permitir o clique e mostrar um toast explicativo quando nao puder avancar:
-
-```typescript
-// Antes (botao desabilitado silenciosamente):
-<Button
-  onClick={avancar}
-  disabled={!podeAvancar()}
-  className="flex-1 bg-blue-600 ..."
->
-
-// Depois (botao sempre clicavel, com feedback):
-<Button
-  onClick={() => {
-    if (!podeAvancar()) {
-      // Feedback explicativo
-      if (etapaAtual === 2 && !checklistCompleto) {
-        const faltam = checklistItems.filter(item => 
-          checklist[item.id]?.status === 'pendente' || !checklist[item.id]
-        ).length;
-        toast.error(`Marque todos os itens do checklist (${faltam} pendente${faltam > 1 ? 's' : ''})`);
-      } else {
-        toast.error('Complete todos os campos obrigatórios para avançar');
-      }
-      return;
-    }
-    avancar();
-  }}
-  className="flex-1 bg-blue-600 hover:bg-blue-700"
->
-```
-
-Isso elimina o `disabled` que causa confusao visual no mobile e da feedback claro ao usuario.
-
-**3. Garantir Dialog mobile-friendly**
-
-Adicionar classes ao DialogContent do dialog de confirmacao NOK para funcionar melhor no mobile:
-
-```typescript
-// Antes:
-<DialogContent className="max-w-md">
-
-// Depois:
-<DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md z-[1200]">
-```
+Mesma correcao -- usar `detectarTipoVeiculo` importada com os 3 parametros em vez da logica inline atual.
 
 ## Resultado
 
-- Instalador sempre pode clicar "Proximo" -- se faltar algo, recebe toast explicando o que falta
-- Contador de progresso mostra quantos itens foram verificados
-- Dialog de confirmacao NOK aparece corretamente em qualquer tamanho de tela
-- Zero possibilidade de botao "travado" sem feedback
-
-Apenas 1 arquivo editado. Nenhuma migration necessaria.
+- Motos detectadas automaticamente: exibem 10 fotos (7 veiculo + 3 rastreador)
+- Carros continuam com 31 fotos
+- Sem migration de banco -- usa campos `marca` e `modelo` ja existentes
+- 3 arquivos editados
