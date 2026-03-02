@@ -1869,15 +1869,18 @@ export default function InstaladorChecklist() {
                 </div>
 
                 <DialogFooter className="flex-col gap-2 sm:flex-col">
-                  {!temCritico && (
-                    <Button
-                      onClick={handleContinuarComRessalva}
-                      className="w-full bg-amber-600 hover:bg-amber-700"
-                    >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Há condição de continuar
-                    </Button>
+                  {temCritico && (
+                    <p className="text-xs text-amber-600 text-center mb-1">
+                      ⚠️ Itens críticos com falha — a opção "Aprovado" estará bloqueada na decisão final.
+                    </p>
                   )}
+                  <Button
+                    onClick={handleContinuarComRessalva}
+                    className="w-full bg-amber-600 hover:bg-amber-700"
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    {temCritico ? 'Prosseguir mesmo assim' : 'Há condição de continuar'}
+                  </Button>
                   <Button
                     variant="destructive"
                     onClick={handleEncerrarSemCondicao}
