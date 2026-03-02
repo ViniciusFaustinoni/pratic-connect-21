@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Loader2, MessageCircle, Phone, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +34,7 @@ export function DuploCheckImprevisto({
   const [contatoFeito, setContatoFeito] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [etapa, setEtapa] = useState<'contato' | 'sucesso'>('contato');
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   // Reset state when dialog closes
@@ -69,6 +71,7 @@ export function DuploCheckImprevisto({
     const timer = setTimeout(() => {
       onOpenChange(false);
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      navigate('/instalador');
     }, 4000);
 
     return () => clearTimeout(timer);
