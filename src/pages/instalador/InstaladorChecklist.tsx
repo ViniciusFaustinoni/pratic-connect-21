@@ -264,9 +264,7 @@ export default function InstaladorChecklist() {
   const checklistCompleto = useMemo(() => 
     checklistItems.every(item => {
       const state = checklist[item.id];
-      if (state?.status === 'ok') return true;
-      if (state?.status === 'nok' && state.observacao?.trim()) return true;
-      return false;
+      return state?.status === 'ok' || state?.status === 'nok';
     }),
     [checklist, checklistItems]
   );
@@ -1918,7 +1916,7 @@ export default function InstaladorChecklist() {
             <Button
               onClick={avancar}
               disabled={!podeAvancar()}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Próximo
               <ArrowRight className="ml-2 h-4 w-4" />
