@@ -1,107 +1,128 @@
 
-# Tela de Emissao de Cobrancas em Lote
 
-## Resumo
+# Sistema de Notificacoes de Cobranca e Regua Automatica
 
-Criar uma nova pagina dedicada "Emissao de Cobrancas" (`/financeiro/emissao`) que serve como painel de controle pos-fechamento para emitir boletos/PIX no ASAAS em lote, com progresso em tempo real, tratamento de erros, reemissao individual e exportacao.
+## Situacao Atual
 
-## Arquitetura
+O sistema ja possui toda a infraestrutura de notificacoes:
 
-A edge function `gerar-faturas-mensais` ja cria boletos no ASAAS. O problema e que ela processa TUDO de uma vez sem feedback granular. A nova tela precisara de uma abordagem diferente: processar fatura por fatura no frontend, chamando uma edge function para cada uma, permitindo atualizar a UI em tempo real.
+- `disparar-notificacao` — hub centralizado (WhatsApp + Email + Sistema)
+- `enviar-lembretes-vencimento` — lembretes D-3, D-1, D0, D+1, D+3, D+5 via WhatsApp e Email
+- `executar-regua-cobranca` — regua configuravel de cobranca
+- `cron-suspender-inadimplentes` — suspensao automatica de inadimplentes
+- `cron-marcar-candidatos-spc` — marcacao SPC apos 30 dias
+- `asaas-webhook` — confirmacao de pagamento com notificacao e reativacao
+
+O que falta implementar:
+
+1. **Disparo inicial "Boleto Disponivel"** apos conclusao da emissao em lote
+2. **Ajuste nos dias de lembrete** para D-5 (em vez de D-3)
+3. **Tela de Gestao de Notificacoes de Cobranca** no menu Financeiro
+4. **Disparo manual individual** com historico por associado
 
 ## Arquivos a criar/modificar
 
-### 1. `src/pages/financeiro/EmissaoCobrancas.tsx` (novo)
+### 1. Atualizar `src/pages/financeiro/EmissaoCobrancas.tsx`
 
-Pagina completa com as seguintes secoes:
+Apos a emissao em lote concluir (todos emitidos com sucesso ou parcial), adicionar botao "Disparar Notificacoes" que:
+- Chama uma nova edge function `disparar-boletos-lote` passando o `fechamento_id`
+- Exibe progresso do disparo
+- Mostra resultado: X notificados com sucesso, Y erros
 
-**Painel de Status do Fechamento (topo)**
-- Busca o fechamento mais recente com status `aprovado` ou `processado`
-- Exibe: mes de referencia, total de faturas, quantas ja emitidas (tem `asaas_id` real), quantas pendentes, quantas com erro
-- Status geral: "Aguardando emissao" / "Em processamento" / "Concluido"
+### 2. Criar `supabase/functions/disparar-boletos-lote/index.ts` (nova edge function)
 
-**Lista de Faturas (tabela principal)**
-- Busca de `asaas_cobrancas` filtradas pelo `fechamento_id`
-- Colunas: Nome do associado, Placa, Cotas (do `composicao_resumo`), Valor rateio, Taxa admin, Adicionais, Total, Status do boleto (Pendente/Emitido/Erro), Acoes
-- Status do boleto: "Pendente" se `asaas_id` comeca com `LOCAL-`, "Emitido" se tem `asaas_id` real e `boleto_url`, "Erro" se marcado
-- Filtro por nome/placa e por status (pendente/emitido/erro)
+Edge function que recebe `fechamento_id` e para cada cobranca emitida (com `asaas_id` real):
+- Busca dados do associado (nome, telefone, email)
+- Envia WhatsApp com template: "Ola [Nome]! Seu boleto de contribuicao referente a [Mes/Ano] esta disponivel. Valor: R$ [X]. Vencimento: [Data]. Link: [boleto_url]"
+- Envia Email via `send-email` com template `boleto-gerado` incluindo link do boleto e QR Code PIX
+- Insere notificacao no sistema via `disparar-notificacao` (tipo: boleto, subtipo: gerado)
+- Marca a cobranca com `notificacao_enviada = true`
+- Retorna contagem de sucesso/erros
 
-**Emissao em Lote**
-- Botao "Emitir Todos os Boletos" que:
-  1. Filtra apenas faturas com `asaas_id` comecando por `LOCAL-` (pendentes)
-  2. Para cada uma, chama uma nova edge function `emitir-boleto-individual` que:
-     - Busca o cliente ASAAS do associado
-     - Cria o payment no ASAAS (billingType UNDEFINED = boleto + PIX)
-     - Busca o QR Code PIX
-     - Atualiza a linha em `asaas_cobrancas` com o `asaas_id` real, `boleto_url`, `pix_copia_cola`, `pix_qrcode`
-  3. Atualiza a UI apos cada emissao (progresso X de Y)
-  4. Marca erros em vermelho com mensagem
+Processa em lotes de 10 com delay de 1s entre lotes para nao sobrecarregar a API do WhatsApp.
 
-**Barra de Progresso**
-- Visivel durante o processamento
-- Mostra "Emitindo boleto X de Y..." com Progress component
-- Ao finalizar: "Emissao concluida! X emitidos, Y erros"
+### 3. Atualizar `supabase/functions/enviar-lembretes-vencimento/index.ts`
 
-**Tratamento de Erros**
-- Faturas com erro ficam com badge vermelho e mensagem do erro
-- Botao "Reemitir" individual em cada linha com erro
-- Botao "Reemitir todos com erro" no topo
+Ajustar os dias padrao:
+- `diasAntecedencia` de `[3, 1, 0]` para `[5, 1, 0]` (D-5 em vez de D-3)
+- Adicionar tipo de mensagem `vencimento_5d` na funcao `getMensagemLembrete`
+- Manter D+1, D+3, D+5 pos-vencimento como esta
 
-**Emissao Individual/Avulsa**
-- Botao "Nova Cobranca Avulsa" que abre modal (reutilizar `NovaCobrancaModal` existente)
+### 4. Criar `src/pages/financeiro/NotificacoesCobranca.tsx` (nova pagina)
 
-**Exportacao**
-- Botao "Exportar Relatorio" que gera CSV com: nome, placa, valor, vencimento, status, link do boleto
+Tela de gestao com as seguintes secoes:
 
-### 2. `supabase/functions/emitir-boleto-individual/index.ts` (novo)
+**Painel de Resumo (topo)**
+- Total de boletos notificados com sucesso (do fechamento atual)
+- Total com erro de envio (WhatsApp/email invalido)
+- Ultimo disparo em lote realizado
 
-Edge function que processa UMA cobranca por vez:
+**Inadimplentes por Faixa de Atraso**
+- Cards com contagem por faixa: 1-5 dias / 6-15 dias / 16-29 dias / 30+ dias
+- Busca de `asaas_cobrancas` com status `OVERDUE` agrupando por dias de atraso
 
+**Lista de Inadimplentes**
+- Tabela com: Nome, Placa, Valor pendente, Dias de atraso, Ultimo contato, Proxima acao, Acoes
+- Filtro por faixa de atraso
+- Busca por nome ou placa
+
+**Disparo Manual Individual**
+- Botao "Reenviar Boleto" em cada linha que:
+  - Busca a cobranca mais recente PENDING/OVERDUE do associado
+  - Reenvia WhatsApp + Email com link do boleto
+  - Registra na tabela `whatsapp_mensagens` e `notificacoes`
+
+**Historico de Notificacoes**
+- Ao clicar em um associado, abre dialog mostrando historico de todas as notificacoes enviadas (da tabela `notificacoes` e `whatsapp_mensagens` filtradas por associado)
+
+### 5. Adicionar rota e menu
+
+- `src/App.tsx`: adicionar rota `/financeiro/notificacoes-cobranca`
+- `src/components/layout/AppSidebar.tsx`: adicionar item "Notificacoes de Cobranca" com icone `Bell` no menu Financeiro, apos "Emissao de Cobrancas"
+
+### 6. Registro no `supabase/config.toml`
+
+Adicionar configuracao para a nova edge function:
 ```text
-Input: { cobranca_id: string }
-
-Processo:
-1. Busca a cobranca em asaas_cobrancas (com associado e asaas_clientes)
-2. Verifica se ja tem asaas_id real (nao LOCAL-) -> retorna ja_emitido
-3. Busca o asaas_id do cliente
-4. Se cliente nao existe no ASAAS, sincroniza via asaas-clientes
-5. Cria payment no ASAAS (billingType UNDEFINED)
-6. Busca QR Code PIX
-7. Atualiza asaas_cobrancas com dados reais
-8. Retorna sucesso com dados do boleto
-
-Output: { success, asaas_id, boleto_url, pix_copia_cola }
+[functions.disparar-boletos-lote]
+verify_jwt = false
 ```
 
-Configuracao no `supabase/config.toml`: verify_jwt = false
-
-### 3. `src/App.tsx` (editar)
-
-Adicionar rota: `/financeiro/emissao` -> `EmissaoCobrancas`
-
-### 4. `src/components/layout/AppSidebar.tsx` (editar)
-
-Adicionar item no menu Financeiro: "Emissao de Cobrancas" com icone `Send`, entre "Faturamento" e "Extrato"
-
-## Fluxo de emissao em lote
+## Fluxo Completo
 
 ```text
-1. Pagina carrega -> busca fechamento aprovado/processado mais recente
-2. Lista todas as cobrancas do fechamento
-3. Operador clica "Emitir Todos os Boletos"
-4. Sistema filtra cobrancas pendentes (asaas_id = LOCAL-*)
-5. Loop sequencial (com delay de 500ms entre cada):
-   - Chama emitir-boleto-individual para cada cobranca
-   - Atualiza estado local: pendente -> emitido ou erro
-   - Atualiza barra de progresso
-6. Ao finalizar, invalida queries e mostra resumo
-7. Se houver erros, botao "Reemitir com Erro" disponivel
+Emissao concluida (Prompt 3)
+        |
+Operador clica "Disparar Notificacoes"
+        |
+Edge function disparar-boletos-lote:
+  - WhatsApp com link do boleto
+  - Email com boleto + QR Code PIX
+  - Notificacao no app
+        |
+Cron diario (enviar-lembretes-vencimento):
+  D-5: Lembrete amigavel (WhatsApp)
+  D-1: Ultimo aviso (WhatsApp + Email)
+  D0:  Alerta venceu hoje (WhatsApp)
+  D+1: Aviso atraso (WhatsApp)
+  D+3: Cobranca vencida (WhatsApp)
+  D+5: Suspensao iminente (WhatsApp + Email)
+        |
+Cron diario (cron-suspender-inadimplentes):
+  Suspende e notifica Rede Veiculos
+        |
+D+30 (cron-marcar-candidatos-spc):
+  Alerta interno para financeiro (sem mensagem ao associado)
+        |
+Pagamento confirmado (asaas-webhook):
+  Sai da regua automaticamente
+  WhatsApp: "Pagamento confirmado!"
 ```
 
-## Prevencao de duplicidade
+## Detalhes tecnicos
 
-A edge function `emitir-boleto-individual` verifica se o `asaas_id` ja e real (nao comeca com `LOCAL-`). Se ja foi emitido, retorna `ja_emitido: true` sem criar novo boleto. Isso previne duplicatas mesmo se o operador clicar duas vezes.
-
-## Controle de acesso
-
-Mesma restricao do modulo financeiro existente -- perfis Financeiro e Diretoria ja tem acesso as rotas `/financeiro/*`.
+- A edge function `disparar-boletos-lote` usa `SUPABASE_SERVICE_ROLE_KEY` para acessar dados
+- O disparo WhatsApp usa a funcao existente `whatsapp-send-text`
+- O disparo Email usa a funcao existente `send-email` com template `boleto-gerado`
+- A tela de gestao busca dados de `asaas_cobrancas`, `notificacoes` e `whatsapp_mensagens`
+- Nenhuma migration de banco necessaria — todas as tabelas e campos ja existem
