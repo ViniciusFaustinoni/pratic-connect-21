@@ -1809,100 +1809,101 @@ export default function InstaladorChecklist() {
               detalhesInicial={motivoPrePreenchido}
             />
 
-            {/* Dialog de Confirmação de Condição (Checklist com NOK) */}
-            <Dialog open={showDialogCondicao} onOpenChange={setShowDialogCondicao}>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    {temCritico ? (
-                      <>
-                        <XCircle className="h-5 w-5 text-red-500" />
-                        Irregularidade Crítica Detectada
-                      </>
-                    ) : (
-                      <>
-                        <AlertTriangle className="h-5 w-5 text-amber-500" />
-                        Itens com Ressalva
-                      </>
-                    )}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {temCritico 
-                      ? 'Foram identificados itens críticos reprovados que podem impedir a instalação:'
-                      : 'Alguns itens foram marcados como não conformes:'
-                    }
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {itensNokCriticos.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-red-600 uppercase">Críticos</p>
-                      {itensNokCriticos.map(item => (
-                        <div key={item.id} className="flex items-start gap-2 p-2 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
-                          <XCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium">{item.label}</p>
-                            {checklist[item.id]?.observacao && (
-                              <p className="text-xs text-muted-foreground">{checklist[item.id].observacao}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {itensNokCondicionais.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-amber-600 uppercase">Condicionais</p>
-                      {itensNokCondicionais.map(item => (
-                        <div key={item.id} className="flex items-start gap-2 p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                          <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium">{item.label}</p>
-                            {checklist[item.id]?.observacao && (
-                              <p className="text-xs text-muted-foreground">{checklist[item.id].observacao}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <DialogFooter className="flex-col gap-2 sm:flex-col">
-                  {temCritico && (
-                    <p className="text-xs text-amber-600 text-center mb-1">
-                      ⚠️ Itens críticos com falha — a opção "Aprovado" estará bloqueada na decisão final.
-                    </p>
-                  )}
-                  <Button
-                    onClick={handleContinuarComRessalva}
-                    className="w-full bg-amber-600 hover:bg-amber-700"
-                  >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    {temCritico ? 'Prosseguir mesmo assim' : 'Há condição de continuar'}
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={handleEncerrarSemCondicao}
-                    className="w-full"
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Não há condição - Encerrar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowDialogCondicao(false)}
-                    className="w-full"
-                  >
-                    Revisar checklist
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </div>
         )}
       </div>
+
+      {/* Dialog de Confirmação de Condição (Checklist com NOK) - fora de qualquer bloco de etapa */}
+      <Dialog open={showDialogCondicao} onOpenChange={setShowDialogCondicao}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {temCritico ? (
+                <>
+                  <XCircle className="h-5 w-5 text-red-500" />
+                  Irregularidade Crítica Detectada
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  Itens com Ressalva
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {temCritico 
+                ? 'Foram identificados itens críticos reprovados que podem impedir a instalação:'
+                : 'Alguns itens foram marcados como não conformes:'
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {itensNokCriticos.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-red-600 uppercase">Críticos</p>
+                {itensNokCriticos.map(item => (
+                  <div key={item.id} className="flex items-start gap-2 p-2 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                    <XCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      {checklist[item.id]?.observacao && (
+                        <p className="text-xs text-muted-foreground">{checklist[item.id].observacao}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {itensNokCondicionais.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-amber-600 uppercase">Condicionais</p>
+                {itensNokCondicionais.map(item => (
+                  <div key={item.id} className="flex items-start gap-2 p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      {checklist[item.id]?.observacao && (
+                        <p className="text-xs text-muted-foreground">{checklist[item.id].observacao}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            {temCritico && (
+              <p className="text-xs text-amber-600 text-center mb-1">
+                ⚠️ Itens críticos com falha — a opção "Aprovado" estará bloqueada na decisão final.
+              </p>
+            )}
+            <Button
+              onClick={handleContinuarComRessalva}
+              className="w-full bg-amber-600 hover:bg-amber-700"
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              {temCritico ? 'Prosseguir mesmo assim' : 'Há condição de continuar'}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleEncerrarSemCondicao}
+              className="w-full"
+            >
+              <XCircle className="mr-2 h-4 w-4" />
+              Não há condição - Encerrar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowDialogCondicao(false)}
+              className="w-full"
+            >
+              Revisar checklist
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Footer com navegação */}
       <div className="flex-shrink-0 border-t border-slate-700 bg-slate-800 p-4 safe-area-pb">
