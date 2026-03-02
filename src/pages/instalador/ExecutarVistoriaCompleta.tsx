@@ -31,7 +31,8 @@ import {
   agruparFotosPorCategoriaCompleta, 
   TOTAL_FOTOS_OBRIGATORIAS,
   FOTOS_VISTORIA_COMPLETA,
-  agruparFotosFiltradas
+  agruparFotosFiltradas,
+  detectarTipoVeiculo
 } from '@/data/vistoriaConfigCompleta';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 
@@ -166,11 +167,13 @@ export default function ExecutarVistoriaCompleta() {
     return (veiculo as any)?.valor_fipe || null;
   }, [veiculo]);
 
-  // Detectar tipo de veículo
+  // Detectar tipo de veículo usando tipo_veiculo, modelo e marca
   const tipoVeiculoDetectado = useMemo(() => {
-    const tipo = (veiculo as any)?.tipo_veiculo as string | undefined;
-    if (!tipo) return 'automovel' as const;
-    return tipo.toLowerCase().includes('moto') ? 'moto' as const : 'automovel' as const;
+    return detectarTipoVeiculo(
+      (veiculo as any)?.tipo_veiculo,
+      (veiculo as any)?.modelo,
+      (veiculo as any)?.marca
+    );
   }, [veiculo]);
   
   const veiculoPrecisaRastreador = useMemo(() => {
