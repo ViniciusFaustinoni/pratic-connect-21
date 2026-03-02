@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Send, Download, RefreshCw, AlertCircle, CheckCircle2, Clock, Search, Plus, ExternalLink } from 'lucide-react';
+import { Send, Download, RefreshCw, AlertCircle, CheckCircle2, Clock, Search, Plus, ExternalLink, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 
@@ -66,6 +66,8 @@ export default function EmissaoCobrancas() {
   const [progresso, setProgresso] = useState({ atual: 0, total: 0, emitidos: 0, erros: 0 });
   const [errosMap, setErrosMap] = useState<Record<string, string>>({});
   const [modalCobranca, setModalCobranca] = useState(false);
+  const [disparandoNotificacoes, setDisparandoNotificacoes] = useState(false);
+  const [notificacoesResultado, setNotificacoesResultado] = useState<{ sucesso: number; erros: number } | null>(null);
 
   // Buscar fechamento mais recente aprovado/processado
   const { data: fechamento, isLoading: loadingFechamento } = useQuery({
@@ -221,6 +223,29 @@ export default function EmissaoCobrancas() {
     URL.revokeObjectURL(url);
   }, [cobrancas, fechamento]);
 
+  // Disparar notificações em lote
+  const dispararNotificacoes = useCallback(async () => {
+    if (!fechamento?.id) return;
+    setDisparandoNotificacoes(true);
+    setNotificacoesResultado(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('disparar-boletos-lote', {
+        body: { fechamento_id: fechamento.id },
+      });
+      if (error) throw new Error(error.message);
+      setNotificacoesResultado({ sucesso: data.sucesso || 0, erros: data.erros || 0 });
+      if (data.erros === 0) {
+        toast.success(`${data.sucesso} notificações enviadas com sucesso!`);
+      } else {
+        toast.warning(`${data.sucesso} enviadas, ${data.erros} com erro.`);
+      }
+    } catch (err: any) {
+      toast.error(`Erro ao disparar notificações: ${err.message}`);
+    } finally {
+      setDisparandoNotificacoes(false);
+    }
+  }, [fechamento?.id]);
+
   const isLoading = loadingFechamento || loadingCobrancas;
 
   if (isLoading) {
@@ -320,12 +345,53 @@ export default function EmissaoCobrancas() {
       {!processando && progresso.total > 0 && progresso.atual === progresso.total && (
         <Card className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
           <CardContent className="pt-4 pb-3 px-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <span className="font-medium">
-                Emissão concluída! {progresso.emitidos} emitidos{progresso.erros > 0 ? `, ${progresso.erros} com erro` : ''}.
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <span className="font-medium">
+                  Emissão concluída! {progresso.emitidos} emitidos{progresso.erros > 0 ? `, ${progresso.erros} com erro` : ''}.
+                </span>
+              </div>
+              <Button 
+                onClick={dispararNotificacoes} 
+                disabled={disparandoNotificacoes}
+                size="sm"
+              >
+                <Bell className="h-4 w-4 mr-1" />
+                {disparandoNotificacoes ? 'Disparando...' : 'Disparar Notificações'}
+              </Button>
             </div>
+            {notificacoesResultado && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Notificações: {notificacoesResultado.sucesso} enviadas, {notificacoesResultado.erros} com erro
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Botão de notificações quando emissão já está concluída (sem progresso ativo) */}
+      {!processando && progresso.total === 0 && pendentes === 0 && emitidas > 0 && (
+        <Card>
+          <CardContent className="pt-4 pb-3 px-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                Todos os {emitidas} boletos já foram emitidos.
+              </span>
+              <Button 
+                onClick={dispararNotificacoes} 
+                disabled={disparandoNotificacoes}
+                size="sm"
+              >
+                <Bell className="h-4 w-4 mr-1" />
+                {disparandoNotificacoes ? 'Disparando...' : 'Disparar Notificações'}
+              </Button>
+            </div>
+            {notificacoesResultado && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Notificações: {notificacoesResultado.sucesso} enviadas, {notificacoesResultado.erros} com erro
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

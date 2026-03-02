@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.emitir-boleto-individual]
 verify_jwt = false
+
+[functions.disparar-boletos-lote]
+verify_jwt = false
