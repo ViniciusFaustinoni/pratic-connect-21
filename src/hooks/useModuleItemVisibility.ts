@@ -54,6 +54,7 @@ export const MENU_ITEM_IDS: Record<string, string> = {
   '/cadastro/associados': 'associados',
   '/cadastro/veiculos': 'veiculos',
   '/cadastro/substituicoes': 'substituicoes',
+  '/cadastro/recusas-instalador': 'recusas_instalador',
   // Monitoramento
   '/monitoramento/equipe': 'equipe',
   '/monitoramento/instalacoes': 'instalacoes',
