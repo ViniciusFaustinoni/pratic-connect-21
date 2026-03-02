@@ -169,12 +169,14 @@ export default function ExecutarVistoriaCompleta() {
 
   // Detectar tipo de veículo usando tipo_veiculo, modelo e marca
   const tipoVeiculoDetectado = useMemo(() => {
-    return detectarTipoVeiculo(
+    const resultado = detectarTipoVeiculo(
       (veiculo as any)?.tipo_veiculo,
       (veiculo as any)?.modelo,
       (veiculo as any)?.marca
     );
-  }, [veiculo]);
+    console.log('[ExecutarVistoria] Deteccao tipo veiculo:', { modelo: (veiculo as any)?.modelo, marca: (veiculo as any)?.marca, resultado });
+    return resultado;
+  }, [(veiculo as any)?.modelo, (veiculo as any)?.marca]);
   
   const veiculoPrecisaRastreador = useMemo(() => {
     return precisaRastreador(valorFipeVeiculo, fipeMinRastreador, tipoVeiculoDetectado, fipeMinRastreadorMoto);

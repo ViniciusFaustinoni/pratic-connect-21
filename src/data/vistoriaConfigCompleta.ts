@@ -181,6 +181,7 @@ export function detectarTipoVeiculo(
   modelo?: string | null,
   marca?: string | null
 ): TipoVeiculo {
+  console.log('[detectarTipoVeiculo] Input:', { tipoVeiculoStr, modelo, marca });
   // 1. Tipo explícito
   if (tipoVeiculoStr) {
     const normalized = tipoVeiculoStr.toLowerCase();
