@@ -895,9 +895,14 @@ export default function InstaladorChecklist() {
         {/* Etapa 2: Checklist */}
         {etapaAtual === 2 && (
           <div className="space-y-4">
-            <p className="text-sm text-slate-400">
-              Verifique todos os itens antes de iniciar a instalação:
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-400">
+                Verifique todos os itens antes de iniciar a instalação:
+              </p>
+              <Badge variant={checklistCompleto ? 'default' : 'secondary'} className="shrink-0">
+                {checklistItems.filter(item => checklist[item.id]?.status === 'ok' || checklist[item.id]?.status === 'nok').length}/{checklistItems.length} verificados
+              </Badge>
+            </div>
             
             {/* Card de KM identificado pela IA (extraído da foto do odômetro) */}
             <Card className={cn(
@@ -1815,7 +1820,7 @@ export default function InstaladorChecklist() {
 
       {/* Dialog de Confirmação de Condição (Checklist com NOK) - fora de qualquer bloco de etapa */}
       <Dialog open={showDialogCondicao} onOpenChange={setShowDialogCondicao}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md z-[1200]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {temCritico ? (
@@ -1918,9 +1923,25 @@ export default function InstaladorChecklist() {
           </Button>
           {etapaAtual < ETAPAS.length && (
             <Button
-              onClick={avancar}
-              disabled={!podeAvancar()}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (!podeAvancar()) {
+                  if (etapaAtual === 2 && !checklistCompleto) {
+                    const faltam = checklistItems.filter(item => 
+                      checklist[item.id]?.status === 'pendente' || !checklist[item.id]
+                    ).length;
+                    toast.error(`Marque todos os itens do checklist (${faltam} pendente${faltam > 1 ? 's' : ''})`);
+                  } else if (etapaAtual === 3) {
+                    toast.error('Envie todas as fotos obrigatórias e o vídeo 360°');
+                  } else if (etapaAtual === 4) {
+                    toast.error('Colete a assinatura do cliente para avançar');
+                  } else {
+                    toast.error('Complete todos os campos obrigatórios para avançar');
+                  }
+                  return;
+                }
+                avancar();
+              }}
+              className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
               Próximo
               <ArrowRight className="ml-2 h-4 w-4" />
