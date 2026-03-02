@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
-import { ArrowLeft, Save, FileText, PenTool, Loader2, Shield, Car, Truck } from 'lucide-react';
+import { ArrowLeft, Save, FileText, PenTool, Loader2, Shield, Car, Truck, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Schema de validação
@@ -37,6 +37,7 @@ const templateSchema = z.object({
   is_default_autentique: z.boolean().default(false),
   is_default_evento: z.boolean().default(false),
   is_default_saida: z.boolean().default(false),
+  is_default_rastreador: z.boolean().default(false),
 });
 
 type TemplateFormData = z.infer<typeof templateSchema>;
@@ -65,6 +66,7 @@ export default function TemplateForm() {
       is_default_autentique: false,
       is_default_evento: false,
       is_default_saida: false,
+      is_default_rastreador: false,
     },
   });
 
@@ -81,6 +83,7 @@ export default function TemplateForm() {
         is_default_autentique: template.is_default_autentique || false,
         is_default_evento: template.is_default_evento || false,
         is_default_saida: (template as any).is_default_saida || false,
+        is_default_rastreador: (template as any).is_default_rastreador || false,
       });
     }
   }, [template, isEditing, form]);
@@ -135,6 +138,7 @@ export default function TemplateForm() {
           is_default_autentique: data.is_default_autentique,
           is_default_evento: data.is_default_evento,
           is_default_saida: data.is_default_saida,
+          is_default_rastreador: data.is_default_rastreador,
         });
       }
       navigate('/documentos/templates');
@@ -369,6 +373,31 @@ export default function TemplateForm() {
                           <FormDescription>
                             Este template será usado para gerar o Termo de Saída de Veículo enviado ao associado quando
                             uma Ordem de Serviço for concluída. Apenas um template pode ser marcado.
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="is_default_rastreador"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="flex items-center gap-2 text-cyan-700 dark:text-cyan-400">
+                            <MapPin className="h-4 w-4" />
+                            Usar como padrão para Termo de Rastreador
+                          </FormLabel>
+                          <FormDescription>
+                            Este template será usado para gerar o Termo de Instalação de Rastreador quando houver necessidade.
+                            Apenas um template pode ser marcado.
                           </FormDescription>
                         </div>
                       </FormItem>

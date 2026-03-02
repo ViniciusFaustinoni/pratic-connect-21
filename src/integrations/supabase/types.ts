@@ -9462,6 +9462,7 @@ export type Database = {
           is_default: boolean | null
           is_default_autentique: boolean | null
           is_default_evento: boolean | null
+          is_default_rastreador: boolean | null
           is_default_saida: boolean | null
           nome: string
           perfis_permitidos: string[] | null
@@ -9490,6 +9491,7 @@ export type Database = {
           is_default?: boolean | null
           is_default_autentique?: boolean | null
           is_default_evento?: boolean | null
+          is_default_rastreador?: boolean | null
           is_default_saida?: boolean | null
           nome: string
           perfis_permitidos?: string[] | null
@@ -9518,6 +9520,7 @@ export type Database = {
           is_default?: boolean | null
           is_default_autentique?: boolean | null
           is_default_evento?: boolean | null
+          is_default_rastreador?: boolean | null
           is_default_saida?: boolean | null
           nome?: string
           perfis_permitidos?: string[] | null
