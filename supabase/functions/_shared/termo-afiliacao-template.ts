@@ -995,4 +995,5 @@ export function generateTermoAfiliacao(data: TermoAfiliacaoData): string {
   `;
 }
 
+export { generateSecaoRastreador };
 export default generateTermoAfiliacao;

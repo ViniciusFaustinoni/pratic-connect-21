@@ -5,9 +5,9 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
-import { generateTermoAfiliacao } from "../_shared/termo-afiliacao-template.ts";
+import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/termo-afiliacao-template.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
-import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, markdownParaHTML, hasSignatureArea, sanitizeSignatureBlocks } from "../_shared/template-utils.ts";
+import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, markdownParaHTML, hasSignatureArea, sanitizeSignatureBlocks, exigeRastreador } from "../_shared/template-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -206,8 +206,12 @@ serve(async (req) => {
       conteudoHTML = sanitizeSignatureBlocks(conteudoHTML);
       const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData);
 
+      // Injetar seção de rastreador se obrigatório (não coberta pelos aditivos do banco)
+      const rastreadorResult = exigeRastreador(templateData.veiculo, templateData.configRastreador);
+      const rastreadorHTML = rastreadorResult.exige ? generateSecaoRastreador(templateData) : '';
+
       // Só injetar assinatura padrão se o conteúdo + aditivos não contiverem uma
-      const conteudoCompleto = conteudoHTML + (aditivosHTML || '');
+      const conteudoCompleto = conteudoHTML + (aditivosHTML || '') + rastreadorHTML;
       const assinaturaHTML = hasSignatureArea(conteudoCompleto) ? '' : generateSecaoAssinatura(templateData);
 
       contratoHTML = `
@@ -223,6 +227,7 @@ serve(async (req) => {
     ${generateHeader(templateData)}
     ${conteudoHTML}
     ${aditivosHTML}
+    ${rastreadorHTML}
     ${assinaturaHTML}
     ${generateFooter(templateData)}
   </div>
