@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.cron-marcar-candidatos-spc]
 verify_jwt = false
+
+[functions.emitir-boleto-individual]
+verify_jwt = false

@@ -62,6 +62,7 @@ import {
   Store,
   Bot,
   Bell,
+  Send,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -261,6 +262,7 @@ const menuConfig: {
         { title: 'Cobranças', url: '/financeiro/cobrancas', icon: Receipt },
         { title: 'Contas a Pagar', url: '/financeiro/contas-pagar', icon: CreditCard },
         { title: 'Faturamento', url: '/financeiro/faturamento', icon: FileText },
+        { title: 'Emissão de Cobranças', url: '/financeiro/emissao', icon: Send },
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
         { title: 'Extratos Bancários', url: '/financeiro/extratos-bancarios', icon: FileText },
         { title: 'Contas Bancárias', url: '/financeiro/contas-bancarias', icon: Building2 },

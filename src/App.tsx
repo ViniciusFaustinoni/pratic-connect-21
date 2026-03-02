@@ -144,6 +144,7 @@ import AcordoDetalhe from "./pages/cobranca/AcordoDetalhe";
 import CobrancasList from "./pages/financeiro/CobrancasList";
 import CobrancaDetalhe from "./pages/financeiro/CobrancaDetalhe";
 import FaturamentoMensal from "./pages/financeiro/FaturamentoMensal";
+import EmissaoCobrancas from "./pages/financeiro/EmissaoCobrancas";
 import ContasPagar from "./pages/financeiro/ContasPagar";
 import Extrato from "./pages/financeiro/Extrato";
 import ExtratosBancarios from "./pages/financeiro/ExtratosBancarios";
@@ -486,6 +487,7 @@ const App = () => (
               <Route path="/financeiro/cobrancas" element={<CobrancasList />} />
               <Route path="/financeiro/cobrancas/:id" element={<CobrancaDetalhe />} />
               <Route path="/financeiro/faturamento" element={<FaturamentoMensal />} />
+              <Route path="/financeiro/emissao" element={<EmissaoCobrancas />} />
               <Route path="/financeiro/contas-pagar" element={<ContasPagar />} />
               <Route path="/financeiro/extrato" element={<Extrato />} />
               <Route path="/financeiro/extratos-bancarios" element={<ExtratosBancarios />} />
