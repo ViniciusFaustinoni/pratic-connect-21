@@ -178,6 +178,38 @@ export default function PropostaAnalise() {
     }
   };
 
+  // Handler para aprovar documento individual em contratos_documentos
+  const handleAprovarDocumento = async (docId: string) => {
+    const { error } = await supabase
+      .from('contratos_documentos')
+      .update({ status: 'aprovado' })
+      .eq('id', docId);
+    
+    if (error) {
+      toast.error('Erro ao aprovar documento', { description: error.message });
+      return;
+    }
+    toast.success('Documento aprovado');
+    queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+    queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+  };
+
+  // Handler para reprovar documento individual em contratos_documentos
+  const handleReprovarDocumento = async (docId: string, motivo: string) => {
+    const { error } = await supabase
+      .from('contratos_documentos')
+      .update({ status: 'reprovado' })
+      .eq('id', docId);
+    
+    if (error) {
+      toast.error('Erro ao reprovar documento', { description: error.message });
+      return;
+    }
+    toast.success('Documento reprovado');
+    queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+    queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+  };
+
   // Verificar se pode ativar Softruck
   const podeAtivarSoftruck = proposta?.status === 'ativo' &&
     proposta?.instalacao_info?.rastreador_plataforma === 'softruck' &&
@@ -295,6 +327,8 @@ export default function PropostaAnalise() {
         setVeiculoRenavam={setVeiculoRenavam}
         veiculoChassi={veiculoChassi}
         setVeiculoChassi={setVeiculoChassi}
+        onAprovarDocumento={handleAprovarDocumento}
+        onReprovarDocumento={handleReprovarDocumento}
       />
 
       {/* DIALOGS */}
@@ -318,6 +352,8 @@ export default function PropostaAnalise() {
           documento={documentoVisualizar}
           open={!!documentoVisualizar}
           onClose={() => setDocumentoVisualizar(null)}
+          onAprovar={handleAprovarDocumento}
+          onReprovar={handleReprovarDocumento}
         />
       )}
 

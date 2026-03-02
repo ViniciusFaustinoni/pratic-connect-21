@@ -38,6 +38,8 @@ interface PropostaDetalhesTabsProps {
   setVeiculoRenavam: (value: string) => void;
   veiculoChassi: string;
   setVeiculoChassi: (value: string) => void;
+  onAprovarDocumento?: (docId: string) => Promise<void>;
+  onReprovarDocumento?: (docId: string, motivo: string) => Promise<void>;
 }
 
 // Componente de campo com hover highlight
@@ -102,6 +104,8 @@ export function PropostaDetalhesTabs({
   setVeiculoRenavam,
   veiculoChassi,
   setVeiculoChassi,
+  onAprovarDocumento,
+  onReprovarDocumento,
 }: PropostaDetalhesTabsProps) {
   const associado = proposta.associado;
   
@@ -251,6 +255,8 @@ export function PropostaDetalhesTabs({
         <DocumentosAnexadosPanel
           documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
           onViewDocumento={onViewDocumento}
+          onAprovarDocumento={onAprovarDocumento}
+          onReprovarDocumento={onReprovarDocumento}
         />
       </TabsContent>
 

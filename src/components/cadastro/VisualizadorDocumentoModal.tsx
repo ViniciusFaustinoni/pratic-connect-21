@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { 
   FileText, Download, CheckCircle, Shield, X,
-  FileSignature, Calendar, User, ExternalLink
+  FileSignature, Calendar, User, ExternalLink,
+  XCircle, Loader2
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { DocumentoAnexadoCompleto, TipoDocumentoAnexo } from '@/types/documentos';
 import type { StatusDocumento } from '@/types/database';
@@ -16,6 +19,8 @@ interface VisualizadorDocumentoModalProps {
   documento: DocumentoAnexadoCompleto | null;
   open: boolean;
   onClose: () => void;
+  onAprovar?: (docId: string) => Promise<void>;
+  onReprovar?: (docId: string, motivo: string) => Promise<void>;
 }
 
 function formatDateTime(dateString: string): string {
@@ -46,7 +51,11 @@ const statusConfig: Record<StatusDocumento, { className: string; label: string }
   expirado: { className: 'bg-muted text-muted-foreground', label: 'Expirado' },
 };
 
-export function VisualizadorDocumentoModal({ documento, open, onClose }: VisualizadorDocumentoModalProps) {
+export function VisualizadorDocumentoModal({ documento, open, onClose, onAprovar, onReprovar }: VisualizadorDocumentoModalProps) {
+  const [showReprovarForm, setShowReprovarForm] = useState(false);
+  const [motivoReprovacao, setMotivoReprovacao] = useState('');
+  const [loading, setLoading] = useState(false);
+
   if (!documento) return null;
 
   const isContrato = documento.tipo === 'contrato_assinado';
@@ -54,8 +63,40 @@ export function VisualizadorDocumentoModal({ documento, open, onClose }: Visuali
   const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(documento.arquivo_url || '');
   const status = statusConfig[documento.status] || statusConfig.pendente;
 
+  const podeAnalisar = (documento.status === 'pendente' || documento.status === 'em_analise') && (onAprovar || onReprovar);
+
+  const handleAprovar = async () => {
+    if (!onAprovar) return;
+    setLoading(true);
+    try {
+      await onAprovar(documento.id);
+      onClose();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReprovar = async () => {
+    if (!onReprovar || !motivoReprovacao.trim()) return;
+    setLoading(true);
+    try {
+      await onReprovar(documento.id, motivoReprovacao.trim());
+      setShowReprovarForm(false);
+      setMotivoReprovacao('');
+      onClose();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!isOpen) {
+        setShowReprovarForm(false);
+        setMotivoReprovacao('');
+        onClose();
+      }
+    }}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
@@ -150,6 +191,28 @@ export function VisualizadorDocumentoModal({ documento, open, onClose }: Visuali
           )}
         </div>
 
+        {/* Form de reprovação */}
+        {showReprovarForm && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+            <p className="text-sm font-medium text-destructive">Motivo da reprovação:</p>
+            <Textarea
+              value={motivoReprovacao}
+              onChange={(e) => setMotivoReprovacao(e.target.value)}
+              placeholder="Descreva o motivo da reprovação..."
+              className="min-h-[80px]"
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => { setShowReprovarForm(false); setMotivoReprovacao(''); }} disabled={loading}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" size="sm" onClick={handleReprovar} disabled={loading || !motivoReprovacao.trim()}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
+                Confirmar Reprovação
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Ações */}
         <div className="flex justify-between items-center pt-4 border-t flex-wrap gap-2">
           <div className="text-xs text-muted-foreground">
@@ -160,18 +223,32 @@ export function VisualizadorDocumentoModal({ documento, open, onClose }: Visuali
             )}
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {/* Botões de análise */}
+            {podeAnalisar && !showReprovarForm && (
+              <>
+                {onReprovar && (
+                  <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => setShowReprovarForm(true)} disabled={loading}>
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Reprovar
+                  </Button>
+                )}
+                {onAprovar && (
+                  <Button className="bg-success hover:bg-success/90 text-white" onClick={handleAprovar} disabled={loading}>
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                    Aprovar
+                  </Button>
+                )}
+              </>
+            )}
+
             <Button variant="outline" onClick={onClose}>
               <X className="h-4 w-4 mr-1" />
               Fechar
             </Button>
             
             <Button variant="outline" asChild>
-              <a 
-                href={documento.arquivo_url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
+              <a href={documento.arquivo_url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Abrir em nova aba
               </a>

@@ -9,9 +9,11 @@ import type { StatusDocumento } from '@/types/database';
 interface DocumentosAnexadosPanelProps {
   documentos: DocumentoAnexadoCompleto[];
   onViewDocumento: (documento: DocumentoAnexadoCompleto) => void;
+  onAprovarDocumento?: (docId: string) => Promise<void>;
+  onReprovarDocumento?: (docId: string, motivo: string) => Promise<void>;
 }
 
-export function DocumentosAnexadosPanel({ documentos, onViewDocumento }: DocumentosAnexadosPanelProps) {
+export function DocumentosAnexadosPanel({ documentos, onViewDocumento, onAprovarDocumento, onReprovarDocumento }: DocumentosAnexadosPanelProps) {
   // Verificar se tem contrato assinado
   const contratoAssinado = documentos.find(d => d.tipo === 'contrato_assinado');
   const temContratoAprovado = contratoAssinado?.status === 'aprovado';
@@ -109,6 +111,8 @@ export function DocumentosAnexadosPanel({ documentos, onViewDocumento }: Documen
                 key={doc.id}
                 documento={doc}
                 onView={onViewDocumento}
+                onAprovar={onAprovarDocumento}
+                onReprovar={onReprovarDocumento}
               />
             ))}
           </div>
