@@ -118,6 +118,7 @@ import Perfis from "./pages/configuracoes/Perfis";
 import Integracoes from "./pages/configuracoes/Integracoes";
 import Sistema from "./pages/configuracoes/Sistema";
 import Logs from "./pages/configuracoes/Logs";
+import RateioConfig from "./pages/configuracoes/RateioConfig";
 import UsuariosAcessos from "./pages/configuracoes/UsuariosAcessos";
 import NotFound from "./pages/NotFound";
 import AcessoNegado from "./pages/AcessoNegado";
@@ -659,6 +660,7 @@ const App = () => (
                 <Route path="logs" element={<Navigate to="/configuracoes/usuarios-acessos?tab=logs" replace />} />
                 
                 <Route path="integracoes" element={<Integracoes />} />
+                <Route path="rateio" element={<RateioConfig />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
             </Route>

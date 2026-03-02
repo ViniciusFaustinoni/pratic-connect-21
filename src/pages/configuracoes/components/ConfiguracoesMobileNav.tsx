@@ -3,9 +3,10 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { 
   User, Shield, Bell, Building2, Settings,
-  Users, KeyRound, Plug, ScrollText, Menu, ChevronDown
+  Users, KeyRound, Plug, ScrollText, Menu, ChevronDown, Calculator
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -19,6 +20,7 @@ interface MenuItem {
   path: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  diretorOnly?: boolean;
 }
 
 interface MenuSection {
@@ -41,6 +43,7 @@ const menuItems: MenuSection[] = [
     adminOnly: true,
     items: [
       { path: '/configuracoes/usuarios-acessos', label: 'Usuários e Acessos', icon: Users },
+      { path: '/configuracoes/rateio', label: 'Rateio', icon: Calculator, diretorOnly: true },
     ]
   },
   {
@@ -56,6 +59,7 @@ const menuItems: MenuSection[] = [
 export function ConfiguracoesMobileNav() {
   const location = useLocation();
   const { profile } = useAuth();
+  const { isDiretor, isDesenvolvedor } = usePermissions();
   const [open, setOpen] = useState(false);
   
   const isAdmin = profile?.tipo === 'funcionario';
@@ -96,7 +100,9 @@ export function ConfiguracoesMobileNav() {
                       {section.category}
                     </p>
                     <div className="space-y-1">
-                      {section.items.map((item) => {
+                      {section.items
+                        .filter(item => !item.diretorOnly || isDiretor || isDesenvolvedor)
+                        .map((item) => {
                         const Icon = item.icon;
                         const isActive = isItemActive(item.path);
 
