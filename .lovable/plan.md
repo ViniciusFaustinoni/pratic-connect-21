@@ -1,89 +1,127 @@
 
-# Tela de Configuracao do Rateio
 
-## Resumo
+# Tela de Fechamento Mensal com Entrada Manual de Despesas
 
-Criar uma nova pagina dedicada "Configuracao do Rateio" dentro do modulo Configuracoes, acessivel apenas por Diretores. A pagina tera: edicao dos parametros do rateio, multiplicadores por tipo de veiculo, simulador de impacto em tempo real e historico de alteracoes.
+## Situacao Atual
 
-## Dados existentes no banco
+A pagina `/financeiro/faturamento` (FaturamentoMensal.tsx) ja existe com um pipeline de 3 etapas (Fechar Mes, Calcular Rateio, Gerar Faturas). Porem, a Etapa 1 ("Fechar Mes") executa automaticamente buscando sinistros no banco -- nao permite que o operador informe as despesas manualmente por categoria.
 
-O banco ja possui na tabela `configuracoes` os seguintes registros relevantes:
-- `atuarial_valor_por_cota` = 5000 (valor base da cota)
-- `financeiro_dia_vencimento_padrao` = 10
+A Edge Function `fechamento-mensal` tambem faz tudo automaticamente: busca sinistros, agrupa por beneficio e insere nas tabelas `fechamentos_mensais` e `despesas_rateio`.
 
-E a tabela `faixas_taxa_administrativa` com 9 faixas definidas por valor FIPE (de R$0 a R$180.000).
+As tabelas e edge functions necessarias ja existem:
+- `fechamentos_mensais` (status: aberto/fechado/aprovado/processado)
+- `despesas_rateio` (tipo_beneficio, valor_total, etc.)
+- `calcular-rateio-completo` (calcula valor por cota por beneficio)
+- `gerar-faturas-mensais` (gera boletos no ASAAS)
 
-Sera necessario criar novos registros de configuracao para: multiplicadores por tipo de veiculo, taxa administrativa fixa, dia de fechamento. E uma tabela para historico de alteracoes.
+## O que sera alterado
 
-## Arquivos a criar/modificar
+### 1. Refatorar `src/pages/financeiro/FaturamentoMensal.tsx`
 
-### 1. Migration SQL (nova)
+Reescrever a Etapa 1 para incluir entrada manual de despesas com os campos solicitados:
 
-Inserir novos registros na tabela `configuracoes`:
-- `rateio_multiplicador_passeio` = "1.0" (numero)
-- `rateio_multiplicador_aplicativo` = "1.3" (numero)
-- `rateio_multiplicador_diesel` = "1.2" (numero)
-- `rateio_multiplicador_moto` = "1.5" (numero)
-- `rateio_taxa_administrativa` = "29.90" (moeda)
-- `rateio_dia_fechamento` = "25" (numero)
-- `rateio_dia_vencimento` = "10" (numero)
+**Campos de despesa (Etapa 1):**
+- Total pago em colisoes (R$)
+- Total pago em roubos/furtos (R$)
+- Total pago em assistencia 24h (R$)
+- Total pago em danos a terceiros (R$)
+- Total pago em vidros/farois (R$)
+- Outras despesas operacionais (R$)
+- TOTAL GERAL (calculado automaticamente, soma em tempo real)
 
-Criar tabela `configuracoes_historico` para registrar cada alteracao:
-- `id`, `chave`, `valor_anterior`, `valor_novo`, `alterado_por` (FK profiles), `alterado_em` (timestamp)
-- RLS: leitura apenas para diretores
+Quando o operador clica "Fechar Mes", os valores informados serao enviados a edge function.
 
-### 2. `src/pages/configuracoes/RateioConfig.tsx` (novo)
+**Previa do Calculo (Etapa 2 melhorada):**
 
-Pagina completa com:
+Apos o fechamento, mostrar:
+- Total de despesas informadas
+- Total de cotas ativas na base
+- Valor por cota (total despesas / total cotas)
+- Amostra de 5 associados com valor calculado para cada um (busca via preview da edge function gerar-faturas-mensais)
+- Maior e menor valor que sera cobrado
+- Botao "Aprovar" apos revisao
 
-**Secao 1 - Valor Base da Cota**
-- Campo monetario com o valor atual (busca `atuarial_valor_por_cota`)
-- Alerta de confirmacao ao salvar ("Atencao: alterar o valor base afeta o calculo de TODOS os associados...")
+**Resumo pos-processamento (Etapa 3 melhorada):**
 
-**Secao 2 - Multiplicadores por Tipo de Veiculo**
-- 4 campos numericos com step 0.1 (passeio, aplicativo, diesel, moto)
-- Validacao: entre 0.5 e 5.0
+Apos confirmacao e geracao:
+- Mes de referencia
+- Total de associados com fatura gerada
+- Valor total a receber
+- Valor medio por associado
+- Maior/menor fatura
+- Botao para avancar a geracao de boletos
 
-**Secao 3 - Taxa Administrativa Mensal**
-- Campo monetario (nao pode ser negativo)
+### 2. Atualizar Edge Function `fechamento-mensal`
 
-**Secao 4 - Dia de Fechamento e Vencimento**
-- Dois campos numericos (1 a 28)
+Aceitar despesas manuais no body da requisicao:
 
-**Secao 5 - Simulador de Impacto**
-- Input: valor FIPE hipotetico + tipo de veiculo (select)
-- Output calculado em tempo real: quantidade de cotas, multiplicador aplicado, valor estimado de rateio (usando ultimo fechamento)
+```text
+{
+  mes, ano,
+  despesas_manuais: {
+    colisao: 50000,
+    roubo_furto: 30000,
+    assistencia: 10000,
+    terceiros: 5000,
+    vidros: 3000,
+    outros: 2000
+  }
+}
+```
 
-**Secao 6 - Historico de Alteracoes**
-- Tabela com: campo alterado, valor anterior, valor novo, quem alterou, quando
+Quando `despesas_manuais` estiver presente:
+- Usar esses valores em vez de buscar sinistros automaticamente
+- A categoria "outros" sera mapeada para "incendio" ou armazenada como novo tipo
+- Manter a logica de contagem de associados/cotas ativos (automatica)
+- Inserir nas tabelas normalmente
 
-Todas as alteracoes passam por dialog de confirmacao e gravam no historico.
+Quando `despesas_manuais` NAO estiver presente (compatibilidade):
+- Manter comportamento atual de auto-apuracao via sinistros
 
-### 3. `src/pages/configuracoes/components/ConfiguracoesSidebar.tsx` (editar)
+### 3. Adicionar categoria "outros" na despesas_rateio
 
-Adicionar item "Rateio" na secao "Administracao" (que ja e `adminOnly`), verificando adicionalmente se o usuario e diretor. Usar icone `Calculator`.
+A tabela `despesas_rateio` usa `tipo_beneficio` como varchar. Adicionar suporte ao tipo `outros` tanto na edge function quanto no frontend (nenhuma migration necessaria, o campo ja aceita qualquer string).
 
-### 4. `src/pages/configuracoes/components/ConfiguracoesMobileNav.tsx` (editar)
+A edge function `calcular-rateio-completo` tambem precisara tratar o tipo `outros` -- essas despesas serao rateadas entre TODAS as cotas ativas (sem filtro de cobertura).
 
-Mesmo item de menu para a navegacao mobile.
+### 4. Melhorar indicadores de inadimplencia
 
-### 5. `src/App.tsx` (editar)
+Na lista de preview de faturas, buscar se o associado tem cobrancas vencidas e nao pagas (status `OVERDUE` ou `EXPIRED` na tabela `asaas_cobrancas`). Exibir badge "Inadimplente" ao lado do nome.
 
-Adicionar rota `<Route path="rateio" element={<RateioConfig />} />` dentro do grupo `/configuracoes`.
+### 5. Protecao contra fechamento duplicado
 
-### 6. `src/pages/configuracoes/index.tsx` (editar)
-
-Exportar o novo componente `RateioConfig`.
+O sistema ja tem essa protecao na edge function (verifica `fechamentoExistente` e retorna erro se status != 'aberto'). Manter esse comportamento e exibir mensagem amigavel no frontend quando o mes ja tiver sido fechado.
 
 ## Controle de acesso
 
-- O item de menu so aparece para usuarios com role `diretor` (verificado via `usePermissions`)
-- A pagina em si tambem verifica permissao e redireciona se nao autorizado
-- RLS da tabela `configuracoes_historico` restringe leitura a diretores
+A pagina ja esta acessivel no menu Financeiro. A verificacao de perfil (Financeiro e Diretoria) sera mantida como esta -- a rota ja esta protegida pelo sistema de permissoes existente.
 
-## Detalhes tecnicos
+## Arquivos a modificar
 
-- Cada campo salva individualmente via mutation que faz UPDATE na tabela `configuracoes` e INSERT no `configuracoes_historico`
-- O simulador e puramente client-side, usando os valores editados (antes de salvar) para calculo em tempo real
-- O historico busca da tabela `configuracoes_historico` filtrado pelas chaves do rateio
-- Validacoes com zod antes de permitir salvar
+- `src/pages/financeiro/FaturamentoMensal.tsx` -- refatorar Etapa 1 com campos manuais, melhorar Etapa 2 com previa detalhada, melhorar resumo final
+- `supabase/functions/fechamento-mensal/index.ts` -- aceitar `despesas_manuais` no body
+- `supabase/functions/calcular-rateio-completo/index.ts` -- tratar tipo `outros` (ratear entre todas as cotas)
+
+## Fluxo revisado
+
+```text
+Operador seleciona mes/ano
+        |
+Informa despesas manualmente por categoria
+        |
+Clica "Fechar Mes" -> Edge function recebe valores
+        |
+Sistema conta associados/cotas automaticamente
+        |
+Status = "fechado" -> Mostra previa com amostra
+        |
+Diretor/Financeiro clica "Aprovar"
+        |
+Status = "aprovado" -> Simula faturas
+        |
+Mostra resumo com maior/menor/media/inadimplentes
+        |
+Clica "Gerar Faturas" -> Boletos no ASAAS
+        |
+Status = "processado" -> Resumo final
+```
