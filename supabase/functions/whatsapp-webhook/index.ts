@@ -796,7 +796,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
           status: v.status,
           cobertura_roubo_furto: v.cobertura_roubo_furto ?? true,
           cobertura_total: v.cobertura_total ?? false,
-          tipo_cobertura: v.cobertura_total ? "Total (todos os serviços)" : "Apenas Roubo/Furto",
+          tipo_cobertura: v.cobertura_total ? "Proteção 360º (todos os serviços)" : "Apenas Roubo/Furto",
         })),
       });
     }
@@ -1772,7 +1772,7 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
   const veiculosFormatados = veiculos?.length > 0
     ? veiculos.map((v: any) => {
         const cobertura = v.cobertura_total 
-          ? "TOTAL (tudo liberado)" 
+          ? "PROTEÇÃO 360º (tudo liberado)" 
           : v.cobertura_roubo_furto 
             ? "APENAS ROUBO/FURTO" 
             : "SEM COBERTURA";
