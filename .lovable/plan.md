@@ -1,127 +1,107 @@
 
+# Tela de Emissao de Cobrancas em Lote
 
-# Tela de Fechamento Mensal com Entrada Manual de Despesas
+## Resumo
 
-## Situacao Atual
+Criar uma nova pagina dedicada "Emissao de Cobrancas" (`/financeiro/emissao`) que serve como painel de controle pos-fechamento para emitir boletos/PIX no ASAAS em lote, com progresso em tempo real, tratamento de erros, reemissao individual e exportacao.
 
-A pagina `/financeiro/faturamento` (FaturamentoMensal.tsx) ja existe com um pipeline de 3 etapas (Fechar Mes, Calcular Rateio, Gerar Faturas). Porem, a Etapa 1 ("Fechar Mes") executa automaticamente buscando sinistros no banco -- nao permite que o operador informe as despesas manualmente por categoria.
+## Arquitetura
 
-A Edge Function `fechamento-mensal` tambem faz tudo automaticamente: busca sinistros, agrupa por beneficio e insere nas tabelas `fechamentos_mensais` e `despesas_rateio`.
+A edge function `gerar-faturas-mensais` ja cria boletos no ASAAS. O problema e que ela processa TUDO de uma vez sem feedback granular. A nova tela precisara de uma abordagem diferente: processar fatura por fatura no frontend, chamando uma edge function para cada uma, permitindo atualizar a UI em tempo real.
 
-As tabelas e edge functions necessarias ja existem:
-- `fechamentos_mensais` (status: aberto/fechado/aprovado/processado)
-- `despesas_rateio` (tipo_beneficio, valor_total, etc.)
-- `calcular-rateio-completo` (calcula valor por cota por beneficio)
-- `gerar-faturas-mensais` (gera boletos no ASAAS)
+## Arquivos a criar/modificar
 
-## O que sera alterado
+### 1. `src/pages/financeiro/EmissaoCobrancas.tsx` (novo)
 
-### 1. Refatorar `src/pages/financeiro/FaturamentoMensal.tsx`
+Pagina completa com as seguintes secoes:
 
-Reescrever a Etapa 1 para incluir entrada manual de despesas com os campos solicitados:
+**Painel de Status do Fechamento (topo)**
+- Busca o fechamento mais recente com status `aprovado` ou `processado`
+- Exibe: mes de referencia, total de faturas, quantas ja emitidas (tem `asaas_id` real), quantas pendentes, quantas com erro
+- Status geral: "Aguardando emissao" / "Em processamento" / "Concluido"
 
-**Campos de despesa (Etapa 1):**
-- Total pago em colisoes (R$)
-- Total pago em roubos/furtos (R$)
-- Total pago em assistencia 24h (R$)
-- Total pago em danos a terceiros (R$)
-- Total pago em vidros/farois (R$)
-- Outras despesas operacionais (R$)
-- TOTAL GERAL (calculado automaticamente, soma em tempo real)
+**Lista de Faturas (tabela principal)**
+- Busca de `asaas_cobrancas` filtradas pelo `fechamento_id`
+- Colunas: Nome do associado, Placa, Cotas (do `composicao_resumo`), Valor rateio, Taxa admin, Adicionais, Total, Status do boleto (Pendente/Emitido/Erro), Acoes
+- Status do boleto: "Pendente" se `asaas_id` comeca com `LOCAL-`, "Emitido" se tem `asaas_id` real e `boleto_url`, "Erro" se marcado
+- Filtro por nome/placa e por status (pendente/emitido/erro)
 
-Quando o operador clica "Fechar Mes", os valores informados serao enviados a edge function.
+**Emissao em Lote**
+- Botao "Emitir Todos os Boletos" que:
+  1. Filtra apenas faturas com `asaas_id` comecando por `LOCAL-` (pendentes)
+  2. Para cada uma, chama uma nova edge function `emitir-boleto-individual` que:
+     - Busca o cliente ASAAS do associado
+     - Cria o payment no ASAAS (billingType UNDEFINED = boleto + PIX)
+     - Busca o QR Code PIX
+     - Atualiza a linha em `asaas_cobrancas` com o `asaas_id` real, `boleto_url`, `pix_copia_cola`, `pix_qrcode`
+  3. Atualiza a UI apos cada emissao (progresso X de Y)
+  4. Marca erros em vermelho com mensagem
 
-**Previa do Calculo (Etapa 2 melhorada):**
+**Barra de Progresso**
+- Visivel durante o processamento
+- Mostra "Emitindo boleto X de Y..." com Progress component
+- Ao finalizar: "Emissao concluida! X emitidos, Y erros"
 
-Apos o fechamento, mostrar:
-- Total de despesas informadas
-- Total de cotas ativas na base
-- Valor por cota (total despesas / total cotas)
-- Amostra de 5 associados com valor calculado para cada um (busca via preview da edge function gerar-faturas-mensais)
-- Maior e menor valor que sera cobrado
-- Botao "Aprovar" apos revisao
+**Tratamento de Erros**
+- Faturas com erro ficam com badge vermelho e mensagem do erro
+- Botao "Reemitir" individual em cada linha com erro
+- Botao "Reemitir todos com erro" no topo
 
-**Resumo pos-processamento (Etapa 3 melhorada):**
+**Emissao Individual/Avulsa**
+- Botao "Nova Cobranca Avulsa" que abre modal (reutilizar `NovaCobrancaModal` existente)
 
-Apos confirmacao e geracao:
-- Mes de referencia
-- Total de associados com fatura gerada
-- Valor total a receber
-- Valor medio por associado
-- Maior/menor fatura
-- Botao para avancar a geracao de boletos
+**Exportacao**
+- Botao "Exportar Relatorio" que gera CSV com: nome, placa, valor, vencimento, status, link do boleto
 
-### 2. Atualizar Edge Function `fechamento-mensal`
+### 2. `supabase/functions/emitir-boleto-individual/index.ts` (novo)
 
-Aceitar despesas manuais no body da requisicao:
+Edge function que processa UMA cobranca por vez:
 
 ```text
-{
-  mes, ano,
-  despesas_manuais: {
-    colisao: 50000,
-    roubo_furto: 30000,
-    assistencia: 10000,
-    terceiros: 5000,
-    vidros: 3000,
-    outros: 2000
-  }
-}
+Input: { cobranca_id: string }
+
+Processo:
+1. Busca a cobranca em asaas_cobrancas (com associado e asaas_clientes)
+2. Verifica se ja tem asaas_id real (nao LOCAL-) -> retorna ja_emitido
+3. Busca o asaas_id do cliente
+4. Se cliente nao existe no ASAAS, sincroniza via asaas-clientes
+5. Cria payment no ASAAS (billingType UNDEFINED)
+6. Busca QR Code PIX
+7. Atualiza asaas_cobrancas com dados reais
+8. Retorna sucesso com dados do boleto
+
+Output: { success, asaas_id, boleto_url, pix_copia_cola }
 ```
 
-Quando `despesas_manuais` estiver presente:
-- Usar esses valores em vez de buscar sinistros automaticamente
-- A categoria "outros" sera mapeada para "incendio" ou armazenada como novo tipo
-- Manter a logica de contagem de associados/cotas ativos (automatica)
-- Inserir nas tabelas normalmente
+Configuracao no `supabase/config.toml`: verify_jwt = false
 
-Quando `despesas_manuais` NAO estiver presente (compatibilidade):
-- Manter comportamento atual de auto-apuracao via sinistros
+### 3. `src/App.tsx` (editar)
 
-### 3. Adicionar categoria "outros" na despesas_rateio
+Adicionar rota: `/financeiro/emissao` -> `EmissaoCobrancas`
 
-A tabela `despesas_rateio` usa `tipo_beneficio` como varchar. Adicionar suporte ao tipo `outros` tanto na edge function quanto no frontend (nenhuma migration necessaria, o campo ja aceita qualquer string).
+### 4. `src/components/layout/AppSidebar.tsx` (editar)
 
-A edge function `calcular-rateio-completo` tambem precisara tratar o tipo `outros` -- essas despesas serao rateadas entre TODAS as cotas ativas (sem filtro de cobertura).
+Adicionar item no menu Financeiro: "Emissao de Cobrancas" com icone `Send`, entre "Faturamento" e "Extrato"
 
-### 4. Melhorar indicadores de inadimplencia
+## Fluxo de emissao em lote
 
-Na lista de preview de faturas, buscar se o associado tem cobrancas vencidas e nao pagas (status `OVERDUE` ou `EXPIRED` na tabela `asaas_cobrancas`). Exibir badge "Inadimplente" ao lado do nome.
+```text
+1. Pagina carrega -> busca fechamento aprovado/processado mais recente
+2. Lista todas as cobrancas do fechamento
+3. Operador clica "Emitir Todos os Boletos"
+4. Sistema filtra cobrancas pendentes (asaas_id = LOCAL-*)
+5. Loop sequencial (com delay de 500ms entre cada):
+   - Chama emitir-boleto-individual para cada cobranca
+   - Atualiza estado local: pendente -> emitido ou erro
+   - Atualiza barra de progresso
+6. Ao finalizar, invalida queries e mostra resumo
+7. Se houver erros, botao "Reemitir com Erro" disponivel
+```
 
-### 5. Protecao contra fechamento duplicado
+## Prevencao de duplicidade
 
-O sistema ja tem essa protecao na edge function (verifica `fechamentoExistente` e retorna erro se status != 'aberto'). Manter esse comportamento e exibir mensagem amigavel no frontend quando o mes ja tiver sido fechado.
+A edge function `emitir-boleto-individual` verifica se o `asaas_id` ja e real (nao comeca com `LOCAL-`). Se ja foi emitido, retorna `ja_emitido: true` sem criar novo boleto. Isso previne duplicatas mesmo se o operador clicar duas vezes.
 
 ## Controle de acesso
 
-A pagina ja esta acessivel no menu Financeiro. A verificacao de perfil (Financeiro e Diretoria) sera mantida como esta -- a rota ja esta protegida pelo sistema de permissoes existente.
-
-## Arquivos a modificar
-
-- `src/pages/financeiro/FaturamentoMensal.tsx` -- refatorar Etapa 1 com campos manuais, melhorar Etapa 2 com previa detalhada, melhorar resumo final
-- `supabase/functions/fechamento-mensal/index.ts` -- aceitar `despesas_manuais` no body
-- `supabase/functions/calcular-rateio-completo/index.ts` -- tratar tipo `outros` (ratear entre todas as cotas)
-
-## Fluxo revisado
-
-```text
-Operador seleciona mes/ano
-        |
-Informa despesas manualmente por categoria
-        |
-Clica "Fechar Mes" -> Edge function recebe valores
-        |
-Sistema conta associados/cotas automaticamente
-        |
-Status = "fechado" -> Mostra previa com amostra
-        |
-Diretor/Financeiro clica "Aprovar"
-        |
-Status = "aprovado" -> Simula faturas
-        |
-Mostra resumo com maior/menor/media/inadimplentes
-        |
-Clica "Gerar Faturas" -> Boletos no ASAAS
-        |
-Status = "processado" -> Resumo final
-```
+Mesma restricao do modulo financeiro existente -- perfis Financeiro e Diretoria ja tem acesso as rotas `/financeiro/*`.
