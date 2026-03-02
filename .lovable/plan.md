@@ -1,77 +1,132 @@
 
-# Correcao: Documentos CNH/CRLV sempre mostram "Pendente" na tela do analista
+# Substituicao: "Cobertura Total" → "Protecao 360"
 
-## Diagnostico
+## Estrategia
 
-### Causa raiz
+A coluna do banco de dados `cobertura_total` **nao sera renomeada**. Renomear colunas quebraria dezenas de queries, types auto-gerados e edge functions. A mudanca e **apenas nos textos exibidos ao usuario** (labels, tooltips, mensagens, notificacoes WhatsApp, toasts, prompts de IA).
 
-O sistema possui **duas tabelas de documentos separadas** que nao se comunicam adequadamente:
+Nomes de variaveis internas (`temCoberturaTotal`, `coberturaTotal`, etc.) tambem permanecem inalterados - sao codigo interno, nao visivel ao usuario.
 
-1. **`documentos`** -- usada pela Fila de Documentos e tela do Associado para analise individual
-2. **`contratos_documentos`** -- usada pelo fluxo de cotacao/proposta para armazenar documentos enviados durante o cadastro
+---
 
-Quando documentos sao enviados durante a cotacao (pelo vendedor ou pelo sistema), eles sao inseridos **apenas** na tabela `contratos_documentos` via `UnifiedDocumentUploader`. Eles **nunca** sao inseridos na tabela `documentos`.
+## Arquivos a editar (21 arquivos)
 
-A tela de analise da proposta (`PropostaAnalise.tsx` > `DocumentosAnexadosPanel`) le os documentos diretamente de `contratos_documentos`. Como nao existe **nenhum mecanismo de aprovacao individual** nessa tela (apenas botoes de Fechar/Baixar no modal de visualizacao), os documentos permanecem eternamente com status `pendente`.
+### Frontend - Componentes (4 arquivos)
 
-A sincronizacao que existe em `useDocumentos.ts` (aprovar na tabela `documentos` e sincronizar para `contratos_documentos` via `arquivo_url`) **nao funciona neste caso** porque os documentos da cotacao nunca existem na tabela `documentos`.
+**1. `src/components/veiculos/BadgeCobertura.tsx`**
+- `'Cobertura Total'` → `'Proteção 360º'`
+- `'Veículo com cobertura total ativa...'` → `'Veículo com Proteção 360º ativa...'`
+- `'Aguardando instalação para cobertura total'` → `'Aguardando instalação para Proteção 360º'`
+- `'Cobertura Total Ativa'` → `'Proteção 360º Ativa'`
 
-### Impacto
+**2. `src/components/cadastro/StatusCoberturaCard.tsx`**
+- `'Cobertura Total'` → `'Proteção 360º'`
+- `'liberar a cobertura total'` → `'liberar a Proteção 360º'`
 
-- Analista ve CNH e CRLV como "Pendente" mesmo apos verificar visualmente
-- Nao ha botao de aprovar/reprovar individual no fluxo de proposta
-- A unica forma de "aprovar" era aprovar a proposta inteira (que faz bulk update)
+**3. `src/components/eventos/NovoSinistroModal.tsx`**
+- `'Cobertura total: qualquer tipo permitido'` (comentario, manter ou trocar)
+- `'Veículo sem cobertura total para este tipo...'` → `'Veículo sem Proteção 360º...'`
+- `'Sinistro roubo/furto sem cobertura total'` (log, manter)
 
-## Solucao
+**4. `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx`**
+- `'A cobertura total será ativada...'` → `'A Proteção 360º será ativada...'`
 
-Adicionar botoes de **Aprovar** e **Reprovar** diretamente no `VisualizadorDocumentoModal` quando o documento estiver pendente. Ao clicar, atualizar diretamente na tabela `contratos_documentos` e invalidar o cache.
+### Frontend - Pages (6 arquivos)
 
-### Arquivos a editar
+**5. `src/pages/cadastro/PropostaAnalise.tsx`**
+- `'Cobertura Total'` → `'Proteção 360º'`
+- `'A cobertura total será ativada...'` → `'A Proteção 360º será ativada...'`
+- `'cobertura total para o veículo'` → `'Proteção 360º para o veículo'`
 
-#### 1. `src/components/cadastro/VisualizadorDocumentoModal.tsx`
+**6. `src/pages/cadastro/VistoriaCompletaAnalise.tsx`**
+- `'liberar a cobertura total'` → `'liberar a Proteção 360º'`
+- `'Cobertura total liberada'` → `'Proteção 360º liberada'`
 
-- Adicionar props `onAprovar` e `onReprovar` (opcionais, callbacks)
-- Quando o documento tiver `status === 'pendente'` e os callbacks estiverem presentes, exibir botoes "Aprovar" (verde) e "Reprovar" (vermelho) na barra de acoes
-- Ao reprovar, exibir campo de motivo antes de confirmar
+**7. `src/pages/instalador/ExecutarVistoriaCompleta.tsx`**
+- `'ativos com cobertura total'` → `'ativos com Proteção 360º'`
 
-#### 2. `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
+**8. `src/pages/public/CotacaoContratacao.tsx`**
+- `'Cobertura Total Ativada'` → `'Proteção 360º Ativada'`
+- `'cobertura total'` → `'Proteção 360º'`
+- `'Cobertura total ativada'` → `'Proteção 360º ativada'`
 
-- Adicionar props `onAprovarDocumento` e `onReprovarDocumento` ao componente
-- Repassar para `DocumentosAnexadosPanel`
+**9. `src/pages/public/AcompanhamentoProposta.tsx`**
+- `'Cobertura Total Ativa!'` → `'Proteção 360º Ativa!'`
+- `'cobertura total ativa'` → `'Proteção 360º ativa'`
+- `'Cobertura Total (após instalação)'` → `'Proteção 360º (após instalação)'`
+- `'para cobertura total'` → `'para Proteção 360º'`
 
-#### 3. `src/components/cadastro/DocumentosAnexadosPanel.tsx`
+**10. `src/pages/app/AppHome.tsx`**
+- Comentarios com "cobertura total" → atualizar
 
-- Adicionar props `onAprovarDocumento` e `onReprovarDocumento` (opcionais)
-- Repassar para `DocumentoAnexadoCard`
+### Frontend - Hooks (4 arquivos)
 
-#### 4. `src/components/cadastro/DocumentoAnexadoCard.tsx`
+**11. `src/hooks/useMinhasCoberturasApp.ts`**
+- `'você terá cobertura total incluindo...'` → `'você terá Proteção 360º incluindo...'`
 
-- Adicionar botoes de acao rapida (Aprovar/Reprovar) diretamente no card quando o documento estiver pendente
-- Os botoes chamam os callbacks recebidos via props
+**12. `src/hooks/useVistoriaCompleta.ts`**
+- `'Cobertura total ativada'` (descricao log) → `'Proteção 360º ativada'`
+- `'Veículo aprovado... Cobertura total ativada.'` → `'... Proteção 360º ativada.'`
 
-#### 5. `src/pages/cadastro/PropostaAnalise.tsx`
+**13. `src/hooks/useVistoriaCompletaAnalise.ts`**
+- `'Cobertura total liberada'` → `'Proteção 360º liberada'`
+- Toast: `'Cobertura total liberada'` → `'Proteção 360º liberada'`
 
-- Criar funcoes `handleAprovarDocumento(docId)` e `handleReprovarDocumento(docId, motivo)` que:
-  - Atualizam `contratos_documentos` diretamente via Supabase (`status: 'aprovado'` ou `status: 'reprovado'`)
-  - Invalidam query cache de `contratos` e da proposta
-  - Exibem toast de confirmacao
-- Repassar esses callbacks para `PropostaDetalhesTabs`
+**14. `src/hooks/useAppAssociadoRealtime.ts`**
+- Toast: `'Cobertura Total Ativada!'` → `'Proteção 360º Ativada!'`
 
-#### 6. `src/hooks/usePropostasPendentes.ts` (linha ~202-220)
+### Frontend - Data (1 arquivo)
 
-- Na query de documentos (`contratos_documentos`), adicionar `order('created_at', ascending: true)` se nao existir, para garantir ordenacao consistente
-- Nenhuma outra alteracao necessaria - a invalidacao do cache ja e feita pelo PropostaAnalise
+**15. `src/data/planosPrecos.ts`**
+- Incendio descricao: `'Cobertura total'` → `'Proteção 360º'` (se fizer sentido no contexto — pode ser "Cobertura completa" aqui, pois refere-se a cobertura do incendio e nao ao nivel de protecao)
 
-### Fluxo resultante
+### Backend - Edge Functions (5 arquivos, requerem deploy)
 
-```text
-Analista abre proposta
-  -> Ve documentos na aba "Docs"
-  -> CNH mostra "Pendente" com botoes [Aprovar] [Reprovar]
-  -> Analista clica no card ou no botao de visualizar
-  -> Modal abre com preview + botoes [Aprovar] [Reprovar]
-  -> Analista aprova -> status muda para "aprovado" em contratos_documentos
-  -> Badge atualiza imediatamente
-```
+**16. `supabase/functions/notificar-cliente/index.ts`**
+- Template WhatsApp `cobertura_total_ativada`: titulo `'Cobertura Total Ativada!'` → `'Proteção 360º Ativada!'`
+- Corpo: `'COBERTURA TOTAL'` → `'PROTEÇÃO 360º'`
+- Mensagem instalacao: `'Cobertura Total'` → `'Proteção 360º'`
+- Mensagem ativo: `'Cobertura Total (Roubo, Furto...)'` → `'Proteção 360º (Roubo, Furto...)'`
+- **Nota**: A chave do objeto `cobertura_total_ativada` permanece (e codigo interno), apenas os textos mudam
 
-Nao e necessaria nenhuma migration de banco de dados.
+**17. `supabase/functions/assistente-chat/index.ts`**
+- Prompt da IA: todas as mencoes de "cobertura total" → "Proteção 360º"
+- Mensagens de bloqueio: `'cobertura total'` → `'Proteção 360º'`
+- Contexto do veiculo: `'Total (inclui Assistência 24h)'` → `'Proteção 360º (inclui Assistência 24h)'`
+
+**18. `supabase/functions/whatsapp-webhook/index.ts`**
+- Prompt da IA (duplicado do assistente-chat): mesmas substituicoes
+- Mensagens de bloqueio: `'cobertura total'` → `'Proteção 360º'`
+
+**19. `supabase/functions/criar-sinistro/index.ts`**
+- Log: `'cobertura total'` → `'Proteção 360º'` (logs podem manter, mas mensagem de erro ao usuario deve mudar)
+- Mensagem de erro: `'para cobertura total'` → `'para Proteção 360º'`
+
+**20. `supabase/functions/processar-vistoria/index.ts`**
+- Comentarios internos (opcional, mas recomendado para consistencia)
+
+**21. `supabase/functions/gerar-faturas-mensais/index.ts`**
+- Apenas codigo interno (`.cobertura_total`), **sem textos visíveis** — nenhuma mudanca necessaria
+
+### Nao sera alterado
+
+- **Banco de dados**: coluna `cobertura_total` permanece (renomear quebraria types auto-gerados e dezenas de queries)
+- **`src/integrations/supabase/types.ts`**: auto-gerado, nao editavel
+- **Variaveis internas**: `temCoberturaTotal`, `coberturaTotal`, `veiculoCoberturaTotal` etc. permanecem
+- **Chaves de objeto**: `cobertura_total_ativada` (tipo de notificacao) permanece como identificador interno
+- **Migrations antigas**: sao historicas, nao se editam
+
+---
+
+## Impacto em logica
+
+**Nenhum.** Todas as mudancas sao em strings de exibicao (labels, tooltips, toasts, mensagens de erro, templates WhatsApp, prompts de IA). A logica booleana (`cobertura_total === true`) permanece identica.
+
+## Deploy necessario
+
+Apos editar as edge functions (itens 16-20), sera necessario fazer deploy de:
+- `notificar-cliente`
+- `assistente-chat`
+- `whatsapp-webhook`
+- `criar-sinistro`
+- `processar-vistoria`
