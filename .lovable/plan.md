@@ -1,61 +1,49 @@
 
-# Correcao: Botao "Proximo" nao funcional quando item NOK no checklist
+# Fix: Checklist being reset by background refetch
 
-## Diagnostico
+## Root Cause
 
-O botao "Proximo" fica desabilitado (mesmo parecendo azul) porque a validacao `checklistCompleto` exige que itens marcados como NOK tenham uma observacao preenchida (`state.observacao?.trim()`). Sem essa observacao, `podeAvancar()` retorna `false` e o botao nao responde ao clique.
+There's a `useEffect` (line 256-262) that resets the checklist to all `pendente` whenever `servico` changes AND there's no saved checklist in the database. The problem:
 
-Alem disso, o estilo `bg-blue-600` aplicado diretamente no botao sobrescreve o estilo visual de "disabled", fazendo o botao parecer ativo quando na verdade esta desabilitado — confundindo o instalador.
+1. User fills out checklist items (ok/nok) -- state is local only
+2. React-query refetches `servico` (window focus, polling, etc.)
+3. The effect sees no saved `checklist_data` in DB (it's only saved when user clicks "Proximo")
+4. Resets ALL items back to `pendente`
+5. `checklistCompleto` becomes `false` -- button disabled again
 
-## Correcao
+The user never gets to click "Proximo" because the checklist keeps resetting before they can.
 
-### Arquivo: `src/pages/instalador/InstaladorChecklist.tsx`
+## Fix
 
-**1. Simplificar validacao do checklist (linha 264-270)**
+### File: `src/pages/instalador/InstaladorChecklist.tsx`
 
-Remover a exigencia de observacao para considerar o checklist completo. Basta que todos os itens tenham status `ok` ou `nok` (nao `pendente`):
-
-```typescript
-// Antes:
-const checklistCompleto = useMemo(() => 
-  checklistItems.every(item => {
-    const state = checklist[item.id];
-    if (state?.status === 'ok') return true;
-    if (state?.status === 'nok' && state.observacao?.trim()) return true;
-    return false;
-  }),
-  [checklist, checklistItems]
-);
-
-// Depois:
-const checklistCompleto = useMemo(() => 
-  checklistItems.every(item => {
-    const state = checklist[item.id];
-    return state?.status === 'ok' || state?.status === 'nok';
-  }),
-  [checklist, checklistItems]
-);
-```
-
-A observacao continua disponivel e incentivada na interface (o campo aparece quando o item e NOK), mas nao bloqueia o avanco. O dialog de confirmacao (etapa intermediaria) ja serve como ponto de decisao.
-
-**2. Corrigir estilo do botao desabilitado (linha 1918-1925)**
-
-Adicionar classe condicional para que o botao fique visualmente apagado quando desabilitado:
+**Add a ref to track local modifications** (after line 132):
 
 ```typescript
-// Antes:
-className="flex-1 bg-blue-600 hover:bg-blue-700"
-
-// Depois:
-className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+const checklistModificadoLocal = useRef(false);
 ```
 
-## Resultado
+**Mark checklist as locally modified** when user changes any item status. Find the `handleStatusChange` function and add:
 
-- Instalador marca todos os itens (ok ou nok) → botao "Proximo" fica ativo
-- Se houver itens NOK → clique abre o dialog de confirmacao (ja implementado)
-- Se algum item ainda estiver pendente → botao fica visivelmente desabilitado (opaco)
-- Observacoes continuam opcionais mas disponiveis
+```typescript
+checklistModificadoLocal.current = true;
+```
 
-Apenas 1 arquivo editado. Nenhuma migration necessaria.
+**Guard the reset effect** (line 256-262) to skip reset if user has already modified the checklist locally:
+
+```typescript
+useEffect(() => {
+  if (checklistModificadoLocal.current) return; // Don't reset if user already filled items
+  const savedChecklist = (servico as any)?.checklist_data;
+  const hasSaved = savedChecklist && typeof savedChecklist === 'object' && Object.keys(savedChecklist).length > 0;
+  if (!hasSaved) {
+    setChecklist(checklistItems.reduce((acc, item) => ({
+      ...acc, [item.id]: { status: 'pendente' as ChecklistStatus }
+    }), {}));
+  }
+}, [checklistItems, servico]);
+```
+
+This ensures the reset only happens on initial load or when vehicle type genuinely changes, never after the user has started filling out the checklist.
+
+Only 1 file edited. No migration needed.
