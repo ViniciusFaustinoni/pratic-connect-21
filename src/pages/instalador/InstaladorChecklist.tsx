@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -130,6 +130,7 @@ export default function InstaladorChecklist() {
   const [checklist, setChecklist] = useState<ChecklistState>(() => 
     CHECKLIST_ITEMS.reduce((acc, item) => ({ ...acc, [item.id]: { status: 'pendente' as ChecklistStatus } }), {})
   );
+  const checklistModificadoLocal = useRef(false);
   const [quilometragem, setQuilometragem] = useState<string>('');
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [uploadingChecklistFoto, setUploadingChecklistFoto] = useState<string | null>(null);
@@ -254,6 +255,7 @@ export default function InstaladorChecklist() {
 
   // Reinicializar checklist quando tipoVeiculo muda (e não há checklist salvo)
   useEffect(() => {
+    if (checklistModificadoLocal.current) return;
     const savedChecklist = (servico as any)?.checklist_data;
     const hasSaved = savedChecklist && typeof savedChecklist === 'object' && Object.keys(savedChecklist).length > 0;
     if (!hasSaved) {
@@ -321,6 +323,7 @@ export default function InstaladorChecklist() {
   };
 
   const handleChecklistChange = (itemId: string, status: ChecklistStatus) => {
+    checklistModificadoLocal.current = true;
     setChecklist(prev => ({
       ...prev,
       [itemId]: { ...prev[itemId], status },
