@@ -61,16 +61,16 @@ Antes de criar qualquer solicitação, verifique a COBERTURA do veículo no cont
    - ❌ BLOQUEADO: Assistência 24h (guincho, chaveiro, pane, etc.)
    - ❌ BLOQUEADO: Sinistros de colisão, incêndio, fenômenos naturais, vandalismo
    - RESPOSTA OBRIGATÓRIA quando pedir algo bloqueado:
-     "Entendo sua necessidade, mas sua cobertura atual é apenas para roubo e furto. 
-     Após a instalação do rastreador, você terá acesso à cobertura total que inclui 
+      "Entendo sua necessidade, mas sua cobertura atual é apenas para roubo e furto. 
+     Após a instalação do rastreador, você terá acesso à Proteção 360º que inclui 
      assistência 24h, colisão, e outros tipos de sinistro. Posso ajudar com algo 
      relacionado a roubo ou furto?"
 
-2. **Se o veículo tem cobertura "Total":**
+2. **Se o veículo tem cobertura "Total" (Proteção 360º):**
    - ✅ TUDO LIBERADO: Assistência 24h, todos tipos de sinistro, rastreamento
 
 ## ⚠️ FLUXO SINISTRO + ASSISTÊNCIA (IMPORTANTE!)
-**ATENÇÃO: Para COLISÃO com cobertura TOTAL, pergunte se o veículo anda ANTES de criar o sinistro (ver seção BIFURCAÇÃO DE COLISÃO)!**
+**ATENÇÃO: Para COLISÃO com cobertura TOTAL (Proteção 360º), pergunte se o veículo anda ANTES de criar o sinistro (ver seção BIFURCAÇÃO DE COLISÃO)!**
 
 Para outros tipos de sinistro (não colisão), após coletar os dados:
 
@@ -129,7 +129,7 @@ Quando o associado manifestar interesse em:
 4. Crie a solicitação usando a tool criar_solicitacao_troca_titularidade
 
 ## BIFURCAÇÃO DE COLISÃO: PERGUNTAR SE O VEÍCULO ANDA (OBRIGATÓRIO!)
-Quando o sinistro for de COLISÃO e o veículo tiver cobertura TOTAL, ANTES de criar o sinistro você DEVE perguntar:
+Quando o sinistro for de COLISÃO e o veículo tiver Proteção 360º, ANTES de criar o sinistro você DEVE perguntar:
 
 1. **"O veículo ainda consegue andar ou precisa de reboque?"**
    - Se o associado disser que **CONSEGUE ANDAR** (sim, anda, tá rodando, consigo dirigir):
@@ -148,7 +148,7 @@ Quando o sinistro for de COLISÃO e o veículo tiver cobertura TOTAL, ANTES de c
 
 2. **IMPORTANTE**: Essa pergunta deve ser feita ANTES de chamar criar_solicitacao_sinistro, pois os campos necessita_reboque e destino_reboque_* são enviados junto com o sinistro.
 
-## FLUXO PÓS-SINISTRO DE COLISÃO (COBERTURA TOTAL)
+## FLUXO PÓS-SINISTRO DE COLISÃO (PROTEÇÃO 360º)
 Após criar o sinistro de colisão com sucesso:
 
 1. Informe ao associado: "Seu plano inclui cobertura para conserto do veículo em oficina credenciada!"
@@ -161,7 +161,7 @@ Após criar o sinistro de colisão com sucesso:
 5. Inclua EXATAMENTE este marcador na sua resposta: [LINK_AUTO_VISTORIA]
 6. Se necessita_reboque = true E já criou o chamado de assistência, informe o protocolo do guincho também.
 
-IMPORTANTE: Só mencione conserto se a cobertura for TOTAL. Para cobertura apenas roubo/furto, não há cobertura de conserto.
+IMPORTANTE: Só mencione conserto se a cobertura for Proteção 360º. Para cobertura apenas roubo/furto, não há cobertura de conserto.
 
 ## Formato de Respostas
 - Use Markdown para formatar (negrito, listas, etc.)
@@ -653,7 +653,7 @@ async function executeTool(
             return JSON.stringify({
               sucesso: false,
               bloqueado: true,
-              message: "Sua cobertura atual é apenas para roubo/furto. Para sinistros de colisão, incêndio ou outros, é necessário ter cobertura total.",
+              message: "Sua cobertura atual é apenas para roubo/furto. Para sinistros de colisão, incêndio ou outros, é necessário ter Proteção 360º.",
             });
           }
         }
@@ -872,7 +872,7 @@ async function executeTool(
             return JSON.stringify({
               sucesso: false,
               bloqueado: true,
-              message: "Sua cobertura atual é apenas para roubo/furto. A assistência 24h está disponível apenas para veículos com cobertura total.",
+              message: "Sua cobertura atual é apenas para roubo/furto. A assistência 24h está disponível apenas para veículos com Proteção 360º.",
             });
           }
         }
@@ -1164,7 +1164,7 @@ serve(async (req) => {
       ? veiculos.map((v: any) => {
           const coberturas = [];
           if (v.cobertura_roubo_furto) coberturas.push('Roubo/Furto');
-          if (v.cobertura_total) coberturas.push('Total (inclui Assistência 24h)');
+          if (v.cobertura_total) coberturas.push('Proteção 360º (inclui Assistência 24h)');
           const coberturaInfo = coberturas.length > 0 
             ? `Coberturas: ${coberturas.join(', ')}` 
             : '⚠️ Aguardando ativação de cobertura';

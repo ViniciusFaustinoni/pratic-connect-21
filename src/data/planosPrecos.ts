@@ -283,7 +283,7 @@ export const BENEFICIOS_ADICIONAIS_COMPLETO = [
 export const COBERTURAS_ICONES = [
   { icone: '🔒', nome: 'Roubo e Furto', descricao: 'Indenização 60 dias úteis' },
   { icone: '💥', nome: 'Colisão', descricao: 'Análise 7 dias' },
-  { icone: '🔥', nome: 'Incêndio', descricao: 'Cobertura total' },
+  { icone: '🔥', nome: 'Incêndio', descricao: 'Cobertura completa' },
   { icone: '💧', nome: 'Alagamento', descricao: 'Danos mecânicos/elétricos' },
   { icone: '🌨️', nome: 'Chuva de Granizo', descricao: 'Reparo de amassados' },
   { icone: '⚠️', nome: 'Perda Total', descricao: '>75% = indenização' },

@@ -608,7 +608,7 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {/* COBERTURA TOTAL ATIVADA - Tela de boas-vindas */}
+                  {/* PROTEÇÃO 360º ATIVADA - Tela de boas-vindas */}
                   {cotacao?.status_contratacao === 'ativo' ? (
                     <Card className="border-green-500/30 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-6">
@@ -623,13 +623,13 @@ export default function CotacaoContratacao() {
                         
                         <div>
                           <Badge className="bg-green-500/20 text-green-400 border-green-500/30 mb-4">
-                            Cobertura Total Ativada
+                            Proteção 360º Ativada
                           </Badge>
                           <h2 className="text-2xl font-bold mb-3 text-foreground">
                             Bem-vindo à PRATIC!
                           </h2>
                           <p className="text-muted-foreground max-w-md mx-auto">
-                            Seu veículo <strong className="text-foreground">{cotacao?.veiculo_placa}</strong> está protegido com <strong className="text-green-400">cobertura total</strong>.
+                            Seu veículo <strong className="text-foreground">{cotacao?.veiculo_placa}</strong> está protegido com <strong className="text-green-400">Proteção 360º</strong>.
                             Instalação e vistoria foram concluídas com sucesso!
                           </p>
                         </div>
@@ -654,7 +654,7 @@ export default function CotacaoContratacao() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Shield className="h-5 w-5 text-primary flex-shrink-0" />
-                            <span className="text-sm font-medium text-primary">Cobertura total ativada</span>
+                            <span className="text-sm font-medium text-primary">Proteção 360º ativada</span>
                           </div>
                         </div>
 

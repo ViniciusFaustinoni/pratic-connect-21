@@ -25,10 +25,10 @@ export function BadgeCobertura({
   const getCoberturaInfo = () => {
     if (coberturaTotal) {
       return {
-        label: 'Cobertura Total',
+        label: 'Proteção 360º',
         icon: ShieldCheck,
         className: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
-        tooltip: 'Veículo com cobertura total ativa - Proteção completa contra roubo, furto e colisão',
+        tooltip: 'Veículo com Proteção 360º ativa - Proteção completa contra roubo, furto e colisão',
       };
     }
     if (coberturaRouboFurto) {
@@ -36,7 +36,7 @@ export function BadgeCobertura({
         label: 'Roubo/Furto',
         icon: Shield,
         className: 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border-yellow-500/30',
-        tooltip: 'Cobertura parcial ativa - Proteção contra roubo e furto. Aguardando instalação para cobertura total',
+        tooltip: 'Cobertura parcial ativa - Proteção contra roubo e furto. Aguardando instalação para Proteção 360º',
       };
     }
     return {
@@ -105,7 +105,7 @@ export function BadgeCoberturaCompact({
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Cobertura Total Ativa</p>
+            <p>Proteção 360º Ativa</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -122,7 +122,7 @@ export function BadgeCoberturaCompact({
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Cobertura Roubo/Furto - Aguardando Instalação</p>
+            <p>Roubo/Furto - Aguardando Instalação</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

@@ -356,7 +356,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Sua cobertura atual permite apenas sinistros de roubo e furto. Aguarde a instalação do rastreador para cobertura total.' 
+          error: 'Sua cobertura atual permite apenas sinistros de roubo e furto. Aguarde a instalação do rastreador para Proteção 360º.' 
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

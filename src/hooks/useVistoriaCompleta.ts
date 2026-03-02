@@ -85,7 +85,7 @@ export function useAprovarVeiculoVistoria() {
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
         tipo: 'veiculo_aprovado',
-        descricao: 'Veículo aprovado pelo técnico instalador - Cobertura total ativada',
+        descricao: 'Veículo aprovado pelo técnico instalador - Proteção 360º ativada',
         dados_novos: { 
           vistoria_id: data.vistoriaId,
           instalacao_id: data.instalacaoId, 
@@ -158,7 +158,7 @@ export function useAprovarVeiculoVistoria() {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
-      toast.success('Veículo aprovado com sucesso! Cobertura total ativada.');
+      toast.success('Veículo aprovado com sucesso! Proteção 360º ativada.');
     },
     onError: (error) => {
       console.error('Erro ao aprovar veículo:', error);

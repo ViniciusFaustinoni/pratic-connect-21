@@ -601,7 +601,7 @@ export default function ExecutarVistoriaCompleta() {
                 <CheckCircle2 className="h-10 w-10 text-white" />
               </div>
               <h2 className="text-xl font-bold text-white">Veículo Aprovado!</h2>
-              <p className="text-slate-400">O associado e veículo estão ativos com cobertura total.</p>
+              <p className="text-slate-400">O associado e veículo estão ativos com Proteção 360º.</p>
               <Button onClick={() => navigate('/vistoriador/tarefas')} className="mt-4 w-full bg-blue-600 hover:bg-blue-700">
                 Voltar para Tarefas
               </Button>

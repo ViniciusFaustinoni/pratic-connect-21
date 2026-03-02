@@ -44,8 +44,8 @@ const TEMPLATES: Record<string, {
     emailTemplate: 'generico',
   },
   cobertura_total_ativada: {
-    titulo: '🛡️ Cobertura Total Ativada!',
-    mensagem: `Parabéns {nome}! Seu veículo *{placa}* agora está com *COBERTURA TOTAL* ativa! ✅
+    titulo: '🛡️ Proteção 360º Ativada!',
+    mensagem: `Parabéns {nome}! Seu veículo *{placa}* agora está com *PROTEÇÃO 360º* ativa! ✅
 
 *O que está incluso na sua cobertura:*
 🔐 Roubo e Furto
@@ -119,7 +119,7 @@ Qualquer dúvida, responda esta mensagem!`,
 📱 Acesse o link abaixo para criar sua conta no app PRATIC:
 🔗 {link_acompanhamento}
 
-Após a instalação, sua *Cobertura Total* será ativada automaticamente!
+Após a instalação, sua *Proteção 360º* será ativada automaticamente!
 
 Para qualquer dúvida sobre sua cobertura, você pode falar com nossa IA diretamente pelo app ou por aqui no WhatsApp! 🤖
 
@@ -133,7 +133,7 @@ Bem-vindo à família PRATIC! 💙`,
 📋 *Veículo Protegido:*
 {placa} - {marca} {modelo}
 
-🛡️ *Cobertura Ativa:* Cobertura Total (Roubo, Furto, Colisão, Incêndio e mais)
+🛡️ *Cobertura Ativa:* Proteção 360º (Roubo, Furto, Colisão, Incêndio e mais)
 
 ✅ *Próximo Passo:* Crie sua senha e acesse o App PRATIC
 

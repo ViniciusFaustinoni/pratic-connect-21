@@ -31,7 +31,7 @@ export function useMinhasCoberturas() {
     tiposSinistroPermitidos,
     // Mensagem para exibir ao usuário quando cobertura é parcial
     mensagemCoberturaParcial: temCoberturaRouboFurto && !temCoberturaTotal
-      ? 'Sua cobertura atual é apenas para roubo e furto. Após a instalação do rastreador, você terá cobertura total incluindo assistência 24h.'
+      ? 'Sua cobertura atual é apenas para roubo e furto. Após a instalação do rastreador, você terá Proteção 360º incluindo assistência 24h.'
       : null,
   };
 }
