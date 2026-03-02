@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/react';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import type { ReactNodeViewProps } from '@tiptap/react';
+import { InputRule } from '@tiptap/core';
 
 // React component for the chip display
 function VariableChipView(props: ReactNodeViewProps) {
@@ -58,6 +59,19 @@ export const VariableChipExtension = Node.create({
 
   addNodeView() {
     return ReactNodeViewRenderer(VariableChipView);
+  },
+
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /\{\{([^}]+)\}\}$/,
+        handler: ({ state, range, match }) => {
+          const label = `{{${match[1].trim()}}}`;
+          const { tr } = state;
+          tr.replaceWith(range.from, range.to, this.type.create({ label }));
+        },
+      }),
+    ];
   },
 });
 
