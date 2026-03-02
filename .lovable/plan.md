@@ -1,37 +1,48 @@
 
-# Adicionar Template Padrao para Rastreador
 
-## Resumo
+# Auto-detectar Variaveis Digitadas no Editor
 
-Adicionar uma nova regra "Usar como padrao para Termo de Rastreador" nos templates de documentos, seguindo o mesmo padrao ja existente para Autentique, Entrada de Evento e Saida de Evento.
+## Problema
 
-## O que sera feito
+Atualmente, ao digitar `{{associado.nome}}` manualmente no editor TipTap, o texto permanece como texto puro. A conversao para chip visual so acontece no carregamento inicial do conteudo (via `convertPlainTextToHTML`). O usuario precisa arrastar a variavel do painel lateral para que ela apareca como chip.
 
-### 1. Migration: nova coluna `is_default_rastreador`
+## Solucao
 
-Adicionar coluna `is_default_rastreador` (boolean, default false) na tabela `documento_templates`, seguindo o padrao das colunas `is_default_autentique`, `is_default_evento` e `is_default_saida`.
+Adicionar uma **Input Rule** ao TipTap que detecta o padrao `{{...}}` em tempo real enquanto o usuario digita. Quando o usuario fecha as chaves duplas (`}}`), o texto digitado e automaticamente substituido por um chip visual.
 
-### 2. Atualizar `src/pages/documentos/TemplateForm.tsx`
+## Alteracao
 
-- Adicionar `is_default_rastreador: z.boolean().default(false)` no schema Zod
-- Adicionar campo no form default e no reset ao carregar template existente
-- Passar `is_default_rastreador` no submit (create e update)
-- Adicionar checkbox com icone `Radio` (ou `MapPin`), borda azul-ciano, com texto:
-  - Label: "Usar como padrao para Termo de Rastreador"
-  - Descricao: "Este template sera usado para gerar o Termo de Instalacao de Rastreador quando houver necessidade. Apenas um template pode ser marcado."
+### Arquivo: `src/components/documentos/tiptap/VariableChip.tsx`
 
-### 3. Atualizar `src/hooks/useDocumentoTemplates.ts`
+Adicionar o metodo `addInputRules()` dentro do `VariableChipExtension.create()`:
 
-- Adicionar `is_default_rastreador` nas interfaces `CreateTemplateInput`, `UpdateTemplateInput`, `TemplateData`
-- Incluir no `mapTemplateData` (parse do banco)
-- Incluir no `mutationFn` de create e update
+- Importar `inputRuleFromRegex` (ou usar `InputRule` do `@tiptap/core`)
+- Criar uma Input Rule com regex `/\{\{([^}]+)\}\}\s$/` que:
+  1. Captura o texto entre `{{ }}` quando o usuario digita um espaco ou fecha as chaves
+  2. Deleta o texto bruto correspondente
+  3. Insere um node `variableChip` com o label `{{captura}}`
 
-### 4. Garantir exclusividade (apenas 1 padrao)
+A regex usara `\{\{([^}]+)\}\}$` (sem exigir espaco apos) para converter imediatamente ao fechar `}}`.
 
-Ao salvar um template com `is_default_rastreador = true`, limpar o flag dos demais templates. Isso sera feito no hook de update/create com uma chamada extra ao Supabase antes de salvar (mesmo padrao que poderia ser feito para os outros flags -- atualmente nao ha essa protecao, mas vou adicionar para o rastreador).
+### Detalhes tecnicos
 
-## Arquivos a modificar
+```
+addInputRules() {
+  return [
+    new InputRule({
+      find: /\{\{([^}]+)\}\}$/,
+      handler: ({ state, range, match }) => {
+        const label = `{{${match[1].trim()}}}`;
+        const { tr } = state;
+        tr.replaceWith(range.from, range.to, 
+          this.type.create({ label })
+        );
+      },
+    }),
+  ];
+}
+```
 
-- `documento_templates` (migration) -- nova coluna
-- `src/pages/documentos/TemplateForm.tsx` -- checkbox no formulario
-- `src/hooks/useDocumentoTemplates.ts` -- interfaces e logica de persistencia
+Sera necessario importar `InputRule` de `@tiptap/core`.
+
+Nenhum outro arquivo precisa ser alterado -- a logica fica inteiramente dentro da extensao existente.
