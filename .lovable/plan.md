@@ -1,50 +1,77 @@
 
-# Correcao: Termo de Rastreador nao incluido no PDF (template do banco)
+# Correcao: Documentos CNH/CRLV sempre mostram "Pendente" na tela do analista
 
 ## Diagnostico
 
-O contrato CTR-20260302161419-LFCH32 do associado MARCUS VINICIUS FAUSTINONI DE FREITAS (moto Honda NXR160 Bros, FIPE R$ 16.484, categoria "moto") deveria incluir a secao de Termo de Responsabilidade de Rastreador, pois o valor FIPE excede o limite de R$ 9.000 para motos.
+### Causa raiz
 
-**Causa raiz**: O sistema esta usando o template do banco de dados ("Proposta de Filiacao" AF1), e nesse caminho a funcao `generateSecaoRastreador()` **nunca e chamada**. Ela so existe no fallback hardcoded. O fluxo do template de banco depende de `termos_aditivos` para anexar secoes condicionais, mas **nao existe nenhum aditivo configurado para rastreador**.
+O sistema possui **duas tabelas de documentos separadas** que nao se comunicam adequadamente:
 
-### Fluxo atual (banco de dados template - USADO):
-1. Busca template AF1 do banco
-2. Substitui variaveis com `substituirVariaveis()`
-3. Busca aditivos com `buscarEGerarAditivos()` - so encontra "0Km" e "Vidros"
-4. **Rastreador e ignorado**
+1. **`documentos`** -- usada pela Fila de Documentos e tela do Associado para analise individual
+2. **`contratos_documentos`** -- usada pelo fluxo de cotacao/proposta para armazenar documentos enviados durante o cadastro
 
-### Fluxo fallback (hardcoded - NAO USADO):
-1. Chama `generateTermoAfiliacao()` que inclui `generateSecaoRastreador()`
-2. Rastreador funciona corretamente
+Quando documentos sao enviados durante a cotacao (pelo vendedor ou pelo sistema), eles sao inseridos **apenas** na tabela `contratos_documentos` via `UnifiedDocumentUploader`. Eles **nunca** sao inseridos na tabela `documentos`.
 
-## Correcao Proposta
+A tela de analise da proposta (`PropostaAnalise.tsx` > `DocumentosAnexadosPanel`) le os documentos diretamente de `contratos_documentos`. Como nao existe **nenhum mecanismo de aprovacao individual** nessa tela (apenas botoes de Fechar/Baixar no modal de visualizacao), os documentos permanecem eternamente com status `pendente`.
 
-Injetar a secao de rastreador diretamente no fluxo do template de banco, **apos os aditivos**, quando `exigeRastreador()` retornar `true`. Isso garante que independente do caminho (banco ou fallback), o termo de rastreador apareca.
+A sincronizacao que existe em `useDocumentos.ts` (aprovar na tabela `documentos` e sincronizar para `contratos_documentos` via `arquivo_url`) **nao funciona neste caso** porque os documentos da cotacao nunca existem na tabela `documentos`.
 
-### Arquivo a editar
+### Impacto
 
-**`supabase/functions/autentique-create-by-token/index.ts`** (linhas ~207-230)
+- Analista ve CNH e CRLV como "Pendente" mesmo apos verificar visualmente
+- Nao ha botao de aprovar/reprovar individual no fluxo de proposta
+- A unica forma de "aprovar" era aprovar a proposta inteira (que faz bulk update)
 
-Apos gerar `aditivosHTML`, verificar se rastreador e obrigatorio e, se sim, chamar `generateSecaoRastreador()` e concatenar ao HTML final.
+## Solucao
 
-**`supabase/functions/autentique-create/index.ts`** (mesmo ajuste, se tambem usar template de banco)
+Adicionar botoes de **Aprovar** e **Reprovar** diretamente no `VisualizadorDocumentoModal` quando o documento estiver pendente. Ao clicar, atualizar diretamente na tabela `contratos_documentos` e invalidar o cache.
 
-Aplicar a mesma logica para garantir consistencia entre os dois endpoints de geracao de contrato.
+### Arquivos a editar
 
-### Logica da correcao
+#### 1. `src/components/cadastro/VisualizadorDocumentoModal.tsx`
+
+- Adicionar props `onAprovar` e `onReprovar` (opcionais, callbacks)
+- Quando o documento tiver `status === 'pendente'` e os callbacks estiverem presentes, exibir botoes "Aprovar" (verde) e "Reprovar" (vermelho) na barra de acoes
+- Ao reprovar, exibir campo de motivo antes de confirmar
+
+#### 2. `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
+
+- Adicionar props `onAprovarDocumento` e `onReprovarDocumento` ao componente
+- Repassar para `DocumentosAnexadosPanel`
+
+#### 3. `src/components/cadastro/DocumentosAnexadosPanel.tsx`
+
+- Adicionar props `onAprovarDocumento` e `onReprovarDocumento` (opcionais)
+- Repassar para `DocumentoAnexadoCard`
+
+#### 4. `src/components/cadastro/DocumentoAnexadoCard.tsx`
+
+- Adicionar botoes de acao rapida (Aprovar/Reprovar) diretamente no card quando o documento estiver pendente
+- Os botoes chamam os callbacks recebidos via props
+
+#### 5. `src/pages/cadastro/PropostaAnalise.tsx`
+
+- Criar funcoes `handleAprovarDocumento(docId)` e `handleReprovarDocumento(docId, motivo)` que:
+  - Atualizam `contratos_documentos` diretamente via Supabase (`status: 'aprovado'` ou `status: 'reprovado'`)
+  - Invalidam query cache de `contratos` e da proposta
+  - Exibem toast de confirmacao
+- Repassar esses callbacks para `PropostaDetalhesTabs`
+
+#### 6. `src/hooks/usePropostasPendentes.ts` (linha ~202-220)
+
+- Na query de documentos (`contratos_documentos`), adicionar `order('created_at', ascending: true)` se nao existir, para garantir ordenacao consistente
+- Nenhuma outra alteracao necessaria - a invalidacao do cache ja e feita pelo PropostaAnalise
+
+### Fluxo resultante
 
 ```text
-1. Importar generateSecaoRastreador do termo-afiliacao-template
-2. Apos gerar aditivosHTML, chamar:
-   const rastreadorResult = exigeRastreador(templateData.veiculo, templateData.configRastreador)
-   const rastreadorHTML = rastreadorResult.exige ? generateSecaoRastreador(templateData) : ''
-3. Incluir rastreadorHTML no HTML final, entre aditivosHTML e assinaturaHTML
+Analista abre proposta
+  -> Ve documentos na aba "Docs"
+  -> CNH mostra "Pendente" com botoes [Aprovar] [Reprovar]
+  -> Analista clica no card ou no botao de visualizar
+  -> Modal abre com preview + botoes [Aprovar] [Reprovar]
+  -> Analista aprova -> status muda para "aprovado" em contratos_documentos
+  -> Badge atualiza imediatamente
 ```
 
-### Resumo de alteracoes
-
-- **Editar**: `supabase/functions/autentique-create-by-token/index.ts` — injetar secao rastreador no fluxo de template de banco
-- **Editar**: `supabase/functions/autentique-create/index.ts` — mesma correcao para consistencia
-- **Exportar**: `generateSecaoRastreador` de `supabase/functions/_shared/termo-afiliacao-template.ts` (verificar se ja esta exportada)
-
-Nenhuma migration necessaria. A correcao e puramente na logica de geracao de HTML do termo.
+Nao e necessaria nenhuma migration de banco de dados.
