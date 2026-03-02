@@ -1,72 +1,89 @@
 
+# Tela de Configuracao do Rateio
 
-# Correcao do payload de veiculo na sincronizacao SGA Hinova
+## Resumo
 
-## Problema Identificado
+Criar uma nova pagina dedicada "Configuracao do Rateio" dentro do modulo Configuracoes, acessivel apenas por Diretores. A pagina tera: edicao dos parametros do rateio, multiplicadores por tipo de veiculo, simulador de impacto em tempo real e historico de alteracoes.
 
-O payload enviado para a API Hinova no endpoint `veiculo/cadastrar` esta faltando campos criticos e referenciando colunas que nao existem na tabela `veiculos`:
+## Dados existentes no banco
 
-### Campos ausentes no payload
-- **marca** -- existe no banco mas NAO e enviado
-- **modelo** -- existe no banco mas NAO e enviado
+O banco ja possui na tabela `configuracoes` os seguintes registros relevantes:
+- `atuarial_valor_por_cota` = 5000 (valor base da cota)
+- `financeiro_dia_vencimento_padrao` = 10
 
-### Campos referenciando colunas inexistentes (sempre vao como vazio/zero)
-- `veiculo.km` e `veiculo.quilometragem` -- nao existem na tabela, `kilometragem` sempre vai como 0
-- `veiculo.numero_motor` -- nao existe na tabela, sempre vai como string vazia
-- `veiculo.tipo` -- nao existe na tabela, `codigo_tipo_veiculo` sempre vai como fallback 1 (automovel)
+E a tabela `faixas_taxa_administrativa` com 9 faixas definidas por valor FIPE (de R$0 a R$180.000).
 
-### Mapeamento de combustivel falha
-- O banco armazena valores como `GASOLINA/ALCOOL/GAS NATURAL` ou `FLEX`, mas o mapeamento busca correspondencia exata com `gasolina`, `flex`, etc. Valores compostos como `GASOLINA/ALCOOL/GAS NATURAL` nunca encontram match e vao como null.
+Sera necessario criar novos registros de configuracao para: multiplicadores por tipo de veiculo, taxa administrativa fixa, dia de fechamento. E uma tabela para historico de alteracoes.
 
-## Solucao
+## Arquivos a criar/modificar
 
-### Arquivo: `supabase/functions/sga-hinova-sync/index.ts`
+### 1. Migration SQL (nova)
 
-**1. Adicionar `marca` e `modelo` ao payload do veiculo (linhas 807-825)**
+Inserir novos registros na tabela `configuracoes`:
+- `rateio_multiplicador_passeio` = "1.0" (numero)
+- `rateio_multiplicador_aplicativo` = "1.3" (numero)
+- `rateio_multiplicador_diesel` = "1.2" (numero)
+- `rateio_multiplicador_moto` = "1.5" (numero)
+- `rateio_taxa_administrativa` = "29.90" (moeda)
+- `rateio_dia_fechamento` = "25" (numero)
+- `rateio_dia_vencimento` = "10" (numero)
 
-Incluir os campos `marca` e `modelo` diretamente do registro do veiculo.
+Criar tabela `configuracoes_historico` para registrar cada alteracao:
+- `id`, `chave`, `valor_anterior`, `valor_novo`, `alterado_por` (FK profiles), `alterado_em` (timestamp)
+- RLS: leitura apenas para diretores
 
-**2. Inferir `codigo_tipo_veiculo` a partir da categoria do contrato**
+### 2. `src/pages/configuracoes/RateioConfig.tsx` (novo)
 
-Buscar `veiculo_categoria` da tabela `contratos` (que ja esta sendo consultada para o vendedor). Usar isso para mapear o tipo de veiculo corretamente (moto, carro, caminhao, etc.) em vez de depender de um campo inexistente.
+Pagina completa com:
 
-**3. Melhorar o mapeamento de combustivel**
+**Secao 1 - Valor Base da Cota**
+- Campo monetario com o valor atual (busca `atuarial_valor_por_cota`)
+- Alerta de confirmacao ao salvar ("Atencao: alterar o valor base afeta o calculo de TODOS os associados...")
 
-Criar logica de normalizacao que converta valores compostos do banco (ex: `GASOLINA/ALCOOL/GAS NATURAL`) para o valor mapeavel mais proximo (`flex` ou `gnv`). Tratar tambem `ALCOOL/GASOLINA` como `flex`.
+**Secao 2 - Multiplicadores por Tipo de Veiculo**
+- 4 campos numericos com step 0.1 (passeio, aplicativo, diesel, moto)
+- Validacao: entre 0.5 e 5.0
 
-**4. Remover referencias a campos inexistentes**
+**Secao 3 - Taxa Administrativa Mensal**
+- Campo monetario (nao pode ser negativo)
 
-- Substituir `veiculo.km || veiculo.quilometragem || 0` por apenas `0` (ou buscar de outra fonte se disponivel)
-- Substituir `veiculo.numero_motor || ''` por string vazia (campo nao existe)
+**Secao 4 - Dia de Fechamento e Vencimento**
+- Dois campos numericos (1 a 28)
 
-**5. Buscar dados complementares do contrato**
+**Secao 5 - Simulador de Impacto**
+- Input: valor FIPE hipotetico + tipo de veiculo (select)
+- Output calculado em tempo real: quantidade de cotas, multiplicador aplicado, valor estimado de rateio (usando ultimo fechamento)
 
-Expandir a query existente do contrato (ja buscando `vendedor_id`) para tambem trazer `veiculo_categoria` e usar para inferir o tipo de veiculo.
+**Secao 6 - Historico de Alteracoes**
+- Tabela com: campo alterado, valor anterior, valor novo, quem alterou, quando
 
-## Resumo das alteracoes no payload
+Todas as alteracoes passam por dialog de confirmacao e gravam no historico.
 
-```text
-ANTES (campos faltando/errados):
-  placa, chassi, renavam, ano_fabricacao, ano_modelo,
-  codigo_fipe, valor_fipe,
-  kilometragem: 0 (campo inexistente),
-  numero_motor: '' (campo inexistente),
-  codigo_tipo_veiculo: 1 (sempre fallback),
-  codigo_cor: null (se cor nao mapeada),
-  codigo_combustivel: null (valor composto nao mapeavel)
+### 3. `src/pages/configuracoes/components/ConfiguracoesSidebar.tsx` (editar)
 
-DEPOIS (corrigido):
-  marca, modelo,  <-- NOVOS
-  placa, chassi, renavam, ano_fabricacao, ano_modelo,
-  codigo_fipe, valor_fipe,
-  kilometragem: 0,
-  numero_motor: '',
-  codigo_tipo_veiculo: inferido da categoria do contrato,
-  codigo_cor: mapeado (ja funciona para valores simples),
-  codigo_combustivel: normalizado antes do mapeamento
-```
+Adicionar item "Rateio" na secao "Administracao" (que ja e `adminOnly`), verificando adicionalmente se o usuario e diretor. Usar icone `Calculator`.
 
-## Arquivo a modificar
+### 4. `src/pages/configuracoes/components/ConfiguracoesMobileNav.tsx` (editar)
 
-- `supabase/functions/sga-hinova-sync/index.ts` -- corrigir o payload do veiculo, expandir query do contrato, normalizar combustivel
+Mesmo item de menu para a navegacao mobile.
 
+### 5. `src/App.tsx` (editar)
+
+Adicionar rota `<Route path="rateio" element={<RateioConfig />} />` dentro do grupo `/configuracoes`.
+
+### 6. `src/pages/configuracoes/index.tsx` (editar)
+
+Exportar o novo componente `RateioConfig`.
+
+## Controle de acesso
+
+- O item de menu so aparece para usuarios com role `diretor` (verificado via `usePermissions`)
+- A pagina em si tambem verifica permissao e redireciona se nao autorizado
+- RLS da tabela `configuracoes_historico` restringe leitura a diretores
+
+## Detalhes tecnicos
+
+- Cada campo salva individualmente via mutation que faz UPDATE na tabela `configuracoes` e INSERT no `configuracoes_historico`
+- O simulador e puramente client-side, usando os valores editados (antes de salvar) para calculo em tempo real
+- O historico busca da tabela `configuracoes_historico` filtrado pelas chaves do rateio
+- Validacoes com zod antes de permitir salvar
