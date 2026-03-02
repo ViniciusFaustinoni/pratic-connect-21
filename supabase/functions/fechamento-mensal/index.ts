@@ -9,44 +9,30 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Tipos de benefícios para rateio
-const TIPOS_BENEFICIO = [
-  'colisao',
-  'roubo_furto', 
-  'incendio',
-  'vidros',
-  'terceiros',
-  'assistencia'
-] as const;
+const TIPOS_BENEFICIO = ['colisao', 'roubo_furto', 'incendio', 'vidros', 'terceiros', 'assistencia'] as const;
 
-// Mapeamento de tipos de sinistro para benefício
-// Todos os tipos conhecidos devem estar mapeados para garantir cálculo correto
 const SINISTRO_PARA_BENEFICIO: Record<string, string> = {
-  // Colisão
-  'colisao_parcial': 'colisao',
-  'colisao_total': 'colisao',
-  'colisao': 'colisao',
-  'fenomeno_natural': 'colisao', // Granizo, alagamento, queda de árvore
-  'vandalismo': 'colisao',       // Vandalismo entra como colisão
-  'outro': 'colisao',            // Outros tipos não especificados
-  
-  // Roubo/Furto
-  'roubo': 'roubo_furto',
-  'furto': 'roubo_furto',
-  'roubo_furto': 'roubo_furto',
-  
-  // Outros benefícios específicos
-  'incendio': 'incendio',
-  'vidros': 'vidros',
-  'terceiros': 'terceiros',
-  'assistencia': 'assistencia',
+  'colisao_parcial': 'colisao', 'colisao_total': 'colisao', 'colisao': 'colisao',
+  'fenomeno_natural': 'colisao', 'vandalismo': 'colisao', 'outro': 'colisao',
+  'roubo': 'roubo_furto', 'furto': 'roubo_furto', 'roubo_furto': 'roubo_furto',
+  'incendio': 'incendio', 'vidros': 'vidros', 'terceiros': 'terceiros', 'assistencia': 'assistencia',
 };
+
+interface DespesasManuais {
+  colisao?: number;
+  roubo_furto?: number;
+  assistencia?: number;
+  terceiros?: number;
+  vidros?: number;
+  outros?: number;
+}
 
 interface FechamentoRequest {
   mes?: number;
   ano?: number;
   forcar?: boolean;
   auto?: boolean;
+  despesas_manuais?: DespesasManuais;
 }
 
 serve(async (req) => {
@@ -59,7 +45,6 @@ serve(async (req) => {
   try {
     const body: FechamentoRequest = await req.json().catch(() => ({}));
     
-    // Determinar mês/ano de referência (mês ANTERIOR ao atual)
     const dataReferencia = new Date();
     dataReferencia.setMonth(dataReferencia.getMonth() - 1);
     
@@ -68,7 +53,7 @@ serve(async (req) => {
     
     console.log(`[fechamento-mensal] Iniciando fechamento para ${mes}/${ano}`);
 
-    // Verificar se já existe fechamento para este período
+    // Verificar fechamento existente
     const { data: fechamentoExistente, error: checkError } = await supabase
       .from('fechamentos_mensais')
       .select('*')
@@ -76,173 +61,132 @@ serve(async (req) => {
       .eq('ano', ano)
       .maybeSingle();
 
-    if (checkError) {
-      throw new Error(`Erro ao verificar fechamento: ${checkError.message}`);
+    if (checkError) throw new Error(`Erro ao verificar fechamento: ${checkError.message}`);
+
+    if (fechamentoExistente && fechamentoExistente.status !== 'aberto' && !body.forcar) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: `Fechamento ${mes}/${ano} já existe com status "${fechamentoExistente.status}". Use forcar=true para recalcular.`,
+        fechamento: fechamentoExistente
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Se já existe e não está aberto, verificar se pode sobrescrever
-    if (fechamentoExistente) {
-      if (fechamentoExistente.status !== 'aberto' && !body.forcar) {
-        return new Response(JSON.stringify({
-          success: false,
-          message: `Fechamento ${mes}/${ano} já existe com status "${fechamentoExistente.status}". Use forcar=true para recalcular.`,
-          fechamento: fechamentoExistente
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+    // Determinar despesas: manual ou automático
+    const usarDespesasManuais = body.despesas_manuais && Object.values(body.despesas_manuais).some(v => (v ?? 0) > 0);
+    
+    let despesasPorBeneficio: Record<string, { valor: number; quantidade: number; sinistros_ids: string[]; ordens_servico_ids: string[] }> = {};
+    let totalIndenizacoes = 0;
+    let totalReparosOficina = 0;
+    let sinistrosApurados = 0;
+
+    if (usarDespesasManuais) {
+      // ===== MODO MANUAL =====
+      console.log('[fechamento-mensal] Usando despesas manuais');
+      const dm = body.despesas_manuais!;
+      
+      // Mapear categorias manuais para tipos de benefício
+      const mapeamento: Record<string, string> = {
+        colisao: 'colisao',
+        roubo_furto: 'roubo_furto',
+        assistencia: 'assistencia',
+        terceiros: 'terceiros',
+        vidros: 'vidros',
+        outros: 'outros',
+      };
+
+      for (const [chave, tipo] of Object.entries(mapeamento)) {
+        const valor = (dm as any)[chave] ?? 0;
+        if (valor > 0) {
+          despesasPorBeneficio[tipo] = { valor, quantidade: 0, sinistros_ids: [], ordens_servico_ids: [] };
+        }
       }
-    }
+    } else {
+      // ===== MODO AUTOMÁTICO (comportamento original) =====
+      console.log('[fechamento-mensal] Usando apuração automática de sinistros');
+      
+      const inicioMes = `${ano}-${String(mes).padStart(2, '0')}-01`;
+      const fimMes = new Date(ano, mes, 0).toISOString().split('T')[0];
 
-    // Definir período para apuração
-    const inicioMes = `${ano}-${String(mes).padStart(2, '0')}-01`;
-    const fimMes = new Date(ano, mes, 0).toISOString().split('T')[0];
-    
-    console.log(`[fechamento-mensal] Período: ${inicioMes} a ${fimMes}`);
+      const { data: sinistros, error: sinistrosError } = await supabase
+        .from('sinistros')
+        .select('id, tipo, tipo_dano, valor_indenizacao, data_ocorrencia, associado_id, veiculo_id')
+        .in('status', ['aprovado', 'indenizado', 'pago'])
+        .gte('data_ocorrencia', inicioMes)
+        .lte('data_ocorrencia', fimMes);
 
-    // 1. Buscar sinistros aprovados/indenizados do período
-    const { data: sinistros, error: sinistrosError } = await supabase
-      .from('sinistros')
-      .select(`
-        id, 
-        tipo, 
-        tipo_dano,
-        valor_indenizacao, 
-        data_ocorrencia, 
-        associado_id, 
-        veiculo_id
-      `)
-      .in('status', ['aprovado', 'indenizado', 'pago'])
-      .gte('data_ocorrencia', inicioMes)
-      .lte('data_ocorrencia', fimMes);
+      if (sinistrosError) throw new Error(`Erro ao buscar sinistros: ${sinistrosError.message}`);
+      sinistrosApurados = sinistros?.length || 0;
 
-    if (sinistrosError) {
-      throw new Error(`Erro ao buscar sinistros: ${sinistrosError.message}`);
-    }
+      // Buscar OS pagas
+      const sinistrosIds = (sinistros || []).map(s => s.id);
+      let valorPagoPorSinistro: Record<string, number> = {};
+      let ordensServicoIds: Record<string, string[]> = {};
+      
+      if (sinistrosIds.length > 0) {
+        const { data: ordensServico } = await supabase
+          .from('ordens_servico')
+          .select('id, sinistro_id, valor_pago, status')
+          .in('sinistro_id', sinistrosIds)
+          .in('status', ['concluido', 'pago', 'aprovado']);
 
-    console.log(`[fechamento-mensal] ${sinistros?.length || 0} sinistros encontrados`);
-
-    // 1.1 Buscar Ordens de Serviço pagas vinculadas aos sinistros do período
-    const sinistrosIds = (sinistros || []).map(s => s.id);
-    let valorPagoPorSinistro: Record<string, number> = {};
-    let ordensServicoIds: Record<string, string[]> = {};
-    
-    if (sinistrosIds.length > 0) {
-      const { data: ordensServico, error: osError } = await supabase
-        .from('ordens_servico')
-        .select('id, sinistro_id, valor_pago, status')
-        .in('sinistro_id', sinistrosIds)
-        .in('status', ['concluido', 'pago', 'aprovado']);
-
-      if (osError) {
-        console.error('[fechamento-mensal] Erro ao buscar OS:', osError);
-      } else {
-        // Criar mapa de valor pago por sinistro
         for (const os of (ordensServico || [])) {
           if (os.sinistro_id && os.valor_pago) {
-            valorPagoPorSinistro[os.sinistro_id] = 
-              (valorPagoPorSinistro[os.sinistro_id] || 0) + os.valor_pago;
-            
-            // Guardar IDs das OS para rastreabilidade
-            if (!ordensServicoIds[os.sinistro_id]) {
-              ordensServicoIds[os.sinistro_id] = [];
-            }
+            valorPagoPorSinistro[os.sinistro_id] = (valorPagoPorSinistro[os.sinistro_id] || 0) + os.valor_pago;
+            if (!ordensServicoIds[os.sinistro_id]) ordensServicoIds[os.sinistro_id] = [];
             ordensServicoIds[os.sinistro_id].push(os.id);
           }
         }
-        console.log(`[fechamento-mensal] ${ordensServico?.length || 0} ordens de serviço encontradas`);
       }
-    }
 
-    // 2. Agrupar despesas por tipo de benefício
-    const despesasPorBeneficio: Record<string, { valor: number; quantidade: number; sinistros_ids: string[]; ordens_servico_ids: string[] }> = {};
-    
-    for (const tipo of TIPOS_BENEFICIO) {
-      despesasPorBeneficio[tipo] = { valor: 0, quantidade: 0, sinistros_ids: [], ordens_servico_ids: [] };
-    }
+      for (const tipo of TIPOS_BENEFICIO) {
+        despesasPorBeneficio[tipo] = { valor: 0, quantidade: 0, sinistros_ids: [], ordens_servico_ids: [] };
+      }
 
-    // Contadores para detalhamento
-    let totalIndenizacoes = 0;
-    let totalReparosOficina = 0;
+      for (const sinistro of (sinistros || [])) {
+        const beneficio = SINISTRO_PARA_BENEFICIO[sinistro.tipo];
+        if (!beneficio || !despesasPorBeneficio[beneficio]) continue;
 
-    for (const sinistro of (sinistros || [])) {
-      const beneficio = SINISTRO_PARA_BENEFICIO[sinistro.tipo];
-      if (beneficio && despesasPorBeneficio[beneficio]) {
-        // Determinar valor do custo baseado no tipo de dano
         let valorCusto = 0;
-        let fonteValor = 'indenizacao';
-        
         const valorOS = valorPagoPorSinistro[sinistro.id] || 0;
         const valorIndenizacao = sinistro.valor_indenizacao || 0;
-        
+
         if (sinistro.tipo_dano === 'perda_total') {
-          // Perda total: usar valor de indenização
           valorCusto = valorIndenizacao;
           totalIndenizacoes += valorCusto;
-          fonteValor = 'indenizacao';
-        } else if (sinistro.tipo_dano === 'parcial') {
-          // Dano parcial: priorizar valor pago das OS
-          if (valorOS > 0) {
-            valorCusto = valorOS;
-            totalReparosOficina += valorCusto;
-            fonteValor = 'ordem_servico';
-          } else {
-            valorCusto = valorIndenizacao;
-            totalIndenizacoes += valorCusto;
-            fonteValor = 'indenizacao_fallback';
-          }
+        } else if (valorOS > 0) {
+          valorCusto = valorOS;
+          totalReparosOficina += valorCusto;
         } else {
-          // Fallback (tipo_dano NULL): verificar se há OS paga, senão usar valor_indenizacao
-          if (valorOS > 0) {
-            valorCusto = valorOS;
-            totalReparosOficina += valorCusto;
-            fonteValor = 'ordem_servico';
-          } else {
-            valorCusto = valorIndenizacao;
-            totalIndenizacoes += valorCusto;
-            fonteValor = 'indenizacao';
-          }
+          valorCusto = valorIndenizacao;
+          totalIndenizacoes += valorCusto;
         }
-        
-        console.log(`[fechamento-mensal] Sinistro ${sinistro.id}: tipo=${sinistro.tipo}, tipo_dano=${sinistro.tipo_dano || 'null'}, valor_indenizacao=${valorIndenizacao}, valor_os=${valorOS}, valor_usado=${valorCusto}, fonte=${fonteValor}`);
-        
+
         despesasPorBeneficio[beneficio].valor += valorCusto;
         despesasPorBeneficio[beneficio].quantidade += 1;
         despesasPorBeneficio[beneficio].sinistros_ids.push(sinistro.id);
-        
-        // Adicionar IDs das OS usadas
         if (ordensServicoIds[sinistro.id]) {
           despesasPorBeneficio[beneficio].ordens_servico_ids.push(...ordensServicoIds[sinistro.id]);
         }
       }
     }
 
-    // 3. Contar associados ativos e total de cotas
+    // Contar associados ativos e cotas
     const { data: associadosAtivos, error: associadosError } = await supabase
       .from('associados')
       .select('id')
       .eq('status', 'ativo');
 
-    if (associadosError) {
-      throw new Error(`Erro ao contar associados: ${associadosError.message}`);
-    }
+    if (associadosError) throw new Error(`Erro ao contar associados: ${associadosError.message}`);
 
-    // Buscar total de cotas via RPC ou calculando
-    const { data: totalCotasData, error: cotasError } = await supabase
-      .rpc('fn_calcular_total_cotas_ativos');
-
+    const { data: totalCotasData } = await supabase.rpc('fn_calcular_total_cotas_ativos');
     const totalCotas = totalCotasData || 0;
     const totalAssociados = associadosAtivos?.length || 0;
 
-    console.log(`[fechamento-mensal] ${totalAssociados} associados ativos, ${totalCotas} cotas`);
+    const totalDespesasRateio = Object.values(despesasPorBeneficio).reduce((acc, d) => acc + d.valor, 0);
 
-    // 4. Calcular totais gerais
-    const totalDespesasRateio = Object.values(despesasPorBeneficio)
-      .reduce((acc, d) => acc + d.valor, 0);
-
-    // 5. Criar ou atualizar fechamento
+    // Criar ou atualizar fechamento
     const fechamentoData = {
-      mes,
-      ano,
+      mes, ano,
       status: 'fechado',
       total_associados_ativos: totalAssociados,
       total_cotas_ativas: totalCotas,
@@ -257,33 +201,22 @@ serve(async (req) => {
         .from('fechamentos_mensais')
         .update(fechamentoData)
         .eq('id', fechamentoExistente.id);
-
-      if (updateError) {
-        throw new Error(`Erro ao atualizar fechamento: ${updateError.message}`);
-      }
+      if (updateError) throw new Error(`Erro ao atualizar fechamento: ${updateError.message}`);
       fechamentoId = fechamentoExistente.id;
-
-      // Limpar despesas antigas
-      await supabase
-        .from('despesas_rateio')
-        .delete()
-        .eq('fechamento_id', fechamentoId);
+      await supabase.from('despesas_rateio').delete().eq('fechamento_id', fechamentoId);
     } else {
       const { data: novoFechamento, error: insertError } = await supabase
         .from('fechamentos_mensais')
         .insert(fechamentoData)
         .select()
         .single();
-
-      if (insertError) {
-        throw new Error(`Erro ao criar fechamento: ${insertError.message}`);
-      }
+      if (insertError) throw new Error(`Erro ao criar fechamento: ${insertError.message}`);
       fechamentoId = novoFechamento.id;
     }
 
-    // 6. Inserir despesas por benefício
+    // Inserir despesas por benefício
     const despesasParaInserir = Object.entries(despesasPorBeneficio)
-      .filter(([_, d]) => d.valor > 0 || d.quantidade > 0)
+      .filter(([_, d]) => d.valor > 0)
       .map(([tipo, d]) => ({
         fechamento_id: fechamentoId,
         tipo_beneficio: tipo,
@@ -293,18 +226,12 @@ serve(async (req) => {
       }));
 
     if (despesasParaInserir.length > 0) {
-      const { error: despesasError } = await supabase
-        .from('despesas_rateio')
-        .insert(despesasParaInserir);
-
-      if (despesasError) {
-        throw new Error(`Erro ao inserir despesas: ${despesasError.message}`);
-      }
+      const { error: despError } = await supabase.from('despesas_rateio').insert(despesasParaInserir);
+      if (despError) throw new Error(`Erro ao inserir despesas: ${despError.message}`);
     }
 
-    console.log(`[fechamento-mensal] Fechamento ${mes}/${ano} concluído com sucesso`);
+    console.log(`[fechamento-mensal] Fechamento ${mes}/${ano} concluído`);
 
-    // Buscar fechamento atualizado
     const { data: fechamentoFinal } = await supabase
       .from('fechamentos_mensais')
       .select('*, despesas_rateio(*)')
@@ -316,30 +243,19 @@ serve(async (req) => {
       message: `Fechamento ${mes}/${ano} realizado com sucesso`,
       fechamento: fechamentoFinal,
       resumo: {
-        periodo: `${inicioMes} a ${fimMes}`,
         associados_ativos: totalAssociados,
         total_cotas: totalCotas,
         total_despesas: totalDespesasRateio,
-        sinistros_apurados: sinistros?.length || 0,
+        modo: usarDespesasManuais ? 'manual' : 'automatico',
+        sinistros_apurados: sinistrosApurados,
         despesas_por_beneficio: despesasPorBeneficio,
-        custos_detalhados: {
-          indenizacoes: totalIndenizacoes,
-          reparos_oficina: totalReparosOficina,
-          total: totalDespesasRateio,
-        }
       }
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
     console.error('[fechamento-mensal] Erro:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-    
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: errorMessage 
-    }), {
+    return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

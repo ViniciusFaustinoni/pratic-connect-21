@@ -56,19 +56,26 @@ export interface PreviewFatura {
     rateio_vidros: number;
     rateio_terceiros: number;
     rateio_assistencia: number;
+    rateio_outros: number;
     adicionais: number;
     fator_prorata: number;
     total: number;
   };
 }
 
+export interface DespesasManuais {
+  colisao: number;
+  roubo_furto: number;
+  assistencia: number;
+  terceiros: number;
+  vidros: number;
+  outros: number;
+}
+
 // ============================================
 // HOOKS
 // ============================================
 
-/**
- * Buscar todos os fechamentos mensais
- */
 export function useFechamentosMensais(ano?: number) {
   return useQuery({
     queryKey: ['fechamentos-mensais', ano],
@@ -84,29 +91,23 @@ export function useFechamentosMensais(ano?: number) {
       }
 
       const { data, error } = await query.limit(24);
-      
       if (error) throw error;
       return data as FechamentoMensal[];
     },
   });
 }
 
-/**
- * Buscar fechamento específico por mês/ano
- */
 export function useFechamento(mes?: number, ano?: number) {
   return useQuery({
     queryKey: ['fechamento', mes, ano],
     queryFn: async () => {
       if (!mes || !ano) return null;
-
       const { data, error } = await supabase
         .from('fechamentos_mensais')
         .select('*, despesas_rateio(*)')
         .eq('mes', mes)
         .eq('ano', ano)
         .maybeSingle();
-
       if (error) throw error;
       return data as FechamentoMensal | null;
     },
@@ -114,21 +115,18 @@ export function useFechamento(mes?: number, ano?: number) {
   });
 }
 
-/**
- * Executar fechamento mensal
- */
 export function useExecutarFechamento() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ mes, ano, forcar = false }: { mes: number; ano: number; forcar?: boolean }) => {
+    mutationFn: async ({ mes, ano, forcar = false, despesas_manuais }: { 
+      mes: number; ano: number; forcar?: boolean; despesas_manuais?: DespesasManuais 
+    }) => {
       const { data, error } = await supabase.functions.invoke('fechamento-mensal', {
-        body: { mes, ano, forcar },
+        body: { mes, ano, forcar, despesas_manuais },
       });
-
       if (error) throw new Error(error.message);
       if (!data.success) throw new Error(data.error || data.message);
-      
       return data;
     },
     onSuccess: (data) => {
@@ -142,29 +140,18 @@ export function useExecutarFechamento() {
   });
 }
 
-/**
- * Calcular rateio após fechamento
- */
 export function useCalcularRateio() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ 
-      fechamento_id, 
-      aprovar = false,
-      profile_id,
-    }: { 
-      fechamento_id: string; 
-      aprovar?: boolean;
-      profile_id?: string;
+    mutationFn: async ({ fechamento_id, aprovar = false, profile_id }: { 
+      fechamento_id: string; aprovar?: boolean; profile_id?: string;
     }) => {
       const { data, error } = await supabase.functions.invoke('calcular-rateio-completo', {
         body: { fechamento_id, aprovar, profile_id },
       });
-
       if (error) throw new Error(error.message);
       if (!data.success) throw new Error(data.error || data.message);
-      
       return data;
     },
     onSuccess: (data) => {
@@ -178,31 +165,18 @@ export function useCalcularRateio() {
   });
 }
 
-/**
- * Gerar faturas (boletos) após aprovação
- */
 export function useGerarFaturas() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ 
-      fechamento_id, 
-      preview = false,
-      enviar_whatsapp = false,
-      limite,
-    }: { 
-      fechamento_id: string; 
-      preview?: boolean;
-      enviar_whatsapp?: boolean;
-      limite?: number;
+    mutationFn: async ({ fechamento_id, preview = false, enviar_whatsapp = false, limite }: { 
+      fechamento_id: string; preview?: boolean; enviar_whatsapp?: boolean; limite?: number;
     }) => {
       const { data, error } = await supabase.functions.invoke('gerar-faturas-mensais', {
         body: { fechamento_id, preview, enviar_whatsapp, limite },
       });
-
       if (error) throw new Error(error.message);
       if (!data.success) throw new Error(data.error || data.message);
-      
       return data;
     },
     onSuccess: (data) => {
@@ -221,15 +195,11 @@ export function useGerarFaturas() {
   });
 }
 
-/**
- * Buscar cobranças de um fechamento específico
- */
 export function useCobrancasFechamento(fechamentoId: string | undefined) {
   return useQuery({
     queryKey: ['cobrancas-fechamento', fechamentoId],
     queryFn: async () => {
       if (!fechamentoId) return [];
-
       const { data, error } = await supabase
         .from('asaas_cobrancas')
         .select(`
@@ -239,7 +209,6 @@ export function useCobrancasFechamento(fechamentoId: string | undefined) {
         `)
         .eq('fechamento_id', fechamentoId)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       return data;
     },
@@ -247,57 +216,29 @@ export function useCobrancasFechamento(fechamentoId: string | undefined) {
   });
 }
 
-/**
- * Enviar cobrança via WhatsApp
- */
 export function useEnviarCobrancaWhatsApp() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ cobranca_id }: { cobranca_id: string }) => {
-      // Buscar cobrança
       const { data: cobranca, error: fetchError } = await supabase
         .from('asaas_cobrancas')
-        .select(`
-          *,
-          associado:associados(nome, telefone, whatsapp)
-        `)
+        .select(`*, associado:associados(nome, telefone, whatsapp)`)
         .eq('id', cobranca_id)
         .single();
-
       if (fetchError || !cobranca) throw new Error('Cobrança não encontrada');
-
       const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
       if (!telefone) throw new Error('Associado sem telefone cadastrado');
-
       const valorFormatado = cobranca.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       const vencimentoFormatado = new Date(cobranca.data_vencimento).toLocaleDateString('pt-BR');
-
-      let mensagem = `📄 *Fatura ${cobranca.competencia}*\n\n`;
-      mensagem += `Olá ${cobranca.associado?.nome?.split(' ')[0]}! 👋\n\n`;
-      mensagem += `Sua fatura de *${valorFormatado}* está disponível.\n`;
-      mensagem += `📅 Vencimento: *${vencimentoFormatado}*\n\n`;
-      
-      if (cobranca.pix_copia_cola) {
-        mensagem += `💠 *PIX Copia e Cola:*\n\`${cobranca.pix_copia_cola}\`\n\n`;
-      }
-      
-      if (cobranca.boleto_url) {
-        mensagem += `📋 Boleto: ${cobranca.boleto_url}`;
-      }
-
+      let mensagem = `📄 *Fatura ${cobranca.competencia}*\n\nOlá ${cobranca.associado?.nome?.split(' ')[0]}! 👋\n\nSua fatura de *${valorFormatado}* está disponível.\n📅 Vencimento: *${vencimentoFormatado}*\n\n`;
+      if (cobranca.pix_copia_cola) mensagem += `💠 *PIX Copia e Cola:*\n\`${cobranca.pix_copia_cola}\`\n\n`;
+      if (cobranca.boleto_url) mensagem += `📋 Boleto: ${cobranca.boleto_url}`;
       const { error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
         body: { telefone: telefone.replace(/\D/g, ''), mensagem },
       });
-
       if (sendError) throw new Error(sendError.message);
-
-      // Marcar como enviada
-      await supabase
-        .from('asaas_cobrancas')
-        .update({ enviada_whatsapp: true, enviada_whatsapp_em: new Date().toISOString() })
-        .eq('id', cobranca_id);
-
+      await supabase.from('asaas_cobrancas').update({ enviada_whatsapp: true, enviada_whatsapp_em: new Date().toISOString() }).eq('id', cobranca_id);
       return { success: true };
     },
     onSuccess: () => {
@@ -315,20 +256,12 @@ export function useEnviarCobrancaWhatsApp() {
 // ============================================
 
 export function getNomeMes(mes: number): string {
-  const nomes = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-  ];
+  const nomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   return nomes[mes - 1] || '';
 }
 
 export function getStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    aberto: 'Aberto',
-    fechado: 'Fechado',
-    aprovado: 'Aprovado',
-    processado: 'Processado',
-  };
+  const labels: Record<string, string> = { aberto: 'Aberto', fechado: 'Fechado', aprovado: 'Aprovado', processado: 'Processado' };
   return labels[status] || status;
 }
 
@@ -343,8 +276,5 @@ export function getStatusColor(status: string): string {
 }
 
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }

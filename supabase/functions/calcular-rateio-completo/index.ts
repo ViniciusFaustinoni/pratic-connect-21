@@ -126,20 +126,18 @@ serve(async (req) => {
 
       // Aplicar filtro de cobertura específico por tipo de benefício
       if (tipoBeneficio === 'colisao' || tipoBeneficio === 'incendio') {
-        // Colisão e incêndio requerem cobertura total
         query = query.eq('cobertura_total', true);
       } else if (tipoBeneficio === 'roubo_furto') {
-        // Roubo/furto: tem cobertura específica OU cobertura total
         query = query.or('cobertura_roubo_furto.eq.true,cobertura_total.eq.true');
       } else if (tipoBeneficio === 'vidros') {
-        // Vidros: cobertura específica de vidros
         query = query.eq('cobertura_vidros', true);
       } else if (tipoBeneficio === 'terceiros') {
-        // Terceiros: cobertura específica de terceiros
         query = query.eq('cobertura_terceiros', true);
       } else if (tipoBeneficio === 'assistencia') {
-        // Assistência 24h: cobertura específica
         query = query.eq('cobertura_assistencia', true);
+      } else if (tipoBeneficio === 'outros') {
+        // "Outros" é rateado entre TODAS as cotas ativas (sem filtro de cobertura)
+        // Não aplica nenhum filtro adicional
       }
 
       const { data: veiculosElegiveis, error: veiculosError } = await query;
