@@ -181,10 +181,10 @@ export default function InstaladorChecklist() {
   const videoUrl = (vistoriaCompleta as any)?.video_360_url as string | undefined;
   const vistoriaId = vistoriaCompleta?.id;
 
-  // Detectar tipo de veículo (moto ou automóvel)
+  // Detectar tipo de veículo (moto ou automóvel) usando tipo_veiculo, modelo e marca
   const tipoVeiculo: TipoVeiculo = useMemo(() => {
-    const veiculoData = servico?.veiculos as { tipo_veiculo?: string } | undefined;
-    return detectarTipoVeiculo(veiculoData?.tipo_veiculo);
+    const veiculoData = servico?.veiculos as { tipo_veiculo?: string; modelo?: string; marca?: string } | undefined;
+    return detectarTipoVeiculo(veiculoData?.tipo_veiculo, veiculoData?.modelo, veiculoData?.marca);
   }, [servico?.veiculos]);
 
   // Verificar valor FIPE do veículo e se precisa de rastreador

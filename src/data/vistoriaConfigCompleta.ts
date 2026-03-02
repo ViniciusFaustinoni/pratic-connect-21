@@ -156,13 +156,55 @@ export function getTotalFotosObrigatorias(tipo: TipoVeiculo): number {
   return fotos.filter(f => f.categoria !== 'instalacao' && f.categoria !== 'rastreador').length;
 }
 
-// Detectar tipo de veículo a partir de string
-export function detectarTipoVeiculo(tipoVeiculoStr?: string | null): TipoVeiculo {
-  if (!tipoVeiculoStr) return 'automovel';
-  const normalized = tipoVeiculoStr.toLowerCase();
-  if (normalized.includes('moto') || normalized.includes('motocicleta') || normalized.includes('ciclomotor') || normalized.includes('triciclo')) {
-    return 'moto';
+// Keywords que indicam motocicleta no modelo
+const MOTO_KEYWORDS = [
+  'moto', 'motocicleta', 'ciclomotor', 'triciclo', 'scooter',
+  'nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop',
+  'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr',
+  'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'factor',
+  'dl ', 'crf', 'sahara', 'twister', 'hornet', 'africa twin', 'ninja',
+  'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', 'riva',
+  'citycom', 'maxsym', 'boulevard', 'bandit', 'hayabusa', 'gsxr', 'gsx',
+];
+
+// Marcas exclusivamente de moto
+const MARCAS_EXCLUSIVAS_MOTO = [
+  'YAMAHA', 'SUZUKI', 'KAWASAKI', 'HARLEY-DAVIDSON', 'HARLEY DAVIDSON',
+  'TRIUMPH', 'DUCATI', 'KTM', 'DAFRA', 'SHINERAY', 'KASINSKI',
+  'ROYAL ENFIELD', 'HUSQVARNA', 'BENELLI', 'MV AGUSTA', 'INDIAN',
+  'HAOJUE', 'TRAXX', 'SUNDOWN', 'SOUSA',
+];
+
+// Detectar tipo de veículo a partir de tipo_veiculo, modelo e marca
+export function detectarTipoVeiculo(
+  tipoVeiculoStr?: string | null,
+  modelo?: string | null,
+  marca?: string | null
+): TipoVeiculo {
+  // 1. Tipo explícito
+  if (tipoVeiculoStr) {
+    const normalized = tipoVeiculoStr.toLowerCase();
+    if (normalized.includes('moto') || normalized.includes('motocicleta') || normalized.includes('ciclomotor') || normalized.includes('triciclo')) {
+      return 'moto';
+    }
   }
+
+  // 2. Keywords no modelo
+  if (modelo) {
+    const modeloLower = ` ${modelo.toLowerCase()} `;
+    if (MOTO_KEYWORDS.some(kw => modeloLower.includes(kw))) {
+      return 'moto';
+    }
+  }
+
+  // 3. Marca exclusiva de moto
+  if (marca) {
+    const marcaUpper = marca.toUpperCase().trim();
+    if (MARCAS_EXCLUSIVAS_MOTO.some(m => marcaUpper.includes(m))) {
+      return 'moto';
+    }
+  }
+
   return 'automovel';
 }
 
