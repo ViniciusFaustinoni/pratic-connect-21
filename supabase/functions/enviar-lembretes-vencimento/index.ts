@@ -73,9 +73,22 @@ function getMensagemLembrete(
   }
 
   switch (tipo) {
-    case 'vencimento_3d':
+    case 'vencimento_5d':
       titulo = '📋 Lembrete Amigável';
       mensagem = `📋 *Lembrete Amigável* 👋
+
+Olá ${nomeAbreviado}!
+
+Sua mensalidade de *${valor}* vence em *5 dias* (${data}).
+
+💡 *Dica:* Pague via PIX e libere na hora!
+${blocoPagamento}
+Qualquer dúvida, estamos aqui! 😊`;
+      break;
+
+    case 'vencimento_3d':
+      titulo = '📋 Lembrete de Vencimento';
+      mensagem = `📋 *Lembrete de Vencimento* 👋
 
 Olá ${nomeAbreviado}!
 
@@ -180,7 +193,7 @@ serve(async (req) => {
 
   try {
     const { 
-      diasAntecedencia = [3, 1, 0], 
+      diasAntecedencia = [5, 1, 0], 
       diasPosVencimento = [1, 3, 5],
       incluirVencidas = true,
       ignorarHorarioComercial = false 
@@ -213,7 +226,8 @@ serve(async (req) => {
       data.setDate(data.getDate() + dias);
       const tipoLembrete = dias === 0 ? 'vence_hoje' : 
                            dias === 1 ? 'vencimento_1d' : 
-                           dias === 3 ? 'vencimento_3d' : `vencimento_${dias}d`;
+                           dias === 3 ? 'vencimento_3d' :
+                           dias === 5 ? 'vencimento_5d' : `vencimento_${dias}d`;
       datasConfig.push({
         data: data.toISOString().split('T')[0],
         tipo: tipoLembrete,

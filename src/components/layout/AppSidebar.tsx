@@ -263,6 +263,7 @@ const menuConfig: {
         { title: 'Contas a Pagar', url: '/financeiro/contas-pagar', icon: CreditCard },
         { title: 'Faturamento', url: '/financeiro/faturamento', icon: FileText },
         { title: 'Emissão de Cobranças', url: '/financeiro/emissao', icon: Send },
+        { title: 'Notificações Cobrança', url: '/financeiro/notificacoes-cobranca', icon: Bell },
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
         { title: 'Extratos Bancários', url: '/financeiro/extratos-bancarios', icon: FileText },
         { title: 'Contas Bancárias', url: '/financeiro/contas-bancarias', icon: Building2 },
