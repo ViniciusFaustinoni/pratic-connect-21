@@ -59,6 +59,7 @@ import {
   Puzzle,
   Ban,
   RefreshCw,
+  ShieldAlert,
   Store,
   Bot,
   Bell,
@@ -176,6 +177,7 @@ const menuConfig: {
         { title: 'Associados', url: '/cadastro/associados', icon: Users },
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
         { title: 'Substituições', url: '/cadastro/substituicoes', icon: RefreshCw },
+        { title: 'Recusas do Instalador', url: '/cadastro/recusas-instalador', icon: ShieldAlert },
     ],
   },
   {
@@ -547,7 +549,8 @@ export function AppSidebar() {
             ...group,
             items: group.items.filter(item => 
               item.url === '/cadastro/propostas' ||
-              item.url === '/cadastro/associados'
+              item.url === '/cadastro/associados' ||
+              item.url === '/cadastro/recusas-instalador'
             ),
           };
         }
