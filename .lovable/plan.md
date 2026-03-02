@@ -1,49 +1,39 @@
 
-
-# Correcao: Deteccao moto/carro na instalacao
+# Substituir "Cobertura Total" por "Proteção 360º" em todas as interfaces
 
 ## Diagnostico
 
-Analisei toda a cadeia de dados e logica de deteccao. Os 3 arquivos foram corrigidos corretamente no ultimo commit:
+O template `cobertura_total_ativada` no `notificar-cliente` **ja foi atualizado** para "Proteção 360º" no codigo-fonte, mas a **edge function nao foi reimplantada** -- por isso a mensagem do WhatsApp ainda chega como "COBERTURA TOTAL".
 
-1. `detectarTipoVeiculo` agora aceita `modelo` e `marca`
-2. `InstaladorChecklist.tsx` passa `servico?.veiculos?.modelo` e `servico?.veiculos?.marca`
-3. `ExecutarVistoriaCompleta.tsx` faz o mesmo
+Alem disso, existem **diversas outras ocorrencias** de "cobertura total" em textos voltados ao usuario que precisam ser corrigidas.
 
-O veiculo em andamento no banco e: **Honda nxr160 Bros Esdd** -- as keywords `nxr` e `bros` existem na lista e a funcao deveria retornar `'moto'`.
+## Alteracoes Necessarias
 
-**Porem, identifiquei um problema potencial de timing/dependencia**: o `useMemo` depende de `[servico?.veiculos]`, mas quando o `servico` carrega, a referencia do objeto `veiculos` pode nao mudar se o React comparar por referencia. Alem disso, nao ha nenhum log de debug para confirmar que a deteccao esta sendo executada.
+### 1. Reimplantar edge function `notificar-cliente`
+A funcao ja tem o texto correto no codigo mas precisa ser deployada para que a mudanca surta efeito no WhatsApp.
 
-## Correcoes
+### 2. `supabase/functions/whatsapp-webhook/index.ts` (2 ocorrencias)
+- Linha 799: `"Total (todos os serviços)"` -> `"Proteção 360º (todos os serviços)"`
+- Linha 1775: `"TOTAL (tudo liberado)"` -> `"PROTEÇÃO 360º (tudo liberado)"`
 
-### 1. `src/pages/instalador/InstaladorChecklist.tsx` - Melhorar dependencia do useMemo
+### 3. `src/hooks/usePropostasPendentes.ts` (4 ocorrencias)
+- Linha 1570: `"Cobertura total ativada."` -> `"Proteção 360º ativada."`
+- Linha 1571: `"Aguardando instalação para cobertura total."` -> `"Aguardando instalação para Proteção 360º."`
+- Linha 1691: `"Cobertura total ativada."` -> `"Proteção 360º ativada."`
+- Linha 1692: `"Aguardando instalação para cobertura total."` -> `"Aguardando instalação para Proteção 360º."`
 
-Trocar a dependencia de `[servico?.veiculos]` para campos primitivos `[servico?.veiculos?.modelo, servico?.veiculos?.marca]` que garantem re-avaliacao quando os dados carregam. Adicionar `console.log` temporario para debug.
+### 4. `src/pages/cadastro/PropostaAnalise.tsx` (1 ocorrencia)
+- Linha 466: `"cobertura total"` -> `"Proteção 360º"`
 
-```typescript
-const tipoVeiculo: TipoVeiculo = useMemo(() => {
-  const veiculoData = servico?.veiculos as { ... } | undefined;
-  const resultado = detectarTipoVeiculo(veiculoData?.tipo_veiculo, veiculoData?.modelo, veiculoData?.marca);
-  console.log('[InstaladorChecklist] Deteccao tipo veiculo:', {
-    modelo: veiculoData?.modelo,
-    marca: veiculoData?.marca,
-    resultado
-  });
-  return resultado;
-}, [servico?.veiculos?.modelo, servico?.veiculos?.marca]);
-```
+### 5. Reimplantar edge function `whatsapp-webhook`
+Para que as correcoes das linhas 799 e 1775 entrem em vigor.
 
-### 2. `src/pages/instalador/ExecutarVistoriaCompleta.tsx` - Mesma correcao
-
-Trocar dependencia de `[veiculo]` para `[(veiculo as any)?.modelo, (veiculo as any)?.marca]`.
-
-### 3. `src/data/vistoriaConfigCompleta.ts` - Tornar deteccao HONDA mais robusta
-
-Adicionar `console.log` na funcao de deteccao para rastrear o fluxo. Tambem adicionar keyword `'honda'` com tratamento especial: se marca for HONDA **e** modelo conter qualquer keyword de moto, detectar como moto (redundante mas defensivo).
+## O que NAO sera alterado
+- Colunas do banco (`cobertura_total`) -- permanecem iguais (logica interna)
+- Comentarios de codigo e logs de debug -- nao sao voltados ao usuario
+- Variaveis e nomes de funcoes -- nao afetam o usuario
 
 ## Resultado
-
-- Dependencias do `useMemo` usando valores primitivos garantem re-render correto
-- Logs de debug permitem confirmar a deteccao no console do navegador
-- Mesma logica, mais robusta contra edge cases de referencia React
-- 3 arquivos editados, sem migration
+- Mensagens do WhatsApp mostrarao "Proteção 360º" em vez de "Cobertura Total"
+- Textos internos do sistema (historico, toasts, modais) tambem atualizados
+- 3 arquivos editados + 2 edge functions reimplantadas
