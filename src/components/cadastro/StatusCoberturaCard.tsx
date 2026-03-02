@@ -74,7 +74,7 @@ export function StatusCoberturaCard({
               <ShieldOff className="h-5 w-5 text-muted-foreground" />
             )}
             <div>
-              <p className="font-medium text-foreground">Cobertura Total</p>
+              <p className="font-medium text-foreground">Proteção 360º</p>
               <p className="text-sm text-muted-foreground">
                 {aguardandoAtivacao
                   ? 'Rastreador precisa ser ativado na plataforma'
@@ -174,7 +174,7 @@ export function StatusCoberturaCard({
                 <p className="font-medium text-warning">Ativação Pendente</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   O rastreador foi instalado mas ainda não foi ativado na plataforma de rastreamento.
-                  Use o botão "Ativar Rastreador" para sincronizar com a plataforma e liberar a cobertura total.
+                  Use o botão "Ativar Rastreador" para sincronizar com a plataforma e liberar a Proteção 360º.
                 </p>
               </div>
             </div>

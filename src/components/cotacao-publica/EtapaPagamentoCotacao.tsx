@@ -411,7 +411,7 @@ export function EtapaPagamentoCotacao({
           Aguardando Instalação
         </Badge>
         <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-          A cobertura total será ativada após a instalação do rastreador no seu veículo.
+          A Proteção 360º será ativada após a instalação do rastreador no seu veículo.
         </p>
       </motion.div>
     );

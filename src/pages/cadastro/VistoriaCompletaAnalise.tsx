@@ -409,9 +409,9 @@ export default function VistoriaCompletaAnalise() {
                 <CardTitle className="text-foreground">Ações</CardTitle>
                 <CardDescription>
                   {podeAtivar
-                    ? 'Clique para ativar o rastreador na plataforma e liberar a cobertura total'
+                    ? 'Clique para ativar o rastreador na plataforma e liberar a Proteção 360º'
                     : veiculos?.cobertura_total
-                    ? 'Rastreador já ativado - Cobertura total liberada'
+                    ? 'Rastreador já ativado - Proteção 360º liberada'
                     : 'Ativação não disponível no momento'}
                 </CardDescription>
               </CardHeader>
@@ -440,7 +440,7 @@ export default function VistoriaCompletaAnalise() {
                     <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
                     <p className="font-medium text-success">Rastreador Ativado</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Cobertura total liberada para este veículo
+                      Proteção 360º liberada para este veículo
                     </p>
                   </div>
                 ) : (
@@ -484,7 +484,7 @@ export default function VistoriaCompletaAnalise() {
               Esta ação irá:
               <ul className="mt-2 list-disc list-inside space-y-1">
                 <li>Ativar o rastreador na plataforma {rastreadores?.plataforma?.toUpperCase()}</li>
-                <li>Liberar a cobertura total para o veículo {veiculos?.placa}</li>
+                <li>Liberar a Proteção 360º para o veículo {veiculos?.placa}</li>
                 <li>Ativar o associado {associados?.nome}</li>
               </ul>
               <p className="mt-3 font-medium">Deseja continuar?</p>

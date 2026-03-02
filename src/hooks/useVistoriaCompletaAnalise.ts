@@ -217,7 +217,7 @@ export function useAtivarRastreadorPlataforma() {
       await supabase.from('associados_historico').insert({
         associado_id: associadoId,
         tipo: 'ativacao',
-        descricao: `Rastreador ativado manualmente na plataforma ${rastreador.plataforma}. Cobertura total liberada.`,
+        descricao: `Rastreador ativado manualmente na plataforma ${rastreador.plataforma}. Proteção 360º liberada.`,
         dados_novos: {
           instalacao_id: instalacaoId,
           rastreador_id: rastreadorId,
@@ -237,7 +237,7 @@ export function useAtivarRastreadorPlataforma() {
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
-      toast.success('Rastreador ativado com sucesso! Cobertura total liberada.');
+      toast.success('Rastreador ativado com sucesso! Proteção 360º liberada.');
     },
     onError: (error) => {
       console.error('Erro ao ativar rastreador:', error);

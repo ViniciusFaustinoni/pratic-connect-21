@@ -143,7 +143,7 @@ export function useAppAssociadoRealtime() {
               
               // Toast quando cobertura total for ativada
               if (newData.cobertura_total && !oldData.cobertura_total) {
-                toast.success('🚗 Cobertura Total Ativada!', {
+                toast.success('🚗 Proteção 360º Ativada!', {
                   description: 'Seu rastreador está ativo! Acesse todas as funcionalidades do app.',
                   duration: 10000,
                 });

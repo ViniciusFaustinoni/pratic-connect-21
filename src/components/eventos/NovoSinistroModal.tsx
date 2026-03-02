@@ -384,7 +384,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
           alertaRecemAtivado = true;
           console.log('[NovoSinistroModal] ⚠️ Sinistro roubo/furto sem cobertura total - alerta ativado');
         } else if (!isRouboFurto && !temCoberturaTotal) {
-          throw new Error('Veículo sem cobertura total para este tipo de sinistro. Apenas roubo/furto é permitido.');
+          throw new Error('Veículo sem Proteção 360º para este tipo de sinistro. Apenas roubo/furto é permitido.');
         }
       }
 

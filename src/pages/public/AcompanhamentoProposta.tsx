@@ -259,7 +259,7 @@ function getStatusInfo(associado: AssociadoData) {
       icon: Shield,
       color: 'primary',
       title: 'Cobertura Parcial Ativa',
-      description: 'Sua proteção contra roubo e furto está ativa! Acesse o app e aguarde a instalação do rastreador para cobertura total.',
+      description: 'Sua proteção contra roubo e furto está ativa! Acesse o app e aguarde a instalação do rastreador para Proteção 360º.',
       showDetails: true,
       showCriarConta: false,
       showEmRota: false,
@@ -275,8 +275,8 @@ function getStatusInfo(associado: AssociadoData) {
       status: 'ativo_total',
       icon: PartyPopper,
       color: 'success',
-      title: 'Cobertura Total Ativa!',
-      description: 'Parabéns! Seu veículo está com cobertura total ativa.',
+      title: 'Proteção 360º Ativa!',
+      description: 'Parabéns! Seu veículo está com Proteção 360º ativa.',
       showDetails: true,
       showCriarConta: false,
       showEmRota: false,
@@ -292,7 +292,7 @@ function getStatusInfo(associado: AssociadoData) {
       icon: Shield,
       color: 'primary',
       title: 'Cobertura Roubo e Furto Ativa',
-      description: 'Seu veículo já está protegido contra roubo e furto. Aguardando instalação do rastreador para cobertura total.',
+      description: 'Seu veículo já está protegido contra roubo e furto. Aguardando instalação do rastreador para Proteção 360º.',
       showDetails: true,
       showInstalacao: true,
       showCriarConta: false,
@@ -792,7 +792,7 @@ export default function AcompanhamentoProposta() {
                       <Clock className="h-5 w-5 text-muted-foreground" />
                     )}
                     <span className={veiculo.cobertura_total ? 'text-foreground' : 'text-muted-foreground'}>
-                      Cobertura Total (após instalação)
+                      Proteção 360º (após instalação)
                     </span>
                     {veiculo.cobertura_total && (
                       <Badge className="bg-success/20 text-success border-success/30 text-xs">

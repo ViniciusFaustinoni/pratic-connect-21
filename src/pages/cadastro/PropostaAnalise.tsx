@@ -392,12 +392,12 @@ export default function PropostaAnalise() {
                     </p>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <ShieldOff className="h-3 w-3" />
-                      <span>Cobertura Total</span>
+                      <span>Proteção 360º</span>
                     </div>
                   </div>
                   
                   <p className="text-sm text-muted-foreground">
-                    A cobertura total será ativada automaticamente após a instalação e ativação do rastreador.
+                    A Proteção 360º será ativada automaticamente após a instalação e ativação do rastreador.
                   </p>
                 </div>
               ) : (

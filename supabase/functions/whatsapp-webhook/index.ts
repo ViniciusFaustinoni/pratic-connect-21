@@ -293,7 +293,7 @@ const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsAp
 - ❌ BLOQUEADO: Assistência 24h (guincho, chaveiro, pane, etc.)
 - ❌ BLOQUEADO: Sinistros de colisão, incêndio, fenômenos naturais
 
-### Veículo ativo com cobertura "TOTAL":
+### Veículo ativo com cobertura "TOTAL" (Proteção 360º):
 - ✅ TUDO LIBERADO
 
 ## Coleta de Dados para SINISTRO
@@ -305,7 +305,7 @@ const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsAp
 6. Pedir fotos do veículo/danos (pode enviar direto aqui!)
 
 ## BIFURCAÇÃO DE COLISÃO: PERGUNTAR SE O VEÍCULO ANDA (OBRIGATÓRIO!)
-Quando o sinistro for de COLISÃO e o veículo tiver cobertura TOTAL, ANTES de criar o sinistro você DEVE perguntar:
+Quando o sinistro for de COLISÃO e o veículo tiver Proteção 360º, ANTES de criar o sinistro você DEVE perguntar:
 
 1. *O veículo ainda consegue andar ou precisa de reboque?*
    - Se o associado disser que *CONSEGUE ANDAR* (sim, anda, tá rodando, consigo dirigir):
@@ -900,7 +900,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
           return JSON.stringify({
             sucesso: false,
             bloqueado: true,
-            message: "Sua cobertura atual é apenas para roubo/furto. Para sinistros de colisão, incêndio ou outros, é necessário ter cobertura total.",
+            message: "Sua cobertura atual é apenas para roubo/furto. Para sinistros de colisão, incêndio ou outros, é necessário ter Proteção 360º.",
           });
         }
       }
@@ -1101,7 +1101,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         return JSON.stringify({
           sucesso: false,
           bloqueado: true,
-          message: "Sua cobertura atual é apenas para roubo/furto. A assistência 24h (guincho, chaveiro, etc.) está disponível apenas para veículos com cobertura total. Após a instalação do rastreador, você terá acesso à cobertura total. Entre em contato com a associação para mais informações.",
+          message: "Sua cobertura atual é apenas para roubo/furto. A assistência 24h (guincho, chaveiro, etc.) está disponível apenas para veículos com Proteção 360º. Após a instalação do rastreador, você terá acesso à Proteção 360º. Entre em contato com a associação para mais informações.",
         });
       }
 
