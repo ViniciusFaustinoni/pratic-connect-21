@@ -375,16 +375,43 @@ serve(async (req) => {
       return combustivel.toLowerCase();
     };
 
-    // Inferir tipo de veículo a partir da categoria do contrato
-    const inferirTipoVeiculo = (categoria: string | null): number => {
-      if (!categoria) return 1; // automóvel padrão
-      const cat = categoria.toUpperCase().trim();
-      if (cat.includes('MOTO') || cat.includes('MOTOCICLETA')) return 2; // moto
-      if (cat.includes('CAMINHÃO') || cat.includes('CAMINHAO') || cat.includes('TRUCK')) return 3;
-      if (cat.includes('VAN') || cat.includes('UTILITÁRIO') || cat.includes('UTILITARIO')) return 4;
-      if (cat.includes('ÔNIBUS') || cat.includes('ONIBUS')) return 5;
-      if (cat.includes('REBOQUE') || cat.includes('SEMI-REBOQUE')) return 6;
-      return 1; // automóvel
+    // Inferir tipo de veículo a partir da categoria, marca e modelo
+    const inferirTipoVeiculo = (categoria: string | null, marca?: string | null, modelo?: string | null): number => {
+      // Prioridade 1: categoria explícita
+      if (categoria) {
+        const cat = categoria.toUpperCase().trim();
+        if (cat.includes('MOTO') || cat.includes('MOTOCICLETA')) return 2;
+        if (cat.includes('CAMINHÃO') || cat.includes('CAMINHAO') || cat.includes('TRUCK')) return 3;
+        if (cat.includes('VAN') || cat.includes('UTILITÁRIO') || cat.includes('UTILITARIO')) return 4;
+        if (cat.includes('ÔNIBUS') || cat.includes('ONIBUS')) return 5;
+        if (cat.includes('REBOQUE') || cat.includes('SEMI-REBOQUE')) return 6;
+      }
+      
+      // Prioridade 2: modelo contém keywords de moto
+      const MOTO_KEYWORDS = ['nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop', 
+        'titan', 'fan', 'xre', 'lander', 'tenere', 'ténéré', 'crosser', 'fazer', 'ybr', 'neo',
+        'burgman', 'intruder', 'factor', 'scooter', 'lead', 'sahara', 'transalp', 'africa twin',
+        'xtz', 'xt ', 'xj6', 'mt-', 'mt ', 'nmax', 'fluo', 'next', 'crypton', 'yes',
+        'gsx', 'v-strom', 'vstrom', 'dl ', 'boulevard', 'hayabusa', 'ninja', 'versys', 'z900', 'z800', 'z750',
+        'duke', 'adventure', 'rc ', 'apache', 'speed', 'street', 'bonneville', 'tiger',
+        'sportster', 'iron', 'fat bob', 'softail', 'electra', 'road king',
+        'riva', 'kansas', 'mirage', 'horizon', 'jet', 'citicom', 'citycom'];
+      if (modelo && MOTO_KEYWORDS.some(kw => modelo.toLowerCase().includes(kw))) return 2;
+      
+      // Prioridade 3: marca exclusiva de moto
+      const MARCAS_MOTO = ['YAMAHA', 'SUZUKI', 'KAWASAKI', 'HARLEY', 'TRIUMPH', 
+        'DUCATI', 'KTM', 'DAFRA', 'SHINERAY', 'KASINSKI', 'ROYAL ENFIELD', 'BMW MOTORRAD',
+        'BAJAJ', 'BENELLI', 'MV AGUSTA', 'HUSQVARNA', 'INDIAN'];
+      if (marca && MARCAS_MOTO.some(m => marca.toUpperCase().includes(m))) return 2;
+      
+      // HONDA é ambígua (carros e motos) - verificar se modelo parece moto
+      if (marca?.toUpperCase().includes('HONDA') && modelo) {
+        const HONDA_CARROS = ['civic', 'fit', 'city', 'hr-v', 'hrv', 'cr-v', 'crv', 'accord', 'wr-v', 'wrv', 'zr-v'];
+        const isHondaCarro = HONDA_CARROS.some(c => modelo.toLowerCase().includes(c));
+        if (!isHondaCarro) return 2; // Se é Honda e não é carro conhecido, provavelmente é moto
+      }
+      
+      return 1; // automóvel padrão
     };
 
     // ========================================
@@ -601,16 +628,17 @@ serve(async (req) => {
           // ========================================
           // ESTRATÉGIA 1: Buscar código em logs anteriores de cadastro bem-sucedido
           // ========================================
-          console.log('[SGA Sync] Estratégia 1: Buscando código em logs anteriores...');
+          console.log('[SGA Sync] Estratégia 1: Buscando código em logs anteriores (por associado_id)...');
           try {
             const { data: logAnterior } = await supabase
               .from('sga_sync_logs')
               .select('response_payload')
+              .eq('associado_id', associado_id)
               .eq('action', 'cadastrar_associado')
               .eq('status', 'success')
               .not('response_payload', 'is', null)
               .order('created_at', { ascending: false })
-              .limit(50);
+              .limit(5);
             
             // Procurar log que tenha codigo_associado na resposta
             if (logAnterior && logAnterior.length > 0) {
@@ -839,9 +867,9 @@ serve(async (req) => {
     const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
     console.log(`[SGA Sync] Combustível original: "${veiculo.combustivel}" → normalizado: "${combustivelNormalizado}"`);
 
-    // Inferir tipo de veículo da categoria do contrato
-    const tipoVeiculoInferido = inferirTipoVeiculo(contrato?.veiculo_categoria);
-    console.log(`[SGA Sync] Categoria contrato: "${contrato?.veiculo_categoria}" → tipo veículo: ${tipoVeiculoInferido}`);
+    // Inferir tipo de veículo usando categoria, marca e modelo
+    const tipoVeiculoInferido = inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
+    console.log(`[SGA Sync] Categoria: "${contrato?.veiculo_categoria}", Marca: "${veiculo.marca}", Modelo: "${veiculo.modelo}" → tipo veículo: ${tipoVeiculoInferido}`);
 
     // Payload SEM credenciais - autenticação já está no header com token_usuario
     const veiculoPayload = {
@@ -932,25 +960,26 @@ serve(async (req) => {
           }
         }
 
-        // ESTRATÉGIA 3: Buscar em logs anteriores de sincronização bem-sucedida
+        // ESTRATÉGIA 3: Buscar em logs anteriores filtrado por veiculo_id
         if (!codigoVeiculoExistente) {
-          console.log('[SGA Sync] Estratégia 3: Buscando código em logs anteriores...');
+          console.log('[SGA Sync] Estratégia 3: Buscando código em logs anteriores (por veiculo_id)...');
           try {
             const { data: logAnterior } = await supabase
               .from('sga_sync_logs')
               .select('response_payload')
+              .eq('veiculo_id', veiculo_id)
               .eq('action', 'cadastrar_veiculo')
               .eq('status', 'success')
               .not('response_payload', 'is', null)
               .order('created_at', { ascending: false })
-              .limit(50);
+              .limit(5);
             
             if (logAnterior) {
               for (const log of logAnterior) {
                 const resp = log.response_payload as any;
                 if (resp?.codigo_veiculo) {
                   codigoVeiculoExistente = resp.codigo_veiculo;
-                  console.log(`[SGA Sync] Código encontrado em log: ${codigoVeiculoExistente}`);
+                  console.log(`[SGA Sync] Código encontrado em log (veiculo_id): ${codigoVeiculoExistente}`);
                   break;
                 }
               }
@@ -985,14 +1014,28 @@ serve(async (req) => {
             { placa: veiculo.placa }, { codigo_veiculo: codigoVeiculoExistente }, null);
         } else {
           console.log('[SGA Sync] Não foi possível recuperar o código do veículo por nenhuma estratégia');
+          
+          // ESTRATÉGIA 5: Salvar estado parcial - preservar codigo_associado mesmo sem veículo
+          if (codigoAssociadoHinova) {
+            console.log(`[SGA Sync] Salvando estado parcial: codigo_associado=${codigoAssociadoHinova}`);
+            await supabase.from('associados')
+              .update({ 
+                codigo_hinova: codigoAssociadoHinova,
+                sincronizado_hinova: true,
+                sincronizado_hinova_em: new Date().toISOString()
+              })
+              .eq('id', associado_id);
+          }
+          
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
           await logSync(veiculo_id, associado_id, 'buscar_veiculo_existente', 'error', 
-            { placa: veiculo.placa }, veiculoData, 'Não foi possível recuperar código do veículo existente');
+            { placa: veiculo.placa, codigo_associado_salvo: codigoAssociadoHinova }, veiculoData, 'Não foi possível recuperar código do veículo existente - estado parcial salvo');
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'Placa já cadastrada no Hinova. Não foi possível recuperar o código automaticamente. Verifique no painel Hinova o código do veículo.',
+              error: 'Placa já cadastrada no Hinova. Não foi possível recuperar o código automaticamente. O código do associado foi salvo. Verifique no painel Hinova o código do veículo.',
               step: 'veiculo',
+              codigo_associado_hinova: codigoAssociadoHinova,
               details: veiculoData
             }),
             { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
