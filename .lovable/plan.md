@@ -1,132 +1,41 @@
 
-# Substituicao: "Cobertura Total" → "Protecao 360"
+# Correcao: Checklist com itens NOK criticos bloqueia progresso na instalacao
 
-## Estrategia
+## Diagnostico
 
-A coluna do banco de dados `cobertura_total` **nao sera renomeada**. Renomear colunas quebraria dezenas de queries, types auto-gerados e edge functions. A mudanca e **apenas nos textos exibidos ao usuario** (labels, tooltips, mensagens, notificacoes WhatsApp, toasts, prompts de IA).
+A logica de criticidade dos itens do checklist esta definida assim:
 
-Nomes de variaveis internas (`temCoberturaTotal`, `coberturaTotal`, etc.) tambem permanecem inalterados - sao codigo interno, nao visivel ao usuario.
+**Itens criticos** (`critico: true`): veiculo_confere, placa_confere, chassi_confere (moto)
+**Itens condicionais** (`critico: false`): condicoes_veiculo, local_seguro, **bateria_ok**, eletrica_ok, cliente_ciente
 
----
+Bateria e um item **condicional** (nao critico). O problema nao e com bateria especificamente -- e que quando qualquer item **critico** e marcado como NOK, o botao "Ha condicao de continuar" e **completamente escondido** (linha 1872: `{!temCritico && ...}`), impedindo o instalador de prosseguir para fotos, assinatura e decisao final.
 
-## Arquivos a editar (21 arquivos)
+O fluxo de manutencao (`ExecutarManutencao.tsx`) ja funciona corretamente: **sempre** mostra o botao "Sim, continuar para resultado", independente de criticidade.
 
-### Frontend - Componentes (4 arquivos)
+## Correcao
 
-**1. `src/components/veiculos/BadgeCobertura.tsx`**
-- `'Cobertura Total'` → `'Proteção 360º'`
-- `'Veículo com cobertura total ativa...'` → `'Veículo com Proteção 360º ativa...'`
-- `'Aguardando instalação para cobertura total'` → `'Aguardando instalação para Proteção 360º'`
-- `'Cobertura Total Ativa'` → `'Proteção 360º Ativa'`
+### Arquivo: `src/pages/instalador/InstaladorChecklist.tsx` (linhas 1871-1896)
 
-**2. `src/components/cadastro/StatusCoberturaCard.tsx`**
-- `'Cobertura Total'` → `'Proteção 360º'`
-- `'liberar a cobertura total'` → `'liberar a Proteção 360º'`
+Remover a condicao `{!temCritico && (...)}` que esconde o botao de continuar. O botao deve estar **sempre visivel**, com texto adaptado:
 
-**3. `src/components/eventos/NovoSinistroModal.tsx`**
-- `'Cobertura total: qualquer tipo permitido'` (comentario, manter ou trocar)
-- `'Veículo sem cobertura total para este tipo...'` → `'Veículo sem Proteção 360º...'`
-- `'Sinistro roubo/furto sem cobertura total'` (log, manter)
+- **Sem criticos**: "Ha condicao de continuar" (amber)
+- **Com criticos**: "Prosseguir mesmo assim" (amber, com aviso de que "Aprovado" estara bloqueado na etapa final)
 
-**4. `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx`**
-- `'A cobertura total será ativada...'` → `'A Proteção 360º será ativada...'`
+O botao "Nao ha condicao - Encerrar" continua disponivel em ambos os cenarios.
 
-### Frontend - Pages (6 arquivos)
+A logica da etapa 5 (decisao final) ja bloqueia "Aprovado" quando ha itens NOK, entao a seguranca do fluxo esta garantida -- o dialog serve apenas como alerta, nao como bloqueio.
 
-**5. `src/pages/cadastro/PropostaAnalise.tsx`**
-- `'Cobertura Total'` → `'Proteção 360º'`
-- `'A cobertura total será ativada...'` → `'A Proteção 360º será ativada...'`
-- `'cobertura total para o veículo'` → `'Proteção 360º para o veículo'`
+### Resultado
 
-**6. `src/pages/cadastro/VistoriaCompletaAnalise.tsx`**
-- `'liberar a cobertura total'` → `'liberar a Proteção 360º'`
-- `'Cobertura total liberada'` → `'Proteção 360º liberada'`
+```
+Dialog com criticos (ANTES):
+  [Nao ha condicao - Encerrar]
+  [Revisar checklist]
 
-**7. `src/pages/instalador/ExecutarVistoriaCompleta.tsx`**
-- `'ativos com cobertura total'` → `'ativos com Proteção 360º'`
+Dialog com criticos (DEPOIS):
+  [Prosseguir mesmo assim]        (amber)
+  [Nao ha condicao - Encerrar]    (destructive)
+  [Revisar checklist]             (outline)
+```
 
-**8. `src/pages/public/CotacaoContratacao.tsx`**
-- `'Cobertura Total Ativada'` → `'Proteção 360º Ativada'`
-- `'cobertura total'` → `'Proteção 360º'`
-- `'Cobertura total ativada'` → `'Proteção 360º ativada'`
-
-**9. `src/pages/public/AcompanhamentoProposta.tsx`**
-- `'Cobertura Total Ativa!'` → `'Proteção 360º Ativa!'`
-- `'cobertura total ativa'` → `'Proteção 360º ativa'`
-- `'Cobertura Total (após instalação)'` → `'Proteção 360º (após instalação)'`
-- `'para cobertura total'` → `'para Proteção 360º'`
-
-**10. `src/pages/app/AppHome.tsx`**
-- Comentarios com "cobertura total" → atualizar
-
-### Frontend - Hooks (4 arquivos)
-
-**11. `src/hooks/useMinhasCoberturasApp.ts`**
-- `'você terá cobertura total incluindo...'` → `'você terá Proteção 360º incluindo...'`
-
-**12. `src/hooks/useVistoriaCompleta.ts`**
-- `'Cobertura total ativada'` (descricao log) → `'Proteção 360º ativada'`
-- `'Veículo aprovado... Cobertura total ativada.'` → `'... Proteção 360º ativada.'`
-
-**13. `src/hooks/useVistoriaCompletaAnalise.ts`**
-- `'Cobertura total liberada'` → `'Proteção 360º liberada'`
-- Toast: `'Cobertura total liberada'` → `'Proteção 360º liberada'`
-
-**14. `src/hooks/useAppAssociadoRealtime.ts`**
-- Toast: `'Cobertura Total Ativada!'` → `'Proteção 360º Ativada!'`
-
-### Frontend - Data (1 arquivo)
-
-**15. `src/data/planosPrecos.ts`**
-- Incendio descricao: `'Cobertura total'` → `'Proteção 360º'` (se fizer sentido no contexto — pode ser "Cobertura completa" aqui, pois refere-se a cobertura do incendio e nao ao nivel de protecao)
-
-### Backend - Edge Functions (5 arquivos, requerem deploy)
-
-**16. `supabase/functions/notificar-cliente/index.ts`**
-- Template WhatsApp `cobertura_total_ativada`: titulo `'Cobertura Total Ativada!'` → `'Proteção 360º Ativada!'`
-- Corpo: `'COBERTURA TOTAL'` → `'PROTEÇÃO 360º'`
-- Mensagem instalacao: `'Cobertura Total'` → `'Proteção 360º'`
-- Mensagem ativo: `'Cobertura Total (Roubo, Furto...)'` → `'Proteção 360º (Roubo, Furto...)'`
-- **Nota**: A chave do objeto `cobertura_total_ativada` permanece (e codigo interno), apenas os textos mudam
-
-**17. `supabase/functions/assistente-chat/index.ts`**
-- Prompt da IA: todas as mencoes de "cobertura total" → "Proteção 360º"
-- Mensagens de bloqueio: `'cobertura total'` → `'Proteção 360º'`
-- Contexto do veiculo: `'Total (inclui Assistência 24h)'` → `'Proteção 360º (inclui Assistência 24h)'`
-
-**18. `supabase/functions/whatsapp-webhook/index.ts`**
-- Prompt da IA (duplicado do assistente-chat): mesmas substituicoes
-- Mensagens de bloqueio: `'cobertura total'` → `'Proteção 360º'`
-
-**19. `supabase/functions/criar-sinistro/index.ts`**
-- Log: `'cobertura total'` → `'Proteção 360º'` (logs podem manter, mas mensagem de erro ao usuario deve mudar)
-- Mensagem de erro: `'para cobertura total'` → `'para Proteção 360º'`
-
-**20. `supabase/functions/processar-vistoria/index.ts`**
-- Comentarios internos (opcional, mas recomendado para consistencia)
-
-**21. `supabase/functions/gerar-faturas-mensais/index.ts`**
-- Apenas codigo interno (`.cobertura_total`), **sem textos visíveis** — nenhuma mudanca necessaria
-
-### Nao sera alterado
-
-- **Banco de dados**: coluna `cobertura_total` permanece (renomear quebraria types auto-gerados e dezenas de queries)
-- **`src/integrations/supabase/types.ts`**: auto-gerado, nao editavel
-- **Variaveis internas**: `temCoberturaTotal`, `coberturaTotal`, `veiculoCoberturaTotal` etc. permanecem
-- **Chaves de objeto**: `cobertura_total_ativada` (tipo de notificacao) permanece como identificador interno
-- **Migrations antigas**: sao historicas, nao se editam
-
----
-
-## Impacto em logica
-
-**Nenhum.** Todas as mudancas sao em strings de exibicao (labels, tooltips, toasts, mensagens de erro, templates WhatsApp, prompts de IA). A logica booleana (`cobertura_total === true`) permanece identica.
-
-## Deploy necessario
-
-Apos editar as edge functions (itens 16-20), sera necessario fazer deploy de:
-- `notificar-cliente`
-- `assistente-chat`
-- `whatsapp-webhook`
-- `criar-sinistro`
-- `processar-vistoria`
+Nenhuma migration necessaria. Apenas 1 arquivo editado.
