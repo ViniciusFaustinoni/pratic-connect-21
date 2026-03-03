@@ -120,6 +120,7 @@ interface ValorItem {
   hr_trabalhada: string;
   hr_parada: string;
   diaria_base: string;
+  valor_sugerido: string;
 }
 
 interface PrestadorParaEdicao {
@@ -295,6 +296,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
           hr_trabalhada: v.hr_trabalhada ? String(v.hr_trabalhada) : '',
           hr_parada: v.hr_parada ? String(v.hr_parada) : '',
           diaria_base: v.diaria_base ? String(v.diaria_base) : '',
+          valor_sugerido: v.valor_sugerido ? String(v.valor_sugerido) : '',
         };
       }
       setValores(map);
@@ -383,7 +385,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
       .map(card => {
         const v = valores[card.key];
         if (!v) return null;
-        const hasValue = v.valor_saida || v.valor_km || v.valor_fixo || v.km_franquia || v.hr_trabalhada || v.hr_parada || v.diaria_base;
+        const hasValue = v.valor_saida || v.valor_km || v.valor_fixo || v.km_franquia || v.hr_trabalhada || v.hr_parada || v.diaria_base || v.valor_sugerido;
         if (!hasValue) return null;
         return {
           prestador_id: prestadorId,
@@ -397,6 +399,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
           hr_trabalhada: v.hr_trabalhada ? parseFloat(v.hr_trabalhada) : null,
           hr_parada: v.hr_parada ? parseFloat(v.hr_parada) : null,
           diaria_base: v.diaria_base ? parseFloat(v.diaria_base) : null,
+          valor_sugerido: v.valor_sugerido ? parseFloat(v.valor_sugerido) : null,
         };
       })
       .filter(Boolean);
@@ -1005,6 +1008,7 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
                         hr_trabalhada: '',
                         hr_parada: '',
                         diaria_base: '',
+                        valor_sugerido: '',
                       };
                       // Initialize in state if not present
                       if (!valores[card.key]) {
@@ -1017,28 +1021,42 @@ export function NovoPrestadorModal({ open, onClose, onSuccess, prestador }: Novo
                           </CardHeader>
                           <CardContent className="px-4 pb-3 pt-0 space-y-2">
                             {card.isKm ? (
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <Label className="text-xs">Valor de Saída (R$)</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="0,00"
-                                    value={v.valor_saida}
-                                    onChange={(e) => updateValor(card.key, 'valor_saida', e.target.value)}
-                                  />
+                              <>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Valor de Saída (R$)</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="0,00"
+                                      value={v.valor_saida}
+                                      onChange={(e) => updateValor(card.key, 'valor_saida', e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Valor por Km (R$)</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="0,00"
+                                      value={v.valor_km}
+                                      onChange={(e) => updateValor(card.key, 'valor_km', e.target.value)}
+                                    />
+                                  </div>
                                 </div>
-                                <div className="space-y-1">
-                                  <Label className="text-xs">Valor por Km (R$)</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="0,00"
-                                    value={v.valor_km}
-                                    onChange={(e) => updateValor(card.key, 'valor_km', e.target.value)}
-                                  />
-                                </div>
-                              </div>
+                                {card.tipo_servico === 'reboque' && (
+                                  <div className="space-y-1">
+                                    <Label className="text-xs font-semibold text-primary">💰 Valor Sugerido (R$)</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="Valor fixo enviado na mensagem de despacho"
+                                      value={v.valor_sugerido}
+                                      onChange={(e) => updateValor(card.key, 'valor_sugerido', e.target.value)}
+                                    />
+                                  </div>
+                                )}
+                              </>
                             ) : (
                               <div className="space-y-1">
                                 <Label className="text-xs">Valor Fixo (R$)</Label>

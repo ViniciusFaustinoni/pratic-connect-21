@@ -139,17 +139,17 @@ serve(async (req) => {
       throw new Error("Todos os reboquistas estão ocupados com outros chamados.");
     }
 
-    // Buscar valores de cada prestador
+    // Buscar valores de cada prestador (incluindo valor_sugerido)
     const { data: valores } = await supabase
       .from("prestadores_assistencia_valores")
-      .select("prestador_id, valor_saida, valor_km, tipo_servico")
+      .select("prestador_id, valor_saida, valor_km, valor_sugerido, tipo_servico")
       .in("prestador_id", reboquistasDisponiveis.map((r) => r.id))
       .eq("ativo", true);
 
-    const valoresMap = new Map<string, { valor_saida: number; valor_km: number }>();
+    const valoresMap = new Map<string, { valor_saida: number; valor_km: number; valor_sugerido: number | null }>();
     for (const v of valores || []) {
       if (v.tipo_servico === "reboque" || v.tipo_servico === "guincho" || !valoresMap.has(v.prestador_id)) {
-        valoresMap.set(v.prestador_id, { valor_saida: v.valor_saida || 0, valor_km: v.valor_km || 0 });
+        valoresMap.set(v.prestador_id, { valor_saida: v.valor_saida || 0, valor_km: v.valor_km || 0, valor_sugerido: v.valor_sugerido || null });
       }
     }
 
@@ -172,14 +172,15 @@ serve(async (req) => {
 
     // Criar convites para cada reboquista (sem token/link)
     const convites = reboquistasDisponiveis.map((prest) => {
-      const vals = valoresMap.get(prest.id) || { valor_saida: 0, valor_km: 0 };
+      const vals = valoresMap.get(prest.id) || { valor_saida: 0, valor_km: 0, valor_sugerido: null };
       return {
         despacho_id: despacho.id,
         prestador_id: prest.id,
         token_expira_em: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
         valor_saida: vals.valor_saida,
         valor_km: vals.valor_km,
-        etapa_conversacao: "aguardando_sim",
+        valor_calculado: vals.valor_sugerido || null,
+        etapa_conversacao: "aguardando_aceite",
       };
     });
 
@@ -205,10 +206,12 @@ serve(async (req) => {
       observacao: `Despacho WhatsApp enviado (ciclo ${ciclo}). ${reboquistasDisponiveis.length} reboquistas notificados via mensagem direta.${isServiceCall ? ' [auto-despacho]' : ''}`,
     });
 
-    // Enviar WhatsApp para cada reboquista - mensagem direta (sem link)
+    // Enviar WhatsApp para cada reboquista - mensagem com valor sugerido
     const veiculo = chamado.veiculo as any;
     const veiculoDesc = veiculo ? `${veiculo.marca || ""} ${veiculo.modelo || ""} ${veiculo.ano_modelo || ""}`.trim() : "Veículo";
     const placaDisplay = veiculo?.placa || "N/D";
+    const tipoServico = chamado.tipo_servico || "Reboque";
+    const tipoLabel = tipoServico.charAt(0).toUpperCase() + tipoServico.slice(1);
 
     let enviados = 0;
     let falhas = 0;
@@ -220,14 +223,22 @@ serve(async (req) => {
       const telefone = prest.whatsapp || prest.telefone;
       if (!telefone) continue;
 
-      const mensagem = `🚨 *NOVO CHAMADO - Reboque*
+      const vals = valoresMap.get(prest.id) || { valor_saida: 0, valor_km: 0, valor_sugerido: null };
+      const valorSugerido = vals.valor_sugerido;
+      const valorDisplay = valorSugerido 
+        ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valorSugerido)
+        : "A combinar";
+
+      const mensagem = `🚨 *NOVO CHAMADO - ${tipoLabel}*
 
 🚗 Veículo: ${veiculoDesc} — ${placaDisplay}
+${chamado.observacoes ? `📝 Obs: ${chamado.observacoes}\n` : ""}
 📍 Origem: ${enderecoOrigem || "A informar"}
 📍 Destino: ${enderecoDestino}
-${chamado.observacoes ? `📝 Obs: ${chamado.observacoes}` : ""}
 
-Responda *SIM* se você está disponível para este serviço.`;
+💰 *Valor sugerido: ${valorDisplay}*
+
+Responda *SIM* para aceitar ou *NÃO* para recusar.`;
 
       try {
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {

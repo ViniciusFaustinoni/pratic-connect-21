@@ -93,7 +93,7 @@ async function processarRespostaPrestador(
     `)
     .eq("prestador_id", prestador.id)
     .in("despacho_id", despachosIds)
-    .in("etapa_conversacao", ["aguardando_sim", "aguardando_localizacao", "aguardando_aceite_valor"])
+    .in("etapa_conversacao", ["aguardando_aceite"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -109,98 +109,8 @@ async function processarRespostaPrestador(
   const telPrestador = prestador.whatsapp || prestador.telefone || telefone;
   const textoNorm = texto?.trim().toUpperCase() || "";
 
-  // ---- ETAPA 1: Aguardando SIM ----
-  if (convite.etapa_conversacao === "aguardando_sim") {
-    if (textoNorm === "SIM" || textoNorm === "S") {
-      // Avançar para pedir localização
-      await supabase
-        .from("despacho_reboque_convites")
-        .update({ etapa_conversacao: "aguardando_localizacao" })
-        .eq("id", convite.id);
-
-      await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-        `✅ Ótimo! Você demonstrou interesse no chamado.
-
-📍 Agora, *envie sua localização atual* (use o botão de compartilhar localização do WhatsApp) para que possamos calcular a distância e o valor do serviço.`
-      );
-      return true;
-    }
-
-    if (textoNorm === "NAO" || textoNorm === "NÃO" || textoNorm === "N") {
-      await supabase
-        .from("despacho_reboque_convites")
-        .update({ status: "recusado", etapa_conversacao: "recusado", data_recusa: new Date().toISOString() })
-        .eq("id", convite.id);
-
-      await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-        `❌ Tudo bem! Você recusou este chamado. Obrigado pela resposta.`
-      );
-      return true;
-    }
-
-    // Mensagem não reconhecida nesta etapa
-    await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-      `⚠️ Responda *SIM* para aceitar ou *NÃO* para recusar o chamado.`
-    );
-    return true;
-  }
-
-  // ---- ETAPA 2: Aguardando localização ----
-  if (convite.etapa_conversacao === "aguardando_localizacao") {
-    if (msgType === "location" && latitude !== null && longitude !== null) {
-      // Calcular distância até o veículo
-      const veiculoLat = chamado?.rastreador_lat || chamado?.origem_lat;
-      const veiculoLng = chamado?.rastreador_lng || chamado?.origem_lng;
-
-      if (!veiculoLat || !veiculoLng) {
-        await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-          `⚠️ Não foi possível calcular a distância. A localização do veículo está indisponível. Um analista entrará em contato.`
-        );
-        return true;
-      }
-
-      const distancia = haversineKm(latitude, longitude, veiculoLat, veiculoLng);
-      const distanciaArredondada = Math.round(distancia * 100) / 100;
-      const valorSaida = convite.valor_saida || 0;
-      const valorKm = convite.valor_km || 0;
-      const valorCalculado = Math.round((valorSaida + valorKm * distanciaArredondada) * 100) / 100;
-
-      // Salvar localização e valor calculado
-      await supabase
-        .from("despacho_reboque_convites")
-        .update({
-          etapa_conversacao: "aguardando_aceite_valor",
-          latitude_prestador: latitude,
-          longitude_prestador: longitude,
-          distancia_km: distanciaArredondada,
-          valor_calculado: valorCalculado,
-        })
-        .eq("id", convite.id);
-
-      await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-        `📊 *Cálculo do serviço:*
-
-📏 Distância até o veículo: *${distanciaArredondada} km*
-💰 Valor de saída: ${formatCurrency(valorSaida)}
-💰 Valor por km: ${formatCurrency(valorKm)}
-━━━━━━━━━━━━━━━
-💵 *Valor total sugerido: ${formatCurrency(valorCalculado)}*
-
-Você aceita realizar o serviço por este valor?
-Responda *SIM* ou *NÃO*`
-      );
-      return true;
-    }
-
-    // Não enviou localização
-    await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-      `📍 Por favor, *envie sua localização* usando o botão de compartilhar localização do WhatsApp (📎 > Localização > Enviar sua localização atual).`
-    );
-    return true;
-  }
-
-  // ---- ETAPA 3: Aguardando aceite do valor ----
-  if (convite.etapa_conversacao === "aguardando_aceite_valor") {
+  // ---- ETAPA ÚNICA: Aguardando aceite (SIM/NÃO) ----
+  if (convite.etapa_conversacao === "aguardando_aceite") {
     if (textoNorm === "SIM" || textoNorm === "S") {
       // Aceitar!
       await supabase
@@ -224,7 +134,7 @@ Responda *SIM* ou *NÃO*`
 Seu aceite foi enviado ao analista de eventos. Aguarde a confirmação da atribuição. Você será notificado em breve.`
       );
 
-      console.log(`[webhook] Prestador ${prestador.id} aceitou: ${convite.distancia_km}km, R$${convite.valor_calculado}`);
+      console.log(`[webhook] Prestador ${prestador.id} aceitou chamado. Valor: R$${convite.valor_calculado || 'N/D'}`);
       return true;
     }
 
@@ -235,13 +145,14 @@ Seu aceite foi enviado ao analista de eventos. Aguarde a confirmação da atribu
         .eq("id", convite.id);
 
       await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-        `❌ Você recusou o valor. Obrigado pela resposta!`
+        `❌ Tudo bem! Você recusou este chamado. Obrigado pela resposta.`
       );
       return true;
     }
 
+    // Mensagem não reconhecida
     await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-      `⚠️ Responda *SIM* para aceitar o valor ou *NÃO* para recusar.`
+      `⚠️ Responda *SIM* para aceitar ou *NÃO* para recusar o chamado.`
     );
     return true;
   }

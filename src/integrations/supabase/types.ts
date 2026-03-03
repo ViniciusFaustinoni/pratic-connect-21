@@ -16671,6 +16671,7 @@ export type Database = {
           valor_fixo: number | null
           valor_km: number | null
           valor_saida: number | null
+          valor_sugerido: number | null
         }
         Insert: {
           ativo?: boolean | null
@@ -16688,6 +16689,7 @@ export type Database = {
           valor_fixo?: number | null
           valor_km?: number | null
           valor_saida?: number | null
+          valor_sugerido?: number | null
         }
         Update: {
           ativo?: boolean | null
@@ -16705,6 +16707,7 @@ export type Database = {
           valor_fixo?: number | null
           valor_km?: number | null
           valor_saida?: number | null
+          valor_sugerido?: number | null
         }
         Relationships: [
           {
