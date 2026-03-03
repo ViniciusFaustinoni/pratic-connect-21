@@ -1,64 +1,54 @@
 
 
-# Plano de Implementacao: Simplificacao do Despacho de Reboque
+# Plano: Ajustes Finos no Fluxo de Despacho de Reboque
 
-## Resumo
-Substituir o fluxo atual (link publico com timer de 10min) por um fluxo conversacional via WhatsApp onde a IA Maya interage diretamente com os prestadores.
+## Analise Tela-a-Tela
 
-## O que ja existe e sera reutilizado
-- Tabelas `despacho_reboque`, `despacho_reboque_convites`, `despacho_reboque_status_log`, `despacho_reboque_tracking` -- schema OK
-- `prestadores_assistencia_valores` com `valor_saida` e `valor_km` -- OK
-- Edge function `despacho-reboque-disparar` -- sera modificada
-- Edge function `despacho-reboque-responder` -- sera modificada
-- Componente `CardDespachoReboque.tsx` -- sera modificado
+Analisei todo o fluxo: **disparar → webhook → CardDespachoReboque → atribuicao**. O codigo esta funcional mas precisa de ajustes finos para robustez e consistencia.
 
-## Fase 1: Modificar `despacho-reboque-disparar`
-Alterar a mensagem WhatsApp enviada aos prestadores. Em vez de enviar um link, enviar mensagem informativa direta:
+### Problemas Identificados
 
-```text
-🚨 *NOVO CHAMADO - Reboque Leve*
+**1. CardDespachoReboque — Cast e tipagem de `etapa_conversacao`**
+- Linha 336-341: usa `(c as any).etapa_conversacao` em varios lugares. O campo ja existe no tipo Supabase (`etapa_conversacao: string | null`), entao o cast e desnecessario e pode mascarar erros.
 
-Veiculo: Toyota Corolla 2013
-Rodas travadas
-Origem: Rua A, N B
-Destino: Rua C, N D
+**2. CardDespachoReboque — Tabela "Todos os prestadores" sem coluna de recusas**
+- A coluna "Etapa" mostra status como `aguardando_sim`, `recusado`, etc., mas nao mostra contagem de recusas no counter (linha 337 filtra recusas mas nao exibe no grid de 4 colunas — falta o 4o slot ser recusas em vez de "Sem resp.").
+- Atualmente: Enviados | Aceitos | Negociando | Sem resp.
+- Melhor: Enviados | Aceitos | Negociando | Recusados (e "sem resposta" fica implicito).
 
-Responda *SIM* se voce esta disponivel para este servico.
-```
+**3. Webhook — Nao usa `token` existente no convite para lookup**
+- O webhook busca o convite pelo `prestador_id` + `etapa_conversacao`. Isso funciona, mas se um prestador tiver 2 convites de ciclos diferentes (ciclo 1 cancelado, ciclo 2 ativo), a query pode retornar o errado.
+- Fix: adicionar filtro `.eq("despacho.status", "aguardando")` — ja existe na logica (linha 93), mas a query relacional nao filtra na clausula WHERE do Supabase, so valida depois. Precisa de um `.not("despacho_id", "is", null)` com join filter ou query em 2 etapas.
 
-Remover a geracao de link/token publico. Manter o registro de convites para controle interno.
+**4. Despacho-disparar — Sem campo `observacoes` no chamado**
+- A mensagem ja inclui `chamado.observacoes` (linha 220). OK.
 
-## Fase 2: Modificar `whatsapp-meta-webhook`
-Adicionar logica para interceptar respostas de prestadores cadastrados:
+**5. Falta de "valor sugerido" na mensagem inicial de despacho**
+- O usuario pediu que a mensagem inclua o "valor sugerido". Atualmente a mensagem NAO inclui valor (so inclui apos o prestador enviar localizacao). Isso esta correto pelo fluxo aprovado (valor depende da distancia do prestador), entao nao e bug.
 
-1. Quando recebe mensagem, verificar se o telefone pertence a um prestador ativo
-2. Se sim, verificar se existe despacho aguardando para esse prestador
-3. Fluxo conversacional:
-   - Prestador responde "SIM" → Maya pede localizacao: "Envie sua localizacao atual (GPS do WhatsApp)"
-   - Prestador envia localizacao (lat/lng) → Maya calcula distancia via Haversine, busca `valor_saida + valor_km * distancia`, responde: "O valor sugerido para este servico e de R$ XXX,XX. Voce aceita? Responda SIM ou NAO"
-   - Prestador aceita → Salva no `despacho_reboque_convites` com status `aceito`, distancia e valor
-   - Prestador recusa → Atualiza status para `recusado`
+**6. Teste com dados mockados**
+- Precisa testar a edge function de disparo com curl e simular respostas de prestador no webhook para validar o fluxo completo.
 
-## Fase 3: Modificar `CardDespachoReboque.tsx`
-Substituir o botao "Encerrar e atribuir agora" (automatico) por selecao manual do analista:
-- Mostrar os 3 prestadores que aceitaram, ordenados por proximidade + menor valor
-- Analista clica em "Atribuir" no prestador escolhido
-- Remover timer de 10 minutos (nao tem mais bidding automatico)
+### Ajustes Planejados
 
-## Fase 4: Ajustar `despacho-reboque-responder`
-Simplificar ou remover -- a logica de aceite agora acontece via webhook do WhatsApp, nao mais via link publico.
+| # | Ajuste | Arquivo |
+|---|--------|---------|
+| 1 | Remover casts `as any` para `etapa_conversacao` no CardDespachoReboque | `CardDespachoReboque.tsx` |
+| 2 | Melhorar grid de counters: trocar "Sem resp." por "Recusados" + adicionar "Aguardando" | `CardDespachoReboque.tsx` |
+| 3 | Adicionar filtro mais robusto no webhook para evitar convites de ciclos anteriores | `whatsapp-meta-webhook/index.ts` |
+| 4 | Testar edge function `despacho-reboque-disparar` com curl mockado | Teste via tool |
+| 5 | Testar webhook simulando resposta de prestador | Teste via tool |
 
-## Arquivos afetados
+### Detalhes Tecnicos
 
-| Acao | Arquivo |
-|------|---------|
-| Editar | `supabase/functions/despacho-reboque-disparar/index.ts` (mensagem direta, sem link) |
-| Editar | `supabase/functions/whatsapp-meta-webhook/index.ts` (interceptar respostas de prestadores) |
-| Editar | `src/components/assistencia/CardDespachoReboque.tsx` (selecao manual dos 3 melhores) |
-| Manter | `supabase/functions/despacho-reboque-responder/index.ts` (pode manter como fallback) |
+**CardDespachoReboque.tsx** — Limpeza de tipos:
+- Substituir `(c as any).etapa_conversacao` por `c.etapa_conversacao` (campo ja existe no tipo)
+- Melhorar counters grid para 5 colunas ou reorganizar com recusas visíveis
 
-## Ordem de execucao
-1. Editar `despacho-reboque-disparar` (mensagem sem link)
-2. Editar `whatsapp-meta-webhook` (logica conversacional)
-3. Editar `CardDespachoReboque` (UI de selecao manual)
+**whatsapp-meta-webhook** — Query mais segura:
+- Na funcao `processarRespostaPrestador`, apos buscar o convite, verificar tambem se o `despacho_id` pertence a um despacho com `status = 'aguardando'` de forma mais explicita (a validacao ja existe na linha 93, mas adicionar filtro na query SQL para nao trazer convites de despachos cancelados).
+
+**Testes com curl**:
+- Chamar `despacho-reboque-disparar` com um `chamado_id` real de teste
+- Chamar o webhook simulando mensagem "SIM", depois localizacao, depois aceite
 
