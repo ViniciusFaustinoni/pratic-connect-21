@@ -1,28 +1,31 @@
 
 
-# Corrigir Cotacoes que Persistem Apos Exclusao
+# Documentos Visiveis na Tela Principal de Analise
 
-## Diagnostico
+## Problema
+Os documentos (CNH, CRLV, Contrato Assinado, Comprovante de Residencia) ficam escondidos na aba "Docs", obrigando o analista a clicar nessa aba para visualizar, aprovar ou reprovar. Na pratica, o analista precisa alternar entre abas constantemente, o que torna o fluxo lento e propenso a erros.
 
-As duas cotacoes (Nissan Versa / teste 04 e Fiat Siena / Caio Da Silva) **ainda existem no banco de dados**. A edge function `delete-cotacao` esta deployada e responde, porem os logs mostram **zero invocacoes**, indicando que as tentativas de exclusao do usuario falharam silenciosamente no frontend (possivelmente erro de auth ou rede que foi engolido pelo catch).
+## Solucao
 
-As cotacoes nao possuem dependencias (0 contratos, 0 agendamentos, 0 instalacoes pendentes), entao a exclusao e direta.
+Mover o painel `DocumentosAnexadosPanel` para **fora das tabs**, posicionando-o diretamente na pagina principal de analise (`PropostaAnalise.tsx`), entre o grid de midia e as tabs de detalhes. Assim, os documentos ficam sempre visiveis, independentemente da aba selecionada.
 
-## Correcoes
+A aba "Docs" sera removida do `TabsList` para evitar duplicidade.
 
-### 1. Excluir os 2 registros orfaos do banco
-Deletar diretamente as cotacoes via SQL (usando service role):
-- `d1747122-5aef-4b49-850e-65c506c91257` (Nissan Versa - teste 04)
-- `b42c0337-b488-4eb8-8a68-1782e45bb33d` (Fiat Siena - Caio Da Silva)
+## Alteracoes
 
-### 2. Melhorar tratamento de erro no frontend
-No `useExcluirCotacao` (em `useCotacoes.ts`), o `onError` mostra o toast mas nao loga detalhes suficientes. Adicionar log do response body para diagnosticar falhas futuras.
+### Arquivo 1: `src/pages/cadastro/PropostaAnalise.tsx`
+- Importar `DocumentosAnexadosPanel` e o tipo `DocumentoAnexadoCompleto`
+- Adicionar o componente `DocumentosAnexadosPanel` entre a ZONA 2 (PropostaMidiaGrid / VistoriaObservacoesCard) e a ZONA 3 (PropostaDetalhesTabs)
+- Passar as mesmas props: `documentos`, `onViewDocumento`, `onAprovarDocumento`, `onReprovarDocumento`
 
-### 3. Reimplantar a edge function `delete-cotacao`
-Para garantir que a versao mais recente esta no ar e funcionando corretamente.
+### Arquivo 2: `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
+- Remover a aba "Docs" do `TabsList` (reduzir de 5 para 4 colunas: `grid-cols-4`)
+- Remover o `TabsContent value="documentos"` e a importacao de `DocumentosAnexadosPanel`
+- Remover props desnecessarias (`onViewDocumento`, `onAprovarDocumento`, `onReprovarDocumento`) e o import de `DocumentoAnexadoCompleto`
+- Remover calculo de `totalDocumentos` e `documentosNovos` que era usado no badge da aba
 
-## Arquivos afetados
-- Execucao de DELETE via SQL (2 registros)
-- `src/hooks/useCotacoes.ts` — melhorar error handling no `useExcluirCotacao`
-- Deploy: `delete-cotacao`
+## Resultado
+- Documentos ficam **sempre visiveis** na pagina de analise, sem precisar clicar em nenhuma aba
+- O analista pode aprovar/reprovar documentos enquanto consulta dados do cliente, veiculo ou contrato nas tabs restantes
+- Tabs ficam com 4 abas: Cliente, Veiculo, Instal., Contrato
 
