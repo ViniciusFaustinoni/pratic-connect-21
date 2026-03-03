@@ -1,31 +1,29 @@
 
 
-# Documentos Visiveis na Tela Principal de Analise
+# Corrigir Tarefa Negada Persistindo na Tela do Vistoriador
 
-## Problema
-Os documentos (CNH, CRLV, Contrato Assinado, Comprovante de Residencia) ficam escondidos na aba "Docs", obrigando o analista a clicar nessa aba para visualizar, aprovar ou reprovar. Na pratica, o analista precisa alternar entre abas constantemente, o que torna o fluxo lento e propenso a erros.
+## Diagnostico
 
-## Solucao
+Dois problemas identificados:
 
-Mover o painel `DocumentosAnexadosPanel` para **fora das tabs**, posicionando-o diretamente na pagina principal de analise (`PropostaAnalise.tsx`), entre o grid de midia e as tabs de detalhes. Assim, os documentos ficam sempre visiveis, independentemente da aba selecionada.
+### 1. Query key incorreta na invalidacao (BUG PRINCIPAL)
+Quando o instalador nega um veiculo, o hook `useRecusarVeiculoServico` (em `useServicos.ts` linha 1189) invalida a query `['tarefa-atual-servico']`. Porem, o dashboard do instalador usa `useTarefaAtual` (de `useTarefaAtual.ts`) que registra a query como `['tarefa-atual']` — **chave diferente**. Resultado: o cache antigo persiste e a tarefa negada continua aparecendo ate o proximo refetch automatico (30s).
 
-A aba "Docs" sera removida do `TabsList` para evitar duplicidade.
+### 2. Nao dispara busca da proxima tarefa apos negativa
+Apos negar o veiculo, o sistema deveria chamar `atribuir-proxima-tarefa` para liberar o profissional e buscar o proximo servico, mas isso nao acontece. O profissional fica "ocioso" sem receber nova atribuicao.
 
-## Alteracoes
+## Correcoes
 
-### Arquivo 1: `src/pages/cadastro/PropostaAnalise.tsx`
-- Importar `DocumentosAnexadosPanel` e o tipo `DocumentoAnexadoCompleto`
-- Adicionar o componente `DocumentosAnexadosPanel` entre a ZONA 2 (PropostaMidiaGrid / VistoriaObservacoesCard) e a ZONA 3 (PropostaDetalhesTabs)
-- Passar as mesmas props: `documentos`, `onViewDocumento`, `onAprovarDocumento`, `onReprovarDocumento`
+### Arquivo 1: `src/hooks/useServicos.ts` (~linha 1186-1191)
+No `onSuccess` de `useRecusarVeiculoServico`:
+- Adicionar invalidacao de `['tarefa-atual']` (a query usada pelo dashboard)
+- Chamar `supabase.functions.invoke('atribuir-proxima-tarefa')` com a geolocalizacao atual do profissional, para liberar e atribuir proxima tarefa automaticamente
 
-### Arquivo 2: `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
-- Remover a aba "Docs" do `TabsList` (reduzir de 5 para 4 colunas: `grid-cols-4`)
-- Remover o `TabsContent value="documentos"` e a importacao de `DocumentosAnexadosPanel`
-- Remover props desnecessarias (`onViewDocumento`, `onAprovarDocumento`, `onReprovarDocumento`) e o import de `DocumentoAnexadoCompleto`
-- Remover calculo de `totalDocumentos` e `documentosNovos` que era usado no badge da aba
+### Arquivo 2: `src/hooks/useVistoriaCompleta.ts` (~hook `useRecusarVeiculoVistoria`)
+- Mesmo fix: adicionar invalidacao de `['tarefa-atual']` no onSuccess
+- Chamar `atribuir-proxima-tarefa` apos negativa
 
 ## Resultado
-- Documentos ficam **sempre visiveis** na pagina de analise, sem precisar clicar em nenhuma aba
-- O analista pode aprovar/reprovar documentos enquanto consulta dados do cliente, veiculo ou contrato nas tabs restantes
-- Tabs ficam com 4 abas: Cliente, Veiculo, Instal., Contrato
+- Tarefa negada desaparece imediatamente da tela do vistoriador
+- Profissional fica disponivel para receber nova tarefa automaticamente
 
