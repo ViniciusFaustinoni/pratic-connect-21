@@ -1,0 +1,1 @@
+ALTER TABLE prestadores_assistencia_valores ADD COLUMN IF NOT EXISTS valor_sugerido numeric DEFAULT NULL;
