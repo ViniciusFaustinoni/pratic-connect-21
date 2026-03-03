@@ -423,14 +423,22 @@ export function useExcluirCotacao() {
   
   return useMutation({
     mutationFn: async (cotacaoId: string) => {
+      console.log('[useExcluirCotacao] Iniciando exclusão:', cotacaoId);
+      
       const { data, error } = await supabase.functions.invoke('delete-cotacao', {
         body: { cotacaoId },
       });
       
       if (error) {
-        console.error('Erro na Edge Function delete-cotacao:', error);
+        console.error('[useExcluirCotacao] Erro na Edge Function:', {
+          message: error.message,
+          name: error.name,
+          context: error,
+        });
         throw new Error(error.message || 'Erro ao excluir cotação');
       }
+      
+      console.log('[useExcluirCotacao] Resposta da Edge Function:', data);
       
       if (!data?.success) {
         throw new Error(data?.error || 'Erro ao excluir cotação');

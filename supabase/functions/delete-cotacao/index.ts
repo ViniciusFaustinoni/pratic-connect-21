@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
 Deno.serve(async (req) => {
@@ -30,18 +30,17 @@ Deno.serve(async (req) => {
     })
 
     // Verificar usuário
-    const token = authHeader.replace('Bearer ', '')
-    const { data: claims, error: claimsError } = await userClient.auth.getClaims(token)
+    const { data: { user }, error: userError } = await userClient.auth.getUser()
     
-    if (claimsError || !claims?.claims?.sub) {
-      console.error('Erro ao verificar claims:', claimsError)
+    if (userError || !user) {
+      console.error('Erro ao verificar usuário:', userError)
       return new Response(
         JSON.stringify({ success: false, error: 'Token inválido' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const userId = claims.claims.sub as string
+    const userId = user.id
 
     // Criar cliente admin para operações
     const adminClient = createClient(supabaseUrl, supabaseServiceKey)
