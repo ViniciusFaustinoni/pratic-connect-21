@@ -331,6 +331,25 @@ serve(async (req) => {
 
     console.log("[criar-chamado] Chamado criado:", chamado.id);
 
+    // Auto-despacho para reboque/guincho
+    if (['reboque', 'guincho'].includes(payload.tipo_assistencia)) {
+      try {
+        console.log("[criar-chamado] Iniciando auto-despacho para tipo:", payload.tipo_assistencia);
+        const despRes = await fetch(`${supabaseUrl}/functions/v1/despacho-reboque-disparar`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({ chamado_id: chamado.id }),
+        });
+        const despData = await despRes.json();
+        console.log('[criar-chamado] Auto-despacho resultado:', JSON.stringify(despData));
+      } catch (e) {
+        console.error('[criar-chamado] Erro no auto-despacho (não bloqueia):', e);
+      }
+    }
+
     // 8. Registrar no histórico
     await supabaseAdmin.from("chamados_assistencia_historico").insert({
       chamado_id: chamado.id,
