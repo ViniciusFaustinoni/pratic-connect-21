@@ -1,61 +1,80 @@
 
-
-# Plano: Upload de PDF do Orcamento com Extracao Automatica por IA
+# Plano: Simplificação do Despacho de Reboque
 
 ## Contexto
-O regulador recebe um PDF de orcamento (ex: do sistema Cilia) contendo tabelas com pecas (troca, R&I), servicos (funilaria, pintura, reparacao) e valores. Hoje ele precisa digitar tudo manualmente. A proposta e que ele faca upload do PDF e a IA extraia automaticamente os itens.
+Substituir o sistema "Uber do Guincho" (lances com timer de 10min) por um fluxo direto via WhatsApp com cálculo de valor sugerido por prestador.
 
-## Estrutura do PDF (analisado)
-O PDF contem:
-- **Pecas (Troca/R&I):** tabela com operacao (T, R&I), horas, codigo, titulo da peca, fornecimento, preco, desconto, preco liquido
-- **Servicos (Mao de Obra):** reparacao (R) com horas, pintura (P) com horas, por peca
-- **Resumo:** totais de pintura, reparacao, servicos, fornecimento oficina/associacao
-- **Mao de obra por tipo:** funilaria, vidracaria, tapecaria, eletrica, mecanica, pintura, reparacao com valores e horas
-
-## Solucao
-
-### 1. Nova Edge Function: `extract-orcamento-pdf`
-Recebe o PDF via URL do storage, usa Lovable AI (Gemini) com prompt especializado para extrair:
-- Array de pecas: `{descricao, quantidade, valor_unitario, valor_total, operacao}`
-- Array de servicos/mao de obra: `{descricao, horas, valor_unitario, valor_total, tipo_servico}`
-- Resumo geral: `{total_pecas, total_mao_obra, total_geral}`
-
-Usara tool calling (structured output) para garantir JSON valido.
-
-### 2. Novo componente: `ImportarOrcamentoPDFModal`
-Modal com:
-- Dropzone para upload do PDF (aceita .pdf)
-- Upload para bucket `documentos` no storage
-- Chama edge function → recebe itens extraidos
-- Exibe preview dos itens em tabela editavel (regulador pode revisar/ajustar antes de confirmar)
-- Botao "Confirmar e Importar" que chama `useAdicionarItem` em batch para todos os itens
-
-### 3. Integracao no `CardOrcamentoReparo`
-Adicionar botao "📄 Importar PDF" ao lado dos botoes "Adicionar Peca" e "Adicionar Servico", visivel quando `canEdit` e orcamento em `elaboracao`.
-
-### 4. Etapas manuais preservadas
-O regulador continua informando etapas necessarias manualmente — essa feature so automatiza a importacao de pecas/servicos/valores.
-
-## Arquivos
-
-| Acao | Arquivo |
-|------|---------|
-| Criar | `supabase/functions/extract-orcamento-pdf/index.ts` |
-| Criar | `src/components/orcamento/ImportarOrcamentoPDFModal.tsx` |
-| Editar | `src/components/orcamento/CardOrcamentoReparo.tsx` (botao importar) |
-| Editar | `supabase/config.toml` (registrar funcao) |
-
-## Fluxo
+## Fluxo Novo
 
 ```text
-Regulador abre orcamento (cotacao_separada)
-  └── Clica "Importar PDF"
-        └── Upload do PDF → storage bucket "documentos"
-              └── Chama extract-orcamento-pdf (Lovable AI)
-                    └── IA extrai pecas + servicos + valores
-                          └── Preview editavel no modal
-                                └── Regulador revisa e confirma
-                                      └── Batch insert via useAdicionarItem
-                                            └── Itens aparecem na tabela normalmente
+Chamado de reboque criado (via WhatsApp ou sistema)
+  └── Sistema busca TODOS prestadores ativos tipo "reboque"
+        └── Envia WhatsApp para cada um:
+              "🚨 Novo Chamado - Reboque Leve
+               Veículo: Toyota Corolla 2013
+               Rodas travadas
+               Origem: Rua A, Nº B
+               Destino: Rua C, Nº D
+               Responda SIM se disponível"
+              
+        └── Prestador responde SIM
+              └── IA (Maya) pergunta localização atual do prestador
+                    └── Prestador envia localização (WhatsApp GPS)
+                          └── IA calcula distância prestador → origem
+                                └── Valor sugerido = valor_saida + (valor_km × distância)
+                                      └── IA informa: "O valor sugerido para este serviço é R$ XXX,XX. Aceita?"
+                                            └── Prestador aceita
+                                                  └── Sistema registra resposta com valor e distância
+                                                  
+  └── Após 3+ aceites (ou timeout):
+        └── Sistema mostra ao Analista de Eventos os 3 prestadores:
+              - Mais próximos
+              - Com menor valor
+              └── Analista escolhe → prestador atribuído → notificação ao prestador e associado
 ```
 
+## O que já existe no banco
+- `prestadores_assistencia_valores` já tem `valor_saida` e `valor_km` por tipo de serviço/reboque ✅
+- `prestadores_assistencia` já tem `whatsapp`, `tipos_servico`, `tipos_reboque`, `disponivel` ✅
+- `chamados_assistencia` já tem `origem_endereco`, `destino_endereco`, `tipo_servico` ✅
+
+## Fases de Implementação
+
+### Fase 1: Disparo automático para prestadores (Edge Function)
+- **Nova Edge Function `despacho-reboque-disparar`**: 
+  - Recebe chamado_id
+  - Busca todos prestadores ativos com tipo_servico = 'reboque' e disponivel = true
+  - Envia mensagem WhatsApp para cada um com dados do chamado (via Meta API ou Evolution)
+  - Registra na tabela `despacho_reboque_respostas` cada envio com status 'enviado'
+- **Trigger ou hook**: Ao criar chamado tipo reboque, chama automaticamente essa function
+
+### Fase 2: IA conversa com prestadores que respondem
+- **Modificar whatsapp-webhook**: Quando prestador responde "SIM":
+  - IA pergunta localização
+  - Ao receber localização (lat/lng), calcula distância via Haversine
+  - Busca `valor_saida` + `valor_km` do prestador na tabela de valores
+  - Calcula: `valor_sugerido = valor_saida + (valor_km × distância_km)`
+  - Informa valor e pergunta se aceita
+  - Se aceita, salva na tabela de respostas: prestador_id, distancia_km, valor_sugerido, status='aceito'
+
+### Fase 3: Tela do Analista para selecionar prestador
+- **Modificar `CardDespachoReboque`**: Mostrar lista de prestadores que aceitaram, ordenados por proximidade e valor
+- Analista clica → atribui prestador → notifica prestador e associado
+
+### Fase 4: Migração de dados (schema)
+- **Nova tabela `despacho_reboque_respostas`** (ou reutilizar a existente se compatível):
+  - chamado_id, prestador_id, status (enviado/interessado/aceito/recusado), 
+  - distancia_km, valor_sugerido, localizacao_lat, localizacao_lng, respondido_em
+
+## Arquivos Afetados
+
+| Ação | Arquivo |
+|------|---------|
+| Criar | `supabase/functions/despacho-reboque-disparar/index.ts` |
+| Editar | `supabase/functions/whatsapp-webhook/index.ts` (lógica de resposta do prestador) |
+| Editar | `src/components/assistencia/CardDespachoReboque.tsx` (UI de seleção) |
+| Migration | Nova tabela ou ajuste em `despacho_reboque_respostas` |
+| Editar | `supabase/config.toml` |
+
+## Ordem de execução
+1. Fase 4 (schema) → 2. Fase 1 (disparo) → 3. Fase 2 (IA/webhook) → 4. Fase 3 (UI analista)
