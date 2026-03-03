@@ -162,7 +162,7 @@ const menuConfig: {
         { title: 'Propostas', url: '/vendas/contratos', icon: FileCheck },
         { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
         
-        { title: 'Consultores', url: '/vendas/propostas', icon: FileText, permission: 'canManageConsultores' },
+        { title: 'Equipe Comercial', url: '/vendas/equipe-comercial', icon: FileText, permission: 'canManageConsultores' },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
       ],
     },

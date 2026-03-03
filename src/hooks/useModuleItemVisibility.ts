@@ -47,7 +47,7 @@ export const MENU_ITEM_IDS: Record<string, string> = {
   '/vendas/cotacoes': 'cotacoes',
   '/vendas/contratos': 'propostas',
   '/vendas/ativacoes': 'ativacoes',
-  '/vendas/propostas': 'consultores',
+  '/vendas/equipe-comercial': 'consultores',
   '/vendas/planos-beneficios': 'planos',
   // Cadastro
   '/cadastro/propostas': 'propostas_pendentes',

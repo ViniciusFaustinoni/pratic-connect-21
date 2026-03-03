@@ -224,43 +224,15 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
         });
       });
 
-      // Lista de consultores prioritários (aparecem primeiro, nesta ordem)
-      const consultoresPrioritarios = [
-        'KALAYANE SHASNAM MURADO',
-        'JEICIELI DOS SANTOS LIMA',
-        'MARIA JULIA FLORENCIO GOMES',
-        'CASAL BRASIL',
-        'ISABELLA SILVA MORSCHBACHER',
-        'PATRICK MACEDO RODRIGUES DUARTE',
-        'LEONARDO LOPES',
-        'ANTONIO FRANCISCO SANTOS DE FREITAS',
-        'THAINÁ DE OLIVEIRA LOUZADA',
-        'TAIANY GONÇALVES DE LIMA',
-        'JAQUELINE ZANONI DA CUNHA',
-        'RENATA PELAIS DOS SANTOS',
-      ];
-
-      // Ordenar: prioritários primeiro (na ordem da lista), depois os demais por propostas fechadas
+      // Ranking real baseado em desempenho:
+      // 1º critério: propostas fechadas (desc)
+      // 2º critério: valor fechado (desc)
+      // 3º critério: atividade - cotações + contratos enviados (desc)
       const consultores = Array.from(consultoresMap.values())
         .sort((a, b) => {
-          const nomeA = a.nome.toUpperCase();
-          const nomeB = b.nome.toUpperCase();
-          
-          const indexA = consultoresPrioritarios.findIndex(
-            nome => nomeA.includes(nome) || nome.includes(nomeA)
-          );
-          const indexB = consultoresPrioritarios.findIndex(
-            nome => nomeB.includes(nome) || nome.includes(nomeB)
-          );
-          
-          // Ambos são prioritários: ordenar pela posição na lista
-          if (indexA >= 0 && indexB >= 0) return indexA - indexB;
-          // Só A é prioritário: A vem primeiro
-          if (indexA >= 0) return -1;
-          // Só B é prioritário: B vem primeiro
-          if (indexB >= 0) return 1;
-          // Nenhum é prioritário: ordenar por propostas fechadas
-          return b.propostasFechadas - a.propostasFechadas;
+          if (b.propostasFechadas !== a.propostasFechadas) return b.propostasFechadas - a.propostasFechadas;
+          if (b.valorFechado !== a.valorFechado) return b.valorFechado - a.valorFechado;
+          return (b.emCotacao + b.contratoEnviado) - (a.emCotacao + a.contratoEnviado);
         })
         .map((c, idx) => ({ ...c, ranking: idx + 1 }));
 

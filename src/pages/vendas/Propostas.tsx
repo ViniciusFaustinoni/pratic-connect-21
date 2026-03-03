@@ -63,14 +63,11 @@ export default function Propostas() {
     };
   }, [queryClient]);
 
-  // Filtrar e ordenar consultores por valor fechado (maior para menor)
+  // Filtrar consultores (ranking já vem correto do hook)
   const sortedConsultores = useMemo(() => {
-    const filtered = data?.consultores.filter(consultor =>
+    return data?.consultores.filter(consultor =>
       consultor.nome.toLowerCase().includes(searchTerm.toLowerCase())
     ) || [];
-    
-    // Ordenar por valor fechado (desc)
-    return [...filtered].sort((a, b) => b.valorFechado - a.valorFechado);
   }, [data?.consultores, searchTerm]);
 
   // Pagination
@@ -210,7 +207,7 @@ export default function Propostas() {
               <ConsultorCardNew
                 key={consultor.id}
                 consultor={consultor}
-                ranking={(page - 1) * PAGE_SIZE + index + 1}
+                ranking={consultor.ranking}
                 onClick={() => setSelectedConsultorId(consultor.id)}
               />
             ))}
