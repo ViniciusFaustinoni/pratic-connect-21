@@ -1,106 +1,130 @@
 
 
-# Notificacao Amigavel ao Associado + Follow-up Pos-Recusa
+# Plano: Fila de Reenvio SGA + Consulta Backup por CPF
 
-## Contexto
-Quando o instalador/vistoriador recusa um veiculo, o associado nao recebe nenhuma comunicacao. Alem disso, nao existe follow-up para reengajar o associado. A mensagem precisa ser acolhedora, com passo-a-passo baseado no motivo da recusa, e orientar que sera necessaria nova cotacao (valores FIPE mudam mensalmente).
+## Problema
+A sincronizacao com o SGA Hinova e inconsistente: as vezes so vai o associado, as vezes so o veiculo. Quando o SGA esta em manutencao, nada e enviado e nao ha reenvio automatico. O sistema atual e fire-and-forget — se falha, mostra um toast e para.
 
-## Motivos de recusa existentes no sistema
-O modal de recusa (`ModalRecusaVeiculoComFotos.tsx`) tem 9 motivos padronizados:
-- condicoes_precarias, danos_estruturais, adulteracoes, quilometragem_adulterada, documentacao_irregular, chassi_divergente, sinais_sinistro, sistema_eletrico, outro
+## Diagnostico Tecnico
+1. **Estado parcial:** A funcao `sga-hinova-sync` ja salva `codigo_associado` mesmo se o veiculo falhar (linha 1019-1027), mas nao ha mecanismo para retomar a parte que faltou.
+2. **Sem fila de reenvio:** Se a chamada falha (manutencao, timeout), o unico recurso e o botao manual.
+3. **Sem consulta backup:** O endpoint `associado/buscar/:cpf/:buscar_por` (GET) que o usuario forneceu nao e usado para verificar se o associado ja foi cadastrado apos falhas.
 
-## Alteracoes
+## Solucao
 
-### 1. Template de recusa amigavel (`supabase/functions/notificar-cliente/index.ts`)
+### 1. Criar tabela `sga_sync_queue` (fila de reenvio)
 
-Adicionar template `veiculo_negado_orientacoes` com mensagem humanizada:
+```sql
+CREATE TABLE public.sga_sync_queue (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at timestamptz DEFAULT now(),
+  veiculo_id uuid REFERENCES veiculos(id) ON DELETE CASCADE NOT NULL,
+  associado_id uuid REFERENCES associados(id) ON DELETE CASCADE NOT NULL,
+  status text DEFAULT 'pendente' CHECK (status IN ('pendente','processando','concluido','falha_permanente')),
+  tentativas int DEFAULT 0,
+  ultima_tentativa_em timestamptz,
+  proximo_reenvio_em timestamptz DEFAULT now(),
+  erro_ultimo text,
+  etapa_parou text, -- 'associado', 'veiculo', 'fotos' — onde parou
+  codigo_associado_hinova int, -- preservar progresso parcial
+  codigo_veiculo_hinova int,
+  origem text DEFAULT 'automatico', -- 'automatico' ou 'manual'
+  UNIQUE(veiculo_id, associado_id)
+);
 
-```
-Ola {nome}! Passamos para te atualizar sobre a avaliacao do seu veiculo {placa}.
+ALTER TABLE public.sga_sync_queue ENABLE ROW LEVEL SECURITY;
 
-Nosso tecnico identificou uma pendencia que precisa ser resolvida antes de seguirmos com a protecao:
-
-{orientacoes_resolucao}
-
-Assim que resolver, voce pode fazer uma nova cotacao pelo nosso app ou entrando em contato conosco. Como os valores de protecao sao atualizados mensalmente, sera necessario gerar uma nova cotacao — e pode ser ate mais vantajoso!
-
-Estamos aqui para te ajudar. Qualquer duvida, e so responder esta mensagem.
-```
-
-A variavel `{orientacoes_resolucao}` sera preenchida com passo-a-passo especifico por motivo.
-
-### 2. Mapeamento motivo → orientacoes (`src/hooks/useServicos.ts` e `useVistoriaCompleta.ts`)
-
-Criar funcao `getOrientacoesRecusa(motivo: string): string` que retorna texto amigavel:
-
-- **condicoes_precarias**: "Leve o veiculo a uma oficina de confianca para revisao geral. Itens como pneus, farois, lanternas e lataria precisam estar em boas condicoes."
-- **danos_estruturais**: "O veiculo apresentou danos na estrutura. Procure uma funilaria para reparo e guarde os comprovantes do servico."
-- **adulteracoes**: "Foram identificadas modificacoes nao originais. Restaure os itens alterados ao padrao de fabrica."
-- **quilometragem_adulterada**: "Ha indicio de inconsistencia no hodometro. Solicite uma pericia veicular em empresa credenciada pelo DETRAN."
-- **documentacao_irregular**: "A documentacao esta com pendencias. Verifique junto ao DETRAN se ha debitos, restricoes ou transferencia pendente."
-- **chassi_divergente**: "O numero do chassi diverge do documento. Procure o DETRAN para regularizacao e pericia."
-- **sinais_sinistro**: "Foram identificados sinais de sinistro anterior. Obtenha um laudo cautelar em empresa credenciada para comprovar que o veiculo esta em condicoes."
-- **sistema_eletrico**: "O sistema eletrico do veiculo precisa de reparos. Leve a um eletricista automotivo para diagnostico e correcao."
-- **outro / generico**: "Nosso tecnico identificou uma pendencia. Entre em contato para entender os detalhes e como resolver."
-
-### 3. Disparar notificacao nos hooks de recusa
-
-**`src/hooks/useServicos.ts`** (onSuccess de `useRecusarVeiculoServico`):
-- Chamar `notificar-cliente` com tipo `veiculo_negado_orientacoes` passando `orientacoes_resolucao` baseada no motivo
-
-**`src/hooks/useVistoriaCompleta.ts`** (onSuccess de `useRecusarVeiculoVistoria`):
-- Mesmo disparo, extraindo motivo e associado_id dos dados da mutacao
-
-### 4. Follow-up automatico pos-recusa (Edge Function cron)
-
-**Novo arquivo: `supabase/functions/cron-followup-recusa/index.ts`**
-
-Cron job que roda diariamente e:
-1. Busca servicos com `decisao_instalador = 'negado'` e `status = 'em_analise'` criados ha mais de 3 dias sem interacao
-2. Verifica se ja nao enviou follow-up (checando `whatsapp_mensagens` com `referencia_tipo = 'followup_recusa'`)
-3. Envia mensagem de reengajamento:
-
-```
-Ola {nome}! Vimos que ainda nao retornou sobre a pendencia do seu veiculo {placa}.
-
-Sabemos que pode parecer complicado, mas estamos aqui para te ajudar! Lembre-se:
-
-{orientacoes_resolucao}
-
-Quando estiver pronto, faca uma nova cotacao pelo app ou fale conosco. Queremos te ver protegido!
+CREATE POLICY "Authenticated users can manage sync queue"
+ON public.sga_sync_queue FOR ALL TO authenticated USING (true) WITH CHECK (true);
 ```
 
-4. Marca o servico com flag `followup_recusa_enviado = true` (novo campo) para nao reenviar
-5. Segundo follow-up apos 7 dias (se ainda sem resposta), mensagem final mais curta
+### 2. Atualizar `sga-hinova-sync` para gravar na fila em caso de falha
 
-### 5. Migracao de banco
+Nos pontos onde a funcao retorna erro (autenticacao, cadastro associado, cadastro veiculo), ao inves de apenas retornar o erro, tambem inserir/atualizar um registro na `sga_sync_queue` com:
+- `etapa_parou`: onde falhou ('associado', 'veiculo', 'fotos')
+- `codigo_associado_hinova`: se ja conseguiu cadastrar o associado
+- `tentativas`: incrementar
+- `proximo_reenvio_em`: agora + 10 minutos
+- `erro_ultimo`: mensagem do erro
 
-Adicionar campo `followup_recusa_enviado_em` (timestamp nullable) na tabela `servicos` para controlar envio do follow-up.
+Quando a sincronizacao completa com sucesso, marcar o registro como `concluido` (ou remover).
 
-### 6. Registrar cron job
+### 3. Usar endpoint de consulta backup `associado/buscar/:cpf/cpf`
 
-Agendar `cron-followup-recusa` para rodar diariamente as 10h (horario comercial amigavel).
+Adicionar uma etapa no inicio do PASSO 5 (cadastrar associado): **antes de tentar cadastrar**, se a fila indica que ja tentou antes, usar:
+```
+GET {hinovaApiUrl}/associado/buscar/{cpfFormatado}/cpf
+Headers: Authorization: Bearer {tokenUsuario}
+```
+Se retornar `codigo_associado`, pular o cadastro e usar o codigo encontrado. Isso resolve o caso onde o SGA estava em manutencao, o associado foi cadastrado parcialmente, e ao retomar a fila, ja existe no Hinova.
 
-## Arquivos afetados
-- `supabase/functions/notificar-cliente/index.ts` — novo template amigavel
-- `src/hooks/useServicos.ts` — funcao de orientacoes + disparo da notificacao
-- `src/hooks/useVistoriaCompleta.ts` — mesmo disparo com orientacoes
-- `supabase/functions/cron-followup-recusa/index.ts` — novo cron de follow-up
-- Migracao SQL — campo `followup_recusa_enviado_em` em `servicos`
+Mesma logica para veiculo: usar a resposta `veiculos[]` do endpoint de busca do associado para verificar se o veiculo ja foi vinculado.
 
-## Fluxo completo
+### 4. Criar Edge Function `cron-sga-retry` (cron cada 10 min)
+
+**Novo arquivo: `supabase/functions/cron-sga-retry/index.ts`**
+
+Logica:
+1. Buscar registros em `sga_sync_queue` com `status = 'pendente'` e `proximo_reenvio_em <= now()` e `tentativas < 10`
+2. Para cada registro:
+   - Marcar como `processando`
+   - Se `etapa_parou = 'associado'`: tentar buscar por CPF primeiro (endpoint backup), se nao encontrar, cadastrar
+   - Se `etapa_parou = 'veiculo'`: usar `codigo_associado_hinova` salvo e tentar cadastrar veiculo
+   - Se `etapa_parou = 'fotos'`: usar codigos salvos e enviar fotos
+   - Sucesso: marcar `concluido`, atualizar `veiculos.status_sga = 'ativado_sga'`
+   - Falha: incrementar `tentativas`, setar `proximo_reenvio_em = now() + 10min`, manter `pendente`
+   - Se `tentativas >= 10`: marcar `falha_permanente`
+3. Registrar cron via `pg_cron` a cada 10 minutos
+
+### 5. Badge visual nos pontos que chamam o SGA
+
+**Arquivos: `src/components/ativacao/BotaoEnviarSGA.tsx`**
+- Alem dos estados atuais (sincronizado, erro, loading), adicionar estado `na_fila`:
+  - Buscar se existe registro em `sga_sync_queue` para este veiculo com `status IN ('pendente','processando')`
+  - Mostrar Badge amarelo: "Na fila de reenvio (tentativa X/10)"
+  - Badge vermelho se `falha_permanente`: "Falha permanente — verificar manualmente"
+
+**Arquivo: `src/hooks/useAtivacoes.ts`** (fire-and-forget)
+- No catch/falha, inserir na `sga_sync_queue` em vez de apenas mostrar toast
+
+### 6. Registrar cron job (SQL direto)
+
+```sql
+SELECT cron.schedule(
+  'sga-retry-every-10min',
+  '*/10 * * * *',
+  $$ SELECT net.http_post(
+    url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-sga-retry',
+    headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbG..."}'::jsonb,
+    body:='{}'::jsonb
+  ) as request_id; $$
+);
+```
+
+## Arquivos Afetados
+- **Nova tabela:** `sga_sync_queue` (migracao)
+- **Novo:** `supabase/functions/cron-sga-retry/index.ts` — cron de reenvio
+- **Editar:** `supabase/functions/sga-hinova-sync/index.ts` — gravar na fila em falha, usar endpoint backup
+- **Editar:** `src/components/ativacao/BotaoEnviarSGA.tsx` — badge "na fila"
+- **Editar:** `src/hooks/useAtivacoes.ts` — inserir na fila em vez de apenas toast
+- **Editar:** `supabase/config.toml` — registrar nova funcao
+- **SQL:** cron job a cada 10 minutos
+
+## Fluxo Resultante
 
 ```text
-Recusa do instalador/vistoriador
-  ├── WhatsApp imediato → Mensagem acolhedora + passo-a-passo por motivo
-  │     "Leve a uma oficina... Quando resolver, faca nova cotacao..."
-  │
-  ├── Dia 3 → Follow-up automatico (se sem resposta)
-  │     "Vimos que ainda nao retornou... Estamos aqui para ajudar!"
-  │
-  ├── Dia 7 → Segundo follow-up (ultimo)
-  │     "Ola {nome}, sua protecao esta esperando por voce..."
-  │
-  └── Associado resolve → Nova cotacao (FIPE atualizada) → Novo fluxo completo
+Ativacao do contrato
+  └── sga-hinova-sync (fire-and-forget)
+        ├── SUCESSO → ativado_sga ✓
+        └── FALHA (qualquer etapa)
+              ├── Grava na sga_sync_queue com etapa_parou + progresso parcial
+              ├── Badge amarelo: "Na fila de reenvio"
+              └── cron-sga-retry (a cada 10 min)
+                    ├── Consulta backup: GET /associado/buscar/{cpf}/cpf
+                    │     └── Se encontrado → pula cadastro, usa codigo
+                    ├── Retoma da etapa onde parou (associado→veiculo→fotos)
+                    ├── Sucesso → ativado_sga ✓, Badge verde
+                    └── Falha → tentativa++ , proximo reenvio em 10min
+                          └── Apos 10 tentativas → falha_permanente, Badge vermelho
 ```
 
