@@ -158,6 +158,46 @@ Bem-vindo à família PRATIC! 💙`,
 Você pode entrar em contato com o técnico se precisar de mais informações!`,
     emailTemplate: 'generico',
   },
+  veiculo_negado_orientacoes: {
+    titulo: '📋 Atualização sobre seu veículo',
+    mensagem: `Olá {nome}! 😊
+
+Passamos para te atualizar sobre a avaliação do seu veículo *{placa}*.
+
+Nosso técnico identificou uma pendência que precisa ser resolvida antes de seguirmos com a proteção:
+
+{orientacoes_resolucao}
+
+✅ *Como prosseguir:*
+Assim que resolver, você pode fazer uma *nova cotação* pelo nosso app ou entrando em contato conosco. Como os valores de proteção são atualizados mensalmente com base na tabela FIPE, será necessário gerar uma nova cotação — e pode ser até mais vantajoso! 💰
+
+Estamos aqui para te ajudar. Qualquer dúvida, é só responder esta mensagem! 💙`,
+    emailTemplate: 'generico',
+  },
+  followup_recusa_dia3: {
+    titulo: '💙 Ainda estamos aqui para te ajudar!',
+    mensagem: `Olá {nome}! 😊
+
+Vimos que ainda não retornou sobre a pendência do seu veículo *{placa}*.
+
+Sabemos que pode parecer complicado, mas estamos aqui para te ajudar! Lembre-se:
+
+{orientacoes_resolucao}
+
+Quando estiver pronto, faça uma *nova cotação* pelo app ou fale conosco. Queremos te ver protegido! 🛡️`,
+    emailTemplate: 'generico',
+  },
+  followup_recusa_dia7: {
+    titulo: '🛡️ Sua proteção está esperando por você!',
+    mensagem: `Olá {nome}!
+
+Sua proteção veicular está esperando por você! 🚗
+
+Já resolveu a pendência do veículo *{placa}*? Se sim, é só fazer uma nova cotação pelo app ou falar com a gente.
+
+Estamos torcendo para te ver protegido em breve! 💙`,
+    emailTemplate: 'generico',
+  },
 };
 
 serve(async (req) => {

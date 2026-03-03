@@ -1220,6 +1220,25 @@ export function useRecusarVeiculoServico() {
             notificarRecusaInstalador(variables.servicoId, placa, variables.motivo);
           });
       });
+
+      // Dispara notificação WhatsApp amigável para o associado (fire-and-forget)
+      import('@/utils/orientacoesRecusa').then(({ getOrientacoesRecusa }) => {
+        supabase.from('veiculos').select('placa').eq('id', variables.veiculoId).single()
+          .then(({ data: veiculo }) => {
+            const placa = veiculo?.placa || '';
+            const orientacoes = getOrientacoesRecusa(variables.motivo);
+            supabase.functions.invoke('notificar-cliente', {
+              body: {
+                tipo: 'veiculo_negado_orientacoes',
+                associado_id: variables.associadoId,
+                dados: {
+                  placa,
+                  orientacoes_resolucao: orientacoes,
+                },
+              },
+            });
+          });
+      });
     },
     onError: (error) => {
       console.error('Erro ao recusar veículo:', error);

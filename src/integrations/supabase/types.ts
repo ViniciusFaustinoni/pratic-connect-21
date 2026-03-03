@@ -19670,6 +19670,7 @@ export type Database = {
           em_rota_em: string | null
           encaixe_executado: boolean | null
           fios_isolados: boolean | null
+          followup_recusa_enviado_em: string | null
           fotos_manutencao: Json | null
           fotos_recusa: string[] | null
           fotos_ressalva: string[] | null
@@ -19778,6 +19779,7 @@ export type Database = {
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           fios_isolados?: boolean | null
+          followup_recusa_enviado_em?: string | null
           fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
           fotos_ressalva?: string[] | null
@@ -19886,6 +19888,7 @@ export type Database = {
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           fios_isolados?: boolean | null
+          followup_recusa_enviado_em?: string | null
           fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
           fotos_ressalva?: string[] | null

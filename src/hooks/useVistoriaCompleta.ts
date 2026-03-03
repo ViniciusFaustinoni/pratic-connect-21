@@ -304,7 +304,7 @@ export function useRecusarVeiculoVistoria() {
           .eq('id', vistoriaData.contrato_id);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
       queryClient.invalidateQueries({ queryKey: ['vistoria'] });
       queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });
@@ -333,6 +333,25 @@ export function useRecusarVeiculoVistoria() {
           });
         }
       );
+
+      // Dispara notificação WhatsApp amigável para o associado (fire-and-forget)
+      import('@/utils/orientacoesRecusa').then(({ getOrientacoesRecusa }) => {
+        supabase.from('veiculos').select('placa').eq('id', variables.veiculoId).single()
+          .then(({ data: veiculo }) => {
+            const placa = veiculo?.placa || '';
+            const orientacoes = getOrientacoesRecusa(variables.motivo);
+            supabase.functions.invoke('notificar-cliente', {
+              body: {
+                tipo: 'veiculo_negado_orientacoes',
+                associado_id: variables.associadoId,
+                dados: {
+                  placa,
+                  orientacoes_resolucao: orientacoes,
+                },
+              },
+            });
+          });
+      });
     },
     onError: (error) => {
       console.error('Erro ao recusar veículo:', error);
