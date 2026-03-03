@@ -272,7 +272,7 @@ const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsAp
 - Para localização, peça o endereço digitado OU use a tool reverse_geocode se receber coordenadas
 
 ## Capacidades
-1. Consultar boletos pendentes e enviar PIX/PDF
+1. Consultar faturas pendentes e enviar PIX/PDF — quando o associado perguntar sobre boleto, fatura, pagamento em aberto, dívida ou mensalidade, use get_boletos_pendentes. Se não houver faturas em aberto, informe que está em dia. Se houver, mostre resumo e OFEREÇA enviar o PDF pelo WhatsApp (use enviar_boleto_pdf com o id E o campo fonte retornados).
 2. Histórico de pagamentos
 3. Status de sinistros
 4. Abrir sinistro (coleta dados para aprovação)
@@ -615,11 +615,12 @@ const tools = [
     type: "function",
     function: {
       name: "enviar_boleto_pdf",
-      description: "Envia boleto em PDF via WhatsApp para o associado. Use quando o cliente pedir para receber o boleto no WhatsApp.",
+      description: "Envia boleto em PDF via WhatsApp para o associado. Use quando o cliente pedir para receber o boleto no WhatsApp. Inclua o campo 'fonte' retornado por get_boletos_pendentes.",
       parameters: {
         type: "object",
         properties: {
           boleto_id: { type: "string", description: "ID do boleto a ser enviado (obtido de get_boletos_pendentes)" },
+          fonte: { type: "string", enum: ["asaas_cobrancas", "cobrancas"], description: "Tabela de origem do boleto (retornada por get_boletos_pendentes)" },
         },
       required: ["boleto_id"],
     },
@@ -696,20 +697,40 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
 
   switch (toolName) {
     case "get_boletos_pendentes": {
-      // ATUALIZADO: Incluir boleto_url, pix_copia_cola e linha_digitavel
-      const { data } = await supabase
-        .from("cobrancas")
-        .select("id, valor, data_vencimento, status, boleto_url, pix_copia_cola, linha_digitavel")
-        .eq("associado_id", associadoId)
-        .in("status", ["pendente", "vencido", "em_aberto"])
-        .order("data_vencimento");
+      // Buscar em asaas_cobrancas (tabela principal do Asaas) E cobrancas (legado)
+      const [asaasResult, cobrancasResult] = await Promise.all([
+        supabase
+          .from("asaas_cobrancas")
+          .select("id, valor, data_vencimento, status, boleto_url, pix_copia_cola, linha_digitavel")
+          .eq("associado_id", associadoId)
+          .in("status", ["PENDING", "OVERDUE", "CONFIRMED"])
+          .order("data_vencimento"),
+        supabase
+          .from("cobrancas")
+          .select("id, valor, data_vencimento, status, boleto_url, pix_copia_cola, linha_digitavel")
+          .eq("associado_id", associadoId)
+          .in("status", ["pendente", "vencido", "em_aberto"])
+          .order("data_vencimento"),
+      ]);
 
-      if (!data?.length) return JSON.stringify({ message: "Sem boletos pendentes ✅" });
-
-      const total = data.reduce((s: number, b: any) => s + (b.valor || 0), 0);
-      return JSON.stringify({
-        boletos: data.map((b: any) => ({
+      const asaasData = asaasResult.data || [];
+      const cobrancasData = cobrancasResult.data || [];
+      
+      // Unificar resultados: asaas_cobrancas tem prioridade
+      const todosboletos = [
+        ...asaasData.map((b: any) => ({
           id: b.id,
+          fonte: "asaas_cobrancas",
+          valor: `R$ ${b.valor?.toFixed(2)}`,
+          vencimento: new Date(b.data_vencimento).toLocaleDateString("pt-BR"),
+          status: b.status === "PENDING" ? "pendente" : b.status === "OVERDUE" ? "vencido" : b.status.toLowerCase(),
+          boleto_url: b.boleto_url || null,
+          pix: b.pix_copia_cola || null,
+          linha_digitavel: b.linha_digitavel || null,
+        })),
+        ...cobrancasData.map((b: any) => ({
+          id: b.id,
+          fonte: "cobrancas",
           valor: `R$ ${b.valor?.toFixed(2)}`,
           vencimento: new Date(b.data_vencimento).toLocaleDateString("pt-BR"),
           status: b.status,
@@ -717,8 +738,19 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
           pix: b.pix_copia_cola || null,
           linha_digitavel: b.linha_digitavel || null,
         })),
+      ];
+
+      if (!todosboletos.length) {
+        return JSON.stringify({ 
+          message: "Você está em dia! ✅ Não há faturas em aberto no momento. Parabéns por manter tudo em ordem! 💙" 
+        });
+      }
+
+      const total = [...asaasData, ...cobrancasData].reduce((s: number, b: any) => s + (b.valor || 0), 0);
+      return JSON.stringify({
+        boletos: todosboletos,
         total: `R$ ${total.toFixed(2)}`,
-        instrucao: "Para receber o boleto em PDF no WhatsApp, use a tool enviar_boleto_pdf com o id do boleto.",
+        instrucao: "Para receber o boleto em PDF no WhatsApp, use a tool enviar_boleto_pdf com o id do boleto e o campo fonte (asaas_cobrancas ou cobrancas).",
       });
     }
 
@@ -1215,16 +1247,16 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     }
 
     case "enviar_boleto_pdf": {
-      // NOVA TOOL: Enviar boleto PDF via whatsapp-send-media
-      const { boleto_id } = args;
+      const { boleto_id, fonte } = args;
       
       if (!boleto_id) {
         return JSON.stringify({ success: false, message: "ID do boleto não informado" });
       }
 
-      // Buscar boleto do associado
+      // Buscar boleto na tabela correta (asaas_cobrancas ou cobrancas)
+      const tabela = fonte === "asaas_cobrancas" ? "asaas_cobrancas" : "cobrancas";
       const { data: boleto, error: boletoError } = await supabase
-        .from("cobrancas")
+        .from(tabela)
         .select("id, valor, data_vencimento, boleto_url, associado_id")
         .eq("id", boleto_id)
         .eq("associado_id", associadoId)
