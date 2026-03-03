@@ -9,7 +9,7 @@ import { FileUp, Loader2, Upload, Trash2, CheckCircle } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useAdicionarItem, type OrcamentoItem } from '@/hooks/useOrcamentoReparo';
+import { useAdicionarItem, useCriarOrcamento, type OrcamentoItem } from '@/hooks/useOrcamentoReparo';
 
 interface ExtractedPeca {
   descricao: string;
@@ -42,13 +42,18 @@ interface Props {
   open: boolean;
   onClose: () => void;
   orcamentoId: string;
+  /** When true, creates the orcamento automatically before importing items */
+  autoCreate?: boolean;
+  /** Required when autoCreate=true */
+  sinistroId?: string;
 }
 
-export function ImportarOrcamentoPDFModal({ open, onClose, orcamentoId }: Props) {
+export function ImportarOrcamentoPDFModal({ open, onClose, orcamentoId, autoCreate = false, sinistroId }: Props) {
   const [step, setStep] = useState<'upload' | 'processing' | 'preview'>('upload');
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [importing, setImporting] = useState(false);
   const adicionarItem = useAdicionarItem();
+  const criarOrcamento = useCriarOrcamento();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -61,7 +66,6 @@ export function ImportarOrcamentoPDFModal({ open, onClose, orcamentoId }: Props)
     setStep('processing');
 
     try {
-      // Upload to storage
       const timestamp = Date.now();
       const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const path = `orcamentos-pdf/${timestamp}-${safeName}`;
@@ -72,10 +76,8 @@ export function ImportarOrcamentoPDFModal({ open, onClose, orcamentoId }: Props)
 
       if (uploadError) throw new Error(`Erro no upload: ${uploadError.message}`);
 
-      // Get public URL
       const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(path);
 
-      // Call extraction edge function
       const { data, error } = await supabase.functions.invoke('extract-orcamento-pdf', {
         body: { pdfUrl: urlData.publicUrl },
       });
@@ -141,12 +143,26 @@ export function ImportarOrcamentoPDFModal({ open, onClose, orcamentoId }: Props)
     setImporting(true);
 
     try {
+      let targetOrcamentoId = orcamentoId;
+
+      // Auto-create mode: create orcamento first
+      if (autoCreate && sinistroId) {
+        const result = await criarOrcamento.mutateAsync({
+          sinistroId,
+          tipoOrcamento: 'cotacao_separada',
+        });
+        targetOrcamentoId = result.id;
+      }
+
+      if (!targetOrcamentoId) {
+        throw new Error('ID do orçamento não disponível');
+      }
+
       let successCount = 0;
 
-      // Import peças
       for (const peca of extractedData.pecas) {
         await adicionarItem.mutateAsync({
-          orcamentoId,
+          orcamentoId: targetOrcamentoId,
           item: {
             tipo: 'peca',
             descricao: peca.descricao,
@@ -160,10 +176,9 @@ export function ImportarOrcamentoPDFModal({ open, onClose, orcamentoId }: Props)
         successCount++;
       }
 
-      // Import serviços
       for (const servico of extractedData.servicos) {
         await adicionarItem.mutateAsync({
-          orcamentoId,
+          orcamentoId: targetOrcamentoId,
           item: {
             tipo: 'mao_de_obra',
             descricao: servico.descricao,
@@ -198,10 +213,12 @@ export function ImportarOrcamentoPDFModal({ open, onClose, orcamentoId }: Props)
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileUp className="h-5 w-5" />
-            Importar Orçamento via PDF
+            {autoCreate ? 'Enviar Orçamento via PDF' : 'Importar Orçamento via PDF'}
           </DialogTitle>
           <DialogDescription>
-            Envie o PDF do orçamento e a IA extrairá automaticamente peças e serviços. Revise antes de confirmar.
+            {autoCreate
+              ? 'Envie o PDF do orçamento. A IA extrairá peças e serviços automaticamente, criando o orçamento do evento.'
+              : 'Envie o PDF do orçamento e a IA extrairá automaticamente peças e serviços. Revise antes de confirmar.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -230,7 +247,6 @@ export function ImportarOrcamentoPDFModal({ open, onClose, orcamentoId }: Props)
 
         {step === 'preview' && extractedData && (
           <>
-            {/* Resumo */}
             <div className="grid grid-cols-3 gap-2 mb-3">
               <div className="rounded-lg border p-2 text-center">
                 <p className="text-xs text-muted-foreground">Peças</p>
@@ -373,9 +389,9 @@ export function ImportarOrcamentoPDFModal({ open, onClose, orcamentoId }: Props)
                 disabled={importing || (!extractedData.pecas.length && !extractedData.servicos.length)}
               >
                 {importing ? (
-                  <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Importando...</>
+                  <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {autoCreate ? 'Criando orçamento...' : 'Importando...'}</>
                 ) : (
-                  <><CheckCircle className="h-4 w-4 mr-1" /> Confirmar e Importar ({extractedData.pecas.length + extractedData.servicos.length} itens)</>
+                  <><CheckCircle className="h-4 w-4 mr-1" /> Confirmar e {autoCreate ? 'Criar Orçamento' : 'Importar'} ({extractedData.pecas.length + extractedData.servicos.length} itens)</>
                 )}
               </Button>
             </DialogFooter>
