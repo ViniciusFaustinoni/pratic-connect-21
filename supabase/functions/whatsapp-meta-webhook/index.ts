@@ -65,13 +65,26 @@ async function processarRespostaPrestador(
 
   console.log(`[webhook] Prestador identificado: ${prestador.razao_social || prestador.nome_fantasia} (${prestador.id})`);
 
-  // Buscar convite ativo para este prestador
+  // Buscar despachos ativos (aguardando) para este prestador via 2-step query
+  const { data: despachosAtivos } = await supabase
+    .from("despacho_reboque")
+    .select("id")
+    .eq("status", "aguardando");
+
+  if (!despachosAtivos || despachosAtivos.length === 0) {
+    console.log(`[webhook] Nenhum despacho aguardando no momento`);
+    return false;
+  }
+
+  const despachosIds = despachosAtivos.map((d: any) => d.id);
+
+  // Buscar convite ativo para este prestador em despachos ativos
   const { data: convite } = await supabase
     .from("despacho_reboque_convites")
     .select(`
       *,
       despacho:despacho_reboque(
-        id, chamado_id, status,
+        id, chamado_id, status, total_aceites,
         chamado:chamados_assistencia(
           id, origem_lat, origem_lng, rastreador_lat, rastreador_lng,
           origem_endereco, origem_logradouro, destino_endereco, destino_logradouro
@@ -79,6 +92,7 @@ async function processarRespostaPrestador(
       )
     `)
     .eq("prestador_id", prestador.id)
+    .in("despacho_id", despachosIds)
     .in("etapa_conversacao", ["aguardando_sim", "aguardando_localizacao", "aguardando_aceite_valor"])
     .order("created_at", { ascending: false })
     .limit(1)
@@ -90,10 +104,6 @@ async function processarRespostaPrestador(
   }
 
   const despacho = convite.despacho as any;
-  if (!despacho || despacho.status !== "aguardando") {
-    console.log(`[webhook] Despacho não está mais aguardando`);
-    return false;
-  }
 
   const chamado = despacho.chamado as any;
   const telPrestador = prestador.whatsapp || prestador.telefone || telefone;

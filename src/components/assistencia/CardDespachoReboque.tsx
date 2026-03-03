@@ -333,12 +333,12 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
 
   // Aguardando aceites
   if (despacho.status === 'aguardando') {
-    const aceitos = convites?.filter((c) => c.status === 'aceito' || (c as any).etapa_conversacao === 'aceito') || [];
-    const recusas = convites?.filter((c) => c.status === 'recusado' || (c as any).etapa_conversacao === 'recusado').length || 0;
+    const aceitos = convites?.filter((c) => c.status === 'aceito' || c.etapa_conversacao === 'aceito') || [];
+    const recusas = convites?.filter((c) => c.status === 'recusado' || c.etapa_conversacao === 'recusado').length || 0;
     const emNegociacao = convites?.filter((c) => 
-      ['aguardando_localizacao', 'aguardando_aceite_valor'].includes((c as any).etapa_conversacao)
+      ['aguardando_localizacao', 'aguardando_aceite_valor'].includes(c.etapa_conversacao || '')
     ).length || 0;
-    const semResposta = convites?.filter((c) => (c as any).etapa_conversacao === 'aguardando_sim').length || 0;
+    const semResposta = convites?.filter((c) => c.etapa_conversacao === 'aguardando_sim').length || 0;
 
     // Top 3 aceitos, ordenados por menor valor e menor distância
     const top3 = aceitos
@@ -358,11 +358,12 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Counters */}
-          <div className="grid grid-cols-4 gap-2 text-center text-sm">
+          <div className="grid grid-cols-5 gap-2 text-center text-sm">
             <div><p className="font-bold text-lg">{despacho.total_enviados}</p><p className="text-muted-foreground">Enviados</p></div>
             <div><p className="font-bold text-lg text-green-600">{aceitos.length}</p><p className="text-muted-foreground">Aceitos</p></div>
             <div><p className="font-bold text-lg text-blue-600">{emNegociacao}</p><p className="text-muted-foreground">Negociando</p></div>
-            <div><p className="font-bold text-lg text-gray-500">{semResposta}</p><p className="text-muted-foreground">Sem resp.</p></div>
+            <div><p className="font-bold text-lg text-red-600">{recusas}</p><p className="text-muted-foreground">Recusados</p></div>
+            <div><p className="font-bold text-lg text-muted-foreground">{semResposta}</p><p className="text-muted-foreground">Aguardando</p></div>
           </div>
 
           {/* Top 3 para atribuição manual */}
@@ -430,7 +431,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
                 </TableHeader>
                 <TableBody>
                   {convites.map((c) => {
-                    const etapa = (c as any).etapa_conversacao || 'aguardando_sim';
+                    const etapa = c.etapa_conversacao || 'aguardando_sim';
                     const cfg = etapaConfig[etapa] || { label: etapa, className: '' };
                     return (
                       <TableRow key={c.id}>
