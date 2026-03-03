@@ -12,10 +12,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Upload, CheckCircle2, AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
+import { Upload, CheckCircle2, AlertTriangle, Loader2, ShieldAlert, Clock, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 
 interface BotaoEnviarSGAProps {
   contratoId: string;
@@ -43,6 +43,23 @@ export function BotaoEnviarSGA({
   const [isLoading, setIsLoading] = useState(false);
   const queryClient = useQueryClient();
 
+  // Buscar status na fila de reenvio
+  const { data: queueItem } = useQuery({
+    queryKey: ['sga-sync-queue', veiculoId],
+    queryFn: async () => {
+      if (!veiculoId) return null;
+      const { data } = await supabase
+        .from('sga_sync_queue')
+        .select('id, status, tentativas, etapa_parou, erro_ultimo, proximo_reenvio_em')
+        .eq('veiculo_id', veiculoId)
+        .in('status', ['pendente', 'processando', 'falha_permanente'])
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!veiculoId && !sincronizado,
+    refetchInterval: 30000, // Atualizar a cada 30s
+  });
+
   // Se já sincronizado, mostrar badge de sucesso
   if (sincronizado && codigoHinova) {
     return (
@@ -61,6 +78,28 @@ export function BotaoEnviarSGA({
     );
   }
 
+  // Se na fila de reenvio
+  if (queueItem) {
+    if (queueItem.status === 'falha_permanente') {
+      return (
+        <Badge variant="destructive" className="text-xs">
+          <XCircle className="h-3 w-3 mr-1" />
+          Falha permanente — verificar manualmente
+        </Badge>
+      );
+    }
+
+    if (queueItem.status === 'pendente' || queueItem.status === 'processando') {
+      return (
+        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+          <Clock className="h-3 w-3 mr-1" />
+          Na fila de reenvio ({queueItem.tentativas}/10)
+          {queueItem.etapa_parou && ` • ${queueItem.etapa_parou}`}
+        </Badge>
+      );
+    }
+  }
+
   // Verificar se temos os IDs necessários
   if (!veiculoId || !associadoId) {
     return (
@@ -70,17 +109,13 @@ export function BotaoEnviarSGA({
     );
   }
 
-  // Status de erro - mostrar botão para tentar novamente
   const isError = statusSGA === 'erro_sincronizacao';
 
   const handleEnviar = async () => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
-        body: {
-          veiculo_id: veiculoId,
-          associado_id: associadoId,
-        },
+        body: { veiculo_id: veiculoId, associado_id: associadoId },
       });
 
       if (error) {
@@ -88,7 +123,6 @@ export function BotaoEnviarSGA({
       }
 
       if (!data?.success) {
-        // Tratar erro específico de Token Bearer expirado
         if (data?.action_required === 'update_bearer_token') {
           toast.error('Token SGA Hinova Expirado', {
             description: 'O Token Bearer da API precisa ser atualizado. Acesse Configurações > Integrações > SGA Hinova.',
@@ -97,10 +131,9 @@ export function BotaoEnviarSGA({
           return;
         }
         
-        // Tratar erro de campo faltante (RENAVAM/CHASSI)
         if (data?.campo_faltante) {
           toast.error('Campo obrigatório não preenchido', {
-            description: `${data.campo_faltante.toUpperCase()} é obrigatório para enviar ao SGA. Edite o veículo e preencha este campo.`,
+            description: `${data.campo_faltante.toUpperCase()} é obrigatório para enviar ao SGA.`,
             duration: 10000,
           });
           return;
@@ -113,9 +146,9 @@ export function BotaoEnviarSGA({
         description: `Código Hinova: ${data.codigo_veiculo_hinova || 'N/A'}`,
       });
 
-      // Invalidar queries para atualizar a tela
       queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+      queryClient.invalidateQueries({ queryKey: ['sga-sync-queue', veiculoId] });
     } catch (err) {
       console.error('[BotaoEnviarSGA] Erro:', err);
       toast.error('Erro ao enviar para o SGA', {

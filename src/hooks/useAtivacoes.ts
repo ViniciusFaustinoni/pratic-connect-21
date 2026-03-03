@@ -305,12 +305,27 @@ export function useAtivarContrato() {
           }).then(({ data, error }) => {
             if (error || !data?.success) {
               console.warn('[Ativacao] Falha ao enviar ao SGA:', error || data?.error);
-              toast.warning('Contrato ativado, mas envio ao SGA falhou. Use o botão manual.');
+              // A própria função sga-hinova-sync já grava na fila de reenvio
+              toast.warning('Contrato ativado, mas envio ao SGA falhou. O sistema tentará reenviar automaticamente.');
             } else {
               toast.success('Enviado ao SGA automaticamente!');
             }
-          }).catch(err => {
+          }).catch(async (err) => {
             console.warn('[Ativacao] Erro ao enviar ao SGA:', err);
+            // Fallback: inserir diretamente na fila se a função nem executou
+            try {
+              await supabase.from('sga_sync_queue').upsert({
+                veiculo_id: veiculo.id,
+                associado_id: contrato.associado_id,
+                status: 'pendente',
+                tentativas: 0,
+                erro_ultimo: err instanceof Error ? err.message : 'Erro de conexão',
+                etapa_parou: 'associado',
+                origem: 'automatico',
+                proximo_reenvio_em: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+              }, { onConflict: 'veiculo_id,associado_id' });
+            } catch (_) {}
+            toast.warning('Contrato ativado. Envio ao SGA será tentado automaticamente em 10 minutos.');
           });
         }
       }

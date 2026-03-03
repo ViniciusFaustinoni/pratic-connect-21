@@ -20318,6 +20318,139 @@ export type Database = {
           },
         ]
       }
+      sga_sync_queue: {
+        Row: {
+          associado_id: string
+          codigo_associado_hinova: number | null
+          codigo_veiculo_hinova: number | null
+          created_at: string | null
+          erro_ultimo: string | null
+          etapa_parou: string | null
+          id: string
+          origem: string | null
+          proximo_reenvio_em: string | null
+          status: string | null
+          tentativas: number | null
+          ultima_tentativa_em: string | null
+          veiculo_id: string
+        }
+        Insert: {
+          associado_id: string
+          codigo_associado_hinova?: number | null
+          codigo_veiculo_hinova?: number | null
+          created_at?: string | null
+          erro_ultimo?: string | null
+          etapa_parou?: string | null
+          id?: string
+          origem?: string | null
+          proximo_reenvio_em?: string | null
+          status?: string | null
+          tentativas?: number | null
+          ultima_tentativa_em?: string | null
+          veiculo_id: string
+        }
+        Update: {
+          associado_id?: string
+          codigo_associado_hinova?: number | null
+          codigo_veiculo_hinova?: number | null
+          created_at?: string | null
+          erro_ultimo?: string | null
+          etapa_parou?: string | null
+          id?: string
+          origem?: string | null
+          proximo_reenvio_em?: string | null
+          status?: string | null
+          tentativas?: number | null
+          ultima_tentativa_em?: string | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sga_sync_queue_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_queue_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sindicancia_diligencias: {
         Row: {
           created_at: string | null
