@@ -1,61 +1,79 @@
 
 
-# Plano: Despacho automatico de reboque ao criar chamado de assistencia
+# Plano: Simplificar despacho de reboque com valor sugerido por prestador
 
-## Situacao atual
-O fluxo ja esta implementado e funcionando:
-- `despacho-reboque-disparar` envia WhatsApp para todos os reboquistas com dados do veiculo e rota (ponto A → ponto B)
-- `whatsapp-meta-webhook` processa respostas: SIM → pede localizacao → calcula distancia → informa valor sugerido → aceite
-- `CardDespachoReboque` mostra top 3 aceitos (menor valor + mais proximo) para selecao manual do analista
+## Resumo
 
-**O que falta**: O despacho so acontece quando o analista clica manualmente em "Despachar Reboque via WhatsApp". O usuario quer que seja **automatico ao criar o chamado**.
+Simplificar o fluxo de 3 etapas (SIM → localização → aceite valor) para **1 etapa** (SIM/NÃO). O valor sugerido é enviado na mensagem inicial, baseado no campo `valor_sugerido` cadastrado em cada prestador. O prestador responde SIM ou NÃO diretamente.
 
-## Mudanca proposta
-Adicionar disparo automatico do despacho na edge function `criar-chamado-assistencia` quando o tipo de servico for reboque/guincho.
+## Mudancas
 
-### Ajuste em `criar-chamado-assistencia/index.ts`
-Apos criar o chamado (linha ~332), se `tipo_servico` for `reboque` ou `guincho`:
-1. Chamar `despacho-reboque-disparar` automaticamente (via fetch interno com service key)
-2. Logar resultado no console
-3. Nao bloquear o fluxo se falhar — chamado ja foi criado
+### 1. Database: Adicionar campo `valor_sugerido` em `prestadores_assistencia_valores`
 
-Codigo aproximado a adicionar apos a criacao do chamado:
-
-```typescript
-// Auto-despacho para reboque/guincho
-if (['reboque', 'guincho'].includes(payload.tipo_assistencia)) {
-  try {
-    const despRes = await fetch(`${supabaseUrl}/functions/v1/despacho-reboque-disparar`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({ chamado_id: chamado.id }),
-    });
-    const despData = await despRes.json();
-    console.log('[criar-chamado] Auto-despacho:', despData);
-  } catch (e) {
-    console.error('[criar-chamado] Erro no auto-despacho:', e);
-  }
-}
+```sql
+ALTER TABLE prestadores_assistencia_valores 
+ADD COLUMN valor_sugerido numeric DEFAULT NULL;
 ```
 
-### Ajuste em `despacho-reboque-disparar/index.ts`
-A funcao exige JWT de usuario autenticado (linhas 18-23). Porem, quando chamada internamente pelo `criar-chamado-assistencia` com service key, nao ha JWT de usuario. Precisa aceitar tambem chamadas com service role key (sem exigir `getUser`).
+Campo opcional — se preenchido, é o valor fixo que aparece na mensagem de despacho para aquele prestador/tipo de serviço.
 
-Logica: se o bearer token for o service role key, pular validacao de usuario. Caso contrario, validar normalmente.
+### 2. Frontend: Campo "Valor Sugerido" no cadastro de prestador
+
+**Arquivo:** `src/components/assistencia/NovoPrestadorModal.tsx`
+
+Na seção de valores (cards de serviço com `isKm`), adicionar campo "Valor Sugerido (R$)" no grid. O campo aparece para serviços do tipo reboque. O `saveValores` deve incluir `valor_sugerido` no insert.
+
+### 3. Edge Function `despacho-reboque-disparar`: Incluir valor sugerido na mensagem
+
+**Arquivo:** `supabase/functions/despacho-reboque-disparar/index.ts`
+
+- Buscar `valor_sugerido` da tabela `prestadores_assistencia_valores` junto com `valor_saida` e `valor_km`
+- Montar mensagem com valor sugerido e dados do veículo:
+
+```
+🚨 *NOVO CHAMADO - Reboque Leve*
+
+🚗 Veículo: Toyota Corolla 2013
+📝 Obs: Rodas travadas
+
+📍 Origem: Rua A, número B
+📍 Destino: Rua C, número D
+
+💰 *Valor sugerido: R$ 250,00*
+
+Responda *SIM* para aceitar ou *NÃO* para recusar.
+```
+
+- Salvar `valor_calculado = valor_sugerido` no convite criado
+- Setar `etapa_conversacao = "aguardando_aceite"` (etapa unica)
+
+### 4. Webhook: Simplificar para 1 etapa
+
+**Arquivo:** `supabase/functions/whatsapp-meta-webhook/index.ts`
+
+Remover etapas `aguardando_localizacao` e `aguardando_aceite_valor`. Manter apenas:
+
+- **`aguardando_aceite`**: SIM → aceito, NÃO → recusado
+- Remover logica de pedir localização e calcular distância por conversação
+
+### 5. CardDespachoReboque: Ajustar etapa config
+
+**Arquivo:** `src/components/assistencia/CardDespachoReboque.tsx`
+
+Atualizar `etapaConfig` para refletir a nova etapa unica `aguardando_aceite`.
 
 ## Arquivos afetados
 
 | Arquivo | Acao |
 |---------|------|
-| `supabase/functions/criar-chamado-assistencia/index.ts` | Adicionar auto-despacho apos criar chamado de reboque |
-| `supabase/functions/despacho-reboque-disparar/index.ts` | Aceitar chamadas internas com service key (sem JWT de usuario) |
+| Migration SQL | Adicionar `valor_sugerido` em `prestadores_assistencia_valores` |
+| `NovoPrestadorModal.tsx` | Campo "Valor Sugerido" no card de valores de reboque |
+| `despacho-reboque-disparar/index.ts` | Mensagem com valor sugerido + tipo reboque + dados veículo |
+| `whatsapp-meta-webhook/index.ts` | Simplificar para 1 etapa (SIM/NÃO) |
+| `CardDespachoReboque.tsx` | Ajustar etapa config |
 
 ## O que NAO muda
-- Fluxo conversacional do webhook (ja funciona)
-- CardDespachoReboque (ja mostra top 3)
-- Logica de calculo de valor (ja funciona)
-- Botao manual de despacho continua disponivel como fallback/reenvio
+- Auto-despacho ao criar chamado (ja implementado)
+- Top 3 mais proximos/menor valor para analista (CardDespachoReboque ja faz)
+- Fluxo de atribuição pelo analista
 
