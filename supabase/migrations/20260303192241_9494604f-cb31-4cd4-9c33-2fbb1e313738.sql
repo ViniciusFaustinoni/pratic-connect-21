@@ -1,0 +1,1 @@
+ALTER TABLE public.servicos ADD COLUMN IF NOT EXISTS followup_recusa_enviado_em timestamptz DEFAULT NULL;

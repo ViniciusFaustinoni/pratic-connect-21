@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.disparar-boletos-lote]
 verify_jwt = false
+
+[functions.cron-followup-recusa]
+verify_jwt = false
