@@ -1187,13 +1187,33 @@ export function useRecusarVeiculoServico() {
       queryClient.invalidateQueries({ queryKey: ['servico-detalhes'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
       queryClient.invalidateQueries({ queryKey: ['recusas-instalador'] });
       queryClient.invalidateQueries({ queryKey: ['recusas-instalador-count'] });
       toast.success('Veículo negado. Encaminhado para análise interna.');
 
+      // Buscar geolocalização e disparar busca da próxima tarefa (fire-and-forget)
+      navigator.geolocation?.getCurrentPosition(
+        (pos) => {
+          supabase.functions.invoke('atribuir-proxima-tarefa', {
+            body: {
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            },
+          }).then(() => {
+            queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+          });
+        },
+        () => {
+          // Sem geolocalização, dispara sem coordenadas
+          supabase.functions.invoke('atribuir-proxima-tarefa').then(() => {
+            queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+          });
+        }
+      );
+
       // Dispara notificação para analistas/coordenadores (fire-and-forget)
       import('@/components/sinistros/NotificacaoHelper').then(({ notificarRecusaInstalador }) => {
-        // Buscar placa do veículo
         supabase.from('veiculos').select('placa').eq('id', variables.veiculoId).single()
           .then(({ data: veiculo }) => {
             const placa = veiculo?.placa || 'N/A';
