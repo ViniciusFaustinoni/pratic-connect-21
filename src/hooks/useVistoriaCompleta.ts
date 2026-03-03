@@ -311,7 +311,28 @@ export function useRecusarVeiculoVistoria() {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
       toast.success('Veículo recusado. O associado será notificado.');
+
+      // Disparar busca da próxima tarefa (fire-and-forget)
+      navigator.geolocation?.getCurrentPosition(
+        (pos) => {
+          supabase.functions.invoke('atribuir-proxima-tarefa', {
+            body: {
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            },
+          }).then(() => {
+            queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+          });
+        },
+        () => {
+          supabase.functions.invoke('atribuir-proxima-tarefa').then(() => {
+            queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+          });
+        }
+      );
     },
     onError: (error) => {
       console.error('Erro ao recusar veículo:', error);
