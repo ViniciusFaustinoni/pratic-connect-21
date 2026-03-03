@@ -30,6 +30,7 @@ import { EscolhaTipoOrcamentoModal } from './EscolhaTipoOrcamentoModal';
 import { FormPacoteFechado } from './FormPacoteFechado';
 import { CotacoesPecaModal } from './CotacoesPecaModal';
 import { ImportarOrcamentoPDFModal } from './ImportarOrcamentoPDFModal';
+import { ConfirmacaoOrcamentoAnalista } from './ConfirmacaoOrcamentoAnalista';
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   elaboracao: { label: 'Em Elaboração', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
@@ -58,9 +59,10 @@ interface Props {
   canChooseType?: boolean;
   canReset?: boolean;
   oficinaNome?: string;
+  isAnalista?: boolean;
 }
 
-export function CardOrcamentoReparo({ sinistroId, valorFipe, canEdit = false, canChooseType = false, canReset = false, oficinaNome }: Props) {
+export function CardOrcamentoReparo({ sinistroId, valorFipe, canEdit = false, canChooseType = false, canReset = false, oficinaNome, isAnalista = false }: Props) {
   const { data: orcamento, isLoading } = useOrcamentoReparo(sinistroId);
   const { data: itens = [] } = useOrcamentoItens(orcamento?.id);
   const { data: historico = [] } = useOrcamentoHistorico(orcamento?.id);
@@ -442,6 +444,14 @@ export function CardOrcamentoReparo({ sinistroId, valorFipe, canEdit = false, ca
                   <HistoricoAlteracoes historico={historico} />
                 </TabsContent>
               </Tabs>
+
+              {/* Confirmação do Analista */}
+              {isAnalista && itens.length > 0 && !isPacoteFechado && (
+                <>
+                  <Separator />
+                  <ConfirmacaoOrcamentoAnalista orcamento={orcamento} sinistroId={sinistroId} />
+                </>
+              )}
 
               {/* Footer totals */}
               {itens.length > 0 && (

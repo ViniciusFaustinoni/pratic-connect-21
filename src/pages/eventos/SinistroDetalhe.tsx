@@ -326,6 +326,7 @@ export default function SinistroDetalhe() {
                 terceirosData={terceirosData}
                 isDiretor={isDiretor}
                 isRegulador={isRegulador}
+                isAnalista={isAnalistaEventosOnly || isDiretor}
                 onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
               />
             </TabsContent>

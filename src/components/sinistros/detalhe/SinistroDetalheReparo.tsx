@@ -9,11 +9,12 @@ interface SinistroDetalheReparoProps {
   terceirosData: any[];
   isDiretor: boolean;
   isRegulador: boolean;
+  isAnalista?: boolean;
   onOpenAtribuirFornecedores: () => void;
 }
 
 export function SinistroDetalheReparo({
-  sinistro, terceirosData, isDiretor, isRegulador, onOpenAtribuirFornecedores,
+  sinistro, terceirosData, isDiretor, isRegulador, isAnalista = false, onOpenAtribuirFornecedores,
 }: SinistroDetalheReparoProps) {
   const temTerceiros = terceirosData.length > 0;
 
@@ -38,6 +39,7 @@ export function SinistroDetalheReparo({
               canEdit={isDiretor || isRegulador}
               canChooseType={isDiretor}
               canReset={isDiretor}
+              isAnalista={isAnalista || isDiretor}
             />
           </TabsContent>
           {terceirosData.map((t) => (
@@ -56,6 +58,7 @@ export function SinistroDetalheReparo({
             canEdit={isDiretor || isRegulador}
             canChooseType={isDiretor}
             canReset={isDiretor}
+            isAnalista={isAnalista || isDiretor}
           />
         </>
       )}
