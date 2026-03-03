@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.cron-followup-recusa]
 verify_jwt = false
+
+[functions.cron-sga-retry]
+verify_jwt = false
