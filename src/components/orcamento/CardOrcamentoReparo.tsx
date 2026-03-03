@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Wrench, Plus, Pencil, X, CheckCircle, AlertTriangle, Lock, DollarSign, ClipboardList, Package, RotateCcw } from 'lucide-react';
+import { Wrench, Plus, Pencil, X, CheckCircle, AlertTriangle, Lock, DollarSign, ClipboardList, Package, RotateCcw, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useOrcamentoReparo,
@@ -29,6 +29,7 @@ import { HistoricoAlteracoes } from './HistoricoAlteracoes';
 import { EscolhaTipoOrcamentoModal } from './EscolhaTipoOrcamentoModal';
 import { FormPacoteFechado } from './FormPacoteFechado';
 import { CotacoesPecaModal } from './CotacoesPecaModal';
+import { ImportarOrcamentoPDFModal } from './ImportarOrcamentoPDFModal';
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   elaboracao: { label: 'Em Elaboração', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
@@ -79,6 +80,7 @@ export function CardOrcamentoReparo({ sinistroId, valorFipe, canEdit = false, ca
   const [showConsolidar, setShowConsolidar] = useState(false);
   const [cotacoesItem, setCotacoesItem] = useState<OrcamentoItem | null>(null);
   const [resetMotivo, setResetMotivo] = useState('');
+  const [showImportPDF, setShowImportPDF] = useState(false);
 
   const pecas = useMemo(() => itens.filter(i => i.tipo === 'peca'), [itens]);
   const mdo = useMemo(() => itens.filter(i => i.tipo === 'mao_de_obra'), [itens]);
@@ -355,6 +357,11 @@ export function CardOrcamentoReparo({ sinistroId, valorFipe, canEdit = false, ca
                   <Button size="sm" variant="outline" onClick={() => { setAddDefaultTipo('mao_de_obra'); setShowAddModal(true); }}>
                     <Plus className="h-3 w-3 mr-1" /> Adicionar Serviço
                   </Button>
+                  {orcamento.status === 'elaboracao' && (
+                    <Button size="sm" variant="outline" onClick={() => setShowImportPDF(true)}>
+                      <FileUp className="h-3 w-3 mr-1" /> Importar PDF
+                    </Button>
+                  )}
                   {canEdit && orcamento.status !== 'consolidado' && itens.length > 0 && (
                     <Button size="sm" onClick={() => setShowConsolidar(true)}>
                       <CheckCircle className="h-3 w-3 mr-1" /> Consolidar Orçamento
@@ -500,6 +507,14 @@ export function CardOrcamentoReparo({ sinistroId, valorFipe, canEdit = false, ca
           itemId={cotacoesItem.id}
           itemDescricao={cotacoesItem.descricao}
           canEdit={canEditItems}
+        />
+      )}
+
+      {showImportPDF && (
+        <ImportarOrcamentoPDFModal
+          open={showImportPDF}
+          onClose={() => setShowImportPDF(false)}
+          orcamentoId={orcamento.id}
         />
       )}
     </>
