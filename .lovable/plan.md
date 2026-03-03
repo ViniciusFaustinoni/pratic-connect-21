@@ -1,102 +1,55 @@
 
-# Corrigir propagacao de dados para o SGA Hinova
 
-## Diagnostico (baseado nos logs reais do banco)
+# Corrigir Ranking e Rota da Equipe Comercial
 
-Analisei os logs de sincronizacao e identifiquei **3 problemas na raiz** que impedem a propagacao correta:
+## Problemas Identificados
 
-### Problema 1: Tipo de veiculo errado para motos
-O ultimo sync (01/03) enviou `codigo_tipo_veiculo: 1` (automovel) para uma **Honda NXR160 Bros** (moto). A funcao `inferirTipoVeiculo` no edge function so olha `contrato.veiculo_categoria` -- que nao contem "moto" para muitos contratos. Precisa usar `marca` e `modelo` do veiculo como fallback, igual ao que ja foi feito no frontend (`detectarTipoVeiculo`).
+### 1. Rota incorreta
+A sidebar (`AppSidebar.tsx` linha 165) aponta para `/vendas/propostas` com o titulo "Consultores". A pagina mostra "Equipe Comercial" mas a rota diz "propostas". Precisa renomear para `/vendas/equipe-comercial`.
 
-### Problema 2: Recuperacao de placa duplicada falha
-Quando o Hinova retorna "Ja existe um veiculo com a placa LMS3B44", as 4 estrategias de fallback nao encontram o codigo:
-- Estrategia 1 (GET /veiculo/consultar/placa/): endpoint pode nao existir na API v2
-- Estrategia 2 (POST /veiculo/consultar): idem
-- Estrategia 3 (logs anteriores): busca generica sem filtrar pelo veiculo_id/placa especifico
-- Estrategia 4 (banco local): so funciona se o veiculo ja foi sincronizado antes
-
-O resultado: a sync para no passo do veiculo e nunca completa. O associado fica cadastrado no Hinova mas sem veiculo vinculado.
-
-### Problema 3: Edge functions desatualizadas
-As correcoes feitas anteriormente nos arquivos de edge functions (notificar-cliente, whatsapp-webhook) precisam ser reimplantadas para surtirem efeito.
-
-## Correcoes Propostas
-
-### 1. `supabase/functions/sga-hinova-sync/index.ts` -- Deteccao inteligente de tipo de veiculo
-
-Substituir a funcao `inferirTipoVeiculo` para aceitar `marca` e `modelo` alem da categoria:
+### 2. Ranking hardcoded (PROBLEMA PRINCIPAL)
+No `usePropostasMetricas.ts` (linhas 228-241), existe uma lista **hardcoded** de nomes de consultores "prioritarios" que forca a ordenacao independentemente do desempenho real:
 
 ```typescript
-const inferirTipoVeiculo = (categoria, marca, modelo): number => {
-  // Prioridade 1: categoria explicita
-  if (categoria?.toUpperCase().includes('MOTO')) return 2;
-  
-  // Prioridade 2: modelo com keywords de moto
-  const MOTO_KEYWORDS = ['nxr', 'bros', 'cg', 'cb', 'cbr', 'pcx', 'biz', 'pop', 
-    'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr', 'neo',
-    'burgman', 'intruder', 'factor', 'scooter'];
-  if (modelo && MOTO_KEYWORDS.some(kw => modelo.toLowerCase().includes(kw))) return 2;
-  
-  // Prioridade 3: marca exclusiva de moto
-  const MARCAS_MOTO = ['YAMAHA', 'SUZUKI', 'KAWASAKI', 'HARLEY', 'TRIUMPH', 
-    'DUCATI', 'KTM', 'DAFRA', 'SHINERAY', 'KASINSKI'];
-  if (marca && MARCAS_MOTO.some(m => marca.toUpperCase().includes(m))) return 2;
-  
-  // Demais categorias (caminhao, van, etc.)
-  // ... manter logica existente
-  return 1;
-};
+const consultoresPrioritarios = [
+  'KALAYANE SHASNAM MURADO',
+  'JEICIELI DOS SANTOS LIMA',
+  // ... 10 nomes fixos
+];
 ```
 
-Passar `veiculo.marca` e `veiculo.modelo` para a funcao (linha 843).
+Isso significa que o ranking nunca reflete a performance real -- o #1 sera sempre KALAYANE, o #2 sempre JEICIELI, etc.
 
-### 2. `supabase/functions/sga-hinova-sync/index.ts` -- Corrigir recuperacao de placa duplicada
+### 3. Ordenacao conflitante
+O hook ordena pela lista hardcoded, mas depois `Propostas.tsx` (linha 73) re-ordena por `valorFechado`. Como todos tem R$0,00, a ordem final e arbitraria e os badges de #1/#2/#3 nao significam nada.
 
-Na **Estrategia 3** (busca em logs): filtrar pelo `veiculo_id` especifico em vez de buscar qualquer log generico:
+## Correcoes
 
-```typescript
-// ANTES: busca generica em todos os logs
-const { data: logAnterior } = await supabase
-  .from('sga_sync_logs')
-  .select('response_payload')
-  .eq('action', 'cadastrar_veiculo')
-  .eq('status', 'success')
-  .order('created_at', { ascending: false })
-  .limit(50);
+### Arquivo 1: `src/hooks/usePropostasMetricas.ts`
+- **Remover** a lista `consultoresPrioritarios` (linhas 227-241)
+- **Substituir** a ordenacao por ranking real baseado em metricas: `propostasFechadas` (primario) > `valorFechado` (secundario) > `emCotacao + contratoEnviado` (terciario)
+- O campo `ranking` sera atribuido apos a ordenacao real
 
-// DEPOIS: filtrar por veiculo_id
-const { data: logAnterior } = await supabase
-  .from('sga_sync_logs')
-  .select('response_payload')
-  .eq('veiculo_id', veiculo_id)
-  .eq('action', 'cadastrar_veiculo')
-  .eq('status', 'success')
-  .order('created_at', { ascending: false })
-  .limit(5);
-```
+### Arquivo 2: `src/pages/vendas/Propostas.tsx`
+- **Remover** o re-sort por `valorFechado` (linha 73) pois o hook ja retornara a ordem correta
+- Manter a posicao do ranking baseada na ordem do hook (nao na posicao da pagina)
+- Passar `consultor.ranking` ao componente `ConsultorCardNew` em vez de `(page - 1) * PAGE_SIZE + index + 1`
 
-Tambem adicionar uma **Estrategia 5**: tentar associar o veiculo existente ao associado recem-criado usando outro endpoint Hinova, ou pelo menos salvar o estado parcial:
+### Arquivo 3: `src/components/layout/AppSidebar.tsx`
+- Alterar a URL de `/vendas/propostas` para `/vendas/equipe-comercial`
 
-```typescript
-// Se nenhuma estrategia encontrou o codigo,
-// marcar sync como parcial (associado OK, veiculo pendente)
-// e salvar o codigo_associado para nao perder progresso
-await supabase.from('associados')
-  .update({ codigo_hinova: codigoAssociadoHinova })
-  .eq('id', associado_id);
-```
+### Arquivo 4: `src/App.tsx`
+- Alterar a rota de `/vendas/propostas` para `/vendas/equipe-comercial`
+- Adicionar redirect de `/vendas/propostas` para `/vendas/equipe-comercial` (compatibilidade)
 
-### 3. Reimplantar edge functions
+### Arquivo 5: `src/hooks/useModuleItemVisibility.ts`
+- Atualizar o mapeamento de rota de `/vendas/propostas` para `/vendas/equipe-comercial`
 
-Apos as alteracoes, reimplantar:
-- `sga-hinova-sync` (correcoes de tipo e recuperacao)
-- `notificar-cliente` (ja corrigido para "Protecao 360")
-- `whatsapp-webhook` (ja corrigido para "Protecao 360")
+### Arquivo 6: `src/pages/vendas/Consultores.tsx`
+- Atualizar o botao de voltar de `/vendas/propostas` para `/vendas/equipe-comercial`
 
-## Resultado Esperado
+## Resultado
+- Ranking baseado em desempenho real (vendas fechadas, valor, atividade)
+- Rota correta: `/vendas/equipe-comercial`
+- Medalhas #1/#2/#3 refletem os melhores consultores do periodo
 
-- Motos serao enviadas como `codigo_tipo_veiculo: 2` no SGA
-- Recuperacao de placa duplicada sera mais precisa (filtra por veiculo_id)
-- Mesmo quando o veiculo ja existe no Hinova, o `codigo_associado` sera preservado
-- Mensagens do WhatsApp mostrarao "Protecao 360" corretamente
-- 1 arquivo editado + 3 edge functions reimplantadas
