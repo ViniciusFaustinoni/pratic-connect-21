@@ -83,7 +83,10 @@ export function CardOrcamentoReparo({ sinistroId, valorFipe, canEdit = false, ca
   const [cotacoesItem, setCotacoesItem] = useState<OrcamentoItem | null>(null);
   const [resetMotivo, setResetMotivo] = useState('');
   const [showImportPDF, setShowImportPDF] = useState(false);
+  const [showPDFAutoCreate, setShowPDFAutoCreate] = useState(false);
 
+  // Regulador = canEdit && !canChooseType && !isAnalista
+  const isRegulador = canEdit && !canChooseType && !isAnalista;
   const pecas = useMemo(() => itens.filter(i => i.tipo === 'peca'), [itens]);
   const mdo = useMemo(() => itens.filter(i => i.tipo === 'mao_de_obra'), [itens]);
 
@@ -109,16 +112,38 @@ export function CardOrcamentoReparo({ sinistroId, valorFipe, canEdit = false, ca
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-3">Nenhum orçamento criado para este evento.</p>
-            <Button
-              size="sm"
-              onClick={() => setShowEscolha(true)}
-              disabled={criarOrcamento.isPending}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Criar Orçamento
-            </Button>
+            {isRegulador ? (
+              <Button
+                size="sm"
+                onClick={() => setShowPDFAutoCreate(true)}
+              >
+                <FileUp className="h-4 w-4 mr-1" />
+                Enviar Orçamento (PDF)
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => setShowEscolha(true)}
+                disabled={criarOrcamento.isPending}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Criar Orçamento
+              </Button>
+            )}
           </CardContent>
         </Card>
+
+        {/* Modal PDF autoCreate para regulador */}
+        {showPDFAutoCreate && (
+          <ImportarOrcamentoPDFModal
+            open={showPDFAutoCreate}
+            onClose={() => setShowPDFAutoCreate(false)}
+            orcamentoId=""
+            autoCreate
+            sinistroId={sinistroId}
+          />
+        )}
+
         <EscolhaTipoOrcamentoModal
           open={showEscolha}
           onClose={() => setShowEscolha(false)}
