@@ -39,6 +39,10 @@ export interface OrcamentoItem {
   observacao: string | null;
   motivo_inclusao: string | null;
   motivo_cancelamento: string | null;
+  auto_center_id: string | null;
+  valor_confirmado: number | null;
+  confirmado_por: string | null;
+  confirmado_em: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -314,11 +318,18 @@ export function useConsolidarOrcamento() {
       if (error) throw error;
 
       const valorFinal = data.valor_pacote ?? data.valor_total;
+      
+      // Registrar custo real no sinistro (apenas na consolidação = conclusão do reparo)
+      await supabase
+        .from('sinistros')
+        .update({ custo_real_total: valorFinal } as any)
+        .eq('id', data.sinistro_id);
+
       await supabase.from('orcamento_reparo_historico').insert({
         orcamento_id: orcamentoId,
         acao: 'consolidado',
-        descricao: `Orçamento consolidado — Total final: R$ ${valorFinal?.toFixed(2)}`,
-        dados_novos: { valor_total: data.valor_total, valor_pecas: data.valor_pecas, valor_mao_obra: data.valor_mao_obra, valor_pacote: data.valor_pacote },
+        descricao: `Orçamento consolidado — Custo real do evento: R$ ${valorFinal?.toFixed(2)}`,
+        dados_novos: { valor_total: data.valor_total, valor_pecas: data.valor_pecas, valor_mao_obra: data.valor_mao_obra, valor_pacote: data.valor_pacote, custo_real_total: valorFinal },
         motivo: observacaoFinal || null,
         usuario_id: profile?.id || null,
       });
@@ -530,6 +541,115 @@ export function useResetarOrcamento() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['orcamento-reparo', data.sinistroId] });
+    },
+  });
+}
+
+// ========== Hook para Confirmar Item (Analista) ==========
+
+export function useConfirmarItem() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      item,
+      valorConfirmado,
+      autoCenterId,
+      motivo,
+    }: {
+      item: OrcamentoItem;
+      valorConfirmado: number;
+      autoCenterId?: string | null;
+      motivo?: string;
+    }) => {
+      const valorTotalConfirmado = valorConfirmado * item.quantidade;
+
+      const updateData: any = {
+        valor_confirmado: valorConfirmado,
+        confirmado_por: profile?.id || null,
+        confirmado_em: new Date().toISOString(),
+      };
+
+      // Se o valor confirmado difere do original, atualizar valor_unitario e valor_total
+      if (valorConfirmado !== item.valor_unitario) {
+        updateData.valor_unitario = valorConfirmado;
+        updateData.valor_total = valorTotalConfirmado;
+      }
+
+      if (autoCenterId !== undefined) {
+        updateData.auto_center_id = autoCenterId;
+      }
+
+      const { data: updated, error } = await supabase
+        .from('orcamento_reparo_itens')
+        .update(updateData)
+        .eq('id', item.id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      // Registrar no histórico de auditoria
+      await supabase.from('orcamento_reparo_historico').insert({
+        orcamento_id: item.orcamento_id,
+        item_id: item.id,
+        acao: 'item_confirmado_analista',
+        descricao: `Analista confirmou ${item.tipo === 'peca' ? 'peça' : 'serviço'}: ${item.descricao} — Valor: R$ ${valorConfirmado.toFixed(2)}${valorConfirmado !== item.valor_unitario ? ` (anterior: R$ ${item.valor_unitario.toFixed(2)})` : ''}`,
+        dados_anteriores: { valor_unitario: item.valor_unitario, valor_total: item.valor_total, auto_center_id: item.auto_center_id },
+        dados_novos: updateData,
+        motivo: motivo || 'Confirmação do analista',
+        usuario_id: profile?.id || null,
+      });
+
+      return updated;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orcamento-reparo-itens', data.orcamento_id] });
+      queryClient.invalidateQueries({ queryKey: ['orcamento-reparo'] });
+      queryClient.invalidateQueries({ queryKey: ['orcamento-reparo-historico', data.orcamento_id] });
+    },
+  });
+}
+
+// ========== Hook para Confirmar Orçamento Completo (Analista) ==========
+
+export function useConfirmarOrcamentoAnalista() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      orcamentoId,
+      sinistroId,
+    }: {
+      orcamentoId: string;
+      sinistroId: string;
+    }) => {
+      const { data, error } = await supabase
+        .from('orcamento_reparo')
+        .update({
+          confirmado_analista: true,
+          confirmado_analista_por: profile?.id || null,
+          confirmado_analista_em: new Date().toISOString(),
+          status: 'execucao',
+        } as any)
+        .eq('id', orcamentoId)
+        .select()
+        .single();
+      if (error) throw error;
+
+      await supabase.from('orcamento_reparo_historico').insert({
+        orcamento_id: orcamentoId,
+        acao: 'orcamento_confirmado_analista',
+        descricao: 'Orçamento confirmado pelo analista de eventos',
+        usuario_id: profile?.id || null,
+      });
+
+      return data;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['orcamento-reparo', data.sinistro_id] });
+      queryClient.invalidateQueries({ queryKey: ['orcamento-reparo-historico', data.id] });
     },
   });
 }

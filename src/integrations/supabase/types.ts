@@ -14387,6 +14387,9 @@ export type Database = {
       }
       orcamento_reparo: {
         Row: {
+          confirmado_analista: boolean | null
+          confirmado_analista_em: string | null
+          confirmado_analista_por: string | null
           consolidado_em: string | null
           consolidado_por: string | null
           created_at: string
@@ -14409,6 +14412,9 @@ export type Database = {
           valor_total: number | null
         }
         Insert: {
+          confirmado_analista?: boolean | null
+          confirmado_analista_em?: string | null
+          confirmado_analista_por?: string | null
           consolidado_em?: string | null
           consolidado_por?: string | null
           created_at?: string
@@ -14431,6 +14437,9 @@ export type Database = {
           valor_total?: number | null
         }
         Update: {
+          confirmado_analista?: boolean | null
+          confirmado_analista_em?: string | null
+          confirmado_analista_por?: string | null
           consolidado_em?: string | null
           consolidado_por?: string | null
           created_at?: string
@@ -14453,6 +14462,27 @@ export type Database = {
           valor_total?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "orcamento_reparo_confirmado_analista_por_fkey"
+            columns: ["confirmado_analista_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orcamento_reparo_confirmado_analista_por_fkey"
+            columns: ["confirmado_analista_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "orcamento_reparo_confirmado_analista_por_fkey"
+            columns: ["confirmado_analista_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
           {
             foreignKeyName: "orcamento_reparo_oficina_id_fkey"
             columns: ["oficina_id"]
@@ -14569,6 +14599,9 @@ export type Database = {
       }
       orcamento_reparo_itens: {
         Row: {
+          auto_center_id: string | null
+          confirmado_em: string | null
+          confirmado_por: string | null
           created_at: string
           created_by: string | null
           descricao: string
@@ -14582,10 +14615,14 @@ export type Database = {
           status: string
           tipo: string
           updated_at: string
+          valor_confirmado: number | null
           valor_total: number
           valor_unitario: number
         }
         Insert: {
+          auto_center_id?: string | null
+          confirmado_em?: string | null
+          confirmado_por?: string | null
           created_at?: string
           created_by?: string | null
           descricao: string
@@ -14599,10 +14636,14 @@ export type Database = {
           status?: string
           tipo: string
           updated_at?: string
+          valor_confirmado?: number | null
           valor_total?: number
           valor_unitario?: number
         }
         Update: {
+          auto_center_id?: string | null
+          confirmado_em?: string | null
+          confirmado_por?: string | null
           created_at?: string
           created_by?: string | null
           descricao?: string
@@ -14616,10 +14657,39 @@ export type Database = {
           status?: string
           tipo?: string
           updated_at?: string
+          valor_confirmado?: number | null
           valor_total?: number
           valor_unitario?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "orcamento_reparo_itens_auto_center_id_fkey"
+            columns: ["auto_center_id"]
+            isOneToOne: false
+            referencedRelation: "auto_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orcamento_reparo_itens_confirmado_por_fkey"
+            columns: ["confirmado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orcamento_reparo_itens_confirmado_por_fkey"
+            columns: ["confirmado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "orcamento_reparo_itens_confirmado_por_fkey"
+            columns: ["confirmado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
           {
             foreignKeyName: "orcamento_reparo_itens_orcamento_id_fkey"
             columns: ["orcamento_id"]
@@ -21677,6 +21747,7 @@ export type Database = {
           cota_paga: boolean | null
           cota_paga_em: string | null
           created_at: string
+          custo_real_total: number | null
           data_garantia_fim: string | null
           data_garantia_inicio: string | null
           data_ocorrencia: string
@@ -21750,6 +21821,7 @@ export type Database = {
           tipo_agua: string | null
           tipo_dano: string | null
           tipo_local_evento: string | null
+          tipo_servico_oficina: string | null
           updated_at: string
           upload_token: string | null
           upload_token_expires_at: string | null
@@ -21801,6 +21873,7 @@ export type Database = {
           cota_paga?: boolean | null
           cota_paga_em?: string | null
           created_at?: string
+          custo_real_total?: number | null
           data_garantia_fim?: string | null
           data_garantia_inicio?: string | null
           data_ocorrencia: string
@@ -21874,6 +21947,7 @@ export type Database = {
           tipo_agua?: string | null
           tipo_dano?: string | null
           tipo_local_evento?: string | null
+          tipo_servico_oficina?: string | null
           updated_at?: string
           upload_token?: string | null
           upload_token_expires_at?: string | null
@@ -21925,6 +21999,7 @@ export type Database = {
           cota_paga?: boolean | null
           cota_paga_em?: string | null
           created_at?: string
+          custo_real_total?: number | null
           data_garantia_fim?: string | null
           data_garantia_inicio?: string | null
           data_ocorrencia?: string
@@ -21998,6 +22073,7 @@ export type Database = {
           tipo_agua?: string | null
           tipo_dano?: string | null
           tipo_local_evento?: string | null
+          tipo_servico_oficina?: string | null
           updated_at?: string
           upload_token?: string | null
           upload_token_expires_at?: string | null

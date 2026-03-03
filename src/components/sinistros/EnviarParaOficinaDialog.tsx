@@ -13,7 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Select,
   SelectContent,
@@ -21,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Wrench, Loader2 } from 'lucide-react';
+import { Wrench, Loader2, Package, ClipboardList, AlertTriangle } from 'lucide-react';
 
 interface EnviarParaOficinaDialogProps {
   open: boolean;
@@ -39,7 +41,8 @@ export function EnviarParaOficinaDialog({
   onSuccess,
 }: EnviarParaOficinaDialogProps) {
   const [oficinaId, setOficinaId] = useState('');
-  const [tipoReparo, setTipoReparo] = useState('');
+  const [tipoServico, setTipoServico] = useState<'pacote_fechado' | 'servico_comum' | ''>('');
+  const [valorPacote, setValorPacote] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -50,22 +53,24 @@ export function EnviarParaOficinaDialog({
       toast.error('Selecione uma oficina');
       return;
     }
+    if (!tipoServico) {
+      toast.error('Selecione o tipo de serviço');
+      return;
+    }
+    if (tipoServico === 'pacote_fechado' && (!valorPacote || parseFloat(valorPacote) <= 0)) {
+      toast.error('Informe o valor do pacote fechado');
+      return;
+    }
 
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Buscar profile.id (FK exige referencia a profiles, nao auth.users)
       const { data: profile } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user?.id)
         .maybeSingle();
-
-      const obs = [
-        tipoReparo ? `Tipo de reparo: ${tipoReparo}` : '',
-        observacoes || '',
-      ].filter(Boolean).join('\n');
 
       // 1. Criar OS
       const { data: os, error: osError } = await supabase
@@ -77,7 +82,7 @@ export function EnviarParaOficinaDialog({
           veiculo_id: sinistro.veiculo_id,
           associado_id: sinistro.associado_id,
           data_entrada: format(new Date(), 'yyyy-MM-dd'),
-          observacoes: obs || null,
+          observacoes: observacoes || null,
           status: 'aguardando_orcamento' as any,
           criado_por: profile?.id,
         })
@@ -86,22 +91,51 @@ export function EnviarParaOficinaDialog({
 
       if (osError) throw osError;
 
-      // 2. Atualizar sinistro para em_reparo
+      // 2. Atualizar sinistro
       await supabase
         .from('sinistros')
-        .update({ status: 'em_reparo' as any })
+        .update({
+          status: 'em_reparo' as any,
+          oficina_id: oficinaId,
+          tipo_servico_oficina: tipoServico,
+        } as any)
         .eq('id', sinistro.id);
 
-      // 3. Registrar histórico do sinistro
+      // 3. Se pacote fechado, criar orçamento automaticamente com valor
+      if (tipoServico === 'pacote_fechado') {
+        const valor = parseFloat(valorPacote);
+        await supabase
+          .from('orcamento_reparo')
+          .insert({
+            sinistro_id: sinistro.id,
+            oficina_id: oficinaId,
+            tipo_orcamento: 'pacote_fechado',
+            valor_pacote: valor,
+            valor_total: valor,
+            status: 'elaboracao',
+          });
+      } else {
+        // Serviço comum: criar orçamento vazio para o regulador preencher
+        await supabase
+          .from('orcamento_reparo')
+          .insert({
+            sinistro_id: sinistro.id,
+            oficina_id: oficinaId,
+            tipo_orcamento: 'cotacao_separada',
+            status: 'elaboracao',
+          });
+      }
+
+      // 4. Registrar histórico do sinistro
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistro.id,
         status_anterior: sinistro.status,
         status_novo: 'em_reparo',
-        observacao: `Encaminhado para oficina. OS criada: ${os.numero || os.id}`,
+        observacao: `Encaminhado para oficina. OS: ${os.numero || os.id}. Tipo: ${tipoServico === 'pacote_fechado' ? 'Pacote Fechado (R$ ' + parseFloat(valorPacote).toFixed(2) + ')' : 'Serviço Comum'}`,
         usuario_id: profile?.id,
       });
 
-      // 4. Registrar histórico da OS
+      // 5. Registrar histórico da OS
       await supabase.from('ordens_servico_historico').insert({
         ordem_servico_id: os.id,
         status_novo: 'aguardando_orcamento',
@@ -109,7 +143,7 @@ export function EnviarParaOficinaDialog({
         usuario_id: profile?.id,
       });
 
-      // 5. WhatsApp ao associado
+      // 6. WhatsApp ao associado
       try {
         const { data: assocData } = await supabase
           .from('associados')
@@ -150,18 +184,19 @@ export function EnviarParaOficinaDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wrench className="h-5 w-5" />
-            Enviar para Oficina
+            Atribuir Oficina ao Evento
           </DialogTitle>
           <DialogDescription>
-            Selecione a oficina e crie uma ordem de serviço para o sinistro {sinistro?.protocolo}
+            Selecione a oficina e o tipo de serviço para o sinistro {sinistro?.protocolo}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-5 py-2">
+          {/* Oficina */}
           <div className="space-y-2">
             <Label>Oficina *</Label>
             <Select value={oficinaId} onValueChange={setOficinaId}>
@@ -178,23 +213,89 @@ export function EnviarParaOficinaDialog({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label>Tipo de Reparo</Label>
-            <Select value={tipoReparo} onValueChange={setTipoReparo}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="funilaria_pintura">Funilaria e Pintura</SelectItem>
-                <SelectItem value="mecanica">Mecânica</SelectItem>
-                <SelectItem value="eletrica">Elétrica</SelectItem>
-                <SelectItem value="vidros">Vidros</SelectItem>
-                <SelectItem value="completo">Reparo Completo</SelectItem>
-                <SelectItem value="outro">Outro</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Tipo de Serviço */}
+          <div className="space-y-3">
+            <Label>Tipo de Serviço *</Label>
+            <RadioGroup
+              value={tipoServico}
+              onValueChange={(v) => setTipoServico(v as 'pacote_fechado' | 'servico_comum')}
+              className="grid grid-cols-2 gap-3"
+            >
+              <label
+                className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all ${
+                  tipoServico === 'pacote_fechado' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:border-muted-foreground/40'
+                }`}
+              >
+                <RadioGroupItem value="pacote_fechado" />
+                <div>
+                  <div className="flex items-center gap-1.5 font-medium text-sm">
+                    <Package className="h-4 w-4" />
+                    Pacote Fechado
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Valor total único, sem detalhamento de peças/serviços
+                  </p>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all ${
+                  tipoServico === 'servico_comum' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:border-muted-foreground/40'
+                }`}
+              >
+                <RadioGroupItem value="servico_comum" />
+                <div>
+                  <div className="flex items-center gap-1.5 font-medium text-sm">
+                    <ClipboardList className="h-4 w-4" />
+                    Serviço Comum
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Orçamento detalhado com peças e mão de obra
+                  </p>
+                </div>
+              </label>
+            </RadioGroup>
           </div>
 
+          {/* Valor do Pacote Fechado */}
+          {tipoServico === 'pacote_fechado' && (
+            <div className="space-y-2 p-4 border rounded-lg bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                <AlertTriangle className="h-4 w-4" />
+                <Label className="text-amber-800 dark:text-amber-200 font-medium">Valor Total do Pacote *</Label>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Este será o custo total do evento. Cotações de peças, serviços e mão de obra serão desconsideradas.
+              </p>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0,00"
+                  value={valorPacote}
+                  onChange={(e) => setValorPacote(e.target.value)}
+                  className="pl-10 text-lg font-semibold"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Serviço Comum info */}
+          {tipoServico === 'servico_comum' && (
+            <div className="p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 text-xs text-blue-800 dark:text-blue-200">
+              <p className="font-medium mb-1">📋 Fluxo do Serviço Comum:</p>
+              <ol className="list-decimal list-inside space-y-0.5">
+                <li>O regulador da oficina envia o orçamento detalhado</li>
+                <li>O analista de eventos confirma/corrige os valores</li>
+                <li>O analista atribui o auto center para cada peça</li>
+                <li>O custo real é calculado somente na conclusão do reparo</li>
+              </ol>
+            </div>
+          )}
+
+          {/* Observações */}
           <div className="space-y-2">
             <Label>Observações</Label>
             <Textarea
@@ -210,9 +311,9 @@ export function EnviarParaOficinaDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
+          <Button onClick={handleSubmit} disabled={loading || !tipoServico}>
             {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wrench className="h-4 w-4 mr-2" />}
-            Criar OS e Enviar
+            Criar OS e Atribuir
           </Button>
         </DialogFooter>
       </DialogContent>
