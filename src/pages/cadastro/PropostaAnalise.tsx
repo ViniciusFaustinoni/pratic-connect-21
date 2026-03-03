@@ -43,6 +43,7 @@ import {
   PropostaMidiaGrid,
   PropostaDetalhesTabs,
 } from '@/components/cadastro/proposta';
+import { DocumentosAnexadosPanel } from '@/components/cadastro/DocumentosAnexadosPanel';
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 
 // ============================================
@@ -319,16 +320,21 @@ export default function PropostaAnalise() {
         />
       )}
 
+      {/* ZONA 2.5: Documentos sempre visíveis */}
+      <DocumentosAnexadosPanel
+        documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
+        onViewDocumento={setDocumentoVisualizar}
+        onAprovarDocumento={handleAprovarDocumento}
+        onReprovarDocumento={handleReprovarDocumento}
+      />
+
       {/* ZONA 3: Tabs de Detalhes */}
       <PropostaDetalhesTabs
         proposta={proposta}
-        onViewDocumento={setDocumentoVisualizar}
         veiculoRenavam={veiculoRenavam}
         setVeiculoRenavam={setVeiculoRenavam}
         veiculoChassi={veiculoChassi}
         setVeiculoChassi={setVeiculoChassi}
-        onAprovarDocumento={handleAprovarDocumento}
-        onReprovarDocumento={handleReprovarDocumento}
       />
 
       {/* DIALOGS */}

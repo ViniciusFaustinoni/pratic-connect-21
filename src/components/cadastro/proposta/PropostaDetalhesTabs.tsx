@@ -26,20 +26,14 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { DocumentosAnexadosPanel } from '@/components/cadastro/DocumentosAnexadosPanel';
-
 import type { PropostaPendente } from '@/hooks/usePropostasPendentes';
-import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 
 interface PropostaDetalhesTabsProps {
   proposta: PropostaPendente;
-  onViewDocumento: (documento: DocumentoAnexadoCompleto) => void;
   veiculoRenavam: string;
   setVeiculoRenavam: (value: string) => void;
   veiculoChassi: string;
   setVeiculoChassi: (value: string) => void;
-  onAprovarDocumento?: (docId: string) => Promise<void>;
-  onReprovarDocumento?: (docId: string, motivo: string) => Promise<void>;
 }
 
 // Componente de campo com hover highlight
@@ -99,18 +93,12 @@ const categoryBorderColors: Record<string, string> = {
 
 export function PropostaDetalhesTabs({
   proposta,
-  onViewDocumento,
   veiculoRenavam,
   setVeiculoRenavam,
   veiculoChassi,
   setVeiculoChassi,
-  onAprovarDocumento,
-  onReprovarDocumento,
 }: PropostaDetalhesTabsProps) {
   const associado = proposta.associado;
-  
-  const totalDocumentos = (proposta.documentos?.length || 0);
-  const documentosNovos = proposta.documentos_solicitados_enviados?.length || 0;
   
   const temInstalacao = !!proposta.instalacao_info;
   const temAgendamento = !!proposta.instalacao_agendada && !temInstalacao;
@@ -123,7 +111,7 @@ export function PropostaDetalhesTabs({
     <Tabs defaultValue="cliente" className="w-full">
       {/* Sticky tabs bar - labels sempre visíveis */}
       <div className="sticky top-[41px] z-10 bg-background/95 backdrop-blur-sm pb-2 pt-1 -mx-1 px-1">
-        <TabsList className="w-full grid grid-cols-5 h-11 bg-muted/50 p-1 rounded-xl">
+        <TabsList className="w-full grid grid-cols-4 h-11 bg-muted/50 p-1 rounded-xl">
           <TabsTrigger value="cliente" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg">
             <User className="h-3.5 w-3.5" />
             <span>Cliente</span>
@@ -135,21 +123,6 @@ export function PropostaDetalhesTabs({
               <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
                 <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-warning text-[8px] text-warning-foreground font-bold flex items-center justify-center">!</span>
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="documentos" className="gap-1.5 text-xs relative data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg">
-            <FileText className="h-3.5 w-3.5" />
-            <span>Docs</span>
-            <Badge variant="secondary" className="ml-0.5 h-5 w-5 p-0 text-[10px] leading-none flex items-center justify-center rounded-full">
-              {totalDocumentos}
-            </Badge>
-            {documentosNovos > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75" />
-                <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 text-[8px] text-white font-bold items-center justify-center">
-                  {documentosNovos}
-                </span>
               </span>
             )}
           </TabsTrigger>
@@ -248,16 +221,6 @@ export function PropostaDetalhesTabs({
             </div>
           </CardContent>
         </Card>
-      </TabsContent>
-
-      {/* Tab Documentos */}
-      <TabsContent value="documentos" className="mt-3 space-y-3">
-        <DocumentosAnexadosPanel
-          documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
-          onViewDocumento={onViewDocumento}
-          onAprovarDocumento={onAprovarDocumento}
-          onReprovarDocumento={onReprovarDocumento}
-        />
       </TabsContent>
 
       {/* Tab Instalação */}
