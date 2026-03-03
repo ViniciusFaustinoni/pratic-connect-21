@@ -4,11 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Truck, Clock, Send, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, MapPin, Navigation } from 'lucide-react';
+import { Truck, Send, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, MapPin, Navigation, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -46,9 +45,16 @@ const conviteStatusConfig: Record<string, { label: string; className: string }> 
   nao_atribuido: { label: '➖ Não atribuído', className: 'bg-yellow-100 text-yellow-800' },
 };
 
+const etapaConfig: Record<string, { label: string; className: string }> = {
+  aguardando_sim: { label: '⏳ Aguardando resposta', className: 'bg-gray-100 text-gray-700' },
+  aguardando_localizacao: { label: '📍 Aguardando localização', className: 'bg-blue-100 text-blue-700' },
+  aguardando_aceite_valor: { label: '💰 Aguardando aceite valor', className: 'bg-amber-100 text-amber-700' },
+  aceito: { label: '✅ Aceito', className: 'bg-green-100 text-green-700' },
+  recusado: { label: '❌ Recusou', className: 'bg-red-100 text-red-700' },
+};
+
 export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
   const queryClient = useQueryClient();
-  const [timeLeft, setTimeLeft] = useState(0);
 
   // Buscar despacho ativo
   const { data: despacho, isLoading } = useQuery({
@@ -79,7 +85,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
         .from('despacho_reboque_convites')
         .select(`
           *,
-          prestador:prestadores_assistencia(id, razao_social, nome_fantasia)
+          prestador:prestadores_assistencia(id, razao_social, nome_fantasia, whatsapp, telefone)
         `)
         .eq('despacho_id', despacho!.id)
         .order('valor_calculado', { ascending: true, nullsFirst: false });
@@ -87,6 +93,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
       return data;
     },
     enabled: !!despacho?.id,
+    refetchInterval: 10000, // Poll every 10s para ver aceites em tempo real
   });
 
   // Buscar status log
@@ -119,10 +126,10 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
       return data;
     },
     enabled: !!despacho && despacho.status === 'atribuido',
-    refetchInterval: 15000, // polling every 15s
+    refetchInterval: 15000,
   });
 
-  // Buscar trilha do tracking (últimas 50 posições)
+  // Buscar trilha do tracking
   const { data: trilhaTracking } = useQuery({
     queryKey: ['despacho-tracking-trail', chamadoId],
     queryFn: async () => {
@@ -139,7 +146,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
     refetchInterval: 30000,
   });
 
-  // Dados do chamado para o mapa (lat/lng do veículo)
+  // Dados do chamado para o mapa
   const { data: chamadoData } = useQuery({
     queryKey: ['chamado-coords', chamadoId],
     queryFn: async () => {
@@ -157,7 +164,6 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
   const veiculoLat = chamadoData?.rastreador_lat || chamadoData?.origem_lat;
   const veiculoLng = chamadoData?.rastreador_lng || chamadoData?.origem_lng;
 
-  // Trilha como posições para polyline
   const trilhaPosicoes = useMemo(() => {
     if (!trilhaTracking?.length) return [];
     return trilhaTracking.map(t => [Number(t.latitude), Number(t.longitude)] as [number, number]);
@@ -185,21 +191,6 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [despacho?.id, chamadoId, queryClient]);
 
-  // Timer
-  useEffect(() => {
-    if (!despacho?.hora_limite || despacho.status !== 'aguardando') return;
-    const interval = setInterval(() => {
-      const remaining = Math.max(0, Math.floor((new Date(despacho.hora_limite).getTime() - Date.now()) / 1000));
-      setTimeLeft(remaining);
-      if (remaining <= 0) {
-        clearInterval(interval);
-        // Trigger attribution
-        handleAtribuir();
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [despacho?.hora_limite, despacho?.status]);
-
   // Mutation: Disparar despacho
   const disparar = useMutation({
     mutationFn: async () => {
@@ -213,38 +204,81 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success(`Despacho enviado para ${data.total_enviados} reboquistas!`);
+      toast.success(`Despacho enviado para ${data.total_enviados} reboquistas via WhatsApp!`);
       queryClient.invalidateQueries({ queryKey: ['despacho-reboque', chamadoId] });
       queryClient.invalidateQueries({ queryKey: ['chamado', chamadoId] });
     },
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Atribuir agora
-  const handleAtribuir = async () => {
-    if (!despacho?.id) return;
-    try {
-      const res = await supabase.functions.invoke('despacho-reboque-atribuir', {
-        body: { despacho_id: despacho.id },
-      });
-      if (res.data?.success) {
-        toast.success(res.data.status === 'atribuido' ? `Atribuído a ${res.data.prestador_nome}!` : 'Despacho processado');
-        queryClient.invalidateQueries({ queryKey: ['despacho-reboque', chamadoId] });
-        queryClient.invalidateQueries({ queryKey: ['chamado', chamadoId] });
+  // Mutation: Atribuir prestador manualmente
+  const atribuirMutation = useMutation({
+    mutationFn: async (conviteId: string) => {
+      // Buscar dados do convite
+      const convite = convites?.find(c => c.id === conviteId);
+      if (!convite) throw new Error('Convite não encontrado');
+
+      // Atualizar despacho com o prestador atribuído
+      const { error: despErr } = await supabase
+        .from('despacho_reboque')
+        .update({
+          status: 'atribuido',
+          prestador_atribuido_id: convite.prestador_id,
+          valor_atribuido: convite.valor_calculado,
+          distancia_atribuida_km: convite.distancia_km,
+        })
+        .eq('id', despacho!.id);
+
+      if (despErr) throw new Error('Erro ao atribuir: ' + despErr.message);
+
+      // Marcar outros aceitos como não_atribuido
+      await supabase
+        .from('despacho_reboque_convites')
+        .update({ status: 'nao_atribuido' })
+        .eq('despacho_id', despacho!.id)
+        .eq('status', 'aceito')
+        .neq('id', conviteId);
+
+      // Atualizar chamado
+      await supabase
+        .from('chamados_assistencia')
+        .update({
+          status: 'prestador_despachado',
+          prestador_id: convite.prestador_id,
+        })
+        .eq('id', chamadoId);
+
+      // Notificar prestador atribuído via WhatsApp
+      const prest = convite.prestador as any;
+      const telPrest = prest?.whatsapp || prest?.telefone;
+      if (telPrest) {
+        await supabase.functions.invoke('whatsapp-send-text', {
+          body: {
+            telefone: telPrest,
+            mensagem: `🎉 *CHAMADO ATRIBUÍDO A VOCÊ!*\n\nVocê foi selecionado para este serviço de reboque.\nValor: ${formatCurrency(convite.valor_calculado)}\n\nPor favor, dirija-se ao local o mais rápido possível. Boa viagem! 🚛`,
+          },
+        });
       }
-    } catch (e: any) { toast.error(e.message); }
-  };
+
+      return { prestador_nome: prest?.razao_social || prest?.nome_fantasia };
+    },
+    onSuccess: (data) => {
+      toast.success(`Atribuído a ${data.prestador_nome}!`);
+      queryClient.invalidateQueries({ queryKey: ['despacho-reboque', chamadoId] });
+      queryClient.invalidateQueries({ queryKey: ['despacho-convites', despacho?.id] });
+      queryClient.invalidateQueries({ queryKey: ['chamado', chamadoId] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   // Reenviar
   const reenviar = useMutation({
     mutationFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada');
-      // Cancelar despacho atual
       if (despacho?.id) {
         await supabase.from('despacho_reboque').update({ status: 'cancelado' }).eq('id', despacho.id);
       }
-      // Novo disparo
       const res = await supabase.functions.invoke('despacho-reboque-disparar', {
         body: { chamado_id: chamadoId },
       });
@@ -261,9 +295,6 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
 
   if (isLoading) return null;
 
-  const timerMin = Math.floor(timeLeft / 60);
-  const timerSec = timeLeft % 60;
-
   // Antes de disparar
   if (!despacho) {
     return (
@@ -273,20 +304,20 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Envie automaticamente para todos os reboquistas ativos. O sistema atribui ao mais barato em até 10 minutos.
+            Envie mensagem via WhatsApp para todos os reboquistas ativos. Os prestadores respondem diretamente no chat e o analista escolhe o melhor.
           </p>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button className="w-full" disabled={disparar.isPending}>
                 {disparar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                Despachar Reboque Automaticamente
+                Despachar Reboque via WhatsApp
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Confirmar Despacho Automático</AlertDialogTitle>
+                <AlertDialogTitle>Confirmar Despacho</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Todos os reboquistas ativos receberão um link por WhatsApp. O sistema aguardará até 10 minutos e atribuirá ao mais barato.
+                  Todos os reboquistas ativos receberão uma mensagem WhatsApp com os dados do chamado. Eles responderão SIM, enviarão a localização e o sistema calculará o valor automaticamente. Você escolherá entre os 3 melhores.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -302,63 +333,131 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
 
   // Aguardando aceites
   if (despacho.status === 'aguardando') {
-    const aceites = convites?.filter((c) => c.status === 'aceito').length || 0;
-    const recusas = convites?.filter((c) => c.status === 'recusado').length || 0;
-    const semResposta = (despacho.total_enviados || 0) - aceites - recusas;
+    const aceitos = convites?.filter((c) => c.status === 'aceito' || (c as any).etapa_conversacao === 'aceito') || [];
+    const recusas = convites?.filter((c) => c.status === 'recusado' || (c as any).etapa_conversacao === 'recusado').length || 0;
+    const emNegociacao = convites?.filter((c) => 
+      ['aguardando_localizacao', 'aguardando_aceite_valor'].includes((c as any).etapa_conversacao)
+    ).length || 0;
+    const semResposta = convites?.filter((c) => (c as any).etapa_conversacao === 'aguardando_sim').length || 0;
+
+    // Top 3 aceitos, ordenados por menor valor e menor distância
+    const top3 = aceitos
+      .sort((a, b) => {
+        const va = a.valor_calculado || Infinity;
+        const vb = b.valor_calculado || Infinity;
+        if (va !== vb) return va - vb;
+        return (a.distancia_km || Infinity) - (b.distancia_km || Infinity);
+      })
+      .slice(0, 3);
 
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Truck className="h-5 w-5" /> Despacho de Reboque</CardTitle>
-          <Badge className="bg-yellow-100 text-yellow-800 w-fit">Aguardando aceites — Ciclo {despacho.ciclo}</Badge>
+          <Badge className="bg-yellow-100 text-yellow-800 w-fit">Aguardando respostas — Ciclo {despacho.ciclo}</Badge>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Timer */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm flex items-center gap-1"><Clock className="h-4 w-4" /> Tempo restante:</span>
-            <span className="font-mono font-bold text-lg">
-              {String(timerMin).padStart(2, '0')}:{String(timerSec).padStart(2, '0')}
-            </span>
-          </div>
-          <Progress value={Math.max(0, (timeLeft / 600) * 100)} className="h-2" />
-
           {/* Counters */}
           <div className="grid grid-cols-4 gap-2 text-center text-sm">
             <div><p className="font-bold text-lg">{despacho.total_enviados}</p><p className="text-muted-foreground">Enviados</p></div>
-            <div><p className="font-bold text-lg text-green-600">{aceites}</p><p className="text-muted-foreground">Aceites</p></div>
-            <div><p className="font-bold text-lg text-red-600">{recusas}</p><p className="text-muted-foreground">Recusas</p></div>
+            <div><p className="font-bold text-lg text-green-600">{aceitos.length}</p><p className="text-muted-foreground">Aceitos</p></div>
+            <div><p className="font-bold text-lg text-blue-600">{emNegociacao}</p><p className="text-muted-foreground">Negociando</p></div>
             <div><p className="font-bold text-lg text-gray-500">{semResposta}</p><p className="text-muted-foreground">Sem resp.</p></div>
           </div>
 
-          {/* Table */}
-          {convites && convites.length > 0 && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Prestador</TableHead>
-                  <TableHead>Distância</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {convites.map((c) => {
-                  const cfg = conviteStatusConfig[c.status] || { label: c.status, className: '' };
+          {/* Top 3 para atribuição manual */}
+          {top3.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold flex items-center gap-1">
+                <UserCheck className="h-4 w-4" /> Selecione o prestador (Top {Math.min(3, top3.length)} — menor valor e mais próximo):
+              </p>
+              <div className="space-y-2">
+                {top3.map((c, idx) => {
+                  const prest = c.prestador as any;
                   return (
-                    <TableRow key={c.id}>
-                      <TableCell className="text-sm">{(c.prestador as any)?.razao_social || (c.prestador as any)?.nome_fantasia}</TableCell>
-                      <TableCell>{c.distancia_km ? `${c.distancia_km} km` : '-'}</TableCell>
-                      <TableCell>{formatCurrency(c.valor_calculado)}</TableCell>
-                      <TableCell><Badge className={cfg.className}>{cfg.label}</Badge></TableCell>
-                    </TableRow>
+                    <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg bg-green-50 dark:bg-green-950/20">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">#{idx + 1}</Badge>
+                          <span className="font-medium text-sm">{prest?.razao_social || prest?.nome_fantasia}</span>
+                        </div>
+                        <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {c.distancia_km ? `${c.distancia_km} km` : '-'}</span>
+                          <span className="font-semibold text-foreground">{formatCurrency(c.valor_calculado)}</span>
+                        </div>
+                      </div>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" disabled={atribuirMutation.isPending}>
+                            <CheckCircle className="h-4 w-4 mr-1" /> Atribuir
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Atribuir o chamado para <strong>{prest?.razao_social || prest?.nome_fantasia}</strong> por {formatCurrency(c.valor_calculado)} ({c.distancia_km} km)?
+                              O prestador será notificado por WhatsApp.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => atribuirMutation.mutate(c.id)}>
+                              Confirmar Atribuição
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   );
                 })}
-              </TableBody>
-            </Table>
+              </div>
+            </div>
           )}
 
-          <Button variant="outline" className="w-full" onClick={handleAtribuir} disabled={aceites === 0}>
-            ⏹️ Encerrar e atribuir agora {aceites > 0 ? `(${aceites} aceites)` : ''}
+          {/* Tabela completa de convites */}
+          {convites && convites.length > 0 && (
+            <div>
+              <p className="text-sm font-medium mb-2">Todos os prestadores:</p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Prestador</TableHead>
+                    <TableHead>Etapa</TableHead>
+                    <TableHead>Distância</TableHead>
+                    <TableHead>Valor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {convites.map((c) => {
+                    const etapa = (c as any).etapa_conversacao || 'aguardando_sim';
+                    const cfg = etapaConfig[etapa] || { label: etapa, className: '' };
+                    return (
+                      <TableRow key={c.id}>
+                        <TableCell className="text-sm">{(c.prestador as any)?.razao_social || (c.prestador as any)?.nome_fantasia}</TableCell>
+                        <TableCell><Badge className={cfg.className}>{cfg.label}</Badge></TableCell>
+                        <TableCell>{c.distancia_km ? `${c.distancia_km} km` : '-'}</TableCell>
+                        <TableCell>{formatCurrency(c.valor_calculado)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {aceitos.length === 0 && (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Aguardando respostas dos reboquistas via WhatsApp. Os aceites aparecerão automaticamente aqui.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <Button variant="outline" className="w-full" onClick={() => reenviar.mutate()} disabled={reenviar.isPending}>
+            <RotateCw className="h-4 w-4 mr-2" />
+            Cancelar e reenviar para todos
           </Button>
         </CardContent>
       </Card>
@@ -377,7 +476,6 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
     const temTracking = truckLat !== null && truckLng !== null;
     const temVeiculo = veiculoLat !== null && veiculoLng !== null;
 
-    // Posições para fit bounds
     const mapPositions: [number, number][] = [];
     if (temTracking) mapPositions.push([truckLat!, truckLng!]);
     if (temVeiculo) mapPositions.push([veiculoLat!, veiculoLng!]);
@@ -391,7 +489,6 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
           </Badge>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Prestador info */}
           <div className="bg-green-50 dark:bg-green-950/30 p-4 rounded-lg space-y-2">
             <p className="font-bold">{prest?.razao_social || prest?.nome_fantasia || 'Prestador'}</p>
             <div className="flex gap-4 text-sm">
@@ -407,7 +504,6 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
             )}
           </div>
 
-          {/* Tracking indicator */}
           {!isConcluido && (
             <div className="flex items-center gap-2">
               <div className={`h-3 w-3 rounded-full ${temTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
@@ -419,7 +515,6 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
             </div>
           )}
 
-          {/* Mapa de tracking */}
           {mapPositions.length > 0 && !isConcluido && (
             <div className="h-64 rounded-lg overflow-hidden border">
               <MapContainer
@@ -449,7 +544,6 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
             </div>
           )}
 
-          {/* Status timeline */}
           {statusLog && statusLog.length > 0 && (
             <div className="space-y-1">
               <p className="text-sm font-medium mb-2">Timeline do Reboquista:</p>
@@ -478,34 +572,34 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
           )}
 
           <p className="text-xs text-muted-foreground">
-            {aceites} reboquistas aceitaram. Atribuído ao menor valor.
+            {aceites} reboquistas aceitaram. Atribuído manualmente pelo analista.
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  // Expirado (ninguém aceitou)
-  if (despacho.status === 'expirado') {
+  // Expirado / sem aceites
+  if (despacho.status === 'expirado' || despacho.status === 'cancelado') {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Truck className="h-5 w-5" /> Despacho de Reboque</CardTitle>
-          <Badge className="bg-red-100 text-red-800 w-fit">⚠️ Sem aceites</Badge>
+          <Badge className="bg-red-100 text-red-800 w-fit">⚠️ {despacho.status === 'cancelado' ? 'Cancelado' : 'Sem aceites'}</Badge>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Nenhum reboquista aceitou o chamado em 10 minutos (ciclo {despacho.ciclo}). Intervenção manual necessária.
+              {despacho.status === 'cancelado'
+                ? `Despacho cancelado (ciclo ${despacho.ciclo}).`
+                : `Nenhum reboquista aceitou o chamado (ciclo ${despacho.ciclo}). Intervenção manual necessária.`}
             </AlertDescription>
           </Alert>
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => reenviar.mutate()} disabled={reenviar.isPending}>
-              <RotateCw className="h-4 w-4 mr-2" />
-              Reenviar para todos
-            </Button>
-          </div>
+          <Button variant="outline" className="w-full" onClick={() => reenviar.mutate()} disabled={reenviar.isPending}>
+            <RotateCw className="h-4 w-4 mr-2" />
+            Reenviar para todos
+          </Button>
         </CardContent>
       </Card>
     );
