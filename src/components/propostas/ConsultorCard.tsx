@@ -19,8 +19,10 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-// Função temporariamente desabilitada - ranking oficial será implementado depois
-function getRankingIcon(_ranking: number) {
+function getRankingIcon(ranking: number) {
+  if (ranking === 1) return { emoji: '🥇', label: '#1' };
+  if (ranking === 2) return { emoji: '🥈', label: '#2' };
+  if (ranking === 3) return { emoji: '🥉', label: '#3' };
   return null;
 }
 
