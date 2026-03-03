@@ -14,13 +14,21 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    // Validar JWT
+    // Validar JWT — aceitar service role key para chamadas internas
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Token de autenticação ausente");
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) throw new Error("Não autenticado");
+    const isServiceCall = token === serviceKey;
+
+    let userId: string | null = null;
+    if (!isServiceCall) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) throw new Error("Não autenticado");
+      userId = user.id;
+    } else {
+      console.log("[despacho-disparar] Chamada interna via service key");
+    }
 
     const { chamado_id } = await req.json();
     if (!chamado_id) throw new Error("chamado_id é obrigatório");
@@ -193,8 +201,8 @@ serve(async (req) => {
       chamado_id,
       status_anterior: chamado.status,
       status_novo: "aguardando_aceites",
-      usuario_id: user.id,
-      observacao: `Despacho WhatsApp enviado (ciclo ${ciclo}). ${reboquistasDisponiveis.length} reboquistas notificados via mensagem direta.`,
+      usuario_id: userId,
+      observacao: `Despacho WhatsApp enviado (ciclo ${ciclo}). ${reboquistasDisponiveis.length} reboquistas notificados via mensagem direta.${isServiceCall ? ' [auto-despacho]' : ''}`,
     });
 
     // Enviar WhatsApp para cada reboquista - mensagem direta (sem link)
