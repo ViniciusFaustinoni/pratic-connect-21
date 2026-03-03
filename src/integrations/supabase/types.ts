@@ -8683,6 +8683,7 @@ export type Database = {
           data_visualizacao: string | null
           despacho_id: string
           distancia_km: number | null
+          etapa_conversacao: string | null
           id: string
           latitude_prestador: number | null
           longitude_prestador: number | null
@@ -8702,6 +8703,7 @@ export type Database = {
           data_visualizacao?: string | null
           despacho_id: string
           distancia_km?: number | null
+          etapa_conversacao?: string | null
           id?: string
           latitude_prestador?: number | null
           longitude_prestador?: number | null
@@ -8721,6 +8723,7 @@ export type Database = {
           data_visualizacao?: string | null
           despacho_id?: string
           distancia_km?: number | null
+          etapa_conversacao?: string | null
           id?: string
           latitude_prestador?: number | null
           longitude_prestador?: number | null

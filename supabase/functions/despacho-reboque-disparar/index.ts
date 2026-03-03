@@ -27,12 +27,13 @@ serve(async (req) => {
 
     console.log(`[despacho-disparar] Iniciando despacho para chamado ${chamado_id}`);
 
-    // Buscar chamado com veículo
+    // Buscar chamado com veículo e destino
     const { data: chamado, error: chamadoErr } = await supabase
       .from("chamados_assistencia")
       .select(`
-        id, protocolo, tipo_servico, status,
+        id, protocolo, tipo_servico, status, observacoes,
         origem_lat, origem_lng, origem_endereco, origem_logradouro, origem_cidade, origem_uf,
+        destino_endereco, destino_logradouro, destino_cidade, destino_uf,
         rastreador_lat, rastreador_lng,
         veiculo_id,
         veiculo:veiculos(id, placa, marca, modelo, ano_modelo, cor),
@@ -51,9 +52,9 @@ serve(async (req) => {
       throw new Error("Localização do veículo indisponível. Informe o endereço manualmente.");
     }
 
-    // Buscar endereço do veículo via reverse geocode
-    let enderecoVeiculo = chamado.origem_logradouro || chamado.origem_endereco || "";
-    if (!enderecoVeiculo) {
+    // Buscar endereço de origem
+    let enderecoOrigem = chamado.origem_logradouro || chamado.origem_endereco || "";
+    if (!enderecoOrigem) {
       try {
         const geoRes = await fetch(`${supabaseUrl}/functions/v1/reverse-geocode`, {
           method: "POST",
@@ -62,10 +63,13 @@ serve(async (req) => {
         });
         if (geoRes.ok) {
           const geoData = await geoRes.json();
-          if (geoData.success) enderecoVeiculo = geoData.endereco_completo || "";
+          if (geoData.success) enderecoOrigem = geoData.endereco_completo || "";
         }
       } catch (_) { /* continue sem endereço */ }
     }
+
+    // Endereço de destino
+    const enderecoDestino = chamado.destino_logradouro || chamado.destino_endereco || "A definir";
 
     // Verificar se já existe despacho ativo
     const { data: despachoExistente } = await supabase
@@ -142,15 +146,14 @@ serve(async (req) => {
     }
 
     const now = new Date();
-    const horaLimite = new Date(now.getTime() + 10 * 60 * 1000);
 
-    // Criar despacho
+    // Criar despacho (sem hora_limite fixa - agora é conversacional)
     const { data: despacho, error: despErr } = await supabase
       .from("despacho_reboque")
       .insert({
         chamado_id,
         hora_disparo: now.toISOString(),
-        hora_limite: horaLimite.toISOString(),
+        hora_limite: new Date(now.getTime() + 60 * 60 * 1000).toISOString(), // 1h limite máximo
         total_enviados: reboquistasDisponiveis.length,
         ciclo,
       })
@@ -159,26 +162,23 @@ serve(async (req) => {
 
     if (despErr || !despacho) throw new Error("Erro ao criar despacho: " + despErr?.message);
 
-    // Gerar URL base para links públicos
-    // Usar o domínio publicado ou preview
-    const appUrl = Deno.env.get("APP_PUBLIC_URL") || "https://pratic-connect-21.lovable.app";
-
-    // Criar convites para cada reboquista
+    // Criar convites para cada reboquista (sem token/link)
     const convites = reboquistasDisponiveis.map((prest) => {
       const vals = valoresMap.get(prest.id) || { valor_saida: 0, valor_km: 0 };
       return {
         despacho_id: despacho.id,
         prestador_id: prest.id,
-        token_expira_em: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
+        token_expira_em: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
         valor_saida: vals.valor_saida,
         valor_km: vals.valor_km,
+        etapa_conversacao: "aguardando_sim",
       };
     });
 
     const { data: convitesCriados, error: convErr } = await supabase
       .from("despacho_reboque_convites")
       .insert(convites)
-      .select("id, token, prestador_id");
+      .select("id, prestador_id");
 
     if (convErr) throw new Error("Erro ao criar convites: " + convErr.message);
 
@@ -194,10 +194,10 @@ serve(async (req) => {
       status_anterior: chamado.status,
       status_novo: "aguardando_aceites",
       usuario_id: user.id,
-      observacao: `Despacho automático iniciado (ciclo ${ciclo}). ${reboquistasDisponiveis.length} reboquistas notificados. Timer: 10 minutos.`,
+      observacao: `Despacho WhatsApp enviado (ciclo ${ciclo}). ${reboquistasDisponiveis.length} reboquistas notificados via mensagem direta.`,
     });
 
-    // Enviar WhatsApp para cada reboquista
+    // Enviar WhatsApp para cada reboquista - mensagem direta (sem link)
     const veiculo = chamado.veiculo as any;
     const veiculoDesc = veiculo ? `${veiculo.marca || ""} ${veiculo.modelo || ""} ${veiculo.ano_modelo || ""}`.trim() : "Veículo";
     const placaDisplay = veiculo?.placa || "N/D";
@@ -212,30 +212,20 @@ serve(async (req) => {
       const telefone = prest.whatsapp || prest.telefone;
       if (!telefone) continue;
 
-      const link = `${appUrl}/assistencia/chamado/${conv.token}`;
+      const mensagem = `🚨 *NOVO CHAMADO - Reboque*
 
-      const mensagem = `🚛 *NOVO CHAMADO DE REBOQUE — PraticCar*
+🚗 Veículo: ${veiculoDesc} — ${placaDisplay}
+📍 Origem: ${enderecoOrigem || "A informar"}
+📍 Destino: ${enderecoDestino}
+${chamado.observacoes ? `📝 Obs: ${chamado.observacoes}` : ""}
 
-📍 Veículo: ${veiculoDesc} — ${placaDisplay}
-📍 Local: ${enderecoVeiculo || "Ver no link"}
-🕐 Aberto: ${now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
-
-👉 Toque para ver detalhes e aceitar:
-${link}
-
-⏰ Você tem 10 minutos para responder.`;
+Responda *SIM* se você está disponível para este serviço.`;
 
       try {
-        const dataHora = now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-          body: JSON.stringify({
-            telefone,
-            mensagem,
-            template_name: "despacho_reboque_novo",
-            template_params: [veiculoDesc, placaDisplay, enderecoVeiculo || "Ver no link", dataHora, link],
-          }),
+          body: JSON.stringify({ telefone, mensagem }),
         });
 
         const sendResult = await sendRes.json();
@@ -267,7 +257,6 @@ ${link}
         total_enviados: reboquistasDisponiveis.length,
         whatsapp_enviados: enviados,
         whatsapp_falhas: falhas,
-        hora_limite: horaLimite.toISOString(),
         ciclo,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
