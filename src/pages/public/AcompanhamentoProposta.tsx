@@ -28,6 +28,7 @@ import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociadoForm';
 import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
+import { getOrientacoesRecusa } from '@/utils/orientacoesRecusa';
 
 interface AssociadoData {
   id: string;
@@ -45,6 +46,7 @@ interface AssociadoData {
     status: string;
     cobertura_roubo_furto: boolean;
     cobertura_total: boolean;
+    motivo_recusa_veiculo?: string;
   }[];
   contrato: {
     id: string;
@@ -113,7 +115,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
       // Buscar veículos
       const { data: veiculos } = await supabase
         .from('veiculos')
-        .select('id, placa, modelo, marca, status, cobertura_roubo_furto, cobertura_total')
+        .select('id, placa, modelo, marca, status, cobertura_roubo_furto, cobertura_total, motivo_recusa_veiculo')
         .eq('associado_id', contrato.associado_id);
 
       // Buscar instalações COM dados do vistoriador
@@ -164,6 +166,24 @@ function getStatusInfo(associado: AssociadoData) {
   const veiculo = associado.veiculos[0];
   const instalacao = associado.instalacoes[0];
   const contrato = associado.contrato;
+
+  // PRIORIDADE 0: Veículo recusado pelo instalador/vistoriador
+  if (veiculo?.status === 'recusado') {
+    return {
+      status: 'veiculo_recusado',
+      icon: AlertTriangle,
+      color: 'warning',
+      title: 'Pendência Identificada no Veículo',
+      description: 'Nosso técnico identificou uma pendência que precisa ser resolvida antes de seguirmos com a proteção.',
+      showDetails: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: false,
+      showRecusaOrientacoes: true,
+      motivoRecusa: veiculo.motivo_recusa_veiculo || '',
+    };
+  }
 
   // Verificar se foi reprovado/cancelado
   if (contrato?.status === 'cancelado') {
@@ -618,6 +638,57 @@ export default function AcompanhamentoProposta() {
               />
             </motion.div>
           )}
+
+          {/* Card de Orientações pós-Recusa */}
+          {statusInfo.showRecusaOrientacoes && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+            >
+              <Card className="bg-amber-500/5 border-amber-500/30">
+                <CardContent className="py-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                      <Wrench className="h-5 w-5 text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-foreground">O que fazer agora?</h3>
+                      <p className="text-sm text-muted-foreground">Siga as orientações abaixo para regularizar</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <p className="text-sm text-foreground leading-relaxed">
+                      {getOrientacoesRecusa(statusInfo.motivoRecusa || 'outro')}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-3">
+                    <h4 className="text-sm font-semibold text-primary flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Próximos passos
+                    </h4>
+                    <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                      <li>Resolva a pendência indicada acima</li>
+                      <li>Guarde comprovantes do serviço realizado</li>
+                      <li>Faça uma <strong className="text-foreground">nova cotação</strong> pelo app ou entre em contato conosco</li>
+                    </ol>
+                    <p className="text-xs text-muted-foreground mt-2 italic">
+                      💡 Como os valores de proteção são atualizados mensalmente com base na tabela FIPE, será necessário gerar uma nova cotação — e pode ser até mais vantajoso!
+                    </p>
+                  </div>
+
+                  <div className="text-center pt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Dúvidas? Entre em contato pelo WhatsApp ou ligue para nossa central 💙
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
           {/* Card de Técnico a Caminho */}
           {statusInfo.showEmRota && (
             <motion.div

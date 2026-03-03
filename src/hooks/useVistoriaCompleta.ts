@@ -194,7 +194,7 @@ export function useRecusarVeiculoVistoria() {
         }
       }
 
-      // 2. Atualizar veículo como RECUSADO (não mais suspenso)
+      // 2. Atualizar veículo como RECUSADO
       const { data: veiculoData, error: veiculoError } = await supabase
         .from('veiculos')
         .update({ 
@@ -210,25 +210,7 @@ export function useRecusarVeiculoVistoria() {
 
       if (veiculoError) throw veiculoError;
 
-      // 3. NOVO: Adicionar veículo à blacklist
-      if (veiculoData) {
-        await supabase
-          .from('blacklist_veiculos')
-          .insert({
-            placa: veiculoData.placa?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '',
-            chassi: veiculoData.chassi,
-            motivo: data.motivo,
-            justificativa: data.observacoes,
-            tipo_reprovacao: 'vistoria_reprovada',
-            veiculo_id: data.veiculoId,
-            associado_id: data.associadoId,
-            adicionado_por: profile?.id,
-            vistoria_id: data.vistoriaId,
-            ativo: true,
-          });
-      }
-
-      // 4. Atualizar vistoria como reprovada
+      // 3. Atualizar vistoria como reprovada
       const { error: vistoriaError } = await supabase
         .from('vistorias')
         .update({ 
@@ -241,33 +223,46 @@ export function useRecusarVeiculoVistoria() {
 
       if (vistoriaError) throw vistoriaError;
 
-      // 5. Cancelar instalação se existir
+      // 4. Cancelar instalação se existir
       if (data.instalacaoId) {
-        const { error: instalacaoError } = await supabase
+        await supabase
           .from('instalacoes')
           .update({ 
             status: 'cancelada',
             observacoes: `Veículo recusado: ${data.motivo}`,
           })
           .eq('id', data.instalacaoId);
-
-        if (instalacaoError) throw instalacaoError;
       }
 
-      // 6. NOVO: Atualizar associado para suspenso
-      await supabase
-        .from('associados')
-        .update({ 
-          status: 'suspenso',
-          updated_at: agora,
-        })
-        .eq('id', data.associadoId);
+      // 5. Buscar e atualizar serviço vinculado para aparecer na fila de recusas
+      const { data: servicoVinculado } = await supabase
+        .from('servicos')
+        .select('id')
+        .eq('veiculo_id', data.veiculoId)
+        .in('status', ['agendada', 'em_andamento', 'em_rota'] as any)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      // 7. Registrar no histórico
+      if (servicoVinculado) {
+        await supabase
+          .from('servicos')
+          .update({
+            status: 'em_analise',
+            decisao_instalador: 'negado',
+            ressalvas_instalador: data.motivo,
+            fotos_ressalva: fotosUrls,
+            observacoes: `Veículo negado pelo instalador - pendente análise interna: ${data.motivo}`,
+            updated_at: agora,
+          })
+          .eq('id', servicoVinculado.id);
+      }
+
+      // 6. Registrar no histórico
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
         tipo: 'veiculo_recusado',
-        descricao: `Veículo recusado pelo técnico instalador: ${data.motivo}`,
+        descricao: `Veículo recusado pelo técnico - encaminhado para análise interna: ${data.motivo}`,
         dados_novos: { 
           vistoria_id: data.vistoriaId,
           instalacao_id: data.instalacaoId, 
@@ -275,14 +270,16 @@ export function useRecusarVeiculoVistoria() {
           motivo: data.motivo,
           observacoes: data.observacoes,
           fotos_recusa: fotosUrls,
+          servico_id: servicoVinculado?.id,
+          status_encaminhamento: 'pendente_analise',
         },
         usuario_id: profile?.id,
       });
 
-      // 8. Propagar cancelamento
+      // 7. Propagar status na cotação
       const { data: vistoriaData } = await supabase
         .from('vistorias')
-        .select('cotacao_id, contrato_id')
+        .select('cotacao_id')
         .eq('id', data.vistoriaId)
         .single();
 
@@ -293,16 +290,8 @@ export function useRecusarVeiculoVistoria() {
           .eq('id', vistoriaData.cotacao_id);
       }
 
-      // 9. NOVO: Cancelar contrato se existir
-      if (vistoriaData?.contrato_id) {
-        await supabase
-          .from('contratos')
-          .update({ 
-            status: 'cancelado',
-            motivo_cancelamento: `Vistoria reprovada: ${data.motivo}`,
-          })
-          .eq('id', vistoriaData.contrato_id);
-      }
+      // NOTA: Ações destrutivas (blacklist, cancelar contrato, suspender associado)
+      // são agora responsabilidade do ANALISTA na fila de recusas, não automáticas.
     },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
@@ -313,7 +302,10 @@ export function useRecusarVeiculoVistoria() {
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
-      toast.success('Veículo recusado. O associado será notificado.');
+      queryClient.invalidateQueries({ queryKey: ['recusas-instalador'] });
+      queryClient.invalidateQueries({ queryKey: ['recusas-instalador-count'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      toast.success('Veículo recusado. Encaminhado para análise interna.');
 
       // Disparar busca da próxima tarefa (fire-and-forget)
       navigator.geolocation?.getCurrentPosition(
