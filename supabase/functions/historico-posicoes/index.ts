@@ -241,8 +241,8 @@ async function getHistoricoLocal(
   }));
 }
 
-// Buscar histórico via Softruck API
-async function getHistoricoSoftruck(
+// Buscar histórico via Softruck API (formato corrigido - mesmo do rastreador-historico)
+async function getHistoricoSoftruckFixed(
   token: string,
   vehicleId: string,
   baseUrl: string,
@@ -250,14 +250,17 @@ async function getHistoricoSoftruck(
   dataInicio: string,
   dataFim: string
 ): Promise<PontoPosicao[]> {
-  const url = new URL(`${baseUrl}/vehicles/${vehicleId}/trajectories/`);
-  url.searchParams.set('filters[start_date]', dataInicio);
-  url.searchParams.set('filters[end_date]', dataFim);
-  url.searchParams.set('limit', '1000');
+  // Usar filters[acc][btw] - mesmo formato que funciona no rastreador-historico
+  const queryParams = [
+    `filters[acc][btw]=${encodeURIComponent(dataInicio)},${encodeURIComponent(dataFim)}`,
+    `limit=1000`,
+  ].join('&');
 
-  console.log('[Softruck] Buscando trajeto:', url.toString());
+  const url = `${baseUrl}/vehicles/${vehicleId}/trajectories/?${queryParams}`;
 
-  const response = await fetch(url.toString(), {
+  console.log('[Softruck] Buscando trajeto (formato corrigido):', url);
+
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -283,6 +286,18 @@ async function getHistoricoSoftruck(
     endereco: item.attributes?.address,
     direcao: item.attributes?.heading || item.heading,
   }));
+}
+
+// Mantém a função antiga como fallback (não usada mais)
+async function getHistoricoSoftruck(
+  token: string,
+  vehicleId: string,
+  baseUrl: string,
+  publicKey: string,
+  dataInicio: string,
+  dataFim: string
+): Promise<PontoPosicao[]> {
+  return getHistoricoSoftruckFixed(token, vehicleId, baseUrl, publicKey, dataInicio, dataFim);
 }
 
 // Buscar histórico via Rede Veículos API
@@ -401,13 +416,10 @@ serve(async (req) => {
       throw new Error('Veículo não encontrado ou não pertence ao associado');
     }
 
-    // Buscar rastreador com configuração da plataforma
+    // Buscar rastreador (query separada, sem JOIN)
     const { data: rastreador, error: rastError } = await supabase
       .from('rastreadores')
-      .select(`
-        *,
-        config_plataforma:rastreadores_config_plataformas(*)
-      `)
+      .select('*')
       .eq('veiculo_id', veiculo_id)
       .maybeSingle();
 
@@ -415,7 +427,12 @@ serve(async (req) => {
       throw new Error('Rastreador não encontrado para este veículo');
     }
 
-    const plataforma = rastreador.config_plataforma;
+    // Buscar config da plataforma separadamente (evita falha silenciosa de FK)
+    const { data: plataforma } = await supabase
+      .from('rastreadores_config_plataformas')
+      .select('*')
+      .eq('plataforma', rastreador.plataforma)
+      .maybeSingle();
     let trajeto: PontoPosicao[] = [];
     let fonte: 'api' | 'local' = 'local';
 
@@ -443,9 +460,9 @@ serve(async (req) => {
             : plataforma.api_url_sandbox;
 
           if (plataforma.plataforma === 'softruck') {
-            const vehicleId = rastreador.plataforma_device_id || rastreador.id_plataforma;
+            const vehicleId = rastreador.plataforma_veiculo_id || rastreador.plataforma_device_id || rastreador.id_plataforma;
             if (vehicleId) {
-              trajeto = await getHistoricoSoftruck(
+              trajeto = await getHistoricoSoftruckFixed(
                 authData.token,
                 vehicleId,
                 baseUrl,

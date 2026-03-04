@@ -26,15 +26,16 @@ export function useRotaReal(
   });
   
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const lastRequestRef = useRef<string>('');
+  
+  // Estabilizar coordenadas com toFixed(4) (~11m precisão)
+  const origemKey = origem ? `${origem[0].toFixed(4)},${origem[1].toFixed(4)}` : '';
+  const destinoKey = destino ? `${destino[0].toFixed(4)},${destino[1].toFixed(4)}` : '';
   
   useEffect(() => {
-    // Limpar timeout anterior
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
     
-    // Se não tiver origem ou destino, limpar resultado
     if (!origem || !destino) {
       setResult({
         coordenadas: [],
@@ -46,26 +47,16 @@ export function useRotaReal(
       return;
     }
     
-    // Criar chave de requisição para evitar duplicatas
-    const requestKey = `${origem.join(',')}->${destino.join(',')}`;
-    
-    // Se for a mesma requisição, não fazer nada
-    if (requestKey === lastRequestRef.current) {
-      return;
-    }
-    
-    // Marcar como carregando imediatamente com fallback de linha reta
+    // Mostrar linha reta enquanto carrega
     setResult(prev => ({
       ...prev,
-      coordenadas: [origem, destino], // Linha reta enquanto carrega
+      coordenadas: [origem, destino],
       isLoading: true,
       error: null,
     }));
     
-    // Debounce de 500ms para evitar chamadas excessivas durante movimento
+    // Debounce de 500ms
     debounceRef.current = setTimeout(async () => {
-      lastRequestRef.current = requestKey;
-      
       try {
         const rota = await getRouteOSRM(origem, destino);
         
@@ -79,7 +70,6 @@ export function useRotaReal(
       } catch (error) {
         console.error('[useRotaReal] Erro:', error);
         
-        // Em caso de erro, manter linha reta
         setResult({
           coordenadas: [origem, destino],
           distanciaKm: 0,
@@ -95,7 +85,7 @@ export function useRotaReal(
         clearTimeout(debounceRef.current);
       }
     };
-  }, [origem?.[0], origem?.[1], destino?.[0], destino?.[1]]);
+  }, [origemKey, destinoKey]);
   
   return result;
 }
