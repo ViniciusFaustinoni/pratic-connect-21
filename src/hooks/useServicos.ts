@@ -1247,6 +1247,106 @@ export function useRecusarVeiculoServico() {
   });
 }
 
+/**
+ * Hook para enviar serviço para confirmação do monitoramento
+ */
+export function useEnviarParaMonitoramento() {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async (data: {
+      servicoId: string;
+      associadoId: string;
+      ressalvasInstalador: string;
+      fotosRessalva?: string[];
+      checklistData?: Record<string, unknown>;
+      quilometragem?: number;
+    }) => {
+      const agora = new Date().toISOString();
+
+      // 1. Salvar checklist se fornecido
+      if (data.checklistData) {
+        const updateChecklist: Record<string, unknown> = {
+          checklist_data: data.checklistData,
+          updated_at: agora,
+        };
+        if (data.quilometragem !== undefined) {
+          updateChecklist.quilometragem = data.quilometragem;
+        }
+        await supabase
+          .from('servicos')
+          .update(updateChecklist)
+          .eq('id', data.servicoId);
+      }
+
+      // 2. Atualizar serviço com status pendente_monitoramento
+      const { error: servicoError } = await supabase
+        .from('servicos')
+        .update({
+          status: 'em_analise',
+          decisao_instalador: 'pendente_monitoramento',
+          ressalvas_instalador: data.ressalvasInstalador,
+          fotos_ressalva: data.fotosRessalva || [],
+          observacoes: `Enviado para confirmação do monitoramento: ${data.ressalvasInstalador}`,
+          updated_at: agora,
+        })
+        .eq('id', data.servicoId);
+
+      if (servicoError) throw servicoError;
+
+      // 3. Registrar histórico
+      await supabase.from('associados_historico').insert({
+        associado_id: data.associadoId,
+        tipo: 'enviado_monitoramento',
+        descricao: `Instalação enviada para confirmação do monitoramento. Ressalvas: ${data.ressalvasInstalador}`,
+        dados_novos: {
+          servico_id: data.servicoId,
+          decisao: 'pendente_monitoramento',
+          ressalvas: data.ressalvasInstalador,
+          fotos_ressalva: data.fotosRessalva || [],
+          enviado_por: profile?.id,
+        },
+        usuario_id: profile?.id,
+      });
+
+      return { sucesso: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servico-detalhes'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['ressalvas-monitoramento'] });
+      queryClient.invalidateQueries({ queryKey: ['ressalvas-monitoramento-count'] });
+      toast.success('Enviado para confirmação do monitoramento.');
+
+      // Buscar próxima tarefa (fire-and-forget)
+      navigator.geolocation?.getCurrentPosition(
+        (pos) => {
+          supabase.functions.invoke('atribuir-proxima-tarefa', {
+            body: {
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            },
+          }).then(() => {
+            queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+          });
+        },
+        () => {
+          supabase.functions.invoke('atribuir-proxima-tarefa').then(() => {
+            queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+          });
+        }
+      );
+    },
+    onError: (error) => {
+      console.error('Erro ao enviar para monitoramento:', error);
+      toast.error('Erro ao enviar para monitoramento');
+    },
+  });
+}
+
 // Helper para verificar se é uma instalação
 export function isInstalacao(tipo: TipoServico): boolean {
   return tipo === 'instalacao';

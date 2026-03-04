@@ -210,6 +210,11 @@ const menuConfig: {
           url: '/monitoramento/alertas',
           icon: Bell,
         },
+        {
+          title: 'Ressalvas Pendentes',
+          url: '/monitoramento/ressalvas-pendentes',
+          icon: AlertTriangle,
+        },
       ],
     },
     {
