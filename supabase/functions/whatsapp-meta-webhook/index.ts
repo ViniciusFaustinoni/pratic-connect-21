@@ -49,7 +49,6 @@ async function processarRespostaPrestador(
   latitude: number | null,
   longitude: number | null,
 ) {
-  // Normalizar telefone (remover 55 do início se tiver)
   const telNormalizado = telefone.replace(/^55/, "");
 
   // Buscar prestador pelo telefone
@@ -61,24 +60,21 @@ async function processarRespostaPrestador(
     .limit(1)
     .maybeSingle();
 
-  if (!prestador) return false; // Não é prestador cadastrado
+  if (!prestador) return false;
 
   console.log(`[webhook] Prestador identificado: ${prestador.razao_social || prestador.nome_fantasia} (${prestador.id})`);
 
-  // Buscar despachos ativos (aguardando) para este prestador via 2-step query
+  // Buscar despachos ativos
   const { data: despachosAtivos } = await supabase
     .from("despacho_reboque")
     .select("id")
     .eq("status", "aguardando");
 
-  if (!despachosAtivos || despachosAtivos.length === 0) {
-    console.log(`[webhook] Nenhum despacho aguardando no momento`);
-    return false;
-  }
+  if (!despachosAtivos || despachosAtivos.length === 0) return false;
 
   const despachosIds = despachosAtivos.map((d: any) => d.id);
 
-  // Buscar convite ativo para este prestador em despachos ativos
+  // Buscar convite em qualquer etapa ativa
   const { data: convite } = await supabase
     .from("despacho_reboque_convites")
     .select(`
@@ -93,7 +89,12 @@ async function processarRespostaPrestador(
     `)
     .eq("prestador_id", prestador.id)
     .in("despacho_id", despachosIds)
-    .in("etapa_conversacao", ["aguardando_aceite"])
+    .in("etapa_conversacao", [
+      "aguardando_interesse",
+      "aguardando_localizacao",
+      "aguardando_confirmacao_valor",
+      "aguardando_eta",
+    ])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -104,37 +105,24 @@ async function processarRespostaPrestador(
   }
 
   const despacho = convite.despacho as any;
-
   const chamado = despacho.chamado as any;
   const telPrestador = prestador.whatsapp || prestador.telefone || telefone;
   const textoNorm = texto?.trim().toUpperCase() || "";
+  const etapa = convite.etapa_conversacao;
 
-  // ---- ETAPA ÚNICA: Aguardando aceite (SIM/NÃO) ----
-  if (convite.etapa_conversacao === "aguardando_aceite") {
+  // ---- ETAPA 1: Aguardando interesse (SIM/NÃO) ----
+  if (etapa === "aguardando_interesse") {
     if (textoNorm === "SIM" || textoNorm === "S") {
-      // Aceitar!
       await supabase
         .from("despacho_reboque_convites")
-        .update({
-          status: "aceito",
-          etapa_conversacao: "aceito",
-          data_aceite: new Date().toISOString(),
-        })
+        .update({ etapa_conversacao: "aguardando_localizacao" })
         .eq("id", convite.id);
 
-      // Incrementar total_aceites
-      await supabase
-        .from("despacho_reboque")
-        .update({ total_aceites: (despacho.total_aceites || 0) + 1 })
-        .eq("id", despacho.id);
-
       await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-        `✅ *Aceite registrado com sucesso!*
+        `📍 Ótimo! Para calcularmos o valor, precisamos saber sua localização atual.
 
-Seu aceite foi enviado ao analista de eventos. Aguarde a confirmação da atribuição. Você será notificado em breve.`
+Envie sua *localização em tempo real* pelo WhatsApp ou digite seu *endereço completo* (rua, número, cidade).`
       );
-
-      console.log(`[webhook] Prestador ${prestador.id} aceitou chamado. Valor: R$${convite.valor_calculado || 'N/D'}`);
       return true;
     }
 
@@ -143,17 +131,186 @@ Seu aceite foi enviado ao analista de eventos. Aguarde a confirmação da atribu
         .from("despacho_reboque_convites")
         .update({ status: "recusado", etapa_conversacao: "recusado", data_recusa: new Date().toISOString() })
         .eq("id", convite.id);
-
       await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
         `❌ Tudo bem! Você recusou este chamado. Obrigado pela resposta.`
       );
       return true;
     }
 
-    // Mensagem não reconhecida
     await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
-      `⚠️ Responda *SIM* para aceitar ou *NÃO* para recusar o chamado.`
+      `⚠️ Responda *SIM* para demonstrar interesse ou *NÃO* para recusar.`
     );
+    return true;
+  }
+
+  // ---- ETAPA 2: Aguardando localização ----
+  if (etapa === "aguardando_localizacao") {
+    let prestLat: number | null = null;
+    let prestLng: number | null = null;
+
+    // Se mandou localização GPS
+    if (msgType === "location" && latitude && longitude) {
+      prestLat = latitude;
+      prestLng = longitude;
+    } else if (texto && texto.length > 5) {
+      // Geocodificar endereço texto
+      try {
+        const geoRes = await fetch(`${supabaseUrl}/functions/v1/geocode-endereco`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({ endereco: texto }),
+        });
+        const geoData = await geoRes.json();
+        if (geoData.success) {
+          prestLat = geoData.latitude;
+          prestLng = geoData.longitude;
+        }
+      } catch (e) {
+        console.error("[webhook] Erro geocode:", e);
+      }
+    }
+
+    if (!prestLat || !prestLng) {
+      await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
+        `⚠️ Não consegui identificar sua localização. Por favor, envie sua *localização pelo WhatsApp* (📎 > Localização) ou digite um endereço completo.`
+      );
+      return true;
+    }
+
+    // Calcular distância até a origem do chamado
+    const origemLat = chamado.rastreador_lat || chamado.origem_lat;
+    const origemLng = chamado.rastreador_lng || chamado.origem_lng;
+
+    if (!origemLat || !origemLng) {
+      await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
+        `⚠️ Erro interno: localização da origem indisponível. O analista entrará em contato.`
+      );
+      return true;
+    }
+
+    const distanciaKm = Math.round(haversineKm(prestLat, prestLng, origemLat, origemLng) * 10) / 10;
+
+    // Buscar valores do prestador
+    const { data: valores } = await supabase
+      .from("prestadores_assistencia_valores")
+      .select("valor_saida, valor_km")
+      .eq("prestador_id", prestador.id)
+      .eq("ativo", true)
+      .limit(1)
+      .maybeSingle();
+
+    const valorFixo = valores?.valor_saida || convite.valor_saida || 0;
+    const valorKm = valores?.valor_km || convite.valor_km || 0;
+    const valorCalculado = Math.round((valorFixo + distanciaKm * valorKm) * 100) / 100;
+
+    // Salvar dados no convite
+    await supabase
+      .from("despacho_reboque_convites")
+      .update({
+        latitude_prestador: prestLat,
+        longitude_prestador: prestLng,
+        distancia_km: distanciaKm,
+        valor_calculado: valorCalculado,
+        valor_saida: valorFixo,
+        valor_km: valorKm,
+        etapa_conversacao: "aguardando_confirmacao_valor",
+      })
+      .eq("id", convite.id);
+
+    const valorFormatado = formatCurrency(valorCalculado);
+    await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
+      `📊 *Cálculo do serviço:*
+
+📏 Distância até o local: *${distanciaKm} km*
+💰 Valor fixo de saída: *${formatCurrency(valorFixo)}*
+💰 Valor por km: *${formatCurrency(valorKm)}*
+
+🏷️ *Valor sugerido: ${valorFormatado}*
+
+Aceita realizar o serviço por este valor? Responda *SIM* ou *NÃO*.`
+    );
+    return true;
+  }
+
+  // ---- ETAPA 3: Confirmação do valor ----
+  if (etapa === "aguardando_confirmacao_valor") {
+    if (textoNorm === "SIM" || textoNorm === "S") {
+      await supabase
+        .from("despacho_reboque_convites")
+        .update({ etapa_conversacao: "aguardando_eta" })
+        .eq("id", convite.id);
+
+      await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
+        `⏱️ Perfeito! Em quantos *minutos* você consegue chegar ao local do associado?
+
+Responda apenas o número (ex: 20, 30, 45).`
+      );
+      return true;
+    }
+
+    if (textoNorm === "NAO" || textoNorm === "NÃO" || textoNorm === "N") {
+      await supabase
+        .from("despacho_reboque_convites")
+        .update({ status: "recusado", etapa_conversacao: "recusado", data_recusa: new Date().toISOString() })
+        .eq("id", convite.id);
+      await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
+        `❌ Entendido, você recusou o valor. Obrigado pela resposta!`
+      );
+      return true;
+    }
+
+    await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
+      `⚠️ Responda *SIM* para aceitar o valor ou *NÃO* para recusar.`
+    );
+    return true;
+  }
+
+  // ---- ETAPA 4: Tempo de chegada (ETA) ----
+  if (etapa === "aguardando_eta") {
+    // Extrair número de minutos da resposta
+    const numMatch = texto?.match(/(\d+)/);
+    if (!numMatch) {
+      await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
+        `⚠️ Por favor, informe apenas o número de *minutos* (ex: 20, 30, 45).`
+      );
+      return true;
+    }
+
+    const minutos = parseInt(numMatch[1], 10);
+    if (minutos <= 0 || minutos > 300) {
+      await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
+        `⚠️ Informe um tempo válido entre 1 e 300 minutos.`
+      );
+      return true;
+    }
+
+    // Finalizar: salvar ETA e marcar como aceito
+    await supabase
+      .from("despacho_reboque_convites")
+      .update({
+        tempo_chegada_minutos: minutos,
+        status: "aceito",
+        etapa_conversacao: "aceito",
+        data_aceite: new Date().toISOString(),
+      })
+      .eq("id", convite.id);
+
+    // Incrementar total_aceites
+    await supabase
+      .from("despacho_reboque")
+      .update({ total_aceites: (despacho.total_aceites || 0) + 1 })
+      .eq("id", despacho.id);
+
+    await enviarWhatsApp(supabaseUrl, serviceKey, telPrestador,
+      `✅ *Aceite registrado com sucesso!*
+
+📊 Valor: *${formatCurrency(convite.valor_calculado)}*
+⏱️ Previsão de chegada: *~${minutos} min*
+
+Seu aceite foi enviado ao analista de eventos. Aguarde a confirmação da atribuição. Você será notificado em breve.`
+    );
+
+    console.log(`[webhook] Prestador ${prestador.id} aceitou. Valor: R$${convite.valor_calculado}, ETA: ${minutos}min`);
     return true;
   }
 

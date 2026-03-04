@@ -8689,6 +8689,7 @@ export type Database = {
           longitude_prestador: number | null
           prestador_id: string
           status: string
+          tempo_chegada_minutos: number | null
           token: string
           token_expira_em: string
           valor_calculado: number | null
@@ -8709,6 +8710,7 @@ export type Database = {
           longitude_prestador?: number | null
           prestador_id: string
           status?: string
+          tempo_chegada_minutos?: number | null
           token?: string
           token_expira_em?: string
           valor_calculado?: number | null
@@ -8729,6 +8731,7 @@ export type Database = {
           longitude_prestador?: number | null
           prestador_id?: string
           status?: string
+          tempo_chegada_minutos?: number | null
           token?: string
           token_expira_em?: string
           valor_calculado?: number | null

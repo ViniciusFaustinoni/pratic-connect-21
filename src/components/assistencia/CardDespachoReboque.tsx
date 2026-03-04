@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Truck, Send, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, MapPin, Navigation, UserCheck } from 'lucide-react';
+import { Truck, Send, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, MapPin, Navigation, UserCheck, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -46,7 +46,10 @@ const conviteStatusConfig: Record<string, { label: string; className: string }> 
 };
 
 const etapaConfig: Record<string, { label: string; className: string }> = {
-  aguardando_aceite: { label: '⏳ Aguardando resposta', className: 'bg-yellow-100 text-yellow-700' },
+  aguardando_interesse: { label: '⏳ Aguardando interesse', className: 'bg-yellow-100 text-yellow-700' },
+  aguardando_localizacao: { label: '📍 Aguardando localização', className: 'bg-blue-100 text-blue-700' },
+  aguardando_confirmacao_valor: { label: '💰 Aguardando aceite do valor', className: 'bg-orange-100 text-orange-700' },
+  aguardando_eta: { label: '⏱️ Aguardando tempo de chegada', className: 'bg-purple-100 text-purple-700' },
   aceito: { label: '✅ Aceito', className: 'bg-green-100 text-green-700' },
   recusado: { label: '❌ Recusou', className: 'bg-red-100 text-red-700' },
 };
@@ -315,7 +318,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
               <AlertDialogHeader>
                 <AlertDialogTitle>Confirmar Despacho</AlertDialogTitle>
                 <AlertDialogDescription>
-                   Todos os reboquistas ativos receberão uma mensagem WhatsApp com os dados do chamado e o valor sugerido. Eles respondem SIM ou NÃO diretamente. Você escolherá entre os aceites.
+                   Todos os reboquistas ativos receberão uma mensagem WhatsApp com os dados do chamado. A IA coletará localização, calculará o valor e tempo de chegada de cada um. Você escolherá entre os Top 3.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -333,7 +336,12 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
   if (despacho.status === 'aguardando') {
     const aceitos = convites?.filter((c) => c.status === 'aceito' || c.etapa_conversacao === 'aceito') || [];
     const recusas = convites?.filter((c) => c.status === 'recusado' || c.etapa_conversacao === 'recusado').length || 0;
-    const semResposta = convites?.filter((c) => c.etapa_conversacao === 'aguardando_aceite').length || 0;
+    const semResposta = convites?.filter((c) => 
+      c.etapa_conversacao === 'aguardando_interesse' || 
+      c.etapa_conversacao === 'aguardando_localizacao' || 
+      c.etapa_conversacao === 'aguardando_confirmacao_valor' || 
+      c.etapa_conversacao === 'aguardando_eta'
+    ).length || 0;
 
     // Top 3 aceitos, ordenados por menor valor e menor distância
     const top3 = aceitos
@@ -379,6 +387,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
                         <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {c.distancia_km ? `${c.distancia_km} km` : '-'}</span>
                           <span className="font-semibold text-foreground">{formatCurrency(c.valor_calculado)}</span>
+                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {(c as any).tempo_chegada_minutos ? `~${(c as any).tempo_chegada_minutos} min` : '-'}</span>
                         </div>
                       </div>
                       <AlertDialog>
@@ -417,10 +426,11 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Prestador</TableHead>
-                    <TableHead>Etapa</TableHead>
-                    <TableHead>Distância</TableHead>
-                    <TableHead>Valor</TableHead>
+                     <TableHead>Prestador</TableHead>
+                     <TableHead>Etapa</TableHead>
+                     <TableHead>Distância</TableHead>
+                     <TableHead>Valor</TableHead>
+                     <TableHead>ETA</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -433,6 +443,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
                         <TableCell><Badge className={cfg.className}>{cfg.label}</Badge></TableCell>
                         <TableCell>{c.distancia_km ? `${c.distancia_km} km` : '-'}</TableCell>
                         <TableCell>{formatCurrency(c.valor_calculado)}</TableCell>
+                        <TableCell>{(c as any).tempo_chegada_minutos ? `~${(c as any).tempo_chegada_minutos} min` : '-'}</TableCell>
                       </TableRow>
                     );
                   })}
