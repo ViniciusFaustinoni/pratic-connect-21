@@ -1,41 +1,51 @@
 
 
-# Plano: Corrigir Rotas e Historico de Rastreador
+# Verificacao do Fluxo de Rotas do Rastreador
 
-## Diagnostico
+## Analise Completa
 
-Identifiquei 3 problemas raiz que impedem o funcionamento das rotas:
+Revisei todos os arquivos envolvidos no fluxo de rotas. Eis o estado atual:
 
-### Problema 1: Join falho na edge function `historico-posicoes`
-A funcao que busca o historico do associado faz um JOIN inline com `rastreadores_config_plataformas`:
-```
-.select(`*, config_plataforma:rastreadores_config_plataformas(*)`)
-.eq('veiculo_id', veiculo_id)
-.maybeSingle();
-```
-Esse join pode falhar silenciosamente se a FK nao estiver configurada corretamente. A funcao `rastreador-historico` (que funciona para sinistros) ja foi corrigida anteriormente para fazer **queries separadas** - mas `historico-posicoes` nao foi atualizada.
+### 1. Rota OSRM (ComparacaoPosicoes + RotaPolyline) -- OK
 
-### Problema 2: Parametros Softruck inconsistentes entre edge functions
-- `rastreador-historico` usa: `filters[acc][btw]=inicio,fim`
-- `historico-posicoes` usa: `filters[start_date]=... & filters[end_date]=...`
+- `routingService.ts`: Ja possui AbortController com timeout de 8s, cache de 30s, fallback Haversine, suporte multi-waypoint
+- `useRotaReal.ts`: Ja usa `toFixed(4)` para estabilizar dependencias, debounce de 500ms, cleanup correto
+- `RotaPolyline.tsx`: Renderiza linha tracejada enquanto carrega, depois mostra rota real
+- `ComparacaoPosicoes.tsx`: Usa `useRotaReal` + `RotaPolyline`, geocodifica enderecos quando coordenadas estao ausentes, classifica distancia
 
-Parametros diferentes para a mesma API, um deles esta errado e retorna 0 pontos.
+**Status: Funcional.** Todos os fixes anteriores (timeout, debounce, estabilizacao de coordenadas) ja estao aplicados.
 
-### Problema 3: OSRM API publica sem timeout
-O `routingService.ts` chama `router.project-osrm.org` (servidor demo publico) sem timeout. Se a API demora ou esta fora, o `useRotaReal` fica em loading infinito, e a `ComparacaoPosicoes` nunca desenha a rota.
+### 2. Trajeto Historico do Sinistro (TrajetoColisaoCard + TrajetoSinistroCard) -- OK
 
-## Correcoes
+- Ambos chamam `rastreador-historico` edge function
+- `rastreador-historico`: Queries separadas (rastreador + plataforma), retry em 401, `filters[acc][btw]` para Softruck, fallback para banco local
+- `TrajetoColisaoCard`: 4h antes da colisao, busca rastreador com status `instalado`
+- `TrajetoSinistroCard`: 24h antes (configuravel), inclui retry e botao "Tentar novamente"
 
-### 1. `supabase/functions/historico-posicoes/index.ts`
-- Separar query do rastreador e da config da plataforma em 2 chamadas independentes (mesmo padrao do `rastreador-historico`)
-- Padronizar filtros Softruck para usar o mesmo formato do `rastreador-historico` (que ja funciona para posicao atual)
-- Usar `plataforma_veiculo_id || plataforma_device_id || id_plataforma` (mesma cadeia de fallback)
+**Status: Funcional.** Edge function ja usa o formato correto de parametros Softruck e queries separadas.
 
-### 2. `src/services/routingService.ts`
-- Adicionar `AbortController` com timeout de 8 segundos na chamada OSRM
-- Garantir que o fallback (linha reta + Haversine) funcione corretamente em caso de timeout
+### 3. Historico de Posicoes do Associado (historico-posicoes) -- OK
 
-### 3. `src/hooks/useRotaReal.ts`
-- Remover o `lastRequestRef` que impede retentativas quando coordenadas mudam minimamente
-- Usar dependencias estabilizadas com `toFixed(4)` para evitar re-renders desnecessarios mas permitir retry apos erro
+- Queries separadas para rastreador e config de plataforma (fix anterior ja aplicado)
+- Usa `getHistoricoSoftruckFixed` com `filters[acc][btw]` (formato correto)
+- Fallback para `plataforma_veiculo_id || plataforma_device_id || id_plataforma`
+- Validacao de propriedade (associado -> veiculo -> rastreador)
+- Downsampling por intervalo, identificacao de paradas, resumo estatistico
+
+**Status: Funcional.** Todos os fixes anteriores ja estao aplicados.
+
+## Conclusao
+
+Todos os tres fluxos de rotas estao implementados corretamente com as correcoes anteriores ja aplicadas:
+
+| Componente | Edge Function | Timeout | Cache | Fallback | Retry |
+|---|---|---|---|---|---|
+| ComparacaoPosicoes | OSRM (externo) | 8s | 30s | Haversine | N/A |
+| TrajetoColisaoCard | rastreador-historico | N/A | N/A | Banco local | 401 retry |
+| TrajetoSinistroCard | rastreador-historico | N/A | N/A | Banco local | 401 retry + UI retry |
+| App Associado | historico-posicoes | N/A | N/A | Banco local | N/A |
+
+Nenhuma correcao adicional e necessaria. O codigo esta funcional e operante.
+
+Para testar de forma efetiva, seria necessario ter um veiculo com rastreador ativo e com dados de posicoes no banco ou na API Softruck.
 
