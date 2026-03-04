@@ -845,30 +845,28 @@ serve(async (req) => {
     // ========================================
     console.log('[SGA Sync] Validando campos obrigatórios do veículo...');
 
-    if (!veiculo.renavam || veiculo.renavam.trim() === '') {
-      await logSync(veiculo_id, associado_id, 'validar_veiculo', 'error', null, null, 'RENAVAM não informado');
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-      await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', 'RENAVAM não informado', codigoAssociadoHinova);
-      return new Response(
-        JSON.stringify({ 
-          success: false, error: 'RENAVAM é obrigatório para sincronização com SGA.',
-          step: 'validacao_veiculo', campo_faltante: 'renavam'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const camposObrigatorios: { campo: string; valor: string | null | undefined; label: string }[] = [
+      { campo: 'marca', valor: veiculo.marca, label: 'MARCA' },
+      { campo: 'modelo', valor: veiculo.modelo, label: 'MODELO' },
+      { campo: 'placa', valor: veiculo.placa, label: 'PLACA' },
+      { campo: 'renavam', valor: veiculo.renavam, label: 'RENAVAM' },
+      { campo: 'chassi', valor: veiculo.chassi, label: 'CHASSI' },
+    ];
 
-    if (!veiculo.chassi || veiculo.chassi.trim() === '') {
-      await logSync(veiculo_id, associado_id, 'validar_veiculo', 'error', null, null, 'CHASSI não informado');
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-      await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', 'CHASSI não informado', codigoAssociadoHinova);
-      return new Response(
-        JSON.stringify({ 
-          success: false, error: 'CHASSI é obrigatório para sincronização com SGA.',
-          step: 'validacao_veiculo', campo_faltante: 'chassi'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    for (const { campo, valor, label } of camposObrigatorios) {
+      if (!valor || valor.trim() === '') {
+        const msg = `${label} é obrigatório para sincronização com SGA.`;
+        await logSync(veiculo_id, associado_id, 'validar_veiculo', 'error', null, null, `${label} não informado`);
+        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+        await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', `${label} não informado`, codigoAssociadoHinova);
+        return new Response(
+          JSON.stringify({ 
+            success: false, error: msg,
+            step: 'validacao_veiculo', campo_faltante: campo
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     if (!hinovaCodigoVoluntario) {
@@ -916,8 +914,20 @@ serve(async (req) => {
     if (!veiculoResponse.ok) {
       const statusCode = veiculoResponse.status;
       const mensagem = veiculoData.mensagem?.toLowerCase() || '';
+      const errorMessages: string[] = (veiculoData as any).error || [];
       
-      if (statusCode === 406 || mensagem.includes('já cadastrad') || mensagem.includes('duplicad') || mensagem.includes('existe')) {
+      // Check if this is a validation error (not a duplicate)
+      const isValidationError = errorMessages.some((e: string) => 
+        e.toLowerCase().includes('parâmetros inválidos') || 
+        e.toLowerCase().includes('parametros invalidos') ||
+        e.toLowerCase().includes('verifique o campo')
+      );
+      
+      const isDuplicate = !isValidationError && (
+        statusCode === 406 || mensagem.includes('já cadastrad') || mensagem.includes('duplicad') || mensagem.includes('existe')
+      );
+      
+      if (isDuplicate) {
         console.log('[SGA Sync] Placa já cadastrada, tentando buscar código...');
         
         let codigoVeiculoExistente: number | null = null;
