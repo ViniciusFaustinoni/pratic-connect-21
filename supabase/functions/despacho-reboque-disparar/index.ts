@@ -180,7 +180,7 @@ serve(async (req) => {
         valor_saida: vals.valor_saida,
         valor_km: vals.valor_km,
         valor_calculado: vals.valor_sugerido || null,
-        etapa_conversacao: "aguardando_aceite",
+        etapa_conversacao: "aguardando_interesse",
       };
     });
 
@@ -236,9 +236,7 @@ ${chamado.observacoes ? `📝 Obs: ${chamado.observacoes}\n` : ""}
 📍 Origem: ${enderecoOrigem || "A informar"}
 📍 Destino: ${enderecoDestino}
 
-💰 *Valor sugerido: ${valorDisplay}*
-
-Responda *SIM* para aceitar ou *NÃO* para recusar.`;
+Tem interesse neste serviço? Responda *SIM* ou *NÃO*.`;
 
       try {
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
