@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { CardOrcamentoReparo } from '@/components/orcamento/CardOrcamentoReparo';
 import { useVeiculosOficina, useOficinasDisponiveis, type VeiculoOficina } from '@/hooks/useVeiculosOficina';
+import { OrcamentoPDFImport, type DadosExtraidos } from '@/components/regulador/OrcamentoPDFImport';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -19,7 +21,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   Car, Search, Clock, AlertTriangle, AlertCircle, Phone,
   CheckCircle2, CircleDot, Circle, Wrench, Building2, Store,
-  ClipboardEdit, Video, Shield, Users, RefreshCw, RotateCcw, XCircle
+  ClipboardEdit, Video, Shield, Users, RefreshCw, RotateCcw, XCircle,
+  FileUp, ArrowRight, Plus, Trash2, Loader2
 } from 'lucide-react';
 import { differenceInDays, differenceInHours, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -28,6 +31,16 @@ import { VistoriaPresencialDialog } from '@/components/sinistros/VistoriaPresenc
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+
+const ETAPAS_REPARO = [
+  { id: 'lanternagem', nome: 'Lanternagem' },
+  { id: 'pintura', nome: 'Pintura' },
+  { id: 'mecanica', nome: 'Mecânica' },
+  { id: 'eletrica', nome: 'Elétrica' },
+  { id: 'vidros_farois', nome: 'Vidros e Faróis' },
+  { id: 'polimento', nome: 'Polimento' },
+  { id: 'lavagem', nome: 'Lavagem' },
+] as const;
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   aguardando_entrada: { label: 'Aguardando Entrada', color: 'bg-yellow-100 text-yellow-800' },
@@ -100,6 +113,11 @@ export default function ReguladorOficina() {
   const [retornoTipo, setRetornoTipo] = useState<'pertinente' | 'nao_pertinente'>('pertinente');
   const [retornoObservacao, setRetornoObservacao] = useState('');
   const [retornoSalvando, setRetornoSalvando] = useState(false);
+  // PDF Orçamento Dialog
+  const [pdfOrcamentoOS, setPdfOrcamentoOS] = useState<VeiculoOficina | null>(null);
+  const [pdfEtapasReparo, setPdfEtapasReparo] = useState<string[]>([]);
+  const [pdfItensExtraidos, setPdfItensExtraidos] = useState<any[]>([]);
+  const [pdfSalvando, setPdfSalvando] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -317,6 +335,114 @@ export default function ReguladorOficina() {
     }
   };
 
+  const handlePdfDadosExtraidos = useCallback((dados: DadosExtraidos) => {
+    const novosItens: any[] = [];
+    if (dados.pecas?.length) {
+      for (const p of dados.pecas) {
+        novosItens.push({
+          tipo: 'peca',
+          descricao: p.descricao || '',
+          quantidade: p.quantidade || 1,
+          valor_unitario: p.valor_unitario || 0,
+          valor_total: (p.quantidade || 1) * (p.valor_unitario || 0),
+          origem: p.origem || '',
+          operacao: p.operacao || '',
+        });
+      }
+    }
+    if (dados.servicos?.length) {
+      for (const s of dados.servicos) {
+        novosItens.push({
+          tipo: 'servico',
+          descricao: s.descricao || '',
+          quantidade: 1,
+          valor_unitario: s.valor_total || 0,
+          valor_total: s.valor_total || 0,
+          tipo_servico: s.tipo_servico || '',
+        });
+      }
+    }
+    setPdfItensExtraidos(novosItens);
+  }, []);
+
+  const handleSalvarOrcamentoPDF = async () => {
+    if (!pdfOrcamentoOS?.sinistro_id) return;
+    if (pdfItensExtraidos.length === 0) {
+      toast.error('Nenhum item extraído. Envie o PDF primeiro.');
+      return;
+    }
+    if (pdfEtapasReparo.length === 0) {
+      toast.error('Selecione pelo menos uma etapa de reparo.');
+      return;
+    }
+
+    setPdfSalvando(true);
+    try {
+      // Find or create orcamento_reparo
+      let { data: orcamento } = await supabase
+        .from('orcamento_reparo')
+        .select('id')
+        .eq('sinistro_id', pdfOrcamentoOS.sinistro_id)
+        .maybeSingle();
+
+      if (!orcamento) {
+        const { data: novoOrc, error: createErr } = await supabase
+          .from('orcamento_reparo')
+          .insert({
+            sinistro_id: pdfOrcamentoOS.sinistro_id,
+            oficina_id: pdfOrcamentoOS.oficina?.id || null,
+            tipo_orcamento: 'cotacao_separada',
+          } as any)
+          .select('id')
+          .single();
+        if (createErr) throw createErr;
+        orcamento = novoOrc;
+      }
+
+      // Insert items
+      const itensParaInserir = pdfItensExtraidos.map(i => ({
+        orcamento_id: orcamento!.id,
+        tipo: i.tipo === 'peca' ? 'peca' : 'mao_de_obra',
+        descricao: i.descricao,
+        origem: i.origem || null,
+        quantidade: i.quantidade || 1,
+        valor_unitario: i.valor_unitario || 0,
+        status: 'pendente',
+        observacao: i.operacao || i.tipo_servico || null,
+        created_by: profile?.id || null,
+      }));
+
+      const { error: insertErr } = await supabase
+        .from('orcamento_reparo_itens')
+        .insert(itensParaInserir);
+      if (insertErr) throw insertErr;
+
+      // Update OS etapas_reparo
+      const etapasData = ETAPAS_REPARO
+        .filter(e => pdfEtapasReparo.includes(e.id))
+        .map(e => ({ id: e.id, nome: e.nome, selecionada: true, status: 'pendente' as const }));
+
+      await supabase
+        .from('ordens_servico')
+        .update({
+          etapas_reparo: etapasData as any,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', pdfOrcamentoOS.id);
+
+      toast.success('Orçamento salvo com sucesso!');
+      setPdfOrcamentoOS(null);
+      setPdfEtapasReparo([]);
+      setPdfItensExtraidos([]);
+      queryClient.invalidateQueries({ queryKey: ['veiculos-oficina'] });
+      queryClient.invalidateQueries({ queryKey: ['orcamento-reparo'] });
+    } catch (e: any) {
+      toast.error('Erro ao salvar: ' + e.message);
+    } finally {
+      setPdfSalvando(false);
+    }
+  };
+
   return (
     <div className="p-4 space-y-4 pb-20">
       <h1 className="text-lg font-bold flex items-center gap-2">
@@ -508,6 +634,20 @@ export default function ReguladorOficina() {
                           <Video className="h-3 w-3 mr-1" /> Vistoria
                         </Button>
                       </>
+                    )}
+                    {v.sinistro_id && ['aguardando_orcamento', 'em_execucao', 'aguardando_entrada'].includes(v.status) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={() => {
+                          setPdfOrcamentoOS(v);
+                          setPdfEtapasReparo([]);
+                          setPdfItensExtraidos([]);
+                        }}
+                      >
+                        <FileUp className="h-3 w-3 mr-1" /> Orçamento PDF
+                      </Button>
                     )}
                     <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setAlterarOficinaOS(v); setNovaOficinaId(v.oficina?.id || ''); }}>
                       <RefreshCw className="h-3 w-3 mr-1" /> Oficina
@@ -703,6 +843,116 @@ export default function ReguladorOficina() {
               {retornoSalvando ? 'Salvando...' : retornoTipo === 'pertinente' ? 'Criar Nova OS' : 'Registrar Negativa'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Orçamento via PDF */}
+      <Dialog open={!!pdfOrcamentoOS} onOpenChange={(open) => { if (!open) { setPdfOrcamentoOS(null); setPdfEtapasReparo([]); setPdfItensExtraidos([]); } }}>
+        <DialogContent className="max-w-full h-full max-h-full sm:max-w-2xl sm:max-h-[90vh] sm:h-auto p-0 gap-0 rounded-none sm:rounded-lg">
+          <DialogHeader className="px-4 pt-4 pb-2 border-b">
+            <DialogTitle>Orçamento via PDF — OS {pdfOrcamentoOS?.numero}</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto p-4 space-y-4 flex-1">
+            <p className="text-xs text-muted-foreground">
+              Veículo: <strong>{pdfOrcamentoOS?.veiculo?.placa}</strong> — {pdfOrcamentoOS?.veiculo?.marca} {pdfOrcamentoOS?.veiculo?.modelo}
+            </p>
+
+            {/* Etapas de Reparo */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Etapas necessárias *</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {ETAPAS_REPARO.map((etapa) => (
+                  <label key={etapa.id} className="flex items-center gap-2 rounded-lg border p-2 cursor-pointer hover:bg-muted/50 transition-colors">
+                    <Checkbox
+                      checked={pdfEtapasReparo.includes(etapa.id)}
+                      onCheckedChange={(checked) => {
+                        setPdfEtapasReparo(prev => checked ? [...prev, etapa.id] : prev.filter(id => id !== etapa.id));
+                      }}
+                    />
+                    <span className="text-xs">{etapa.nome}</span>
+                  </label>
+                ))}
+              </div>
+              {pdfEtapasReparo.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1">
+                  {ETAPAS_REPARO.filter(e => pdfEtapasReparo.includes(e.id)).map((etapa, i, arr) => (
+                    <span key={etapa.id} className="flex items-center gap-1">
+                      <Badge variant="secondary" className="text-[10px]">{etapa.nome}</Badge>
+                      {i < arr.length - 1 && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* PDF Upload */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Enviar PDF do orçamento</Label>
+              <OrcamentoPDFImport onDadosExtraidos={handlePdfDadosExtraidos} />
+            </div>
+
+            {/* Itens Extraídos */}
+            {pdfItensExtraidos.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Itens extraídos ({pdfItensExtraidos.length})</Label>
+                {pdfItensExtraidos.map((item, i) => (
+                  <div key={i} className="rounded-lg border p-2 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <Badge variant={item.tipo === 'peca' ? 'default' : 'secondary'} className="text-[10px]">
+                        {item.tipo === 'peca' ? '🔧 Peça' : '🛠️ Serviço'}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setPdfItensExtraidos(prev => prev.filter((_, idx) => idx !== i))}
+                      >
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
+                    <p className="text-xs font-medium">{item.descricao}</p>
+                    <div className="flex justify-between text-[11px] text-muted-foreground">
+                      <span>Qtd: {item.quantidade}</span>
+                      <span>Unit: R$ {(item.valor_unitario || 0).toFixed(2)}</span>
+                      <span className="font-medium text-foreground">Total: R$ {(item.valor_total || 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Resumo */}
+                <div className="rounded-lg bg-muted p-3 space-y-1 text-sm">
+                  <div className="flex justify-between text-xs">
+                    <span>Peças ({pdfItensExtraidos.filter(i => i.tipo === 'peca').length}):</span>
+                    <span>R$ {pdfItensExtraidos.filter(i => i.tipo === 'peca').reduce((s: number, i: any) => s + (i.valor_total || 0), 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span>Serviços ({pdfItensExtraidos.filter(i => i.tipo === 'servico').length}):</span>
+                    <span>R$ {pdfItensExtraidos.filter(i => i.tipo === 'servico').reduce((s: number, i: any) => s + (i.valor_total || 0), 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold">
+                    <span>TOTAL:</span>
+                    <span>R$ {pdfItensExtraidos.reduce((s: number, i: any) => s + (i.valor_total || 0), 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="border-t p-4">
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setPdfOrcamentoOS(null); setPdfEtapasReparo([]); setPdfItensExtraidos([]); }}>
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleSalvarOrcamentoPDF}
+                disabled={pdfSalvando || pdfItensExtraidos.length === 0 || pdfEtapasReparo.length === 0}
+              >
+                {pdfSalvando ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</> : 'Salvar Orçamento'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
