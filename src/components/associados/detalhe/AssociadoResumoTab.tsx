@@ -126,8 +126,8 @@ export function AssociadoResumoTab({
               value={resumoFinanceiro?.proximaCobranca?.data_vencimento
                 ? formatDate(resumoFinanceiro.proximaCobranca.data_vencimento) : '—'}
             />
-            <InfoRow label="CNH vence" value="—" />
-            <InfoRow label="CRLV vence" value="—" />
+            <InfoRow label="CNH vence" value={contrato?.cliente_cnh_validade ? formatDate(contrato.cliente_cnh_validade) : 'Não informado'} />
+            <InfoRow label="CRLV vence" value="Não informado" />
           </CardContent>
         </Card>
       </div>
