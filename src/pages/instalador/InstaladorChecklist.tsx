@@ -45,7 +45,8 @@ import {
   useServicoDetalhes, 
   useSalvarChecklistServico,
   useAprovarVeiculoServico,
-  useRecusarVeiculoServico
+  useRecusarVeiculoServico,
+  useEnviarParaMonitoramento
 } from '@/hooks/useServicos';
 import { useVistoriaCompletaPorServico } from '@/hooks/useVistorias';
 import { useUploadFotoVistoriaCompleta, useUploadVideo360 } from '@/hooks/useVistoriaCompleta';
@@ -173,6 +174,8 @@ export default function InstaladorChecklist() {
   const salvarChecklistMutation = useSalvarChecklistServico();
   const aprovarVeiculoMutation = useAprovarVeiculoServico();
   const recusarVeiculoMutation = useRecusarVeiculoServico();
+  const enviarParaMonitoramentoMutation = useEnviarParaMonitoramento();
+  const [enviandoMonitoramento, setEnviandoMonitoramento] = useState(false);
 
   const progresso = (etapaAtual / ETAPAS.length) * 100;
 
@@ -656,6 +659,9 @@ export default function InstaladorChecklist() {
     }
   };
 
+
+
+
   const handleContinuarComRessalva = async () => {
     setShowDialogCondicao(false);
     await salvarEAvancar();
@@ -670,6 +676,39 @@ export default function InstaladorChecklist() {
     }).join('\n');
     setMotivoPrePreenchido(`Itens reprovados no checklist:\n${motivos}`);
     setShowModalRecusa(true);
+  };
+
+  const handleEnviarParaMonitoramento = async () => {
+    if (!servico || !id) return;
+    setEnviandoMonitoramento(true);
+    try {
+      const motivos = itensNok.map(item => {
+        const obs = checklist[item.id]?.observacao;
+        return `• ${item.label}${obs ? `: ${obs}` : ''}`;
+      }).join('\n');
+      
+      // Coletar fotos de evidência dos itens NOK
+      const fotosEvidencia: string[] = [];
+      itensNok.forEach(item => {
+        const fotos = checklist[item.id]?.fotos;
+        if (fotos) fotosEvidencia.push(...fotos);
+      });
+
+      await enviarParaMonitoramentoMutation.mutateAsync({
+        servicoId: id,
+        associadoId: (servico as any).associados?.id || (servico as any).associado_id,
+        ressalvasInstalador: `Itens reprovados no checklist:\n${motivos}`,
+        fotosRessalva: fotosEvidencia.length > 0 ? fotosEvidencia : undefined,
+        checklistData: checklist as any,
+        quilometragem: quilometragem ? parseInt(quilometragem) : undefined,
+      });
+      setShowDialogCondicao(false);
+      navigate('/instalador');
+    } catch (err) {
+      console.error('Erro ao enviar para monitoramento:', err);
+    } finally {
+      setEnviandoMonitoramento(false);
+    }
   };
 
   const voltar = () => {
@@ -1892,6 +1931,18 @@ export default function InstaladorChecklist() {
             >
               <CheckCircle2 className="mr-2 h-4 w-4" />
               {temCritico ? 'Prosseguir mesmo assim' : 'Há condição de continuar'}
+            </Button>
+            <Button
+              onClick={handleEnviarParaMonitoramento}
+              disabled={enviandoMonitoramento}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+            >
+              {enviandoMonitoramento ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <AlertTriangle className="mr-2 h-4 w-4" />
+              )}
+              Enviar para Monitoramento
             </Button>
             <Button
               variant="destructive"
