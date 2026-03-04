@@ -23,7 +23,8 @@ export function useVistoriasEvento(filtros: FiltrosVistoria = {}) {
             id, protocolo, tipo, data_ocorrencia,
             associado:associados!sinistros_associado_id_fkey(id, nome, telefone, whatsapp),
             veiculo:veiculos!sinistros_veiculo_id_fkey(id, placa, marca, modelo, ano_modelo, cor)
-          )
+          ),
+          regulador:profiles!vistorias_evento_regulador_id_fkey(id, nome)
         `)
         .order('data_agendada', { ascending: true })
         .order('horario_agendado', { ascending: true });

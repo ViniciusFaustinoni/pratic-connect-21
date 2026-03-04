@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query';
+import { useVistoriasEvento, useVistoriasEventoContadores } from '@/hooks/useVistoriasEvento';
 import { 
   Search, MoreHorizontal, Calendar, User, Car, MapPin, 
   Clock, Camera, CheckCircle, XCircle, Eye, CalendarDays,
@@ -62,7 +63,7 @@ type StatusVistoriaFila =
   | 'aprovada'
   | 'reprovada';
 
-type TipoVistoria = 'presencial' | 'auto_vistoria' | 'ponto_fixo' | 'manutencao' | 'retirada';
+type TipoVistoria = 'presencial' | 'auto_vistoria' | 'ponto_fixo' | 'manutencao' | 'retirada' | 'evento';
 
 interface VistoriaFila {
   id: string;
@@ -78,6 +79,7 @@ interface VistoriaFila {
   vistoriadorId: string | null;
   status: StatusVistoriaFila;
   createdAt: string;
+  sinistroId?: string;
 }
 
 const STATUS_CONFIG: Record<StatusVistoriaFila, { label: string; className: string }> = {
@@ -97,6 +99,7 @@ const TIPO_CONFIG: Record<TipoVistoria, { label: string; className: string }> = 
   ponto_fixo: { label: 'Ponto Fixo', className: 'bg-amber-100 text-amber-800' },
   manutencao: { label: 'Manutenção', className: 'bg-orange-100 text-orange-800 border-orange-300' },
   retirada: { label: 'Retirada', className: 'bg-red-100 text-red-800 border-red-300' },
+  evento: { label: 'Evento/Sinistro', className: 'bg-violet-100 text-violet-800 border-violet-300' },
 };
 
 // ============================================
@@ -171,7 +174,11 @@ export default function FilaVistorias() {
     status: ['pendente', 'agendada', 'em_rota', 'em_andamento'],
   });
 
-  const isLoading = isLoadingVistorias || isLoadingServicos;
+  // Buscar vistorias de evento (sinistros)
+  const { data: vistoriasEventoRaw, isLoading: isLoadingEventos } = useVistoriasEvento({});
+  const { data: contadoresEvento } = useVistoriasEventoContadores();
+
+  const isLoading = isLoadingVistorias || isLoadingServicos || isLoadingEventos;
 
   // Transformar dados - combinar vistorias + serviços de manutenção/retirada
   const vistorias: VistoriaFila[] = useMemo(() => {
@@ -229,11 +236,38 @@ export default function FilaVistorias() {
       createdAt: s.created_at,
     }));
 
+    // Mapear vistorias de evento (sinistros)
+    const eventosTransformados: VistoriaFila[] = (vistoriasEventoRaw || []).map((ve: any) => {
+      const sinistro = ve.sinistro;
+      const associado = sinistro?.associado;
+      const veiculo = sinistro?.veiculo;
+      const dataHora = ve.data_agendada && ve.horario_agendado
+        ? `${ve.data_agendada}T${ve.horario_agendado}`
+        : ve.data_agendada || null;
+
+      return {
+        id: ve.id,
+        protocolo: sinistro?.protocolo || gerarProtocolo(ve.id, ve.created_at || new Date().toISOString()),
+        cliente: associado?.nome || 'Associado não identificado',
+        clienteId: associado?.id || '',
+        veiculo: veiculo ? `${veiculo.marca || ''} ${veiculo.modelo || ''}`.trim() : 'N/A',
+        placa: veiculo?.placa || '---',
+        tipo: 'evento' as TipoVistoria,
+        regiao: ve.endereco_bairro || ve.endereco_cidade || 'Não informada',
+        dataAgendada: dataHora,
+        vistoriador: ve.regulador?.nome || null,
+        vistoriadorId: ve.regulador_id || null,
+        status: mapStatus(ve.status),
+        createdAt: ve.created_at || new Date().toISOString(),
+        sinistroId: ve.sinistro_id,
+      };
+    });
+
     // Combinar e ordenar por data de criação (mais recentes primeiro)
-    return [...vistoriasTransformadas, ...servicosTransformados].sort(
+    return [...vistoriasTransformadas, ...servicosTransformados, ...eventosTransformados].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [vistoriasRaw, servicosRaw]);
+  }, [vistoriasRaw, servicosRaw, vistoriasEventoRaw]);
 
   // Lista de vistoriadores únicos
   const vistoriadores = useMemo(() => {
@@ -595,6 +629,7 @@ export default function FilaVistorias() {
               <SelectItem value="ponto_fixo">Ponto Fixo</SelectItem>
               <SelectItem value="manutencao">Manutenção</SelectItem>
               <SelectItem value="retirada">Retirada</SelectItem>
+              <SelectItem value="evento">Evento/Sinistro</SelectItem>
             </SelectContent>
           </Select>
 
@@ -684,7 +719,9 @@ export default function FilaVistorias() {
                     </TableCell>
                     <TableCell>
                       <Link 
-                        to={`/cadastro/associados/${vistoria.clienteId}`}
+                        to={vistoria.tipo === 'evento' && vistoria.sinistroId 
+                          ? `/sinistros/${vistoria.sinistroId}` 
+                          : `/cadastro/associados/${vistoria.clienteId}`}
                         className="text-primary hover:underline"
                       >
                         {vistoria.cliente}
