@@ -1,43 +1,21 @@
 
+# Analise: Atribuicao de Oficinas e Confirmacao de Orcamento
 
-# Plano: Importar Orcamento via PDF no Parecer do Regulador
+## Requisitos vs. Estado Atual
 
-## Situacao atual
+| Requisito | Status | Implementacao |
+|-----------|--------|---------------|
+| Modal para selecionar oficina em evento aprovado | Implementado | `EnviarParaOficinaDialog.tsx` |
+| Pergunta Pacote Fechado vs Servico Comum | Implementado | Radio buttons no dialog |
+| Pacote Fechado abre campo de valor total | Implementado | Campo R$ com alerta visual |
+| Servico Comum calcula valor do orcamento do regulador | Implementado | `ConfirmacaoOrcamentoAnalista.tsx` com totais automaticos |
+| Analista confirma/corrige valores item a item | Implementado | Botao Editar por item com campo de valor editavel |
+| Analista atribui Auto Center por peca | Implementado | Select de Auto Center por peca na tabela de confirmacao |
+| Registrar toda alteracao para auditoria | Implementado | `orcamento_reparo_historico` com `dados_anteriores`, `dados_novos`, `motivo`, `usuario_id` em cada mutacao |
+| Custo real somente na conclusao | Implementado | `useConsolidarOrcamento` seta `custo_real_total` apenas na consolidacao |
 
-- O regulador preenche itens (pecas e servicos) manualmente um a um em `VistoriaEventoOrcamento.tsx`
-- Ja existe `ImportarOrcamentoPDFModal` + edge function `extract-orcamento-pdf` que extrai pecas/servicos de PDF via IA (Gemini) — usado hoje apenas pelo analista em `CardOrcamentoReparo`
-- O regulador ja seleciona etapas de reparo manualmente (lanternagem, pintura, etc.) — isso deve continuar manual
+## Conclusao
 
-## Mudanca
+Todas as funcionalidades descritas ja estao implementadas. Nao ha mudancas necessarias.
 
-Substituir o bloco de adicao manual de itens na Secao 2 do `VistoriaEventoOrcamento.tsx` por um fluxo de upload de PDF com preview editavel, reutilizando a mesma logica de extracao existente.
-
-### Arquivo: `src/components/regulador/VistoriaEventoOrcamento.tsx`
-
-1. **Adicionar botao "Importar PDF"** na Secao 2, acima da lista de itens
-2. **Integrar logica de upload+extracao** (dropzone, upload para storage, chamar `extract-orcamento-pdf`, preview editavel)
-3. **Manter botoes "+ Peca" e "+ Servico"** para ajustes manuais apos importacao
-4. **Manter selecao de etapas** intacta (manual pelo regulador)
-5. Ao importar o PDF, os itens extraidos populam o state `itens` existente, permitindo edicao antes de finalizar
-
-### Fluxo do regulador
-
-```text
-Secao 2: Itens
-  [Etapas de reparo - checkboxes - manual] ← sem mudanca
-  
-  [Importar PDF do Orcamento]  ← NOVO botao principal
-     ↓ upload → IA extrai → preview editavel → confirma
-     ↓ popula lista de itens
-  
-  [Lista de itens extraidos - editaveis]
-  [+ Peca] [+ Servico]  ← mantidos para ajuste fino
-```
-
-### Detalhes tecnicos
-
-- Reutilizar a mesma edge function `extract-orcamento-pdf` (nenhuma mudanca no backend)
-- Upload do PDF para `documentos` bucket (mesmo path: `orcamentos-pdf/`)
-- Converter resultado da IA para o formato `ItemParecer[]` existente
-- Inline no componente (sem abrir modal separado) — exibir zona de drop com estado de processamento direto na secao
-
+Se houver algum comportamento especifico que nao esta funcionando como esperado, descreva o cenario para investigacao.
