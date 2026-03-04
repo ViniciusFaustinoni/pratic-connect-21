@@ -720,7 +720,7 @@ export default function FilaVistorias() {
                     <TableCell>
                       <Link 
                         to={vistoria.tipo === 'evento' && vistoria.sinistroId 
-                          ? `/sinistros/${vistoria.sinistroId}` 
+                          ? `/eventos/sinistros/${vistoria.sinistroId}` 
                           : `/cadastro/associados/${vistoria.clienteId}`}
                         className="text-primary hover:underline"
                       >
