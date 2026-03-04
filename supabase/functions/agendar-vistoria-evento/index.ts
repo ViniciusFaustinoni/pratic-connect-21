@@ -13,6 +13,58 @@ const SLOTS = Array.from({ length: 19 }, (_, i) => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 });
 
+/**
+ * Geocodifica um endereço usando Nominatim (OpenStreetMap)
+ */
+async function geocodificarEndereco(rua?: string, numero?: string, bairro?: string, cidade?: string): Promise<{ latitude: number | null; longitude: number | null }> {
+  try {
+    const partes = [rua, numero, bairro, cidade, "Brasil"].filter(Boolean);
+    const enderecoCompleto = partes.join(", ");
+
+    if (!enderecoCompleto || enderecoCompleto === "Brasil") {
+      return { latitude: null, longitude: null };
+    }
+
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoCompleto)}&countrycodes=br&limit=1`;
+    console.log(`[agendar-vistoria-evento] Geocodificando: ${enderecoCompleto}`);
+
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "PraticConnect/1.0",
+        "Accept-Language": "pt-BR,pt;q=0.9",
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`[agendar-vistoria-evento] Nominatim status: ${response.status}`);
+      return { latitude: null, longitude: null };
+    }
+
+    const data = await response.json();
+    if (data.length > 0) {
+      console.log(`[agendar-vistoria-evento] Geocode OK: ${data[0].lat}, ${data[0].lon}`);
+      return { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) };
+    }
+
+    // Fallback: tentar só bairro + cidade
+    if (bairro && cidade) {
+      const fallback = `${bairro}, ${cidade}, Brasil`;
+      const r2 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallback)}&countrycodes=br&limit=1`, {
+        headers: { "User-Agent": "PraticConnect/1.0" },
+      });
+      const d2 = await r2.json();
+      if (d2.length > 0) {
+        return { latitude: parseFloat(d2[0].lat), longitude: parseFloat(d2[0].lon) };
+      }
+    }
+
+    return { latitude: null, longitude: null };
+  } catch (err) {
+    console.error("[agendar-vistoria-evento] Erro geocode:", err);
+    return { latitude: null, longitude: null };
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -20,7 +72,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { action, token, data_agendada, horario_agendado, endereco } = body;
+    const { action, token, data_agendada, horario_agendado, endereco, permite_encaixe } = body;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -126,6 +178,14 @@ serve(async (req) => {
       );
     }
 
+    // Geocodificar endereço
+    const coords = await geocodificarEndereco(
+      endereco?.rua,
+      endereco?.numero,
+      endereco?.bairro,
+      endereco?.cidade
+    );
+
     // Criar vistoria
     const { data: vistoria, error: vistoriaError } = await supabase
       .from("vistorias_evento")
@@ -139,6 +199,9 @@ serve(async (req) => {
         endereco_bairro: endereco?.bairro || null,
         endereco_cidade: endereco?.cidade || null,
         endereco_complemento: endereco?.complemento || null,
+        permite_encaixe: permite_encaixe === true,
+        endereco_latitude: coords.latitude,
+        endereco_longitude: coords.longitude,
         status: "agendada",
       })
       .select()

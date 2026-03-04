@@ -24423,6 +24423,8 @@ export type Database = {
           endereco_bairro: string | null
           endereco_cidade: string | null
           endereco_complemento: string | null
+          endereco_latitude: number | null
+          endereco_longitude: number | null
           endereco_numero: string | null
           endereco_rua: string | null
           horario_agendado: string
@@ -24430,6 +24432,7 @@ export type Database = {
           iniciada_em: string | null
           link_id: string | null
           observacoes: string | null
+          permite_encaixe: boolean
           regulador_id: string | null
           sinistro_id: string
           status: string
@@ -24443,6 +24446,8 @@ export type Database = {
           endereco_bairro?: string | null
           endereco_cidade?: string | null
           endereco_complemento?: string | null
+          endereco_latitude?: number | null
+          endereco_longitude?: number | null
           endereco_numero?: string | null
           endereco_rua?: string | null
           horario_agendado: string
@@ -24450,6 +24455,7 @@ export type Database = {
           iniciada_em?: string | null
           link_id?: string | null
           observacoes?: string | null
+          permite_encaixe?: boolean
           regulador_id?: string | null
           sinistro_id: string
           status?: string
@@ -24463,6 +24469,8 @@ export type Database = {
           endereco_bairro?: string | null
           endereco_cidade?: string | null
           endereco_complemento?: string | null
+          endereco_latitude?: number | null
+          endereco_longitude?: number | null
           endereco_numero?: string | null
           endereco_rua?: string | null
           horario_agendado?: string
@@ -24470,6 +24478,7 @@ export type Database = {
           iniciada_em?: string | null
           link_id?: string | null
           observacoes?: string | null
+          permite_encaixe?: boolean
           regulador_id?: string | null
           sinistro_id?: string
           status?: string
