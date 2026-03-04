@@ -1,63 +1,40 @@
 
 
-# Reformular Orçamento do Regulador: PDF como Entrada Principal
+# Vistoria de Evento nao aparece no Monitoramento
 
-## Situacao Atual
+## Diagnostico
 
-Ja existe a tela `VistoriaEventoOrcamento.tsx` que permite ao regulador importar PDF com extracao por IA. Porem:
-- O upload de PDF e apenas uma opcao secundaria dentro do fluxo de vistoria
-- O regulador precisa preencher muitos campos manualmente antes de chegar ao PDF
-- Na tela de oficina (`ReguladorOficina.tsx`), o orcamento aparece colapsado via `CardOrcamentoReparo`, sem opcao de upload de PDF
+A vistoria foi criada com sucesso na tabela `vistorias_evento` (ID: `0d527f3a`, sinistro `8edba9fa`, status `agendada`, data 2026-03-05 08:30). A edge function `agendar-vistoria-evento` funcionou corretamente.
 
-A imagem enviada mostra a tela de detalhe do associado Marcus Vinicius — nao ha relacao direta com o orcamento do regulador, mas confirma que o associado esta ativo.
+**Porem:** A pagina `/monitoramento/vistorias` (`FilaVistorias.tsx`) consulta apenas duas fontes:
+- Tabela `vistorias` (vistorias de entrada/proposta) via `useVistorias`
+- Tabela `servicos` (instalacoes/manutencoes) via `useServicos`
 
-## Plano de Alteracoes
+**Ela NAO consulta `vistorias_evento`** — que e onde as vistorias de sinistro sao gravadas. Essas vistorias so aparecem nas paginas do regulador (`/regulador/vistorias`), que o diretor nao acessa normalmente.
 
-### 1. Reorganizar `VistoriaEventoOrcamento.tsx` — PDF como passo principal
+Resultado: o diretor agenda pelo link do evento, a vistoria e criada, mas nao aparece em nenhuma tela acessivel ao diretor.
 
-- **Inverter a ordem da Secao 2**: O dropzone de PDF aparece PRIMEIRO, antes da lista de itens
-- Apos upload e extracao, os itens aparecem ja preenchidos para revisao
-- Botoes "Adicionar Peca/Servico" ficam como opcao secundaria abaixo dos itens extraidos
-- **Etapas de reparo**: Continuam manuais (checkboxes), posicionadas ANTES do upload de PDF
-- Remover o texto "Valores estimados com base na sua experiencia" e substituir por "Envie o PDF do orcamento para preenchimento automatico"
+## Correcao
 
-### 2. Adicionar acesso ao orcamento via PDF na tela `ReguladorOficina.tsx`
+### 1. Adicionar secao de Vistorias de Evento no `FilaVistorias.tsx`
 
-- Nos cards de OS com status `aguardando_orcamento` ou `em_execucao`, adicionar botao "Enviar Orcamento PDF"
-- Ao clicar, abre um dialog simplificado com:
-  - Dropzone para PDF (reutiliza a mesma logica de upload + edge function `extract-orcamento-pdf`)
-  - Selecao de etapas de reparo (checkboxes manuais)
-  - Revisao dos itens extraidos
-  - Botao salvar que grava no `orcamento_reparo` do sinistro vinculado
+- Importar `useVistoriasEvento` no `FilaVistorias.tsx`
+- Adicionar uma secao/grupo "Vistorias de Evento" na lista, mostrando as vistorias agendadas da tabela `vistorias_evento` com dados do sinistro (protocolo, associado, veiculo, data/horario, endereco)
+- Cada card tera badge de status e link para o detalhe do sinistro
 
-### 3. Criar componente reutilizavel `OrcamentoPDFImport`
+### 2. Incluir contadores de vistorias de evento nos metricas
 
-Extrair a logica de upload/extracao de `VistoriaEventoOrcamento.tsx` para um componente isolado:
-- Props: `onItensExtraidos(itens)`, `disabled`
-- Contem: dropzone, estados de loading/sucesso, chamada a edge function
-- Reutilizado tanto no `VistoriaEventoOrcamento` quanto no novo dialog da `ReguladorOficina`
+- Adicionar card de contagem "Eventos" nos contadores do topo da FilaVistorias, usando `useVistoriasEventoContadores`
+
+### 3. RLS ja esta correta
+
+A policy SELECT de `vistorias_evento` ja inclui `diretor` — nao precisa de alteracao de RLS.
 
 ### Arquivos a modificar
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/regulador/OrcamentoPDFImport.tsx` | **Novo** — componente reutilizavel de upload PDF + extracao IA |
-| `src/components/regulador/VistoriaEventoOrcamento.tsx` | Refatorar: usar `OrcamentoPDFImport`, reordenar secoes |
-| `src/pages/regulador/ReguladorOficina.tsx` | Adicionar botao "Enviar Orcamento PDF" + dialog com import e etapas |
+| `src/pages/monitoramento/FilaVistorias.tsx` | Importar `useVistoriasEvento`, adicionar secao de vistorias de evento na lista e contadores |
 
-### Fluxo resultante para o regulador
-
-```text
-Regulador abre OS na aba Oficina
-  → Clica "Enviar Orcamento PDF"
-  → Dialog abre:
-      1. Seleciona etapas de reparo (checkboxes)
-      2. Faz upload do PDF
-      3. IA extrai pecas e servicos automaticamente
-      4. Regulador revisa itens extraidos (pode editar/remover)
-      5. Clica "Salvar Orcamento"
-  → Dados gravados no orcamento_reparo do sinistro
-```
-
-A edge function `extract-orcamento-pdf` ja existe e nao precisa de alteracoes.
+Impacto: apenas 1 arquivo alterado, sem migracao de banco.
 
