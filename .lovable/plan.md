@@ -1,21 +1,41 @@
 
-# Analise: Atribuicao de Oficinas e Confirmacao de Orcamento
 
-## Requisitos vs. Estado Atual
+# Plano: Corrigir Rotas e Historico de Rastreador
 
-| Requisito | Status | Implementacao |
-|-----------|--------|---------------|
-| Modal para selecionar oficina em evento aprovado | Implementado | `EnviarParaOficinaDialog.tsx` |
-| Pergunta Pacote Fechado vs Servico Comum | Implementado | Radio buttons no dialog |
-| Pacote Fechado abre campo de valor total | Implementado | Campo R$ com alerta visual |
-| Servico Comum calcula valor do orcamento do regulador | Implementado | `ConfirmacaoOrcamentoAnalista.tsx` com totais automaticos |
-| Analista confirma/corrige valores item a item | Implementado | Botao Editar por item com campo de valor editavel |
-| Analista atribui Auto Center por peca | Implementado | Select de Auto Center por peca na tabela de confirmacao |
-| Registrar toda alteracao para auditoria | Implementado | `orcamento_reparo_historico` com `dados_anteriores`, `dados_novos`, `motivo`, `usuario_id` em cada mutacao |
-| Custo real somente na conclusao | Implementado | `useConsolidarOrcamento` seta `custo_real_total` apenas na consolidacao |
+## Diagnostico
 
-## Conclusao
+Identifiquei 3 problemas raiz que impedem o funcionamento das rotas:
 
-Todas as funcionalidades descritas ja estao implementadas. Nao ha mudancas necessarias.
+### Problema 1: Join falho na edge function `historico-posicoes`
+A funcao que busca o historico do associado faz um JOIN inline com `rastreadores_config_plataformas`:
+```
+.select(`*, config_plataforma:rastreadores_config_plataformas(*)`)
+.eq('veiculo_id', veiculo_id)
+.maybeSingle();
+```
+Esse join pode falhar silenciosamente se a FK nao estiver configurada corretamente. A funcao `rastreador-historico` (que funciona para sinistros) ja foi corrigida anteriormente para fazer **queries separadas** - mas `historico-posicoes` nao foi atualizada.
 
-Se houver algum comportamento especifico que nao esta funcionando como esperado, descreva o cenario para investigacao.
+### Problema 2: Parametros Softruck inconsistentes entre edge functions
+- `rastreador-historico` usa: `filters[acc][btw]=inicio,fim`
+- `historico-posicoes` usa: `filters[start_date]=... & filters[end_date]=...`
+
+Parametros diferentes para a mesma API, um deles esta errado e retorna 0 pontos.
+
+### Problema 3: OSRM API publica sem timeout
+O `routingService.ts` chama `router.project-osrm.org` (servidor demo publico) sem timeout. Se a API demora ou esta fora, o `useRotaReal` fica em loading infinito, e a `ComparacaoPosicoes` nunca desenha a rota.
+
+## Correcoes
+
+### 1. `supabase/functions/historico-posicoes/index.ts`
+- Separar query do rastreador e da config da plataforma em 2 chamadas independentes (mesmo padrao do `rastreador-historico`)
+- Padronizar filtros Softruck para usar o mesmo formato do `rastreador-historico` (que ja funciona para posicao atual)
+- Usar `plataforma_veiculo_id || plataforma_device_id || id_plataforma` (mesma cadeia de fallback)
+
+### 2. `src/services/routingService.ts`
+- Adicionar `AbortController` com timeout de 8 segundos na chamada OSRM
+- Garantir que o fallback (linha reta + Haversine) funcione corretamente em caso de timeout
+
+### 3. `src/hooks/useRotaReal.ts`
+- Remover o `lastRequestRef` que impede retentativas quando coordenadas mudam minimamente
+- Usar dependencias estabilizadas com `toFixed(4)` para evitar re-renders desnecessarios mas permitir retry apos erro
+
