@@ -37,7 +37,7 @@ const SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC, um chatbot intelige
 
 ## Capacidades
 Você pode ajudar os associados com:
-1. **Consultar boletos pendentes** - Liste valores, vencimentos e envie via WhatsApp
+1. **Consultar faturas pendentes** - Liste valores, vencimentos e forneça o link do boleto e o PIX copia-e-cola quando disponíveis
 2. **Histórico de pagamentos** - Mostre pagamentos realizados
 3. **Status de sinistros** - Acompanhe sinistros em andamento
 4. **Abrir sinistro** - Registre novos sinistros (colisão, roubo/furto, incêndio, etc.)
@@ -423,16 +423,16 @@ async function executeTool(
     switch (toolName) {
       case "get_boletos_pendentes": {
         const { data, error } = await supabase
-          .from("cobrancas")
-          .select("id, valor, data_vencimento, status, competencia")
+          .from("asaas_cobrancas")
+          .select("id, valor, data_vencimento, status, competencia, boleto_url, pix_copia_cola, linha_digitavel")
           .eq("associado_id", associadoId)
-          .in("status", ["pendente", "vencido", "em_aberto"])
+          .in("status", ["PENDING", "OVERDUE"])
           .order("data_vencimento", { ascending: true });
 
         if (error) throw error;
 
         if (!data || data.length === 0) {
-          return JSON.stringify({ message: "Não há boletos pendentes. Sua situação está em dia! ✅" });
+          return JSON.stringify({ message: "Você está em dia! Não há faturas em aberto. ✅" });
         }
 
         const total = data.reduce((sum: number, b: any) => sum + (b.valor || 0), 0);
@@ -440,8 +440,11 @@ async function executeTool(
           boletos: data.map((b: any) => ({
             valor: `R$ ${b.valor?.toFixed(2)}`,
             vencimento: new Date(b.data_vencimento).toLocaleDateString("pt-BR"),
-            status: b.status,
+            status: b.status === "OVERDUE" ? "Vencido" : "Pendente",
             competencia: b.competencia,
+            boleto_url: b.boleto_url || null,
+            pix_copia_cola: b.pix_copia_cola || null,
+            linha_digitavel: b.linha_digitavel || null,
           })),
           total: `R$ ${total.toFixed(2)}`,
           quantidade: data.length,
@@ -451,10 +454,10 @@ async function executeTool(
       case "get_historico_pagamentos": {
         const limite = args.limite || 10;
         const { data, error } = await supabase
-          .from("cobrancas")
-          .select("id, valor, data_vencimento, data_pagamento, competencia")
+          .from("asaas_cobrancas")
+          .select("id, valor, data_vencimento, data_pagamento, competencia, forma_pagamento")
           .eq("associado_id", associadoId)
-          .eq("status", "pago")
+          .in("status", ["RECEIVED", "CONFIRMED"])
           .order("data_pagamento", { ascending: false })
           .limit(limite);
 
@@ -469,6 +472,7 @@ async function executeTool(
             valor: `R$ ${p.valor?.toFixed(2)}`,
             competencia: p.competencia,
             pago_em: p.data_pagamento ? new Date(p.data_pagamento).toLocaleDateString("pt-BR") : "N/A",
+            forma: p.forma_pagamento || "N/A",
           })),
           total_exibido: data.length,
         });
