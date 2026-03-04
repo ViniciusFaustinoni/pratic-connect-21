@@ -1,51 +1,37 @@
 
+# Corrigir Erro MARCA na Sincronizacao SGA Hinova
 
-# Verificacao do Fluxo de Rotas do Rastreador
+## Diagnostico (baseado em dados reais do banco)
 
-## Analise Completa
+Comparei os payloads de sucesso vs erro nos logs `sga_sync_logs`:
 
-Revisei todos os arquivos envolvidos no fluxo de rotas. Eis o estado atual:
+**Payload que FUNCIONOU:**
+```json
+{ "codigo_associado": 29204, "chassi": "...", "placa": "LTB4J74", "renavam": "...", 
+  "codigo_fipe": "002111-3", "codigo_cor": 6, "codigo_tipo_veiculo": 1, ... }
+```
+- SEM campo `marca`, SEM campo `modelo`
 
-### 1. Rota OSRM (ComparacaoPosicoes + RotaPolyline) -- OK
+**Payload que FALHOU:**
+```json
+{ "codigo_associado": 29293, "marca": "Toyota", "modelo": "corolla Xei Flex", 
+  "chassi": "...", "placa": "LTB4J74", ... }
+```
+- COM `marca` e `modelo` como texto = API Hinova rejeita
 
-- `routingService.ts`: Ja possui AbortController com timeout de 8s, cache de 30s, fallback Haversine, suporte multi-waypoint
-- `useRotaReal.ts`: Ja usa `toFixed(4)` para estabilizar dependencias, debounce de 500ms, cleanup correto
-- `RotaPolyline.tsx`: Renderiza linha tracejada enquanto carrega, depois mostra rota real
-- `ComparacaoPosicoes.tsx`: Usa `useRotaReal` + `RotaPolyline`, geocodifica enderecos quando coordenadas estao ausentes, classifica distancia
+**Conclusao:** A API Hinova NAO aceita `marca` e `modelo` como campos texto. Ela infere essas informacoes a partir do `codigo_fipe`. A adicao recente desses campos ao payload e a validacao obrigatoria deles esta causando o erro.
 
-**Status: Funcional.** Todos os fixes anteriores (timeout, debounce, estabilizacao de coordenadas) ja estao aplicados.
+## Correcao
 
-### 2. Trajeto Historico do Sinistro (TrajetoColisaoCard + TrajetoSinistroCard) -- OK
+### `supabase/functions/sga-hinova-sync/index.ts`
 
-- Ambos chamam `rastreador-historico` edge function
-- `rastreador-historico`: Queries separadas (rastreador + plataforma), retry em 401, `filters[acc][btw]` para Softruck, fallback para banco local
-- `TrajetoColisaoCard`: 4h antes da colisao, busca rastreador com status `instalado`
-- `TrajetoSinistroCard`: 24h antes (configuravel), inclui retry e botao "Tentar novamente"
+1. **Remover `marca` e `modelo` do `veiculoPayload`** (linhas 882-883)
+   - Remover `marca: veiculo.marca || ''`
+   - Remover `modelo: veiculo.modelo || ''`
 
-**Status: Funcional.** Edge function ja usa o formato correto de parametros Softruck e queries separadas.
+2. **Remover `marca` e `modelo` da validacao de campos obrigatorios** (linhas ~847-850)
+   - Manter apenas `placa`, `renavam`, `chassi` na validacao
 
-### 3. Historico de Posicoes do Associado (historico-posicoes) -- OK
+3. **Manter a logica de `isValidationError`** da correcao anterior como protecao contra futuros erros de parametros
 
-- Queries separadas para rastreador e config de plataforma (fix anterior ja aplicado)
-- Usa `getHistoricoSoftruckFixed` com `filters[acc][btw]` (formato correto)
-- Fallback para `plataforma_veiculo_id || plataforma_device_id || id_plataforma`
-- Validacao de propriedade (associado -> veiculo -> rastreador)
-- Downsampling por intervalo, identificacao de paradas, resumo estatistico
-
-**Status: Funcional.** Todos os fixes anteriores ja estao aplicados.
-
-## Conclusao
-
-Todos os tres fluxos de rotas estao implementados corretamente com as correcoes anteriores ja aplicadas:
-
-| Componente | Edge Function | Timeout | Cache | Fallback | Retry |
-|---|---|---|---|---|---|
-| ComparacaoPosicoes | OSRM (externo) | 8s | 30s | Haversine | N/A |
-| TrajetoColisaoCard | rastreador-historico | N/A | N/A | Banco local | 401 retry |
-| TrajetoSinistroCard | rastreador-historico | N/A | N/A | Banco local | 401 retry + UI retry |
-| App Associado | historico-posicoes | N/A | N/A | Banco local | N/A |
-
-Nenhuma correcao adicional e necessaria. O codigo esta funcional e operante.
-
-Para testar de forma efetiva, seria necessario ter um veiculo com rastreador ativo e com dados de posicoes no banco ou na API Softruck.
-
+Impacto: apenas 2 blocos de codigo alterados no mesmo arquivo. Deploy automatico.
