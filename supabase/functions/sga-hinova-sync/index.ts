@@ -846,8 +846,6 @@ serve(async (req) => {
     console.log('[SGA Sync] Validando campos obrigatórios do veículo...');
 
     const camposObrigatorios: { campo: string; valor: string | null | undefined; label: string }[] = [
-      { campo: 'marca', valor: veiculo.marca, label: 'MARCA' },
-      { campo: 'modelo', valor: veiculo.modelo, label: 'MODELO' },
       { campo: 'placa', valor: veiculo.placa, label: 'PLACA' },
       { campo: 'renavam', valor: veiculo.renavam, label: 'RENAVAM' },
       { campo: 'chassi', valor: veiculo.chassi, label: 'CHASSI' },
@@ -879,8 +877,6 @@ serve(async (req) => {
 
     const veiculoPayload = {
       codigo_associado: codigoAssociadoHinova,
-      marca: veiculo.marca || '',
-      modelo: veiculo.modelo || '',
       placa: veiculo.placa || '',
       chassi: veiculo.chassi.trim(),
       renavam: veiculo.renavam.trim(),
