@@ -2996,12 +2996,12 @@ export type Database = {
           fechado_em: string | null
           fechado_por: string | null
           funcionario_id: string
-          horas_compensadas: unknown
-          horas_extras: unknown
+          horas_compensadas: string | null
+          horas_extras: string | null
           id: string
           mes: number
-          saldo_anterior: unknown
-          saldo_atual: unknown
+          saldo_anterior: string | null
+          saldo_atual: string | null
           updated_at: string | null
         }
         Insert: {
@@ -3011,12 +3011,12 @@ export type Database = {
           fechado_em?: string | null
           fechado_por?: string | null
           funcionario_id: string
-          horas_compensadas?: unknown
-          horas_extras?: unknown
+          horas_compensadas?: string | null
+          horas_extras?: string | null
           id?: string
           mes: number
-          saldo_anterior?: unknown
-          saldo_atual?: unknown
+          saldo_anterior?: string | null
+          saldo_atual?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -3026,12 +3026,12 @@ export type Database = {
           fechado_em?: string | null
           fechado_por?: string | null
           funcionario_id?: string
-          horas_compensadas?: unknown
-          horas_extras?: unknown
+          horas_compensadas?: string | null
+          horas_extras?: string | null
           id?: string
           mes?: number
-          saldo_anterior?: unknown
-          saldo_atual?: unknown
+          saldo_anterior?: string | null
+          saldo_atual?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -16448,9 +16448,9 @@ export type Database = {
           entrada_2: string | null
           entrada_3: string | null
           funcionario_id: string
-          horas_extras: unknown
-          horas_faltantes: unknown
-          horas_trabalhadas: unknown
+          horas_extras: string | null
+          horas_faltantes: string | null
+          horas_trabalhadas: string | null
           id: string
           justificativa: string | null
           saida_1: string | null
@@ -16470,9 +16470,9 @@ export type Database = {
           entrada_2?: string | null
           entrada_3?: string | null
           funcionario_id: string
-          horas_extras?: unknown
-          horas_faltantes?: unknown
-          horas_trabalhadas?: unknown
+          horas_extras?: string | null
+          horas_faltantes?: string | null
+          horas_trabalhadas?: string | null
           id?: string
           justificativa?: string | null
           saida_1?: string | null
@@ -16492,9 +16492,9 @@ export type Database = {
           entrada_2?: string | null
           entrada_3?: string | null
           funcionario_id?: string
-          horas_extras?: unknown
-          horas_faltantes?: unknown
-          horas_trabalhadas?: unknown
+          horas_extras?: string | null
+          horas_faltantes?: string | null
+          horas_trabalhadas?: string | null
           id?: string
           justificativa?: string | null
           saida_1?: string | null
