@@ -61,11 +61,17 @@ export async function getRouteOSRM(
   const url = `https://router.project-osrm.org/route/v1/driving/${origemOSRM};${destinoOSRM}?geometries=geojson&overview=full`;
   
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
       },
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       throw new Error(`OSRM API error: ${response.status}`);
@@ -167,7 +173,12 @@ export async function getRouteOSRMMultiWaypoint(
   const url = `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`;
 
   try {
-    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: controller.signal });
+    
+    clearTimeout(timeoutId);
     if (!response.ok) throw new Error(`OSRM API error: ${response.status}`);
 
     const data: OSRMResponse = await response.json();
