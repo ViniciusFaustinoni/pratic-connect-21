@@ -1,60 +1,40 @@
 
 
-# Tela de Opcoes de Ressalva — Instalador + Fila de Monitoramento
+# Mapa de Monitoramento — Busca individual + Aba padrao Veiculos
 
-## Resumo
+## Problema
 
-Atualmente, quando o instalador tem itens NOK no checklist, o dialog (linhas 1823-1913 do `InstaladorChecklist.tsx`) oferece apenas 2 opcoes: "Prosseguir mesmo assim" (continua normal) ou "Nao ha condicao - Encerrar" (abre modal de recusa total). O pedido adiciona uma **terceira opcao**: "Enviar para confirmacao do Monitoramento", que cria um estado intermediario (`pendente_monitoramento`) onde o coordenador decide aprovar ou declinar.
+1. A aba "Veiculos" carrega TODOS os veiculos da view `view_rastreadores_posicao` e renderiza todos os markers no mapa — lento com muitos registros.
+2. A aba padrao e "vistorias" (`abaAtiva` inicializa com `"vistorias"`), mas o pedido e que "veiculos" seja a primeira aba.
 
 ## Alteracoes
 
-### 1. Migracao SQL — novo valor para `decisao_instalador`
+### 1. Trocar aba padrao para "veiculos"
 
-Nao e necessario alterar enum (campo e `text`). Usaremos o valor `pendente_monitoramento` no campo `decisao_instalador` da tabela `servicos`.
+Linha 137: mudar `useState<string>("vistorias")` para `useState<string>("veiculos")`.
 
-### 2. `InstaladorChecklist.tsx` — Adicionar 3a opcao no dialog de NOK
+Reordenar os `TabsTrigger` no JSX para que "Veiculos" apareca primeiro (linhas 670-679).
 
-No dialog de confirmacao (linhas 1883-1911), adicionar um terceiro botao **"Enviar para Monitoramento"** entre os existentes. Ao clicar:
-- Salva o checklist no banco
-- Atualiza o servico com `decisao_instalador: 'pendente_monitoramento'`, `status: 'em_analise'`, `ressalvas_instalador` com os itens NOK, e `fotos_ressalva` se houver
-- Redireciona para a fila do instalador
+### 2. Remover carregamento automatico de todos os veiculos
 
-### 3. Hook `useServicos.ts` — Adicionar mutation `useEnviarParaMonitoramento`
+Substituir a query atual (que busca todos) por uma busca sob demanda: o mapa inicia vazio, o usuario digita uma placa na barra de busca, e so entao o sistema busca aquele veiculo especifico.
 
-Nova mutation que:
-- Atualiza `servicos` com `decisao_instalador = 'pendente_monitoramento'`, `status = 'em_analise'`
-- Grava `ressalvas_instalador` e `fotos_ressalva`
-- Registra historico em `associados_historico`
+**Fluxo:**
+- Barra de busca por placa no topo do mapa (campo de texto + botao buscar)
+- Ao digitar >= 3 caracteres e submeter, busca na `view_rastreadores_posicao` com filtro `placa.ilike.%termo%`
+- Exibe resultados em dropdown/lista abaixo do campo (maximo 10 resultados)
+- Ao selecionar um resultado, mostra apenas aquele marker no mapa e centraliza
+- Botoes de acao no popup permanecem (WhatsApp, Google Maps, Trajeto, Atualizar posicao)
 
-### 4. Hook `useRessalvasMonitoramento.ts` — Novo hook
+### 3. Remover sidebar de lista e drawer mobile
 
-- `useRessalvasPendentesMonitoramento()`: query em `servicos` com `decisao_instalador = 'pendente_monitoramento'` e `status = 'em_analise'`, join com associados/veiculos/profiles
-- `useContagemRessalvasPendentes()`: contagem para badge no menu
-- `useDecidirRessalva()`: mutation para aprovar ou declinar:
-  - **Aprovar**: `decisao_instalador = 'aprovado_ressalva'`, `status = 'concluida'`, segue para analise de cadastro (mesmo fluxo de `aprovado_ressalva` atual)
-  - **Declinar**: blacklist + cancelar associado/contrato (reutiliza logica do `useRecusasInstalador`)
+Como so um veiculo e exibido por vez, a sidebar com lista completa e o drawer mobile nao sao mais necessarios. Substituidos pela barra de busca flutuante sobre o mapa.
 
-### 5. Pagina `src/pages/monitoramento/RessalvasPendentes.tsx` — Nova tela
+## Arquivo a modificar
 
-Lista cards com:
-- Associado, veiculo (placa/modelo), instalador, data
-- Badge "Pendente Monitoramento"
-- Ao clicar: abre modal com detalhes completos (itens NOK, observacoes, fotos de evidencia, dados da vistoria)
-- Botoes: "Aprovar (seguir com ressalva)" e "Declinar (blacklist)"
-
-### 6. Rota e menu
-
-- Adicionar rota `/monitoramento/ressalvas-pendentes` no `App.tsx`
-- Adicionar item no menu do monitoramento com badge de contagem
-
-## Arquivos a criar/modificar
-
-| Arquivo | Acao |
+| Arquivo | Alteracao |
 |---|---|
-| `src/pages/instalador/InstaladorChecklist.tsx` | Adicionar 3o botao no dialog NOK + logica de envio |
-| `src/hooks/useServicos.ts` | Adicionar `useEnviarParaMonitoramento` |
-| `src/hooks/useRessalvasMonitoramento.ts` | Novo — query + mutation para fila de ressalvas pendentes |
-| `src/pages/monitoramento/RessalvasPendentes.tsx` | Nova pagina — lista + modal de detalhes + decisao |
-| `src/App.tsx` | Adicionar rota |
-| Menu lateral do monitoramento | Adicionar link com badge |
+| `src/pages/monitoramento/Mapa.tsx` | Aba padrao "veiculos", remover query de todos, adicionar busca por placa, mostrar 1 veiculo no mapa, reordenar tabs |
+
+1 arquivo.
 
