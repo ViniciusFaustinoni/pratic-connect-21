@@ -1,58 +1,41 @@
 
 
-# Erros no Link Publico — Agendamento de Vistoria
+# Registrar Ressalvas no Historico de Associados/Veiculos
 
-Apos analise completa do fluxo publico (`/cotacao/:token`), identifiquei **5 erros** que causam falhas no agendamento:
+## Resumo
 
-## Erros Encontrados
+Adicionar um botao "Registrar Ressalva" na aba Historico do `AssociadoDetalhe.tsx`, similar ao componente `AdicionarObservacao` ja existente, mas especifico para ressalvas. O coordenador de monitoramento podera documentar inconsistencias com tipo `ressalva_registrada`, campo de texto obrigatorio e opcao de selecionar o veiculo relacionado.
 
-### 1. `useAgendamentoBase.ts` usa cliente autenticado (`supabase`) em pagina publica
-Os hooks `useConfiguracaoBase`, `useHorariosDisponiveis` e `useCriarAgendamentoBase` usam `supabase` (requer login). Na pagina publica, o usuario nao esta autenticado — as queries falham silenciosamente por RLS. Deve usar `publicSupabase`.
+## Alteracoes
 
-### 2. `useVagasPeriodo.ts` usa cliente autenticado em pagina publica
-O hook que verifica vagas disponiveis por periodo (`manha`/`tarde`) consulta a tabela `servicos` com o cliente autenticado. Falha na pagina publica. Deve usar `publicSupabase`.
+### 1. Novo componente `src/components/cadastro/AdicionarRessalva.tsx`
 
-### 3. `EtapaVistoria` nao recebe dados do cliente
-Em `CotacaoContratacao.tsx` (linha 538), o componente `EtapaVistoria` e renderizado **sem** as props `clienteNome`, `clienteTelefone`, `clienteEmail`, `veiculoPlaca`, `veiculoDescricao`. Quando o usuario escolhe "Agendar na Base", o `AgendamentoBase` recebe strings vazias — o agendamento e criado sem nome do cliente.
+Componente com:
+- Botao "Registrar Ressalva" (icone AlertTriangle, cor amber)
+- Ao expandir: campo de texto (descricao da ressalva), select opcional para escolher o veiculo do associado (busca veiculos do associado), e botoes Cancelar/Salvar
+- Insere na tabela `associados_historico` com `tipo: 'ressalva_registrada'` e `dados_novos` contendo veiculo_id/placa se selecionado
+- Usa `supabase.auth.getUser()` para registrar o usuario
 
-### 4. Status `vistoria_agendada` nao reconhecido pelo stepper
-`useCriarAgendamentoBase` define `status_contratacao: 'vistoria_agendada'`, mas `determinarEtapa()` em `useCotacaoContratacao.ts` nao tem esse case no switch. Cai no `default` (retorna 0), enviando o usuario de volta para a etapa de escolha de plano.
+### 2. `src/hooks/useAssociadoHistoricoCompleto.ts` — Mapear novo tipo
 
-### 5. `useFinalizarVistoriaCotacao` (autovistoria) usa cliente autenticado
-Na linha 164, o fluxo de autovistoria atualiza `cotacoes` via `supabase` (auth). Como a pagina publica usa role `anon`, a operacao falha por RLS.
+Adicionar `'ressalva_registrada': 'observacao_adicionada'` no mapeamento `tipoDbParaTimeline` (reutiliza o icone de observacao, ou podemos criar um tipo especifico).
 
-## Correcoes
+### 3. `src/pages/cadastro/AssociadoDetalhe.tsx` — Renderizar componente
 
-### `src/hooks/useAgendamentoBase.ts`
-- Trocar `import { supabase }` por `import { publicSupabase }` nos hooks `useConfiguracaoBase`, `useHorariosDisponiveis` e `useCriarAgendamentoBase`
-- Manter `supabase` (auth) apenas em `useAgendamentosBaseDia` e `useAtualizarAgendamentoBase` (usados no painel interno)
+Na aba `historico` (linha 813), adicionar o componente `AdicionarRessalva` logo acima da timeline, ao lado do titulo. Visivel apenas para coordenadores de monitoramento (verificar permissao).
 
-### `src/hooks/useVagasPeriodo.ts`
-- Trocar para `publicSupabase` na query de vagas
+### 4. `src/components/associados/detalhe/AssociadoResumoTab.tsx` — Mapear titulo
 
-### `src/pages/public/CotacaoContratacao.tsx`
-- Passar props de dados do cliente para `EtapaVistoria`:
-  - `clienteNome={cotacao.nome_solicitante}`
-  - `clienteTelefone={cotacao.telefone1_solicitante}`
-  - `clienteEmail={cotacao.email_solicitante}`
-  - `veiculoPlaca={cotacao.veiculo_placa}`
-  - `veiculoDescricao={...marca modelo...}`
+Adicionar `'ressalva_registrada': 'Ressalva registrada'` no mapa de titulos e configurar icone/cor amber.
 
-### `src/hooks/useCotacaoContratacao.ts`
-- Adicionar `case 'vistoria_agendada':` no switch de `determinarEtapa`, retornando etapa 4 (pagamento)
+## Arquivos
 
-### `src/hooks/useCotacaoVistoria.ts`
-- Linha 164: trocar `supabase` por `publicSupabase` no update da cotacao (fluxo autovistoria)
-
-## Arquivos a modificar
-
-| Arquivo | Correcao |
+| Arquivo | Acao |
 |---|---|
-| `src/hooks/useAgendamentoBase.ts` | Trocar 3 hooks para `publicSupabase` |
-| `src/hooks/useVagasPeriodo.ts` | Trocar para `publicSupabase` |
-| `src/pages/public/CotacaoContratacao.tsx` | Passar props do cliente para EtapaVistoria |
-| `src/hooks/useCotacaoContratacao.ts` | Adicionar `vistoria_agendada` no switch |
-| `src/hooks/useCotacaoVistoria.ts` | Trocar para `publicSupabase` no fluxo autovistoria |
+| `src/components/cadastro/AdicionarRessalva.tsx` | Novo — formulario de ressalva com select de veiculo |
+| `src/hooks/useAssociadoHistoricoCompleto.ts` | Adicionar tipo no mapeamento |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Renderizar AdicionarRessalva na aba historico + import |
+| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Mapear titulo/icone/cor do novo tipo |
 
-5 arquivos.
+4 arquivos.
 
