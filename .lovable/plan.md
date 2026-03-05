@@ -1,40 +1,58 @@
 
 
-# Mapa de Monitoramento — Busca individual + Aba padrao Veiculos
+# Erros no Link Publico — Agendamento de Vistoria
 
-## Problema
+Apos analise completa do fluxo publico (`/cotacao/:token`), identifiquei **5 erros** que causam falhas no agendamento:
 
-1. A aba "Veiculos" carrega TODOS os veiculos da view `view_rastreadores_posicao` e renderiza todos os markers no mapa — lento com muitos registros.
-2. A aba padrao e "vistorias" (`abaAtiva` inicializa com `"vistorias"`), mas o pedido e que "veiculos" seja a primeira aba.
+## Erros Encontrados
 
-## Alteracoes
+### 1. `useAgendamentoBase.ts` usa cliente autenticado (`supabase`) em pagina publica
+Os hooks `useConfiguracaoBase`, `useHorariosDisponiveis` e `useCriarAgendamentoBase` usam `supabase` (requer login). Na pagina publica, o usuario nao esta autenticado — as queries falham silenciosamente por RLS. Deve usar `publicSupabase`.
 
-### 1. Trocar aba padrao para "veiculos"
+### 2. `useVagasPeriodo.ts` usa cliente autenticado em pagina publica
+O hook que verifica vagas disponiveis por periodo (`manha`/`tarde`) consulta a tabela `servicos` com o cliente autenticado. Falha na pagina publica. Deve usar `publicSupabase`.
 
-Linha 137: mudar `useState<string>("vistorias")` para `useState<string>("veiculos")`.
+### 3. `EtapaVistoria` nao recebe dados do cliente
+Em `CotacaoContratacao.tsx` (linha 538), o componente `EtapaVistoria` e renderizado **sem** as props `clienteNome`, `clienteTelefone`, `clienteEmail`, `veiculoPlaca`, `veiculoDescricao`. Quando o usuario escolhe "Agendar na Base", o `AgendamentoBase` recebe strings vazias — o agendamento e criado sem nome do cliente.
 
-Reordenar os `TabsTrigger` no JSX para que "Veiculos" apareca primeiro (linhas 670-679).
+### 4. Status `vistoria_agendada` nao reconhecido pelo stepper
+`useCriarAgendamentoBase` define `status_contratacao: 'vistoria_agendada'`, mas `determinarEtapa()` em `useCotacaoContratacao.ts` nao tem esse case no switch. Cai no `default` (retorna 0), enviando o usuario de volta para a etapa de escolha de plano.
 
-### 2. Remover carregamento automatico de todos os veiculos
+### 5. `useFinalizarVistoriaCotacao` (autovistoria) usa cliente autenticado
+Na linha 164, o fluxo de autovistoria atualiza `cotacoes` via `supabase` (auth). Como a pagina publica usa role `anon`, a operacao falha por RLS.
 
-Substituir a query atual (que busca todos) por uma busca sob demanda: o mapa inicia vazio, o usuario digita uma placa na barra de busca, e so entao o sistema busca aquele veiculo especifico.
+## Correcoes
 
-**Fluxo:**
-- Barra de busca por placa no topo do mapa (campo de texto + botao buscar)
-- Ao digitar >= 3 caracteres e submeter, busca na `view_rastreadores_posicao` com filtro `placa.ilike.%termo%`
-- Exibe resultados em dropdown/lista abaixo do campo (maximo 10 resultados)
-- Ao selecionar um resultado, mostra apenas aquele marker no mapa e centraliza
-- Botoes de acao no popup permanecem (WhatsApp, Google Maps, Trajeto, Atualizar posicao)
+### `src/hooks/useAgendamentoBase.ts`
+- Trocar `import { supabase }` por `import { publicSupabase }` nos hooks `useConfiguracaoBase`, `useHorariosDisponiveis` e `useCriarAgendamentoBase`
+- Manter `supabase` (auth) apenas em `useAgendamentosBaseDia` e `useAtualizarAgendamentoBase` (usados no painel interno)
 
-### 3. Remover sidebar de lista e drawer mobile
+### `src/hooks/useVagasPeriodo.ts`
+- Trocar para `publicSupabase` na query de vagas
 
-Como so um veiculo e exibido por vez, a sidebar com lista completa e o drawer mobile nao sao mais necessarios. Substituidos pela barra de busca flutuante sobre o mapa.
+### `src/pages/public/CotacaoContratacao.tsx`
+- Passar props de dados do cliente para `EtapaVistoria`:
+  - `clienteNome={cotacao.nome_solicitante}`
+  - `clienteTelefone={cotacao.telefone1_solicitante}`
+  - `clienteEmail={cotacao.email_solicitante}`
+  - `veiculoPlaca={cotacao.veiculo_placa}`
+  - `veiculoDescricao={...marca modelo...}`
 
-## Arquivo a modificar
+### `src/hooks/useCotacaoContratacao.ts`
+- Adicionar `case 'vistoria_agendada':` no switch de `determinarEtapa`, retornando etapa 4 (pagamento)
 
-| Arquivo | Alteracao |
+### `src/hooks/useCotacaoVistoria.ts`
+- Linha 164: trocar `supabase` por `publicSupabase` no update da cotacao (fluxo autovistoria)
+
+## Arquivos a modificar
+
+| Arquivo | Correcao |
 |---|---|
-| `src/pages/monitoramento/Mapa.tsx` | Aba padrao "veiculos", remover query de todos, adicionar busca por placa, mostrar 1 veiculo no mapa, reordenar tabs |
+| `src/hooks/useAgendamentoBase.ts` | Trocar 3 hooks para `publicSupabase` |
+| `src/hooks/useVagasPeriodo.ts` | Trocar para `publicSupabase` |
+| `src/pages/public/CotacaoContratacao.tsx` | Passar props do cliente para EtapaVistoria |
+| `src/hooks/useCotacaoContratacao.ts` | Adicionar `vistoria_agendada` no switch |
+| `src/hooks/useCotacaoVistoria.ts` | Trocar para `publicSupabase` no fluxo autovistoria |
 
-1 arquivo.
+5 arquivos.
 
