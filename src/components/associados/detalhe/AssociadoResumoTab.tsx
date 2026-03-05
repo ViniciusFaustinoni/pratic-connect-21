@@ -29,7 +29,7 @@ const getIconeEvento = (tipo: string) => {
   const mapa: Record<string, typeof CheckCircle> = {
     'associado_criado': Shield, 'status_alterado': Clock, 'documento_aprovado': CheckCircle,
     'boleto_pago': CheckCircle, 'veiculo_adicionado': Car, 'instalacao_concluida': CheckCircle,
-    'sinistro_aberto': AlertTriangle, 'contrato_assinado': FileText,
+    'sinistro_aberto': AlertTriangle, 'contrato_assinado': FileText, 'ressalva_registrada': AlertTriangle,
   };
   return mapa[tipo] || Clock;
 };
@@ -37,7 +37,7 @@ const getIconeEvento = (tipo: string) => {
 const getCorEvento = (tipo: string) => {
   if (['documento_aprovado', 'boleto_pago', 'instalacao_concluida', 'sinistro_encerrado', 'contrato_assinado', 'chamado_concluido'].includes(tipo)) return 'text-emerald-500';
   if (['documento_reprovado', 'boleto_cancelado', 'instalacao_cancelada'].includes(tipo)) return 'text-destructive';
-  if (['sinistro_aberto'].includes(tipo)) return 'text-amber-500';
+  if (['sinistro_aberto', 'ressalva_registrada'].includes(tipo)) return 'text-amber-500';
   if (['associado_criado', 'status_alterado', 'veiculo_adicionado'].includes(tipo)) return 'text-primary';
   return 'text-muted-foreground';
 };
@@ -53,6 +53,7 @@ const getTituloEvento = (tipo: string) => {
     'contrato_assinado': 'Contrato assinado', 'observacao_adicionada': 'Observação',
     'chamado_aberto': 'Chamado aberto', 'chamado_concluido': 'Chamado finalizado',
     'sinistro_aberto': 'Sinistro aberto', 'sinistro_encerrado': 'Sinistro encerrado',
+    'ressalva_registrada': 'Ressalva registrada',
   };
   return mapa[tipo] || tipo.replace(/_/g, ' ');
 };
