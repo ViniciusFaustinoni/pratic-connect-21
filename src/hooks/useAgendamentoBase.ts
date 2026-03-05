@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 
 export interface ConfiguracaoBase {
@@ -39,7 +40,7 @@ export function useConfiguracaoBase() {
   return useQuery({
     queryKey: ['configuracao-base'],
     queryFn: async (): Promise<ConfiguracaoBase | null> => {
-      const { data, error } = await supabase
+      const { data, error } = await publicSupabase
         .from('configuracoes')
         .select('chave, valor')
         .in('chave', [
@@ -81,7 +82,7 @@ export function useHorariosDisponiveis(data: string) {
     queryFn: async () => {
       if (!data) return [];
 
-      const { data: agendamentos, error } = await supabase
+      const { data: agendamentos, error } = await publicSupabase
         .from('agendamentos_base')
         .select('horario')
         .eq('data_agendada', data)
@@ -133,7 +134,7 @@ export function useCriarAgendamentoBase() {
       veiculoDescricao?: string;
     }) => {
       // Verificar capacidade antes de inserir
-      const { data: existentes, error: checkError } = await supabase
+      const { data: existentes, error: checkError } = await publicSupabase
         .from('agendamentos_base')
         .select('id')
         .eq('data_agendada', dados.dataAgendada)
@@ -143,7 +144,7 @@ export function useCriarAgendamentoBase() {
       if (checkError) throw checkError;
 
       // Buscar capacidade configurada
-      const { data: configCapacidade } = await supabase
+      const { data: configCapacidade } = await publicSupabase
         .from('configuracoes')
         .select('valor')
         .eq('chave', 'base_capacidade_horario')
@@ -156,7 +157,7 @@ export function useCriarAgendamentoBase() {
       }
 
       // Criar agendamento
-      const { data: agendamento, error } = await supabase
+      const { data: agendamento, error } = await publicSupabase
         .from('agendamentos_base')
         .insert({
           cotacao_id: dados.cotacaoId,
@@ -175,7 +176,7 @@ export function useCriarAgendamentoBase() {
       if (error) throw error;
 
       // Atualizar cotação com tipo_vistoria = 'agendada_base'
-      await supabase
+      await publicSupabase
         .from('cotacoes')
         .update({ 
           status_contratacao: 'vistoria_agendada',

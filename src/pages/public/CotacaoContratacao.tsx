@@ -538,6 +538,11 @@ export default function CotacaoContratacao() {
                     <EtapaVistoria
                       cotacaoId={cotacao.id}
                       tipoVeiculo={detectarTipoVeiculoDaCotacao(cotacao)}
+                      clienteNome={cotacao.nome_solicitante || ''}
+                      clienteTelefone={cotacao.telefone1_solicitante || undefined}
+                      clienteEmail={cotacao.email_solicitante || undefined}
+                      veiculoPlaca={cotacao.veiculo_placa || undefined}
+                      veiculoDescricao={[cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.veiculo_ano].filter(Boolean).join(' ') || undefined}
                       onComplete={() => setEtapaAtual(4)}
                       onAgendar={() => setEtapaAtual(4)}
                       readOnly={isEtapaConcluida(3)}

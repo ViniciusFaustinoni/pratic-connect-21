@@ -161,7 +161,7 @@ export function useFinalizarVistoriaCotacao() {
       };
       
       // Atualizar cotação
-      const { error } = await supabase.from('cotacoes').update(updateData).eq('id', cotacaoId);
+      const { error } = await publicSupabase.from('cotacoes').update(updateData).eq('id', cotacaoId);
       if (error) throw error;
       
       return { vistoriaId: null, instalacaoId: null };
