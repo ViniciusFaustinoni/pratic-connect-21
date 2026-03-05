@@ -55,6 +55,7 @@ import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoSt
 import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHeroHeader';
 import { AssociadoResumoTab } from '@/components/associados/detalhe/AssociadoResumoTab';
 import { AssociadoTabNav } from '@/components/associados/detalhe/AssociadoTabNav';
+import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
 
 // ============================================
 // UTILITÁRIOS
@@ -812,6 +813,7 @@ export default function AssociadoDetalhe() {
         {activeTab === 'historico' && (
           <div className="space-y-4">
             <h3 className="text-base font-semibold">Histórico de Atividades</h3>
+            <AdicionarRessalva associadoId={id!} />
             {isLoadingHistorico ? (
               <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
             ) : historico && historico.length > 0 ? (

@@ -54,7 +54,8 @@ export type TipoEvento =
   | 'sinistro_atualizado'
   | 'sinistro_encerrado'
   | 'contrato_assinado'
-  | 'observacao_adicionada';
+  | 'observacao_adicionada'
+  | 'ressalva_registrada';
 
 export interface EventoHistorico {
   id: string;
@@ -214,6 +215,12 @@ const eventoConfig: Record<TipoEvento, EventoConfig> = {
     bgCor: 'bg-gray-100',
     label: 'Observação adicionada',
   },
+  ressalva_registrada: {
+    icone: AlertTriangle,
+    cor: 'text-amber-600',
+    bgCor: 'bg-amber-100',
+    label: 'Ressalva registrada',
+  },
 };
 
 // Filter categories
@@ -225,6 +232,7 @@ const filterCategories: Record<string, TipoEvento[]> = {
   financeiro: ['boleto_gerado', 'boleto_pago', 'boleto_cancelado', 'contrato_assinado'],
   sinistros: ['sinistro_aberto', 'sinistro_atualizado', 'sinistro_encerrado'],
   chamados: ['chamado_aberto', 'chamado_concluido'],
+  ressalvas: ['ressalva_registrada'],
 };
 
 export function TimelineHistorico({

@@ -43,6 +43,7 @@ const tipoDbParaTimeline: Record<string, TipoEvento> = {
   'sinistro_encerrado': 'sinistro_encerrado',
   'contrato_assinado': 'contrato_assinado',
   'observacao_adicionada': 'observacao_adicionada',
+  'ressalva_registrada': 'ressalva_registrada',
 };
 
 export function useAssociadoHistoricoCompleto(associadoId: string | undefined) {
