@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { LIMITE_VAGAS_POR_PERIODO, type Periodo } from '@/data/autovistoriaConfig';
 
 interface VagasDisponiveis {
@@ -20,7 +20,7 @@ export function useVagasPeriodo(data: string | null) {
       }
 
       // Buscar serviços agendados para a data (excluindo cancelados/recusados)
-      const { data: servicos, error } = await supabase
+      const { data: servicos, error } = await publicSupabase
         .from('servicos')
         .select('periodo')
         .eq('data_agendada', data)

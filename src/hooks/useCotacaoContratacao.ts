@@ -338,6 +338,8 @@ export function useCotacaoContratacao(token: string | undefined) {
         return 2; // Assinatura do contrato (Autentique) - NOVA ETAPA
       case 'contrato_assinado':
         return 3; // Vistoria (movido)
+      case 'vistoria_agendada':
+        return 4; // Pagamento (vistoria já agendada na base)
       case 'vistoria_ok':
         return 4; // Pagamento (movido)
       case 'pagamento_ok':
