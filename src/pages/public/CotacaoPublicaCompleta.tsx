@@ -28,12 +28,18 @@ import {
 import { useCalcularCotacao } from '@/hooks/useCalcularCotacao';
 import { 
   TipoUsoVeiculo,
-  CategoriaPlano,
-  CORES_PLANO,
   DOCUMENTOS_CONFIG,
   FOTOS_VISTORIA_CONFIG,
   STATUS_COTACAO_PUBLICA_LABELS,
 } from '@/types/cotacaoPublica';
+
+// Cores dinâmicas para planos — baseadas no índice do plano
+const CORES_PLANO_DINAMICAS = [
+  { bg: 'bg-slate-50', border: 'border-slate-400', text: 'text-slate-700', badge: 'bg-slate-100 text-slate-700' },
+  { bg: 'bg-blue-50', border: 'border-blue-500', text: 'text-blue-700', badge: 'bg-blue-100 text-blue-700' },
+  { bg: 'bg-amber-50', border: 'border-amber-500', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' },
+  { bg: 'bg-emerald-50', border: 'border-emerald-500', text: 'text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
+];
 
 // ════════════════════════════════════════════════════════════════
 // TIPOS
@@ -98,7 +104,7 @@ export default function CotacaoPublicaCompleta() {
   // Estados da jornada
   const [step, setStep] = useState<JornadaStep>('uso');
   const [tipoUso, setTipoUso] = useState<TipoUsoVeiculo>('particular');
-  const [planoEscolhido, setPlanoEscolhido] = useState<CategoriaPlano | null>(null);
+  const [planoEscolhido, setPlanoEscolhido] = useState<string | null>(null);
   const [propostaAceita, setPropostaAceita] = useState(false);
   const [documentos, setDocumentos] = useState<DocumentoState[]>(
     DOCUMENTOS_CONFIG.map(d => ({ ...d, status: 'pendente' as const }))
@@ -126,7 +132,7 @@ export default function CotacaoPublicaCompleta() {
         setTipoUso(cotacao.uso_aplicativo ? 'aplicativo' : 'particular');
       }
       if (cotacao.plano_escolhido) {
-        setPlanoEscolhido(cotacao.plano_escolhido as CategoriaPlano);
+        setPlanoEscolhido(cotacao.plano_escolhido as string);
       }
 
       switch (cotacao.status) {
@@ -683,13 +689,13 @@ export default function CotacaoPublicaCompleta() {
               <p className="text-muted-foreground">Selecione a proteção ideal para você</p>
             </div>
 
-            {resultado.planos.map((plano) => {
-              const cores = CORES_PLANO[plano.categoria];
+            {resultado.planos.map((plano, planoIndex) => {
+              const cores = CORES_PLANO_DINAMICAS[planoIndex % CORES_PLANO_DINAMICAS.length];
               const isSelected = planoEscolhido === plano.categoria;
 
               return (
                 <Card
-                  key={plano.categoria}
+                  key={plano.id || plano.categoria}
                   onClick={() => setPlanoEscolhido(plano.categoria)}
                   className={cn(
                     'border-2 cursor-pointer transition-all overflow-hidden',
@@ -705,9 +711,9 @@ export default function CotacaoPublicaCompleta() {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <div className={cn('h-10 w-10 rounded-full flex items-center justify-center', cores.bg)}>
-                          {plano.categoria === 'Premium' && <Crown className="h-5 w-5 text-amber-600" />}
-                          {plano.categoria === 'Completo' && <Star className="h-5 w-5 text-blue-600" />}
-                          {plano.categoria === 'Básico' && <Shield className="h-5 w-5 text-slate-600" />}
+                          {planoIndex >= 2 && <Crown className="h-5 w-5 text-amber-600" />}
+                          {planoIndex === 1 && <Star className="h-5 w-5 text-blue-600" />}
+                          {planoIndex === 0 && <Shield className="h-5 w-5 text-slate-600" />}
                         </div>
                         <div>
                           <p className="font-bold">{plano.categoria}</p>

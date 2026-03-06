@@ -1,28 +1,38 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  TipoUsoVeiculo, 
-  CategoriaPlano, 
-  PlanoCalculado, 
-  ResultadoCalculo,
-  COBERTURAS_POR_PLANO 
-} from '@/types/cotacaoPublica';
+
+// ============================================
+// TIPOS - Agora dinâmicos, sem categorias fixas
+// ============================================
+
+export interface PlanoCalculado {
+  id: string;
+  codigo: string;
+  nome: string;
+  categoria: string;
+  valor_mensal: number;
+  valor_adesao: number;
+  valor_primeira_parcela: number;
+  coberturas: string[];
+  tag?: string;
+  destaque?: boolean;
+}
+
+export interface ResultadoCalculo {
+  planos: PlanoCalculado[];
+  valor_fipe: number;
+  tipo_uso: string;
+}
 
 interface CalcularParams {
   valor_fipe: number;
-  tipo_uso: TipoUsoVeiculo;
+  tipo_uso: 'particular' | 'aplicativo';
 }
 
-interface PrecoMensal {
-  categoria: string;
-  valor_mensal: number;
-}
-
-interface PrecoAdesao {
-  categoria: string;
-  valor_adesao: number;
-}
-
+/**
+ * Hook para calcular cotação pública buscando planos e preços do banco de dados.
+ * Não usa categorias fixas (Básico/Completo/Premium) — retorna os planos ativos do banco.
+ */
 export function useCalcularCotacao() {
   const [resultado, setResultado] = useState<ResultadoCalculo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,64 +43,74 @@ export function useCalcularCotacao() {
     setError(null);
 
     try {
-      // Buscar preços mensais
-      const { data: precosMensais, error: errorMensais } = await (supabase as any)
-        .from('tabelas_preco_mensalidade')
+      // Buscar planos ativos do banco
+      const { data: planosBanco, error: errorPlanos } = await supabase
+        .from('planos')
         .select('*')
-        .eq('tipo_uso', params.tipo_uso)
-        .eq('is_active', true)
-        .lte('fipe_min', params.valor_fipe)
-        .gte('fipe_max', params.valor_fipe);
+        .eq('ativo', true)
+        .order('ordem', { ascending: true });
 
-      if (errorMensais) throw errorMensais;
+      if (errorPlanos) throw errorPlanos;
 
-      // Buscar taxas de adesão
-      const { data: precosAdesao, error: errorAdesao } = await (supabase as any)
-        .from('tabelas_preco_adesao')
+      if (!planosBanco || planosBanco.length === 0) {
+        throw new Error('Nenhum plano ativo encontrado no banco de dados');
+      }
+
+      // Buscar tabelas de preço aplicáveis ao valor FIPE
+      const { data: tabelasPreco } = await supabase
+        .from('tabelas_preco')
         .select('*')
-        .eq('tipo_uso', params.tipo_uso)
-        .eq('is_active', true)
-        .lte('fipe_min', params.valor_fipe)
-        .gte('fipe_max', params.valor_fipe);
+        .eq('ativo', true);
 
-      if (errorAdesao) throw errorAdesao;
+      const faixaPreco = tabelasPreco?.find(
+        f => params.valor_fipe >= Number(f.fipe_de) && params.valor_fipe <= Number(f.fipe_ate)
+      );
 
-      // Mapear por categoria
-      const planosPorCategoria: Record<CategoriaPlano, { mensal: number; adesao: number }> = {
-        'Básico': { mensal: 99.90, adesao: 249 },
-        'Completo': { mensal: 134.87, adesao: 349 },
-        'Premium': { mensal: 169.83, adesao: 449 },
-      };
+      // Filtrar e calcular planos
+      const planos: PlanoCalculado[] = [];
 
-      // Processar preços mensais
-      (precosMensais as PrecoMensal[] || []).forEach((preco) => {
-        const categoria = preco.categoria as CategoriaPlano;
-        if (planosPorCategoria[categoria]) {
-          planosPorCategoria[categoria].mensal = preco.valor_mensal;
+      for (const plano of planosBanco) {
+        const tipoUsoPlano = plano.tipo_uso?.toLowerCase() || '';
+        const categoriaPlano = plano.categoria?.toLowerCase() || '';
+        const isPlanoAplicativo = tipoUsoPlano === 'aplicativo' || categoriaPlano === 'aplicativo';
+
+        // Filtrar por tipo de uso
+        if (params.tipo_uso === 'aplicativo' && !isPlanoAplicativo) continue;
+        if (params.tipo_uso === 'particular' && isPlanoAplicativo) continue;
+
+        // Verificar FIPE dentro da faixa
+        if (plano.fipe_minima && params.valor_fipe < Number(plano.fipe_minima)) continue;
+        if (plano.fipe_maxima && params.valor_fipe > Number(plano.fipe_maxima)) continue;
+
+        // Calcular valor mensal
+        let valorBase = 0;
+        if (faixaPreco) {
+          valorBase = Number(faixaPreco.taxa_comercial) || 0;
         }
-      });
-
-      // Processar taxas de adesão
-      (precosAdesao as PrecoAdesao[] || []).forEach((preco) => {
-        const categoria = preco.categoria as CategoriaPlano;
-        if (planosPorCategoria[categoria]) {
-          planosPorCategoria[categoria].adesao = preco.valor_adesao;
+        if (valorBase === 0) {
+          valorBase = Math.round(params.valor_fipe * 0.025 / 12);
         }
-      });
 
-      // Montar resultado
-      const planos: PlanoCalculado[] = (['Básico', 'Completo', 'Premium'] as CategoriaPlano[]).map((categoria) => {
-        const valores = planosPorCategoria[categoria];
-        return {
-          categoria,
-          valor_mensal: valores.mensal,
-          valor_adesao: valores.adesao,
-          valor_primeira_parcela: valores.adesao,
-          coberturas: COBERTURAS_POR_PLANO[categoria],
-          tag: categoria === 'Completo' ? 'Mais Popular' : categoria === 'Premium' ? 'Mais Completo' : undefined,
-          destaque: categoria === 'Completo',
-        };
-      });
+        const adicionalMensal = Number(plano.adicional_mensal) || 0;
+        const valorMensal = valorBase + adicionalMensal;
+        const valorAdesao = Number(plano.valor_adesao);
+
+        // Coberturas do banco
+        const coberturas = Array.isArray(plano.coberturas) ? plano.coberturas as string[] : [];
+
+        planos.push({
+          id: plano.id,
+          codigo: plano.codigo,
+          nome: plano.nome,
+          categoria: plano.categoria || plano.nome,
+          valor_mensal: Math.round(valorMensal * 100) / 100,
+          valor_adesao: valorAdesao,
+          valor_primeira_parcela: valorAdesao,
+          coberturas,
+          tag: plano.badge_text || undefined,
+          destaque: !!plano.destaque,
+        });
+      }
 
       const novoResultado: ResultadoCalculo = {
         planos,

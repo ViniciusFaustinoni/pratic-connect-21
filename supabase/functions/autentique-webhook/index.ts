@@ -501,6 +501,9 @@ serve(async (req) => {
                   ]);
 
                   if (plano && veiculo?.valor_fipe) {
+                    if (!plano.cota_participacao || !plano.cota_minima) {
+                      console.warn('[autentique-webhook] ATENÇÃO: plano sem cota_participacao/cota_minima configurados. Verifique o cadastro do plano.');
+                    }
                     let percentual = plano.cota_participacao || 6;
                     let minimo = plano.cota_minima || 1200;
 

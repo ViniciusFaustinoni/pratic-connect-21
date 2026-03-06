@@ -9,8 +9,6 @@
 
 export type TipoUsoVeiculo = 'particular' | 'aplicativo';
 
-export type CategoriaPlano = 'Básico' | 'Completo' | 'Premium';
-
 export type StatusCotacaoPublica =
   | 'aguardando'
   | 'visualizado'
@@ -33,22 +31,6 @@ export type TipoVistoria = 'autoatendimento' | 'presencial';
 // ============================================
 // INTERFACES
 // ============================================
-
-export interface PlanoCalculado {
-  categoria: CategoriaPlano;
-  valor_mensal: number;
-  valor_adesao: number;
-  valor_primeira_parcela: number;
-  coberturas: string[];
-  tag?: string;
-  destaque?: boolean;
-}
-
-export interface ResultadoCalculo {
-  planos: PlanoCalculado[];
-  valor_fipe: number;
-  tipo_uso: TipoUsoVeiculo;
-}
 
 export interface CotacaoPublicaData {
   id: string;
@@ -123,63 +105,8 @@ export interface FotoVistoria {
 }
 
 // ============================================
-// CONSTANTES
+// CONSTANTES (apenas labels/cores de status — sem dados de planos hardcoded)
 // ============================================
-
-export const CORES_PLANO: Record<CategoriaPlano, { bg: string; border: string; text: string; badge: string }> = {
-  'Básico': {
-    bg: 'bg-slate-50',
-    border: 'border-slate-400',
-    text: 'text-slate-700',
-    badge: 'bg-slate-100 text-slate-700',
-  },
-  'Completo': {
-    bg: 'bg-blue-50',
-    border: 'border-blue-500',
-    text: 'text-blue-700',
-    badge: 'bg-blue-100 text-blue-700',
-  },
-  'Premium': {
-    bg: 'bg-amber-50',
-    border: 'border-amber-500',
-    text: 'text-amber-700',
-    badge: 'bg-amber-100 text-amber-700',
-  },
-};
-
-export const COBERTURAS_POR_PLANO: Record<CategoriaPlano, string[]> = {
-  'Básico': [
-    'Roubo e Furto (100% FIPE)',
-    'Colisão (até 75% FIPE)',
-    'Incêndio',
-    'Fenômenos Naturais',
-    'Assistência 24h (200km)',
-  ],
-  'Completo': [
-    'Roubo e Furto (100% FIPE)',
-    'Colisão (100% FIPE)',
-    'Incêndio',
-    'Fenômenos Naturais',
-    'Assistência 24h (400km)',
-    'Vidros Laterais',
-    'Carro Reserva (7 dias)',
-    'APP Morte (R$ 10.000)',
-  ],
-  'Premium': [
-    'Roubo e Furto (100% FIPE)',
-    'Colisão (100% FIPE)',
-    'Perda Total',
-    'Incêndio',
-    'Fenômenos Naturais',
-    'Assistência 24h (Ilimitada)',
-    'Vidros (Todos)',
-    'Carro Reserva (15 dias)',
-    'APP Morte (R$ 30.000)',
-    'APP Invalidez (R$ 30.000)',
-    'Danos Morais (R$ 20.000)',
-    'Reboque Especializado',
-  ],
-};
 
 export const STATUS_COTACAO_PUBLICA_LABELS: Record<StatusCotacaoPublica, string> = {
   aguardando: 'Aguardando acesso',

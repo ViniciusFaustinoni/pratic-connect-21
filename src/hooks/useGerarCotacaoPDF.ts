@@ -11,41 +11,6 @@ const MARGIN = 50;
 const COR_PRIMARIA = { r: 0.1, g: 0.3, b: 0.6 }; // Azul
 const COR_SECUNDARIA = { r: 0.2, g: 0.6, b: 0.3 }; // Verde
 
-// Coberturas por plano
-const COBERTURAS_POR_PLANO: Record<string, string[]> = {
-  basico: [
-    'Colisão',
-    'Roubo e Furto',
-    'Incêndio',
-    'Assistência 24 horas',
-  ],
-  completo: [
-    'Colisão',
-    'Roubo e Furto',
-    'Incêndio',
-    'Proteção de Vidros',
-    'Assistência 24 horas',
-    'Carro Reserva (7 dias)',
-  ],
-  premium: [
-    'Colisão',
-    'Roubo e Furto',
-    'Incêndio',
-    'Proteção de Vidros',
-    'Assistência 24 horas',
-    'Carro Reserva (15 dias)',
-    'App de Rastreamento',
-    'Guincho Ilimitado',
-  ],
-};
-
-// Valores por plano
-const VALORES_PLANO: Record<string, { mensal: number; nome: string }> = {
-  basico: { mensal: 189.90, nome: 'Plano Básico' },
-  completo: { mensal: 249.90, nome: 'Plano Completo' },
-  premium: { mensal: 299.90, nome: 'Plano Premium' },
-};
-
 interface DadosCotacao {
   // Cliente
   nome: string;
@@ -58,9 +23,10 @@ interface DadosCotacao {
   ano: number;
   placa?: string;
   
-  // Plano
-  plano: 'basico' | 'completo' | 'premium';
-  valorExtra?: number; // Valor adicional do vendedor
+  // Plano - agora dinâmico
+  planoNome: string;
+  valorMensal: number;
+  coberturas: string[];
   
   // Meta
   vendedor?: string;
@@ -88,7 +54,6 @@ export function useGerarCotacaoPDF() {
     let y = A4_HEIGHT - MARGIN;
 
     // ===== CABEÇALHO =====
-    // Fundo do cabeçalho
     page.drawRectangle({
       x: 0,
       y: A4_HEIGHT - 120,
@@ -97,7 +62,6 @@ export function useGerarCotacaoPDF() {
       color: rgb(COR_PRIMARIA.r, COR_PRIMARIA.g, COR_PRIMARIA.b),
     });
 
-    // Nome da empresa
     page.drawText('PRATICCAR', {
       x: MARGIN,
       y: A4_HEIGHT - 55,
@@ -106,7 +70,6 @@ export function useGerarCotacaoPDF() {
       color: rgb(1, 1, 1),
     });
 
-    // Subtítulo
     page.drawText('COTAÇÃO DE PROTEÇÃO VEICULAR', {
       x: MARGIN,
       y: A4_HEIGHT - 85,
@@ -118,7 +81,6 @@ export function useGerarCotacaoPDF() {
     y = A4_HEIGHT - 150;
 
     // ===== DADOS DO CLIENTE =====
-    // Título da seção
     page.drawText('DADOS DO CLIENTE', {
       x: MARGIN,
       y,
@@ -129,7 +91,6 @@ export function useGerarCotacaoPDF() {
 
     y -= 8;
 
-    // Linha decorativa
     page.drawLine({
       start: { x: MARGIN, y },
       end: { x: A4_WIDTH - MARGIN, y },
@@ -139,19 +100,16 @@ export function useGerarCotacaoPDF() {
 
     y -= 25;
 
-    // Nome
     page.drawText('Nome:', { x: MARGIN, y, size: 10, font: fontRegular, color: rgb(0.5, 0.5, 0.5) });
     page.drawText(dados.nome, { x: MARGIN + 80, y, size: 11, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
 
     y -= 18;
 
-    // Telefone
     page.drawText('Telefone:', { x: MARGIN, y, size: 10, font: fontRegular, color: rgb(0.5, 0.5, 0.5) });
     page.drawText(dados.telefone, { x: MARGIN + 80, y, size: 11, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
 
     y -= 18;
 
-    // Email (se houver)
     if (dados.email) {
       page.drawText('E-mail:', { x: MARGIN, y, size: 10, font: fontRegular, color: rgb(0.5, 0.5, 0.5) });
       page.drawText(dados.email, { x: MARGIN + 80, y, size: 11, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
@@ -180,7 +138,6 @@ export function useGerarCotacaoPDF() {
 
     y -= 25;
 
-    // Marca/Modelo/Ano
     const veiculoDescricao = `${dados.marca} ${dados.modelo} ${dados.ano}`;
     page.drawText(veiculoDescricao, {
       x: MARGIN,
@@ -192,7 +149,6 @@ export function useGerarCotacaoPDF() {
 
     y -= 18;
 
-    // Placa (se houver)
     if (dados.placa) {
       page.drawText('Placa:', { x: MARGIN, y, size: 10, font: fontRegular, color: rgb(0.5, 0.5, 0.5) });
       page.drawText(dados.placa, { x: MARGIN + 80, y, size: 11, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
@@ -202,10 +158,6 @@ export function useGerarCotacaoPDF() {
     y -= 30;
 
     // ===== CARD DO PLANO (DESTAQUE) =====
-    const planoInfo = VALORES_PLANO[dados.plano];
-    const valorTotal = planoInfo.mensal + (dados.valorExtra || 0);
-
-    // Fundo do card
     const cardY = y - 80;
     page.drawRectangle({
       x: MARGIN,
@@ -217,8 +169,8 @@ export function useGerarCotacaoPDF() {
       borderWidth: 2,
     });
 
-    // Nome do plano
-    const nomePlano = planoInfo.nome.toUpperCase();
+    // Nome do plano (dinâmico)
+    const nomePlano = dados.planoNome.toUpperCase();
     const nomePlanoWidth = fontBold.widthOfTextAtSize(nomePlano, 18);
     page.drawText(nomePlano, {
       x: (A4_WIDTH - nomePlanoWidth) / 2,
@@ -228,8 +180,8 @@ export function useGerarCotacaoPDF() {
       color: rgb(COR_PRIMARIA.r, COR_PRIMARIA.g, COR_PRIMARIA.b),
     });
 
-    // Valor
-    const valorFormatado = formatarMoeda(valorTotal);
+    // Valor (dinâmico)
+    const valorFormatado = formatarMoeda(dados.valorMensal);
     const valorWidth = fontBold.widthOfTextAtSize(valorFormatado, 28);
     page.drawText(valorFormatado, {
       x: (A4_WIDTH - valorWidth) / 2,
@@ -239,7 +191,6 @@ export function useGerarCotacaoPDF() {
       color: rgb(COR_SECUNDARIA.r, COR_SECUNDARIA.g, COR_SECUNDARIA.b),
     });
 
-    // Texto "valor médio mensal"
     const textoMensal = 'valor médio mensal';
     const textoMensalWidth = fontRegular.widthOfTextAtSize(textoMensal, 11);
     page.drawText(textoMensal, {
@@ -252,7 +203,7 @@ export function useGerarCotacaoPDF() {
 
     y = cardY - 30;
 
-    // ===== COBERTURAS =====
+    // ===== COBERTURAS (dinâmicas) =====
     page.drawText('COBERTURAS INCLUÍDAS', {
       x: MARGIN,
       y,
@@ -272,17 +223,13 @@ export function useGerarCotacaoPDF() {
 
     y -= 25;
 
-    // Listar coberturas do plano selecionado
-    const coberturas = COBERTURAS_POR_PLANO[dados.plano] || [];
-    
-    // Grid de 2 colunas
+    const coberturas = dados.coberturas || [];
     const colWidth = (A4_WIDTH - MARGIN * 2) / 2;
     
     coberturas.forEach((cobertura, index) => {
       const col = index % 2;
       const x = MARGIN + (col * colWidth);
       
-      // Check verde
       page.drawText('✓', {
         x,
         y,
@@ -291,7 +238,6 @@ export function useGerarCotacaoPDF() {
         color: rgb(COR_SECUNDARIA.r, COR_SECUNDARIA.g, COR_SECUNDARIA.b),
       });
       
-      // Nome da cobertura
       page.drawText(cobertura, {
         x: x + 18,
         y,
@@ -300,13 +246,11 @@ export function useGerarCotacaoPDF() {
         color: rgb(0.2, 0.2, 0.2),
       });
 
-      // Nova linha a cada 2 itens
       if (col === 1) {
         y -= 20;
       }
     });
 
-    // Ajustar se terminou em coluna ímpar
     if (coberturas.length % 2 !== 0) {
       y -= 20;
     }
@@ -317,7 +261,6 @@ export function useGerarCotacaoPDF() {
     const validadeDias = dados.validadeDias || 7;
     const dataAtual = new Date().toLocaleDateString('pt-BR');
 
-    // Linha separadora
     page.drawLine({
       start: { x: MARGIN, y },
       end: { x: A4_WIDTH - MARGIN, y },
@@ -327,7 +270,6 @@ export function useGerarCotacaoPDF() {
 
     y -= 20;
 
-    // Validade
     page.drawText(`Cotação válida por ${validadeDias} dias`, {
       x: MARGIN,
       y,
@@ -336,7 +278,6 @@ export function useGerarCotacaoPDF() {
       color: rgb(0.5, 0.5, 0.5),
     });
 
-    // Data
     page.drawText(`Gerada em: ${dataAtual}`, {
       x: MARGIN,
       y: y - 14,
@@ -345,7 +286,6 @@ export function useGerarCotacaoPDF() {
       color: rgb(0.5, 0.5, 0.5),
     });
 
-    // Vendedor (lado direito)
     if (dados.vendedor) {
       page.drawText(`Vendedor: ${dados.vendedor}`, {
         x: A4_WIDTH - MARGIN - fontRegular.widthOfTextAtSize(`Vendedor: ${dados.vendedor}`, 9),
@@ -356,7 +296,6 @@ export function useGerarCotacaoPDF() {
       });
     }
 
-    // Nome da empresa
     page.drawText('PRATICCAR - Proteção Veicular', {
       x: A4_WIDTH - MARGIN - fontRegular.widthOfTextAtSize('PRATICCAR - Proteção Veicular', 9),
       y: y - 14,
@@ -365,11 +304,9 @@ export function useGerarCotacaoPDF() {
       color: rgb(COR_PRIMARIA.r, COR_PRIMARIA.g, COR_PRIMARIA.b),
     });
 
-    // Salvar PDF
     return await pdfDoc.save();
   };
 
-  // Função para baixar PDF
   const baixarPDF = (pdfBytes: Uint8Array, nomeCliente: string) => {
     const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
@@ -386,14 +323,12 @@ export function useGerarCotacaoPDF() {
     URL.revokeObjectURL(url);
   };
 
-  // Função para abrir em nova aba
   const abrirPDF = (pdfBytes: Uint8Array) => {
     const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
   };
 
-  // Função principal exposta
   const gerarCotacao = async (
     dados: DadosCotacao,
     modo: 'baixar' | 'abrir' | 'bytes' = 'baixar'
