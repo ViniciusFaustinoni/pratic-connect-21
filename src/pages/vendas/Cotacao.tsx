@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CotacaoStepper } from '@/components/cotacao/CotacaoStepper';
@@ -7,6 +7,7 @@ import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
 import { EtapaCriteriosCotacao } from '@/components/cotacao/EtapaCriteriosCotacao';
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
 import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 
 // ============================================
 // INTERFACES
@@ -107,6 +108,13 @@ export default function CotacaoPage() {
     });
   }, []);
 
+  // Detectar tipo de veículo automaticamente
+  const tipoVeiculoDetectado = useMemo(() => {
+    if (!marca && !modelo) return 'carro' as const;
+    const tipo = detectarTipoVeiculo(undefined, modelo, marca);
+    return tipo === 'moto' ? 'moto' as const : 'carro' as const;
+  }, [marca, modelo]);
+
   // Hook de planos - busca do banco de dados e calcula baseado nos parâmetros
   const { planos: planosCalculados, isLoading: isLoadingPlanos } = usePlanosCotacao({
     valorFipe: valorFipe || 0,
@@ -114,7 +122,7 @@ export default function CotacaoPage() {
     combustivel: combustivel || 'gasolina',
     categoria: categoria || modalidade,
     anoVeiculo: ano ? parseInt(ano) : undefined,
-    tipoVeiculo: 'carro',
+    tipoVeiculo: tipoVeiculoDetectado,
     usoApp: modalidade === 'aplicativo',
   });
 
