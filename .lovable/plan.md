@@ -65,6 +65,17 @@ Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`
 
 Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
+
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
+
 
 ---
 
