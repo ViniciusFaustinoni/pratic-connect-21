@@ -1,25 +1,41 @@
 
 
-# Corrigir constraint `servicos_decisao_instalador_check`
+# Registrar Ressalvas no Historico de Associados/Veiculos
 
-## Problema
+## Resumo
 
-A constraint `servicos_decisao_instalador_check` na tabela `servicos` restringe `decisao_instalador` a apenas 3 valores: `aprovado`, `aprovado_ressalva`, `negado`.
+Adicionar um botao "Registrar Ressalva" na aba Historico do `AssociadoDetalhe.tsx`, similar ao componente `AdicionarObservacao` ja existente, mas especifico para ressalvas. O coordenador de monitoramento podera documentar inconsistencias com tipo `ressalva_registrada`, campo de texto obrigatorio e opcao de selecionar o veiculo relacionado.
 
-O codigo tenta usar `pendente_monitoramento` e `declinado_monitoramento`, que sao valores validos do fluxo de triagem/ressalva mas nao foram incluidos na constraint.
+## Alteracoes
 
-## Solucao
+### 1. Novo componente `src/components/cadastro/AdicionarRessalva.tsx`
 
-Uma unica migracao SQL para dropar e recriar a constraint com todos os valores necessarios:
+Componente com:
+- Botao "Registrar Ressalva" (icone AlertTriangle, cor amber)
+- Ao expandir: campo de texto (descricao da ressalva), select opcional para escolher o veiculo do associado (busca veiculos do associado), e botoes Cancelar/Salvar
+- Insere na tabela `associados_historico` com `tipo: 'ressalva_registrada'` e `dados_novos` contendo veiculo_id/placa se selecionado
+- Usa `supabase.auth.getUser()` para registrar o usuario
 
-```sql
-ALTER TABLE servicos DROP CONSTRAINT servicos_decisao_instalador_check;
-ALTER TABLE servicos ADD CONSTRAINT servicos_decisao_instalador_check 
-  CHECK (decisao_instalador = ANY (ARRAY[
-    'aprovado', 'aprovado_ressalva', 'negado', 
-    'pendente_monitoramento', 'declinado_monitoramento'
-  ]));
-```
+### 2. `src/hooks/useAssociadoHistoricoCompleto.ts` — Mapear novo tipo
 
-Nenhuma alteracao de codigo necessaria. Apenas 1 migracao.
+Adicionar `'ressalva_registrada': 'observacao_adicionada'` no mapeamento `tipoDbParaTimeline` (reutiliza o icone de observacao, ou podemos criar um tipo especifico).
+
+### 3. `src/pages/cadastro/AssociadoDetalhe.tsx` — Renderizar componente
+
+Na aba `historico` (linha 813), adicionar o componente `AdicionarRessalva` logo acima da timeline, ao lado do titulo. Visivel apenas para coordenadores de monitoramento (verificar permissao).
+
+### 4. `src/components/associados/detalhe/AssociadoResumoTab.tsx` — Mapear titulo
+
+Adicionar `'ressalva_registrada': 'Ressalva registrada'` no mapa de titulos e configurar icone/cor amber.
+
+## Arquivos
+
+| Arquivo | Acao |
+|---|---|
+| `src/components/cadastro/AdicionarRessalva.tsx` | Novo — formulario de ressalva com select de veiculo |
+| `src/hooks/useAssociadoHistoricoCompleto.ts` | Adicionar tipo no mapeamento |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Renderizar AdicionarRessalva na aba historico + import |
+| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Mapear titulo/icone/cor do novo tipo |
+
+4 arquivos.
 
