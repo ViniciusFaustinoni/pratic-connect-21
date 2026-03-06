@@ -242,8 +242,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
       
       if (valorBase === null || valorBase === 0) {
-        // Fallback: usar um valor padrão baseado no Valor FIPE
-        valorBase = Math.round(valorFipe * 0.025 / 12); // ~2.5% ao ano / 12 meses
+        if (tipoVeiculo === 'moto') {
+          // Fallback para motos: ~3% ao ano / 12 meses
+          valorBase = Math.round(valorFipe * 0.03 / 12);
+        } else {
+          // Fallback para carros: ~2.5% ao ano / 12 meses
+          valorBase = Math.round(valorFipe * 0.025 / 12);
+        }
       }
 
       // Aplicar ajuste de região (Lagos e SP = 90% do RJ)
