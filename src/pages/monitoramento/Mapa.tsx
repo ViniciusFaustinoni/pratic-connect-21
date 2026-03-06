@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, CircleMarker } from "react-leaflet";
-import { useRotaRealMultiWaypoint } from "@/hooks/useRotaRealMultiWaypoint";
+import { TrajetoOSRM } from "@/components/mapa/TrajetoOSRM";
 import L from "leaflet";
 import { format, formatDistanceToNow, subHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
