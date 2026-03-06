@@ -74,3 +74,39 @@ verify_jwt = false
 
 [functions.rastreador-auth]
 verify_jwt = false
+
+[functions.agendar-vistoria-completa]
+verify_jwt = false
+
+[functions.agendar-vistoria-presencial]
+verify_jwt = false
+
+[functions.agendar-vistoria-evento]
+verify_jwt = false
+
+[functions.contrato-gerar]
+verify_jwt = false
+
+[functions.asaas-cobranca-adesao]
+verify_jwt = false
+
+[functions.asaas-verificar-pagamento]
+verify_jwt = false
+
+[functions.criar-instalacao-pos-pagamento]
+verify_jwt = false
+
+[functions.autentique-create]
+verify_jwt = false
+
+[functions.autentique-sync-contrato]
+verify_jwt = false
+
+[functions.validar-link-evento]
+verify_jwt = false
+
+[functions.salvar-etapa-evento]
+verify_jwt = false
+
+[functions.processar-termo-evento]
+verify_jwt = false
