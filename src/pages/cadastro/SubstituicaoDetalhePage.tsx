@@ -52,7 +52,6 @@ export default function SubstituicaoDetalhePage() {
     v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
 
   const fipeAlta = (sub?.veiculo_novo_fipe ?? 0) > (limites?.fipeLimiteAutorizacao ?? 120000);
-  const veiculoBlindado = !!(vNovo as any)?.blindado;
   const isPendente = sub?.status === 'aguardando_aprovacao';
 
   const handleAprovar = async () => {

@@ -12,7 +12,6 @@ import { Plus, Edit, Trash2, Car, Shield, DollarSign } from 'lucide-react';
 
 const REGRA_LABELS: Record<string, { label: string; icon: typeof Car }> = {
   veiculo_0km: { label: '0KM', icon: Car },
-  veiculo_blindado: { label: 'Blindado', icon: Shield },
   fipe_acima_de: { label: 'FIPE acima', icon: DollarSign },
 };
 

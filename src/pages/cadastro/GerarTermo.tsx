@@ -132,7 +132,6 @@ export default function GerarTermo() {
   const { aditivosAvaliados, isLoading: loadingAvaliacao } = useAvaliarAditivos({
     placa: associado.veiculo.placa,
     procedencia: associado.veiculo.procedencia,
-    blindado: false,
     valorFipe: associado.veiculo.valorFipe,
     observacoes: '',
   });
