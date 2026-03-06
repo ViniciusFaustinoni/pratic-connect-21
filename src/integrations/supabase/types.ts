@@ -23657,6 +23657,7 @@ export type Database = {
           ano_modelo: number
           associado_id: string
           ativo: boolean
+          blindado: boolean | null
           chassi: string | null
           cobertura_assistencia: boolean | null
           cobertura_roubo_furto: boolean | null
@@ -23702,6 +23703,7 @@ export type Database = {
           ano_modelo: number
           associado_id: string
           ativo?: boolean
+          blindado?: boolean | null
           chassi?: string | null
           cobertura_assistencia?: boolean | null
           cobertura_roubo_furto?: boolean | null
@@ -23747,6 +23749,7 @@ export type Database = {
           ano_modelo?: number
           associado_id?: string
           ativo?: boolean
+          blindado?: boolean | null
           chassi?: string | null
           cobertura_assistencia?: boolean | null
           cobertura_roubo_furto?: boolean | null
