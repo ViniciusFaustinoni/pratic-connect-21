@@ -177,6 +177,25 @@ export default function InstaladorChecklist() {
   const recusarVeiculoMutation = useRecusarVeiculoServico();
   const enviarParaMonitoramentoMutation = useEnviarParaMonitoramento();
   const [enviandoMonitoramento, setEnviandoMonitoramento] = useState(false);
+  const [aguardandoMonitoramento, setAguardandoMonitoramento] = useState(false);
+  const [tempoEspera, setTempoEspera] = useState(0);
+
+  // Polling para aguardar decisão do monitoramento
+  const { data: statusDecisao } = useAguardarDecisaoMonitoramento(id ?? null, aguardandoMonitoramento);
+
+  // Timer de espera
+  useEffect(() => {
+    if (!aguardandoMonitoramento) return;
+    const interval = setInterval(() => setTempoEspera(prev => prev + 1), 1000);
+    return () => clearInterval(interval);
+  }, [aguardandoMonitoramento]);
+
+  // Quando receber decisão, parar espera
+  useEffect(() => {
+    if (statusDecisao === 'aprovado' || statusDecisao === 'declinado') {
+      setAguardandoMonitoramento(false);
+    }
+  }, [statusDecisao]);
 
   const progresso = (etapaAtual / ETAPAS.length) * 100;
 
