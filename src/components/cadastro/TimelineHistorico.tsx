@@ -5,7 +5,7 @@ import {
   UserPlus, RefreshCw, Edit, Upload, CheckCircle, XCircle,
   Car, Calendar, CheckSquare, SquareX, Receipt, DollarSign,
   PhoneCall, PhoneOff, AlertTriangle, FileText, FileCheck,
-  MessageSquare, ChevronDown, Filter, Loader2, History, X
+  MessageSquare, ChevronDown, Filter, Loader2, History, X, Wrench
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -55,7 +55,10 @@ export type TipoEvento =
   | 'sinistro_encerrado'
   | 'contrato_assinado'
   | 'observacao_adicionada'
-  | 'ressalva_registrada';
+  | 'ressalva_registrada'
+  | 'ressalva_aprovada_monitoramento'
+  | 'ressalva_declinada_monitoramento'
+  | 'ressalva_instalacao';
 
 export interface EventoHistorico {
   id: string;
@@ -221,6 +224,24 @@ const eventoConfig: Record<TipoEvento, EventoConfig> = {
     bgCor: 'bg-amber-100',
     label: 'Ressalva registrada',
   },
+  ressalva_aprovada_monitoramento: {
+    icone: CheckCircle,
+    cor: 'text-green-600',
+    bgCor: 'bg-green-100',
+    label: 'Ressalva aprovada',
+  },
+  ressalva_declinada_monitoramento: {
+    icone: XCircle,
+    cor: 'text-red-600',
+    bgCor: 'bg-red-100',
+    label: 'Ressalva declinada',
+  },
+  ressalva_instalacao: {
+    icone: Wrench,
+    cor: 'text-amber-600',
+    bgCor: 'bg-amber-100',
+    label: 'Ressalva de instalação',
+  },
 };
 
 // Filter categories
@@ -232,7 +253,7 @@ const filterCategories: Record<string, TipoEvento[]> = {
   financeiro: ['boleto_gerado', 'boleto_pago', 'boleto_cancelado', 'contrato_assinado'],
   sinistros: ['sinistro_aberto', 'sinistro_atualizado', 'sinistro_encerrado'],
   chamados: ['chamado_aberto', 'chamado_concluido'],
-  ressalvas: ['ressalva_registrada'],
+  ressalvas: ['ressalva_registrada', 'ressalva_aprovada_monitoramento', 'ressalva_declinada_monitoramento', 'ressalva_instalacao'],
 };
 
 export function TimelineHistorico({
@@ -332,6 +353,7 @@ export function TimelineHistorico({
               <SelectItem value="financeiro">Financeiro</SelectItem>
               <SelectItem value="sinistros">Sinistros</SelectItem>
               <SelectItem value="chamados">Chamados</SelectItem>
+              <SelectItem value="ressalvas">Ressalvas</SelectItem>
             </SelectContent>
           </Select>
 

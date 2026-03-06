@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.extract-orcamento-pdf]
 verify_jwt = false
+
+[functions.sugerir-ressalva-ia]
+verify_jwt = false
