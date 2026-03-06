@@ -17,7 +17,7 @@ export interface PlanoOpcao {
   valorAdesao?: number;
   coberturas?: string[];
   destaque?: boolean;
-  nivel?: 'basic' | 'premium' | 'exclusive';
+  nivel?: string;
   categoriaVeiculo?: string;
 }
 
@@ -31,27 +31,47 @@ interface EscolhaPlanoProps {
   readOnly?: boolean;
 }
 
-const getNivelIcon = (nivel?: string) => {
-  switch (nivel) {
-    case 'exclusive':
-      return <Crown className="h-5 w-5 text-yellow-400" />;
-    case 'premium':
-      return <Zap className="h-5 w-5 text-purple-400" />;
-    default:
-      return <Shield className="h-5 w-5 text-primary" />;
-  }
+// Mapa extensível de estilos por nível — novos níveis usam fallback automático
+const NIVEL_CONFIG: Record<string, { icon: typeof Crown; iconClass: string; badgeClass: string; label: string }> = {
+  exclusive: {
+    icon: Crown,
+    iconClass: 'text-yellow-400',
+    badgeClass: 'border-yellow-400/30 text-yellow-400 bg-yellow-400/10',
+    label: 'Exclusive',
+  },
+  premium: {
+    icon: Zap,
+    iconClass: 'text-purple-400',
+    badgeClass: 'border-purple-400/30 text-purple-400 bg-purple-400/10',
+    label: 'Premium',
+  },
+  basic: {
+    icon: Shield,
+    iconClass: 'text-primary',
+    badgeClass: 'border-border/50 bg-muted/30',
+    label: 'Basic',
+  },
 };
 
-const getNivelLabel = (nivel?: string) => {
-  switch (nivel) {
-    case 'exclusive':
-      return 'Exclusive';
-    case 'premium':
-      return 'Premium';
-    default:
-      return 'Basic';
-  }
+const DEFAULT_NIVEL = {
+  icon: Shield,
+  iconClass: 'text-primary',
+  badgeClass: 'border-border/50 bg-muted/30',
 };
+
+const getNivelConfig = (nivel?: string) => {
+  if (nivel && NIVEL_CONFIG[nivel]) return NIVEL_CONFIG[nivel];
+  return { ...DEFAULT_NIVEL, label: nivel ? nivel.charAt(0).toUpperCase() + nivel.slice(1) : 'Padrão' };
+};
+
+const getNivelIcon = (nivel?: string) => {
+  const config = getNivelConfig(nivel);
+  const Icon = config.icon;
+  return <Icon className={cn('h-5 w-5', config.iconClass)} />;
+};
+
+const getNivelLabel = (nivel?: string) => getNivelConfig(nivel).label;
+const getNivelBadgeClass = (nivel?: string) => getNivelConfig(nivel).badgeClass;
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -140,11 +160,7 @@ export function EscolhaPlano({
             </div>
             <Badge 
               variant="outline" 
-              className={cn(
-                'text-xs mb-3',
-                planoSelecionado.nivel === 'exclusive' && 'border-yellow-400/30 text-yellow-400 bg-yellow-400/10',
-                planoSelecionado.nivel === 'premium' && 'border-purple-400/30 text-purple-400 bg-purple-400/10'
-              )}
+              className={cn('text-xs mb-3', getNivelBadgeClass(planoSelecionado.nivel))}
             >
               {getNivelLabel(planoSelecionado.nivel)}
             </Badge>
@@ -260,11 +276,7 @@ export function EscolhaPlano({
                     <h3 className="text-xl font-bold text-foreground mb-2">{plano.nome}</h3>
                     <Badge 
                       variant="outline" 
-                      className={cn(
-                        'text-xs border-border/50 bg-muted/30',
-                        plano.nivel === 'exclusive' && 'border-yellow-400/30 text-yellow-400 bg-yellow-400/10',
-                        plano.nivel === 'premium' && 'border-purple-400/30 text-purple-400 bg-purple-400/10'
-                      )}
+                      className={cn('text-xs', getNivelBadgeClass(plano.nivel))}
                     >
                       {getNivelLabel(plano.nivel)}
                     </Badge>
