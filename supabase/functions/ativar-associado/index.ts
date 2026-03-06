@@ -227,7 +227,7 @@ serve(async (req) => {
     if (associado.whatsapp || associado.telefone) {
       const telefoneWhatsapp = associado.whatsapp || associado.telefone;
       try {
-        await supabaseAdmin.functions.invoke('whatsapp-send-media', {
+        await supabaseAdmin.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefoneWhatsapp.replace(/\D/g, ''),
             mensagem: `Olá ${associado.nome}! 🚗\n\nSeu acesso ao App PRATIC está liberado!\n\n🔗 URL: ${appUrl}/app/login\n👤 Login: ${associado.cpf}\n🔑 Senha: ${senhaPadrao}\n\nNo primeiro acesso você deverá trocar sua senha.`,
