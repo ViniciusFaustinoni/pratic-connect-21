@@ -1,8 +1,8 @@
-# Auditoria: Planos, Benefícios e Precificação — Status Atualizado
+# Auditoria Completa: Planos, Benefícios e Precificação
 
 ## Resumo
 
-A maioria dos fluxos de planos/benefícios já é dinâmica (banco de dados). Resta migrar o fluxo avançado de cotação (`pricing.ts`) e remover valores hardcoded de FIPE/idade espalhados em componentes.
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
 
 ---
 
@@ -13,13 +13,13 @@ A maioria dos fluxos de planos/benefícios já é dinâmica (banco de dados). Re
 - `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
 - `CotacaoDetalhe.tsx` — Dados do hook
 - `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
-- `EscolhaPlano.tsx` — Props do banco
 - `ContratoDetalhe.tsx` — Dinâmico
 - `Cotador.tsx` — Usa PlanoCotacao direto
 - `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
 - `CardPlano.tsx` — Recebe benefícios/coberturas como props
-- `CotacaoPublica.tsx` — Usa planos.descricao, sem fallback hardcoded
 - `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
 
 ---
 
@@ -27,37 +27,75 @@ A maioria dos fluxos de planos/benefícios já é dinâmica (banco de dados). Re
 
 ### 1. `pricing.ts` — 539 linhas estáticas (prioridade média)
 
-**Problema:** Arquivo com categorias fixas (BASIC/PREMIUM/EXCLUSIVE), faixas FIPE hardcoded, preços estáticos por região/combustível, e cidades fixas por região.
+**Problema:** Categorias fixas (BASIC/PREMIUM/EXCLUSIVE), faixas FIPE hardcoded, preços estáticos por região/combustível, cidades fixas por região.
 
 **Usado por:**
-- `useCotacaoAvancada.ts` — Hook que calcula cotação avançada usando pricing.ts
-- `QuoteCalculatorModal.tsx` — Modal de cotação na tela de vendas (importa tipos + useCotacaoAvancada)
-- `CotacaoPublica.tsx` — Apenas `formatarMoeda` (função utilitária)
-- `CotacaoContratacao.tsx` — Apenas `formatarMoeda` (função utilitária)
+| Arquivo | O que importa |
+|---------|--------------|
+| `QuoteCalculatorModal.tsx` | `calcularCotacao`, `formatarMoeda`, `ADICIONAIS`, tipos `Categoria`, `ResultadoCotacao` |
+| `useCotacaoAvancada.ts` | `calcularCotacao`, `ResultadoCotacao`, `Categoria` |
+| `CotacaoPublica.tsx` | Apenas `formatarMoeda` |
+| `CotacaoContratacao.tsx` | Apenas `formatarMoeda` |
 
-**Solução proposta:**
-1. Extrair `formatarMoeda` para `src/utils/format.ts` (elimina dependência das páginas públicas)
-2. Migrar `QuoteCalculatorModal` + `useCotacaoAvancada` para usar `usePlanosCotacao` / `useCalcularCotacao`
-3. Após migração, remover `pricing.ts`
+**Solução:**
+1. Extrair `formatarMoeda` para local centralizado (já existe em `usePlanosPrecificacao.ts` L68)
+2. Migrar `QuoteCalculatorModal` + `useCotacaoAvancada` para usar hooks dinâmicos
+3. Remover `pricing.ts`
 
-### 2. Valores FIPE/idade hardcoded (prioridade baixa)
+### 2. `formatarMoeda` duplicada em 5+ locais (prioridade média)
 
-| Arquivo | Linha | Valor hardcoded |
-|---------|-------|----------------|
+| Local | Tipo |
+|-------|------|
+| `src/config/pricing.ts` | Exportada, usada por 2 páginas públicas |
+| `src/hooks/usePlanosPrecificacao.ts` L68 | Exportada |
+| `src/pages/public/CotacaoPublicaCompleta.tsx` L196 | Local |
+| `src/components/cotacao-publica/EscolhaPlano.tsx` L33 | Local |
+| `src/components/beneficios/TabelaSaudeBeneficios.tsx` L23 | Local |
+
+**Solução:** Criar `src/utils/format.ts` com `formatarMoeda` e substituir todas as ocorrências.
+
+### 3. Valores FIPE/idade hardcoded (prioridade baixa)
+
+| Arquivo | Linha | Valor |
+|---------|-------|-------|
+| `StepNovoVeiculo.tsx` | L343 | `> 120000` (alerta FIPE alta) |
 | `SubstituicoesPendentesPage.tsx` | L158 | `> 120000` (badge FIPE ALTA) |
+| `SubstituicaoDetalhePage.tsx` | L51 | `> 120000` (flag fipeAlta) |
 | `VeiculoPerfilAlert.tsx` | L16-18 | `LIMITE_IDADE=15`, `FIPE_MIN=15000`, `FIPE_MAX=500000` |
 
-**Solução proposta:** Ler da tabela `configuracoes` (chaves `aceitacao_*`) com fallback para os valores atuais.
+**Nota:** Os `120000` em `useEventosDashboard.ts` e `useDashboardCoordenador.ts` são `refetchInterval` (2 min em ms), não valores FIPE.
 
-### 3. Blindado como aditivo (prioridade baixa)
+**Solução:** Ler da tabela `configuracoes` com fallback para valores atuais.
 
-- `useAvaliarAditivos.ts` L24-27: trata veículo blindado como aditivo em vez de bloqueio
-- Precisa de decisão de negócio antes de alterar
+### 4. Níveis hardcoded em `EscolhaPlano.tsx` (prioridade baixa)
+
+- L19: `nivel?: 'basic' | 'premium' | 'exclusive'` — tipo fixo
+- L40-59: `getNivelIcon` e `getNivelLabel` com switch hardcoded
+- L151-152: Cores fixas por nível (yellow para exclusive, purple para premium)
+
+**Nota:** Os dados vêm do banco (props), mas a UI de ícones/labels/cores é fixa para 3 níveis. Se no futuro houver mais níveis, precisará refatorar.
+
+**Solução futura:** Mover ícone/cor/label para a tabela `planos` ou `product_lines` no banco.
+
+### 5. Blindado como aditivo (decisão pendente)
+
+- `useAvaliarAditivos.ts` L24-27: trata veículo blindado como aditivo (permite)
+- Comportamento correto: deve bloquear cadastro
+- **Aguarda decisão de negócio**
 
 ---
 
 ## ❌ NÃO FAZER AGORA
 
-- Tabelas novas (`regras_aceitacao`, `modelos_aceitacao_limitada`, `autorizacoes_veiculo`) — complexidade alta, sem demanda imediata
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
 - Página de autorizações da diretoria — depende das tabelas acima
 - Campos de vistoria (rebaixado/turbinado) — escopo separado
+
+---
+
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
+
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
