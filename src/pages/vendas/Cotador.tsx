@@ -367,15 +367,22 @@ export default function CotadorPage() {
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
   
+  // Detectar tipo de veículo automaticamente
+  const tipoVeiculoDetectado = useMemo(() => {
+    if (!marca && !modelo) return 'carro' as const;
+    const tipo = detectarTipoVeiculo(undefined, modelo, marca);
+    return tipo === 'moto' ? 'moto' as const : 'carro' as const;
+  }, [marca, modelo]);
+
   // Hook de planos com filtro por uso (aplicativo vs passeio)
   const parametrosPlanos = useMemo(() => ({
     valorFipe: valorFipe || 0,
     regiao: 'rj',
     anoVeiculo: parseInt(ano) || undefined,
-    tipoVeiculo: 'carro' as const,
+    tipoVeiculo: tipoVeiculoDetectado,
     usoApp: usoApp, // Filtra planos por uso
     categoria: categoriaVeiculo || undefined,
-  }), [valorFipe, ano, usoApp, categoriaVeiculo]);
+  }), [valorFipe, ano, usoApp, categoriaVeiculo, tipoVeiculoDetectado]);
   
   const { planos: planosDB, isLoading: loadingPlanos } = usePlanosCotacao(parametrosPlanos);
   const criarCotacao = useCriarCotacao();

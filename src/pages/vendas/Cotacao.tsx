@@ -108,6 +108,13 @@ export default function CotacaoPage() {
     });
   }, []);
 
+  // Detectar tipo de veículo automaticamente
+  const tipoVeiculoDetectado = useMemo(() => {
+    if (!marca && !modelo) return 'carro' as const;
+    const tipo = detectarTipoVeiculo(undefined, modelo, marca);
+    return tipo === 'moto' ? 'moto' as const : 'carro' as const;
+  }, [marca, modelo]);
+
   // Hook de planos - busca do banco de dados e calcula baseado nos parâmetros
   const { planos: planosCalculados, isLoading: isLoadingPlanos } = usePlanosCotacao({
     valorFipe: valorFipe || 0,
@@ -115,7 +122,7 @@ export default function CotacaoPage() {
     combustivel: combustivel || 'gasolina',
     categoria: categoria || modalidade,
     anoVeiculo: ano ? parseInt(ano) : undefined,
-    tipoVeiculo: 'carro',
+    tipoVeiculo: tipoVeiculoDetectado,
     usoApp: modalidade === 'aplicativo',
   });
 
