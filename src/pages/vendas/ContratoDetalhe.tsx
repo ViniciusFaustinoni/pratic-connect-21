@@ -98,35 +98,7 @@ const formatDateTime = (date: string) => {
   });
 };
 
-// Coberturas mock por plano
-const COBERTURAS_POR_PLANO: Record<string, string[]> = {
-  basico: [
-    'Proteção contra roubo/furto',
-    'Proteção contra colisão',
-    'Proteção contra incêndio',
-    'Assistência 24h',
-  ],
-  completo: [
-    'Proteção contra roubo/furto',
-    'Proteção contra colisão',
-    'Proteção contra incêndio',
-    'Assistência 24h',
-    'Proteção de vidros',
-    'App de rastreamento',
-    'Carro reserva (7 dias)',
-  ],
-  premium: [
-    'Proteção contra roubo/furto',
-    'Proteção contra colisão',
-    'Proteção contra incêndio',
-    'Assistência 24h Premium',
-    'Proteção de vidros',
-    'App de rastreamento',
-    'Carro reserva (15 dias)',
-    'Proteção para terceiros',
-    'Desconto em rede credenciada',
-  ],
-};
+// Coberturas agora vêm do banco via planos.coberturas (array)
 
 interface TimelineEvento {
   id: number;
@@ -401,8 +373,10 @@ export default function ContratoDetalhe() {
   }
 
   const timeline = gerarTimeline(contrato);
-  const planoNome = contrato.planos?.nome?.toLowerCase() || 'basico';
-  const coberturas = COBERTURAS_POR_PLANO[planoNome] || COBERTURAS_POR_PLANO.basico;
+  // Coberturas dinâmicas do banco de dados (planos.coberturas é string[])
+  const coberturas: string[] = Array.isArray(contrato.planos?.coberturas) 
+    ? contrato.planos.coberturas as string[]
+    : [];
   const cliente = contrato.associados || contrato.leads;
   const numeroContrato = contrato.numero || `CTR-${contrato.id.slice(0, 8).toUpperCase()}`;
   

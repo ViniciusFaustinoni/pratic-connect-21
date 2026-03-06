@@ -78,11 +78,7 @@ const mapearRegiao = (regiao: string): Regiao => {
 // ADICIONAL POR NÍVEL (valores do banco ou padrão)
 // ============================================
 
-const ADICIONAL_NIVEL_PADRAO = {
-  basic: 0,
-  premium: 30,
-  exclusive: 60,
-};
+// ADICIONAL_NIVEL_PADRAO removido — usar apenas adicional_mensal do banco de dados
 
 // ============================================
 // EXTRAÇÃO DO NÍVEL DO PLANO
@@ -254,14 +250,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Aplicar ajuste de região (Lagos e SP = 90% do RJ)
       valorBase = calcularPrecoRegiao(valorBase, regiaoMapeada);
 
-      // Aplicar adicional por nível do plano (do banco ou calculado)
+      // Aplicar adicional por nível do plano (do banco)
       const adicionalBanco = Number(plano.adicional_mensal) || 0;
       const nivel = plano.nivel || extrairNivel(codigo);
-      const adicionalNivel = nivel ? (ADICIONAL_NIVEL_PADRAO[nivel as keyof typeof ADICIONAL_NIVEL_PADRAO] || 0) : 0;
-      const valorMensal = valorBase + (adicionalBanco || adicionalNivel);
+      const valorMensal = valorBase + adicionalBanco;
 
-      // Usar valor de adesão do banco
-      const valorAdesao = Number(plano.valor_adesao) || 199.90;
+      // Usar valor de adesão do banco (obrigatório)
+      const valorAdesao = Number(plano.valor_adesao);
 
       // Cota de participação
       const cotaBase = Number(plano.cota_participacao) || 6;
@@ -286,18 +281,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // O que não está incluído (buscar do banco ou lista vazia)
       const naoInclui: string[] = [];
 
-      // Determinar destaque
-      const isDestaque = plano.destaque || 
-                         codigo === 'select-premium' ||
-                         codigo === 'select-basic';
-
-      // Determinar tag
-      let tag: string | undefined;
-      if (codigo === 'select-premium' || codigo === 'select-basic') {
-        tag = 'Recomendado';
-      } else if (plano.destaque) {
-        tag = 'Destaque';
-      }
+      // Destaque e tag dinâmicos — do banco de dados
+      const isDestaque = !!plano.destaque;
+      const tag: string | undefined = plano.badge_text || undefined;
 
       // Obter restrições baseadas na categoria do veículo (fonte única de verdade)
       // Usa exclusões do banco de dados (dinâmico) com fallback para estático
@@ -328,7 +314,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         destaque: isDestaque,
         tag,
         alertaDesagio,
-        adicionalMensal: adicionalBanco || adicionalNivel,
+        adicionalMensal: adicionalBanco,
         valorCota,
         taxaAdministrativa,
         valorRastreamento,
