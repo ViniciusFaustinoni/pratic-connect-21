@@ -12,6 +12,8 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
@@ -23,91 +25,99 @@ function VariacaoIndicador({ variacao }: { variacao: number }) {
   
   return (
     <span className={cn(
-      "inline-flex items-center gap-0.5 text-xs font-medium",
+      "inline-flex items-center gap-0.5 text-[10px] font-semibold",
       isPositive ? "text-green-600" : "text-red-500"
     )}>
-      <Icon className="h-3 w-3" />
+      <Icon className="h-2.5 w-2.5" />
       {isPositive ? '+' : ''}{variacao.toFixed(0)}%
     </span>
   );
 }
 
 export function PropostasMetricsBar({ metricas, isLoading }: PropostasMetricsBarProps) {
-  const cards = [
+  if (isLoading) {
+    return (
+      <Card className="animate-pulse">
+        <CardContent className="p-4">
+          <div className="h-14 bg-muted rounded" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const items = [
     {
-      title: 'Total Propostas',
+      label: 'Total',
       value: metricas.totalPropostas,
       icon: FileText,
-      color: 'bg-blue-500/10 text-blue-600',
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-500/10',
       variacao: metricas.variacaoPropostas,
     },
     {
-      title: 'Em Cotação',
+      label: 'Em Cotação',
       value: metricas.emCotacao,
       icon: Clock,
-      color: 'bg-yellow-500/10 text-yellow-600',
+      color: 'text-yellow-600',
+      bgColor: 'bg-yellow-500/10',
     },
     {
-      title: 'Aguardando Assinatura',
+      label: 'Ag. Assinatura',
       value: metricas.aguardandoAssinatura,
       icon: FileText,
-      color: 'bg-orange-500/10 text-orange-600',
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-500/10',
     },
     {
-      title: 'Assinadas',
+      label: 'Assinadas',
       value: metricas.assinadas,
       icon: CheckCircle,
-      color: 'bg-green-500/10 text-green-600',
+      color: 'text-green-600',
+      bgColor: 'bg-green-500/10',
       variacao: metricas.variacaoAssinadas,
     },
     {
-      title: 'Valor Mensal',
+      label: 'Valor Mensal',
       value: formatCurrency(metricas.valorTotalMensal),
       icon: DollarSign,
-      color: 'bg-emerald-500/10 text-emerald-600',
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-500/10',
       variacao: metricas.variacaoValor,
       isMonetary: true,
     },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {[...Array(5)].map((_, i) => (
-          <Card key={i} className="animate-pulse">
-            <CardContent className="p-4">
-              <div className="h-16 bg-muted rounded" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-      {cards.map((card) => (
-        <Card key={card.title} className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className={cn("rounded-lg p-2.5", card.color)}>
-                <card.icon className="h-5 w-5" />
+    <Card className="overflow-hidden">
+      <CardContent className="p-0">
+        <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-border">
+          {items.map((item, index) => (
+            <div 
+              key={item.label} 
+              className={cn(
+                "px-4 py-3 flex items-center gap-3",
+                index >= 2 && index < 4 && "hidden sm:flex",
+                index === 4 && "col-span-2 sm:col-span-1"
+              )}
+            >
+              <div className={cn("rounded-lg p-2", item.bgColor)}>
+                <item.icon className={cn("h-4 w-4", item.color)} />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-bold truncate">
-                    {card.isMonetary ? card.value : card.value}
-                  </p>
-                  {card.variacao !== undefined && (
-                    <VariacaoIndicador variacao={card.variacao} />
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-bold leading-none truncate">
+                    {item.isMonetary ? item.value : item.value}
+                  </span>
+                  {item.variacao !== undefined && (
+                    <VariacaoIndicador variacao={item.variacao} />
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground truncate">{card.title}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{item.label}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
