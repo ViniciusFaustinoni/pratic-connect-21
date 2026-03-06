@@ -48,7 +48,7 @@ import { cn } from '@/lib/utils';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useCriarCotacao } from '@/hooks/useCotacao';
-import { usePlanosCotacao } from '@/hooks/usePlanosCotacao';
+import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { supabase } from '@/integrations/supabase/client';
@@ -77,18 +77,7 @@ interface VeiculoEncontrado {
   valorFipe?: number;
 }
 
-interface PlanoCalculado {
-  id: string;
-  idReal: string; // ID real do plano no banco
-  codigo: string;
-  nome: string;
-  descricao: string;
-  coberturas: string[];
-  naoInclui: string[];
-  valorAdesao: number;
-  valorMensal: number;
-  destaque: boolean;
-}
+// PlanoCalculado removido — usa PlanoCotacao do hook diretamente
 
 type ModoEntrada = 'busca_placa' | 'manual';
 
@@ -233,65 +222,7 @@ const estimarValorFipe = (marca: string, ano: number): number => {
   return Math.round(baseValor * fatorMarca * depreciacao / 100) * 100;
 };
 
-// Mapear planos do banco para interface de exibição
-const mapearPlanosParaExibicao = (
-  planosDB: any[],
-  valorFipe: number,
-  usoApp: boolean
-): PlanoCalculado[] => {
-  const multiplicadorApp = usoApp ? 1.3 : 1.0;
-  
-  // Ordenar por valor de adesão (basico, completo, premium)
-  const planosOrdenados = [...planosDB].sort((a, b) => 
-    (a.valor_adesao || 0) - (b.valor_adesao || 0)
-  );
-
-  return planosOrdenados.map((plano, index) => {
-    // Calcular valor mensal baseado no FIPE
-    const basePercentual = index === 0 ? 0.004 : index === 1 ? 0.0055 : 0.007;
-    const valorMensal = Math.round((valorFipe * basePercentual) * multiplicadorApp * 100) / 100;
-    const valorAdesao = Math.round((plano.valor_adesao || 350) * multiplicadorApp);
-
-    // Identificar tipo de plano
-    const isBasico = plano.codigo === 'BASICO';
-    const isCompleto = plano.codigo === 'TOTAL';
-    const isPremium = plano.codigo === 'PREMIUM';
-
-    // Coberturas do banco ou padrão
-    const coberturas = plano.coberturas?.length > 0 ? plano.coberturas : [
-      'Colisão (100% FIPE)',
-      'Roubo e Furto (100% FIPE)',
-      'Incêndio Total',
-      'Perda Total',
-      ...(isCompleto || isPremium ? ['Vidros completos', 'App de Rastreamento 24h'] : []),
-      ...(isPremium ? ['Carro reserva (7 dias)', 'Proteção para terceiros'] : []),
-      isBasico ? 'Assistência 24h básica' : 'Assistência 24h completa',
-    ];
-
-    // Itens não incluídos
-    const naoInclui = isBasico 
-      ? ['Vidros', 'App de rastreamento', 'Carro reserva']
-      : isCompleto 
-        ? ['Carro reserva', 'Proteção para terceiros']
-        : [];
-
-    return {
-      id: plano.codigo?.toLowerCase() || `plano-${index}`,
-      idReal: plano.id,
-      codigo: plano.codigo || '',
-      nome: plano.nome || `Plano ${index + 1}`,
-      descricao: plano.descricao || 
-        (isBasico ? 'Proteção essencial para seu veículo' :
-         isCompleto ? 'O mais vendido - melhor custo-benefício' :
-         'Proteção máxima com todos os benefícios'),
-      coberturas,
-      naoInclui,
-      valorAdesao,
-      valorMensal,
-      destaque: isCompleto,
-    };
-  });
-};
+// mapearPlanosParaExibicao REMOVIDO — dados vêm direto do hook usePlanosCotacao
 
 // ============================================
 // COMPONENTE PRINCIPAL
@@ -338,7 +269,7 @@ export default function CotadorPage() {
   const [isCalculando, setIsCalculando] = useState(false);
   const [cotacaoCalculada, setCotacaoCalculada] = useState(false);
   const [planoSelecionadoTab, setPlanoSelecionadoTab] = useState<string>('total');
-  const [planoFinalSelecionado, setPlanoFinalSelecionado] = useState<PlanoCalculado | null>(null);
+  const [planoFinalSelecionado, setPlanoFinalSelecionado] = useState<PlanoCotacao | null>(null);
   const [cotacaoSalva, setCotacaoSalva] = useState<any>(null);
   const [salvandoCotacao, setSalvandoCotacao] = useState(false);
   
@@ -422,17 +353,15 @@ export default function CotadorPage() {
     return ANOS;
   }, [anoCustom]);
 
-  // Planos calculados - agora vem já filtrado do hook
-  const planos = useMemo(() => {
-    if (!valorFipe || !planosDB || planosDB.length === 0) {
-      return [];
-    }
-    return mapearPlanosParaExibicao(planosDB as any[], valorFipe, usoApp);
-  }, [valorFipe, usoApp, planosDB]);
+  // Planos calculados - vem direto do hook usePlanosCotacao
+  const planos: PlanoCotacao[] = useMemo(() => {
+    if (!valorFipe || !planosDB || planosDB.length === 0) return [];
+    return planosDB as PlanoCotacao[];
+  }, [valorFipe, planosDB]);
 
   // Plano atual selecionado nas tabs
   const planoAtual = useMemo(() => {
-    return planos.find(p => p.id === planoSelecionadoTab || p.codigo?.toLowerCase() === planoSelecionadoTab) || planos[1] || planos[0] || null;
+    return planos.find(p => p.id === planoSelecionadoTab) || planos[1] || planos[0] || null;
   }, [planos, planoSelecionadoTab]);
 
   // Dados para geração de proposta PDF
@@ -684,14 +613,14 @@ export default function CotadorPage() {
     }
     
     setCotacaoCalculada(true);
-    setPlanoSelecionadoTab(planosDB?.find(p => p.codigo === 'TOTAL')?.codigo?.toLowerCase() || 'total');
+    setPlanoSelecionadoTab(planosDB?.find(p => p.destaque)?.id || planosDB?.[1]?.id || planosDB?.[0]?.id || '');
     setPlanoFinalSelecionado(null);
     setIsCalculando(false);
     
     toast.success('Cotação calculada com sucesso!');
   };
 
-  const handleSelecionarPlano = (plano: PlanoCalculado) => {
+  const handleSelecionarPlano = (plano: PlanoCotacao) => {
     setPlanoFinalSelecionado(plano);
     toast.success(`Plano ${plano.nome} selecionado!`);
   };
@@ -705,7 +634,7 @@ export default function CotadorPage() {
       // Salvar cotação no banco
       const cotacaoData = await criarCotacao.mutateAsync({
         lead_id: leadSelecionado?.id || null,
-        plano_id: planoFinalSelecionado.idReal,
+        plano_id: planoFinalSelecionado.id,
         veiculo_marca: marca,
         veiculo_modelo: modelo,
         veiculo_ano: parseInt(ano),
@@ -724,7 +653,7 @@ export default function CotadorPage() {
         await atualizarLead.mutateAsync({
           id: leadSelecionado.id,
           etapa: 'cotacao_enviada',
-          plano_escolhido_id: planoFinalSelecionado.idReal,
+          plano_escolhido_id: planoFinalSelecionado.id,
           plano_escolhido_nome: planoFinalSelecionado.nome,
           plano_escolhido_valor: planoFinalSelecionado.valorMensal,
           veiculo_fipe: valorFipe,

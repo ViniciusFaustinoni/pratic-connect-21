@@ -3,22 +3,19 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   Shield, 
-  Phone, 
-  MapPin, 
-  Wrench, 
-  Car,
-  Fuel,
-  Key,
-  AlertTriangle,
-  Flame,
-  Droplets,
   Check,
   ChevronRight,
-  Crown
+  Crown,
+  CheckCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LucideIcon } from 'lucide-react';
+
+interface BeneficioItem {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+}
 
 interface PlanoData {
   id?: string;
@@ -29,47 +26,17 @@ interface PlanoData {
   valor_adesao?: number;
 }
 
-interface BeneficioCobertura {
-  icone: LucideIcon;
-  titulo: string;
-  descricao?: string;
-}
-
 interface CardPlanoProps {
   plano: PlanoData;
   dataAdesao?: string;
   valorMensal?: number;
   compacto?: boolean;
+  beneficios?: BeneficioItem[];
+  coberturas?: string[];
   mostrarBeneficios?: boolean;
   mostrarCoberturas?: boolean;
   onClick?: () => void;
 }
-
-const BENEFICIOS_POR_TIPO: Record<string, BeneficioCobertura[]> = {
-  passeio: [
-    { icone: Shield, titulo: 'Proteção 24h', descricao: 'Monitoramento contínuo' },
-    { icone: Phone, titulo: 'Central de atendimento' },
-    { icone: MapPin, titulo: 'Rastreamento em tempo real' },
-    { icone: Wrench, titulo: 'Assistência mecânica' },
-    { icone: Car, titulo: 'Carro reserva', descricao: 'Até 7 dias' },
-  ],
-  trabalho: [
-    { icone: Shield, titulo: 'Proteção 24h', descricao: 'Monitoramento contínuo' },
-    { icone: Phone, titulo: 'Central prioritário' },
-    { icone: MapPin, titulo: 'Rastreamento em tempo real' },
-    { icone: Wrench, titulo: 'Assistência mecânica ilimitada' },
-    { icone: Car, titulo: 'Carro reserva', descricao: 'Até 15 dias' },
-    { icone: Fuel, titulo: 'Pane seca', descricao: 'Até 10L' },
-    { icone: Key, titulo: 'Chaveiro 24h' },
-  ],
-};
-
-const COBERTURAS: BeneficioCobertura[] = [
-  { icone: AlertTriangle, titulo: 'Roubo e Furto', descricao: '100% FIPE' },
-  { icone: Flame, titulo: 'Incêndio', descricao: '100% FIPE' },
-  { icone: Droplets, titulo: 'Alagamento', descricao: '100% FIPE' },
-  { icone: Car, titulo: 'Perda Total', descricao: '100% FIPE' },
-];
 
 const CORES_POR_TIPO: Record<string, { bg: string; badge: string }> = {
   passeio: { bg: 'bg-blue-50 dark:bg-blue-950/30', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
@@ -81,12 +48,13 @@ export function CardPlano({
   dataAdesao,
   valorMensal,
   compacto = false,
+  beneficios = [],
+  coberturas = [],
   mostrarBeneficios = true,
   mostrarCoberturas = true,
   onClick,
 }: CardPlanoProps) {
   const tipoUso = plano.tipo_uso?.toLowerCase() || 'passeio';
-  const beneficios = BENEFICIOS_POR_TIPO[tipoUso] || BENEFICIOS_POR_TIPO.passeio;
   const cores = CORES_POR_TIPO[tipoUso] || CORES_POR_TIPO.passeio;
 
   const formatDataAdesao = () => {
@@ -167,7 +135,7 @@ export function CardPlano({
           </div>
         )}
 
-        {/* Benefícios */}
+        {/* Benefícios (dinâmicos via props) */}
         {mostrarBeneficios && beneficios.length > 0 && (
           <>
             <Separator />
@@ -176,13 +144,13 @@ export function CardPlano({
                 Benefícios Inclusos
               </h4>
               <ul className="space-y-2">
-                {beneficios.map((beneficio, index) => (
-                  <li key={index} className="flex items-center gap-3">
+                {beneficios.map((beneficio) => (
+                  <li key={beneficio.id} className="flex items-center gap-3">
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
                       <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
                     </div>
                     <div className="flex-1">
-                      <span className="text-sm text-foreground">{beneficio.titulo}</span>
+                      <span className="text-sm text-foreground">{beneficio.nome}</span>
                       {beneficio.descricao && (
                         <span className="text-xs text-muted-foreground ml-1">
                           ({beneficio.descricao})
@@ -196,8 +164,8 @@ export function CardPlano({
           </>
         )}
 
-        {/* Coberturas */}
-        {mostrarCoberturas && COBERTURAS.length > 0 && (
+        {/* Coberturas (dinâmicas via props) */}
+        {mostrarCoberturas && coberturas.length > 0 && (
           <>
             <Separator />
             <div>
@@ -205,27 +173,17 @@ export function CardPlano({
                 Coberturas
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                {COBERTURAS.map((cobertura, index) => {
-                  const IconeCobertura = cobertura.icone;
-                  return (
-                    <div 
-                      key={index} 
-                      className="flex items-center gap-2 rounded-lg bg-muted p-2"
-                    >
-                      <IconeCobertura className="h-4 w-4 text-primary" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground truncate">
-                          {cobertura.titulo}
-                        </p>
-                        {cobertura.descricao && (
-                          <p className="text-xs text-muted-foreground">
-                            {cobertura.descricao}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                {coberturas.map((cobertura, index) => (
+                  <div 
+                    key={index} 
+                    className="flex items-center gap-2 rounded-lg bg-muted p-2"
+                  >
+                    <CheckCircle className="h-4 w-4 text-primary" />
+                    <p className="text-xs font-medium text-foreground truncate">
+                      {cobertura}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           </>

@@ -19,7 +19,7 @@ import {
   Tag,
   AlertTriangle,
 } from 'lucide-react';
-import { formatarMoeda, getDescricaoCategoria, type Categoria } from '@/config/pricing';
+import { formatarMoeda } from '@/config/pricing';
 
 export default function CotacaoPublica() {
   const { token } = useParams<{ token: string }>();
@@ -94,7 +94,7 @@ export default function CotacaoPublica() {
     );
   }
 
-  const categoria = cotacao.categoria as Categoria | null;
+  const categoria = cotacao.categoria as string | null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-background p-4 md:p-8">
@@ -164,15 +164,15 @@ export default function CotacaoPublica() {
             <div>
               <h3 className="font-semibold mb-2 flex items-center gap-2">
                 <Shield className="h-4 w-4 text-primary" />
-                Plano {categoria || cotacao.planos?.nome || 'Selecionado'}
+                Plano {cotacao.planos?.nome || categoria || 'Selecionado'}
               </h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                {categoria
-                  ? getDescricaoCategoria(categoria)
-                  : cotacao.planos?.descricao}
-              </p>
+              {cotacao.planos?.descricao && (
+                <p className="text-sm text-muted-foreground mb-3">
+                  {cotacao.planos.descricao}
+                </p>
+              )}
 
-              {/* Coberturas */}
+              {/* Coberturas (do banco) */}
               <div className="grid gap-2">
                 {cotacao.planos?.coberturas?.map((cobertura: string, index: number) => (
                   <div key={index} className="flex items-center gap-2 text-sm">
@@ -180,46 +180,6 @@ export default function CotacaoPublica() {
                     <span>{cobertura}</span>
                   </div>
                 ))}
-                {!cotacao.planos?.coberturas && categoria && (
-                  <>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Proteção contra Colisão</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Proteção contra Roubo e Furto</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Assistência 24 horas</span>
-                    </div>
-                    {(categoria === 'PREMIUM' || categoria === 'EXCLUSIVE') && (
-                      <>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500" />
-                          <span>Proteção de Vidros</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500" />
-                          <span>App de Rastreamento</span>
-                        </div>
-                      </>
-                    )}
-                    {categoria === 'EXCLUSIVE' && (
-                      <>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500" />
-                          <span>Carro Reserva (7 dias)</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500" />
-                          <span>Guincho Ilimitado</span>
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
               </div>
 
               {/* Adicionais */}

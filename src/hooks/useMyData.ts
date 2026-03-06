@@ -55,6 +55,21 @@ export interface ResumoFinanceiro {
   quantidadeVencido: number;
 }
 
+export interface PlanoBeneficioApp {
+  id: string;
+  beneficio: string;
+  descricao?: string | null;
+  incluso?: boolean | null;
+  is_highlighted?: boolean | null;
+  display_order?: number | null;
+  benefits?: {
+    id: string;
+    name: string;
+    description: string | null;
+    icon: string | null;
+  } | null;
+}
+
 export interface AssociadoWithRelations extends Associado {
   planos?: {
     id: string;
@@ -63,6 +78,8 @@ export interface AssociadoWithRelations extends Associado {
     descricao?: string | null;
     tipo_uso: string;
     valor_adesao: number;
+    coberturas?: string[] | null;
+    planos_beneficios?: PlanoBeneficioApp[];
   } | null;
   contratos?: Array<{
     id: string;
@@ -93,7 +110,22 @@ export function useMyAssociado() {
             nome,
             descricao,
             tipo_uso,
-            valor_adesao
+            valor_adesao,
+            coberturas,
+            planos_beneficios (
+              id,
+              beneficio,
+              descricao,
+              incluso,
+              is_highlighted,
+              display_order,
+              benefits (
+                id,
+                name,
+                description,
+                icon
+              )
+            )
           ),
           contratos!fk_contratos_associado (
             id,
