@@ -54,18 +54,12 @@ A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pen
 
 **Solução:** Criar `src/utils/format.ts` com `formatarMoeda` e substituir todas as ocorrências.
 
-### 3. Valores FIPE/idade hardcoded (prioridade baixa)
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
 
-| Arquivo | Linha | Valor |
-|---------|-------|-------|
-| `StepNovoVeiculo.tsx` | L343 | `> 120000` (alerta FIPE alta) |
-| `SubstituicoesPendentesPage.tsx` | L158 | `> 120000` (badge FIPE ALTA) |
-| `SubstituicaoDetalhePage.tsx` | L51 | `> 120000` (flag fipeAlta) |
-| `VeiculoPerfilAlert.tsx` | L16-18 | `LIMITE_IDADE=15`, `FIPE_MIN=15000`, `FIPE_MAX=500000` |
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
-**Nota:** Os `120000` em `useEventosDashboard.ts` e `useDashboardCoordenador.ts` são `refetchInterval` (2 min em ms), não valores FIPE.
-
-**Solução:** Ler da tabela `configuracoes` com fallback para valores atuais.
 
 ### 4. Níveis hardcoded em `EscolhaPlano.tsx` (prioridade baixa)
 
