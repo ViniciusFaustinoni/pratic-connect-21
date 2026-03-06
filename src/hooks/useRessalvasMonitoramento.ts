@@ -36,8 +36,8 @@ export function useRessalvasPendentesMonitoramento() {
           id, status, decisao_instalador, ressalvas_instalador, fotos_ressalva,
           checklist_data, updated_at, created_at, data_agendada, veiculo_id, 
           associado_id, profissional_id, tipo,
-          associados!inner(nome, cpf, telefone),
-          veiculos!inner(placa, modelo, marca),
+          associados!servicos_associado_id_fkey(nome, cpf, telefone),
+          veiculos!servicos_veiculo_id_fkey(placa, modelo, marca),
           profiles!servicos_profissional_id_fkey(nome)
         `)
         .eq('decisao_instalador', 'pendente_monitoramento')
