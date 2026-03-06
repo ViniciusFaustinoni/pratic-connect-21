@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+export { formatarMoeda } from '@/utils/format';
 
 export interface PrecoPlano {
   plano_id: string;

@@ -194,7 +194,7 @@ export default function CotacaoPublicaCompleta() {
   // FUNÇÕES AUXILIARES
   // ──────────────────────────────────────────────────────────
 
-  // formatarMoeda importado do utils
+  
 
   const getStepIndex = (s: JornadaStep) => STEPS_CONFIG.findIndex(c => c.id === s);
   const progressPercent = ((getStepIndex(step) + 1) / STEPS_CONFIG.length) * 100;

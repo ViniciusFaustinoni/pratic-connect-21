@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
 import { DadosProposta, ConfiguracaoPDF } from '@/types/proposta';
 import { toast } from 'sonner';
+import { formatarMoeda } from '@/utils/format';
 
 // Configurações padrão
 const CONFIG_PADRAO: ConfiguracaoPDF = {
@@ -24,9 +25,7 @@ export function useGerarProposta() {
   const [gerando, setGerando] = useState(false);
   const [progresso, setProgresso] = useState(0);
 
-  const formatarMoeda = (valor: number): string => {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
+  // formatarMoeda importado de @/utils/format
 
   const formatarData = (data: string): string => {
     return new Date(data).toLocaleDateString('pt-BR');
