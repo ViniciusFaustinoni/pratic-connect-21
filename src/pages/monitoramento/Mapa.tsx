@@ -274,50 +274,6 @@ export default function Mapa() {
 
   const centroInicial: [number, number] = [-15.7801, -47.9292];
 
-  // Sub-component for OSRM-enhanced trajectory rendering (needs hooks at top level)
-  const TrajetoOSRM = useCallback(({ pontos }: { pontos: typeof pontosTrajetoAtivo }) => {
-    const pontosLatLng = useMemo(() => pontos.map(p => [p.latitude, p.longitude] as [number, number]), [pontos]);
-    const { coordenadasRota, isLoading } = useRotaRealMultiWaypoint(pontosLatLng);
-
-    return (
-      <>
-        <Polyline
-          positions={coordenadasRota}
-          pathOptions={{
-            color: '#8b5cf6',
-            weight: isLoading ? 3 : 4,
-            opacity: isLoading ? 0.5 : 0.85,
-            dashArray: isLoading ? '10, 10' : undefined,
-          }}
-        />
-        <CircleMarker
-          center={[pontos[0].latitude, pontos[0].longitude]}
-          radius={7}
-          pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 }}
-        >
-          <Popup>
-            <div className="text-xs">
-              <strong className="text-green-600">Início do trajeto</strong>
-              <p>{format(new Date(pontos[0].data_posicao), "dd/MM HH:mm", { locale: ptBR })}</p>
-            </div>
-          </Popup>
-        </CircleMarker>
-        <CircleMarker
-          center={[pontos[pontos.length - 1].latitude, pontos[pontos.length - 1].longitude]}
-          radius={7}
-          pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 }}
-        >
-          <Popup>
-            <div className="text-xs">
-              <strong className="text-red-600">Fim do trajeto</strong>
-              <p>{format(new Date(pontos[pontos.length - 1].data_posicao), "dd/MM HH:mm", { locale: ptBR })}</p>
-            </div>
-          </Popup>
-        </CircleMarker>
-      </>
-    );
-  }, []);
-
   // Render do mapa de veículos
   const renderMapaVeiculos = () => (
     <MapContainer
