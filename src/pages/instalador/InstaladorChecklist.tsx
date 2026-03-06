@@ -723,7 +723,8 @@ export default function InstaladorChecklist() {
         quilometragem: quilometragem ? parseInt(quilometragem) : undefined,
       });
       setShowDialogCondicao(false);
-      navigate('/instalador');
+      setAguardandoMonitoramento(true);
+      setTempoEspera(0);
     } catch (err) {
       console.error('Erro ao enviar para monitoramento:', err);
       toast.error('Falha ao enviar para monitoramento. Tente novamente.');
