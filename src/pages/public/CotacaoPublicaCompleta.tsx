@@ -17,6 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { formatarMoeda } from '@/utils/format';
 
 import { 
   useCotacaoPublica, 
@@ -193,9 +194,7 @@ export default function CotacaoPublicaCompleta() {
   // FUNÇÕES AUXILIARES
   // ──────────────────────────────────────────────────────────
 
-  const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
+  
 
   const getStepIndex = (s: JornadaStep) => STEPS_CONFIG.findIndex(c => c.id === s);
   const progressPercent = ((getStepIndex(step) + 1) / STEPS_CONFIG.length) * 100;

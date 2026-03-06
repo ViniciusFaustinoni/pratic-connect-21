@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+export { formatarMoeda } from '@/utils/format';
 
 export interface PrecoPlano {
   plano_id: string;
@@ -61,17 +62,6 @@ export function usePrecosPlanos(planoIds: string[]) {
     staleTime: 1000 * 60 * 5,
   });
 }
-
-/**
- * Formata valor em reais
- */
-export function formatarMoeda(valor: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(valor);
-}
-
 /**
  * Calcula preço do plano manualmente (para uso sem RPC)
  */

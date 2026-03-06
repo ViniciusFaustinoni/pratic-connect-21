@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { toast } from 'sonner';
+import { formatarMoeda } from '@/utils/format';
 
 // Dimensões A4
 const A4_WIDTH = 595;
@@ -36,10 +37,7 @@ interface DadosCotacao {
 export function useGerarCotacaoPDF() {
   const [gerando, setGerando] = useState(false);
 
-  // Formatar moeda
-  const formatarMoeda = (valor: number): string => {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
+  // formatarMoeda importado de @/utils/format
 
   // Função principal de geração
   const gerarPDF = async (dados: DadosCotacao): Promise<Uint8Array> => {

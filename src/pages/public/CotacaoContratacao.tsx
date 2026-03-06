@@ -19,7 +19,7 @@ import { NavegacaoEtapas } from '@/components/cotacao-publica/NavegacaoEtapas';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { formatarMoeda } from '@/config/pricing';
+import { formatarMoeda } from '@/utils/format';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 

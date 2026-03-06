@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { formatarMoeda } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -125,10 +126,6 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-// Formatar moeda para input
-const formatarMoeda = (valor: number): string => {
-  return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-};
 
 const formatPlaca = (value: string): string => {
   const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();

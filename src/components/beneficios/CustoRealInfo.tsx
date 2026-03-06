@@ -2,20 +2,12 @@ import { TrendingUp, TrendingDown, Minus, HelpCircle, Info } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCustoBeneficio, type IndicadorSaude } from '@/hooks/useCustoBeneficios';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatarMoeda } from '@/utils/format';
 
 interface CustoRealInfoProps {
   beneficioId: string;
   tipo?: 'benefit' | 'adicional';
   precoAtual?: number;
-}
-
-function formatarMoeda(valor: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(valor);
 }
 
 function formatarNumero(valor: number): string {

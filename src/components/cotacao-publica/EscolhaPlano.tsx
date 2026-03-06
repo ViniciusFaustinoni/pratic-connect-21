@@ -7,6 +7,7 @@ import { Check, X, Shield, Zap, Crown, Sparkles, ChevronDown, ChevronUp, AlertTr
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isCoberturaRemovida, getRestricaoCategoria } from '@/data/restricoesCategorias';
+import { formatarMoeda } from '@/utils/format';
 
 export interface PlanoOpcao {
   id: string;
@@ -29,13 +30,6 @@ interface EscolhaPlanoProps {
   categoriaVeiculo?: string;
   readOnly?: boolean;
 }
-
-const formatarMoeda = (valor: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(valor);
-};
 
 const getNivelIcon = (nivel?: string) => {
   switch (nivel) {

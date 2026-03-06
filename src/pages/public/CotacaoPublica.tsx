@@ -19,7 +19,7 @@ import {
   Tag,
   AlertTriangle,
 } from 'lucide-react';
-import { formatarMoeda } from '@/config/pricing';
+import { formatarMoeda } from '@/utils/format';
 
 export default function CotacaoPublica() {
   const { token } = useParams<{ token: string }>();
