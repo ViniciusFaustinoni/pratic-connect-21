@@ -174,7 +174,7 @@ serve(async (req) => {
       .from("associados_historico")
       .select("descricao, created_at, dados_novos")
       .eq("associado_id", sinistro.associado_id)
-      .eq("tipo", "ressalva_registrada")
+      .in("tipo", ["ressalva_registrada", "ressalva_aprovada_monitoramento", "ressalva_declinada_monitoramento"])
       .order("created_at", { ascending: false })
       .limit(20);
 
