@@ -28,6 +28,7 @@ import { useSubstituicao, useAprovarSubstituicao, useRejeitarSubstituicao } from
 import { STATUS_SUBSTITUICAO_LABELS, STATUS_SUBSTITUICAO_CORES } from '@/types/substituicao';
 import type { StatusSubstituicao } from '@/types/substituicao';
 import { supabase } from '@/integrations/supabase/client';
+import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
