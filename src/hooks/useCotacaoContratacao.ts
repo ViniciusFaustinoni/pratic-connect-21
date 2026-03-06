@@ -35,7 +35,7 @@ interface PlanoComparacao {
   valorAdesao?: number;
   coberturas?: string[];
   destaque?: boolean;
-  nivel?: 'basic' | 'premium' | 'exclusive';
+  nivel?: string;
 }
 
 interface DadosExtrasCotacao {

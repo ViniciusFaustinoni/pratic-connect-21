@@ -84,7 +84,7 @@ const mapearRegiao = (regiao: string): Regiao => {
 // EXTRAÇÃO DO NÍVEL DO PLANO
 // ============================================
 
-const extrairNivel = (codigo: string): 'basic' | 'premium' | 'exclusive' | null => {
+const extrairNivel = (codigo: string): string | null => {
   const codigoLower = codigo?.toLowerCase() || '';
   if (codigoLower.includes('basic') || codigoLower.includes('basico')) return 'basic';
   if (codigoLower.includes('premium')) return 'premium';
