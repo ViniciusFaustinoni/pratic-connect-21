@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, CircleMarker } from "react-leaflet";
+import { useRotaRealMultiWaypoint } from "@/hooks/useRotaRealMultiWaypoint";
 import L from "leaflet";
 import { format, formatDistanceToNow, subHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -377,38 +378,9 @@ export default function Mapa() {
         );
       })()}
 
-      {/* Trajeto ativo */}
+      {/* Trajeto ativo com rota real */}
       {trajetoAtivo && pontosTrajetoAtivo.length > 1 && (
-        <>
-          <Polyline
-            positions={pontosTrajetoAtivo.map(p => [p.latitude, p.longitude] as [number, number])}
-            pathOptions={{ color: '#8b5cf6', weight: 4, opacity: 0.85 }}
-          />
-          <CircleMarker
-            center={[pontosTrajetoAtivo[0].latitude, pontosTrajetoAtivo[0].longitude]}
-            radius={7}
-            pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 }}
-          >
-            <Popup>
-              <div className="text-xs">
-                <strong className="text-green-600">Início do trajeto</strong>
-                <p>{format(new Date(pontosTrajetoAtivo[0].data_posicao), "dd/MM HH:mm", { locale: ptBR })}</p>
-              </div>
-            </Popup>
-          </CircleMarker>
-          <CircleMarker
-            center={[pontosTrajetoAtivo[pontosTrajetoAtivo.length - 1].latitude, pontosTrajetoAtivo[pontosTrajetoAtivo.length - 1].longitude]}
-            radius={7}
-            pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 }}
-          >
-            <Popup>
-              <div className="text-xs">
-                <strong className="text-red-600">Fim do trajeto</strong>
-                <p>{format(new Date(pontosTrajetoAtivo[pontosTrajetoAtivo.length - 1].data_posicao), "dd/MM HH:mm", { locale: ptBR })}</p>
-              </div>
-            </Popup>
-          </CircleMarker>
-        </>
+        <TrajetoOSRM pontos={pontosTrajetoAtivo} />
       )}
     </MapContainer>
   );
