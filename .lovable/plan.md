@@ -1,35 +1,61 @@
 
 
-# Audit Results: All Three Flows Are Clean and Dynamic
+# Redesign: Equipe Comercial
 
-## 1. Cotador (`/vendas/cotador`)
-- Uses `usePlanosCotacao` hook directly — returns `PlanoCotacao[]` from the database
-- `mapearPlanosParaExibicao` has been removed; no hardcoded pricing
-- Tabs render `plano.nome`, `plano.destaque`, `plano.coberturas` from DB
-- Plan selection uses UUID `plano.id`
-- Coverage exclusion logic (`isCoberturaRemovida`) works per vehicle category
-- Price display uses `planoAtual.valorMensal`, `planoAtual.valorAdesao` from hook
-- Saves `plano_id` (UUID) to `cotacoes` table on save
+## Current State
 
-## 2. CotacaoPublica (`/cotacao/:token`)
-- Fetches `cotacoes` with `planos:planos!plano_id(*)` join
-- Renders `cotacao.planos.nome`, `cotacao.planos.descricao`, `cotacao.planos.coberturas` from DB
-- No hardcoded fallbacks — if no coberturas in DB, nothing renders (correct)
-- `getDescricaoCategoria` removed from this flow
-- Values come from `cotacao.valor_adesao` and `cotacao.valor_cota`
+The page has: metrics bar (5 cards), search + period filter + grid/list toggle, consultant cards with ranking, and a detail drawer. It works but has limited sorting/filtering options and the layout feels dense.
 
-## 3. AppPlano (`/app/plano`) — Associate App
-- `useMyAssociado` query expanded with `planos_beneficios(... benefits(...))` and `coberturas`
-- Benefits rendered from `plano.planos_beneficios` where `incluso !== false`
-- Coverages rendered from `plano.coberturas` array
-- No `BENEFICIOS_POR_TIPO` or `COBERTURAS` constants remain
+## Proposed Changes
 
-## Remaining `getDescricaoCategoria`
-Only exists inside `pricing.ts` itself, used by `useCotacaoAvancada` (the advanced quote modal). Not part of the main 3 flows. Low priority — separate refactor.
+### 1. Enhanced Filters & Sorting Bar
 
-## No Issues Found
-- No console errors
-- No hardcoded plan data in any of the 3 flows
-- All data comes from `planos`, `planos_beneficios`, `benefits`, and `tabelas_preco` tables
-- The system is fully dynamic and reflects admin panel changes
+Replace the current header with a cleaner toolbar:
+- **Search**: keep as-is
+- **Period filter**: keep (semana/mes)
+- **NEW - Sort selector**: dropdown with options:
+  - `ranking` (default) — current behavior (by closed deals desc)
+  - `ranking_inverso` — worst performers first (ascending)
+  - `alfabetico` — A-Z by name
+  - `alfabetico_inverso` — Z-A
+  - `valor` — by closed value desc
+  - `conversao` — by conversion rate desc
+  - `cotacoes` — by active quotes desc
+- **NEW - Performance filter**: All / Top Performer / Regular / Atenção
+- **View toggle**: keep grid/list
+- **Manage button**: keep
+
+All in a single responsive row that wraps on mobile.
+
+### 2. Redesigned Metrics Bar (`PropostasMetricsBar`)
+
+Make it more compact and visually clean:
+- Use a single card with a horizontal divider layout instead of 5 separate cards
+- Slightly smaller text, tighter spacing
+- Keep variation indicators
+
+### 3. Improved Card Design (`ConsultorCardNew`)
+
+- Add a subtle position number on all cards (not just top 3)
+- Show a mini progress bar for conversion rate instead of just text
+- Cleaner spacing and hierarchy
+- Add "cotações realizadas" count
+
+### 4. Improved Table Design (`ConsultoresTable`)
+
+- Add sortable column headers (click to sort)
+- Add "Cotações" column
+- Highlight rows for top 3 with subtle left border color
+- Better responsive behavior
+
+### Files to Edit
+
+| File | Change |
+|---|---|
+| `src/pages/vendas/Propostas.tsx` | Add sort state, performance filter, pass sorted data |
+| `src/components/propostas/ConsultorCardNew.tsx` | Show position on all cards, add progress bar, add cotações |
+| `src/components/propostas/ConsultoresTable.tsx` | Add sortable headers, cotações column, top-3 highlights |
+| `src/components/propostas/PropostasMetricsBar.tsx` | Compact single-card layout |
+
+No new files needed. No hook changes — sorting is done client-side on the already-fetched data.
 
