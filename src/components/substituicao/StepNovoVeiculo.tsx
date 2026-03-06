@@ -105,7 +105,7 @@ export function StepNovoVeiculo({
   };
 
   const fipeConsultada = !!dados.valor_fipe && dados.valor_fipe > 0;
-  const camposObrigatorios = dados.placa && dados.marca && dados.modelo && dados.cor && dados.combustivel && fipeConsultada;
+  const camposObrigatorios = dados.placa && dados.marca && dados.modelo && dados.cor && dados.combustivel && fipeConsultada && !(dados.blindado && limites?.blindadoPolicy === 'bloquear');
 
   // Criar veículo no banco e avançar
   const handleCriarVeiculoEAvancar = useCallback(async () => {
@@ -134,11 +134,12 @@ export function StepNovoVeiculo({
           valor_fipe: dados.valor_fipe || 0,
           uso_aplicativo: dados.uso_aplicativo || false,
           plataforma_app: dados.plataforma_app || null,
+          blindado: dados.blindado || false,
           status: 'em_analise',
           ativo: false,
           principal: false,
           substituicao_id: substId,
-        })
+        } as any)
         .select('id')
         .single();
 
@@ -277,6 +278,25 @@ export function StepNovoVeiculo({
 
           {/* Uso aplicativo */}
           <div className="mt-6 pt-4 border-t space-y-4">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={dados.blindado || false}
+                onCheckedChange={(v) => updateDados({ blindado: v })}
+              />
+              <Label>Veículo blindado?</Label>
+            </div>
+
+            {dados.blindado && (
+              <Alert className="border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/30">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-xs">
+                  {limites?.blindadoPolicy === 'bloquear'
+                    ? 'Veículos blindados NÃO são aceitos pelo regulamento vigente.'
+                    : 'Veículo blindado requer autorização especial da diretoria por email.'}
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex items-center gap-3">
               <Switch
                 checked={dados.uso_aplicativo || false}

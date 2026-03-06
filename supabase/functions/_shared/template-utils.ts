@@ -735,11 +735,6 @@ function avaliarRegraEdge(regra: RegraAditivo, veiculo: any, fipeLimite: number,
     case 'veiculo_0km':
       return ehVeiculoZeroKm(veiculo);
     
-    case 'veiculo_blindado': {
-      const obs = (veiculo.observacoes || '').toLowerCase();
-      return obs.includes('blindad') || obs.includes('blindagem');
-    }
-    
     case 'fipe_acima_de':
       return (veiculo.valor_fipe || 0) >= fipeLimite;
     

@@ -8,11 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Edit, Trash2, Car, Shield, DollarSign } from 'lucide-react';
+import { Plus, Edit, Trash2, Car, DollarSign } from 'lucide-react';
 
 const REGRA_LABELS: Record<string, { label: string; icon: typeof Car }> = {
   veiculo_0km: { label: '0KM', icon: Car },
-  veiculo_blindado: { label: 'Blindado', icon: Shield },
   fipe_acima_de: { label: 'FIPE acima', icon: DollarSign },
 };
 

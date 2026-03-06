@@ -10,14 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Car, Shield, DollarSign, ExternalLink, GripVertical, GlassWater } from 'lucide-react';
+import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater } from 'lucide-react';
 import { formatCurrency } from '@/types/termo-filiacao';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
 
 const TIPOS_REGRA = [
   { tipo: 'veiculo_0km' as const, label: 'Veículo 0KM', desc: 'Identificado automaticamente via CRLV (sem placa ou procedência "Novo")', icon: Car },
-  { tipo: 'veiculo_blindado' as const, label: 'Veículo Blindado', desc: 'Identificado automaticamente via CRLV (observações do documento)', icon: Shield },
   { tipo: 'fipe_acima_de' as const, label: 'Valor FIPE acima do limite', desc: 'Valor configurável nas configurações do diretor', icon: DollarSign },
   { tipo: 'evento_vidros' as const, label: 'Evento Vidros e Faróis', desc: 'Anexado automaticamente quando o evento/sinistro for do tipo vidros e faróis', icon: GlassWater },
 ];
@@ -50,7 +49,6 @@ export default function AditivoForm() {
   const [ordem, setOrdem] = useState(0);
   const [regras, setRegras] = useState<Record<string, boolean>>({
     veiculo_0km: false,
-    veiculo_blindado: false,
     fipe_acima_de: false,
     evento_vidros: false,
   });
@@ -64,7 +62,6 @@ export default function AditivoForm() {
       setOrdem(aditivo.ordem);
       const regrasMap: Record<string, boolean> = {
         veiculo_0km: false,
-        veiculo_blindado: false,
         fipe_acima_de: false,
         evento_vidros: false,
       };
