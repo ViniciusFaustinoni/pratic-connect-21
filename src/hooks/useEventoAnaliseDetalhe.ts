@@ -150,7 +150,7 @@ export function useEventoAnaliseDetalhe(sinistroId: string | undefined) {
         .from('associados_historico')
         .select('id, descricao, created_at, dados_novos, usuario:profiles(nome)')
         .eq('associado_id', associadoId)
-        .eq('tipo', 'ressalva_registrada')
+        .in('tipo', ['ressalva_registrada', 'ressalva_aprovada_monitoramento', 'ressalva_declinada_monitoramento'])
         .order('created_at', { ascending: false })
         .limit(20);
       return (data || []) as any[];
