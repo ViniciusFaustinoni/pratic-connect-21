@@ -44,6 +44,8 @@ const tipoDbParaTimeline: Record<string, TipoEvento> = {
   'contrato_assinado': 'contrato_assinado',
   'observacao_adicionada': 'observacao_adicionada',
   'ressalva_registrada': 'ressalva_registrada',
+  'ressalva_aprovada_monitoramento': 'ressalva_aprovada_monitoramento',
+  'ressalva_declinada_monitoramento': 'ressalva_declinada_monitoramento',
 };
 
 export function useAssociadoHistoricoCompleto(associadoId: string | undefined) {
@@ -146,6 +148,26 @@ export function useAssociadoHistoricoCompleto(associadoId: string | undefined) {
             tipo: tipoEvento,
             descricao: `Instalação ${inst.status === 'concluida' ? 'concluída' : inst.status === 'cancelada' ? 'cancelada' : 'agendada'} para ${new Date(inst.data_agendada).toLocaleDateString('pt-BR')}`,
             data: inst.created_at,
+          });
+        });
+      }
+
+      // 4.5. Buscar ressalvas de instalação (serviços com aprovado_ressalva)
+      const { data: servicosRessalva } = await supabase
+        .from('servicos')
+        .select('id, ressalvas_instalador, fotos_ressalva, updated_at, veiculo_id, veiculos!servicos_veiculo_id_fkey(placa, modelo)')
+        .eq('associado_id', associadoId)
+        .eq('decisao_instalador', 'aprovado_ressalva')
+        .order('updated_at', { ascending: false });
+
+      if (servicosRessalva) {
+        (servicosRessalva as any[]).forEach((s) => {
+          items.push({
+            id: `ressalva-inst-${s.id}`,
+            tipo: 'ressalva_instalacao',
+            descricao: `Instalação com ressalva aprovada${s.veiculos?.placa ? ` - ${s.veiculos.placa}` : ''}${s.ressalvas_instalador ? ': ' + s.ressalvas_instalador : ''}`,
+            data: s.updated_at,
+            dados_novos: s.fotos_ressalva ? { fotos: s.fotos_ressalva } as any : undefined,
           });
         });
       }
