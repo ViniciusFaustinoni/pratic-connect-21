@@ -18,6 +18,7 @@ const STATUS_INSTALACAO_LABELS: Record<StatusInstalacao, string> = {
   concluida: 'Concluída',
   reagendada: 'Reagendada',
   cancelada: 'Cancelada',
+  em_analise: 'Em Análise',
 };
 
 const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
@@ -27,6 +28,7 @@ const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
   concluida: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   reagendada: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   cancelada: 'bg-destructive/10 text-destructive',
+  em_analise: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300',
 };
 
 const PERIODO_ICONS: Record<PeriodoInstalacao, React.ElementType> = {
