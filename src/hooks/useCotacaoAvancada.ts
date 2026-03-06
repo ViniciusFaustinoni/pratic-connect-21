@@ -1,45 +1,59 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
-import {
-  calcularCotacao,
-  gerarTokenCotacao,
-  formatarMoeda,
-  type CalculoCotacaoParams,
-  type ResultadoCotacao,
-  type Categoria,
-} from '@/config/pricing';
+import { formatarMoeda } from '@/utils/format';
+
+// ============================================
+// TIPOS — agora dinâmicos, sem categorias fixas
+// ============================================
+
+export interface PlanoOpcaoCotacao {
+  id: string;
+  codigo: string;
+  nome: string;
+  valor_cota: number;
+  taxa_administrativa: number;
+  valor_assistencia: number;
+  valor_rastreamento: number;
+  valor_adesao: number;
+  taxa_aplicativo: number;
+  mensalidade_total: number;
+}
+
+export interface AdicionalOpcao {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao: string;
+  preco: number;
+}
 
 export interface DadosCotacaoAvancada {
-  // Lead
   leadId?: string;
   clienteNome: string;
   clienteTelefone: string;
   clienteEmail?: string;
-  
-  // Veículo
   veiculoMarca?: string;
   veiculoModelo?: string;
   veiculoAno?: number;
   veiculoPlaca?: string;
   veiculoCombustivel?: string;
   valorFipe: number;
-  
-  // Localização
   cidade: string;
-  
-  // Cotação
-  categoria: Categoria;
+  planoId: string;
   usoAplicativo: boolean;
-  linhaPreco: 'SELECT' | 'SELECT_ONE';
   desagio: number;
-  adicionais: {
-    vidros: boolean;
-    carroReserva: boolean;
-    guinchoIlimitado: boolean;
-    rastreamento: boolean;
-  };
+  adicionaisSelecionados: string[]; // IDs dos adicionais
+}
+
+export interface ResultadoCotacaoDinamica {
+  plano: PlanoOpcaoCotacao;
+  valorAdicionais: number;
+  adicionaisNomes: string[];
+  desagio: number;
+  precoBase: { adesao: number; mensal: number };
+  precoFinal: { adesao: number; mensal: number };
 }
 
 export interface CotacaoSalva {
@@ -47,95 +61,198 @@ export interface CotacaoSalva {
   numero: string;
   token_publico: string;
   linkPublico: string;
-  cotacao: ResultadoCotacao;
+  cotacao: ResultadoCotacaoDinamica;
+}
+
+// ============================================
+// HOOKS DE DADOS
+// ============================================
+
+export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean) {
+  return useQuery({
+    queryKey: ['planos-cotacao-avancada', valorFipe, usoAplicativo],
+    queryFn: async () => {
+      if (!valorFipe || valorFipe <= 0) return [];
+
+      // Buscar planos ativos
+      const { data: planos, error: ePlanos } = await supabase
+        .from('planos')
+        .select('id, codigo, nome, categoria, valor_adesao, descricao')
+        .eq('ativo', true)
+        .order('ordem', { ascending: true });
+
+      if (ePlanos) throw ePlanos;
+      if (!planos?.length) return [];
+
+      // Filtrar por tipo uso
+      const planosFiltrados = planos.filter(p => {
+        const isApp = p.categoria === 'aplicativo' || p.codigo?.includes('aplicativo');
+        return usoAplicativo ? isApp : !isApp;
+      });
+
+      // Buscar tabelas_preco para o valor FIPE
+      const { data: tabelas, error: eTabelas } = await supabase
+        .from('tabelas_preco')
+        .select('*')
+        .eq('ativo', true);
+
+      if (eTabelas) throw eTabelas;
+
+      const resultado: PlanoOpcaoCotacao[] = [];
+
+      for (const plano of planosFiltrados) {
+        // Encontrar faixa de preço para este plano e FIPE
+        const faixa = tabelas?.find(
+          t => t.plano_id === plano.id &&
+            valorFipe >= Number(t.fipe_de) &&
+            valorFipe <= Number(t.fipe_ate)
+        );
+
+        if (!faixa) continue;
+
+        const valorCota = Number(faixa.valor_cota) || 0;
+        const taxaAdmin = Number(faixa.taxa_administrativa) || 0;
+        const valorAssist = Number(faixa.valor_assistencia) || 0;
+        const valorRastreamento = Number(faixa.valor_rastreamento) || 0;
+        const taxaApp = Number(faixa.taxa_aplicativo) || 0;
+        const valorAdesao = Number(faixa.valor_adesao) || Number(plano.valor_adesao) || 0;
+
+        const mensalidadeTotal = valorCota + taxaAdmin + valorAssist + valorRastreamento + taxaApp;
+
+        resultado.push({
+          id: plano.id,
+          codigo: plano.codigo || '',
+          nome: plano.nome,
+          valor_cota: valorCota,
+          taxa_administrativa: taxaAdmin,
+          valor_assistencia: valorAssist,
+          valor_rastreamento: valorRastreamento,
+          valor_adesao: valorAdesao,
+          taxa_aplicativo: taxaApp,
+          mensalidade_total: Math.round(mensalidadeTotal * 100) / 100,
+        });
+      }
+
+      return resultado;
+    },
+    enabled: valorFipe > 0,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useAdicionaisDisponiveis() {
+  return useQuery({
+    queryKey: ['adicionais-cotacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('beneficios_adicionais')
+        .select('id, codigo, nome, descricao, preco')
+        .eq('ativo', true)
+        .order('nome');
+
+      if (error) throw error;
+      return (data || []) as AdicionalOpcao[];
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+// ============================================
+// CÁLCULO
+// ============================================
+
+export function calcularCotacaoDinamica(
+  plano: PlanoOpcaoCotacao,
+  adicionais: AdicionalOpcao[],
+  adicionaisSelecionadosIds: string[],
+  desagio: number
+): ResultadoCotacaoDinamica {
+  const desagioClamp = Math.min(Math.max(desagio || 0, 0), 30);
+  const fatorDesconto = (100 - desagioClamp) / 100;
+
+  let valorAdicionais = 0;
+  const adicionaisNomes: string[] = [];
+
+  for (const id of adicionaisSelecionadosIds) {
+    const ad = adicionais.find(a => a.id === id);
+    if (ad) {
+      valorAdicionais += ad.preco;
+      adicionaisNomes.push(ad.nome);
+    }
+  }
+
+  const precoBase = {
+    adesao: plano.valor_adesao,
+    mensal: plano.mensalidade_total,
+  };
+
+  const precoFinal = {
+    adesao: Math.round(precoBase.adesao * fatorDesconto * 100) / 100,
+    mensal: Math.round((precoBase.mensal * fatorDesconto + valorAdicionais) * 100) / 100,
+  };
+
+  return {
+    plano,
+    valorAdicionais,
+    adicionaisNomes,
+    desagio: desagioClamp,
+    precoBase,
+    precoFinal,
+  };
+}
+
+// ============================================
+// HOOK PRINCIPAL
+// ============================================
+
+function gerarTokenCotacao(): string {
+  const uuid1 = crypto.randomUUID().replace(/-/g, '');
+  const uuid2 = crypto.randomUUID().replace(/-/g, '');
+  return (uuid1 + uuid2).substring(0, 64);
 }
 
 export function useCotacaoAvancada() {
   const queryClient = useQueryClient();
 
-  const calcular = (params: CalculoCotacaoParams): ResultadoCotacao => {
-    return calcularCotacao(params);
-  };
-
   const salvarCotacaoMutation = useMutation({
-    mutationFn: async (dados: DadosCotacaoAvancada): Promise<CotacaoSalva> => {
-      const cotacao = calcular({
-        valorFipe: dados.valorFipe,
-        cidade: dados.cidade,
-        combustivel: dados.veiculoCombustivel || 'Gasolina',
-        categoria: dados.categoria,
-        usoAplicativo: dados.usoAplicativo,
-        linhaPreco: dados.linhaPreco,
-        desagio: dados.desagio,
-        adicionaisSelecionados: dados.adicionais,
-      });
-
+    mutationFn: async (dados: DadosCotacaoAvancada & { cotacao: ResultadoCotacaoDinamica }): Promise<CotacaoSalva> => {
+      const { cotacao } = dados;
       const token = gerarTokenCotacao();
 
-      // Buscar plano correspondente à categoria
-      const categoriaParaPlano: Record<Categoria, string> = {
-        BASIC: 'BASICO',
-        PREMIUM: 'TOTAL',
-        EXCLUSIVE: 'PREMIUM',
-      };
-      
-      const { data: plano } = await supabase
-        .from('planos')
-        .select('id')
-        .eq('codigo', categoriaParaPlano[dados.categoria])
-        .single();
-
-      if (!plano?.id) {
-        throw new Error('Plano não encontrado para a categoria selecionada');
-      }
-
       const valorMensal = cotacao.precoFinal.mensal;
-      const valorTotalMensal = valorMensal + cotacao.valorAdicionais;
 
       const cotacaoData = {
-        numero: '', // Será gerado pelo trigger
+        numero: '',
         lead_id: dados.leadId || null,
-        plano_id: plano.id,
+        plano_id: dados.planoId,
         status: 'pendente' as Database['public']['Enums']['status_cotacao'],
-        
-        // Veículo
         veiculo_marca: dados.veiculoMarca || null,
         veiculo_modelo: dados.veiculoModelo || null,
         veiculo_ano: dados.veiculoAno || null,
         veiculo_placa: dados.veiculoPlaca || null,
         veiculo_combustivel: dados.veiculoCombustivel || null,
         valor_fipe: dados.valorFipe,
-        
-        // Cotação avançada
-        regiao: cotacao.regiao,
-        categoria: cotacao.categoria,
-        combustivel: cotacao.combustivel,
+        regiao: 'RJ',
+        categoria: cotacao.plano.codigo,
+        combustivel: dados.veiculoCombustivel || null,
         uso_aplicativo: dados.usoAplicativo,
         desagio_aplicado: dados.desagio,
-        
-        // Valores - usando nomes corretos das colunas
         valor_adesao: cotacao.precoFinal.adesao,
-        valor_cota: valorMensal,
-        valor_total_mensal: valorTotalMensal,
-        taxa_administrativa: 0,
-        valor_rastreamento: 0,
+        valor_cota: cotacao.plano.valor_cota,
+        valor_total_mensal: valorMensal,
+        taxa_administrativa: cotacao.plano.taxa_administrativa,
+        valor_rastreamento: cotacao.plano.valor_rastreamento,
         valor_adesao_original: cotacao.precoBase.adesao,
         valor_mensal_original: cotacao.precoBase.mensal,
-        
-        // Dados do solicitante (para preenchimento automático no link público)
         nome_solicitante: dados.clienteNome || null,
         telefone1_solicitante: dados.clienteTelefone?.replace(/\D/g, '') || null,
         email_solicitante: dados.clienteEmail || null,
-        
-        // Adicionais e extras
-        adicionais_selecionados: dados.adicionais,
+        adicionais_selecionados: dados.adicionaisSelecionados,
         cidade: dados.cidade,
         token_publico: token,
         dados_extras: {
-          linhaPreco: dados.linhaPreco,
           valorAdicionais: cotacao.valorAdicionais,
-          adicionaisNomes: cotacao.detalhes.adicionaisSelecionados,
-          faixaFipe: cotacao.faixaFipe,
+          adicionaisNomes: cotacao.adicionaisNomes,
           calculadoEm: new Date().toISOString(),
           clienteNome: dados.clienteNome,
           clienteTelefone: dados.clienteTelefone,
@@ -151,7 +268,6 @@ export function useCotacaoAvancada() {
 
       if (error) throw error;
 
-      // Atualizar lead se existir
       if (dados.leadId) {
         await supabase
           .from('leads')
@@ -184,7 +300,7 @@ export function useCotacaoAvancada() {
 
   const gerarMensagemWhatsApp = (
     dados: DadosCotacaoAvancada,
-    cotacao: ResultadoCotacao,
+    cotacao: ResultadoCotacaoDinamica,
     linkPublico: string
   ): string => {
     const veiculo = `${dados.veiculoMarca || ''} ${dados.veiculoModelo || ''} ${dados.veiculoAno || ''}`.trim();
@@ -199,14 +315,13 @@ Preparamos uma cotação especial para você:
 📋 *Veículo:* ${veiculo || 'Não informado'}
 💰 *Valor FIPE:* ${formatarMoeda(dados.valorFipe)}
 
-📦 *Plano ${cotacao.categoria}*
-${cotacao.detalhes.descricaoCategoria}
+📦 *Plano ${cotacao.plano.nome}*
 
 💵 *Adesão:* ${formatarMoeda(cotacao.precoFinal.adesao)}
 💳 *Mensalidade:* ${formatarMoeda(cotacao.precoFinal.mensal)}
 
 ${dados.usoAplicativo ? '⚠️ _Cotação para uso em aplicativo (Uber, 99, etc)_\n' : ''}
-${cotacao.detalhes.adicionaisSelecionados.length > 0 ? `✨ *Adicionais inclusos:* ${cotacao.detalhes.adicionaisSelecionados.join(', ')}\n` : ''}
+${cotacao.adicionaisNomes.length > 0 ? `✨ *Adicionais inclusos:* ${cotacao.adicionaisNomes.join(', ')}\n` : ''}
 
 🔗 *Clique no link abaixo para ver sua cotação:*
 ${linkPublico}
@@ -214,7 +329,7 @@ ${linkPublico}
 Qualquer dúvida, estou à disposição! 😊`;
   };
 
-  const abrirWhatsApp = async (dados: DadosCotacaoAvancada) => {
+  const abrirWhatsApp = async (dados: DadosCotacaoAvancada & { cotacao: ResultadoCotacaoDinamica }) => {
     try {
       const result = await salvarCotacaoMutation.mutateAsync(dados);
       const mensagem = gerarMensagemWhatsApp(dados, result.cotacao, result.linkPublico);
@@ -234,7 +349,7 @@ Qualquer dúvida, estou à disposição! 😊`;
     }
   };
 
-  const copiarLink = async (dados: DadosCotacaoAvancada) => {
+  const copiarLink = async (dados: DadosCotacaoAvancada & { cotacao: ResultadoCotacaoDinamica }) => {
     try {
       const result = await salvarCotacaoMutation.mutateAsync(dados);
       await navigator.clipboard.writeText(result.linkPublico);
@@ -247,11 +362,9 @@ Qualquer dúvida, estou à disposição! 😊`;
   };
 
   return {
-    calcular,
     salvarCotacao: salvarCotacaoMutation.mutateAsync,
     abrirWhatsApp,
     copiarLink,
     isLoading: salvarCotacaoMutation.isPending,
-    formatarMoeda,
   };
 }
