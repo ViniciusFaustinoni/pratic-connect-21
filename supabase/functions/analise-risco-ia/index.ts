@@ -76,7 +76,6 @@ serve(async (req) => {
         });
       }
 
-      // Não encontrou análise salva - retornar vazio para o componente mostrar botão
       return new Response(JSON.stringify({ sem_analise: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -168,6 +167,46 @@ serve(async (req) => {
     const inconsistenciasGraves = inconsistencias.filter((i: any) => i.gravidade === 'grave').length;
     const inconsistenciasModeradas = inconsistencias.filter((i: any) => i.gravidade === 'moderada').length;
 
+    // ===== NOVAS QUERIES: Ressalvas e Histórico =====
+
+    // Ressalvas registradas no histórico do associado
+    const { data: ressalvasHistorico } = await supabase
+      .from("associados_historico")
+      .select("descricao, created_at, dados_novos")
+      .eq("associado_id", sinistro.associado_id)
+      .eq("tipo", "ressalva_registrada")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    // Ressalvas de instalação do veículo do sinistro
+    let ressalvasInstalacao: any[] = [];
+    if (sinistro.veiculo_id) {
+      const { data: servicos } = await supabase
+        .from("servicos")
+        .select("ressalvas_instalador, fotos_ressalva, created_at, decisao_instalador")
+        .eq("veiculo_id", sinistro.veiculo_id)
+        .eq("decisao_instalador", "aprovado_ressalva")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (servicos) ressalvasInstalacao = servicos;
+    }
+
+    // Histórico completo do associado (resumo quantitativo)
+    const { data: historicoCompleto } = await supabase
+      .from("associados_historico")
+      .select("tipo, descricao, created_at")
+      .eq("associado_id", sinistro.associado_id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    // Calcular resumo do histórico
+    const resumoHistorico: Record<string, number> = {};
+    if (historicoCompleto) {
+      historicoCompleto.forEach((h: any) => {
+        resumoHistorico[h.tipo] = (resumoHistorico[h.tipo] || 0) + 1;
+      });
+    }
+
     // ===== CÁLCULOS PRÉ-IA =====
     const horasComunicacao =
       sinistro.data_ocorrencia && sinistro.created_at
@@ -212,6 +251,33 @@ serve(async (req) => {
     const inadimplente = cobrancas && cobrancas.length > 0;
     const qtdEventosAnteriores = eventosAnteriores?.length || 0;
 
+    // Formatar ressalvas para o prompt
+    const ressalvasTexto = (() => {
+      const items: string[] = [];
+      if (ressalvasHistorico?.length) {
+        ressalvasHistorico.forEach((r: any) => {
+          const veiculoInfo = r.dados_novos?.placa ? ` (Veículo: ${r.dados_novos.placa})` : '';
+          items.push(`- [${new Date(r.created_at).toLocaleDateString('pt-BR')}] ${r.descricao}${veiculoInfo}`);
+        });
+      }
+      if (ressalvasInstalacao.length) {
+        ressalvasInstalacao.forEach((s: any) => {
+          const textoRessalva = Array.isArray(s.ressalvas_instalador) 
+            ? s.ressalvas_instalador.join(', ') 
+            : s.ressalvas_instalador || 'Sem detalhes';
+          items.push(`- [${new Date(s.created_at).toLocaleDateString('pt-BR')}] Ressalva de instalação aprovada: ${textoRessalva}`);
+        });
+      }
+      return items.length > 0 ? items.join('\n') : 'Nenhuma ressalva registrada';
+    })();
+
+    const historicoTexto = (() => {
+      if (!Object.keys(resumoHistorico).length) return 'Sem histórico registrado';
+      return Object.entries(resumoHistorico)
+        .map(([tipo, qtd]) => `- ${tipo.replace(/_/g, ' ')}: ${qtd}`)
+        .join('\n');
+    })();
+
     // ===== PROMPT PARA IA =====
     const prompt = `Você é um analista de risco de fraude em sinistros veiculares de uma associação de proteção veicular.
 
@@ -244,6 +310,12 @@ CONTEXTO DO ASSOCIADO:
 - Inadimplente: ${inadimplente ? "Sim" : "Não"}
 - Eventos anteriores: ${qtdEventosAnteriores}
 
+RESSALVAS REGISTRADAS:
+${ressalvasTexto}
+
+HISTÓRICO DO ASSOCIADO (resumo por tipo de evento):
+${historicoTexto}
+
 ANÁLISE DE CONSISTÊNCIA DOS RELATOS:
 - Score de inconsistência: ${inconsistenciaScore !== null ? inconsistenciaScore + "/5" : "Não disponível"}
 - Inconsistências graves: ${inconsistenciasGraves}
@@ -260,6 +332,8 @@ REGRAS DE AVALIAÇÃO:
 7. Inadimplência combinada com sinistro pode indicar risco
 8. Se o score de inconsistência dos relatos for >= 3, isso AUMENTA significativamente o risco (relatos contraditórios)
 9. Inconsistências graves (divergência de local, dinâmica, presença de terceiros) são fortíssimos indicadores de fraude
+10. Ressalvas registradas sobre o veículo ou associado são sinais de atenção e devem ser consideradas na pontuação — especialmente ressalvas de instalação que indicam irregularidades técnicas no veículo
+11. Múltiplas ressalvas ou ressalvas combinadas com outros fatores de risco aumentam significativamente a pontuação
 
 Analise criteriosamente e forneça sua avaliação.`;
 
