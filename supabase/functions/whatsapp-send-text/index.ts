@@ -206,7 +206,14 @@ serve(async (req) => {
   }
 
   try {
-    const { telefone, mensagem, instancia_id, delay_ms, template_name, template_params } = await req.json();
+    const body = await req.json();
+    // Aceitar ambos os formatos de parâmetros (telefone/mensagem e phone/message)
+    const telefone = body.telefone || body.phone;
+    const mensagem = body.mensagem || body.message;
+    const instancia_id = body.instancia_id;
+    const delay_ms = body.delay_ms;
+    const template_name = body.template_name;
+    const template_params = body.template_params;
 
     if (!telefone || !mensagem) {
       return new Response(

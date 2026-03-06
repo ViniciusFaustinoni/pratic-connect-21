@@ -26,6 +26,32 @@ function formatarTelefone(telefone: string): string {
   return limpo;
 }
 
+async function uploadBase64ToStorage(supabase: any, base64: string, mimetype: string, filename: string): Promise<string> {
+  // Decode base64 to Uint8Array
+  const binaryStr = atob(base64.includes(',') ? base64.split(',')[1] : base64);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+
+  const filePath = `whatsapp-media/${crypto.randomUUID()}/${filename}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('whatsapp-media')
+    .upload(filePath, bytes, { contentType: mimetype, upsert: true });
+
+  if (uploadError) {
+    console.error('[whatsapp-send-media] Erro upload Storage:', uploadError);
+    throw new Error('Erro ao fazer upload da mídia para Storage');
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from('whatsapp-media')
+    .getPublicUrl(filePath);
+
+  return publicUrlData.publicUrl;
+}
+
 async function enviarMediaViaMeta(
   supabase: any,
   telefoneFormatado: string,
@@ -42,8 +68,14 @@ async function enviarMediaViaMeta(
 
   if (!metaConfig?.phone_number_id) throw new Error("Configuração da Meta não encontrada");
 
-  const mediaUrl = payload.media_url;
-  if (!mediaUrl) throw new Error("media_url é obrigatório para envio via Meta");
+  // Se não tem media_url mas tem base64, faz upload para Storage
+  let mediaUrl = payload.media_url;
+  if (!mediaUrl && payload.media_base64) {
+    const fname = payload.filename || `media_${Date.now()}`;
+    mediaUrl = await uploadBase64ToStorage(supabase, payload.media_base64, payload.mimetype, fname);
+    console.log(`[whatsapp-send-media] Base64 uploaded to Storage: ${mediaUrl}`);
+  }
+  if (!mediaUrl) throw new Error("media_url ou media_base64 é obrigatório para envio via Meta");
 
   const metaBody: any = {
     messaging_product: "whatsapp",

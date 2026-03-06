@@ -1,49 +1,95 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
+
+## Resumo
+
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. `pricing.ts` — 539 linhas estáticas (prioridade média)
+
+**Problema:** Categorias fixas (BASIC/PREMIUM/EXCLUSIVE), faixas FIPE hardcoded, preços estáticos por região/combustível, cidades fixas por região.
+
+**Usado por:**
+| Arquivo | O que importa |
+|---------|--------------|
+| `QuoteCalculatorModal.tsx` | `calcularCotacao`, `formatarMoeda`, `ADICIONAIS`, tipos `Categoria`, `ResultadoCotacao` |
+| `useCotacaoAvancada.ts` | `calcularCotacao`, `ResultadoCotacao`, `Categoria` |
+| `CotacaoPublica.tsx` | Apenas `formatarMoeda` |
+| `CotacaoContratacao.tsx` | Apenas `formatarMoeda` |
+
+**Solução:**
+1. Extrair `formatarMoeda` para local centralizado (já existe em `usePlanosPrecificacao.ts` L68)
+2. Migrar `QuoteCalculatorModal` + `useCotacaoAvancada` para usar hooks dinâmicos
+3. Remover `pricing.ts`
+
+### 2. `formatarMoeda` duplicada em 5+ locais (prioridade média)
+
+| Local | Tipo |
+|-------|------|
+| `src/config/pricing.ts` | Exportada, usada por 2 páginas públicas |
+| `src/hooks/usePlanosPrecificacao.ts` L68 | Exportada |
+| `src/pages/public/CotacaoPublicaCompleta.tsx` L196 | Local |
+| `src/components/cotacao-publica/EscolhaPlano.tsx` L33 | Local |
+| `src/components/beneficios/TabelaSaudeBeneficios.tsx` L23 | Local |
+
+**Solução:** Criar `src/utils/format.ts` com `formatarMoeda` e substituir todas as ocorrências.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-# Plan: Fix WhatsApp Message Sending (Meta API Migration)
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-## Root Cause Analysis
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-There are **4 distinct problems** preventing WhatsApp messages from being sent after switching from Evolution to Meta API:
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
 
-### Problem 1: Parameter Name Mismatch
-Multiple callers invoke `whatsapp-send-text` with `{ phone, message }` instead of the expected `{ telefone, mensagem }`. The function destructures `telefone` and `mensagem`, so these calls silently fail with "telefone e mensagem sao obrigatorios".
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
 
-**Affected files (edge functions):**
-- `analisar-evento/index.ts` -- uses `phone` + `message`
-- `asaas-webhook/index.ts` -- uses `phone` + `message`
-- `EnviarParaOficinaDialog.tsx` -- uses `phone` + `message`
 
-**Fix:** Update `whatsapp-send-text` to accept BOTH parameter names with a fallback:
-```typescript
-const telefone = body.telefone || body.phone;
-const mensagem = body.mensagem || body.message;
-```
+---
 
-### Problem 2: `disparar-notificacao` calls non-existent function
-The centralized notification hub calls `supabase.functions.invoke('enviar-whatsapp', ...)` -- this function does NOT exist. It should call `whatsapp-send-text`.
+## ❌ NÃO FAZER AGORA
 
-**Fix:** Change the invoke target from `'enviar-whatsapp'` to `'whatsapp-send-text'` and map the body parameters correctly.
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
 
-### Problem 3: `notificar-retirada-whatsapp` and `notificar-manutencao-whatsapp` still use n8n webhooks
-These two functions send messages exclusively via n8n webhook (`N8N_WEBHOOK_URL_RETIRADA` / `N8N_WEBHOOK_URL_MANUTENCAO`), which are likely not configured. They should use the `whatsapp-send-text` function instead.
+---
 
-**Fix:** Replace the n8n webhook calls with `supabase.functions.invoke('whatsapp-send-text', ...)`.
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-### Problem 4: `whatsapp-send-media` requires `media_url` for Meta but callers send `media_base64`
-The Meta path in `enviarMediaViaMeta` (line 46) throws an error if `media_url` is missing: `"media_url é obrigatório para envio via Meta"`. However, many callers (e.g., `ativar-associado`, `app-primeiro-acesso`) send `media_base64` without a `media_url`. The Meta API requires uploading media first or providing a public URL.
-
-**Fix:** Add a base64-to-upload flow in `enviarMediaViaMeta`: upload the base64 data to Supabase Storage, get a public URL, then send via Meta API. This makes both `media_url` and `media_base64` work seamlessly.
-
-## Implementation Steps
-
-1. **Update `whatsapp-send-text/index.ts`** -- Accept both `phone`/`message` and `telefone`/`mensagem` parameter names with fallback aliases
-2. **Update `whatsapp-send-media/index.ts`** -- Handle `media_base64` for Meta by uploading to Supabase Storage first, then sending the public URL
-3. **Update `disparar-notificacao/index.ts`** -- Change `'enviar-whatsapp'` to `'whatsapp-send-text'` with correct parameter mapping
-4. **Update `notificar-retirada-whatsapp/index.ts`** -- Replace n8n webhook with `whatsapp-send-text` call
-5. **Update `notificar-manutencao-whatsapp/index.ts`** -- Replace n8n webhook with `whatsapp-send-text` call
-6. **Deploy all 5 edge functions and verify via logs**
-
-## Impact
-This fixes ALL WhatsApp sending paths in the system -- text messages, media/documents, centralized notifications, and operational alerts (retirada/manutencao). No frontend changes needed.
-
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)

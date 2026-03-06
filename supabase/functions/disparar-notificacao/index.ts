@@ -362,11 +362,10 @@ serve(async (req) => {
 
         const telefone = associado?.whatsapp || associado?.telefone;
         if (telefone) {
-          await supabase.functions.invoke('enviar-whatsapp', {
+          await supabase.functions.invoke('whatsapp-send-text', {
             body: {
               telefone,
               mensagem: `*${titulo}*\n\n${mensagem}`,
-              tipo: 'notificacao'
             }
           });
           canaisEnviados.push('whatsapp');

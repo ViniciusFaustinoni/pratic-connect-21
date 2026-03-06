@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,7 +18,6 @@ interface NotificacaoRetiradaPayload {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -27,7 +27,6 @@ serve(async (req) => {
     
     console.log('[notificar-retirada-whatsapp] Payload recebido:', JSON.stringify(payload));
 
-    // Validar campos obrigatórios
     if (!payload.telefone || !payload.nome_associado || !payload.data_agendada) {
       return new Response(
         JSON.stringify({ success: false, error: 'Campos obrigatórios faltando' }),
@@ -35,55 +34,27 @@ serve(async (req) => {
       );
     }
 
-    // Verificar se o webhook está configurado
-    const webhookUrl = Deno.env.get('N8N_WEBHOOK_URL_RETIRADA');
-    if (!webhookUrl) {
-      console.warn('[notificar-retirada-whatsapp] N8N_WEBHOOK_URL_RETIRADA não configurada');
-      return new Response(
-        JSON.stringify({ success: false, reason: 'webhook_not_configured' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // Formatar data
     const dataFormatada = new Date(payload.data_agendada).toLocaleDateString('pt-BR');
     const periodoTexto = payload.periodo === 'manha' ? 'manhã' : 'tarde';
 
-    // Montar mensagem conforme regulamento (sem CPF)
+    // Montar mensagem
     const mensagem = `Prezado(a) ${payload.nome_associado}, informamos que a retirada do equipamento rastreador do veículo ${payload.veiculo_modelo} • ${payload.veiculo_placa} está agendada para ${dataFormatada} no período da ${periodoTexto}. Local: ${payload.local}. Prazo para comparecimento: 48 horas. Em caso de não comparecimento, será aplicada multa de R$400 conforme regulamento. Praticcar.`;
 
-    // Limpar telefone (apenas números)
-    const telefoneLimpo = payload.telefone.replace(/\D/g, '');
+    // Enviar via whatsapp-send-text
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
 
-    // Preparar payload para o webhook
-    const webhookPayload = {
-      telefone: telefoneLimpo,
-      mensagem,
-      tipo: 'retirada_agendada',
-      dados: {
-        nome_associado: payload.nome_associado,
-        veiculo_modelo: payload.veiculo_modelo,
-        veiculo_placa: payload.veiculo_placa,
-        data_agendada: payload.data_agendada,
-        periodo: payload.periodo,
-        local: payload.local,
-        motivo: payload.motivo,
-      },
-    };
-
-    console.log('[notificar-retirada-whatsapp] Enviando para webhook n8n...');
-
-    // Enviar para o webhook n8n
-    const webhookResponse = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(webhookPayload),
+    const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+      body: { telefone: payload.telefone, mensagem }
     });
 
-    if (!webhookResponse.ok) {
-      console.error('[notificar-retirada-whatsapp] Erro do webhook:', webhookResponse.status);
+    if (error) {
+      console.error('[notificar-retirada-whatsapp] Erro ao invocar whatsapp-send-text:', error);
       return new Response(
-        JSON.stringify({ success: false, error: 'Erro ao enviar para webhook' }),
+        JSON.stringify({ success: false, error: 'Erro ao enviar mensagem' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
