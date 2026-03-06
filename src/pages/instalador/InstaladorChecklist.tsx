@@ -706,6 +706,7 @@ export default function InstaladorChecklist() {
       navigate('/instalador');
     } catch (err) {
       console.error('Erro ao enviar para monitoramento:', err);
+      toast.error('Falha ao enviar para monitoramento. Tente novamente.');
     } finally {
       setEnviandoMonitoramento(false);
     }
