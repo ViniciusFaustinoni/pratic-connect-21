@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -26,6 +27,7 @@ const TAB_FILTERS: Record<string, StatusSubstituicao[] | null> = {
 export default function SubstituicoesPendentesPage() {
   const navigate = useNavigate();
   const { data: substituicoes, isLoading, refetch } = useSubstituicoes();
+  const { data: limites } = useConfigLimitesVeiculo();
   const [tab, setTab] = useState('pendentes');
   const [busca, setBusca] = useState('');
 
@@ -155,7 +157,7 @@ export default function SubstituicoesPendentesPage() {
                           <TableCell>
                             <div className="flex items-center gap-1.5">
                               {formatCurrency(s.veiculo_novo_fipe)}
-                              {(s.veiculo_novo_fipe ?? 0) > 120000 && (
+                              {(s.veiculo_novo_fipe ?? 0) > (limites?.fipeLimiteAutorizacao ?? 120000) && (
                                 <Badge variant="destructive" className="text-[10px] px-1">
                                   <AlertTriangle className="h-3 w-3 mr-0.5" />FIPE ALTA
                                 </Badge>

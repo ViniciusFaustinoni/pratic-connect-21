@@ -7,17 +7,19 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
+
 interface VeiculoPerfilAlertProps {
   anoVeiculo?: number | null;
   valorFipe?: number | null;
   className?: string;
 }
 
-const LIMITE_IDADE_ANOS = 15;
-const FIPE_MINIMO = 15000;
-const FIPE_MAXIMO = 500000;
-
 export function VeiculoPerfilAlert({ anoVeiculo, valorFipe, className }: VeiculoPerfilAlertProps) {
+  const { data: limites } = useConfigLimitesVeiculo();
+  const LIMITE_IDADE_ANOS = limites?.idadeLimite ?? 15;
+  const FIPE_MINIMO = limites?.fipeMinimo ?? 15000;
+  const FIPE_MAXIMO = limites?.fipeMaximo ?? 500000;
   const alertas: { tipo: string; mensagem: string; detalhe: string }[] = [];
   const anoAtual = new Date().getFullYear();
 

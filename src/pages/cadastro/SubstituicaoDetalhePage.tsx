@@ -28,6 +28,7 @@ import { useSubstituicao, useAprovarSubstituicao, useRejeitarSubstituicao } from
 import { STATUS_SUBSTITUICAO_LABELS, STATUS_SUBSTITUICAO_CORES } from '@/types/substituicao';
 import type { StatusSubstituicao } from '@/types/substituicao';
 import { supabase } from '@/integrations/supabase/client';
+import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +38,7 @@ export default function SubstituicaoDetalhePage() {
   const { data: sub, isLoading } = useSubstituicao(id);
   const aprovarMutation = useAprovarSubstituicao();
   const rejeitarMutation = useRejeitarSubstituicao();
+  const { data: limites } = useConfigLimitesVeiculo();
 
   const [aprovarDialogOpen, setAprovarDialogOpen] = useState(false);
   const [rejeitarDialogOpen, setRejeitarDialogOpen] = useState(false);
@@ -48,7 +50,7 @@ export default function SubstituicaoDetalhePage() {
   const formatCurrency = (v: number | null | undefined) =>
     v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
 
-  const fipeAlta = (sub?.veiculo_novo_fipe ?? 0) > 120000;
+  const fipeAlta = (sub?.veiculo_novo_fipe ?? 0) > (limites?.fipeLimiteAutorizacao ?? 120000);
   const isPendente = sub?.status === 'aguardando_aprovacao';
 
   const handleAprovar = async () => {
