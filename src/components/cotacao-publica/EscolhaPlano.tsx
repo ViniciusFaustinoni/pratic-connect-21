@@ -160,11 +160,7 @@ export function EscolhaPlano({
             </div>
             <Badge 
               variant="outline" 
-              className={cn(
-                'text-xs mb-3',
-                planoSelecionado.nivel === 'exclusive' && 'border-yellow-400/30 text-yellow-400 bg-yellow-400/10',
-                planoSelecionado.nivel === 'premium' && 'border-purple-400/30 text-purple-400 bg-purple-400/10'
-              )}
+              className={cn('text-xs mb-3', getNivelBadgeClass(planoSelecionado.nivel))}
             >
               {getNivelLabel(planoSelecionado.nivel)}
             </Badge>
@@ -280,11 +276,7 @@ export function EscolhaPlano({
                     <h3 className="text-xl font-bold text-foreground mb-2">{plano.nome}</h3>
                     <Badge 
                       variant="outline" 
-                      className={cn(
-                        'text-xs border-border/50 bg-muted/30',
-                        plano.nivel === 'exclusive' && 'border-yellow-400/30 text-yellow-400 bg-yellow-400/10',
-                        plano.nivel === 'premium' && 'border-purple-400/30 text-purple-400 bg-purple-400/10'
-                      )}
+                      className={cn('text-xs', getNivelBadgeClass(plano.nivel))}
                     >
                       {getNivelLabel(plano.nivel)}
                     </Badge>
