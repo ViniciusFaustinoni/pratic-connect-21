@@ -118,6 +118,7 @@ export default function SubstituicaoDetalhePage() {
   const assoc = sub.associado as Record<string, unknown> | null;
   const vAntigo = sub.veiculo_antigo as Record<string, unknown> | null;
   const vNovo = sub.veiculo_novo as Record<string, unknown> | null;
+  const veiculoBlindado = !!(vNovo as any)?.blindado;
   const beneficios = (sub.beneficios_novos || {}) as Record<string, unknown>;
 
   return (
