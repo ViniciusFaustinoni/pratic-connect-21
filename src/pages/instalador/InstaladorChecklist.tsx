@@ -761,7 +761,99 @@ export default function InstaladorChecklist() {
     );
   }
 
-  // Verificar se o serviço já foi finalizado (bloqueio de edição)
+  // Tela de espera do monitoramento
+  if (aguardandoMonitoramento || statusDecisao === 'aprovado' || statusDecisao === 'declinado') {
+    const minutos = Math.floor(tempoEspera / 60);
+    const segundos = tempoEspera % 60;
+    const timeout30min = tempoEspera >= 1800;
+
+    if (statusDecisao === 'aprovado') {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-900 p-6">
+          <div className="rounded-full bg-green-500/20 p-6">
+            <ShieldCheck className="h-16 w-16 text-green-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-green-400">Ressalva Aprovada!</h2>
+          <p className="max-w-sm text-center text-slate-300">
+            O monitoramento aprovou a ressalva. Prossiga com a instalação normalmente.
+          </p>
+          <Button
+            size="lg"
+            className="mt-4 bg-green-600 hover:bg-green-700 text-white"
+            onClick={() => {
+              // Voltar ao fluxo normal do checklist
+              window.location.reload();
+            }}
+          >
+            <CheckCircle2 className="mr-2 h-5 w-5" />
+            Continuar Instalação
+          </Button>
+        </div>
+      );
+    }
+
+    if (statusDecisao === 'declinado') {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-900 p-6">
+          <div className="rounded-full bg-red-500/20 p-6">
+            <ShieldX className="h-16 w-16 text-red-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-red-400">Serviço Declinado</h2>
+          <p className="max-w-sm text-center text-slate-300">
+            O monitoramento declinou a ressalva. <strong>Não instale o equipamento.</strong>
+          </p>
+          <Button
+            size="lg"
+            variant="outline"
+            className="mt-4 border-slate-600 text-slate-300"
+            onClick={() => navigate('/instalador')}
+          >
+            <ArrowLeft className="mr-2 h-5 w-5" />
+            Voltar ao Início
+          </Button>
+        </div>
+      );
+    }
+
+    // Aguardando decisão
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-900 p-6">
+        <div className="rounded-full bg-amber-500/20 p-6">
+          <Loader2 className="h-16 w-16 animate-spin text-amber-500" />
+        </div>
+        <h2 className="text-xl font-bold text-amber-400">Aguardando Monitoramento</h2>
+        <p className="max-w-sm text-center text-slate-400">
+          Sua ressalva foi enviada. Aguarde a decisão do coordenador de monitoramento.
+        </p>
+        <div className="mt-2 rounded-lg bg-slate-800 px-6 py-3">
+          <p className="text-center font-mono text-2xl text-slate-200">
+            {String(minutos).padStart(2, '0')}:{String(segundos).padStart(2, '0')}
+          </p>
+          <p className="text-center text-xs text-slate-500">Tempo de espera</p>
+        </div>
+        {timeout30min && (
+          <Alert className="mt-4 max-w-sm border-amber-500/30 bg-amber-500/10">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <AlertDescription className="text-amber-300">
+              O monitoramento ainda não respondeu. Deseja continuar aguardando?
+            </AlertDescription>
+          </Alert>
+        )}
+        <p className="mt-4 text-xs text-slate-600">Verificando a cada 10 segundos...</p>
+        {timeout30min && (
+          <Button
+            variant="ghost"
+            className="text-slate-500"
+            onClick={() => navigate('/instalador')}
+          >
+            Sair e verificar depois
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+
   const servicoFinalizado = ['concluida', 'cancelada'].includes(servico?.status || '');
   
   if (servicoFinalizado) {
