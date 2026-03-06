@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -69,6 +69,7 @@ import { useRastreadoresDoPortador, type RastreadorEmPorte } from '@/hooks/useRa
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useAguardarDecisaoMonitoramento } from '@/hooks/useAguardarDecisaoMonitoramento';
 
 const CHECKLIST_ITEMS = [
   { id: 'veiculo_confere', label: 'Veículo corresponde aos dados cadastrados', critico: true },
