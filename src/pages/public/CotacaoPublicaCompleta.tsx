@@ -689,13 +689,13 @@ export default function CotacaoPublicaCompleta() {
               <p className="text-muted-foreground">Selecione a proteção ideal para você</p>
             </div>
 
-            {resultado.planos.map((plano) => {
-              const cores = CORES_PLANO[plano.categoria];
+            {resultado.planos.map((plano, planoIndex) => {
+              const cores = CORES_PLANO_DINAMICAS[planoIndex % CORES_PLANO_DINAMICAS.length];
               const isSelected = planoEscolhido === plano.categoria;
 
               return (
                 <Card
-                  key={plano.categoria}
+                  key={plano.id || plano.categoria}
                   onClick={() => setPlanoEscolhido(plano.categoria)}
                   className={cn(
                     'border-2 cursor-pointer transition-all overflow-hidden',
@@ -711,9 +711,9 @@ export default function CotacaoPublicaCompleta() {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <div className={cn('h-10 w-10 rounded-full flex items-center justify-center', cores.bg)}>
-                          {plano.categoria === 'Premium' && <Crown className="h-5 w-5 text-amber-600" />}
-                          {plano.categoria === 'Completo' && <Star className="h-5 w-5 text-blue-600" />}
-                          {plano.categoria === 'Básico' && <Shield className="h-5 w-5 text-slate-600" />}
+                          {planoIndex >= 2 && <Crown className="h-5 w-5 text-amber-600" />}
+                          {planoIndex === 1 && <Star className="h-5 w-5 text-blue-600" />}
+                          {planoIndex === 0 && <Shield className="h-5 w-5 text-slate-600" />}
                         </div>
                         <div>
                           <p className="font-bold">{plano.categoria}</p>
