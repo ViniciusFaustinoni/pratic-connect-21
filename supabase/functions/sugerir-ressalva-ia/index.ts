@@ -25,7 +25,7 @@ serve(async (req) => {
       supabase.from("associados").select("nome, cpf, status, data_adesao, cidade, uf").eq("id", associado_id).single(),
       supabase.from("veiculos").select("placa, marca, modelo, ano, cor").eq("id", veiculo_id).single(),
       supabase.from("associados_historico").select("tipo, descricao, created_at").eq("associado_id", associado_id).order("created_at", { ascending: false }).limit(15),
-      supabase.from("associados_historico").select("descricao, created_at").eq("associado_id", associado_id).eq("tipo", "ressalva_registrada").order("created_at", { ascending: false }).limit(5),
+      supabase.from("associados_historico").select("descricao, created_at").eq("associado_id", associado_id).in("tipo", ["ressalva_registrada", "ressalva_aprovada_monitoramento", "ressalva_declinada_monitoramento"]).order("created_at", { ascending: false }).limit(5),
     ]);
 
     const associado = associadoRes.data;
