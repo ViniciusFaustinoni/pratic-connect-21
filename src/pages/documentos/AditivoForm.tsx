@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Car, Shield, DollarSign, ExternalLink, GripVertical, GlassWater } from 'lucide-react';
+import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater } from 'lucide-react';
 import { formatCurrency } from '@/types/termo-filiacao';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
