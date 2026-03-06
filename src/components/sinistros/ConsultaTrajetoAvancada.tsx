@@ -24,6 +24,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, CircleMarker } from 'react-leaflet';
+import { PolylineOSRM } from '@/components/mapa/PolylineOSRM';
 import L from 'leaflet';
 import type { DateRange } from 'react-day-picker';
 import 'leaflet/dist/leaflet.css';
@@ -232,9 +233,9 @@ export function ConsultaTrajetoAvancada({
                   />
                   {polylinePositions.length > 0 && (
                     <>
-                      <Polyline
+                      <PolylineOSRM
                         positions={polylinePositions}
-                        pathOptions={{ color: '#3b82f6', weight: 3, opacity: 0.8 }}
+                        color="#3b82f6" weight={3} opacity={0.8}
                       />
                       {/* Início */}
                       <CircleMarker
