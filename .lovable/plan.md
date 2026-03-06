@@ -1,41 +1,92 @@
 
 
-# Registrar Ressalvas no Historico de Associados/Veiculos
+# Analise dos 4 Botoes do Dialog de Condicao (Checklist NOK)
 
-## Resumo
+## Quando o dialog aparece
 
-Adicionar um botao "Registrar Ressalva" na aba Historico do `AssociadoDetalhe.tsx`, similar ao componente `AdicionarObservacao` ja existente, mas especifico para ressalvas. O coordenador de monitoramento podera documentar inconsistencias com tipo `ressalva_registrada`, campo de texto obrigatorio e opcao de selecionar o veiculo relacionado.
+O dialog e disparado quando o instalador tenta avancar da etapa 2 (Checklist) para a etapa 3 (Fotos) e existem itens marcados como NOK no checklist (`etapaAtual === 2 && temItensNok`).
 
-## Alteracoes
+---
 
-### 1. Novo componente `src/components/cadastro/AdicionarRessalva.tsx`
+## Botao 1: "Ha condicao de continuar" / "Prosseguir mesmo assim"
 
-Componente com:
-- Botao "Registrar Ressalva" (icone AlertTriangle, cor amber)
-- Ao expandir: campo de texto (descricao da ressalva), select opcional para escolher o veiculo do associado (busca veiculos do associado), e botoes Cancelar/Salvar
-- Insere na tabela `associados_historico` com `tipo: 'ressalva_registrada'` e `dados_novos` contendo veiculo_id/placa se selecionado
-- Usa `supabase.auth.getUser()` para registrar o usuario
+**Funcao:** `handleContinuarComRessalva`
 
-### 2. `src/hooks/useAssociadoHistoricoCompleto.ts` — Mapear novo tipo
+**Logica:**
+1. Fecha o dialog
+2. Salva o checklist no banco (com quilometragem)
+3. Avanca para a etapa 3 (Fotos)
+4. O instalador continua o fluxo normalmente, porem na etapa final de decisao, se houver itens criticos NOK, a opcao "Aprovado" estara bloqueada — so podera escolher "Aprovado com Ressalva" ou "Negado"
 
-Adicionar `'ressalva_registrada': 'observacao_adicionada'` no mapeamento `tipoDbParaTimeline` (reutiliza o icone de observacao, ou podemos criar um tipo especifico).
+**Status:** Funcional. Nenhum problema encontrado.
 
-### 3. `src/pages/cadastro/AssociadoDetalhe.tsx` — Renderizar componente
+---
 
-Na aba `historico` (linha 813), adicionar o componente `AdicionarRessalva` logo acima da timeline, ao lado do titulo. Visivel apenas para coordenadores de monitoramento (verificar permissao).
+## Botao 2: "Enviar para Monitoramento"
 
-### 4. `src/components/associados/detalhe/AssociadoResumoTab.tsx` — Mapear titulo
+**Funcao:** `handleEnviarParaMonitoramento`
 
-Adicionar `'ressalva_registrada': 'Ressalva registrada'` no mapa de titulos e configurar icone/cor amber.
+**Logica:**
+1. Coleta os itens NOK e suas observacoes como texto de ressalvas
+2. Coleta fotos de evidencia dos itens NOK (se existirem)
+3. Chama `useEnviarParaMonitoramento` que:
+   - Salva o checklist no banco (`checklist_data`)
+   - Atualiza o servico: `status = 'em_analise'`, `decisao_instalador = 'pendente_monitoramento'`
+   - Registra historico em `associados_historico` com tipo `'enviado_monitoramento'`
+   - Invalida queries relacionadas a ressalvas do monitoramento
+   - Tenta atribuir proxima tarefa ao instalador (fire-and-forget)
+4. Navega de volta para `/instalador`
 
-## Arquivos
+**Status:** Funcional apos a correcao da constraint `servicos_decisao_instalador_check` (ja aplicada). O coordenador pode revisar em `/monitoramento/ressalvas-pendentes`.
 
-| Arquivo | Acao |
-|---|---|
-| `src/components/cadastro/AdicionarRessalva.tsx` | Novo — formulario de ressalva com select de veiculo |
-| `src/hooks/useAssociadoHistoricoCompleto.ts` | Adicionar tipo no mapeamento |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Renderizar AdicionarRessalva na aba historico + import |
-| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Mapear titulo/icone/cor do novo tipo |
+---
 
-4 arquivos.
+## Botao 3: "Nao ha condicao - Encerrar"
+
+**Funcao:** `handleEncerrarSemCondicao`
+
+**Logica:**
+1. Fecha o dialog de condicao
+2. Monta um motivo pre-preenchido com os itens NOK e suas observacoes
+3. Abre o `ModalRecusaVeiculoComFotos` (com o motivo pre-preenchido)
+4. O instalador deve confirmar, podendo adicionar mais detalhes e fotos
+5. Ao confirmar, chama `handleRecusarVeiculo` que:
+   - Faz upload das fotos de evidencia para o storage
+   - Chama `useRecusarVeiculoServico` que: `status = 'em_analise'`, `decisao_instalador = 'negado'`
+   - Registra historico como `'negado_pelo_instalador_pendente_analise'`
+   - Dispara notificacao para analistas/coordenadores
+   - Envia orientacoes de resolucao ao associado via WhatsApp
+   - Tenta atribuir proxima tarefa ao instalador
+6. Navega de volta para `/instalador`
+
+**Status:** Funcional. Nenhum problema encontrado.
+
+---
+
+## Botao 4: "Revisar checklist"
+
+**Funcao:** `() => setShowDialogCondicao(false)`
+
+**Logica:**
+1. Simplesmente fecha o dialog
+2. O instalador volta a etapa 2 do checklist para revisar/corrigir os itens marcados como NOK
+3. Nenhuma acao destrutiva ou gravacao no banco
+
+**Status:** Funcional. Nenhum problema encontrado.
+
+---
+
+## Verificacao de Infraestrutura
+
+| Item | Status |
+|------|--------|
+| Constraint `servicos_decisao_instalador_check` | OK — inclui `pendente_monitoramento` e `declinado_monitoramento` |
+| Enum `status_servico` inclui `em_analise` | OK |
+| RLS permite prestador atualizar seus servicos | OK |
+| Campo `tipo` em `associados_historico` e varchar livre | OK |
+| Fila de ressalvas do coordenador (`/monitoramento/ressalvas-pendentes`) | Existente |
+
+## Conclusao
+
+**Todos os 4 botoes estao funcionais.** O unico problema existente era a constraint `servicos_decisao_instalador_check` que ja foi corrigida na migracao anterior. Nenhuma correcao adicional e necessaria.
 
