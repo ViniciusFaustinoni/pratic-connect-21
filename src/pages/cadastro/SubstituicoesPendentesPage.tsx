@@ -157,7 +157,7 @@ export default function SubstituicoesPendentesPage() {
                           <TableCell>
                             <div className="flex items-center gap-1.5">
                               {formatCurrency(s.veiculo_novo_fipe)}
-                              {(s.veiculo_novo_fipe ?? 0) > 120000 && (
+                              {(s.veiculo_novo_fipe ?? 0) > (limites?.fipeLimiteAutorizacao ?? 120000) && (
                                 <Badge variant="destructive" className="text-[10px] px-1">
                                   <AlertTriangle className="h-3 w-3 mr-0.5" />FIPE ALTA
                                 </Badge>
