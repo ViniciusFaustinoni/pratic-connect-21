@@ -45,6 +45,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useFipe } from '@/hooks/useFipe';
 import { cn } from '@/lib/utils';
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useCriarCotacao } from '@/hooks/useCotacao';
 import { usePlanosCotacao } from '@/hooks/usePlanosCotacao';

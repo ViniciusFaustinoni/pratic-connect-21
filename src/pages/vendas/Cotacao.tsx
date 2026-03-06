@@ -7,6 +7,7 @@ import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
 import { EtapaCriteriosCotacao } from '@/components/cotacao/EtapaCriteriosCotacao';
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
 import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 
 // ============================================
 // INTERFACES
