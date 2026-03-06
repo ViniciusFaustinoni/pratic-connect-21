@@ -1,45 +1,41 @@
 
 
-# Fix: "Enviar para Monitoramento" not working
+# Registrar Ressalvas no Historico de Associados/Veiculos
 
-## Root Cause Analysis
+## Resumo
 
-After deep investigation, I found two interconnected issues:
+Adicionar um botao "Registrar Ressalva" na aba Historico do `AssociadoDetalhe.tsx`, similar ao componente `AdicionarObservacao` ja existente, mas especifico para ressalvas. O coordenador de monitoramento podera documentar inconsistencias com tipo `ressalva_registrada`, campo de texto obrigatorio e opcao de selecionar o veiculo relacionado.
 
-### Issue 1: `instalacoes.status` not syncing for `em_analise`
+## Alteracoes
 
-The trigger `sync_servicos_to_instalacao` maps `servicos.status` → `instalacoes.status`. But `status_instalacao` enum only has: `agendada`, `em_rota`, `em_andamento`, `concluida`, `reagendada`, `cancelada`. It does NOT include `em_analise`.
+### 1. Novo componente `src/components/cadastro/AdicionarRessalva.tsx`
 
-The CASE fallback keeps the old status (`em_andamento`), so:
-- The admin panel (which reads `instalacoes`) still shows the service as active
-- The installer may still see it depending on which query is used
+Componente com:
+- Botao "Registrar Ressalva" (icone AlertTriangle, cor amber)
+- Ao expandir: campo de texto (descricao da ressalva), select opcional para escolher o veiculo do associado (busca veiculos do associado), e botoes Cancelar/Salvar
+- Insere na tabela `associados_historico` com `tipo: 'ressalva_registrada'` e `dados_novos` contendo veiculo_id/placa se selecionado
+- Usa `supabase.auth.getUser()` para registrar o usuario
 
-### Issue 2: Silent error handling
+### 2. `src/hooks/useAssociadoHistoricoCompleto.ts` — Mapear novo tipo
 
-The `handleEnviarParaMonitoramento` catch block only does `console.error` — no toast is shown to the user on failure, making debugging impossible.
+Adicionar `'ressalva_registrada': 'observacao_adicionada'` no mapeamento `tipoDbParaTimeline` (reutiliza o icone de observacao, ou podemos criar um tipo especifico).
 
-### Current DB state confirms partial update:
-- `servicos.decisao_instalador` = `'pendente_monitoramento'` (updated)
-- `servicos.status` = `'em_andamento'` (NOT updated to `em_analise`)
+### 3. `src/pages/cadastro/AssociadoDetalhe.tsx` — Renderizar componente
 
-This suggests either the `status` update silently fails or the trigger reverts it.
+Na aba `historico` (linha 813), adicionar o componente `AdicionarRessalva` logo acima da timeline, ao lado do titulo. Visivel apenas para coordenadores de monitoramento (verificar permissao).
 
-## Solution
+### 4. `src/components/associados/detalhe/AssociadoResumoTab.tsx` — Mapear titulo
 
-### 1. Database Migration
-- Add `em_analise` to the `status_instalacao` enum
-- Update the `sync_servicos_to_instalacao` trigger to properly handle `em_analise` status mapping
+Adicionar `'ressalva_registrada': 'Ressalva registrada'` no mapa de titulos e configurar icone/cor amber.
 
-```sql
-ALTER TYPE status_instalacao ADD VALUE IF NOT EXISTS 'em_analise';
-```
+## Arquivos
 
-Update the trigger to include `em_analise` in the valid status list for direct mapping.
+| Arquivo | Acao |
+|---|---|
+| `src/components/cadastro/AdicionarRessalva.tsx` | Novo — formulario de ressalva com select de veiculo |
+| `src/hooks/useAssociadoHistoricoCompleto.ts` | Adicionar tipo no mapeamento |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Renderizar AdicionarRessalva na aba historico + import |
+| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Mapear titulo/icone/cor do novo tipo |
 
-### 2. Code Fix — Error handling
-- Add `toast.error()` in the catch block of `handleEnviarParaMonitoramento` so failures are visible to the user
-- Add error checking on the first checklist update call (currently ignores errors)
-
-### 3. Verify servico status update
-- Reset the stuck servico `ba744122` status so retesting works cleanly
+4 arquivos.
 

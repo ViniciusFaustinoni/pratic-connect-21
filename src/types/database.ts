@@ -117,7 +117,7 @@ export type StatusRastreador =
 
 export type StatusRota = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada';
 
-export type StatusInstalacao = 'agendada' | 'em_rota' | 'em_andamento' | 'concluida' | 'reagendada' | 'cancelada';
+export type StatusInstalacao = 'agendada' | 'em_rota' | 'em_andamento' | 'concluida' | 'reagendada' | 'cancelada' | 'em_analise';
 
 export type StatusVistoria = 'pendente' | 'aprovada' | 'reprovada' | 'em_analise';
 
@@ -654,6 +654,7 @@ export const STATUS_INSTALACAO_LABELS: Record<StatusInstalacao, string> = {
   concluida: 'Concluída',
   reagendada: 'Reagendada',
   cancelada: 'Cancelada',
+  em_analise: 'Em Análise',
 };
 
 export const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
@@ -663,6 +664,7 @@ export const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
   concluida: 'bg-green-100 text-green-800',
   reagendada: 'bg-orange-100 text-orange-800',
   cancelada: 'bg-red-100 text-red-800',
+  em_analise: 'bg-amber-100 text-amber-800',
 };
 
 // Alias for PERIODO_INSTALACAO_LABELS
