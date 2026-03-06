@@ -6,6 +6,7 @@ interface LimitesVeiculo {
   idadeLimite: number;
   fipeMinimo: number;
   fipeMaximo: number;
+  blindadoPolicy: 'autorizar' | 'bloquear';
 }
 
 const DEFAULTS: LimitesVeiculo = {
@@ -13,6 +14,7 @@ const DEFAULTS: LimitesVeiculo = {
   idadeLimite: 15,
   fipeMinimo: 15000,
   fipeMaximo: 500000,
+  blindadoPolicy: 'autorizar',
 };
 
 const CHAVES = [
@@ -20,6 +22,7 @@ const CHAVES = [
   'perfil_veiculo_idade_limite',
   'perfil_veiculo_fipe_minimo',
   'perfil_veiculo_fipe_maximo',
+  'aceitar_blindado',
 ] as const;
 
 export function useConfigLimitesVeiculo() {
@@ -33,13 +36,14 @@ export function useConfigLimitesVeiculo() {
 
       if (!data?.length) return DEFAULTS;
 
-      const map = Object.fromEntries(data.map((r) => [r.chave, Number(r.valor)]));
+      const mapStr = Object.fromEntries(data.map((r) => [r.chave, r.valor]));
 
       return {
-        fipeLimiteAutorizacao: map['fipe_limite_autorizacao'] || DEFAULTS.fipeLimiteAutorizacao,
-        idadeLimite: map['perfil_veiculo_idade_limite'] || DEFAULTS.idadeLimite,
-        fipeMinimo: map['perfil_veiculo_fipe_minimo'] || DEFAULTS.fipeMinimo,
-        fipeMaximo: map['perfil_veiculo_fipe_maximo'] || DEFAULTS.fipeMaximo,
+        fipeLimiteAutorizacao: Number(mapStr['fipe_limite_autorizacao']) || DEFAULTS.fipeLimiteAutorizacao,
+        idadeLimite: Number(mapStr['perfil_veiculo_idade_limite']) || DEFAULTS.idadeLimite,
+        fipeMinimo: Number(mapStr['perfil_veiculo_fipe_minimo']) || DEFAULTS.fipeMinimo,
+        fipeMaximo: Number(mapStr['perfil_veiculo_fipe_maximo']) || DEFAULTS.fipeMaximo,
+        blindadoPolicy: (mapStr['aceitar_blindado'] as 'autorizar' | 'bloquear') || DEFAULTS.blindadoPolicy,
       };
     },
     staleTime: 5 * 60 * 1000,
