@@ -134,7 +134,7 @@ export default function Mapa() {
       const { data, error } = await supabase
         .from("view_rastreadores_posicao")
         .select("*")
-        .ilike("placa", `%${termo}%`)
+        .or(`placa.ilike.%${termo}%,associado_nome.ilike.%${termo}%`)
         .limit(10);
 
       if (error) throw error;
@@ -442,7 +442,7 @@ export default function Mapa() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por placa (mín. 3 caracteres)..."
+          placeholder="Buscar por placa ou nome do associado..."
           value={termoBusca}
           onChange={(e) => setTermoBusca(e.target.value.toUpperCase())}
           className="pl-9 pr-9 h-10 bg-background/95 backdrop-blur-sm shadow-lg border"
