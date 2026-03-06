@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { TrendingUp, TrendingDown, Minus, DollarSign, Users, Receipt } from 'lucide-react';
 import { type IndicadorSaude, getCorIndicador } from '@/hooks/useCustoBeneficios';
+import { formatarMoeda } from '@/utils/format';
 
 interface CustoBeneficioCardProps {
   precoSugerido: number;
@@ -11,13 +12,6 @@ interface CustoBeneficioCardProps {
   totalCotas: number;
   indicador: IndicadorSaude;
   className?: string;
-}
-
-function formatarMoeda(valor: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(valor);
 }
 
 export function CustoBeneficioCard({

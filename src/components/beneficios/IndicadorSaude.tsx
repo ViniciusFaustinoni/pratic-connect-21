@@ -2,6 +2,7 @@ import React from 'react';
 import { TrendingUp, TrendingDown, Minus, HelpCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type IndicadorSaude as TipoIndicador, getCorIndicador } from '@/hooks/useCustoBeneficios';
+import { formatarMoeda } from '@/utils/format';
 
 interface IndicadorSaudeProps {
   precoSugerido: number;
@@ -18,13 +19,6 @@ function calcularIndicador(preco: number, custoReal: number): TipoIndicador {
   if (preco < custoReal) return 'prejuizo';
   if (preco > custoReal) return 'superavit';
   return 'equilibrio';
-}
-
-function formatarMoedaLocal(valor: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(valor);
 }
 
 export function IndicadorSaude({ 

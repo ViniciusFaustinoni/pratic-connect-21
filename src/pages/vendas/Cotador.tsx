@@ -125,10 +125,8 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-// Formatar moeda para input
-const formatarMoeda = (valor: number): string => {
-  return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-};
+// Formatar moeda — importado de utils
+import { formatarMoeda } from '@/utils/format';
 
 const formatPlaca = (value: string): string => {
   const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();

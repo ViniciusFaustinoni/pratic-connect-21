@@ -13,18 +13,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { IndicadorSaude, BadgeIndicador } from './IndicadorSaude';
 import { type CustoBeneficio } from '@/hooks/useCustoBeneficios';
 import { Shield, Wrench, Plus } from 'lucide-react';
+import { formatarMoeda } from '@/utils/format';
 
 interface TabelaSaudeBeneficiosProps {
   beneficios: CustoBeneficio[];
   isLoading?: boolean;
   onEdit?: (beneficio: CustoBeneficio) => void;
-}
-
-function formatarMoeda(valor: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(valor);
 }
 
 function getCategoriaIcon(categoria: string) {

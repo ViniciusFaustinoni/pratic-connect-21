@@ -1,5 +1,6 @@
 import { LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { formatarMoeda } from '@/utils/format';
 
 interface CardResumoFinanceiroProps {
   titulo: string;
@@ -13,13 +14,6 @@ interface CardResumoFinanceiroProps {
     positivo: boolean;
   };
 }
-
-const formatarMoeda = (valor: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(valor);
-};
 
 const cores = {
   blue: 'border-l-blue-500 bg-blue-50',
