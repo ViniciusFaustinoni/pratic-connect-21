@@ -58,7 +58,7 @@ export default function EventoAnaliseDetalhe() {
   const { id: sinistroId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { sinistro, link, vistoria, eventosAnteriores, adimplencia, rastreador, isLoading } = useEventoAnaliseDetalhe(sinistroId);
+  const { sinistro, link, vistoria, eventosAnteriores, adimplencia, rastreador, ressalvas, ressalvasInstalacao, historico, isLoading } = useEventoAnaliseDetalhe(sinistroId);
   const { data: fotosAdesao } = useFotosVistoriaPorVeiculo(sinistro?.veiculo?.id);
 
   const [showReprovacao, setShowReprovacao] = useState(false);
@@ -209,6 +209,85 @@ export default function EventoAnaliseDetalhe() {
               </div>
             </AccordionContent>
           </AccordionItem>
+
+          {/* Dossiê do Associado */}
+          {(ressalvas.length > 0 || ressalvasInstalacao.length > 0 || historico.length > 0) && (
+            <AccordionItem value="dossie" className="border rounded-lg px-3 border-amber-300 bg-amber-50/30">
+              <AccordionTrigger className="text-sm font-semibold">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  Dossiê do Associado
+                  {ressalvas.length > 0 && (
+                    <Badge className="bg-amber-100 text-amber-700 border-amber-300" variant="outline">
+                      {ressalvas.length} ressalva(s)
+                    </Badge>
+                  )}
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 text-sm">
+                {/* Ressalvas registradas */}
+                {ressalvas.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="font-semibold text-amber-700 text-xs uppercase tracking-wide">Ressalvas Registradas</p>
+                    {ressalvas.map((r: any) => (
+                      <div key={r.id} className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-1">
+                        <p className="text-sm">{r.descricao}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{format(new Date(r.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                          {r.usuario?.nome && <span>• por {r.usuario.nome}</span>}
+                          {r.dados_novos?.placa && <Badge variant="outline" className="text-xs">{r.dados_novos.placa}</Badge>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Ressalvas de instalação */}
+                {ressalvasInstalacao.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="font-semibold text-amber-700 text-xs uppercase tracking-wide">Ressalvas de Instalação</p>
+                    {ressalvasInstalacao.map((s: any) => (
+                      <div key={s.id} className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-2">
+                        <p className="text-sm">
+                          {Array.isArray(s.ressalvas_instalador) 
+                            ? s.ressalvas_instalador.join(', ') 
+                            : s.ressalvas_instalador || 'Ressalva aprovada pelo monitoramento'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(s.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                        </p>
+                        {s.fotos_ressalva?.length > 0 && (
+                          <div className="grid grid-cols-3 gap-1">
+                            {(s.fotos_ressalva as string[]).map((url: string, i: number) => (
+                              <img key={i} src={url} alt={`Ressalva ${i + 1}`} className="w-full aspect-square object-cover rounded cursor-pointer hover:opacity-80" onClick={() => setFotoZoom(url)} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Histórico resumido */}
+                {historico.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="font-semibold text-muted-foreground text-xs uppercase tracking-wide">Histórico Recente</p>
+                    <div className="space-y-1">
+                      {historico.map((h: any) => (
+                        <div key={h.id} className="flex items-start gap-2 py-1.5 border-b border-border/50 last:border-0">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap mt-0.5">
+                            {format(new Date(h.created_at), 'dd/MM/yy', { locale: ptBR })}
+                          </span>
+                          <span className="text-xs flex-1">{h.descricao}</span>
+                          {h.usuario?.nome && <span className="text-xs text-muted-foreground whitespace-nowrap">{h.usuario.nome}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          )}
 
           {/* Seção 2 - Dados do Veículo */}
           <AccordionItem value="veiculo" className="border rounded-lg px-3">

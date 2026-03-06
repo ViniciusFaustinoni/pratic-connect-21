@@ -7,7 +7,6 @@ export function useEventoAnaliseDetalhe(sinistroId: string | undefined) {
     queryFn: async () => {
       if (!sinistroId) return null;
 
-      // Sinistro com associado, veiculo
       const { data: sinistro, error } = await supabase
         .from('sinistros')
         .select(`
@@ -32,7 +31,6 @@ export function useEventoAnaliseDetalhe(sinistroId: string | undefined) {
     queryKey: ['evento-analise-link', sinistroId],
     queryFn: async () => {
       if (!sinistroId) return null;
-      // Buscar o link completado (com dados das 3 etapas), senão o mais recente
       const { data: completado } = await supabase
         .from('sinistro_evento_links' as any)
         .select('*')
@@ -44,7 +42,6 @@ export function useEventoAnaliseDetalhe(sinistroId: string | undefined) {
 
       if (completado) return completado as any;
 
-      // Fallback: link com etapa_atual >= 2
       const { data: comDados } = await supabase
         .from('sinistro_evento_links' as any)
         .select('*')
@@ -56,7 +53,6 @@ export function useEventoAnaliseDetalhe(sinistroId: string | undefined) {
 
       if (comDados) return comDados as any;
 
-      // Último fallback: mais recente
       const { data, error } = await supabase
         .from('sinistro_evento_links' as any)
         .select('*')
@@ -144,6 +140,59 @@ export function useEventoAnaliseDetalhe(sinistroId: string | undefined) {
     enabled: !!sinistroQuery.data?.veiculo?.id,
   });
 
+  // Ressalvas do histórico do associado
+  const ressalvasQuery = useQuery({
+    queryKey: ['evento-analise-ressalvas', sinistroQuery.data?.associado?.id],
+    queryFn: async () => {
+      const associadoId = sinistroQuery.data?.associado?.id;
+      if (!associadoId) return [];
+      const { data } = await supabase
+        .from('associados_historico')
+        .select('id, descricao, created_at, dados_novos, usuario:profiles(nome)')
+        .eq('associado_id', associadoId)
+        .eq('tipo', 'ressalva_registrada')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      return (data || []) as any[];
+    },
+    enabled: !!sinistroQuery.data?.associado?.id,
+  });
+
+  // Ressalvas de instalação do veículo
+  const ressalvasInstalacaoQuery = useQuery({
+    queryKey: ['evento-analise-ressalvas-instalacao', sinistroQuery.data?.veiculo?.id],
+    queryFn: async () => {
+      const veiculoId = sinistroQuery.data?.veiculo?.id;
+      if (!veiculoId) return [];
+      const { data } = await supabase
+        .from('servicos')
+        .select('id, ressalvas_instalador, fotos_ressalva, created_at, decisao_instalador')
+        .eq('veiculo_id', veiculoId)
+        .eq('decisao_instalador', 'aprovado_ressalva')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      return (data || []) as any[];
+    },
+    enabled: !!sinistroQuery.data?.veiculo?.id,
+  });
+
+  // Histórico resumido do associado (últimos 10 eventos)
+  const historicoQuery = useQuery({
+    queryKey: ['evento-analise-historico', sinistroQuery.data?.associado?.id],
+    queryFn: async () => {
+      const associadoId = sinistroQuery.data?.associado?.id;
+      if (!associadoId) return [];
+      const { data } = await supabase
+        .from('associados_historico')
+        .select('id, tipo, descricao, created_at, usuario:profiles(nome)')
+        .eq('associado_id', associadoId)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      return (data || []) as any[];
+    },
+    enabled: !!sinistroQuery.data?.associado?.id,
+  });
+
   return {
     sinistro: sinistroQuery.data,
     link: linkQuery.data,
@@ -151,6 +200,9 @@ export function useEventoAnaliseDetalhe(sinistroId: string | undefined) {
     eventosAnteriores: eventosAnterioresQuery.data || 0,
     adimplencia: adimplenciaQuery.data,
     rastreador: rastreadorQuery.data,
+    ressalvas: ressalvasQuery.data || [],
+    ressalvasInstalacao: ressalvasInstalacaoQuery.data || [],
+    historico: historicoQuery.data || [],
     isLoading: sinistroQuery.isLoading || linkQuery.isLoading || vistoriaQuery.isLoading,
   };
 }
