@@ -26201,6 +26201,7 @@ export type Database = {
         | "concluida"
         | "reagendada"
         | "cancelada"
+        | "em_analise"
       status_oficina: "ativo" | "inativo" | "suspenso" | "bloqueado"
       status_ordem_servico:
         | "rascunho"
@@ -26604,6 +26605,7 @@ export const Constants = {
         "concluida",
         "reagendada",
         "cancelada",
+        "em_analise",
       ],
       status_oficina: ["ativo", "inativo", "suspenso", "bloqueado"],
       status_ordem_servico: [
