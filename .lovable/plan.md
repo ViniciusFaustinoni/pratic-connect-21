@@ -1,41 +1,48 @@
+# Mega Auditoria: Planos e Benefícios — Diagnóstico Completo
 
+## Resumo Executivo
 
-# Registrar Ressalvas no Historico de Associados/Veiculos
+Auditei todas as telas e processos que envolvem planos e benefícios. O admin (PlanosAdmin.tsx) é 100% dinâmico, mas 6 telas/componentes ainda usam dados hardcoded.
 
-## Resumo
+---
 
-Adicionar um botao "Registrar Ressalva" na aba Historico do `AssociadoDetalhe.tsx`, similar ao componente `AdicionarObservacao` ja existente, mas especifico para ressalvas. O coordenador de monitoramento podera documentar inconsistencias com tipo `ressalva_registrada`, campo de texto obrigatorio e opcao de selecionar o veiculo relacionado.
+## ✅ JÁ CORRETO
 
-## Alteracoes
+- PlanosAdmin.tsx — CRUD dinâmico
+- usePlanosCotacao.ts — Hook principal dinâmico
+- CotacaoDetalhe.tsx — Dados do hook
+- PlanoCardComparativo / PlanoDetalhesModal — Props dinâmicas
+- EscolhaPlano.tsx — Props do banco
+- ContratoDetalhe.tsx — CORRIGIDO
+- useCalcularCotacao.ts — CORRIGIDO
 
-### 1. Novo componente `src/components/cadastro/AdicionarRessalva.tsx`
+## ❌ PROBLEMAS
 
-Componente com:
-- Botao "Registrar Ressalva" (icone AlertTriangle, cor amber)
-- Ao expandir: campo de texto (descricao da ressalva), select opcional para escolher o veiculo do associado (busca veiculos do associado), e botoes Cancelar/Salvar
-- Insere na tabela `associados_historico` com `tipo: 'ressalva_registrada'` e `dados_novos` contendo veiculo_id/placa se selecionado
-- Usa `supabase.auth.getUser()` para registrar o usuario
+### 🔴 P1: Cotador.tsx — mapearPlanosParaExibicao hardcoded
+- Coberturas fallback por código (BASICO/TOTAL/PREMIUM)
+- Preços com percentuais fixos (0.004/0.0055/0.007)
+- Descrição e destaque fixos
+- FIX: Usar usePlanosCotacao
 
-### 2. `src/hooks/useAssociadoHistoricoCompleto.ts` — Mapear novo tipo
+### 🔴 P2: AppPlano.tsx — BENEFICIOS_POR_TIPO hardcoded
+- App mostra benefícios fixos, ignora banco
+- FIX: Buscar planos_beneficios + benefits
 
-Adicionar `'ressalva_registrada': 'observacao_adicionada'` no mapeamento `tipoDbParaTimeline` (reutiliza o icone de observacao, ou podemos criar um tipo especifico).
+### 🔴 P3: CardPlano.tsx — Duplicação de P2
+- FIX: Receber props do banco
 
-### 3. `src/pages/cadastro/AssociadoDetalhe.tsx` — Renderizar componente
+### 🟡 P4: CotacaoPublica.tsx — getDescricaoCategoria estático
+- FIX: Usar planos.descricao do banco
 
-Na aba `historico` (linha 813), adicionar o componente `AdicionarRessalva` logo acima da timeline, ao lado do titulo. Visivel apenas para coordenadores de monitoramento (verificar permissao).
+### 🟡 P5: pricing.ts — 539 linhas estáticas
+- FIX: Extrair utilitários, deprecar tabelas
 
-### 4. `src/components/associados/detalhe/AssociadoResumoTab.tsx` — Mapear titulo
+## Plano
 
-Adicionar `'ressalva_registrada': 'Ressalva registrada'` no mapa de titulos e configurar icone/cor amber.
-
-## Arquivos
-
-| Arquivo | Acao |
-|---|---|
-| `src/components/cadastro/AdicionarRessalva.tsx` | Novo — formulario de ressalva com select de veiculo |
-| `src/hooks/useAssociadoHistoricoCompleto.ts` | Adicionar tipo no mapeamento |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Renderizar AdicionarRessalva na aba historico + import |
-| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Mapear titulo/icone/cor do novo tipo |
-
-4 arquivos.
-
+| Fase | Arquivo | Ação |
+|---|---|---|
+| A | Cotador.tsx | Substituir mapearPlanosParaExibicao por usePlanosCotacao |
+| B | AppPlano.tsx | Buscar benefícios do plano via banco |
+| B | CardPlano.tsx | Receber benefícios como props |
+| C | CotacaoPublica.tsx | Usar planos.descricao |
+| D | pricing.ts | Extrair utilitários |
