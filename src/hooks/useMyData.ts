@@ -63,6 +63,17 @@ export interface AssociadoWithRelations extends Associado {
     descricao?: string | null;
     tipo_uso: string;
     valor_adesao: number;
+    coberturas?: string[] | null;
+    planos_beneficios?: Array<{
+      id: string;
+      included: boolean;
+      benefits: {
+        id: string;
+        name: string;
+        description: string | null;
+        icon: string | null;
+      } | null;
+    }>;
   } | null;
   contratos?: Array<{
     id: string;
@@ -93,7 +104,18 @@ export function useMyAssociado() {
             nome,
             descricao,
             tipo_uso,
-            valor_adesao
+            valor_adesao,
+            coberturas,
+            planos_beneficios (
+              id,
+              included,
+              benefits (
+                id,
+                name,
+                description,
+                icon
+              )
+            )
           ),
           contratos!fk_contratos_associado (
             id,
