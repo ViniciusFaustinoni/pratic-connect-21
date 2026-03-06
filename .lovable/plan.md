@@ -61,21 +61,10 @@ Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`
 - `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-### 4. Níveis hardcoded em `EscolhaPlano.tsx` (prioridade baixa)
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-- L19: `nivel?: 'basic' | 'premium' | 'exclusive'` — tipo fixo
-- L40-59: `getNivelIcon` e `getNivelLabel` com switch hardcoded
-- L151-152: Cores fixas por nível (yellow para exclusive, purple para premium)
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-**Nota:** Os dados vêm do banco (props), mas a UI de ícones/labels/cores é fixa para 3 níveis. Se no futuro houver mais níveis, precisará refatorar.
-
-**Solução futura:** Mover ícone/cor/label para a tabela `planos` ou `product_lines` no banco.
-
-### 5. Blindado como aditivo (decisão pendente)
-
-- `useAvaliarAditivos.ts` L24-27: trata veículo blindado como aditivo (permite)
-- Comportamento correto: deve bloquear cadastro
-- **Aguarda decisão de negócio**
 
 ---
 
