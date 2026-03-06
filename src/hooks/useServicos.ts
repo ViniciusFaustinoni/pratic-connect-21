@@ -1320,25 +1320,8 @@ export function useEnviarParaMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['ressalvas-monitoramento'] });
       queryClient.invalidateQueries({ queryKey: ['ressalvas-monitoramento-count'] });
       toast.success('Enviado para confirmação do monitoramento.');
-
-      // Buscar próxima tarefa (fire-and-forget)
-      navigator.geolocation?.getCurrentPosition(
-        (pos) => {
-          supabase.functions.invoke('atribuir-proxima-tarefa', {
-            body: {
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-            },
-          }).then(() => {
-            queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
-          });
-        },
-        () => {
-          supabase.functions.invoke('atribuir-proxima-tarefa').then(() => {
-            queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
-          });
-        }
-      );
+      // NÃO chamar atribuir-proxima-tarefa aqui.
+      // O instalador deve permanecer no serviço aguardando a decisão do monitoramento.
     },
     onError: (error) => {
       console.error('Erro ao enviar para monitoramento:', error);

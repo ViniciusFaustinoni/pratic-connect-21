@@ -197,6 +197,19 @@ export default function InstaladorChecklist() {
     }
   }, [statusDecisao]);
 
+  // Persistir estado de espera ao recarregar a página
+  useEffect(() => {
+    if (!servico) return;
+    const decisao = (servico as any).decisao_instalador;
+    const status = servico.status;
+    
+    // Se o serviço está pendente de monitoramento, retomar tela de espera + polling
+    if (decisao === 'pendente_monitoramento' && status === 'em_analise' && !aguardandoMonitoramento) {
+      console.log('[InstaladorChecklist] Detectado serviço pendente_monitoramento ao carregar, retomando espera');
+      setAguardandoMonitoramento(true);
+    }
+  }, [servico?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const progresso = (etapaAtual / ETAPAS.length) * 100;
 
   // Fotos da vistoria
