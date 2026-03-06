@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, CircleMarker } from 'react-leaflet';
+import { PolylineOSRM } from '@/components/mapa/PolylineOSRM';
 import L from 'leaflet';
 import { format, subHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -162,10 +163,10 @@ export function TrajetoSinistroCard({
 
       {polylinePositions.length > 0 && (
         <>
-          {/* Linha do trajeto */}
-          <Polyline
+          {/* Linha do trajeto com rota real */}
+          <PolylineOSRM
             positions={polylinePositions}
-            pathOptions={{ color: '#3b82f6', weight: 3, opacity: 0.8 }}
+            color="#3b82f6" weight={3} opacity={0.8}
           />
 
           {/* Marcadores de parada */}
