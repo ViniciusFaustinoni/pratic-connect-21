@@ -117,7 +117,7 @@ export type StatusRastreador =
 
 export type StatusRota = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada';
 
-export type StatusInstalacao = 'agendada' | 'em_rota' | 'em_andamento' | 'concluida' | 'reagendada' | 'cancelada';
+export type StatusInstalacao = 'agendada' | 'em_rota' | 'em_andamento' | 'concluida' | 'reagendada' | 'cancelada' | 'em_analise';
 
 export type StatusVistoria = 'pendente' | 'aprovada' | 'reprovada' | 'em_analise';
 
