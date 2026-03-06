@@ -65,3 +65,12 @@ verify_jwt = false
 
 [functions.sugerir-ressalva-ia]
 verify_jwt = false
+
+[functions.rastreador-historico]
+verify_jwt = false
+
+[functions.rastreador-posicao]
+verify_jwt = false
+
+[functions.rastreador-auth]
+verify_jwt = false
