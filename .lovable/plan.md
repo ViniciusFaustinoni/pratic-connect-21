@@ -1,41 +1,39 @@
 
 
-# Registrar Ressalvas no Historico de Associados/Veiculos
+# Mapa de Veículos — Busca por Nome + Aba Padrão
 
-## Resumo
+## Estado Atual
 
-Adicionar um botao "Registrar Ressalva" na aba Historico do `AssociadoDetalhe.tsx`, similar ao componente `AdicionarObservacao` ja existente, mas especifico para ressalvas. O coordenador de monitoramento podera documentar inconsistencias com tipo `ressalva_registrada`, campo de texto obrigatorio e opcao de selecionar o veiculo relacionado.
+O código já implementa:
+- Aba "Veículos" como padrão (`useState("veiculos")`)
+- Busca por placa com mínimo 3 caracteres
+- Exibição de veículo único no mapa
 
-## Alteracoes
+## Alterações Necessárias
 
-### 1. Novo componente `src/components/cadastro/AdicionarRessalva.tsx`
+### 1. Buscar por placa OU nome do associado (`Mapa.tsx`)
 
-Componente com:
-- Botao "Registrar Ressalva" (icone AlertTriangle, cor amber)
-- Ao expandir: campo de texto (descricao da ressalva), select opcional para escolher o veiculo do associado (busca veiculos do associado), e botoes Cancelar/Salvar
-- Insere na tabela `associados_historico` com `tipo: 'ressalva_registrada'` e `dados_novos` contendo veiculo_id/placa se selecionado
-- Usa `supabase.auth.getUser()` para registrar o usuario
+Atualmente a query usa apenas `.ilike("placa", ...)`. Alterar para usar `.or()` combinando busca por placa e por nome do associado:
 
-### 2. `src/hooks/useAssociadoHistoricoCompleto.ts` — Mapear novo tipo
+```
+.or(`placa.ilike.%${termo}%,associado_nome.ilike.%${termo}%`)
+```
 
-Adicionar `'ressalva_registrada': 'observacao_adicionada'` no mapeamento `tipoDbParaTimeline` (reutiliza o icone de observacao, ou podemos criar um tipo especifico).
+Atualizar o placeholder do input para: `"Buscar por placa ou nome do associado..."`.
 
-### 3. `src/pages/cadastro/AssociadoDetalhe.tsx` — Renderizar componente
+### 2. Exibir associado_nome nos resultados
 
-Na aba `historico` (linha 813), adicionar o componente `AdicionarRessalva` logo acima da timeline, ao lado do titulo. Visivel apenas para coordenadores de monitoramento (verificar permissao).
+Já exibe (`v.associado_nome`), mas quando a busca for por nome e retornar múltiplos veículos do mesmo associado, o operador verá todos listados com placa + modelo + nome, e escolhe qual.
 
-### 4. `src/components/associados/detalhe/AssociadoResumoTab.tsx` — Mapear titulo
+### 3. Garantir aba "Veículos" como padrão
 
-Adicionar `'ressalva_registrada': 'Ressalva registrada'` no mapa de titulos e configurar icone/cor amber.
+O `useState` já define `"veiculos"`, mas vou confirmar que não há nenhum `useEffect` ou lógica que mude isso. Se necessário, forçar.
 
-## Arquivos
+## Arquivo
 
-| Arquivo | Acao |
+| Arquivo | Ação |
 |---|---|
-| `src/components/cadastro/AdicionarRessalva.tsx` | Novo — formulario de ressalva com select de veiculo |
-| `src/hooks/useAssociadoHistoricoCompleto.ts` | Adicionar tipo no mapeamento |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Renderizar AdicionarRessalva na aba historico + import |
-| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Mapear titulo/icone/cor do novo tipo |
+| `src/pages/monitoramento/Mapa.tsx` | Alterar query de busca para incluir nome do associado + atualizar placeholder |
 
-4 arquivos.
+1 arquivo, alteração pontual (~3 linhas).
 
