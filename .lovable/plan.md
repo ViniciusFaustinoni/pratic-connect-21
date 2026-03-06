@@ -1,41 +1,40 @@
 
 
-# Registrar Ressalvas no Historico de Associados/Veiculos
+# Correção: Persistência do Fluxo de Ressalva do Instalador
+
+## Problemas
+
+1. **Reatribuição prematura**: Em `useServicos.ts` (linhas 1324-1341), `atribuir-proxima-tarefa` é chamado no `onSuccess` de `useEnviarParaMonitoramento`, tirando o instalador do serviço antes da decisão.
+
+2. **Estado `aguardandoMonitoramento` não persiste**: É um `useState(false)` — ao recarregar a página, o instalador perde a tela de espera mesmo com o serviço ainda `em_analise` + `pendente_monitoramento` no banco.
+
+## Alterações
+
+### 1. Remover `atribuir-proxima-tarefa` do envio para monitoramento
+
+**Arquivo**: `src/hooks/useServicos.ts` (linhas 1324-1341)
+
+Remover todo o bloco `navigator.geolocation / atribuir-proxima-tarefa` do `onSuccess` de `useEnviarParaMonitoramento`. O instalador deve permanecer no serviço aguardando a decisão.
+
+### 2. Detectar estado pendente ao carregar o componente
+
+**Arquivo**: `src/pages/instalador/InstaladorChecklist.tsx`
+
+Adicionar um `useEffect` após a linha 198 que verifica os dados do serviço ao carregar:
+
+- Se `servico.decisao_instalador === 'pendente_monitoramento'` e `servico.status === 'em_analise'` → ativar `setAguardandoMonitoramento(true)` para retomar polling
+- Se `servico.decisao_instalador === 'aprovado_ressalva'` e `servico.status === 'em_andamento'` → não fazer nada especial, o fluxo normal do checklist continua
+
+Isso garante que:
+- Recarregar a página durante espera → volta à tela de espera com polling
+- Voltar ao serviço após aprovação → continua normalmente o checklist
 
 ## Resumo
 
-Adicionar um botao "Registrar Ressalva" na aba Historico do `AssociadoDetalhe.tsx`, similar ao componente `AdicionarObservacao` ja existente, mas especifico para ressalvas. O coordenador de monitoramento podera documentar inconsistencias com tipo `ressalva_registrada`, campo de texto obrigatorio e opcao de selecionar o veiculo relacionado.
-
-## Alteracoes
-
-### 1. Novo componente `src/components/cadastro/AdicionarRessalva.tsx`
-
-Componente com:
-- Botao "Registrar Ressalva" (icone AlertTriangle, cor amber)
-- Ao expandir: campo de texto (descricao da ressalva), select opcional para escolher o veiculo do associado (busca veiculos do associado), e botoes Cancelar/Salvar
-- Insere na tabela `associados_historico` com `tipo: 'ressalva_registrada'` e `dados_novos` contendo veiculo_id/placa se selecionado
-- Usa `supabase.auth.getUser()` para registrar o usuario
-
-### 2. `src/hooks/useAssociadoHistoricoCompleto.ts` — Mapear novo tipo
-
-Adicionar `'ressalva_registrada': 'observacao_adicionada'` no mapeamento `tipoDbParaTimeline` (reutiliza o icone de observacao, ou podemos criar um tipo especifico).
-
-### 3. `src/pages/cadastro/AssociadoDetalhe.tsx` — Renderizar componente
-
-Na aba `historico` (linha 813), adicionar o componente `AdicionarRessalva` logo acima da timeline, ao lado do titulo. Visivel apenas para coordenadores de monitoramento (verificar permissao).
-
-### 4. `src/components/associados/detalhe/AssociadoResumoTab.tsx` — Mapear titulo
-
-Adicionar `'ressalva_registrada': 'Ressalva registrada'` no mapa de titulos e configurar icone/cor amber.
-
-## Arquivos
-
-| Arquivo | Acao |
+| Arquivo | Ação |
 |---|---|
-| `src/components/cadastro/AdicionarRessalva.tsx` | Novo — formulario de ressalva com select de veiculo |
-| `src/hooks/useAssociadoHistoricoCompleto.ts` | Adicionar tipo no mapeamento |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Renderizar AdicionarRessalva na aba historico + import |
-| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Mapear titulo/icone/cor do novo tipo |
+| `src/hooks/useServicos.ts` | Remover bloco `atribuir-proxima-tarefa` (linhas 1324-1341) |
+| `src/pages/instalador/InstaladorChecklist.tsx` | Adicionar useEffect para detectar estado pendente/aprovado ao carregar |
 
-4 arquivos.
+2 arquivos, alterações pontuais e seguras.
 
