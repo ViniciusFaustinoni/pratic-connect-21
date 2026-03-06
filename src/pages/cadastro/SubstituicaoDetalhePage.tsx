@@ -45,12 +45,14 @@ export default function SubstituicaoDetalhePage() {
   const [motivoRejeicao, setMotivoRejeicao] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [fipeAltaConfirmada, setFipeAltaConfirmada] = useState(false);
+  const [blindadoConfirmado, setBlindadoConfirmado] = useState(false);
   const [efetivando, setEfetivando] = useState(false);
 
   const formatCurrency = (v: number | null | undefined) =>
     v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
 
   const fipeAlta = (sub?.veiculo_novo_fipe ?? 0) > (limites?.fipeLimiteAutorizacao ?? 120000);
+  const veiculoBlindado = !!(vNovo as any)?.blindado;
   const isPendente = sub?.status === 'aguardando_aprovacao';
 
   const handleAprovar = async () => {
@@ -328,11 +330,27 @@ export default function SubstituicaoDetalhePage() {
             <CardTitle className="text-base">Ações da Diretoria</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {veiculoBlindado && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <p className="font-medium">Veículo BLINDADO — Requer autorização especial da diretoria</p>
+                  <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                    <Checkbox
+                      checked={blindadoConfirmado}
+                      onCheckedChange={(v) => setBlindadoConfirmado(!!v)}
+                    />
+                    <span className="text-sm">Confirmo autorização para veículo blindado</span>
+                  </label>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {fipeAlta && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  <p className="font-medium">FIPE acima de R$ 120.000 — Requer autorização especial por email</p>
+                  <p className="font-medium">FIPE acima de R$ {(limites?.fipeLimiteAutorizacao ?? 120000).toLocaleString('pt-BR')} — Requer autorização especial por email</p>
                   <label className="flex items-center gap-2 mt-2 cursor-pointer">
                     <Checkbox
                       checked={fipeAltaConfirmada}
@@ -367,7 +385,7 @@ export default function SubstituicaoDetalhePage() {
               </Button>
               <Button
                 onClick={() => setAprovarDialogOpen(true)}
-                disabled={efetivando || (fipeAlta && !fipeAltaConfirmada)}
+                disabled={efetivando || (fipeAlta && !fipeAltaConfirmada) || (veiculoBlindado && !blindadoConfirmado)}
                 className="bg-green-600 hover:bg-green-700"
               >
                 {efetivando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}

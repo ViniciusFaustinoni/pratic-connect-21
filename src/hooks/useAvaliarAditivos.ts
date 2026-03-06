@@ -6,7 +6,6 @@ import { supabase } from '@/integrations/supabase/client';
 interface VeiculoParaAvaliacao {
   placa?: string;
   procedencia?: string;
-  blindado?: boolean;
   valorFipe?: number;
   observacoes?: string;
 }
@@ -20,11 +19,6 @@ function avaliarRegra(regra: RegraAditivo, veiculo: VeiculoParaAvaliacao, fipeLi
         veiculo.placa === '' || 
         veiculo.placa.startsWith('000') ||
         veiculo.procedencia === 'Novo (zero km)';
-    
-    case 'veiculo_blindado':
-      if (veiculo.blindado) return true;
-      const obs = (veiculo.observacoes || '').toLowerCase();
-      return obs.includes('blindad') || obs.includes('blindagem');
     
     case 'fipe_acima_de':
       return (veiculo.valorFipe || 0) >= fipeLimite;
