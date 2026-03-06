@@ -102,6 +102,7 @@ export interface DadosNovoVeiculo {
   codigo_fipe: string;
   valor_fipe: number;
   uso_aplicativo: boolean;
+  blindado: boolean;
   plataforma_app?: string;
   cobertura_vidros: boolean;
   cobertura_terceiros: string | null;
