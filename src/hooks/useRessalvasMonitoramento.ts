@@ -106,11 +106,11 @@ export function useDecidirRessalva() {
       const agora = new Date().toISOString();
 
       if (decisao === 'aprovar') {
-        // Aprovar: seguir para análise de cadastro
+        // Aprovar: manter em_andamento para o instalador continuar no local
         const { error } = await supabase
           .from('servicos')
           .update({
-            status: 'concluida',
+            status: 'em_andamento',
             decisao_instalador: 'aprovado_ressalva',
             observacoes: `Ressalva aprovada pelo monitoramento${justificativa ? ': ' + justificativa : ''}`,
             updated_at: agora,
@@ -118,31 +118,13 @@ export function useDecidirRessalva() {
           .eq('id', servicoId);
         if (error) throw error;
 
-        // Atualizar veículo para ativo
-        await supabase
-          .from('veiculos')
-          .update({ status: 'ativo', updated_at: agora })
-          .eq('id', veiculoId);
-
-        // Atualizar associado para em_analise (análise cadastral)
-        const { data: associadoAtual } = await supabase
-          .from('associados')
-          .select('status')
-          .eq('id', associadoId)
-          .single();
-
-        if (associadoAtual?.status !== 'ativo') {
-          await supabase
-            .from('associados')
-            .update({ status: 'em_analise', updated_at: agora })
-            .eq('id', associadoId)
-            .in('status', ['pendente_vistoria', 'aguardando_instalacao']);
-        }
+        // NÃO ativar veículo nem alterar associado aqui.
+        // Isso será feito quando o instalador concluir a instalação normalmente.
 
         await supabase.from('associados_historico').insert({
           associado_id: associadoId,
           tipo: 'ressalva_aprovada_monitoramento',
-          descricao: `Ressalva aprovada pelo monitoramento. Seguindo para análise cadastral.${justificativa ? ' Obs: ' + justificativa : ''}`,
+          descricao: `Ressalva aprovada pelo monitoramento. Instalador prosseguindo com instalação.${justificativa ? ' Obs: ' + justificativa : ''}`,
           dados_novos: { servico_id: servicoId, decisao, aprovado_por: profile?.id },
           usuario_id: profile?.id,
         });
