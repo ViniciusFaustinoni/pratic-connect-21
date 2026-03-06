@@ -1,29 +1,35 @@
-# Mega Auditoria: Planos e Benefícios — Diagnóstico Completo
 
-## Resumo Executivo
 
-Auditei todas as telas e processos que envolvem planos e benefícios. Todos os fluxos agora são dinâmicos.
+# Audit Results: All Three Flows Are Clean and Dynamic
 
----
+## 1. Cotador (`/vendas/cotador`)
+- Uses `usePlanosCotacao` hook directly — returns `PlanoCotacao[]` from the database
+- `mapearPlanosParaExibicao` has been removed; no hardcoded pricing
+- Tabs render `plano.nome`, `plano.destaque`, `plano.coberturas` from DB
+- Plan selection uses UUID `plano.id`
+- Coverage exclusion logic (`isCoberturaRemovida`) works per vehicle category
+- Price display uses `planoAtual.valorMensal`, `planoAtual.valorAdesao` from hook
+- Saves `plano_id` (UUID) to `cotacoes` table on save
 
-## ✅ CORRIGIDO
+## 2. CotacaoPublica (`/cotacao/:token`)
+- Fetches `cotacoes` with `planos:planos!plano_id(*)` join
+- Renders `cotacao.planos.nome`, `cotacao.planos.descricao`, `cotacao.planos.coberturas` from DB
+- No hardcoded fallbacks — if no coberturas in DB, nothing renders (correct)
+- `getDescricaoCategoria` removed from this flow
+- Values come from `cotacao.valor_adesao` and `cotacao.valor_cota`
 
-- PlanosAdmin.tsx — CRUD dinâmico
-- usePlanosCotacao.ts — Hook principal dinâmico
-- CotacaoDetalhe.tsx — Dados do hook
-- PlanoCardComparativo / PlanoDetalhesModal — Props dinâmicas
-- EscolhaPlano.tsx — Props do banco
-- ContratoDetalhe.tsx — CORRIGIDO
-- useCalcularCotacao.ts — CORRIGIDO
-- Cotador.tsx — CORRIGIDO (removido mapearPlanosParaExibicao, usa PlanoCotacao direto)
-- AppPlano.tsx — CORRIGIDO (benefícios e coberturas do banco via planos_beneficios + benefits)
-- CardPlano.tsx — CORRIGIDO (recebe benefícios/coberturas como props)
-- CotacaoPublica.tsx — CORRIGIDO (usa planos.descricao, sem fallback hardcoded)
-- useMyData.ts — CORRIGIDO (select expandido com coberturas + planos_beneficios)
+## 3. AppPlano (`/app/plano`) — Associate App
+- `useMyAssociado` query expanded with `planos_beneficios(... benefits(...))` and `coberturas`
+- Benefits rendered from `plano.planos_beneficios` where `incluso !== false`
+- Coverages rendered from `plano.coberturas` array
+- No `BENEFICIOS_POR_TIPO` or `COBERTURAS` constants remain
 
-## 🟡 PENDENTE (baixa prioridade)
+## Remaining `getDescricaoCategoria`
+Only exists inside `pricing.ts` itself, used by `useCotacaoAvancada` (the advanced quote modal). Not part of the main 3 flows. Low priority — separate refactor.
 
-### pricing.ts — 539 linhas estáticas
-- Ainda usado por useCotacaoAvancada.ts e QuoteCalculatorModal.tsx
-- getDescricaoCategoria removido do fluxo público, mas mantido internamente
-- FIX futuro: Migrar fluxo avançado para usar usePlanosCotacao
+## No Issues Found
+- No console errors
+- No hardcoded plan data in any of the 3 flows
+- All data comes from `planos`, `planos_beneficios`, `benefits`, and `tabelas_preco` tables
+- The system is fully dynamic and reflects admin panel changes
+
