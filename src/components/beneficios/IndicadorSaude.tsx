@@ -52,11 +52,11 @@ export function IndicadorSaude({
   switch (indicador) {
     case 'superavit':
       icone = <TrendingUp className={iconSizes[size]} />;
-      texto = showMargem ? `+${formatarMoedaLocal(margem)}` : 'Superávit';
+      texto = showMargem ? `+${formatarMoeda(margem)}` : 'Superávit';
       break;
     case 'prejuizo':
       icone = <TrendingDown className={iconSizes[size]} />;
-      texto = showMargem ? formatarMoedaLocal(margem) : 'Prejuízo';
+      texto = showMargem ? formatarMoeda(margem) : 'Prejuízo';
       break;
     case 'equilibrio':
       icone = <Minus className={iconSizes[size]} />;
@@ -86,16 +86,16 @@ export function IndicadorSaude({
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">
           <div className="space-y-1 text-xs">
-            <p><strong>Preço configurado:</strong> {formatarMoedaLocal(precoSugerido)}</p>
-            <p><strong>Custo real (60d):</strong> {formatarMoedaLocal(custoReal)}</p>
+            <p><strong>Preço configurado:</strong> {formatarMoeda(precoSugerido)}</p>
+            <p><strong>Custo real (60d):</strong> {formatarMoeda(custoReal)}</p>
             {gastoTotal !== undefined && (
-              <p><strong>Gasto total:</strong> {formatarMoedaLocal(gastoTotal)}</p>
+              <p><strong>Gasto total:</strong> {formatarMoeda(gastoTotal)}</p>
             )}
             {totalCotas !== undefined && (
               <p><strong>Total de cotas:</strong> {totalCotas.toLocaleString('pt-BR')}</p>
             )}
             <p className={`font-semibold ${cores.text}`}>
-              <strong>Margem:</strong> {formatarMoedaLocal(margem)} por cota
+              <strong>Margem:</strong> {formatarMoeda(margem)} por cota
             </p>
           </div>
         </TooltipContent>
