@@ -38,6 +38,7 @@ export default function SubstituicaoDetalhePage() {
   const { data: sub, isLoading } = useSubstituicao(id);
   const aprovarMutation = useAprovarSubstituicao();
   const rejeitarMutation = useRejeitarSubstituicao();
+  const { data: limites } = useConfigLimitesVeiculo();
 
   const [aprovarDialogOpen, setAprovarDialogOpen] = useState(false);
   const [rejeitarDialogOpen, setRejeitarDialogOpen] = useState(false);
