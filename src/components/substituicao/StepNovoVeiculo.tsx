@@ -49,6 +49,7 @@ export function StepNovoVeiculo({
   onIniciarSubstituicao,
 }: StepNovoVeiculoProps) {
   const fipe = useFipe();
+  const { data: limites } = useConfigLimitesVeiculo();
   const [placaExiste, setPlacaExiste] = useState(false);
   const [verificandoPlaca, setVerificandoPlaca] = useState(false);
   const [consultandoFipe, setConsultandoFipe] = useState(false);
@@ -341,11 +342,11 @@ export function StepNovoVeiculo({
               </table>
             </div>
 
-            {(dados.valor_fipe || 0) > 120000 && (
+            {(dados.valor_fipe || 0) > (limites?.fipeLimiteAutorizacao ?? 120000) && (
               <Alert className="mt-4 border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/30">
                 <AlertTriangle className="h-4 w-4 text-yellow-600" />
                 <AlertDescription className="text-xs">
-                  Veículo acima de R$ 120.000 requer autorização especial da diretoria por email.
+                  Veículo acima de R$ {(limites?.fipeLimiteAutorizacao ?? 120000).toLocaleString('pt-BR')} requer autorização especial da diretoria por email.
                 </AlertDescription>
               </Alert>
             )}

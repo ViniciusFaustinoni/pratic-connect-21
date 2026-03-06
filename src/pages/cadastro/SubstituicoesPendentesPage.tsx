@@ -27,6 +27,7 @@ const TAB_FILTERS: Record<string, StatusSubstituicao[] | null> = {
 export default function SubstituicoesPendentesPage() {
   const navigate = useNavigate();
   const { data: substituicoes, isLoading, refetch } = useSubstituicoes();
+  const { data: limites } = useConfigLimitesVeiculo();
   const [tab, setTab] = useState('pendentes');
   const [busca, setBusca] = useState('');
 
