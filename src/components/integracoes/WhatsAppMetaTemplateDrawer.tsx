@@ -111,6 +111,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
           header_texto: headerTipo === 'text' ? headerTexto : null,
           rodape: rodape || null,
           variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : null,
+          motivo_rejeicao: template?.motivo_rejeicao || null,
         },
       });
       if (error) throw error;
