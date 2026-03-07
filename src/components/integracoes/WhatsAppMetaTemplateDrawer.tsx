@@ -19,6 +19,7 @@ interface IAValidationResult {
   problemas: string[];
   sugestoes: string[];
   resumo: string;
+  corpo_sugerido?: string;
 }
 
 interface Props {
