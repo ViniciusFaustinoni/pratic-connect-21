@@ -46,7 +46,8 @@ Analise o template fornecido e retorne sua avaliação usando a função dispon�
 ${header_texto ? `**Header texto**: ${header_texto}` : ''}
 **Corpo**: ${corpo}
 ${rodape ? `**Rodapé**: ${rodape}` : ''}
-${variaveis_exemplo ? `**Exemplos de variáveis**: ${JSON.stringify(variaveis_exemplo)}` : ''}
+    ${variaveis_exemplo ? `**Exemplos de variáveis**: ${JSON.stringify(variaveis_exemplo)}` : ''}
+${motivo_rejeicao ? `\n**⚠️ Motivo da rejeição anterior pela Meta**: ${motivo_rejeicao}\n\nEste template foi rejeitado anteriormente. Analise o motivo acima e forneça um corpo_sugerido corrigido que resolva especificamente esse problema.` : ''}
 
 Avalie se este template será aprovado pela Meta e forneça feedback detalhado.`;
 
