@@ -94,6 +94,10 @@ Avalie se este template será aprovado pela Meta e forneça feedback detalhado.`
                     type: "string",
                     description: "Resumo geral da avaliação em 1-2 frases",
                   },
+                  corpo_sugerido: {
+                    type: "string",
+                    description: "Versão corrigida do corpo do template que resolve os problemas encontrados. Obrigatório se houver motivo de rejeição anterior.",
+                  },
                 },
                 required: ["score", "aprovado", "problemas", "sugestoes", "resumo"],
                 additionalProperties: false,
