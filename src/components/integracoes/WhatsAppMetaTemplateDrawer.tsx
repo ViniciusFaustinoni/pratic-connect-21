@@ -7,8 +7,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Save, Send, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Plus, Save, Send, Loader2, Bot, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import { useCriarMetaTemplate, useAtualizarMetaTemplate, useEnviarMetaTemplate } from '@/hooks/useWhatsAppMeta';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+interface IAValidationResult {
+  score: number;
+  aprovado: boolean;
+  problemas: string[];
+  sugestoes: string[];
+  resumo: string;
+}
 
 interface Props {
   open: boolean;
@@ -28,6 +39,9 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
   const [varExemplos, setVarExemplos] = useState<Record<string, string>>({});
   const corpoRef = useRef<HTMLTextAreaElement>(null);
 
+  const [validacao, setValidacao] = useState<IAValidationResult | null>(null);
+  const [validando, setValidando] = useState(false);
+
   const criar = useCriarMetaTemplate();
   const atualizar = useAtualizarMetaTemplate();
   const enviar = useEnviarMetaTemplate();
@@ -41,6 +55,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
       setCorpo(template.corpo || '');
       setRodape(template.rodape || '');
       setVarExemplos((template.variaveis_exemplo as Record<string, string>) || {});
+      setValidacao(null);
     } else if (open && !template) {
       setNome('');
       setCategoria('UTILITY');
@@ -49,6 +64,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
       setCorpo('');
       setRodape('');
       setVarExemplos({});
+      setValidacao(null);
     }
   }, [open, template]);
 
@@ -76,6 +92,41 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
     const exemplo = varExemplos[v] || `[variável ${v}]`;
     return text.replace(new RegExp(`\\{\\{${v}\\}\\}`, 'g'), exemplo);
   }, corpo);
+
+  const handleValidarIA = async () => {
+    if (!nome || !corpo) {
+      toast.error('Preencha o nome e corpo do template antes de validar.');
+      return;
+    }
+    setValidando(true);
+    setValidacao(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-template-validar', {
+        body: {
+          nome,
+          categoria,
+          corpo,
+          header_tipo: headerTipo,
+          header_texto: headerTipo === 'text' ? headerTexto : null,
+          rodape: rodape || null,
+          variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : null,
+        },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      setValidacao({
+        score: data.score,
+        aprovado: data.aprovado,
+        problemas: data.problemas || [],
+        sugestoes: data.sugestoes || [],
+        resumo: data.resumo || '',
+      });
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao validar template com IA');
+    } finally {
+      setValidando(false);
+    }
+  };
 
   const handleSalvarRascunho = async () => {
     if (!nome || !corpo) return;
@@ -106,7 +157,6 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
 
   const handleEnviarAprovacao = async () => {
     if (isEdit && template.id) {
-      // Salvar primeiro, depois enviar
       await atualizar.mutateAsync({
         id: template.id,
         nome,
@@ -120,7 +170,6 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
       await enviar.mutateAsync(template.id);
       onOpenChange(false);
     } else {
-      // Criar e depois enviar
       const created = await criar.mutateAsync({
         nome,
         categoria,
@@ -138,6 +187,22 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
   };
 
   const isSaving = criar.isPending || atualizar.isPending || enviar.isPending;
+
+  const scoreColor = validacao
+    ? validacao.score >= 8
+      ? 'text-green-600'
+      : validacao.score >= 5
+        ? 'text-yellow-600'
+        : 'text-destructive'
+    : '';
+
+  const ScoreIcon = validacao
+    ? validacao.aprovado
+      ? CheckCircle
+      : validacao.score >= 5
+        ? AlertTriangle
+        : XCircle
+    : Bot;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -261,14 +326,74 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
 
             <Separator />
 
+            {/* Resultado da validação IA */}
+            {validacao && (
+              <div className={`rounded-lg border p-3 space-y-2 ${validacao.aprovado ? 'border-green-500/30 bg-green-500/5' : validacao.score >= 5 ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-destructive/30 bg-destructive/5'}`}>
+                <div className="flex items-center gap-2">
+                  <ScoreIcon className={`h-4 w-4 ${scoreColor}`} />
+                  <span className={`text-sm font-semibold ${scoreColor}`}>
+                    Score: {validacao.score}/10
+                  </span>
+                  <Badge className={validacao.aprovado ? 'bg-green-500/20 text-green-700' : 'bg-destructive/20 text-destructive'}>
+                    {validacao.aprovado ? 'Provável aprovação' : 'Risco de rejeição'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{validacao.resumo}</p>
+                {validacao.problemas.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-medium text-destructive uppercase mb-1">Problemas</p>
+                    <ul className="space-y-0.5">
+                      {validacao.problemas.map((p, i) => (
+                        <li key={i} className="text-xs text-muted-foreground flex gap-1">
+                          <XCircle className="h-3 w-3 text-destructive shrink-0 mt-0.5" />
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {validacao.sugestoes.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-medium text-yellow-600 uppercase mb-1">Sugestões</p>
+                    <ul className="space-y-0.5">
+                      {validacao.sugestoes.map((s, i) => (
+                        <li key={i} className="text-xs text-muted-foreground flex gap-1">
+                          <AlertTriangle className="h-3 w-3 text-yellow-500 shrink-0 mt-0.5" />
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {!validacao.aprovado && (
+                  <Alert className="border-destructive/30">
+                    <AlertTriangle className="h-3 w-3" />
+                    <AlertDescription className="text-[10px]">
+                      Recomendamos corrigir os problemas acima antes de enviar para aprovação da Meta.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleValidarIA}
+                disabled={validando || !nome || !corpo}
+                className="shrink-0"
+              >
+                {validando ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Bot className="h-3 w-3 mr-1" />}
+                Validar com IA
+              </Button>
               <Button variant="outline" size="sm" className="flex-1" onClick={handleSalvarRascunho} disabled={isSaving || !nome || !corpo}>
                 {isSaving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
-                Salvar rascunho
+                Salvar
               </Button>
               <Button size="sm" className="flex-1" onClick={handleEnviarAprovacao} disabled={isSaving || !nome || !corpo}>
                 {isSaving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Send className="h-3 w-3 mr-1" />}
-                Enviar para aprovação
+                Enviar
               </Button>
             </div>
           </div>
