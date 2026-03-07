@@ -24648,6 +24648,7 @@ export type Database = {
           mensagem: string | null
           message_id: string | null
           nome_contato: string | null
+          provedor: string | null
           read_at: string | null
           referencia_id: string | null
           referencia_tipo: string | null
@@ -24673,6 +24674,7 @@ export type Database = {
           mensagem?: string | null
           message_id?: string | null
           nome_contato?: string | null
+          provedor?: string | null
           read_at?: string | null
           referencia_id?: string | null
           referencia_tipo?: string | null
@@ -24698,6 +24700,7 @@ export type Database = {
           mensagem?: string | null
           message_id?: string | null
           nome_contato?: string | null
+          provedor?: string | null
           read_at?: string | null
           referencia_id?: string | null
           referencia_tipo?: string | null

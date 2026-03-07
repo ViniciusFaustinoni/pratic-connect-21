@@ -1,0 +1,1 @@
+ALTER TABLE whatsapp_mensagens ADD COLUMN provedor varchar DEFAULT 'evolution';
