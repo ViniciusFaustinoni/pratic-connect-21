@@ -188,12 +188,12 @@ serve(async (req) => {
           .from("whatsapp_meta_templates")
           .update({
             status: "REJECTED",
-            motivo_rejeicao: result.error?.message || "Erro desconhecido",
+            motivo_rejeicao: result.error?.error_user_msg || result.error?.message || "Erro desconhecido",
             updated_at: new Date().toISOString(),
           })
           .eq("id", template_id);
 
-        throw new Error(result.error?.message || "Erro ao enviar template para a Meta");
+        throw new Error(result.error?.error_user_msg || result.error?.message || "Erro ao enviar template para a Meta");
       }
 
       // Atualizar status no banco
@@ -295,11 +295,11 @@ serve(async (req) => {
             console.error(`[whatsapp-meta-templates] Erro ao enviar '${template.nome}':`, result);
             await supabase.from("whatsapp_meta_templates").update({
               status: "REJECTED",
-              motivo_rejeicao: result.error?.message || "Erro desconhecido",
+              motivo_rejeicao: result.error?.error_user_msg || result.error?.message || "Erro desconhecido",
               updated_at: new Date().toISOString(),
             }).eq("id", template.id);
             erros++;
-            resultados.push({ nome: template.nome, sucesso: false, erro: result.error?.message });
+            resultados.push({ nome: template.nome, sucesso: false, erro: result.error?.error_user_msg || result.error?.message });
           } else {
             await supabase.from("whatsapp_meta_templates").update({
               status: result.status?.toUpperCase() || "PENDING",
