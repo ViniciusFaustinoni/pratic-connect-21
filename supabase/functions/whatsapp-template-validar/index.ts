@@ -13,7 +13,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY não configurada");
 
-    const { nome, categoria, corpo, header_tipo, header_texto, rodape, variaveis_exemplo } = await req.json();
+    const { nome, categoria, corpo, header_tipo, header_texto, rodape, variaveis_exemplo, motivo_rejeicao } = await req.json();
 
     if (!nome || !corpo) {
       return new Response(JSON.stringify({ error: "Nome e corpo são obrigatórios" }), {
@@ -34,6 +34,8 @@ Sua tarefa é analisar um template e prever se ele será APROVADO ou REJEITADO p
 5. **Boas práticas**: Mensagem clara e objetiva. Identificar a empresa. Não parecer spam. Variáveis com contexto claro. Não pedir dados sensíveis (senhas, cartões).
 6. **Nome do template**: Apenas minúsculas, números e underscores. Deve ser descritivo.
 
+**IMPORTANTE**: Se o motivo da rejeição anterior pela Meta for fornecido, priorize resolver esse problema específico nas suas sugestões e gere um corpo_sugerido corrigido que resolva o problema.
+
 Analise o template fornecido e retorne sua avaliação usando a função disponível.`;
 
     const userPrompt = `Analise este template WhatsApp:
@@ -44,7 +46,8 @@ Analise o template fornecido e retorne sua avaliação usando a função dispon�
 ${header_texto ? `**Header texto**: ${header_texto}` : ''}
 **Corpo**: ${corpo}
 ${rodape ? `**Rodapé**: ${rodape}` : ''}
-${variaveis_exemplo ? `**Exemplos de variáveis**: ${JSON.stringify(variaveis_exemplo)}` : ''}
+    ${variaveis_exemplo ? `**Exemplos de variáveis**: ${JSON.stringify(variaveis_exemplo)}` : ''}
+${motivo_rejeicao ? `\n**⚠️ Motivo da rejeição anterior pela Meta**: ${motivo_rejeicao}\n\nEste template foi rejeitado anteriormente. Analise o motivo acima e forneça um corpo_sugerido corrigido que resolva especificamente esse problema.` : ''}
 
 Avalie se este template será aprovado pela Meta e forneça feedback detalhado.`;
 
@@ -90,6 +93,10 @@ Avalie se este template será aprovado pela Meta e forneça feedback detalhado.`
                   resumo: {
                     type: "string",
                     description: "Resumo geral da avaliação em 1-2 frases",
+                  },
+                  corpo_sugerido: {
+                    type: "string",
+                    description: "Versão corrigida do corpo do template que resolve os problemas encontrados. Obrigatório se houver motivo de rejeição anterior.",
                   },
                 },
                 required: ["score", "aprovado", "problemas", "sugestoes", "resumo"],

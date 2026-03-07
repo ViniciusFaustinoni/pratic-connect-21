@@ -19,6 +19,7 @@ interface IAValidationResult {
   problemas: string[];
   sugestoes: string[];
   resumo: string;
+  corpo_sugerido?: string;
 }
 
 interface Props {
@@ -110,6 +111,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
           header_texto: headerTipo === 'text' ? headerTexto : null,
           rodape: rodape || null,
           variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : null,
+          motivo_rejeicao: template?.motivo_rejeicao || null,
         },
       });
       if (error) throw error;
@@ -120,6 +122,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         problemas: data.problemas || [],
         sugestoes: data.sugestoes || [],
         resumo: data.resumo || '',
+        corpo_sugerido: data.corpo_sugerido || undefined,
       });
     } catch (e: any) {
       toast.error(e.message || 'Erro ao validar template com IA');
@@ -363,6 +366,23 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+                {validacao.corpo_sugerido && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-medium text-primary uppercase mb-1">Corpo sugerido pela IA</p>
+                    <p className="text-xs bg-muted/50 rounded p-2 whitespace-pre-wrap border">{validacao.corpo_sugerido}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-7 text-xs"
+                      onClick={() => {
+                        setCorpo(validacao.corpo_sugerido!);
+                        toast.success('Corpo do template atualizado com a sugestão da IA');
+                      }}
+                    >
+                      <CheckCircle className="h-3 w-3 mr-1" /> Aplicar sugestão
+                    </Button>
                   </div>
                 )}
                 {!validacao.aprovado && (
