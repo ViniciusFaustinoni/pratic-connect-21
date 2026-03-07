@@ -13,7 +13,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY não configurada");
 
-    const { nome, categoria, corpo, header_tipo, header_texto, rodape, variaveis_exemplo } = await req.json();
+    const { nome, categoria, corpo, header_tipo, header_texto, rodape, variaveis_exemplo, motivo_rejeicao } = await req.json();
 
     if (!nome || !corpo) {
       return new Response(JSON.stringify({ error: "Nome e corpo são obrigatórios" }), {
