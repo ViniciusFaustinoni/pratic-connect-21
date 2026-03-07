@@ -28,8 +28,9 @@ serve(async (req) => {
     )
 
     const token = authHeader.replace('Bearer ', '')
-    const { data: claims, error: authError } = await supabaseAuth.auth.getUser(token)
-    if (authError || !claims?.user) {
+    const { data, error: authError } = await supabaseAuth.auth.getClaims(token)
+    if (authError || !data?.claims) {
+      console.error('[whatsapp-status] Token validation error:', authError)
       return new Response(
         JSON.stringify({ success: false, error: 'Token inválido' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
