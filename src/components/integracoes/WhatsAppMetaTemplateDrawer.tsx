@@ -122,6 +122,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         problemas: data.problemas || [],
         sugestoes: data.sugestoes || [],
         resumo: data.resumo || '',
+        corpo_sugerido: data.corpo_sugerido || undefined,
       });
     } catch (e: any) {
       toast.error(e.message || 'Erro ao validar template com IA');
