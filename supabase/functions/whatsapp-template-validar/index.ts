@@ -34,6 +34,8 @@ Sua tarefa é analisar um template e prever se ele será APROVADO ou REJEITADO p
 5. **Boas práticas**: Mensagem clara e objetiva. Identificar a empresa. Não parecer spam. Variáveis com contexto claro. Não pedir dados sensíveis (senhas, cartões).
 6. **Nome do template**: Apenas minúsculas, números e underscores. Deve ser descritivo.
 
+**IMPORTANTE**: Se o motivo da rejeição anterior pela Meta for fornecido, priorize resolver esse problema específico nas suas sugestões e gere um corpo_sugerido corrigido que resolva o problema.
+
 Analise o template fornecido e retorne sua avaliação usando a função disponível.`;
 
     const userPrompt = `Analise este template WhatsApp:
