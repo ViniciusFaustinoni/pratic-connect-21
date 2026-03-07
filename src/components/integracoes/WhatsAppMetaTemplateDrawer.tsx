@@ -368,6 +368,23 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
                     </ul>
                   </div>
                 )}
+                {validacao.corpo_sugerido && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-medium text-primary uppercase mb-1">Corpo sugerido pela IA</p>
+                    <p className="text-xs bg-muted/50 rounded p-2 whitespace-pre-wrap border">{validacao.corpo_sugerido}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-7 text-xs"
+                      onClick={() => {
+                        setCorpo(validacao.corpo_sugerido!);
+                        toast.success('Corpo do template atualizado com a sugestão da IA');
+                      }}
+                    >
+                      <CheckCircle className="h-3 w-3 mr-1" /> Aplicar sugestão
+                    </Button>
+                  </div>
+                )}
                 {!validacao.aprovado && (
                   <Alert className="border-destructive/30">
                     <AlertTriangle className="h-3 w-3" />
