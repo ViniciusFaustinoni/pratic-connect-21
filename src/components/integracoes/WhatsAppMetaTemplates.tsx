@@ -118,7 +118,14 @@ export function WhatsAppMetaTemplates() {
                     <TableCell className="font-mono text-xs">{t.nome}</TableCell>
                     <TableCell className="text-xs">{t.categoria}</TableCell>
                     <TableCell>
-                      <Badge className={`text-[10px] ${badge.className}`}>{badge.label}</Badge>
+                      <div className="space-y-1">
+                        <Badge className={`text-[10px] ${badge.className}`}>{badge.label}</Badge>
+                        {t.status === 'REJECTED' && t.motivo_rejeicao && (
+                          <p className="text-[10px] text-destructive leading-tight max-w-[200px]">
+                            {t.motivo_rejeicao}
+                          </p>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground truncate max-w-[200px] hidden md:table-cell">
                       {t.corpo?.substring(0, 80)}...
