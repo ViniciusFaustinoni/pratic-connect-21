@@ -299,7 +299,7 @@ serve(async (req) => {
               updated_at: new Date().toISOString(),
             }).eq("id", template.id);
             erros++;
-            resultados.push({ nome: template.nome, sucesso: false, erro: result.error?.message });
+            resultados.push({ nome: template.nome, sucesso: false, erro: result.error?.error_user_msg || result.error?.message });
           } else {
             await supabase.from("whatsapp_meta_templates").update({
               status: result.status?.toUpperCase() || "PENDING",
