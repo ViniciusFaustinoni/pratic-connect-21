@@ -123,6 +123,9 @@ export function EtapaDadosVeiculo({
   onCalcular,
   isCalculando,
 }: EtapaDadosVeiculoProps) {
+  const { data: regioesDb = [] } = useRegioesAtivas();
+  const REGIOES = regioesDb.map(r => ({ value: r.codigo.toLowerCase(), label: r.nome }));
+
   const [camposDesbloqueados, setCamposDesbloqueados] = useState(modoEntrada === 'manual');
   const [valorFipeInput, setValorFipeInput] = useState(
     valorFipe ? formatCurrency(valorFipe) : ''

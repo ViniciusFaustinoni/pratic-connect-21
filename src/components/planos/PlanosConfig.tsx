@@ -382,7 +382,7 @@ export function PlanosConfig() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {LINHAS_PLANO.map(linha => (
+                    {linhasPlano.map(linha => (
                       <SelectItem key={linha.value} value={linha.value}>
                         {linha.label}
                       </SelectItem>

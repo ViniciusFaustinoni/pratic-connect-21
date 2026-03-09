@@ -59,6 +59,9 @@ export function EtapaCriteriosCotacao({
   onCalcular,
   isCalculando = false,
 }: EtapaCriteriosCotacaoProps) {
+  const { data: regioesDb = [] } = useRegioesAtivas();
+  const REGIOES = regioesDb.map(r => ({ value: r.codigo.toLowerCase(), label: r.nome }));
+
   // Pode calcular se todos os campos obrigatórios estão preenchidos
   const canCalculate = regiao !== '' && modalidade && combustivel !== '' && categoria !== '';
 
