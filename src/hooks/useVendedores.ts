@@ -12,11 +12,22 @@ export function useVendedores() {
   return useQuery({
     queryKey: ['vendedores'],
     queryFn: async () => {
+      // Buscar roles da área Comercial + diretor dinamicamente
+      const { data: configs } = await supabase
+        .from('app_roles_config')
+        .select('role')
+        .eq('area', 'Comercial')
+        .eq('is_active', true);
+
+      const rolesComerciais = (configs || []).map((c: any) => c.role);
+      // Incluir diretor que também pode estar no contexto de vendas
+      if (!rolesComerciais.includes('diretor')) rolesComerciais.push('diretor');
+
       // Buscar profiles que têm roles de vendedor
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role')
-        .in('role', ['vendedor_clt', 'vendedor_externo', 'supervisor_vendas', 'gerente_comercial', 'diretor']);
+        .in('role', rolesComerciais);
 
       if (rolesError) throw rolesError;
 

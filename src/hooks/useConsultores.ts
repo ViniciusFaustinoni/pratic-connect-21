@@ -15,17 +15,29 @@ export interface Consultor {
   total_propostas: number;
 }
 
-const ROLES_COMERCIAIS = ['vendedor_clt', 'vendedor_externo', 'supervisor_vendas', 'gerente_comercial'] as const;
-
+/**
+ * Busca usuários com roles da área Comercial dinamicamente.
+ * Substitui lista hardcoded de roles comerciais.
+ */
 export function useConsultores() {
   return useQuery({
     queryKey: ['consultores'],
     queryFn: async (): Promise<Consultor[]> => {
+      // Buscar roles da área Comercial do banco
+      const { data: configs } = await supabase
+        .from('app_roles_config')
+        .select('role')
+        .eq('area', 'Comercial')
+        .eq('is_active', true);
+
+      const rolesComerciais = (configs || []).map((c: any) => c.role);
+      if (rolesComerciais.length === 0) return [];
+
       // Buscar usuários com roles comerciais
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role')
-        .in('role', ROLES_COMERCIAIS);
+        .in('role', rolesComerciais);
 
       if (rolesError) throw rolesError;
 
