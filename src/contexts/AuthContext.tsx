@@ -543,22 +543,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // FUNÇÕES LEGADAS (compatibilidade)
   // ============================================
 
+  /** @deprecated Use usePermissions().hasPerm('canManageComissoes') ou similar */
   const isGerenciaFn = useCallback((): boolean => {
     return perfis.includes('diretor') || perfis.includes('gerente_comercial');
   }, [perfis]);
 
+  /** @deprecated Use getRoleArea(role) === 'Comercial' */
   const isVendedorFn = useCallback((): boolean => {
     return perfis.includes('vendedor_clt') || perfis.includes('vendedor_externo') || perfis.includes('supervisor_vendas');
   }, [perfis]);
 
+  /** @deprecated Use profile?.tipo === 'funcionario' */
   const isFuncionarioFn = useCallback((): boolean => {
     return profile?.tipo === 'funcionario';
   }, [profile?.tipo]);
 
+  /** @deprecated Use profile?.tipo === 'associado' */
   const isAssociadoFn = useCallback((): boolean => {
     return profile?.tipo === 'associado';
   }, [profile?.tipo]);
 
+  /** @deprecated Use usePermissions().isInstaladorVistoriador */
   const isInstaladorFn = useCallback((): boolean => {
     return perfis.includes('instalador_vistoriador');
   }, [perfis]);
