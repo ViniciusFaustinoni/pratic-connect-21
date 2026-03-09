@@ -139,6 +139,18 @@ async function enviarViaMeta(
       });
     }
 
+    // Suporte a botões com URL dinâmica
+    if (templateButtonParams && templateButtonParams.length > 0) {
+      templateButtonParams.forEach((param: string, index: number) => {
+        components.push({
+          type: "button",
+          sub_type: "url",
+          index,
+          parameters: [{ type: "text", text: param }],
+        });
+      });
+    }
+
     metaBody = {
       messaging_product: "whatsapp",
       to: telefoneFormatado,
