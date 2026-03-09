@@ -132,8 +132,22 @@ export function RegrasImportantes() {
 export function TabelaCotasTaxas() {
   const { data: cotasTaxas = [], isLoading: loadingCotas } = useCotasTaxas();
   const { data: taxasProcedimentos = [], isLoading: loadingTaxas } = useTaxasProcedimentos();
+  const { data: cotaPercDefault = 6 } = useCotaParticipacaoDefault();
+  const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();
 
   const isLoading = loadingCotas || loadingTaxas;
+
+  // Derivar valores de deságio das cotas para o alerta
+  const desagioInfo = (() => {
+    const comDesagio = cotasTaxas.find(c => c.comDesagio);
+    const percDesagio = comDesagio?.comDesagio || '8%';
+    const minDesagio = comDesagio?.minimoDesagio || `R$ ${(cotaMinDefault * 2).toLocaleString('pt-BR')}`;
+    const categoriasNormais = cotasTaxas
+      .filter(c => c.percentual && parseFloat(c.percentual) < 10)
+      .map(c => `${c.categoria} ${c.percentual}`)
+      .join(', ');
+    return { percDesagio, minDesagio, categoriasNormais: categoriasNormais || `Passeio ${cotaPercDefault}%` };
+  })();
 
   if (isLoading) {
     return (
