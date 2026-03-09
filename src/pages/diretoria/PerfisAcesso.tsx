@@ -101,7 +101,7 @@ export default function PerfisAcesso() {
 
   const addRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('user_roles')
         .insert({ user_id: userId, role });
       if (error) throw error;
