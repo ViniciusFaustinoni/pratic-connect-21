@@ -175,17 +175,17 @@ serve(async (req) => {
       );
     }
 
-    const profissionalId = user.id;
+    const authUserId = user.id;
 
-    // ✅ NOVA VALIDAÇÃO: Verificar se o perfil do profissional existe
+    // ✅ CORRIGIDO: Buscar perfil pelo user_id (auth), não pelo id do profile
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, nome, ativo')
-      .eq('id', profissionalId)
+      .eq('user_id', authUserId)
       .single();
 
     if (profileError || !profile) {
-      console.error(`[atribuir-proxima-tarefa] ERRO: Profissional ${profissionalId} (${user.email}) não tem perfil no sistema!`);
+      console.error(`[atribuir-proxima-tarefa] ERRO: Profissional ${authUserId} (${user.email}) não tem perfil no sistema!`);
       console.error(`[atribuir-proxima-tarefa] Erro detalhado:`, JSON.stringify(profileError));
       return new Response(
         JSON.stringify({ 
@@ -198,7 +198,7 @@ serve(async (req) => {
     }
 
     if (!profile.ativo) {
-      console.warn(`[atribuir-proxima-tarefa] Profissional ${profissionalId} está INATIVO`);
+      console.warn(`[atribuir-proxima-tarefa] Profissional ${authUserId} está INATIVO`);
       return new Response(
         JSON.stringify({ 
           error: "Seu perfil está inativo. Contate o suporte.",
@@ -208,7 +208,9 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[atribuir-proxima-tarefa] Perfil verificado: ${profile.nome} (${profissionalId})`);
+    // ✅ profileId = profiles.id (usado em todas as tabelas que referenciam profiles)
+    const profissionalId = profile.id;
+    console.log(`[atribuir-proxima-tarefa] Perfil verificado: ${profile.nome} (authUserId=${authUserId}, profileId=${profissionalId})`);
 
     // ========== VERIFICAR STATUS DE JORNADA (ALMOÇO) ==========
     const hoje = new Date().toISOString().split('T')[0];
