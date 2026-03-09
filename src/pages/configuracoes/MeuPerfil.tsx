@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from '@tansta } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Camera, Loader2, Save, Mail, Phone, User, Trash2, Calendar, Shield } from 'lucide-react';
@@ -18,8 +18,7 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
 export default function MeuPerfil() {
-  const { profile, user, updateProfile: updateAuthProfile } = useAuth();
-  const queryClienutRef = useRef<HTMLInputElement>(null);
+  const { profile, user, updateProfile: updateAuthProfile } = usefileInpconst queryClienutRef = useRef<HTMLInputElement>(null);
   
   const [nome, setNome] = useState(profile?.nome || '');
   const [telefone, setTelefone] = useState(profile?.telefone || '');
