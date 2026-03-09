@@ -61,12 +61,12 @@ export function VehicleCategorySelect({
 
   // Filtrar opções pela busca
   const filteredOptions = useMemo(() => {
-    if (!searchTerm.trim()) return CATEGORIAS_VEICULO;
+    if (!searchTerm.trim()) return categorias;
     const term = searchTerm.toLowerCase();
-    return CATEGORIAS_VEICULO.filter((cat) =>
+    return categorias.filter((cat) =>
       cat.label.toLowerCase().includes(term)
     );
-  }, [searchTerm]);
+  }, [searchTerm, categorias]);
 
   // Handler para seleção
   const handleSelect = (selectedValue: string) => {

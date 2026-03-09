@@ -274,11 +274,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       });
     }
 
-    // Ordenar por campo `ordem` do banco (já veio ordenado, mas manter prioridade SELECT)
+    // Ordenar por sort_priority do product_lines (dinâmico do banco)
     return planosCalculados.sort((a, b) => {
-      if (a.linha === 'select' && b.linha !== 'select') return -1;
-      if (a.linha !== 'select' && b.linha === 'select') return 1;
-      // Dentro da mesma linha, usar valorMensal como tiebreaker
+      const aPriority = planosBanco.find(p => p.id === a.id);
+      const bPriority = planosBanco.find(p => p.id === b.id);
+      const aSortP = (aPriority as any)?.product_lines?.sort_priority || 100;
+      const bSortP = (bPriority as any)?.product_lines?.sort_priority || 100;
+      if (aSortP !== bSortP) return aSortP - bSortP;
+      // Dentro da mesma prioridade, usar valorMensal como tiebreaker
       return a.valorMensal - b.valorMensal;
     });
   }, [params, planosBanco, tabelasPreco, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto]);
