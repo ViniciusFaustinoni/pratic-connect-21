@@ -735,6 +735,7 @@ export default function Leads() {
           handleDragEnd={handleDragEnd}
           activeLead={activeLead}
           setDrawerLeadId={setDrawerLeadId}
+          showVendedor={permissions.isSupervisor || permissions.isGerencia}
         />
       )}
 
