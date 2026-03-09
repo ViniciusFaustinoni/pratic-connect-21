@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, addDays, differenceInDays, startOfMonth, endOfMonth } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { format, addDays, differenceInDays } from 'date-fns';
 import { Loader2, Receipt, ArrowLeftRight, Calculator, Shield, CheckCircle2, AlertTriangle, CreditCard, QrCode, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,36 +10,14 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useAsaas } from '@/hooks/useAsaas';
-import { useFaixasCotas, useCotasPorFipe } from '@/hooks/useFaixasCotas';
+import { useCotasPorFipe } from '@/hooks/useFaixasCotas';
 import { useAtualizarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
+import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
+import { useTaxaSubstituicao } from '@/hooks/useConteudosSistema';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { PixQRCode } from '@/components/app/PixQRCode';
 import type { DadosNovoVeiculo } from '@/types/substituicao';
-
-// =============================================
-// Benefício config (same as StepBeneficios)
-// =============================================
-const BENEFICIOS_PRECOS: Record<string, { nome: string; preco: number }> = {
-  cobertura_vidros: { nome: 'Vidros e Faróis', preco: 9.90 },
-  reboque_1000km: { nome: '1000km de Reboque', preco: 2.90 },
-  reboque_excedente: { nome: 'Reboque Excedente', preco: 2.90 },
-  kit_gas: { nome: 'Kit Gás', preco: 9.90 },
-  carro_reserva_7: { nome: 'Carro Reserva 7 dias', preco: 7.90 },
-  carro_reserva_15: { nome: 'Carro Reserva 15 dias', preco: 15.90 },
-  carro_reserva_30: { nome: 'Carro Reserva 30 dias', preco: 35.90 },
-  rastreador_adicional: { nome: 'Rastreador (adicional)', preco: 30.00 },
-  fipe_100_app: { nome: '100% FIPE APP + 30d reserva', preco: 35.90 },
-};
-
-const FAIXAS_TERCEIROS: Record<string, { nome: string; preco: number }> = {
-  '15000': { nome: 'R$ 15.000', preco: 12.90 },
-  '40000': { nome: 'R$ 40.000', preco: 0 },
-  '70000': { nome: 'R$ 70.000', preco: 20.00 },
-  '100000': { nome: 'R$ 100.000', preco: 40.00 },
-};
-
-const TAXA_SUBSTITUICAO = 50.00;
 
 // =============================================
 // Types
@@ -91,6 +68,8 @@ export function StepFinanceiro({
 
   const { criarCobranca } = useAsaas();
   const atualizarSubstituicao = useAtualizarSubstituicao();
+  const { precosMap, terceirosMap } = useBeneficiosSeparados();
+  const { data: taxaSubstituicao = 50 } = useTaxaSubstituicao();
 
   // Faixas de cota
   const cotasAntigo = useCotasPorFipe(veiculoAntigo.valor_fipe);
@@ -112,27 +91,30 @@ export function StepFinanceiro({
   // Adicionais antigos
   const adicionaisAntigo = useMemo(() => {
     let total = 0;
-    if (veiculoAntigo.cobertura_vidros) total += 9.90;
+    if (veiculoAntigo.cobertura_vidros) {
+      const vidros = precosMap['cobertura_vidros'];
+      total += vidros ? vidros.preco : 9.90;
+    }
     if (veiculoAntigo.cobertura_terceiros) {
-      const ft = FAIXAS_TERCEIROS[veiculoAntigo.cobertura_terceiros];
+      const ft = terceirosMap[veiculoAntigo.cobertura_terceiros];
       if (ft) total += ft.preco;
     }
     return total;
-  }, [veiculoAntigo]);
+  }, [veiculoAntigo, precosMap, terceirosMap]);
 
   // Adicionais novos
   const adicionaisNovo = useMemo(() => {
     let total = 0;
     Object.entries(beneficiosSelecionados).forEach(([key, val]) => {
       if (key === 'cobertura_terceiros' && typeof val === 'string') {
-        const ft = FAIXAS_TERCEIROS[val];
+        const ft = terceirosMap[val];
         if (ft) total += ft.preco;
-      } else if (val === true && BENEFICIOS_PRECOS[key]) {
-        total += BENEFICIOS_PRECOS[key].preco;
+      } else if (val === true && precosMap[key]) {
+        total += precosMap[key].preco;
       }
     });
     return total;
-  }, [beneficiosSelecionados]);
+  }, [beneficiosSelecionados, precosMap, terceirosMap]);
 
   const totalMensalAntigo = mensalidadeBaseAntiga + adicionaisAntigo;
   const totalMensalNovo = mensalidadeBaseNova + adicionaisNovo;
@@ -141,7 +123,7 @@ export function StepFinanceiro({
   // Cota de participação
   const cotaAntigaValor = useMemo(() => {
     if (!cotasAntigo) return veiculoAntigo.valor_fipe * 0.06;
-    return Math.max(cotasAntigo.cotas * 200, 1200); // cotas × valor unitário, mín 1200
+    return Math.max(cotasAntigo.cotas * 200, 1200);
   }, [cotasAntigo, veiculoAntigo.valor_fipe]);
 
   const cotaNovaValor = useMemo(() => {
@@ -156,10 +138,8 @@ export function StepFinanceiro({
     const mesAtual = hoje.getMonth();
     const anoAtual = hoje.getFullYear();
 
-    // Data de vencimento deste mês
     const vencimento = new Date(anoAtual, mesAtual, Math.min(diaVenc, 28));
 
-    // Se já passou do vencimento, o período é até o próximo vencimento
     let inicioPeríodo: Date;
     let fimPeríodo: Date;
 
@@ -201,7 +181,7 @@ export function StepFinanceiro({
       const dueDate = format(addDays(new Date(), 3), 'yyyy-MM-dd');
       const result = await criarCobranca.mutateAsync({
         billingType: formaPagamento,
-        value: TAXA_SUBSTITUICAO,
+        value: taxaSubstituicao,
         dueDate,
         description: `Taxa de substituição de veículo - Placa ${dadosNovoVeiculo.placa || 'N/A'}`,
         tipo: 'taxa_substituicao',
@@ -232,7 +212,7 @@ export function StepFinanceiro({
         status: 'aguardando_aprovacao',
         mensalidade_nova: totalMensalNovo,
         cota_participacao_nova: cotaNovaValor,
-        taxa_substituicao: TAXA_SUBSTITUICAO,
+        taxa_substituicao: taxaSubstituicao,
         valor_prorata: proRata.diferenca,
         diferenca_mensalidade: diferencaMensal,
         beneficios_novos: beneficiosSelecionados,
@@ -261,10 +241,11 @@ export function StepFinanceiro({
     const rows: { nome: string; antigo: number; novo: number }[] = [];
 
     // Vidros
+    const vidrosPreco = precosMap['cobertura_vidros']?.preco || 9.90;
     rows.push({
       nome: 'Vidros e Faróis',
-      antigo: veiculoAntigo.cobertura_vidros ? 9.90 : 0,
-      novo: beneficiosSelecionados.cobertura_vidros ? 9.90 : 0,
+      antigo: veiculoAntigo.cobertura_vidros ? vidrosPreco : 0,
+      novo: beneficiosSelecionados.cobertura_vidros ? vidrosPreco : 0,
     });
 
     // Terceiros
@@ -272,24 +253,24 @@ export function StepFinanceiro({
     const ftNovoKey = beneficiosSelecionados.cobertura_terceiros as string;
     rows.push({
       nome: 'Danos a Terceiros',
-      antigo: ftAntigoKey && FAIXAS_TERCEIROS[ftAntigoKey] ? FAIXAS_TERCEIROS[ftAntigoKey].preco : 0,
-      novo: ftNovoKey && FAIXAS_TERCEIROS[ftNovoKey] ? FAIXAS_TERCEIROS[ftNovoKey].preco : 0,
+      antigo: ftAntigoKey && terceirosMap[ftAntigoKey] ? terceirosMap[ftAntigoKey].preco : 0,
+      novo: ftNovoKey && terceirosMap[ftNovoKey] ? terceirosMap[ftNovoKey].preco : 0,
     });
 
     // Demais benefícios novos
     Object.entries(beneficiosSelecionados).forEach(([key, val]) => {
       if (key === 'cobertura_terceiros' || key === 'cobertura_vidros') return;
-      if (val === true && BENEFICIOS_PRECOS[key]) {
+      if (val === true && precosMap[key]) {
         rows.push({
-          nome: BENEFICIOS_PRECOS[key].nome,
+          nome: precosMap[key].nome,
           antigo: 0,
-          novo: BENEFICIOS_PRECOS[key].preco,
+          novo: precosMap[key].preco,
         });
       }
     });
 
     return rows;
-  }, [veiculoAntigo, beneficiosSelecionados]);
+  }, [veiculoAntigo, beneficiosSelecionados, precosMap, terceirosMap]);
 
   return (
     <div className="space-y-6">
@@ -304,7 +285,7 @@ export function StepFinanceiro({
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-primary">{formatCurrency(TAXA_SUBSTITUICAO)}</p>
+              <p className="text-2xl font-bold text-primary">{formatCurrency(taxaSubstituicao)}</p>
               <p className="text-xs text-muted-foreground">Taxa administrativa obrigatória (Regulamento 2.1.6)</p>
             </div>
             {cobrancaGerada && (
@@ -349,7 +330,7 @@ export function StepFinanceiro({
               {formaPagamento === 'PIX' && (cobrancaGerada as Record<string, unknown>)?.pix_copia_cola && (
                 <PixQRCode
                   copiaCola={(cobrancaGerada as Record<string, unknown>).pix_copia_cola as string}
-                  valor={TAXA_SUBSTITUICAO}
+                  valor={taxaSubstituicao}
                   descricao="Taxa de substituição de veículo"
                 />
               )}
@@ -437,7 +418,7 @@ export function StepFinanceiro({
                 <Input
                   type="number"
                   step="0.01"
-                  placeholder={`Auto: ${formatCurrency(dadosNovoVeiculo.valor_fipe * 0.0045)}`}
+                  placeholder={`Auto: ${formatCurrency((dadosNovoVeiculo.valor_fipe || 0) * 0.0045)}`}
                   value={mensalidadeManual}
                   onChange={(e) => setMensalidadeManual(e.target.value)}
                   className="mt-1 max-w-xs"
@@ -549,7 +530,7 @@ export function StepFinanceiro({
             <div className="flex justify-between">
               <span>Taxa de substituição</span>
               <div className="flex items-center gap-2">
-                <span className="font-medium">{formatCurrency(TAXA_SUBSTITUICAO)}</span>
+                <span className="font-medium">{formatCurrency(taxaSubstituicao)}</span>
                 <Badge variant={cobrancaGerada ? 'default' : 'secondary'} className={cn(cobrancaGerada && 'bg-green-600', 'text-xs')}>
                   {cobrancaGerada ? 'Gerada' : 'Pendente'}
                 </Badge>

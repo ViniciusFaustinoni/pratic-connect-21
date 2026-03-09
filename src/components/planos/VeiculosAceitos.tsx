@@ -6,12 +6,23 @@ import {
 } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { VEICULOS_ACEITOS, MOTOS_ACEITAS } from '@/data/planosPrecos';
+import { useVeiculosAceitos, useMotosAceitas } from '@/hooks/useConteudosSistema';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
-import { Car, Bike } from 'lucide-react';
+import { Car, Bike, Loader2 } from 'lucide-react';
 
 export function VeiculosAceitosCarros() {
-  const marcas = Object.entries(VEICULOS_ACEITOS);
+  const { data: veiculosAceitos = {}, isLoading } = useVeiculosAceitos();
+  const marcas = Object.entries(veiculosAceitos);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -32,13 +43,13 @@ export function VeiculosAceitosCarros() {
                 <div className="flex items-center gap-2">
                   <span>{marca}</span>
                   <Badge variant="secondary" className="text-xs">
-                    {modelos.length} modelos
+                    {(modelos as string[]).length} modelos
                   </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent>
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  {modelos.map((modelo) => (
+                  {(modelos as string[]).map((modelo) => (
                     <Badge 
                       key={modelo} 
                       variant="outline" 
@@ -58,9 +69,20 @@ export function VeiculosAceitosCarros() {
 }
 
 export function VeiculosAceitosMotos() {
-  const marcas = Object.entries(MOTOS_ACEITAS);
+  const { data: motosAceitas = {}, isLoading } = useMotosAceitas();
   const { data: fipeCarro = 30000 } = useConfigFipeRastreador();
   const { data: fipeMoto = 9000 } = useConfigFipeRastreadorMoto();
+  const marcas = Object.entries(motosAceitas);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -78,7 +100,7 @@ export function VeiculosAceitosMotos() {
           >
             <span className="font-medium">{marca}</span>
             <Badge variant="secondary" className="text-xs font-normal">
-              {info}
+              {info as string}
             </Badge>
           </div>
         ))}

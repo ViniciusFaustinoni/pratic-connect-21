@@ -16,15 +16,27 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { 
-  GLOSSARIO, 
-  REGRAS_IMPORTANTES, 
-  COTAS_TAXAS, 
-  TAXAS_PROCEDIMENTOS 
-} from '@/data/planosPrecos';
+  useGlossario, 
+  useRegrasImportantes, 
+  useCotasTaxas, 
+  useTaxasProcedimentos 
+} from '@/hooks/useConteudosSistema';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
-import { BookOpen, AlertTriangle, DollarSign } from 'lucide-react';
+import { BookOpen, AlertTriangle, DollarSign, Loader2 } from 'lucide-react';
 
 export function GlossarioTermos() {
+  const { data: glossario = [], isLoading } = useGlossario();
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -38,7 +50,7 @@ export function GlossarioTermos() {
       </CardHeader>
       <CardContent className="pt-0">
         <Accordion type="multiple" className="w-full">
-          {GLOSSARIO.map((item, index) => (
+          {glossario.map((item, index) => (
             <AccordionItem key={index} value={`termo-${index}`}>
               <AccordionTrigger className="text-sm font-semibold hover:no-underline">
                 {item.termo}
@@ -57,10 +69,19 @@ export function GlossarioTermos() {
 }
 
 export function RegrasImportantes() {
+  const { data: regrasBase = [], isLoading } = useRegrasImportantes();
   const { data: fipeCarro = 30000 } = useConfigFipeRastreador();
   const { data: fipeMoto = 9000 } = useConfigFipeRastreadorMoto();
 
-  const regras = REGRAS_IMPORTANTES.map((regra) => {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const regras = regrasBase.map((regra) => {
     if (regra.titulo !== 'Rastreador Obrigatório') return regra;
     return {
       ...regra,
@@ -108,6 +129,19 @@ export function RegrasImportantes() {
 }
 
 export function TabelaCotasTaxas() {
+  const { data: cotasTaxas = [], isLoading: loadingCotas } = useCotasTaxas();
+  const { data: taxasProcedimentos = [], isLoading: loadingTaxas } = useTaxasProcedimentos();
+
+  const isLoading = loadingCotas || loadingTaxas;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Cotas de Participação */}
@@ -130,7 +164,7 @@ export function TabelaCotasTaxas() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {COTAS_TAXAS.map((cota, index) => (
+              {cotasTaxas.map((cota, index) => (
                 <TableRow 
                   key={index}
                   className={index % 2 === 0 ? 'bg-background' : 'bg-muted/30'}
@@ -184,7 +218,7 @@ export function TabelaCotasTaxas() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {TAXAS_PROCEDIMENTOS.map((taxa, index) => (
+              {taxasProcedimentos.map((taxa, index) => (
                 <TableRow 
                   key={index}
                   className={index % 2 === 0 ? 'bg-background' : 'bg-muted/30'}
