@@ -49,6 +49,10 @@ export function VehicleCategorySelect({
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Buscar categorias do banco, com fallback
+  const { data: categoriasDb } = useCategoriasVeiculo();
+  const categorias = categoriasDb && categoriasDb.length > 0 ? categoriasDb : CATEGORIAS_VEICULO_FALLBACK;
+
   // Encontrar label da opção selecionada
   const selectedLabel = useMemo(() => {
     if (!value) return null;
