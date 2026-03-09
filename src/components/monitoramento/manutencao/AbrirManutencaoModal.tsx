@@ -124,7 +124,7 @@ export function AbrirManutencaoModal({
     tipoEndereco === 'cadastrado' || (logradouro && bairro && cidade)
   );
 
-  const associadoEndereco = rastreadorSelecionado?.veiculo?.associado;
+  const associadoEndereco = rastreadorSelecionado?.veiculo?.associado as any;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
