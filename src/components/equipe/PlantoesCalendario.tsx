@@ -42,10 +42,21 @@ export function PlantoesCalendario() {
   const { data: profissionais = [] } = useQuery({
     queryKey: ['plantoes-profissionais'],
     queryFn: async (): Promise<Profissional[]> => {
+      // Buscar instaladores/vistoriadores dinamicamente
+      const { data: configs } = await supabase
+        .from('app_roles_config')
+        .select('role')
+        .eq('is_operational', true)
+        .eq('is_active', true);
+      const opRoles = (configs || [])
+        .map((c: any) => c.role)
+        .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
+      if (opRoles.length === 0) opRoles.push('instalador_vistoriador');
+
       const { data: roles } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role', 'instalador_vistoriador');
+        .in('role', opRoles);
       if (!roles?.length) return [];
 
       const { data: profiles } = await supabase

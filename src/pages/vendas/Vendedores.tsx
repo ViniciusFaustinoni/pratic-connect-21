@@ -30,10 +30,9 @@ export default function Vendedores() {
 
   const isLoading = loadingVendedores || loadingContagem;
   
-  // Check if user can access audit
-  const canAccessAudit = roles?.some(role => 
-    ['diretor', 'gerente_comercial'].includes(role)
-  );
+  // Check if user can access audit via dynamic permissions
+  const { hasPerm } = usePermissions();
+  const canAccessAudit = hasPerm('canViewAudit');
 
   // Filtrar vendedores
   const filteredVendedores = useMemo(() => {

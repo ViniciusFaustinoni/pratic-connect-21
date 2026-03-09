@@ -114,11 +114,21 @@ export function AtribuirVistoriadorModal({
   const { data: vistoriadores = [], isLoading } = useQuery({
     queryKey: ['vistoriadores-para-atribuir', vistoria?.dataAgendada, vistoria?.regiao],
     queryFn: async (): Promise<VistoriadorDisponivel[]> => {
-      // 1. Buscar user_ids que são vistoriadores
+      // 1. Buscar roles operacionais (instaladores/vistoriadores) dinamicamente
+      const { data: configs } = await supabase
+        .from('app_roles_config')
+        .select('role')
+        .eq('is_operational', true)
+        .eq('is_active', true);
+      const opRoles = (configs || [])
+        .map((c: any) => c.role)
+        .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
+      if (opRoles.length === 0) opRoles.push('instalador_vistoriador');
+
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role', 'instalador_vistoriador');
+        .in('role', opRoles);
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];

@@ -575,10 +575,22 @@ export function useProfissionaisSemRota(data: Date) {
       const dataStr = format(data, 'yyyy-MM-dd');
       
       // Buscar profissionais com função de instalador/vistoriador
+      // Buscar roles operacionais (instaladores/vistoriadores) dinamicamente
+      const { data: configsOp } = await supabase
+        .from('app_roles_config')
+        .select('role')
+        .eq('is_operational', true)
+        .eq('is_active', true);
+      
+      const opRoles = (configsOp || [])
+        .map((c: any) => c.role)
+        .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
+      if (opRoles.length === 0) opRoles.push('instalador_vistoriador');
+
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role', 'instalador_vistoriador');
+        .in('role', opRoles);
       
       if (rolesError) throw rolesError;
       

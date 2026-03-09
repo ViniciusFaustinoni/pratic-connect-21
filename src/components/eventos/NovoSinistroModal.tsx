@@ -580,6 +580,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
 
       // ===== 8. NOTIFICAR ANALISTAS E DIRETORES =====
       try {
+        // Buscar analistas de eventos pelo role
         const { data: analistas } = await supabase
           .from('user_roles')
           .select('user_id')
@@ -587,11 +588,21 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
 
         let destinatarios = analistas || [];
         if (destinatarios.length === 0) {
-          const { data: diretores } = await supabase
-            .from('user_roles')
-            .select('user_id')
-            .eq('role', 'diretor');
-          destinatarios = diretores || [];
+          // Fallback: buscar usuários com permissão canDeleteSinistro (diretores/admins)
+          const { data: configs } = await supabase
+            .from('app_roles_config')
+            .select('role, permissions')
+            .eq('is_active', true);
+          const rolesAdmin = (configs || [])
+            .filter((c: any) => Array.isArray(c.permissions) && c.permissions.includes('canDeleteSinistro'))
+            .map((c: any) => c.role);
+          if (rolesAdmin.length > 0) {
+            const { data: admins } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .in('role', rolesAdmin);
+            destinatarios = admins || [];
+          }
         }
 
         const tituloNotificacao = alertaRecemAtivado

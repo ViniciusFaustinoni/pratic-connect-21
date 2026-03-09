@@ -53,8 +53,9 @@ export default function CotacaoDetalhe() {
   const queryClient = useQueryClient();
   const { profile, roles } = useAuth();
 
-  // Verificar se é diretor para permissão de exclusão
-  const isDiretor = roles?.includes('diretor');
+  // Verificar permissão de exclusão via sistema dinâmico
+  const { hasPerm } = usePermissions();
+  const isDiretor = hasPerm('canDeleteCotacao');
 
   // Realtime para notificações
   useCotacoesRealtime();

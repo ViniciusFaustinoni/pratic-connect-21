@@ -266,7 +266,7 @@ export default function Usuarios() {
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {usuario.roles?.slice(0, 2).map((role, idx) => {
-                        const isVendedor = ['vendedor_clt', 'vendedor_externo'].includes(role);
+                        const isVendedor = getRoleArea(role) === 'Comercial';
                         return (
                           <Badge 
                             key={idx} 

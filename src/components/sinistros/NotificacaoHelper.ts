@@ -7,10 +7,21 @@ import { supabase } from '@/integrations/supabase/client';
  */
 
 async function getDiretoresIds(): Promise<string[]> {
+  // Buscar usuários com permissão de gestão de sinistros (diretores/admins)
+  const { data: configs } = await supabase
+    .from('app_roles_config')
+    .select('role, permissions')
+    .eq('is_active', true);
+  const rolesGestao = (configs || [])
+    .filter((c: any) => Array.isArray(c.permissions) && c.permissions.includes('canDeleteSinistro'))
+    .map((c: any) => c.role);
+  
+  if (rolesGestao.length === 0) return [];
+  
   const { data } = await supabase
     .from('user_roles')
     .select('user_id')
-    .eq('role', 'diretor');
+    .in('role', rolesGestao);
   return (data || []).map(r => r.user_id);
 }
 
