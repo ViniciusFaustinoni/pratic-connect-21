@@ -30,6 +30,7 @@ export function EquipeFilters({
   regiaoFilter,
   onRegiaoChange,
 }: EquipeFiltersProps) {
+  const { regioes: REGIOES_ATENDIMENTO } = useRegioesAtendimento();
   return (
     <div className="flex flex-col lg:flex-row gap-3">
       {/* Search */}
