@@ -9,8 +9,6 @@ interface PushNotificationState {
   isLoading: boolean;
 }
 
-// VAPID Public Key - placeholder, será substituído pela chave real do backend
-const VAPID_PUBLIC_KEY_FALLBACK = 'BLc8Qy8VYUZMy3q2JQH0f0t4vNqM8P7YK2WN1Rz6pF5wT3mJ4cB9dS2aE6hN0kL8xV5gR7uI9oP1';
 
 // Converter base64 URL-safe para Uint8Array (necessário para applicationServerKey)
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
