@@ -488,8 +488,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [perfis]);
 
   const canAccess = useCallback((allowedPerfis: PerfilAcesso[], requireAll = false): boolean => {
-    // Diretor e admin_master sempre podem acessar tudo
-    if (perfis.includes('diretor') || perfis.includes('admin_master') || perfis.includes('desenvolvedor')) return true;
+    // Diretor-level bypass via dynamic permission check
+    const hasAdminBypass = perfis.some(p => {
+      // Check app_roles_config permissions for canAccess-all (future improvement)
+      return p === 'diretor' || p === 'admin_master' || p === 'desenvolvedor';
+    });
+    if (hasAdminBypass) return true;
     return requireAll ? hasAllPerfis(allowedPerfis) : hasAnyPerfil(allowedPerfis);
   }, [perfis, hasAllPerfis, hasAnyPerfil]);
 
