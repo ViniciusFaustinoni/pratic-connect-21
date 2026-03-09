@@ -948,7 +948,12 @@ export function useAprovarVeiculoServico() {
         };
         if (data.localInstalacao) rastreadorUpdate.local_instalacao = data.localInstalacao;
         if (data.descricaoInstalacao) rastreadorUpdate.descricao_instalacao = data.descricaoInstalacao;
-        if (fotoLocalUrl) rastreadorUpdate.foto_local_instalacao_url = fotoLocalUrl;
+        // Usar foto enviada diretamente pelo instalador, ou fallback da vistoria
+        if (data.fotoLocalInstalacao) {
+          rastreadorUpdate.foto_local_instalacao_url = data.fotoLocalInstalacao;
+        } else if (fotoLocalUrl) {
+          rastreadorUpdate.foto_local_instalacao_url = fotoLocalUrl;
+        }
 
         const { error: rastreadorUpdateError } = await (supabase
           .from('rastreadores')
