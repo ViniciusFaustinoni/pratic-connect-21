@@ -542,6 +542,27 @@ export default function InstaladorChecklist() {
     return () => clearTimeout(timeout);
   }, [imeiRastreador, isImeiValido]);
 
+  // Upload de foto do local de instalação
+  const handleFotoLocalInstalacao = async (file: File) => {
+    if (!id) return;
+    setUploadingFotoLocal(true);
+    try {
+      const fileName = `local-instalacao/${id}/${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('servicos-fotos')
+        .upload(fileName, file, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) throw uploadError;
+      
+      const { data: urlData } = supabase.storage.from('servicos-fotos').getPublicUrl(fileName);
+      setFotoLocalInstalacao(urlData.publicUrl);
+      toast.success('Foto do local salva!');
+    } catch (err) {
+      toast.error('Erro ao enviar foto do local');
+    } finally {
+      setUploadingFotoLocal(false);
+    }
+  };
+
   // Upload de fotos de ressalva para o storage
   const handleAddFotoRessalva = async (file: File) => {
     if (!id) return;
