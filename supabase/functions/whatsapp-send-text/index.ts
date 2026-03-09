@@ -154,7 +154,7 @@ async function enviarViaMeta(
       text: { body: mensagem },
     };
 
-    console.log(`[whatsapp-send-text] Enviando texto livre via Meta para ${telefoneFormatado}`);
+    console.warn(`[whatsapp-send-text] ⚠️ Enviando TEXTO LIVRE via Meta para ${telefoneFormatado}. Se o contato não interagiu nas últimas 24h, a mensagem NÃO será entregue. Considere usar um template aprovado (template_name).`);
   }
 
   const response = await fetch(

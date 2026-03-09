@@ -300,18 +300,59 @@ serve(async (req) => {
       }
     }
 
-    // 2. Enviar por WhatsApp usando whatsapp-send-text (correto para mensagens de texto)
+    // 2. Enviar por WhatsApp usando whatsapp-send-text
     const telefone = associado.whatsapp || associado.telefone;
     if (telefone) {
       try {
         const whatsappMsg = `${titulo}\n\n${mensagem}`;
-        
-        // Usar whatsapp-send-text para envio de mensagens de texto
-        const { data: whatsResult, error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
-          body: {
-            telefone: telefone.replace(/\D/g, ''),
-            mensagem: whatsappMsg,
+        const telefoneLimpo = telefone.replace(/\D/g, '');
+
+        // Verificar se provedor Meta está ativo para usar templates
+        const { data: metaConfig } = await supabase
+          .from('whatsapp_meta_config')
+          .select('ativo')
+          .limit(1)
+          .maybeSingle();
+
+        const isMetaAtivo = metaConfig?.ativo === true;
+
+        // Mapear tipos de notificação para templates aprovados da Meta
+        const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] }> = {
+          cadastro_aprovado: {
+            template_name: 'boas_vindas_associado',
+            getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
           },
+          proposta_aprovada_roubo_furto: {
+            template_name: 'boas_vindas_associado',
+            getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
+          },
+          proposta_aprovada_cobertura_total: {
+            template_name: 'boas_vindas_associado',
+            getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
+          },
+          cobertura_total_ativada: {
+            template_name: 'boas_vindas_associado',
+            getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
+          },
+        };
+
+        let sendBody: Record<string, unknown> = {
+          telefone: telefoneLimpo,
+          mensagem: whatsappMsg,
+        };
+
+        // Se Meta ativo e temos template mapeado, usar template
+        if (isMetaAtivo && META_TEMPLATE_MAP[tipo]) {
+          const mapping = META_TEMPLATE_MAP[tipo];
+          sendBody.template_name = mapping.template_name;
+          sendBody.template_params = mapping.getParams();
+          console.log(`[notificar-cliente] Usando template Meta '${mapping.template_name}' para tipo '${tipo}'`);
+        } else if (isMetaAtivo) {
+          console.warn(`[notificar-cliente] ⚠️ Meta ativo mas sem template mapeado para tipo '${tipo}'. Enviando texto livre (pode não ser entregue fora da janela 24h).`);
+        }
+
+        const { data: whatsResult, error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
+          body: sendBody,
         });
 
         if (whatsError) {
@@ -326,7 +367,6 @@ serve(async (req) => {
         console.log('[notificar-cliente] WhatsApp enviado via whatsapp-send-text');
       } catch (whatsappError) {
         console.error('[notificar-cliente] Erro ao enviar WhatsApp:', whatsappError);
-        // Continua mesmo se falhar
       }
     } else {
       console.log('[notificar-cliente] Sem telefone para WhatsApp');
