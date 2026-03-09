@@ -94,29 +94,36 @@ export default function PropostaAnalise() {
     if (!id) return;
     setShowConfirmAprovar(false);
     
-    // Salvar RENAVAM/CHASSI no veículo antes de aprovar (se preenchidos)
-    if (proposta?.veiculo_id && (veiculoRenavam || veiculoChassi)) {
-      const updateData: Record<string, string | null> = {};
-      if (veiculoRenavam) updateData.renavam = veiculoRenavam;
-      if (veiculoChassi) updateData.chassi = veiculoChassi;
-      
-      const { error: updateError } = await supabase
-        .from('veiculos')
-        .update(updateData)
-        .eq('id', proposta.veiculo_id);
-      
-      if (updateError) {
-        toast.error('Erro ao salvar dados do veículo', { description: updateError.message });
-        return;
+    try {
+      // Salvar RENAVAM/CHASSI no veículo antes de aprovar (se preenchidos)
+      if (proposta?.veiculo_id && (veiculoRenavam || veiculoChassi)) {
+        const updateData: Record<string, string | null> = {};
+        if (veiculoRenavam) updateData.renavam = veiculoRenavam;
+        if (veiculoChassi) updateData.chassi = veiculoChassi;
+        
+        const { error: updateError } = await supabase
+          .from('veiculos')
+          .update(updateData)
+          .eq('id', proposta.veiculo_id);
+        
+        if (updateError) {
+          toast.error('Erro ao salvar dados do veículo', { description: updateError.message });
+          return;
+        }
       }
-    }
-    
-    await aprovarMutation.mutateAsync(id);
-    // Navegar para próxima ou voltar para lista
-    if (nextProposta) {
-      navigate(`/cadastro/propostas/${nextProposta.id}`);
-    } else {
-      navigate('/cadastro/propostas');
+      
+      await aprovarMutation.mutateAsync(id);
+      // Navegar para próxima ou voltar para lista
+      if (nextProposta) {
+        navigate(`/cadastro/propostas/${nextProposta.id}`);
+      } else {
+        navigate('/cadastro/propostas');
+      }
+    } catch (error: any) {
+      console.error('[PropostaAnalise] Erro ao aprovar:', error);
+      toast.error('Erro ao aprovar proposta', { 
+        description: error?.message || 'Tente novamente. Se o problema persistir, atualize a página.' 
+      });
     }
   };
 
