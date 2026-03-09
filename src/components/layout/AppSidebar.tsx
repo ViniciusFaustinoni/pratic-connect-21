@@ -485,7 +485,7 @@ function UserCard() {
           {profile?.nome?.split(' ')[0] || 'Usuário'}
         </p>
         <p className="text-xs text-muted-foreground truncate">
-          {roles.length > 0 ? ROLE_LABELS[roles[0]] : 'Colaborador'}
+          {roles.length > 0 ? getRoleLabel(roles[0]) : 'Colaborador'}
         </p>
       </div>
     </div>

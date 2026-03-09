@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
-import { ROLE_LABELS } from '@/types/database';
+import { useAppRoles } from '@/hooks/useAppRoles';
 import { UserAvatar } from '@/components/UserAvatar';
 import { AvatarCropDialog } from '@/components/AvatarCropDialog';
 import { maskTelefone } from '@/lib/validations';
