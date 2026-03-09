@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Camera, Loader2, Save, Mail, Phone, User, Trash2, Calendar, Shield } from 'lucide-react';
@@ -18,8 +18,7 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
 export default function MeuPerfil() {
-  const { profile, user } = useAuth();
-  const queryClient = useQueryClient();
+  const { profile, user, updateProfile: updateAuthProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [nome, setNome] = useState(profile?.nome || '');
@@ -60,9 +59,9 @@ export default function MeuPerfil() {
       
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Perfil atualizado com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['auth-user'] });
+      await updateAuthProfile({ nome: nome.trim(), telefone: telefone || undefined });
     },
     onError: (error: Error) => toast.error(error.message || 'Erro ao atualizar perfil')
   });
@@ -128,8 +127,8 @@ export default function MeuPerfil() {
       if (updateError) throw updateError;
 
       setAvatarUrl(publicUrl);
+      await updateAuthProfile({ avatar_url: publicUrl });
       toast.success('Foto atualizada com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['auth-user'] });
     } catch (error) {
       console.error('Erro ao fazer upload:', error);
       toast.error('Erro ao fazer upload da foto');
@@ -160,8 +159,8 @@ export default function MeuPerfil() {
       if (error) throw error;
 
       setAvatarUrl(null);
+      await updateAuthProfile({ avatar_url: null });
       toast.success('Foto removida com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['auth-user'] });
     } catch (error) {
       console.error('Erro ao remover foto:', error);
       toast.error('Erro ao remover foto');
