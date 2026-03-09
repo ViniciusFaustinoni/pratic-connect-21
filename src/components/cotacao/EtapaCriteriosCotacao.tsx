@@ -11,6 +11,8 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { fetchBenefitExclusions, gerarMensagemAlertaCategoria } from '@/data/restricoesCategorias';
+import { useCombustiveis } from '@/hooks/useConteudosSistema';
+import { COMBUSTIVEIS_FALLBACK } from '@/data/combustiveis';
 interface EtapaCriteriosCotacaoProps {
   // Região
   regiao: string;
