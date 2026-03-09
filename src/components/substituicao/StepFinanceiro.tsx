@@ -13,7 +13,7 @@ import { useAsaas } from '@/hooks/useAsaas';
 import { useCotasPorFipe } from '@/hooks/useFaixasCotas';
 import { useAtualizarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
 import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
-import { useTaxaSubstituicao } from '@/hooks/useConteudosSistema';
+import { useTaxaSubstituicao, useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { PixQRCode } from '@/components/app/PixQRCode';

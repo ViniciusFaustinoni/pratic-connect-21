@@ -62,6 +62,11 @@ export default function CotacaoDetalhe() {
   // Realtime para notificações
   useCotacoesRealtime();
 
+  // Defaults de cota dinâmicos
+  const { data: cotaPercDefault = 6 } = useCotaParticipacaoDefault();
+  const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();
+  const cotaFallbackStr = `${cotaPercDefault}% (mín R$ ${cotaMinDefault.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
+
   // Estados dos modais
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showVincularModal, setShowVincularModal] = useState(false);

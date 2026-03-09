@@ -69,6 +69,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   // Buscar decomposição do banco
   const { data: decomposicao } = useConfigDecomposicao();
 
+  // Defaults de cota do banco
+  const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
+  const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
+
   // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
     queryKey: ['planos_cotacao'],
