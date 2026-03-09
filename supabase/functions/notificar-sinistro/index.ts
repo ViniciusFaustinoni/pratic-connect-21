@@ -303,8 +303,17 @@ Deno.serve(async (req) => {
         let templateParams: string[];
         
         if (status === 'comunicado') {
-          templateName = 'sinistro_aberto';
-          templateParams = [primeiroNome, sinistro.protocolo];
+          templateName = 'comunicacao_sinistro';
+          templateParams = [
+            associado.nome || primeiroNome,
+            extras?.tipo_label || 'sinistro',
+            sinistro.protocolo,
+            extras?.plano_nome || 'seu plano',
+            extras?.cota_percentual || 'conforme contrato',
+            extras?.valor_fipe || '',
+            extras?.valor_cota || '',
+            extras?.link_evento || '',
+          ];
         } else {
           templateName = 'sinistro_atualizado';
           templateParams = [primeiroNome, sinistro.protocolo, titulo.replace(/[*]/g, '').substring(0, 200)];
