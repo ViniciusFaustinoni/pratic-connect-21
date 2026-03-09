@@ -75,6 +75,7 @@ export function KanbanBoard({
   handleDragEnd,
   activeLead,
   setDrawerLeadId,
+  showVendedor,
 }: KanbanBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
 
