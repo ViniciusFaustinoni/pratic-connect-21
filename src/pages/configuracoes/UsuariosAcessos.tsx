@@ -487,12 +487,9 @@ export default function UsuariosAcessos() {
               <SelectTrigger className="w-full sm:w-[150px]"><SelectValue placeholder="Perfil" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os perfis</SelectItem>
-                <SelectItem value="vendedor_clt">Vendedor CLT</SelectItem>
-                <SelectItem value="vendedor_externo">Vendedor Externo</SelectItem>
-                <SelectItem value="gerente_comercial">Gerente Comercial</SelectItem>
-                <SelectItem value="supervisor_vendas">Supervisor Vendas</SelectItem>
-                <SelectItem value="analista_cadastro">Analista Cadastro</SelectItem>
-                <SelectItem value="diretor">Diretor</SelectItem>
+                {getRoleOptions().map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={(v) => handleFilterChange(setFilterStatus, v)}>
