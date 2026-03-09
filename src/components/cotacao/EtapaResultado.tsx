@@ -16,7 +16,8 @@ import {
   Loader2,
   Fuel
 } from 'lucide-react';
-import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
+import { useCategoriasVeiculo, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { PlanoCardCotacao } from './PlanoCardCotacao';
 import { CurrencyInput } from '@/components/inputs/MaskedInputs';
 import { cn } from '@/lib/utils';
