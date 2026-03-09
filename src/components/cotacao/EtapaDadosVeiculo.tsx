@@ -103,6 +103,12 @@ export function EtapaDadosVeiculo({
   const { data: regioesDb = [] } = useRegioesAtivas();
   const REGIOES = regioesDb.map(r => ({ value: r.codigo.toLowerCase(), label: r.nome }));
 
+  // Combustíveis e marcas/modelos do banco
+  const { data: COMBUSTIVEIS = COMBUSTIVEIS_FALLBACK } = useCombustiveis();
+  const { data: marcasModelosDb = {} } = useMarcasModelosFallback();
+  const MARCAS = Object.keys(marcasModelosDb).length > 0 ? Object.keys(marcasModelosDb) : MARCAS_FALLBACK;
+  const MODELOS_POR_MARCA = marcasModelosDb;
+
   const [camposDesbloqueados, setCamposDesbloqueados] = useState(modoEntrada === 'manual');
   const [valorFipeInput, setValorFipeInput] = useState(
     valorFipe ? formatCurrency(valorFipe) : ''
