@@ -202,7 +202,7 @@ export default function PerfisAcesso() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {appRoles.map(roleConfig => {
               const count = contagem?.[roleConfig.role] || 0;
-              const IconComponent = iconMap[roleConfig.icon_name] || Shield;
+              const IconComponent = ICON_MAP[roleConfig.icon_name] || Shield;
 
               return (
                 <Card key={roleConfig.role}>
