@@ -63,7 +63,7 @@ export function AppHeader() {
                   {profile?.nome || profile?.email?.split('@')[0] || 'Usuário'}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {roles.length > 0 ? ROLE_LABELS[roles[0]] : 'Colaborador'}
+                  {roles.length > 0 ? getRoleLabel(roles[0]) : 'Colaborador'}
                 </span>
               </div>
             </Button>
