@@ -70,6 +70,8 @@ export function StepFinanceiro({
   const atualizarSubstituicao = useAtualizarSubstituicao();
   const { precosMap, terceirosMap } = useBeneficiosSeparados();
   const { data: taxaSubstituicao = 50 } = useTaxaSubstituicao();
+  const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
+  const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
 
   // Faixas de cota
   const cotasAntigo = useCotasPorFipe(veiculoAntigo.valor_fipe);
