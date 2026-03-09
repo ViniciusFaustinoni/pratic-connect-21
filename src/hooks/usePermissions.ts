@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { useAppRoles } from '@/hooks/useAppRoles';
+import { useAppRoles, type AppRoleConfig } from '@/hooks/useAppRoles';
 
 export type PermissionKey = 
   | 'isFuncionario'
