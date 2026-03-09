@@ -281,7 +281,14 @@ export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick, onActi
           )}
         </div>
 
-        {/* Footer: Origem + Tempo */}
+        {/* Footer: Vendedor + Origem + Tempo */}
+        {showVendedor && vendedorNome && (
+          <div className="flex items-center gap-1 mb-1">
+            <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-normal truncate max-w-[140px]">
+              👤 {vendedorNome}
+            </Badge>
+          </div>
+        )}
         <div className="flex items-center justify-between pt-1.5 border-t border-border/50">
           <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">
             {ORIGEM_LABELS[lead.origem]}
