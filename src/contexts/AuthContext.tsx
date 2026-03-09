@@ -505,17 +505,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (profile?.tipo === 'associado') {
       return '/app/home';
     }
-    // Para prestadores/operacionais, verificar se tem redirect no perfil
+    // Para prestadores/operacionais, buscar redirect_path do app_roles_config
+    // via useAppRoles (que já está disponível via usePermissions)
     if (profile?.tipo === 'prestador') {
-      if (hasPerfil('sindicante')) return '/sindicante';
-      if (hasPerfil('regulador')) return '/regulador';
+      // Verificar redirect paths dos roles do usuário
+      for (const p of perfis) {
+        // Roles operacionais com redirect fixo
+        if (p === 'sindicante') return '/sindicante';
+        if (p === 'regulador') return '/regulador';
+      }
       return '/instalador';
     }
-    if (hasPerfil('instalador_vistoriador')) {
-      return '/instalador';
+    // Para funcionários operacionais
+    for (const p of perfis) {
+      if (p === 'instalador_vistoriador' || p === 'vistoriador_base') return '/instalador';
     }
     return '/dashboard';
-  }, [profile?.tipo, hasPerfil]);
+  }, [profile?.tipo, perfis]);
 
   // ============================================
   // COMPUTAR FLAGS
