@@ -143,9 +143,13 @@ export function useIniciarServico() {
     }
 
     // Usar watchPosition para tracking contínuo
+    let unavailableRetryCount = 0;
+    const MAX_UNAVAILABLE_RETRIES = 3;
+    
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
+        unavailableRetryCount = 0; // Reset retry count on success
         setGeoState(prev => ({
           ...prev,
           status: 'granted',
@@ -156,7 +160,7 @@ export function useIniciarServico() {
         }));
       },
       (error) => {
-        console.warn('[useIniciarServico] Erro no watchPosition:', error.message);
+        console.warn('[useIniciarServico] Erro no watchPosition:', error.message, 'code:', error.code);
         
         if (error.code === 1) { // PERMISSION_DENIED
           setGeoState({
@@ -164,10 +168,34 @@ export function useIniciarServico() {
             error: 'Permissão de localização revogada. Ative a localização nas configurações.'
           });
         } else if (error.code === 2) { // POSITION_UNAVAILABLE
-          setGeoState({
-            status: 'unavailable',
-            error: 'GPS desativado ou indisponível. Verifique se o GPS está ativo.'
-          });
+          unavailableRetryCount++;
+          console.warn(`[useIniciarServico] GPS indisponível (tentativa ${unavailableRetryCount}/${MAX_UNAVAILABLE_RETRIES})`);
+          
+          if (unavailableRetryCount >= MAX_UNAVAILABLE_RETRIES) {
+            // Tentar fallback com getCurrentPosition antes de bloquear
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                console.log('[useIniciarServico] Fallback getCurrentPosition funcionou');
+                unavailableRetryCount = 0;
+                setGeoState({
+                  status: 'granted',
+                  latitude: pos.coords.latitude,
+                  longitude: pos.coords.longitude,
+                  accuracy: pos.coords.accuracy,
+                  error: undefined
+                });
+              },
+              () => {
+                // Fallback também falhou — agora sim bloquear
+                setGeoState({
+                  status: 'unavailable',
+                  error: 'GPS temporariamente indisponível. Verifique se o GPS está ativo e tente em um local aberto.'
+                });
+              },
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 }
+            );
+          }
+          // Se ainda não atingiu o limite, não faz nada (espera próximo evento do watchPosition)
         } else if (error.code === 3) { // TIMEOUT
           console.warn('[useIniciarServico] Timeout no watchPosition, continuando...');
         }

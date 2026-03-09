@@ -158,6 +158,8 @@ export default function InstaladorChecklist() {
   // Estados para local de instalação do rastreador
   const [localInstalacao, setLocalInstalacao] = useState('');
   const [descricaoInstalacao, setDescricaoInstalacao] = useState('');
+  const [fotoLocalInstalacao, setFotoLocalInstalacao] = useState<string | null>(null);
+  const [uploadingFotoLocal, setUploadingFotoLocal] = useState(false);
 
   // Estados para validação em tempo real do IMEI
   const [imeiValidando, setImeiValidando] = useState(false);
