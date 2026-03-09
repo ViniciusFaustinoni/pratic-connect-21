@@ -267,6 +267,9 @@ export function usePermissions() {
     roles,
     userId: user?.id,
     cotacao,
+    hasPerm,
+    operationalRedirectPath,
+    userIsOnlyOperational,
     hasPermission: (key: PermissionKey) => permissions[key] ?? false,
   };
 }
