@@ -6,6 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ====== HELPER: Detectar links no texto ======
+function contemLink(texto: string): boolean {
+  return /https?:\/\/\S+/i.test(texto);
+}
+
 // ====== HELPER: Formatar telefone ======
 function formatarTelefone(telefone: string): string {
   let limpo = telefone.replace(/\D/g, "");
