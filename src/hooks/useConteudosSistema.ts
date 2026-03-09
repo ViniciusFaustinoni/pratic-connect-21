@@ -231,3 +231,87 @@ export function useConfigDecomposicao() {
     staleTime: 1000 * 60 * 10,
   });
 }
+
+// ============================================
+// Defaults de Cota de Participação
+// ============================================
+
+export function useCotaParticipacaoDefault() {
+  return useConfiguracaoNumero('cota_participacao_default', 6);
+}
+
+export function useCotaMinimaDefault() {
+  return useConfiguracaoNumero('cota_minima_default', 1200);
+}
+
+// ============================================
+// Defaults do Form de Plano
+// ============================================
+
+export function useCoberturaFipeDefault() {
+  return useConfiguracaoNumero('cobertura_fipe_default', 100);
+}
+
+export function useAnoMinimoDefault() {
+  return useConfiguracaoNumero('ano_minimo_default', 2005);
+}
+
+// ============================================
+// Fatores de Risco
+// ============================================
+
+export function useFatorVeiculoAntigo() {
+  return useConfiguracaoNumero('fator_veiculo_antigo', 1.15);
+}
+
+export function useFatorUsoTrabalho() {
+  return useConfiguracaoNumero('fator_uso_trabalho', 1.20);
+}
+
+// ============================================
+// Combustíveis
+// ============================================
+
+export interface CombustivelOption {
+  value: string;
+  label: string;
+}
+
+export function useCombustiveis() {
+  return useConfiguracaoJson<CombustivelOption[]>('combustiveis', [
+    { value: 'flex', label: 'Flex (Gasolina/Etanol)' },
+    { value: 'gasolina', label: 'Gasolina' },
+    { value: 'etanol', label: 'Etanol' },
+    { value: 'diesel', label: 'Diesel' },
+    { value: 'eletrico', label: 'Elétrico' },
+    { value: 'hibrido', label: 'Híbrido' },
+    { value: 'gnv', label: 'GNV' },
+  ]);
+}
+
+// ============================================
+// Marcas e Modelos Fallback
+// ============================================
+
+export function useMarcasModelosFallback() {
+  return useConfiguracaoJson<Record<string, string[]>>('marcas_modelos_fallback', {});
+}
+
+// ============================================
+// Estimativa FIPE Config
+// ============================================
+
+export function useEstimativaFipeBase() {
+  return useConfiguracaoNumero('estimativa_fipe_base', 35000);
+}
+
+export function useEstimativaFipeDepreciacao() {
+  return useConfiguracaoNumero('estimativa_fipe_depreciacao', 0.06);
+}
+
+export function useEstimativaFipeAjusteMarca() {
+  return useConfiguracaoJson<Record<string, number>>('estimativa_fipe_ajuste_marca', {
+    Toyota: 1.3, Honda: 1.25, Hyundai: 1.15, Volkswagen: 1.1, Chevrolet: 1.05,
+    Fiat: 1.0, Renault: 0.95, Nissan: 1.1, Jeep: 1.4, Ford: 1.0,
+  });
+}
