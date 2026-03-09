@@ -18,7 +18,7 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
 export default function MeuPerfil() {
-  const { profile, user } = useAuth();
+  const { profile, user, updateProfile: updateAuthProfile } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
