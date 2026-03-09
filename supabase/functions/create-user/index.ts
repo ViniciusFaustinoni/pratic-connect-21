@@ -64,16 +64,13 @@ serve(async (req) => {
 
     const currentUserId = currentUser.id;
 
-    // Verificar se tem role de gerência
-    const { data: roles } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', currentUserId);
+    // Verificar permissão dinâmica via has_permission
+    const { data: temPermissao } = await supabaseAdmin.rpc('has_permission', {
+      _user_id: currentUserId,
+      _permission: 'canCreateUser',
+    });
 
-    const allowedRoles = ['diretor', 'gerente_comercial', 'supervisor_vendas', 'analista_eventos'];
-    const hasPermission = roles?.some(r => allowedRoles.includes(r.role));
-
-    if (!hasPermission) {
+    if (!temPermissao) {
       return new Response(
         JSON.stringify({ error: 'Sem permissão para criar usuários' }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }

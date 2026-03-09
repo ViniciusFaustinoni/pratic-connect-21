@@ -692,6 +692,7 @@ Deno.serve(async (req) => {
     // 9. NOTIFICAR ANALISTAS DE SINISTROS
     // ============================================
     try {
+      // Buscar analistas de sinistros pelo role
       const { data: analistas } = await supabaseAdmin
         .from('user_roles')
         .select('user_id')
@@ -699,11 +700,21 @@ Deno.serve(async (req) => {
 
       let destinatarios = analistas || [];
       if (destinatarios.length === 0) {
-        const { data: diretores } = await supabaseAdmin
-          .from('user_roles')
-          .select('user_id')
-          .eq('role', 'diretor');
-        destinatarios = diretores || [];
+        // Fallback: buscar usuários com permissão canDeleteSinistro (diretores/admins)
+        const { data: configs } = await supabaseAdmin
+          .from('app_roles_config')
+          .select('role, permissions')
+          .eq('is_active', true);
+        const rolesAdmin = (configs || [])
+          .filter(c => Array.isArray(c.permissions) && c.permissions.includes('canDeleteSinistro'))
+          .map(c => c.role);
+        if (rolesAdmin.length > 0) {
+          const { data: admins } = await supabaseAdmin
+            .from('user_roles')
+            .select('user_id')
+            .in('role', rolesAdmin);
+          destinatarios = admins || [];
+        }
       }
 
       // Título com alertas especiais

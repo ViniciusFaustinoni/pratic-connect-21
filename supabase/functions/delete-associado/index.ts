@@ -53,24 +53,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user is a director
-    const { data: roles, error: roleError } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id);
+    // Verificar permissão dinâmica via has_permission
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (roleError) {
-      console.error("[delete-associado] Erro ao verificar role:", roleError);
-      return new Response(
-        JSON.stringify({ error: "Erro ao verificar permissões" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const { data: temPermissao } = await adminClient.rpc('has_permission', {
+      _user_id: user.id,
+      _permission: 'canDeleteAssociado',
+    });
 
-    const isDiretor = roles?.some((r) => r.role === "diretor");
-    if (!isDiretor) {
+    if (!temPermissao) {
       return new Response(
-        JSON.stringify({ error: "Apenas diretores podem excluir associados" }),
+        JSON.stringify({ error: "Sem permissão para excluir associados" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
