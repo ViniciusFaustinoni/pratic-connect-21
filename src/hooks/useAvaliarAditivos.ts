@@ -8,6 +8,7 @@ interface VeiculoParaAvaliacao {
   procedencia?: string;
   valorFipe?: number;
   observacoes?: string;
+  blindado?: boolean;
 }
 
 function avaliarRegra(regra: RegraAditivo, veiculo: VeiculoParaAvaliacao, fipeLimite: number): boolean {
