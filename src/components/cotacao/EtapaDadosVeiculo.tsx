@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
+import { useCombustiveis, useMarcasModelosFallback } from '@/hooks/useConteudosSistema';
+import { COMBUSTIVEIS_FALLBACK } from '@/data/combustiveis';
 
 interface VeiculoEncontrado {
   placa: string;
