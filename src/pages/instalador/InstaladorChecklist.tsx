@@ -600,6 +600,10 @@ export default function InstaladorChecklist() {
         toast.error('Descreva o ponto exato de instalação do rastreador');
         return;
       }
+      if (!fotoLocalInstalacao) {
+        toast.error('Tire a foto do local de instalação do rastreador');
+        return;
+      }
     }
     
     try {
