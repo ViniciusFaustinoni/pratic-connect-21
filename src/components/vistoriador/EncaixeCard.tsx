@@ -41,10 +41,7 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
 
   const handleNavegar = () => {
     if (encaixe.latitude && encaixe.longitude) {
-      window.open(
-        `https://www.google.com/maps/dir/?api=1&destination=${encaixe.latitude},${encaixe.longitude}`,
-        '_blank'
-      );
+      window.location.href = `https://www.google.com/maps/dir/?api=1&destination=${encaixe.latitude},${encaixe.longitude}`;
     } else {
       const endereco = [
         encaixe.endereco_logradouro,
@@ -54,10 +51,7 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
       ]
         .filter(Boolean)
         .join(', ');
-      window.open(
-        `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(endereco)}`,
-        '_blank'
-      );
+      window.location.href = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(endereco)}`;
     }
   };
 

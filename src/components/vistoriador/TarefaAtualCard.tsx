@@ -105,7 +105,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const abrirNavegacao = () => {
     if (tarefa.endereco.latitude && tarefa.endereco.longitude) {
       const url = `https://www.google.com/maps/dir/?api=1&destination=${tarefa.endereco.latitude},${tarefa.endereco.longitude}`;
-      window.open(url, '_blank');
+      window.location.href = url;
     }
   };
 

@@ -9,8 +9,6 @@ interface PushNotificationState {
   isLoading: boolean;
 }
 
-// VAPID Public Key - placeholder, será substituído pela chave real do backend
-const VAPID_PUBLIC_KEY_FALLBACK = 'BLc8Qy8VYUZMy3q2JQH0f0t4vNqM8P7YK2WN1Rz6pF5wT3mJ4cB9dS2aE6hN0kL8xV5gR7uI9oP1';
 
 // Converter base64 URL-safe para Uint8Array (necessário para applicationServerKey)
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
@@ -141,16 +139,26 @@ export function usePushNotificationsProfissional() {
       const registration = await navigator.serviceWorker.ready;
 
       // Buscar a VAPID key do backend
-      let vapidKey = VAPID_PUBLIC_KEY_FALLBACK;
+      let vapidKey: string | null = null;
       try {
-        const { data: vapidData } = await supabase.functions.invoke('send-push-profissional', {
+        const { data: vapidData, error: vapidError } = await supabase.functions.invoke('send-push-profissional', {
           body: { action: 'get-vapid-key' }
         });
+        if (vapidError) {
+          console.error('[Push] Erro ao buscar VAPID key:', vapidError);
+        }
         if (vapidData?.vapidPublicKey) {
           vapidKey = vapidData.vapidPublicKey;
+          console.log('[Push] VAPID key obtida do backend');
         }
       } catch (err) {
-        console.warn('[Push] Não foi possível buscar VAPID key do backend, usando fallback');
+        console.error('[Push] Falha na chamada para obter VAPID key:', err);
+      }
+
+      if (!vapidKey) {
+        console.error('[Push] VAPID key não disponível — configure VAPID_PUBLIC_KEY no servidor');
+        setState(prev => ({ ...prev, isLoading: false }));
+        return { success: false, reason: 'vapid_unavailable' };
       }
 
       // Criar subscription

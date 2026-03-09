@@ -169,7 +169,7 @@ export default function InstaladorHome() {
             <Card 
               className="border-slate-700 bg-slate-800 hover:bg-slate-750 cursor-pointer transition-colors"
                onClick={() => {
-                 window.open('https://wa.me/5521970048549?text=Olá, preciso de suporte.', '_blank');
+                 window.location.href = 'https://wa.me/5521970048549?text=Olá, preciso de suporte.';
                }}
             >
               <CardContent className="flex flex-col items-center justify-center p-4 gap-2">

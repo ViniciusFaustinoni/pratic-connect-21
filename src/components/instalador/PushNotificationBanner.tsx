@@ -57,6 +57,9 @@ export function PushNotificationBanner() {
         case 'rls_blocked':
           toast.error('Erro de permissão ao salvar. Contate o suporte.');
           break;
+        case 'vapid_unavailable':
+          toast.error('Servidor de notificações não configurado. Contate o administrador.', { duration: 6000 });
+          break;
         default:
           toast.error('Não foi possível ativar as notificações. Tente novamente.');
       }
