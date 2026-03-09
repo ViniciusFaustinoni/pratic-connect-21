@@ -229,7 +229,7 @@ export default function UsuariosAcessos() {
   });
 
   const addRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
       const { error } = await supabase.from('user_roles').insert({ user_id: userId, role });
       if (error) throw error;
     },
