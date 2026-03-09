@@ -161,13 +161,20 @@ Deno.serve(async (req) => {
     console.log(`Integridade: ${integridade} → Novo status rastreador: ${novoStatusRastreador}`);
 
     // 5. Atualizar rastreador
+    // Se vai para estoque (íntegro), portador_id = null (não pertence a ninguém)
+    // Se vai para retorno_base (não íntegro), portador_id = profissional que o transporta
+    const portadorId = novoStatusRastreador === 'estoque' ? null : profissionalId;
     const { error: updateRastreadorError } = await supabase
       .from('rastreadores')
       .update({
         status: novoStatusRastreador,
         veiculo_id: null,
-        portador_id: profissionalId,
+        portador_id: portadorId,
         id_plataforma: null,
+        // Limpar campos de instalação — rastreador não está mais instalado
+        local_instalacao: null,
+        descricao_instalacao: null,
+        foto_local_instalacao_url: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', rastreadorId);

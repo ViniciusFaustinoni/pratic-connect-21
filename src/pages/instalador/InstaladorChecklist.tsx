@@ -61,6 +61,7 @@ import {
 import { useSaveAssinatura } from '@/hooks/useAssinatura';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
 import { VistoriaFotoCard } from '@/components/vistorias/VistoriaFotoCard';
+import { FotoCapture } from '@/components/instalador/FotoCapture';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
@@ -158,6 +159,8 @@ export default function InstaladorChecklist() {
   // Estados para local de instalação do rastreador
   const [localInstalacao, setLocalInstalacao] = useState('');
   const [descricaoInstalacao, setDescricaoInstalacao] = useState('');
+  const [fotoLocalInstalacao, setFotoLocalInstalacao] = useState<string | null>(null);
+  const [uploadingFotoLocal, setUploadingFotoLocal] = useState(false);
 
   // Estados para validação em tempo real do IMEI
   const [imeiValidando, setImeiValidando] = useState(false);
@@ -540,6 +543,27 @@ export default function InstaladorChecklist() {
     return () => clearTimeout(timeout);
   }, [imeiRastreador, isImeiValido]);
 
+  // Upload de foto do local de instalação
+  const handleFotoLocalInstalacao = async (file: File) => {
+    if (!id) return;
+    setUploadingFotoLocal(true);
+    try {
+      const fileName = `local-instalacao/${id}/${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('servicos-fotos')
+        .upload(fileName, file, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) throw uploadError;
+      
+      const { data: urlData } = supabase.storage.from('servicos-fotos').getPublicUrl(fileName);
+      setFotoLocalInstalacao(urlData.publicUrl);
+      toast.success('Foto do local salva!');
+    } catch (err) {
+      toast.error('Erro ao enviar foto do local');
+    } finally {
+      setUploadingFotoLocal(false);
+    }
+  };
+
   // Upload de fotos de ressalva para o storage
   const handleAddFotoRessalva = async (file: File) => {
     if (!id) return;
@@ -598,6 +622,10 @@ export default function InstaladorChecklist() {
         toast.error('Descreva o ponto exato de instalação do rastreador');
         return;
       }
+      if (!fotoLocalInstalacao) {
+        toast.error('Tire a foto do local de instalação do rastreador');
+        return;
+      }
     }
     
     try {
@@ -611,6 +639,7 @@ export default function InstaladorChecklist() {
         fotosRessalva: fotosRessalva.length > 0 ? fotosRessalva.map(f => f.preview) : undefined,
         localInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? localInstalacao : undefined,
         descricaoInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? descricaoInstalacao.trim() : undefined,
+        fotoLocalInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? fotoLocalInstalacao : undefined,
       });
       navigate('/instalador');
     } catch (err) {
@@ -1676,6 +1705,22 @@ export default function InstaladorChecklist() {
                       onChange={(e) => setDescricaoInstalacao(e.target.value)}
                       className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 min-h-[80px]"
                     />
+                  </div>
+                  {/* Foto do local de instalação - OBRIGATÓRIA */}
+                  <div className="space-y-2">
+                    <Label className="text-sm text-slate-300">Foto do local de instalação *</Label>
+                    <p className="text-xs text-slate-500">Tire uma foto mostrando onde o rastreador foi instalado</p>
+                    <div className="w-32">
+                      <FotoCapture
+                        tipo="local_instalacao"
+                        label="Local Instalação"
+                        obrigatoria={true}
+                        fotoUrl={fotoLocalInstalacao || undefined}
+                        uploading={uploadingFotoLocal}
+                        onCapture={handleFotoLocalInstalacao}
+                        onRemove={() => setFotoLocalInstalacao(null)}
+                      />
+                    </div>
                   </div>
                 </CardContent>
               </Card>

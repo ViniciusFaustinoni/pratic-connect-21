@@ -116,7 +116,11 @@ export function InstaladorLayout() {
   return (
     <InstaladorGuard>
       {deveBloqueiarPorLocalizacao && (
-        <TelaLocalizacaoBloqueada onRetry={tentarNovamente} isRetrying={isRetrying} />
+        <TelaLocalizacaoBloqueada 
+          onRetry={tentarNovamente} 
+          isRetrying={isRetrying} 
+          errorType={geoState.status === 'denied' ? 'denied' : 'unavailable'}
+        />
       )}
 
       <div className={cn("h-[100dvh] bg-muted/30", deveBloqueiarPorLocalizacao && "hidden")}>
