@@ -12,7 +12,9 @@ import { ConsultorEditSheet } from '@/components/consultores/ConsultorEditSheet'
 import { useConsultores, type Consultor } from '@/hooks/useConsultores';
 import { useNavigate } from 'react-router-dom';
 
-const ROLE_LABELS: Record<string, string> = {
+// ROLE_LABELS removido — usando useAppRoles().getRoleLabel() via ConsultorEditSheet
+// Labels curtos locais para badges compactos da tabela
+const ROLE_SHORT_LABELS: Record<string, string> = {
   vendedor_clt: 'CLT',
   vendedor_externo: 'Externo',
   supervisor_vendas: 'Supervisor',
