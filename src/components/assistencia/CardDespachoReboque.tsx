@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,13 +7,15 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Truck, Send, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, MapPin, Navigation, UserCheck, Clock } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Truck, Send, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, MapPin, Navigation, UserCheck, Clock, Camera, Upload, X, ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useFotosReboquista, useAddFotoReboquista, useDeleteFotoReboquista } from '@/hooks/useFotosReboquista';
 
 const vehicleIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
 const truckIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
@@ -56,6 +58,82 @@ const etapaConfig: Record<string, { label: string; className: string }> = {
 
 export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [observacaoConclusao, setObservacaoConclusao] = useState('');
+  const [fotosPreview, setFotosPreview] = useState<{ file: File; preview: string }[]>([]);
+
+  // Fotos do reboquista
+  const { data: fotosReboque } = useFotosReboquista(chamadoId);
+  const addFotoMutation = useAddFotoReboquista();
+  const deleteFotoMutation = useDeleteFotoReboquista();
+
+  // Mutation: Concluir serviço
+  const concluirMutation = useMutation({
+    mutationFn: async () => {
+      // Upload das fotos anexadas
+      if (fotosPreview.length > 0) {
+        await addFotoMutation.mutateAsync({
+          chamadoId,
+          files: fotosPreview.map(f => f.file),
+          momento: 'conclusao',
+          observacao: observacaoConclusao || 'Serviço concluído',
+        });
+      }
+
+      // Atualizar status do chamado para concluído
+      const { error: chamadoErr } = await supabase
+        .from('chamados_assistencia')
+        .update({ status: 'concluido' })
+        .eq('id', chamadoId);
+      if (chamadoErr) throw chamadoErr;
+
+      // Registrar no histórico
+      await supabase.from('chamados_assistencia_historico').insert({
+        chamado_id: chamadoId,
+        status_anterior: 'prestador_despachado',
+        status_novo: 'concluido',
+        observacao: observacaoConclusao || 'Serviço de reboque concluído pelo analista.',
+      });
+
+      // Registrar status de conclusão no log do reboque
+      await supabase.from('despacho_reboque_status_log').insert({
+        chamado_id: chamadoId,
+        despacho_id: null,
+        prestador_id: null,
+        status: 'concluido',
+        observacao: observacaoConclusao || 'Serviço concluído',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Serviço concluído com sucesso!');
+      setFotosPreview([]);
+      setObservacaoConclusao('');
+      queryClient.invalidateQueries({ queryKey: ['despacho-reboque', chamadoId] });
+      queryClient.invalidateQueries({ queryKey: ['despacho-status-log', chamadoId] });
+      queryClient.invalidateQueries({ queryKey: ['chamado', chamadoId] });
+      queryClient.invalidateQueries({ queryKey: ['fotos-reboquista', chamadoId] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao concluir serviço'),
+  });
+
+  const handleAddFotos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const newPreviews = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setFotosPreview(prev => [...prev, ...newPreviews]);
+    e.target.value = '';
+  };
+
+  const handleRemoveFotoPreview = (index: number) => {
+    setFotosPreview(prev => {
+      const updated = [...prev];
+      URL.revokeObjectURL(updated[index].preview);
+      updated.splice(index, 1);
+      return updated;
+    });
+  };
 
   // Buscar despacho ativo
   const { data: despacho, isLoading } = useQuery({
@@ -249,14 +327,29 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
         })
         .eq('id', chamadoId);
 
-      // Notificar prestador atribuído via WhatsApp
+      // Buscar dados do associado para enviar contato ao reboquista
+      const { data: chamadoInfo } = await supabase
+        .from('chamados_assistencia')
+        .select('associado:associados(nome, telefone)')
+        .eq('id', chamadoId)
+        .single();
+
+      const associado = (chamadoInfo as any)?.associado;
+      const nomeAssociado = associado?.nome || 'Associado';
+      const telAssociado = associado?.telefone || '';
+
+      // Notificar prestador atribuído via WhatsApp (com contato do associado)
       const prest = convite.prestador as any;
       const telPrest = prest?.whatsapp || prest?.telefone;
       if (telPrest) {
+        const contatoAssociado = telAssociado
+          ? `\n\n👤 *Associado:* ${nomeAssociado}\n📱 *Telefone:* ${telAssociado}`
+          : `\n\n👤 *Associado:* ${nomeAssociado}`;
+
         await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telPrest,
-            mensagem: `🎉 *CHAMADO ATRIBUÍDO A VOCÊ!*\n\nVocê foi selecionado para este serviço de reboque.\nValor: ${formatCurrency(convite.valor_calculado)}\n\nPor favor, dirija-se ao local o mais rápido possível. Boa viagem! 🚛`,
+            mensagem: `🎉 *CHAMADO ATRIBUÍDO A VOCÊ!*\n\nVocê foi selecionado para este serviço de reboque.\nValor: ${formatCurrency(convite.valor_calculado)}${contatoAssociado}\n\nPor favor, dirija-se ao local o mais rápido possível. Boa viagem! 🚛`,
           },
         });
       }
@@ -574,6 +667,120 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Fotos anexadas ao serviço */}
+          {fotosReboque && fotosReboque.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium flex items-center gap-1">
+                <ImageIcon className="h-4 w-4" /> Fotos do serviço ({fotosReboque.length}):
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {fotosReboque.map((foto) => (
+                  <div key={foto.id} className="relative group">
+                    <img
+                      src={foto.arquivo_url}
+                      alt={foto.observacao || 'Foto do serviço'}
+                      className="h-24 w-full object-cover rounded-lg border"
+                    />
+                    {!isConcluido && (
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => deleteFotoMutation.mutate({ id: foto.id, arquivoUrl: foto.arquivo_url, chamadoId })}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Seção de conclusão (apenas quando não concluído) */}
+          {!isConcluido && (
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-sm font-semibold flex items-center gap-1">
+                <CheckCircle className="h-4 w-4" /> Concluir Serviço
+              </p>
+
+              {/* Upload de fotos */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleAddFotos}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                Anexar fotos do serviço ({fotosPreview.length})
+              </Button>
+
+              {/* Preview das fotos selecionadas */}
+              {fotosPreview.length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {fotosPreview.map((fp, idx) => (
+                    <div key={idx} className="relative group">
+                      <img
+                        src={fp.preview}
+                        alt={`Foto ${idx + 1}`}
+                        className="h-20 w-full object-cover rounded border"
+                      />
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="absolute top-0.5 right-0.5 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleRemoveFotoPreview(idx)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Observação */}
+              <Textarea
+                placeholder="Observações sobre a conclusão do serviço..."
+                value={observacaoConclusao}
+                onChange={(e) => setObservacaoConclusao(e.target.value)}
+                rows={2}
+              />
+
+              {/* Botão de concluir */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button className="w-full" disabled={concluirMutation.isPending}>
+                    {concluirMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                    Marcar como Concluído
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmar Conclusão</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Marcar o serviço de reboque como concluído? O valor de {formatCurrency(despacho.valor_atribuido)} será registrado como custo operacional.
+                      {fotosPreview.length > 0 ? ` ${fotosPreview.length} foto(s) serão anexadas.` : ''}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => concluirMutation.mutate()}>
+                      Confirmar Conclusão
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
 
