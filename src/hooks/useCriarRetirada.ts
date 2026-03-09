@@ -8,6 +8,14 @@ export interface CriarRetiradaParams {
   dataAgendada: string;      // formato: YYYY-MM-DD
   periodo: Periodo;
   motivo?: string;
+  enderecoAlternativo?: {
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+  };
 }
 
 interface RastreadorInfo {
@@ -90,6 +98,8 @@ export function useCriarRetirada() {
       // 2. Criar serviço de retirada
       const associado = rastreadorInfo.veiculo?.associado;
       
+      const endAlt = params.enderecoAlternativo;
+      
       const servicoData = {
         tipo: 'vistoria_retirada' as const,
         status: 'pendente' as const,
@@ -101,15 +111,15 @@ export function useCriarRetirada() {
         local_vistoria: 'cliente',
         observacoes: params.motivo || 'Retirada de rastreador',
         permite_encaixe: true,
-        // Endereço do associado
-        logradouro: associado?.logradouro || null,
-        numero: associado?.numero || null,
-        bairro: associado?.bairro || null,
-        cidade: associado?.cidade || null,
-        uf: associado?.uf || null,
-        cep: associado?.cep || null,
-        latitude: associado?.endereco_latitude || null,
-        longitude: associado?.endereco_longitude || null,
+        // Endereço: usar alternativo se fornecido, senão do associado
+        logradouro: endAlt?.logradouro || associado?.logradouro || null,
+        numero: endAlt?.numero || associado?.numero || null,
+        bairro: endAlt?.bairro || associado?.bairro || null,
+        cidade: endAlt?.cidade || associado?.cidade || null,
+        uf: endAlt?.uf || associado?.uf || null,
+        cep: endAlt?.cep || associado?.cep || null,
+        latitude: endAlt ? null : (associado?.endereco_latitude || null),
+        longitude: endAlt ? null : (associado?.endereco_longitude || null),
       };
 
       const { data: servico, error: servicoError } = await supabase

@@ -108,7 +108,7 @@ export function AgendarRetiradaModal({
         updated_at: new Date().toISOString(),
       };
 
-      if (dados.localTipo === 'volante' && dados.endereco) {
+      if (dados.endereco) {
         updateData.cep = dados.endereco.cep;
         updateData.logradouro = dados.endereco.logradouro;
         updateData.numero = dados.endereco.numero;
@@ -213,7 +213,7 @@ export function AgendarRetiradaModal({
       periodo: periodo as Periodo,
       profissionalId,
       localTipo,
-      endereco: localTipo === 'volante' && tipoEndereco === 'outro'
+      endereco: tipoEndereco === 'outro'
         ? { cep, logradouro, numero, bairro, cidade, uf }
         : undefined,
       notificarWhatsApp,
@@ -299,77 +299,84 @@ export function AgendarRetiradaModal({
             </RadioGroup>
           </div>
 
-          {/* Endereço (se volante) */}
-          {localTipo === 'volante' && (
-            <div className="space-y-3 pl-2 border-l-2 border-primary/30">
-              <RadioGroup
-                value={tipoEndereco}
-                onValueChange={(v) => setTipoEndereco(v as 'cadastrado' | 'outro')}
-                className="flex gap-4"
-              >
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="cadastrado" id="end-cadastrado" />
-                  <Label htmlFor="end-cadastrado" className="cursor-pointer text-sm">
-                    Endereço cadastrado
-                  </Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="outro" id="end-outro" />
-                  <Label htmlFor="end-outro" className="cursor-pointer text-sm">
-                    Outro endereço
-                  </Label>
-                </div>
-              </RadioGroup>
+          {/* Endereço do serviço */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Endereço do Serviço</Label>
+            <RadioGroup
+              value={tipoEndereco}
+              onValueChange={(v) => setTipoEndereco(v as 'cadastrado' | 'outro')}
+              className="flex gap-4"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="cadastrado" id="end-cadastrado" />
+                <Label htmlFor="end-cadastrado" className="cursor-pointer text-sm">
+                  Endereço cadastrado
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="outro" id="end-outro" />
+                <Label htmlFor="end-outro" className="cursor-pointer text-sm">
+                  Outro endereço
+                </Label>
+              </div>
+            </RadioGroup>
 
-              {tipoEndereco === 'outro' && (
-                <div className="grid gap-3">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="CEP"
-                      value={cep}
-                      onChange={(e) => setCep(e.target.value.replace(/\D/g, ''))}
-                      onBlur={handleBuscarCep}
-                      maxLength={8}
-                      className="w-32"
-                    />
-                    {buscandoCep && <Loader2 className="h-4 w-4 animate-spin self-center" />}
-                  </div>
+            {tipoEndereco === 'cadastrado' && retirada?.associado && (
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                {[retirada.logradouro, retirada.numero, retirada.bairro, retirada.cidade, retirada.uf]
+                  .filter(Boolean)
+                  .join(', ') || 'Endereço não informado no cadastro'}
+              </div>
+            )}
+
+            {tipoEndereco === 'outro' && (
+              <div className="grid gap-3 pl-2 border-l-2 border-primary/30">
+                <div className="flex gap-2">
                   <Input
-                    placeholder="Logradouro"
-                    value={logradouro}
-                    onChange={(e) => setLogradouro(e.target.value)}
+                    placeholder="CEP"
+                    value={cep}
+                    onChange={(e) => setCep(e.target.value.replace(/\D/g, ''))}
+                    onBlur={handleBuscarCep}
+                    maxLength={8}
+                    className="w-32"
                   />
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input
-                      placeholder="Número"
-                      value={numero}
-                      onChange={(e) => setNumero(e.target.value)}
-                    />
-                    <Input
-                      placeholder="Bairro"
-                      value={bairro}
-                      onChange={(e) => setBairro(e.target.value)}
-                      className="col-span-2"
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input
-                      placeholder="Cidade"
-                      value={cidade}
-                      onChange={(e) => setCidade(e.target.value)}
-                      className="col-span-2"
-                    />
-                    <Input
-                      placeholder="UF"
-                      value={uf}
-                      onChange={(e) => setUf(e.target.value.toUpperCase())}
-                      maxLength={2}
-                    />
-                  </div>
+                  {buscandoCep && <Loader2 className="h-4 w-4 animate-spin self-center" />}
                 </div>
-              )}
-            </div>
-          )}
+                <Input
+                  placeholder="Logradouro"
+                  value={logradouro}
+                  onChange={(e) => setLogradouro(e.target.value)}
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <Input
+                    placeholder="Número"
+                    value={numero}
+                    onChange={(e) => setNumero(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Bairro"
+                    value={bairro}
+                    onChange={(e) => setBairro(e.target.value)}
+                    className="col-span-2"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <Input
+                    placeholder="Cidade"
+                    value={cidade}
+                    onChange={(e) => setCidade(e.target.value)}
+                    className="col-span-2"
+                  />
+                  <Input
+                    placeholder="UF"
+                    value={uf}
+                    onChange={(e) => setUf(e.target.value.toUpperCase())}
+                    maxLength={2}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Data */}
           <div className="space-y-2">
