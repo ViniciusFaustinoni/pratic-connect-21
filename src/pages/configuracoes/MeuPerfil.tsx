@@ -60,9 +60,9 @@ export default function MeuPerfil() {
       
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Perfil atualizado com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['auth-user'] });
+      await updateAuthProfile({ nome: nome.trim(), telefone: telefone || undefined });
     },
     onError: (error: Error) => toast.error(error.message || 'Erro ao atualizar perfil')
   });
