@@ -55,12 +55,7 @@ serve(async (req) => {
       body: {
         telefone: payload.telefone,
         mensagem,
-        template_name: 'assistencia_confirmada',
-        template_params: [
-          payload.nome_associado,
-          'Técnico Praticcar',
-          `${dataFormatada} (${periodoTexto})`,
-        ],
+        allow_text: true,
       }
     });
 
