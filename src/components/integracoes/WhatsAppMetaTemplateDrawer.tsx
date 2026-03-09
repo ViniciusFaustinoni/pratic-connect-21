@@ -8,7 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Save, Send, Loader2, Bot, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Plus, Save, Send, Loader2, Bot, CheckCircle, AlertTriangle, XCircle, X, Link, Phone, Reply } from 'lucide-react';
+
+interface BotaoAcao {
+  tipo: 'url' | 'telefone' | 'resposta_rapida';
+  texto: string;
+  url?: string;
+  telefone?: string;
+}
 import { useCriarMetaTemplate, useAtualizarMetaTemplate, useEnviarMetaTemplate } from '@/hooks/useWhatsAppMeta';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -37,6 +44,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
   const [headerTexto, setHeaderTexto] = useState('');
   const [corpo, setCorpo] = useState('');
   const [rodape, setRodape] = useState('');
+  const [botoes, setBotoes] = useState<BotaoAcao[]>([]);
   const [varExemplos, setVarExemplos] = useState<Record<string, string>>({});
   const corpoRef = useRef<HTMLTextAreaElement>(null);
 
@@ -55,6 +63,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
       setHeaderTexto(template.header_texto || '');
       setCorpo(template.corpo || '');
       setRodape(template.rodape || '');
+      setBotoes((template.botoes as BotaoAcao[]) || []);
       setVarExemplos((template.variaveis_exemplo as Record<string, string>) || {});
       setValidacao(null);
     } else if (open && !template) {
@@ -64,6 +73,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
       setHeaderTexto('');
       setCorpo('');
       setRodape('');
+      setBotoes([]);
       setVarExemplos({});
       setValidacao(null);
     }
@@ -131,6 +141,8 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
     }
   };
 
+  const botoesPayload = botoes.length > 0 ? botoes : null;
+
   const handleSalvarRascunho = async () => {
     if (!nome || !corpo) return;
     if (isEdit) {
@@ -142,6 +154,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         header_texto: headerTipo === 'text' ? headerTexto : null,
         corpo,
         rodape: rodape || null,
+        botoes: botoesPayload,
         variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : null,
       });
     } else {
@@ -152,6 +165,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         header_tipo: headerTipo,
         header_texto: headerTipo === 'text' ? headerTexto : undefined,
         rodape: rodape || undefined,
+        botoes: botoesPayload as any,
         variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : undefined,
       });
     }
@@ -168,6 +182,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         header_texto: headerTipo === 'text' ? headerTexto : null,
         corpo,
         rodape: rodape || null,
+        botoes: botoesPayload,
         variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : null,
       });
       await enviar.mutateAsync(template.id);
@@ -180,6 +195,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         header_tipo: headerTipo,
         header_texto: headerTipo === 'text' ? headerTexto : undefined,
         rodape: rodape || undefined,
+        botoes: botoesPayload as any,
         variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : undefined,
       });
       if (created?.id) {
@@ -327,6 +343,92 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
               <span className="text-[10px] text-muted-foreground">{rodape.length}/60</span>
             </div>
 
+            {/* Botões de Ação */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Botões de ação (opcional)</Label>
+                <span className="text-[10px] text-muted-foreground">{botoes.length}/3</span>
+              </div>
+              
+              {botoes.map((btn, idx) => (
+                <div key={idx} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={btn.tipo}
+                      onValueChange={(val: 'url' | 'telefone' | 'resposta_rapida') => {
+                        const updated = [...botoes];
+                        updated[idx] = { ...updated[idx], tipo: val, url: '', telefone: '' };
+                        setBotoes(updated);
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-[10px] w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="url">🔗 URL</SelectItem>
+                        <SelectItem value="telefone">📞 Telefone</SelectItem>
+                        <SelectItem value="resposta_rapida">↩️ Resposta Rápida</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      className="h-7 text-[10px] flex-1"
+                      value={btn.texto}
+                      onChange={(e) => {
+                        const updated = [...botoes];
+                        updated[idx] = { ...updated[idx], texto: e.target.value.substring(0, 25) };
+                        setBotoes(updated);
+                      }}
+                      placeholder="Texto do botão (máx 25)"
+                      maxLength={25}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 text-destructive"
+                      onClick={() => setBotoes(botoes.filter((_, i) => i !== idx))}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  {btn.tipo === 'url' && (
+                    <Input
+                      className="h-7 text-[10px]"
+                      value={btn.url || ''}
+                      onChange={(e) => {
+                        const updated = [...botoes];
+                        updated[idx] = { ...updated[idx], url: e.target.value };
+                        setBotoes(updated);
+                      }}
+                      placeholder="https://exemplo.com/pagina"
+                    />
+                  )}
+                  {btn.tipo === 'telefone' && (
+                    <Input
+                      className="h-7 text-[10px]"
+                      value={btn.telefone || ''}
+                      onChange={(e) => {
+                        const updated = [...botoes];
+                        updated[idx] = { ...updated[idx], telefone: e.target.value };
+                        setBotoes(updated);
+                      }}
+                      placeholder="+5521999999999"
+                    />
+                  )}
+                </div>
+              ))}
+
+              {botoes.length < 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-7 text-[10px]"
+                  onClick={() => setBotoes([...botoes, { tipo: 'url', texto: '' }])}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Adicionar botão
+                </Button>
+              )}
+            </div>
+
             <Separator />
 
             {/* Resultado da validação IA */}
@@ -445,6 +547,22 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
                   )}
                   <p className="text-[10px] text-[#667781] dark:text-gray-400 text-right">10:30 ✓✓</p>
                 </div>
+                {/* Botões preview */}
+                {botoes.length > 0 && (
+                  <div className="bg-[#DCF8C6] dark:bg-[#005C4B] rounded-lg shadow-sm overflow-hidden mt-0.5">
+                    {botoes.map((btn, idx) => (
+                      <div key={idx}>
+                        {idx > 0 && <div className="border-t border-[#c5e8b0] dark:border-[#004a3d]" />}
+                        <button className="w-full py-2 px-3 text-center text-xs text-[#027eb5] dark:text-[#53bdeb] font-medium flex items-center justify-center gap-1.5">
+                          {btn.tipo === 'url' && <Link className="h-3 w-3" />}
+                          {btn.tipo === 'telefone' && <Phone className="h-3 w-3" />}
+                          {btn.tipo === 'resposta_rapida' && <Reply className="h-3 w-3" />}
+                          {btn.texto || 'Botão'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
