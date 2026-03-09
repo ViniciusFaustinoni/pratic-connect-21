@@ -868,6 +868,7 @@ export function useAprovarVeiculoServico() {
       fotosRessalva?: string[];
       localInstalacao?: string;
       descricaoInstalacao?: string;
+      fotoLocalInstalacao?: string;
     }) => {
       const agora = new Date().toISOString();
 
