@@ -108,7 +108,7 @@ export function AgendarRetiradaModal({
         updated_at: new Date().toISOString(),
       };
 
-      if (dados.localTipo === 'volante' && dados.endereco) {
+      if (dados.endereco) {
         updateData.cep = dados.endereco.cep;
         updateData.logradouro = dados.endereco.logradouro;
         updateData.numero = dados.endereco.numero;
