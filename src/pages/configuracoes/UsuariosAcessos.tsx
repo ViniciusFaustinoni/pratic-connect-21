@@ -798,10 +798,9 @@ export default function UsuariosAcessos() {
                         <TableCell className="hidden md:table-cell text-muted-foreground">{user.email}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
-                            {roles.length === 0 ? <span className="text-muted-foreground text-sm">Nenhum perfil</span> : roles.map(role => {
-                              const cfg = rolesConfig[role as AppRole];
-                              return cfg ? <Badge key={role} variant="secondary" className="text-xs">{cfg.label}</Badge> : null;
-                            })}
+                            {roles.length === 0 ? <span className="text-muted-foreground text-sm">Nenhum perfil</span> : roles.map(role => (
+                              <Badge key={role} variant="secondary" className="text-xs">{getRoleLabel(role)}</Badge>
+                            ))}
                           </div>
                         </TableCell>
                         <TableCell>
