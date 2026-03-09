@@ -21,6 +21,7 @@ import {
   useCotasTaxas, 
   useTaxasProcedimentos 
 } from '@/hooks/useConteudosSistema';
+import { useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
 import { BookOpen, AlertTriangle, DollarSign, Loader2 } from 'lucide-react';
 
@@ -131,8 +132,22 @@ export function RegrasImportantes() {
 export function TabelaCotasTaxas() {
   const { data: cotasTaxas = [], isLoading: loadingCotas } = useCotasTaxas();
   const { data: taxasProcedimentos = [], isLoading: loadingTaxas } = useTaxasProcedimentos();
+  const { data: cotaPercDefault = 6 } = useCotaParticipacaoDefault();
+  const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();
 
   const isLoading = loadingCotas || loadingTaxas;
+
+  // Derivar valores de deságio das cotas para o alerta
+  const desagioInfo = (() => {
+    const comDesagio = cotasTaxas.find(c => c.comDesagio);
+    const percDesagio = comDesagio?.comDesagio || '8%';
+    const minDesagio = comDesagio?.minimoDesagio || `R$ ${(cotaMinDefault * 2).toLocaleString('pt-BR')}`;
+    const categoriasNormais = cotasTaxas
+      .filter(c => c.percentual && parseFloat(c.percentual) < 10)
+      .map(c => `${c.categoria} ${c.percentual}`)
+      .join(', ');
+    return { percDesagio, minDesagio, categoriasNormais: categoriasNormais || `Passeio ${cotaPercDefault}%` };
+  })();
 
   if (isLoading) {
     return (
@@ -198,9 +213,9 @@ export function TabelaCotasTaxas() {
           Regra do Deságio
         </AlertTitle>
         <AlertDescription className="text-amber-700 dark:text-amber-300 text-sm">
-          Quando a cota de participação for inferior a 10% (Passeio 6%, Diesel 6%) e o associado 
+          Quando a cota de participação for inferior a 10% ({desagioInfo.categoriasNormais}) e o associado 
           optar pelo <strong>DESÁGIO</strong> (desconto de 10% na mensalidade por uso de adesivo publicitário), 
-          a cota de participação passa automaticamente para <strong>8%</strong> com mínimo de <strong>R$2.000</strong>.
+          a cota de participação passa automaticamente para <strong>{desagioInfo.percDesagio}</strong> com mínimo de <strong>{desagioInfo.minDesagio}</strong>.
         </AlertDescription>
       </Alert>
 

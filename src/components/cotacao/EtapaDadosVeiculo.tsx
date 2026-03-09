@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
+import { useCombustiveis, useMarcasModelosFallback } from '@/hooks/useConteudosSistema';
+import { COMBUSTIVEIS_FALLBACK } from '@/data/combustiveis';
 
 interface VeiculoEncontrado {
   placa: string;
@@ -52,42 +54,17 @@ interface EtapaDadosVeiculoProps {
   isCalculando: boolean;
 }
 
-const MARCAS = [
+// MARCAS e MODELOS agora vêm do banco via useMarcasModelosFallback()
+// Fallback local mantido como constante caso o hook não retorne dados
+const MARCAS_FALLBACK = [
   'Volkswagen', 'Chevrolet', 'Fiat', 'Ford', 'Hyundai', 
   'Toyota', 'Honda', 'Renault', 'Nissan', 'Jeep', 
   'Peugeot', 'Citroën', 'Mitsubishi', 'Kia', 'BYD', 'Caoa Chery', 'RAM', 'Outras'
 ];
 
-const MODELOS_POR_MARCA: Record<string, string[]> = {
-  Volkswagen: ['Gol', 'Voyage', 'Polo', 'Polo Track', 'Virtus', 'Nivus', 'T-Cross', 'Taos', 'Amarok', 'Saveiro'],
-  Chevrolet: ['Onix', 'Onix Plus', 'Tracker', 'S10', 'Spin', 'Cruze', 'Montana', 'Equinox'],
-  Fiat: ['Uno', 'Mobi', 'Argo', 'Cronos', 'Strada', 'Toro', 'Pulse', 'Fastback'],
-  Ford: ['Ka', 'Ka Sedan', 'EcoSport', 'Ranger', 'Territory', 'Bronco Sport', 'Maverick'],
-  Hyundai: ['HB20', 'HB20S', 'HB20X', 'Creta', 'Tucson', 'Santa Fe'],
-  Toyota: ['Corolla', 'Corolla Cross', 'Yaris', 'Yaris Sedan', 'Hilux', 'SW4', 'RAV4'],
-  Honda: ['Civic', 'City', 'HR-V', 'CR-V', 'Fit', 'WR-V'],
-  Renault: ['Kwid', 'Sandero', 'Logan', 'Duster', 'Captur', 'Oroch'],
-  Nissan: ['Versa', 'Sentra', 'Kicks', 'Frontier', 'March'],
-  Jeep: ['Renegade', 'Compass', 'Commander', 'Wrangler'],
-  Peugeot: ['208', '2008', '3008'],
-  Citroën: ['C3', 'C4 Cactus'],
-  Mitsubishi: ['L200', 'Outlander', 'Eclipse Cross', 'Pajero Sport'],
-  Kia: ['Sportage', 'Seltos', 'Cerato', 'Sorento'],
-  BYD: ['Dolphin', 'Seal', 'Song Plus', 'Yuan Plus'],
-  'Caoa Chery': ['Tiggo 5x', 'Tiggo 7', 'Tiggo 8'],
-  RAM: ['Rampage', '1500', '2500'],
-  Outras: ['Outro modelo'],
-};
-
 const ANOS = Array.from({ length: 17 }, (_, i) => String(2026 - i));
 
-const COMBUSTIVEIS = [
-  { value: 'gasolina', label: 'Gasolina' },
-  { value: 'diesel', label: 'Diesel' },
-  { value: 'flex', label: 'Flex' },
-  { value: 'eletrico', label: 'Elétrico' },
-  { value: 'hibrido', label: 'Híbrido' },
-];
+// COMBUSTIVEIS agora vem do banco via useCombustiveis() — fallback em combustiveis.ts
 
 // REGIOES agora vem do banco via useRegioesAtivas()
 
@@ -125,6 +102,12 @@ export function EtapaDadosVeiculo({
 }: EtapaDadosVeiculoProps) {
   const { data: regioesDb = [] } = useRegioesAtivas();
   const REGIOES = regioesDb.map(r => ({ value: r.codigo.toLowerCase(), label: r.nome }));
+
+  // Combustíveis e marcas/modelos do banco
+  const { data: COMBUSTIVEIS = COMBUSTIVEIS_FALLBACK } = useCombustiveis();
+  const { data: marcasModelosDb = {} } = useMarcasModelosFallback();
+  const MARCAS = Object.keys(marcasModelosDb).length > 0 ? Object.keys(marcasModelosDb) : MARCAS_FALLBACK;
+  const MODELOS_POR_MARCA = marcasModelosDb;
 
   const [camposDesbloqueados, setCamposDesbloqueados] = useState(modoEntrada === 'manual');
   const [valorFipeInput, setValorFipeInput] = useState(

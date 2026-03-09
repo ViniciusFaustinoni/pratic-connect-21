@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Edit, Trash2, Loader2, X, Search, FileText, MapPin, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProductLines } from '@/hooks/usePlans';
+import { useCoberturaFipeDefault, useAnoMinimoDefault } from '@/hooks/useConteudosSistema';
 
 interface PlanoFormData extends PlanoInput {
   regioes: string[];
@@ -25,7 +26,10 @@ interface PlanoFormData extends PlanoInput {
 
 export function PlanosConfig() {
   const { data: productLines = [] } = useProductLines();
+  const { data: coberturaFipeDefault = 100 } = useCoberturaFipeDefault();
+  const { data: anoMinimoDefault = 2005 } = useAnoMinimoDefault();
   const linhasPlano = productLines.map(pl => ({ value: pl.slug, label: pl.name }));
+  const linhaDefault = linhasPlano.length > 0 ? linhasPlano[0].value : 'select';
 
   const { isDiretor, isDesenvolvedor } = usePermissions();
   const podeEditar = isDiretor || isDesenvolvedor;
@@ -48,9 +52,9 @@ export function PlanosConfig() {
     codigo: '',
     nome: '',
     descricao: '',
-    linha: 'select',
-    cobertura_fipe: 100,
-    ano_minimo: 2005,
+    linha: linhaDefault,
+    cobertura_fipe: coberturaFipeDefault,
+    ano_minimo: anoMinimoDefault,
     coberturas: [],
     valor_adesao: 0,
     destaque: false,
@@ -64,9 +68,9 @@ export function PlanosConfig() {
       codigo: '',
       nome: '',
       descricao: '',
-      linha: 'select',
-      cobertura_fipe: 100,
-      ano_minimo: 2005,
+      linha: linhaDefault,
+      cobertura_fipe: coberturaFipeDefault,
+      ano_minimo: anoMinimoDefault,
       coberturas: [],
       valor_adesao: 0,
       destaque: false,

@@ -1,0 +1,13 @@
+INSERT INTO public.configuracoes (chave, valor, tipo, categoria, descricao) VALUES 
+('cota_participacao_default', '6', 'numero', 'operacional', 'Cota de participação padrão (%)'),
+('cota_minima_default', '1200', 'numero', 'operacional', 'Valor mínimo da cota de participação (R$)'),
+('fator_veiculo_antigo', '1.15', 'numero', 'operacional', 'Multiplicador de risco para veículo com mais de 10 anos'),
+('fator_uso_trabalho', '1.20', 'numero', 'operacional', 'Multiplicador de risco para uso comercial/app'),
+('cobertura_fipe_default', '100', 'numero', 'operacional', 'Cobertura FIPE padrão (%) para novos planos'),
+('ano_minimo_default', '2005', 'numero', 'operacional', 'Ano mínimo padrão para novos planos'),
+('combustiveis', '[{"value":"flex","label":"Flex (Gasolina/Etanol)"},{"value":"gasolina","label":"Gasolina"},{"value":"etanol","label":"Etanol"},{"value":"diesel","label":"Diesel"},{"value":"eletrico","label":"Elétrico"},{"value":"hibrido","label":"Híbrido"},{"value":"gnv","label":"GNV"}]', 'json', 'operacional', 'Lista de combustíveis disponíveis'),
+('marcas_modelos_fallback', '{"Volkswagen":["Gol","Voyage","Polo","Polo Track","Virtus","Nivus","T-Cross","Taos","Amarok","Saveiro"],"Chevrolet":["Onix","Onix Plus","Tracker","S10","Spin","Cruze","Montana","Equinox"],"Fiat":["Uno","Mobi","Argo","Cronos","Strada","Toro","Pulse","Fastback"],"Ford":["Ka","Ka Sedan","EcoSport","Ranger","Territory","Bronco Sport","Maverick"],"Hyundai":["HB20","HB20S","HB20X","Creta","Tucson","Santa Fe"],"Toyota":["Corolla","Corolla Cross","Yaris","Yaris Sedan","Hilux","SW4","RAV4"],"Honda":["Civic","City","HR-V","CR-V","Fit","WR-V"],"Renault":["Kwid","Sandero","Logan","Duster","Captur","Oroch"],"Nissan":["Versa","Sentra","Kicks","Frontier","March"],"Jeep":["Renegade","Compass","Commander","Wrangler"],"Peugeot":["208","2008","3008"],"Citroën":["C3","C4 Cactus"],"Mitsubishi":["L200","Outlander","Eclipse Cross","Pajero Sport"],"Kia":["Sportage","Seltos","Cerato","Sorento"],"BYD":["Dolphin","Seal","Song Plus","Yuan Plus"],"Caoa Chery":["Tiggo 5x","Tiggo 7","Tiggo 8"],"RAM":["Rampage","1500","2500"]}', 'json', 'operacional', 'Marcas e modelos fallback para entrada manual'),
+('estimativa_fipe_base', '35000', 'numero', 'operacional', 'Valor base para estimativa de FIPE'),
+('estimativa_fipe_depreciacao', '0.06', 'numero', 'operacional', 'Fator de depreciação por ano para estimativa FIPE'),
+('estimativa_fipe_ajuste_marca', '{"Toyota":1.3,"Honda":1.25,"Hyundai":1.15,"Volkswagen":1.1,"Chevrolet":1.05,"Fiat":1.0,"Renault":0.95,"Nissan":1.1,"Jeep":1.4,"Ford":1.0}', 'json', 'operacional', 'Fatores de ajuste por marca para estimativa FIPE')
+ON CONFLICT (chave) DO NOTHING

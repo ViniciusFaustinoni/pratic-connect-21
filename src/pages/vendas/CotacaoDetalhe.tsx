@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 // Hooks
 import { useHistoricoCotacao, registrarEventoCotacao } from '@/hooks/useCotacaoHistorico';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
+import { useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 
 // Componentes novos
 import { CotacaoHeader } from '@/components/cotacoes/CotacaoHeader';
@@ -60,6 +61,11 @@ export default function CotacaoDetalhe() {
 
   // Realtime para notificações
   useCotacoesRealtime();
+
+  // Defaults de cota dinâmicos
+  const { data: cotaPercDefault = 6 } = useCotaParticipacaoDefault();
+  const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();
+  const cotaFallbackStr = `${cotaPercDefault}% (mín R$ ${cotaMinDefault.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
 
   // Estados dos modais
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -210,7 +216,7 @@ Ficou com alguma dúvida? Estou à disposição!
             coberturas: p.coberturas || [],
             naoInclui: p.naoInclui || [],
             coberturaFipe: p.coberturaFipe || 100,
-            cota: p.cota || '6% (mín R$ 1.200,00)',
+            cota: p.cota || cotaFallbackStr,
             // Campos expandidos para novo layout
             cotaPercentual: p.cotaPercentual,
             cotaMinima: p.cotaMinima,
@@ -228,7 +234,7 @@ Ficou com alguma dúvida? Estou à disposição!
             coberturas: [],
             naoInclui: [],
             coberturaFipe: 100,
-            cota: '6% (mín R$ 1.200,00)',
+            cota: cotaFallbackStr,
           }];
 
       await gerarPdfCotacaoComparativa({

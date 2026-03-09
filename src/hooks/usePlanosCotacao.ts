@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
-import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto } from '@/hooks/useConteudosSistema';
+import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 import { 
   getCoberturasRemovidasDinamico, 
   gerarMensagemAlertaCategoria,
@@ -68,6 +68,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   
   // Buscar decomposição do banco
   const { data: decomposicao } = useConfigDecomposicao();
+
+  // Defaults de cota do banco
+  const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
+  const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
 
   // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
@@ -216,8 +220,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const valorAdesao = Number(plano.valor_adesao);
 
       // Cota
-      const cotaBase = Number(plano.cota_participacao) || 6;
-      const cotaMinima = Number(plano.cota_minima) || 1200;
+      const cotaBase = Number(plano.cota_participacao) || cotaParticipacaoDefault;
+      const cotaMinima = Number(plano.cota_minima) || cotaMinimaDefault;
       let cotaPercentual = cotaBase;
       let cotaMinimaFinal = cotaMinima;
 

@@ -13,7 +13,7 @@ import { useAsaas } from '@/hooks/useAsaas';
 import { useCotasPorFipe } from '@/hooks/useFaixasCotas';
 import { useAtualizarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
 import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
-import { useTaxaSubstituicao } from '@/hooks/useConteudosSistema';
+import { useTaxaSubstituicao, useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { PixQRCode } from '@/components/app/PixQRCode';
@@ -70,6 +70,8 @@ export function StepFinanceiro({
   const atualizarSubstituicao = useAtualizarSubstituicao();
   const { precosMap, terceirosMap } = useBeneficiosSeparados();
   const { data: taxaSubstituicao = 50 } = useTaxaSubstituicao();
+  const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
+  const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
 
   // Faixas de cota
   const cotasAntigo = useCotasPorFipe(veiculoAntigo.valor_fipe);
@@ -122,13 +124,13 @@ export function StepFinanceiro({
 
   // Cota de participação
   const cotaAntigaValor = useMemo(() => {
-    if (!cotasAntigo) return veiculoAntigo.valor_fipe * 0.06;
-    return Math.max(cotasAntigo.cotas * 200, 1200);
+    if (!cotasAntigo) return veiculoAntigo.valor_fipe * (cotaParticipacaoDefault / 100);
+    return Math.max(cotasAntigo.cotas * 200, cotaMinimaDefault);
   }, [cotasAntigo, veiculoAntigo.valor_fipe]);
 
   const cotaNovaValor = useMemo(() => {
     if (!cotasNovo || !dadosNovoVeiculo.valor_fipe) return 0;
-    return Math.max(cotasNovo.cotas * 200, 1200);
+    return Math.max(cotasNovo.cotas * 200, cotaMinimaDefault);
   }, [cotasNovo, dadosNovoVeiculo.valor_fipe]);
 
   // Pro-rata

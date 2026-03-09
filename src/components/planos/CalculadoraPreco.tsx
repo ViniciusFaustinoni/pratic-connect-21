@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Calculator, Check, Car, Briefcase } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
+import { useFatorVeiculoAntigo, useFatorUsoTrabalho } from '@/hooks/useConteudosSistema';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -29,9 +30,7 @@ type AnoVeiculo = 'recente' | 'antigo';
 type TipoUso = 'particular' | 'trabalho';
 type CoberturaDesejada = 'todas' | 'basica' | 'completa' | 'premium';
 
-// Fatores de risco configuráveis
-const FATOR_VEICULO_ANTIGO = 1.15; // +15%
-const FATOR_USO_TRABALHO = 1.20;  // +20%
+// Fatores de risco agora vêm do banco via useFatorVeiculoAntigo() e useFatorUsoTrabalho()
 
 export function CalculadoraPreco() {
   const [valorFipe, setValorFipe] = useState<string>('');
@@ -41,6 +40,8 @@ export function CalculadoraPreco() {
   const [resultado, setResultado] = useState<ResultadoFaixa | null>(null);
   
   const { data: tabelas } = useTabelasPreco();
+  const { data: FATOR_VEICULO_ANTIGO = 1.15 } = useFatorVeiculoAntigo();
+  const { data: FATOR_USO_TRABALHO = 1.20 } = useFatorUsoTrabalho();
 
   const calcular = () => {
     const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
