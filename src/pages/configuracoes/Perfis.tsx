@@ -109,6 +109,7 @@ export default function Perfis() {
 
   // Áreas dinâmicas
   const areas = useMemo(() => getAreas(), [getAreas, appRoles]);
+  const areaStyles = useMemo(() => getAreaStyles(), [getAreaStyles, appRoles]);
 
   const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({});
   const [selectedPerfil, setSelectedPerfil] = useState<Perfil | null>(null);
