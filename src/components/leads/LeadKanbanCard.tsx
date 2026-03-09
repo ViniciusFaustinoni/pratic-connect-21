@@ -25,6 +25,7 @@ interface LeadKanbanCardProps {
   onQuote?: (leadId: string) => void;
   onWhatsAppClick?: (leadId: string, currentEtapa: string) => void;
   onAction?: (action: string, lead: Lead) => void;
+  showVendedor?: boolean;
 }
 
 // Cores de fundo do avatar baseadas na origem
