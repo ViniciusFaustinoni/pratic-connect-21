@@ -19,6 +19,7 @@ import {
   Calculator
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 
 interface VeiculoEncontrado {
   placa: string;
