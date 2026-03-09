@@ -241,7 +241,7 @@ export default function UsuariosAcessos() {
 
   const removeRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', role);
+      const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', role as any);
       if (error) throw error;
     },
     onSuccess: () => {
