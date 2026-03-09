@@ -22,6 +22,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUsuarios, useUsuarioActions } from '@/hooks/useUsuarios';
+import { useAppRoles } from '@/hooks/useAppRoles';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -34,20 +35,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ImportarUsuariosDialog } from '@/components/usuarios/ImportarUsuariosDialog';
-const perfisConfig: Record<string, { label: string; color: string }> = {
-  diretor: { label: 'Diretor', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-  gerente_comercial: { label: 'Gerente Comercial', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  supervisor_vendas: { label: 'Supervisor', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
-  vendedor_clt: { label: 'Vendedor CLT', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-  vendedor_externo: { label: 'Vendedor Externo', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  agencia: { label: 'Agência', color: 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30' },
-  analista_cadastro: { label: 'Analista Cadastro', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-  coordenador_monitoramento: { label: 'Coord. Monitoramento', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  analista_plataforma: { label: 'Analista Plataforma', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
-  instalador_vistoriador: { label: 'Instalador', color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
-  analista_marketing: { label: 'Analista Marketing', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
-  analista_juridico: { label: 'Analista Jurídico', color: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
-};
 
 const tiposUsuario: Record<string, { label: string; color: string }> = {
   funcionario: { label: 'Funcionário', color: 'bg-blue-500/20 text-blue-400' },
