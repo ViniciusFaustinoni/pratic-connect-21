@@ -71,7 +71,12 @@ Deno.serve(async (req) => {
 
     if (mensagem) {
       await supabase.functions.invoke('whatsapp-send-text', {
-        body: { telefone, mensagem },
+        body: {
+          telefone,
+          mensagem,
+          template_name: 'sinistro_atualizado',
+          template_params: [nome, placa, mensagem.substring(0, 200)],
+        },
       });
     }
 

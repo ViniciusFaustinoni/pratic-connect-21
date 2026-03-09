@@ -213,7 +213,8 @@ serve(async (req) => {
     // Renderizar mensagem
     const mensagem = renderTemplate(config.mensagem, dadosTemplate);
 
-    // Enviar WhatsApp
+    // Enviar WhatsApp com template
+    const nomeAssociado = chamado.associado?.nome?.split(' ')[0] || 'Associado';
     try {
       const { error: whatsappError } = await supabase.functions.invoke('whatsapp-send-text', {
         body: {
@@ -221,6 +222,12 @@ serve(async (req) => {
           mensagem,
           referencia_tipo: 'chamado_assistencia',
           referencia_id: chamado_id,
+          template_name: 'assistencia_confirmada',
+          template_params: [
+            nomeAssociado,
+            dadosTemplate.prestador_nome as string || 'Praticcar',
+            (dadosTemplate.protocolo as string) || '30',
+          ],
         },
       });
 

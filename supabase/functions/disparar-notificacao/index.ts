@@ -362,10 +362,36 @@ serve(async (req) => {
 
         const telefone = associado?.whatsapp || associado?.telefone;
         if (telefone) {
+          // Mapear tipo/subtipo para template Meta
+          const primeiroNome = associado?.nome?.split(' ')[0] || 'Associado';
+          let templateName: string;
+          let templateParams: string[];
+
+          if (tipo === 'boleto' && subtipo === 'pago') {
+            templateName = 'sinistro_atualizado';
+            templateParams = [primeiroNome, 'pagamento', 'Pagamento confirmado com sucesso!'];
+          } else if (tipo === 'boleto' || tipo === 'cobranca') {
+            templateName = 'cobranca_mensalidade';
+            templateParams = [primeiroNome, String(dados.valor || ''), String(dados.data || dados.data_primeira || '')];
+          } else if (tipo === 'sinistro') {
+            templateName = subtipo === 'aberto' ? 'sinistro_aberto' : 'sinistro_atualizado';
+            templateParams = subtipo === 'aberto' 
+              ? [primeiroNome, String(dados.protocolo || '')]
+              : [primeiroNome, String(dados.protocolo || ''), titulo];
+          } else if (tipo === 'assistencia') {
+            templateName = 'assistencia_confirmada';
+            templateParams = [primeiroNome, String(dados.prestador || 'Prestador'), String(dados.tempo || '30')];
+          } else {
+            templateName = 'sinistro_atualizado';
+            templateParams = [primeiroNome, tipo, titulo];
+          }
+
           await supabase.functions.invoke('whatsapp-send-text', {
             body: {
               telefone,
               mensagem: `*${titulo}*\n\n${mensagem}`,
+              template_name: templateName,
+              template_params: templateParams,
             }
           });
           canaisEnviados.push('whatsapp');

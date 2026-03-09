@@ -52,7 +52,16 @@ serve(async (req) => {
     );
 
     const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
-      body: { telefone: payload.telefone, mensagem }
+      body: {
+        telefone: payload.telefone,
+        mensagem,
+        template_name: 'assistencia_confirmada',
+        template_params: [
+          payload.nome_associado,
+          'Técnico Praticcar',
+          `${dataFormatada} (${periodoTexto})`,
+        ],
+      }
     });
 
     if (error) {

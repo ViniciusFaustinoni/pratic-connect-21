@@ -297,10 +297,25 @@ Deno.serve(async (req) => {
         // Formatar mensagem com negrito do WhatsApp
         const mensagemWhatsApp = `*${titulo}*\n\n${mensagem}`;
         
+        // Mapear status para template Meta
+        const primeiroNome = associado.nome?.split(' ')[0] || 'Associado';
+        let templateName: string;
+        let templateParams: string[];
+        
+        if (status === 'comunicado') {
+          templateName = 'sinistro_aberto';
+          templateParams = [primeiroNome, sinistro.protocolo];
+        } else {
+          templateName = 'sinistro_atualizado';
+          templateParams = [primeiroNome, sinistro.protocolo, titulo.replace(/[*]/g, '').substring(0, 200)];
+        }
+        
         await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefone.replace(/\D/g, ''),
             mensagem: mensagemWhatsApp,
+            template_name: templateName,
+            template_params: templateParams,
           },
         });
         

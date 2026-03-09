@@ -194,13 +194,19 @@ Em caso de dúvidas, estamos à disposição!`;
             throw new Error("Associado sem telefone/whatsapp");
           }
 
+          const primeiroNomeContato = associado.nome?.split(' ')[0] || 'Associado';
           const sendResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${supabaseKey}`,
             },
-            body: JSON.stringify({ telefone, mensagem }),
+            body: JSON.stringify({
+              telefone,
+              mensagem,
+              template_name: 'sinistro_aberto',
+              template_params: [primeiroNomeContato, sinistro.protocolo],
+            }),
           });
 
           const sendResult = await sendResponse.json();
