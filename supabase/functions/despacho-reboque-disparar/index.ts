@@ -102,7 +102,10 @@ serve(async (req) => {
 
     const ciclo = (ultimoDespacho?.ciclo || 0) + 1;
 
-    // Buscar prestadores de reboque ativos
+    // Determinar tipo de serviço do chamado
+    const tipoServicoChamado = (chamado.tipo_servico || "reboque").toLowerCase();
+
+    // Buscar prestadores ativos
     const { data: prestadores, error: prestErr } = await supabase
       .from("prestadores_assistencia")
       .select("id, razao_social, nome_fantasia, whatsapp, telefone, tipos_servico, tipos_reboque, disponivel")
@@ -111,17 +114,17 @@ serve(async (req) => {
 
     if (prestErr) throw new Error("Erro ao buscar prestadores");
 
-    // Filtrar reboquistas com whatsapp e que atendem reboque
+    // Filtrar prestadores com whatsapp e que atendem o tipo de serviço do chamado
     const reboquistas = (prestadores || []).filter((p) => {
       const hasWhatsapp = p.whatsapp || p.telefone;
-      const atendeReboque = p.tipos_servico?.some((t: string) =>
-        ["reboque", "guincho"].includes(t.toLowerCase())
+      const atendeTipo = p.tipos_servico?.some((t: string) =>
+        t.toLowerCase() === tipoServicoChamado
       );
-      return hasWhatsapp && atendeReboque;
+      return hasWhatsapp && atendeTipo;
     });
 
     if (reboquistas.length === 0) {
-      throw new Error("Nenhum reboquista ativo e disponível encontrado. Verifique o cadastro de prestadores.");
+      throw new Error(`Nenhum prestador ativo e disponível encontrado para o tipo '${tipoServicoChamado}'. Verifique o cadastro de prestadores.`);
     }
 
     // Verificar quais reboquistas já têm chamado ativo
@@ -136,7 +139,7 @@ serve(async (req) => {
     const reboquistasDisponiveis = reboquistas.filter((r) => !idsOcupados.has(r.id));
 
     if (reboquistasDisponiveis.length === 0) {
-      throw new Error("Todos os reboquistas estão ocupados com outros chamados.");
+      throw new Error(`Todos os prestadores de '${tipoServicoChamado}' estão ocupados com outros chamados.`);
     }
 
     // Buscar valores de cada prestador (incluindo valor_sugerido)
@@ -148,7 +151,8 @@ serve(async (req) => {
 
     const valoresMap = new Map<string, { valor_saida: number; valor_km: number; valor_sugerido: number | null }>();
     for (const v of valores || []) {
-      if (v.tipo_servico === "reboque" || v.tipo_servico === "guincho" || !valoresMap.has(v.prestador_id)) {
+      // Priorizar valor do tipo exato do chamado, senão usar o primeiro disponível
+      if (v.tipo_servico?.toLowerCase() === tipoServicoChamado || !valoresMap.has(v.prestador_id)) {
         valoresMap.set(v.prestador_id, { valor_saida: v.valor_saida || 0, valor_km: v.valor_km || 0, valor_sugerido: v.valor_sugerido || null });
       }
     }
