@@ -213,9 +213,9 @@ export function TabelaCotasTaxas() {
           Regra do Deságio
         </AlertTitle>
         <AlertDescription className="text-amber-700 dark:text-amber-300 text-sm">
-          Quando a cota de participação for inferior a 10% (Passeio 6%, Diesel 6%) e o associado 
+          Quando a cota de participação for inferior a 10% ({desagioInfo.categoriasNormais}) e o associado 
           optar pelo <strong>DESÁGIO</strong> (desconto de 10% na mensalidade por uso de adesivo publicitário), 
-          a cota de participação passa automaticamente para <strong>8%</strong> com mínimo de <strong>R$2.000</strong>.
+          a cota de participação passa automaticamente para <strong>{desagioInfo.percDesagio}</strong> com mínimo de <strong>{desagioInfo.minDesagio}</strong>.
         </AlertDescription>
       </Alert>
 
