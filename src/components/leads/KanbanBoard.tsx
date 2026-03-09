@@ -25,6 +25,7 @@ interface KanbanBoardProps {
   handleDragEnd: (event: DragEndEvent) => void;
   activeLead: LeadWithVendedor | null;
   setDrawerLeadId: (id: string) => void;
+  showVendedor?: boolean;
 }
 
 // Droppable column component
