@@ -670,6 +670,120 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
             </div>
           )}
 
+          {/* Fotos anexadas ao serviço */}
+          {fotosReboque && fotosReboque.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium flex items-center gap-1">
+                <ImageIcon className="h-4 w-4" /> Fotos do serviço ({fotosReboque.length}):
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {fotosReboque.map((foto) => (
+                  <div key={foto.id} className="relative group">
+                    <img
+                      src={foto.arquivo_url}
+                      alt={foto.observacao || 'Foto do serviço'}
+                      className="h-24 w-full object-cover rounded-lg border"
+                    />
+                    {!isConcluido && (
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => deleteFotoMutation.mutate({ id: foto.id, arquivoUrl: foto.arquivo_url, chamadoId })}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Seção de conclusão (apenas quando não concluído) */}
+          {!isConcluido && (
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-sm font-semibold flex items-center gap-1">
+                <CheckCircle className="h-4 w-4" /> Concluir Serviço
+              </p>
+
+              {/* Upload de fotos */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleAddFotos}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                Anexar fotos do serviço ({fotosPreview.length})
+              </Button>
+
+              {/* Preview das fotos selecionadas */}
+              {fotosPreview.length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {fotosPreview.map((fp, idx) => (
+                    <div key={idx} className="relative group">
+                      <img
+                        src={fp.preview}
+                        alt={`Foto ${idx + 1}`}
+                        className="h-20 w-full object-cover rounded border"
+                      />
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="absolute top-0.5 right-0.5 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleRemoveFotoPreview(idx)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Observação */}
+              <Textarea
+                placeholder="Observações sobre a conclusão do serviço..."
+                value={observacaoConclusao}
+                onChange={(e) => setObservacaoConclusao(e.target.value)}
+                rows={2}
+              />
+
+              {/* Botão de concluir */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button className="w-full" disabled={concluirMutation.isPending}>
+                    {concluirMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                    Marcar como Concluído
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmar Conclusão</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Marcar o serviço de reboque como concluído? O valor de {formatCurrency(despacho.valor_atribuido)} será registrado como custo operacional.
+                      {fotosPreview.length > 0 ? ` ${fotosPreview.length} foto(s) serão anexadas.` : ''}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => concluirMutation.mutate()}>
+                      Confirmar Conclusão
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+
           <p className="text-xs text-muted-foreground">
             {aceites} reboquistas aceitaram. Atribuído manualmente pelo analista.
           </p>
