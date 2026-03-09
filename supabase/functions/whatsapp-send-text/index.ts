@@ -101,7 +101,8 @@ async function enviarViaMeta(
   mensagem: string,
   templateName?: string,
   templateParams?: string[],
-  allowText: boolean = false
+  allowText: boolean = false,
+  templateButtonParams?: string[]
 ) {
   const { data: metaConfig } = await supabase
     .from("whatsapp_meta_config")
@@ -136,6 +137,18 @@ async function enviarViaMeta(
       components.push({
         type: "body",
         parameters: templateParams.map(p => ({ type: "text", text: p })),
+      });
+    }
+
+    // Suporte a botões com URL dinâmica
+    if (templateButtonParams && templateButtonParams.length > 0) {
+      templateButtonParams.forEach((param: string, index: number) => {
+        components.push({
+          type: "button",
+          sub_type: "url",
+          index,
+          parameters: [{ type: "text", text: param }],
+        });
       });
     }
 
@@ -243,6 +256,7 @@ serve(async (req) => {
     const delay_ms = body.delay_ms;
     const template_name = body.template_name;
     const template_params = body.template_params;
+    const template_button_params = body.template_button_params;
     const allow_text = body.allow_text === true;
 
     if (!telefone || !mensagem) {
@@ -271,7 +285,7 @@ serve(async (req) => {
     console.log(`[whatsapp-send-text] Provedor ativo: ${provedorAtivo}`);
 
     if (provedorAtivo === 'meta_oficial') {
-      const result = await enviarViaMeta(supabase, telefoneFormatado, mensagem, template_name, template_params, allow_text);
+      const result = await enviarViaMeta(supabase, telefoneFormatado, mensagem, template_name, template_params, allow_text, template_button_params);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
