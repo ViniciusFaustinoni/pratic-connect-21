@@ -7,20 +7,10 @@
 // user_roles === perfis_acesso (do PRD)
 // ============================================================
 
-export type AppRole = 
-  | 'diretor' 
-  | 'gerente_comercial' 
-  | 'supervisor_vendas'
-  | 'vendedor_clt'
-  | 'vendedor_externo'
-  | 'analista_cadastro'
-  | 'coordenador_monitoramento'
-  | 'analista_plataforma'
-  | 'instalador_vistoriador'
-  | 'associado'
-  | 'analista_marketing'
-  | 'analista_juridico'
-  | 'advogado';
+/**
+ * @deprecated AppRole agora é string dinâmico. Use useAppRoles() para metadata.
+ */
+export type AppRole = string;
 
 export type TipoUsuario = 'funcionario' | 'associado' | 'prestador';
 
