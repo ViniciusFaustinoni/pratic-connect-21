@@ -255,6 +255,7 @@ serve(async (req) => {
     const delay_ms = body.delay_ms;
     const template_name = body.template_name;
     const template_params = body.template_params;
+    const template_button_params = body.template_button_params;
     const allow_text = body.allow_text === true;
 
     if (!telefone || !mensagem) {
