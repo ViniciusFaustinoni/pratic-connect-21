@@ -160,8 +160,8 @@ export default function MeuPerfil() {
       if (error) throw error;
 
       setAvatarUrl(null);
+      await updateAuthProfile({ avatar_url: null });
       toast.success('Foto removida com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['auth-user'] });
     } catch (error) {
       console.error('Erro ao remover foto:', error);
       toast.error('Erro ao remover foto');
