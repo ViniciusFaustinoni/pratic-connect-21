@@ -96,18 +96,31 @@ export default function AuthCallback() {
           if (profile.tipo === 'associado') {
             navigate('/app/home', { replace: true });
           } else if (profile.tipo === 'prestador') {
-            // Verificar se é sindicante
+            // Buscar redirect_path dinâmico dos roles do usuário
             try {
               const { data: userRoles } = await supabase
                 .from('user_roles')
                 .select('role')
                 .eq('user_id', session.user.id);
               const roles = userRoles?.map(r => r.role) || [];
-              if (roles.includes('sindicante')) {
-                navigate('/sindicante', { replace: true });
-              } else {
-                navigate('/instalador', { replace: true });
+              
+              // Buscar redirect_path do app_roles_config para esses roles
+              if (roles.length > 0) {
+                const { data: configs } = await supabase
+                  .from('app_roles_config')
+                  .select('role, redirect_path, is_operational')
+                  .in('role', roles)
+                  .eq('is_active', true);
+                
+                const redirectConfig = (configs || []).find((c: any) => c.redirect_path);
+                if (redirectConfig?.redirect_path) {
+                  navigate(redirectConfig.redirect_path, { replace: true });
+                  return;
+                }
               }
+              
+              // Fallback para prestadores sem redirect configurado
+              navigate('/instalador', { replace: true });
             } catch {
               navigate('/instalador', { replace: true });
             }
