@@ -1563,6 +1563,22 @@ export function useAprovarProposta() {
         } else if (jaTemInstalacaoAtiva) {
           console.log(`Instalação já existe para o veículo ${veiculoId}. Aprovação prossegue sem criar nova instalação.`);
         }
+
+        // Criar acesso do associado mesmo sem instalação concluída (roubo/furto)
+        if (!jaTemInstalacaoConcluida) {
+          try {
+            console.log('[useAprovarProposta] Criando acesso do associado (sem instalação concluída)...');
+            await supabase.functions.invoke('ativar-associado', {
+              body: {
+                associado_id: associadoId,
+                veiculo_id: veiculoId,
+              },
+            });
+            console.log('[useAprovarProposta] Acesso do associado criado com sucesso');
+          } catch (ativacaoError) {
+            console.warn('[useAprovarProposta] Erro ao criar acesso (não crítico):', ativacaoError);
+          }
+        }
       }
 
       // 7. Registrar histórico com mensagem apropriada

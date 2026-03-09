@@ -227,11 +227,40 @@ serve(async (req) => {
     if (associado.whatsapp || associado.telefone) {
       const telefoneWhatsapp = associado.whatsapp || associado.telefone;
       try {
-        await supabaseAdmin.functions.invoke('whatsapp-send-text', {
-          body: {
-            telefone: telefoneWhatsapp.replace(/\D/g, ''),
-            mensagem: `Olá ${associado.nome}! 🚗\n\nSeu acesso ao App PRATIC está liberado!\n\n🔗 URL: ${appUrl}/app/login\n👤 Login: ${associado.cpf}\n🔑 Senha: ${senhaPadrao}\n\nNo primeiro acesso você deverá trocar sua senha.`,
+        // Verificar se Meta está ativo para usar template
+        const { data: metaConfig } = await supabaseAdmin
+          .from('whatsapp_meta_config')
+          .select('ativo')
+          .limit(1)
+          .maybeSingle();
+
+        const isMetaAtivo = metaConfig?.ativo === true;
+        const primeiroNome = associado.nome?.split(' ')[0] || 'Cliente';
+
+        const sendBody: Record<string, unknown> = {
+          telefone: telefoneWhatsapp.replace(/\D/g, ''),
+          mensagem: `Olá ${associado.nome}! 🚗\n\nSeu acesso ao App PRATIC está liberado!\n\n🔗 URL: ${appUrl}/app/login\n👤 Login: ${associado.cpf}\n🔑 Senha: ${senhaPadrao}\n\nNo primeiro acesso você deverá trocar sua senha.`,
+        };
+
+        // Se Meta ativo, usar template boas_vindas_associado para garantir entrega
+        if (isMetaAtivo) {
+          // Buscar placa do veículo para o template
+          let placa = 'seu veículo';
+          if (body.veiculo_id) {
+            const { data: veiculo } = await supabaseAdmin
+              .from('veiculos')
+              .select('placa')
+              .eq('id', body.veiculo_id)
+              .single();
+            if (veiculo?.placa) placa = veiculo.placa;
           }
+          sendBody.template_name = 'boas_vindas_associado';
+          sendBody.template_params = [primeiroNome, placa];
+          console.log(`[ativar-associado] Usando template Meta 'boas_vindas_associado' para ${telefoneWhatsapp}`);
+        }
+
+        await supabaseAdmin.functions.invoke('whatsapp-send-text', {
+          body: sendBody,
         });
         console.log('WhatsApp enviado');
       } catch (whatsappError) {
