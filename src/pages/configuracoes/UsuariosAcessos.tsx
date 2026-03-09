@@ -550,8 +550,8 @@ export default function UsuariosAcessos() {
                         <TableCell className="hidden lg:table-cell">
                           <div className="flex flex-wrap gap-1">
                             {usuario.roles?.slice(0, 2).map((role, idx) => (
-                              <Badge key={idx} variant="outline" className={`text-xs ${perfisConfig[role]?.color || 'bg-gray-500/20 text-gray-400'}`}>
-                                {perfisConfig[role]?.label || role}
+                              <Badge key={idx} variant="outline" className={`text-xs ${getRoleBadgeClass(role)}`}>
+                                {getRoleLabel(role)}
                               </Badge>
                             ))}
                             {(usuario.roles?.length || 0) > 2 && <Badge variant="outline" className="text-xs">+{(usuario.roles?.length || 0) - 2}</Badge>}
