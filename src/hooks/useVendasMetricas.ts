@@ -91,19 +91,26 @@ function calcularPeriodo(periodo: Periodo): { inicio: Date; fim: Date } {
   }
 }
 
-export function useVendasMetricas(periodo: Periodo = '30dias') {
+export function useVendasMetricas(periodo: Periodo = '30dias', equipeProfileIds?: string[]) {
   return useQuery({
-    queryKey: ['vendas-metricas', periodo],
+    queryKey: ['vendas-metricas', periodo, equipeProfileIds],
     queryFn: async (): Promise<VendasMetricas> => {
       const { inicio, fim } = calcularPeriodo(periodo);
 
       // Buscar dados em paralelo
+      const leadsQuery = supabase
+        .from('leads')
+        .select('id, etapa, origem, vendedor_id, created_at')
+        .gte('created_at', inicio.toISOString())
+        .lte('created_at', fim.toISOString());
+
+      // Se temos filtro de equipe, aplicar
+      if (equipeProfileIds && equipeProfileIds.length > 0) {
+        leadsQuery.in('vendedor_id', equipeProfileIds);
+      }
+
       const [leadsResult, cotacoesResult, contratosResult, vendedoresResult] = await Promise.all([
-        supabase
-          .from('leads')
-          .select('id, etapa, origem, vendedor_id, created_at')
-          .gte('created_at', inicio.toISOString())
-          .lte('created_at', fim.toISOString()),
+        leadsQuery,
         supabase
           .from('cotacoes')
           .select('id, status, created_at')
