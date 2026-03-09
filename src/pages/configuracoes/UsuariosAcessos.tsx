@@ -166,7 +166,7 @@ export default function UsuariosAcessos() {
 
   // ===== PERFIS STATE =====
   const [editingUser, setEditingUser] = useState<{ id: string; user_id: string | null; nome: string; email: string | null } | null>(null);
-  const [selectedRoles, setSelectedRoles] = useState<AppRole[]>([]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
   // ===== LOGS STATE =====
   const [searchLogs, setSearchLogs] = useState('');
