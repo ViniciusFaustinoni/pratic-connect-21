@@ -443,8 +443,16 @@ Sua fatura de *${valorFormatado}* está disponível.${veiculosInfo}
 
 ${asaasCobranca.bankSlipUrl ? `📋 Boleto: ${asaasCobranca.bankSlipUrl}` : ''}`;
 
+              const primeiroNomeFatura = associado.nome.split(' ')[0];
+              const valorStr = totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+              const dataVencStr = dataVencimento.toLocaleDateString('pt-BR');
               await supabase.functions.invoke('whatsapp-send-text', {
-                body: { telefone: telefone.replace(/\D/g, ''), mensagem },
+                body: {
+                  telefone: telefone.replace(/\D/g, ''),
+                  mensagem,
+                  template_name: 'cobranca_mensalidade',
+                  template_params: [primeiroNomeFatura, valorStr, dataVencStr],
+                },
               });
               
               await supabase

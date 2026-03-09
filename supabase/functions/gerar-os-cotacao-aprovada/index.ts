@@ -159,7 +159,12 @@ serve(async (req) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
           },
-          body: JSON.stringify({ telefone, mensagem }),
+          body: JSON.stringify({
+            telefone,
+            mensagem,
+            template_name: 'sinistro_atualizado',
+            template_params: [primeiroNome, veiculo.placa, 'Peças aprovadas e sendo providenciadas! Acompanhe cada etapa do reparo.'],
+          }),
         });
       } catch (e) {
         console.error("Erro ao enviar WhatsApp:", e);

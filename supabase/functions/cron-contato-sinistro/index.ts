@@ -73,15 +73,21 @@ serve(async (req) => {
             }
           }
 
-          // Se mensagem_enviada já estiver preenchida, enviar direto (skip template)
+          // Se mensagem_enviada já estiver preenchida, enviar com template genérico
           if (ag.mensagem_enviada && ag.telefone) {
+            // Usar sinistro_atualizado como template genérico para mensagens agendadas
             const sendResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${supabaseKey}`,
               },
-              body: JSON.stringify({ telefone: ag.telefone, mensagem: ag.mensagem_enviada }),
+              body: JSON.stringify({
+                telefone: ag.telefone,
+                mensagem: ag.mensagem_enviada,
+                template_name: 'sinistro_atualizado',
+                template_params: ['Associado', ag.tipo || 'atualização', ag.mensagem_enviada.substring(0, 200)],
+              }),
             });
 
             const sendResult = await sendResponse.json();
@@ -188,13 +194,19 @@ Em caso de dúvidas, estamos à disposição!`;
             throw new Error("Associado sem telefone/whatsapp");
           }
 
+          const primeiroNomeContato = associado.nome?.split(' ')[0] || 'Associado';
           const sendResponse = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${supabaseKey}`,
             },
-            body: JSON.stringify({ telefone, mensagem }),
+            body: JSON.stringify({
+              telefone,
+              mensagem,
+              template_name: 'sinistro_aberto',
+              template_params: [primeiroNomeContato, sinistro.protocolo],
+            }),
           });
 
           const sendResult = await sendResponse.json();

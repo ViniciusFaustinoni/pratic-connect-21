@@ -243,10 +243,17 @@ ${chamado.observacoes ? `📝 Obs: ${chamado.observacoes}\n` : ""}📍 Origem: $
 Tem interesse neste serviço? Responda *SIM* ou *NÃO*.`;
 
       try {
+        const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const siteUrl = Deno.env.get("APP_URL") || "https://pratic-connect-21.lovable.app";
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-          body: JSON.stringify({ telefone, mensagem }),
+          body: JSON.stringify({
+            telefone,
+            mensagem,
+            template_name: 'despacho_reboque_novo',
+            template_params: [veiculoDesc, placaDisplay, enderecoOrigem || 'A informar', horaAtual, siteUrl],
+          }),
         });
 
         const sendResult = await sendRes.json();

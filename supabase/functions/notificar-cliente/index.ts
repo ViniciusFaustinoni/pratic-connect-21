@@ -383,6 +383,73 @@ serve(async (req) => {
               (dados?.documentos as string) || 'documentos pendentes',
             ],
           },
+          // Vistoria → sinistro_atualizado ({{1}} nome, {{2}} ref, {{3}} atualização)
+          vistoria_reprovada: {
+            template_name: 'sinistro_atualizado',
+            getParams: () => [
+              primeiroNome,
+              'vistoria',
+              (dados?.motivo as string) || 'Vistoria não aprovada. Entre em contato para mais informações.',
+            ],
+          },
+          vistoria_nova_tentativa: {
+            template_name: 'sinistro_atualizado',
+            getParams: () => [
+              primeiroNome,
+              'vistoria',
+              (dados?.motivo as string) || 'Sua vistoria precisa de ajustes. Realize uma nova pelo app.',
+            ],
+          },
+          // Documento → sinistro_atualizado / documentacao_pendente
+          documento_aprovado: {
+            template_name: 'sinistro_atualizado',
+            getParams: () => [
+              primeiroNome,
+              'documento',
+              `O documento "${(dados?.tipo_documento as string) || ''}" foi aprovado com sucesso.`,
+            ],
+          },
+          documento_reprovado: {
+            template_name: 'documentacao_pendente',
+            getParams: () => [
+              primeiroNome,
+              (dados?.tipo_documento as string) || 'documento pendente',
+            ],
+          },
+          // Status → sinistro_atualizado
+          status_atualizado: {
+            template_name: 'sinistro_atualizado',
+            getParams: () => [
+              primeiroNome,
+              'cadastro',
+              `Seu cadastro foi atualizado. Status: ${(dados?.status as string) || 'atualizado'}.`,
+            ],
+          },
+          // Veículo negado / followups → sinistro_atualizado
+          veiculo_negado_orientacoes: {
+            template_name: 'sinistro_atualizado',
+            getParams: () => [
+              primeiroNome,
+              'avaliação',
+              (dados?.orientacoes_resolucao as string)?.substring(0, 200) || 'Pendência identificada no veículo. Resolva e faça uma nova cotação.',
+            ],
+          },
+          followup_recusa_dia3: {
+            template_name: 'sinistro_atualizado',
+            getParams: () => [
+              primeiroNome,
+              'avaliação',
+              'Ainda não retornou sobre a pendência do seu veículo. Estamos aqui para ajudar!',
+            ],
+          },
+          followup_recusa_dia7: {
+            template_name: 'sinistro_atualizado',
+            getParams: () => [
+              primeiroNome,
+              'proteção',
+              'Sua proteção veicular está esperando por você! Resolva a pendência e faça uma nova cotação.',
+            ],
+          },
         };
 
         let sendBody: Record<string, unknown> = {
@@ -390,14 +457,17 @@ serve(async (req) => {
           mensagem: whatsappMsg,
         };
 
-        // Se Meta ativo e temos template mapeado, usar template
+        // Se Meta ativo, SEMPRE usar template (obrigatório)
         if (isMetaAtivo && META_TEMPLATE_MAP[tipo]) {
           const mapping = META_TEMPLATE_MAP[tipo];
           sendBody.template_name = mapping.template_name;
           sendBody.template_params = mapping.getParams();
           console.log(`[notificar-cliente] Usando template Meta '${mapping.template_name}' para tipo '${tipo}'`);
         } else if (isMetaAtivo) {
-          console.warn(`[notificar-cliente] ⚠️ Meta ativo mas sem template mapeado para tipo '${tipo}'. Enviando texto livre (pode não ser entregue fora da janela 24h).`);
+          // Fallback: usar sinistro_atualizado como template genérico
+          console.warn(`[notificar-cliente] ⚠️ Meta ativo mas sem template específico para tipo '${tipo}'. Usando sinistro_atualizado como fallback.`);
+          sendBody.template_name = 'sinistro_atualizado';
+          sendBody.template_params = [primeiroNome, tipo, titulo.replace(/[^\w\s]/g, '').substring(0, 200)];
         }
 
         const { data: whatsResult, error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {

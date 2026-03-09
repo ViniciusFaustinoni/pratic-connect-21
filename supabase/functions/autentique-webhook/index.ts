@@ -717,6 +717,7 @@ serve(async (req) => {
                   try {
                     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
                     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+                    const primeiroNomeWpp = associado.nome?.split(' ')[0] || 'Associado';
 
                     const whatsResp = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
                       method: 'POST',
@@ -724,7 +725,12 @@ serve(async (req) => {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${supabaseServiceKey}`,
                       },
-                      body: JSON.stringify({ telefone, mensagem }),
+                      body: JSON.stringify({
+                        telefone,
+                        mensagem,
+                        template_name: 'sinistro_atualizado',
+                        template_params: [primeiroNomeWpp, sinistroDoc.protocolo, `Termo assinado! Efetue o pagamento de R$ ${valorFormatado} para encaminhar à oficina.`],
+                      }),
                     });
                     const whatsResult = await whatsResp.json();
                     console.log(`[autentique-webhook] WhatsApp pagamento enviado:`, whatsResult.success);

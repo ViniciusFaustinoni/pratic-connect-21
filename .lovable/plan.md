@@ -1,129 +1,172 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
+
+## Resumo
+
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. ✅ `pricing.ts` — REMOVIDO
+
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
+
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
+
+Centralizada em `src/utils/format.ts`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+### 5. ✅ Veículo Blindado — CORRIGIDO
+
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-# Plano: Garantir que TODAS as mensagens do sistema usem Templates Meta
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-## Problema
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-Quando a Meta API está ativa, mensagens enviadas como `type: "text"` (texto livre) são aceitas pela API mas **não entregues** se o contato não interagiu nas últimas 24h. Apenas mensagens com `type: "template"` são sempre entregues. Atualmente, **10 edge functions** enviam mensagens sem `template_name`, resultando em texto livre que nunca chega.
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
 
-## Templates aprovados disponíveis (12)
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
 
-| Template | Parâmetros |
-|---|---|
-| `assistencia_confirmada` | {{1}} nome, {{2}} prestador, {{3}} minutos |
-| `boas_vindas_associado` | {{1}} nome, {{2}} placa |
-| `cobranca_mensalidade` | {{1}} nome, {{2}} valor, {{3}} vencimento |
-| `documentacao_pendente` | {{1}} nome, {{2}} documentos |
-| `despacho_reboque_novo` | {{1}} veículo, {{2}} placa, {{3}} local, {{4}} horário, {{5}} link |
-| `orcamento_oficina` | {{1}} nome, {{2}} veículo, {{3}} placa, {{4}} problema |
-| `reboque_a_caminho` | {{1}} prestador, {{2}} distância, {{3}} estimativa, {{4}} link, {{5}} telefone |
-| `reboque_chegou_local` | {{1}} reboquista, {{2}} link |
-| `reboque_entregue` | {{1}} destino, {{2}} horário |
-| `reboque_veiculo_carregado` | {{1}} nome, {{2}} placa, {{3}} destino, {{4}} link |
-| `sinistro_aberto` | {{1}} nome, {{2}} protocolo |
-| `sinistro_atualizado` | {{1}} nome, {{2}} protocolo, {{3}} atualização |
 
-## Funções que precisam de correção
+---
 
-### 1. `notificar-cliente/index.ts` — Tipos sem template mapeado
+## ❌ NÃO FAZER AGORA
 
-11 tipos mapeados no `META_TEMPLATE_MAP`. Faltam **10 tipos**:
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
-| Tipo faltante | Template a usar | Params |
-|---|---|---|
-| `vistoria_reprovada` | `sinistro_atualizado` | nome, "vistoria", motivo |
-| `vistoria_nova_tentativa` | `sinistro_atualizado` | nome, "vistoria", motivo |
-| `documento_aprovado` | `sinistro_atualizado` | nome, "documento", tipo_documento |
-| `documento_reprovado` | `documentacao_pendente` | nome, tipo_documento |
-| `status_atualizado` | `sinistro_atualizado` | nome, "cadastro", status |
-| `proposta_aprovada_roubo_furto` | `boas_vindas_associado` | ✅ já mapeado |
-| `cobertura_total_ativada` | `boas_vindas_associado` | ✅ já mapeado |
-| `veiculo_negado_orientacoes` | `sinistro_atualizado` | nome, "avaliação", resumo |
-| `followup_recusa_dia3` | `sinistro_atualizado` | nome, "avaliação", lembrete |
-| `followup_recusa_dia7` | `sinistro_atualizado` | nome, "proteção", lembrete |
+---
 
-### 2. `notificar-sinistro/index.ts` — Sem template (L300-304)
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-Envia `{ telefone, mensagem }` sem `template_name`. Usar `sinistro_aberto` ou `sinistro_atualizado` conforme o contexto.
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
 
-### 3. `disparar-notificacao/index.ts` — Sem template (L365-370)
+---
 
-Envio genérico de notificações sem template. Adicionar mapeamento por tipo de template de notificação.
+# Visibilidade por Equipe — Supervisor de Vendas
 
-### 4. `cron-contato-sinistro/index.ts` — Sem template (L78-84, L191-197)
+## ✅ CORRIGIDO
 
-Envia mensagem pré-definida e mensagem de sinistro longa sem template. Usar `sinistro_aberto` com params resumidos.
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
 
-### 5. `gerar-faturas-mensais/index.ts` — Sem template (L446-448)
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
 
-Envia cobrança sem usar `cobranca_mensalidade`. Adicionar `template_name: 'cobranca_mensalidade'` com params nome, valor, vencimento.
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
 
-### 6. `notificar-etapa-os/index.ts` — Sem template (L73-74)
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
 
-Etapas de OS (lanternagem, pintura, etc.) sem template. Usar `sinistro_atualizado` como genérico: nome, "reparo", etapa concluída.
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
 
-### 7. `processar-termo-evento/index.ts` — Sem template (L496-501, L590-595)
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
 
-Confirmação de pagamento sem template. Usar `sinistro_atualizado`: nome, protocolo, "pagamento confirmado".
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
 
-### 8. `autentique-webhook/index.ts` — Sem template (L721-728)
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
 
-Link de pagamento pós-assinatura sem template. Usar `sinistro_atualizado`: nome, protocolo, mensagem resumida.
+---
 
-### 9. `notificar-retirada-whatsapp/index.ts` — Sem template (L50-51)
+## 🟡 PENDENTE
 
-Retirada de rastreador sem template. Usar `assistencia_confirmada`: nome, "Praticcar", data/período.
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
 
-### 10. `notificar-manutencao-whatsapp/index.ts` — Sem template (L55)
+---
 
-Manutenção de rastreador sem template. Usar `assistencia_confirmada`: nome, "Técnico Praticcar", data/período.
+# Fluxo de Assistência 24h — Reboque
 
-### 11. `notificar-status-assistencia/index.ts` — Sem template (L218-224)
+## ✅ CORRIGIDO
 
-Status de assistência sem template. Usar `assistencia_confirmada`: nome, prestador, previsão.
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
 
-### 12. `despacho-reboque-disparar/index.ts` — Sem template (L246-249)
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
 
-Despacho para reboquistas sem template. Usar `despacho_reboque_novo`: veículo, placa, local, horário, link.
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
 
-### 13. `gerar-os-cotacao-aprovada/index.ts` — Sem template (L155-163)
-
-Peças aprovadas sem template. Usar `sinistro_atualizado`: nome, protocolo/placa, "peças aprovadas".
-
-## Mudança no `whatsapp-send-text` — Bloquear texto livre quando Meta ativo
-
-Alterar a função `enviarViaMeta` para **recusar** envio sem template quando Meta está ativo, em vez de enviar silenciosamente como texto livre. Isso previne que novos chamadores repitam o erro.
-
-```text
-// Se não tem template_name e Meta ativo → ERRO, não enviar silenciosamente
-if (!templateName) {
-  throw new Error("Meta API ativa: template_name obrigatório. Texto livre não será entregue.");
-}
-```
-
-## Arquivos afetados
-
-| Arquivo | Alteração |
-|---|---|
-| `supabase/functions/whatsapp-send-text/index.ts` | Bloquear texto livre quando Meta ativo |
-| `supabase/functions/notificar-cliente/index.ts` | Adicionar 8 tipos faltantes ao META_TEMPLATE_MAP |
-| `supabase/functions/notificar-sinistro/index.ts` | Adicionar template_name |
-| `supabase/functions/disparar-notificacao/index.ts` | Adicionar template_name |
-| `supabase/functions/cron-contato-sinistro/index.ts` | Adicionar template_name |
-| `supabase/functions/gerar-faturas-mensais/index.ts` | Adicionar template_name cobranca_mensalidade |
-| `supabase/functions/notificar-etapa-os/index.ts` | Adicionar template_name |
-| `supabase/functions/processar-termo-evento/index.ts` | Adicionar template_name (2 locais) |
-| `supabase/functions/autentique-webhook/index.ts` | Adicionar template_name |
-| `supabase/functions/notificar-retirada-whatsapp/index.ts` | Adicionar template_name |
-| `supabase/functions/notificar-manutencao-whatsapp/index.ts` | Adicionar template_name |
-| `supabase/functions/notificar-status-assistencia/index.ts` | Adicionar template_name |
-| `supabase/functions/despacho-reboque-disparar/index.ts` | Adicionar template_name |
-| `supabase/functions/gerar-os-cotacao-aprovada/index.ts` | Adicionar template_name |
-
-## Ordem de execução
-
-1. Atualizar `whatsapp-send-text` para bloquear texto livre com Meta ativa
-2. Corrigir `notificar-cliente` (8 tipos faltantes)
-3. Corrigir as 11 edge functions restantes (todas passam `template_name` + `template_params`)
-4. Deploy de todas as funções
-
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.
