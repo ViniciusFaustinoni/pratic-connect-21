@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export interface RegraAditivo {
-  tipo: 'veiculo_0km' | 'fipe_acima_de' | 'evento_vidros';
+  tipo: 'veiculo_0km' | 'fipe_acima_de' | 'evento_vidros' | 'veiculo_blindado';
   ativo: boolean;
   valor_config?: string;
 }

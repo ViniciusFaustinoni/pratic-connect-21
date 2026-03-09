@@ -741,6 +741,9 @@ function avaliarRegraEdge(regra: RegraAditivo, veiculo: any, fipeLimite: number,
     case 'evento_vidros':
       return contexto?.tipo_evento?.toLowerCase().includes('vidros') === true;
     
+    case 'veiculo_blindado':
+      return veiculo.blindado === true;
+    
     default:
       return false;
   }

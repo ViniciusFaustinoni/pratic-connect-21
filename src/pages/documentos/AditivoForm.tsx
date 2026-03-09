@@ -66,6 +66,7 @@ export default function AditivoForm() {
         veiculo_0km: false,
         fipe_acima_de: false,
         evento_vidros: false,
+        veiculo_blindado: false,
       };
       (aditivo.regras || []).forEach((r: RegraAditivo) => {
         regrasMap[r.tipo] = r.ativo;

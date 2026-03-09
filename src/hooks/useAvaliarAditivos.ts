@@ -28,6 +28,9 @@ function avaliarRegra(regra: RegraAditivo, veiculo: VeiculoParaAvaliacao, fipeLi
       // Avaliação real é feita no backend (edge function)
       return false;
     
+    case 'veiculo_blindado':
+      return veiculo.blindado === true;
+    
     default:
       return false;
   }

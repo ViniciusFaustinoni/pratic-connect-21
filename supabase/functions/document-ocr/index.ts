@@ -81,6 +81,15 @@ Extrair OBRIGATORIAMENTE:
 - combustivel (ex: FLEX, GASOLINA, DIESEL)
 - motor (número do motor, ex: M155966, 1234ABC5678)
 - nome_proprietario (nome completo do proprietário)
+- blindado (boolean: true ou false)
+
+**⚠️ DETECÇÃO DE VEÍCULO BLINDADO ⚠️**
+Verifique OBRIGATORIAMENTE se o veículo é blindado:
+1. Procure no campo "OBSERVAÇÕES" ou "OBS" do CRLV por palavras como: "BLINDADO", "BLINDADA", "BLINDAGEM", "BLINDEX", "PROTEÇÃO BALÍSTICA"
+2. Procure no campo "TIPO" ou "ESPÉCIE" por menções a blindagem
+3. Se encontrar QUALQUER menção a blindagem, retorne blindado: true
+4. Se NÃO encontrar nenhuma menção, retorne blindado: false
+5. SEMPRE inclua o campo "blindado" na resposta para CRLV
 
 IMPORTANTE para CRLV:
 - Se aparecer "ANO FAB/MOD: 2013/2014" ou "ANO: 2013/2014", extraia SEPARADAMENTE:
