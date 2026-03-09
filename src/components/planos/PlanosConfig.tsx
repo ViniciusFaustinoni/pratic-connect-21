@@ -24,6 +24,9 @@ interface PlanoFormData extends PlanoInput {
 }
 
 export function PlanosConfig() {
+  const { data: productLines = [] } = useProductLines();
+  const linhasPlano = productLines.map(pl => ({ value: pl.slug, label: pl.name }));
+
   const { isDiretor, isDesenvolvedor } = usePermissions();
   const podeEditar = isDiretor || isDesenvolvedor;
   
