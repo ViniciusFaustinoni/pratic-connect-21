@@ -266,6 +266,7 @@ export default function UsuarioForm() {
 
   const { isDiretor, isAdminMaster } = usePermissions();
   const { roles: appRoles, getRoleLabel, getRoleDescription, isLoading: isLoadingRoles } = useAppRoles();
+  const { regioes: REGIOES_ATENDIMENTO } = useRegioesAtendimento();
   
   // Perfis disponíveis dinamicamente (exclui 'associado')
   const perfisDisponiveis = appRoles

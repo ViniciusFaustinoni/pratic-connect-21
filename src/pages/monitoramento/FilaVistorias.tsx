@@ -35,7 +35,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useVistorias, Vistoria } from '@/hooks/useVistorias';
 import { useServicos, Servico } from '@/hooks/useServicos';
-import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
+import { useRegioesAtendimento } from '@/hooks/useRegioesAtendimento';
 import { toast } from 'sonner';
 import { 
   AgendarVistoriaModal, 
