@@ -337,6 +337,92 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
               <span className="text-[10px] text-muted-foreground">{rodape.length}/60</span>
             </div>
 
+            {/* Botões de Ação */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Botões de ação (opcional)</Label>
+                <span className="text-[10px] text-muted-foreground">{botoes.length}/3</span>
+              </div>
+              
+              {botoes.map((btn, idx) => (
+                <div key={idx} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={btn.tipo}
+                      onValueChange={(val: 'url' | 'telefone' | 'resposta_rapida') => {
+                        const updated = [...botoes];
+                        updated[idx] = { ...updated[idx], tipo: val, url: '', telefone: '' };
+                        setBotoes(updated);
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-[10px] w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="url">🔗 URL</SelectItem>
+                        <SelectItem value="telefone">📞 Telefone</SelectItem>
+                        <SelectItem value="resposta_rapida">↩️ Resposta Rápida</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      className="h-7 text-[10px] flex-1"
+                      value={btn.texto}
+                      onChange={(e) => {
+                        const updated = [...botoes];
+                        updated[idx] = { ...updated[idx], texto: e.target.value.substring(0, 25) };
+                        setBotoes(updated);
+                      }}
+                      placeholder="Texto do botão (máx 25)"
+                      maxLength={25}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 text-destructive"
+                      onClick={() => setBotoes(botoes.filter((_, i) => i !== idx))}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  {btn.tipo === 'url' && (
+                    <Input
+                      className="h-7 text-[10px]"
+                      value={btn.url || ''}
+                      onChange={(e) => {
+                        const updated = [...botoes];
+                        updated[idx] = { ...updated[idx], url: e.target.value };
+                        setBotoes(updated);
+                      }}
+                      placeholder="https://exemplo.com/pagina"
+                    />
+                  )}
+                  {btn.tipo === 'telefone' && (
+                    <Input
+                      className="h-7 text-[10px]"
+                      value={btn.telefone || ''}
+                      onChange={(e) => {
+                        const updated = [...botoes];
+                        updated[idx] = { ...updated[idx], telefone: e.target.value };
+                        setBotoes(updated);
+                      }}
+                      placeholder="+5521999999999"
+                    />
+                  )}
+                </div>
+              ))}
+
+              {botoes.length < 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-7 text-[10px]"
+                  onClick={() => setBotoes([...botoes, { tipo: 'url', texto: '' }])}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Adicionar botão
+                </Button>
+              )}
+            </div>
+
             <Separator />
 
             {/* Resultado da validação IA */}
