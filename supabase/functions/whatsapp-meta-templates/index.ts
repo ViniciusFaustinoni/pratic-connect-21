@@ -155,7 +155,15 @@ serve(async (req) => {
             return { type: "QUICK_REPLY", text: b.texto };
           }
         });
-        components.push({ type: "BUTTONS", buttons });
+        const urlExamples = buttons
+          .filter((b: any) => b.type === "URL" && b.url?.includes("{{"))
+          .map(() => "https://pratic-connect-21.lovable.app/app/criar-senha?token=exemplo-token-123");
+
+        if (urlExamples.length > 0) {
+          components.push({ type: "BUTTONS", buttons, example: urlExamples });
+        } else {
+          components.push({ type: "BUTTONS", buttons });
+        }
       }
 
       const metaPayload = {
