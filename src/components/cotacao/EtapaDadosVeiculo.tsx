@@ -89,11 +89,7 @@ const COMBUSTIVEIS = [
   { value: 'hibrido', label: 'Híbrido' },
 ];
 
-const REGIOES = [
-  { value: 'rio_de_janeiro', label: 'Rio de Janeiro' },
-  { value: 'regiao_lagos', label: 'Região dos Lagos' },
-  { value: 'sao_paulo', label: 'São Paulo' },
-];
+// REGIOES agora vem do banco via useRegioesAtivas()
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {

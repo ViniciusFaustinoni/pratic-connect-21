@@ -34,13 +34,7 @@ interface EtapaCriteriosCotacaoProps {
   isCalculando?: boolean;
 }
 
-const REGIOES = [
-  { value: 'rio_de_janeiro', label: 'Rio de Janeiro - Capital e Região Metropolitana' },
-  { value: 'regiao_lagos', label: 'Região dos Lagos' },
-  { value: 'sao_paulo', label: 'São Paulo - Capital e Região Metropolitana' },
-  { value: 'interior_rj', label: 'Interior do Rio de Janeiro' },
-  { value: 'interior_sp', label: 'Interior de São Paulo' },
-];
+// REGIOES agora vem do banco via useRegioesAtivas()
 
 const COMBUSTIVEIS = [
   { value: 'flex', label: 'Flex (Gasolina/Etanol)' },

@@ -167,6 +167,48 @@ export interface DecomposicaoMensalidade {
   assistencia: number;
 }
 
+// ============================================
+// Categorias de Veículo
+// ============================================
+
+export interface CategoriaVeiculo {
+  value: string;
+  label: string;
+}
+
+export function useCategoriasVeiculo() {
+  return useConfiguracaoJson<CategoriaVeiculo[]>('categorias_veiculo', [
+    { value: 'chassi_remarcado', label: 'Chassi remarcado' },
+    { value: 'placa_vermelha', label: 'Placa vermelha' },
+    { value: 'aplicativo', label: 'Veículo utilizado para aplicativos de transporte' },
+    { value: 'leilao', label: 'Veículo proveniente de leilão' },
+    { value: 'ressarcimento_integral', label: 'Veículo que já teve ressarcimento integral' },
+    { value: 'ex_taxi', label: 'Ex-táxi' },
+    { value: 'taxi', label: 'Táxi' },
+    { value: 'nenhuma', label: 'Nenhuma das opções' },
+  ]);
+}
+
+// ============================================
+// Observações por Categoria
+// ============================================
+
+export function useObservacoesCategoria() {
+  return useConfiguracaoJson<Record<string, string>>('observacoes_categoria', {});
+}
+
+// ============================================
+// Template WhatsApp Cotação
+// ============================================
+
+export function useTemplateWhatsappCotacao() {
+  return useConfiguracaoTexto('template_whatsapp_cotacao', '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% da tabela FIPE\n• Sem análise de perfil\n• Aprovação em até 24h\n• App exclusivo para associados');
+}
+
+// ============================================
+// Decomposição da Mensalidade
+// ============================================
+
 export function useConfigDecomposicao() {
   return useQuery({
     queryKey: ['configuracoes', 'decomposicao'],
