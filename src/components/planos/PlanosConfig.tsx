@@ -26,7 +26,10 @@ interface PlanoFormData extends PlanoInput {
 
 export function PlanosConfig() {
   const { data: productLines = [] } = useProductLines();
+  const { data: coberturaFipeDefault = 100 } = useCoberturaFipeDefault();
+  const { data: anoMinimoDefault = 2005 } = useAnoMinimoDefault();
   const linhasPlano = productLines.map(pl => ({ value: pl.slug, label: pl.name }));
+  const linhaDefault = linhasPlano.length > 0 ? linhasPlano[0].value : 'select';
 
   const { isDiretor, isDesenvolvedor } = usePermissions();
   const podeEditar = isDiretor || isDesenvolvedor;
