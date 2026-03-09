@@ -164,6 +164,12 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const codigo = plano.codigo?.toLowerCase() || '';
       const tipoUsoPlano = plano.tipo_uso?.toLowerCase() || '';
       const categoriaPlano = plano.categoria?.toLowerCase() || '';
+      
+      // Usar product_lines para regras dinâmicas
+      const plProductLine = (plano as any).product_lines;
+      const vehicleType = plProductLine?.vehicle_type || null;
+      const requiresRecentYear = plProductLine?.requires_recent_year || false;
+      const sortPriority = plProductLine?.sort_priority || 100;
 
       // Filtro por uso
       const isPlanoAplicativo = tipoUsoPlano === 'aplicativo' || categoriaPlano === 'aplicativo';
@@ -171,9 +177,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (params.usoApp === true && !isPlanoAplicativo) continue;
       if (params.usoApp === false && isPlanoAplicativo) continue;
 
-      // Filtrar motos/carros
-      if (tipoVeiculo === 'moto' && linha !== 'advanced') continue;
-      if (tipoVeiculo === 'carro' && linha === 'advanced') continue;
+      // Filtrar motos/carros usando vehicle_type do banco
+      if (tipoVeiculo === 'moto' && vehicleType === 'car') continue;
+      if (tipoVeiculo === 'carro' && vehicleType === 'motorcycle') continue;
 
       // Verificar ano mínimo
       const anoMinimo = plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0;
