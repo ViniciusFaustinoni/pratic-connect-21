@@ -467,6 +467,7 @@ PraticLogo.displayName = "PraticLogo";
 // User Card Component
 function UserCard() {
   const { profile, roles } = useAuth();
+  const { getRoleLabel } = useAppRoles();
   
   return (
     <div className="flex items-center gap-3 rounded-lg bg-card-hover p-3 border-t border-border">
