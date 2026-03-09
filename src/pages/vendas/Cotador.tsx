@@ -228,6 +228,7 @@ const estimarValorFipe = (marca: string, ano: number): number => {
 
 export default function CotadorPage() {
   const navigate = useNavigate();
+  const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
