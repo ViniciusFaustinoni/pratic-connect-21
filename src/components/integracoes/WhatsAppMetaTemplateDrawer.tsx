@@ -63,6 +63,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
       setHeaderTexto(template.header_texto || '');
       setCorpo(template.corpo || '');
       setRodape(template.rodape || '');
+      setBotoes((template.botoes as BotaoAcao[]) || []);
       setVarExemplos((template.variaveis_exemplo as Record<string, string>) || {});
       setValidacao(null);
     } else if (open && !template) {
@@ -72,6 +73,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
       setHeaderTexto('');
       setCorpo('');
       setRodape('');
+      setBotoes([]);
       setVarExemplos({});
       setValidacao(null);
     }
