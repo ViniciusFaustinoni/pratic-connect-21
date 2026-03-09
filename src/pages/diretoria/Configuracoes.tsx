@@ -6,8 +6,7 @@ import {
   Bell, 
   Calculator,
   Save,
-  LucideIcon,
-  Plug
+  LucideIcon
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { IntegracoesStatusCard } from '@/components/diretoria';
+
 
 interface CategoriaConfig {
   label: string;
@@ -34,7 +33,7 @@ const categoriaConfig: Record<string, CategoriaConfig> = {
   operacional: { label: 'Operacional', icon: Settings, desc: 'Prazos e regras operacionais' },
   notificacoes: { label: 'Notificações', icon: Bell, desc: 'Canais de comunicação' },
   atuarial: { label: 'Atuarial', icon: Calculator, desc: 'Parâmetros de cálculo' },
-  integracoes: { label: 'Integrações', icon: Plug, desc: 'Status das integrações externas' },
+  
 };
 
 type ConfigRow = {
@@ -274,12 +273,9 @@ export default function ConfiguracoesSistema() {
     }
   };
 
-  // Adicionar 'integracoes' como categoria sempre disponível
-  const availableCategories = [
-    ...Object.keys(categoriaConfig).filter(
-      cat => cat === 'integracoes' || (configsPorCategoria[cat]?.length > 0)
-    )
-  ];
+  const availableCategories = Object.keys(categoriaConfig).filter(
+    cat => configsPorCategoria[cat]?.length > 0
+  );
 
   if (isLoading) {
     return (
@@ -325,14 +321,6 @@ export default function ConfiguracoesSistema() {
             const config = categoriaConfig[cat];
             const configs = configsPorCategoria[cat] || [];
             
-            // Tab especial para integrações
-            if (cat === 'integracoes') {
-              return (
-                <TabsContent key={cat} value={cat}>
-                  <IntegracoesStatusCard />
-                </TabsContent>
-              );
-            }
             
             return (
               <TabsContent key={cat} value={cat}>
