@@ -262,7 +262,7 @@ export function PlanosConfig() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">
-                          {LINHAS_PLANO.find(l => l.value === plano.linha)?.label || plano.linha}
+                          {linhasPlano.find(l => l.value === plano.linha)?.label || plano.linha}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
