@@ -44,7 +44,7 @@ const tiposUsuario: Record<string, { label: string; color: string }> = {
 
 export default function Usuarios() {
   const navigate = useNavigate();
-  const { getRoleLabel, getRoleBadgeClass, getRoleOptions } = useAppRoles();
+  const { getRoleLabel, getRoleBadgeClass, getRoleOptions, getRoleArea } = useAppRoles();
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
