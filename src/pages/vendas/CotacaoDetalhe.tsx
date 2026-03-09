@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 // Hooks
 import { useHistoricoCotacao, registrarEventoCotacao } from '@/hooks/useCotacaoHistorico';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
+import { useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 
 // Componentes novos
 import { CotacaoHeader } from '@/components/cotacoes/CotacaoHeader';
