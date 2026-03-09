@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Calculator, Check, Car, Briefcase } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
+import { useFatorVeiculoAntigo, useFatorUsoTrabalho } from '@/hooks/useConteudosSistema';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
