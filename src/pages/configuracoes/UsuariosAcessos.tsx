@@ -1025,17 +1025,16 @@ export default function UsuariosAcessos() {
           <div className="py-4">
             <p className="text-sm text-muted-foreground mb-4">Selecione os perfis para <strong>{editingUser?.nome}</strong></p>
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {allRoles.filter(r => r !== 'associado').map(role => {
-                const config = rolesConfig[role];
-                const Icon = config.icon;
+              {allRoles.map(role => {
+                const roleConfig = appRolesData.find(r => r.role === role);
                 const isSelected = selectedRoles.includes(role);
                 return (
                   <div key={role} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`} onClick={() => handleToggleRole(role)}>
                     <Checkbox checked={isSelected} />
-                    <div className={`p-1.5 rounded ${config.color}`}><Icon className="h-4 w-4" /></div>
+                    <div className={`p-1.5 rounded bg-${roleConfig?.color || 'gray'}-500/10 text-${roleConfig?.color || 'gray'}-500`}><Shield className="h-4 w-4" /></div>
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{config.label}</p>
-                      <p className="text-xs text-muted-foreground">{config.desc}</p>
+                      <p className="font-medium text-sm">{getRoleLabel(role)}</p>
+                      <p className="text-xs text-muted-foreground">{roleConfig?.description || ''}</p>
                     </div>
                   </div>
                 );
