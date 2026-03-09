@@ -278,10 +278,22 @@ export function useInstaladores() {
   return useQuery({
     queryKey: ['instaladores'],
     queryFn: async () => {
+      // Buscar roles operacionais (instaladores/vistoriadores) dinamicamente
+      const { data: configs } = await supabase
+        .from('app_roles_config')
+        .select('role')
+        .eq('is_operational', true)
+        .eq('is_active', true);
+      
+      const operationalRoles = (configs || [])
+        .map((c: any) => c.role)
+        .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
+      if (operationalRoles.length === 0) operationalRoles.push('instalador_vistoriador');
+
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role', 'instalador_vistoriador');
+        .in('role', operationalRoles);
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];
