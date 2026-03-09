@@ -62,18 +62,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const REGIOES_LABELS: Record<string, string> = {
-  rio_de_janeiro: 'Rio de Janeiro',
-  regiao_lagos: 'Região dos Lagos',
-  sao_paulo: 'São Paulo',
-};
-
-// Observações baseadas na categoria
-const OBSERVACOES_CATEGORIA: Record<string, string> = {
-  leilao: 'Veículo de leilão: sem cobertura de incêndio',
-  aplicativo: 'Uso para aplicativo: cota de participação 8% (mín R$ 3.000)',
-  chassi_remarcado: 'Chassi remarcado: sujeito à análise de aceitação',
-};
+// REGIOES_LABELS e OBSERVACOES_CATEGORIA agora vêm do banco
 
 export function EtapaResultado({
   veiculoFipe,
