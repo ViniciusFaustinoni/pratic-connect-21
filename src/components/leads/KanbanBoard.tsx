@@ -206,6 +206,7 @@ export function KanbanBoard({
                         key={lead.id}
                         lead={lead as any}
                         onClick={() => setDrawerLeadId(lead.id)}
+                        showVendedor={showVendedor}
                       />
                     ))}
                     {leadsInEtapa.length === 0 && (
