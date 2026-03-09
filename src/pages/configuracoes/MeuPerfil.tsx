@@ -128,8 +128,8 @@ export default function MeuPerfil() {
       if (updateError) throw updateError;
 
       setAvatarUrl(publicUrl);
+      await updateAuthProfile({ avatar_url: publicUrl });
       toast.success('Foto atualizada com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['auth-user'] });
     } catch (error) {
       console.error('Erro ao fazer upload:', error);
       toast.error('Erro ao fazer upload da foto');
