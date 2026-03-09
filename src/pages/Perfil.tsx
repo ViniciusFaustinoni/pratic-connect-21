@@ -23,6 +23,7 @@ const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 export default function Perfil() {
   const navigate = useNavigate();
   const { profile, roles, updatePassword, user } = useAuth();
+  const { getRoleLabel } = useAppRoles();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
