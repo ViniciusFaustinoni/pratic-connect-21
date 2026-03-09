@@ -18,50 +18,17 @@ export interface BenefitExclusionData {
 }
 
 /**
- * Mapa de restrições estáticas por categoria de veículo (fallback).
- * As exclusões dinâmicas do banco de dados têm prioridade.
+ * Labels amigáveis para as categorias de veículo.
+ * Mantido inline — não precisa de tabela separada.
  */
-export const RESTRICOES_CATEGORIA: Record<string, RestricaoCategoria> = {
-  leilao: {
-    coberturasRemovidas: ['incêndio', 'incendio'],
-    mensagemAlerta: 'Veículo de leilão: sem cobertura de incêndio',
-    tipoAlerta: 'warning',
-  },
-  chassi_remarcado: {
-    coberturasRemovidas: ['incêndio', 'incendio'],
-    mensagemAlerta: 'Chassi remarcado: sem cobertura de incêndio, sujeito à análise',
-    tipoAlerta: 'warning',
-  },
-  ressarcimento_integral: {
-    coberturasRemovidas: ['incêndio', 'incendio', 'perda total'],
-    mensagemAlerta: 'Ressarcimento integral anterior: coberturas limitadas',
-    tipoAlerta: 'warning',
-  },
-  taxi: {
-    coberturasRemovidas: [],
-    mensagemAlerta: 'Categoria Táxi: valores diferenciados aplicados',
-    tipoAlerta: 'info',
-  },
-  ex_taxi: {
-    coberturasRemovidas: [],
-    mensagemAlerta: 'Ex-Táxi: análise de quilometragem pode ser necessária',
-    tipoAlerta: 'info',
-  },
-  placa_vermelha: {
-    coberturasRemovidas: [],
-    mensagemAlerta: 'Placa vermelha: veículo de teste/exposição',
-    tipoAlerta: 'info',
-  },
-  aplicativo: {
-    coberturasRemovidas: [],
-    mensagemAlerta: 'Uso APP: cota de participação 8% (mín R$ 3.000)',
-    tipoAlerta: 'info',
-  },
-  nenhuma: {
-    coberturasRemovidas: [],
-    mensagemAlerta: '',
-    tipoAlerta: 'info',
-  },
+const CATEGORIA_LABELS: Record<string, string> = {
+  leilao: 'Veículo de leilão',
+  chassi_remarcado: 'Chassi remarcado',
+  ressarcimento_integral: 'Ressarcimento integral',
+  taxi: 'Táxi',
+  ex_taxi: 'Ex-Táxi',
+  placa_vermelha: 'Placa vermelha',
+  aplicativo: 'Uso para aplicativo',
 };
 
 // Cache local para exclusões (evita múltiplas queries)
