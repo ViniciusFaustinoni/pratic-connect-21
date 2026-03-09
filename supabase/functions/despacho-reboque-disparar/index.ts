@@ -139,7 +139,7 @@ serve(async (req) => {
     const reboquistasDisponiveis = reboquistas.filter((r) => !idsOcupados.has(r.id));
 
     if (reboquistasDisponiveis.length === 0) {
-      throw new Error("Todos os reboquistas estão ocupados com outros chamados.");
+      throw new Error(`Todos os prestadores de '${tipoServicoChamado}' estão ocupados com outros chamados.`);
     }
 
     // Buscar valores de cada prestador (incluindo valor_sugerido)
