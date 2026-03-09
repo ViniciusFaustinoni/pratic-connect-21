@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePerfilUsuarios } from '@/hooks/usePerfilUsuarios';
+import { useAppRoles } from '@/hooks/useAppRoles';
+import { MODULES, MODULE_ITEMS } from '@/config/modules';
 import { GerenciarRolesTab } from '@/components/configuracoes/GerenciarRolesTab';
 import { SolicitacoesTab } from '@/components/configuracoes/SolicitacoesTab';
 import { AreaSection } from '@/components/configuracoes/AreaSection';
@@ -24,192 +26,31 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
-// 18 módulos do sistema (correspondem aos grupos do sidebar)
-const modulos = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'vendas', label: 'Vendas' },
-  { id: 'cadastro', label: 'Cadastro' },
-  { id: 'monitoramento', label: 'Monitoramento' },
-  { id: 'eventos', label: 'Eventos/Sinistros' },
-  { id: 'assistencia', label: 'Assistência 24h' },
-  { id: 'oficinas', label: 'Oficinas' },
-  { id: 'financeiro', label: 'Financeiro' },
-  { id: 'cobranca', label: 'Cobrança' },
-  { id: 'contabilidade', label: 'Contabilidade' },
-  { id: 'juridico', label: 'Jurídico' },
-  { id: 'rh', label: 'Recursos Humanos' },
-  { id: 'marketing', label: 'Marketing' },
-  { id: 'ouvidoria', label: 'Ouvidoria' },
-  { id: 'diretoria', label: 'Diretoria' },
-  { id: 'relatorios', label: 'Relatórios' },
-  { id: 'documentos', label: 'Documentos' },
-  { id: 'configuracoes', label: 'Configurações' },
-];
-
-// Sub-itens de cada módulo
-const MODULE_ITEMS: Record<string, { id: string; label: string }[]> = {
-  vendas: [
-    { id: 'leads', label: 'Leads' },
-    { id: 'cotacoes', label: 'Cotação' },
-    { id: 'propostas', label: 'Propostas' },
-    { id: 'ativacoes', label: 'Ativações' },
-    { id: 'consultores', label: 'Consultores' },
-    { id: 'planos', label: 'Planos e Benefícios' },
-  ],
-  cadastro: [
-    { id: 'propostas_pendentes', label: 'Propostas Pendentes' },
-    { id: 'associados', label: 'Associados' },
-    { id: 'veiculos', label: 'Veículos' },
-    { id: 'substituicoes', label: 'Substituições' },
-  ],
-  monitoramento: [
-    { id: 'equipe', label: 'Equipe' },
-    { id: 'instalacoes', label: 'Instalações' },
-    { id: 'vistorias', label: 'Vistorias' },
-    { id: 'retiradas', label: 'Retiradas' },
-    { id: 'calendario', label: 'Calendário' },
-    { id: 'estoque', label: 'Estoque' },
-    { id: 'rastreadores', label: 'Rastreadores' },
-    { id: 'mapa', label: 'Mapa' },
-    { id: 'alertas', label: 'Alertas' },
-  ],
-  eventos: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'sinistros', label: 'Sinistros' },
-    { id: 'pre_analise', label: 'Pré-Análise' },
-    { id: 'sla', label: 'SLA' },
-    { id: 'sindicancias', label: 'Sindicâncias' },
-    { id: 'sindicantes', label: 'Sindicantes' },
-    { id: 'solicitacoes_ia', label: 'Solicitações IA' },
-  ],
-  assistencia: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'chamados', label: 'Fila de Chamados' },
-    { id: 'prestadores', label: 'Prestadores' },
-  ],
-  oficinas: [
-    { id: 'oficinas', label: 'Oficinas' },
-    { id: 'auto_centers', label: 'Auto Centers' },
-    { id: 'ordens_servico', label: 'Ordens de Serviço' },
-    { id: 'relatorios', label: 'Relatórios' },
-  ],
-  financeiro: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'cobrancas', label: 'Cobranças' },
-    { id: 'contas_pagar', label: 'Contas a Pagar' },
-    { id: 'faturamento', label: 'Faturamento' },
-    { id: 'extrato', label: 'Extrato' },
-    { id: 'extratos_bancarios', label: 'Extratos Bancários' },
-    { id: 'contas_bancarias', label: 'Contas Bancárias' },
-  ],
-  cobranca: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'inadimplentes', label: 'Inadimplentes' },
-    { id: 'fila', label: 'Fila de Trabalho' },
-    { id: 'acordos', label: 'Acordos' },
-    { id: 'negativacao', label: 'Negativação' },
-    { id: 'regua', label: 'Régua' },
-  ],
-  contabilidade: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'plano_contas', label: 'Plano de Contas' },
-    { id: 'lancamentos', label: 'Lançamentos' },
-    { id: 'balancete', label: 'Balancete' },
-    { id: 'balanco_patrimonial', label: 'Balanço Patrimonial' },
-    { id: 'dre', label: 'DRE' },
-    { id: 'fechamento', label: 'Fechamento' },
-  ],
-  juridico: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'casos', label: 'Casos' },
-    { id: 'processos', label: 'Processos' },
-    { id: 'advogados', label: 'Advogados' },
-    { id: 'prazos', label: 'Prazos' },
-    { id: 'audiencias', label: 'Audiências' },
-    { id: 'consultas', label: 'Consultas 360' },
-    { id: 'pareceres', label: 'Pareceres' },
-  ],
-  rh: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'funcionarios', label: 'Funcionários' },
-    { id: 'jornadas', label: 'Jornadas' },
-    { id: 'folha_pagamento', label: 'Folha de Pagamento' },
-    { id: 'ponto', label: 'Ponto' },
-    { id: 'ferias', label: 'Férias' },
-    { id: 'organograma', label: 'Organograma' },
-    { id: 'departamentos', label: 'Departamentos' },
-    { id: 'beneficios', label: 'Benefícios' },
-  ],
-  marketing: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'campanhas', label: 'Campanhas' },
-    { id: 'canais', label: 'Canais' },
-    { id: 'indicacoes', label: 'Indicações' },
-    { id: 'utms', label: 'UTMs' },
-    { id: 'distribuicao', label: 'Distribuição' },
-    { id: 'relatorios', label: 'Relatórios' },
-  ],
-  ouvidoria: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'fila', label: 'Fila' },
-  ],
-  diretoria: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'produtos', label: 'Produtos' },
-    { id: 'planos_beneficios', label: 'Planos/Benefícios' },
-    { id: 'precos', label: 'Tabela de Preços' },
-    { id: 'rateio', label: 'Rateio' },
-    { id: 'atuarial', label: 'Atuarial' },
-    { id: 'blacklist', label: 'Blacklist' },
-    { id: 'configuracoes', label: 'Configurações' },
-    { id: 'perfis', label: 'Perfis' },
-    { id: 'logs', label: 'Logs' },
-    { id: 'relatorios', label: 'Relatórios' },
-  ],
-  documentos: [
-    { id: 'gerar', label: 'Gerar Documento' },
-    { id: 'historico', label: 'Histórico' },
-    { id: 'templates', label: 'Templates' },
-    { id: 'aditivos', label: 'Aditivos' },
-  ],
+// Mapa de ícones por área (fallback)
+const AREA_ICON_MAP: Record<string, typeof Crown> = {
+  'Diretoria': Crown,
+  'Comercial': Briefcase,
+  'Cadastro': FileText,
+  'Monitoramento': Radio,
+  'Eventos': Shield,
+  'Marketing': Megaphone,
+  'Jurídico': Scale,
+  'App': Smartphone,
 };
 
-// Perfis do sistema com descrições
-const perfis: Perfil[] = [
-  { id: 'desenvolvedor', label: 'Desenvolvedor', sigla: 'Dev', color: 'bg-violet-500', area: 'Diretoria', descricao: 'Acesso total ao sistema, incluindo configurações técnicas e debug' },
-  { id: 'diretor', label: 'Diretor', sigla: 'Dir', color: 'bg-purple-500', area: 'Diretoria', descricao: 'Acesso total ao sistema, aprova alterações de permissão' },
-  { id: 'admin_master', label: 'Admin Master', sigla: 'Adm', color: 'bg-purple-400', area: 'Diretoria', descricao: 'Gerencia permissões e usuários (alterações requerem aprovação)' },
-  { id: 'gerente_comercial', label: 'Gerente Comercial', sigla: 'GerC', color: 'bg-blue-500', area: 'Comercial', descricao: 'Gestão completa da equipe comercial e metas' },
-  { id: 'supervisor_vendas', label: 'Supervisor Vendas', sigla: 'SupV', color: 'bg-cyan-500', area: 'Comercial', descricao: 'Supervisiona vendedores e acompanha desempenho' },
-  { id: 'vendedor_clt', label: 'Vendedor CLT', sigla: 'VdC', color: 'bg-green-500', area: 'Comercial', descricao: 'Vendas internas com acesso aos próprios registros' },
-  { id: 'vendedor_externo', label: 'Vendedor Externo', sigla: 'VdE', color: 'bg-green-400', area: 'Comercial', descricao: 'Vendas externas com acesso aos próprios registros' },
-  { id: 'agencia', label: 'Agência', sigla: 'Ag', color: 'bg-green-300', area: 'Comercial', descricao: 'Agência parceira com acesso a vendas' },
-  { id: 'analista_cadastro', label: 'Analista Cadastro', sigla: 'AnCad', color: 'bg-orange-500', area: 'Cadastro', descricao: 'Gerencia cadastros de associados e veículos' },
-  { id: 'coordenador_monitoramento', label: 'Coord. Monitoramento', sigla: 'CrdM', color: 'bg-teal-500', area: 'Monitoramento', descricao: 'Coordena equipe de monitoramento e instalações' },
-  { id: 'analista_plataforma', label: 'Analista Plataforma', sigla: 'AnPlt', color: 'bg-teal-400', area: 'Monitoramento', descricao: 'Monitora rastreadores e alertas em tempo real' },
-  { id: 'instalador_vistoriador', label: 'Instalador/Vistoriador', sigla: 'Inst', color: 'bg-pink-500', area: 'Monitoramento', descricao: 'Realiza instalações e vistorias em campo' },
-  { id: 'vistoriador_base', label: 'Vistoriador Base', sigla: 'VBase', color: 'bg-pink-400', area: 'Monitoramento', descricao: 'Realiza vistorias na base' },
-  { id: 'analista_eventos', label: 'Analista Eventos', sigla: 'AnEv', color: 'bg-red-500', area: 'Eventos', descricao: 'Gerencia eventos e sinistros' },
-  { id: 'regulador', label: 'Regulador', sigla: 'Reg', color: 'bg-red-400', area: 'Eventos', descricao: 'Regulação de sinistros em campo' },
-  { id: 'sindicante', label: 'Sindicante', sigla: 'Sind', color: 'bg-red-300', area: 'Eventos', descricao: 'Realiza sindicâncias em campo' },
-  { id: 'analista_marketing', label: 'Analista Marketing', sigla: 'AnMkt', color: 'bg-rose-500', area: 'Marketing', descricao: 'Gerencia campanhas e leads de marketing' },
-  { id: 'analista_juridico', label: 'Analista Jurídico', sigla: 'AnJur', color: 'bg-gray-500', area: 'Jurídico', descricao: 'Acompanha processos e consultas jurídicas' },
-  { id: 'advogado', label: 'Advogado', sigla: 'Adv', color: 'bg-blue-800', area: 'Jurídico', descricao: 'Advogado com acesso ao módulo jurídico' },
-  { id: 'associado', label: 'Associado', sigla: 'Assoc', color: 'bg-slate-500', area: 'App', descricao: 'Acesso ao aplicativo do associado' },
-];
-
-const areaConfig: Record<string, { icon: typeof Crown; gradient: string; borderColor: string }> = {
-  'Diretoria': { icon: Crown, gradient: 'from-purple-500/10 via-purple-500/5 to-transparent', borderColor: 'border-l-purple-500' },
-  'Comercial': { icon: Briefcase, gradient: 'from-blue-500/10 via-blue-500/5 to-transparent', borderColor: 'border-l-blue-500' },
-  'Cadastro': { icon: FileText, gradient: 'from-orange-500/10 via-orange-500/5 to-transparent', borderColor: 'border-l-orange-500' },
-  'Monitoramento': { icon: Radio, gradient: 'from-teal-500/10 via-teal-500/5 to-transparent', borderColor: 'border-l-teal-500' },
-  'Eventos': { icon: Shield, gradient: 'from-red-500/10 via-red-500/5 to-transparent', borderColor: 'border-l-red-500' },
-  'Marketing': { icon: Megaphone, gradient: 'from-rose-500/10 via-rose-500/5 to-transparent', borderColor: 'border-l-rose-500' },
-  'Jurídico': { icon: Scale, gradient: 'from-gray-500/10 via-gray-500/5 to-transparent', borderColor: 'border-l-gray-500' },
-  'App': { icon: Smartphone, gradient: 'from-slate-500/10 via-slate-500/5 to-transparent', borderColor: 'border-l-slate-500' },
+// Mapa de cores por área (para gradientes e bordas)
+const AREA_STYLE_MAP: Record<string, { gradient: string; borderColor: string }> = {
+  'Diretoria': { gradient: 'from-purple-500/10 via-purple-500/5 to-transparent', borderColor: 'border-l-purple-500' },
+  'Comercial': { gradient: 'from-blue-500/10 via-blue-500/5 to-transparent', borderColor: 'border-l-blue-500' },
+  'Cadastro': { gradient: 'from-orange-500/10 via-orange-500/5 to-transparent', borderColor: 'border-l-orange-500' },
+  'Monitoramento': { gradient: 'from-teal-500/10 via-teal-500/5 to-transparent', borderColor: 'border-l-teal-500' },
+  'Eventos': { gradient: 'from-red-500/10 via-red-500/5 to-transparent', borderColor: 'border-l-red-500' },
+  'Marketing': { gradient: 'from-rose-500/10 via-rose-500/5 to-transparent', borderColor: 'border-l-rose-500' },
+  'Jurídico': { gradient: 'from-gray-500/10 via-gray-500/5 to-transparent', borderColor: 'border-l-gray-500' },
+  'App': { gradient: 'from-slate-500/10 via-slate-500/5 to-transparent', borderColor: 'border-l-slate-500' },
 };
 
-const areas = ['Diretoria', 'Comercial', 'Cadastro', 'Monitoramento', 'Eventos', 'Marketing', 'Jurídico', 'App'];
+const DEFAULT_AREA_STYLE = { gradient: 'from-gray-500/10 via-gray-500/5 to-transparent', borderColor: 'border-l-gray-500' };
 
 // Célula da matriz - toggle de visibilidade
 const VisibilityCell = ({ 
@@ -232,9 +73,8 @@ const VisibilityCell = ({
   );
 };
 
-// Tipo de usuário para a matriz
 interface MatrixUser {
-  id: string; // profile id (= user_id for our tables)
+  id: string;
   nome: string;
   email: string;
 }
@@ -242,21 +82,33 @@ interface MatrixUser {
 export default function Perfis() {
   const { canManagePermissions, canApprovePermissionChanges } = usePermissions();
   const { contagemPorPerfil, useUsuariosPorPerfil } = usePerfilUsuarios();
+  const { roles: appRoles, getAreas, isLoading: isLoadingRoles } = useAppRoles();
   const queryClient = useQueryClient();
   
   const [activeTab, setActiveTab] = useState('perfis');
   const [searchTerm, setSearchTerm] = useState('');
   const [matrixUserSearch, setMatrixUserSearch] = useState('');
-  const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({
-    'Diretoria': true, 'Comercial': true, 'Cadastro': false,
-    'Monitoramento': false, 'Eventos': false, 'Marketing': false,
-    'Jurídico': false, 'App': false,
-  });
+
+  // Gerar perfis dinâmicos a partir do hook
+  const perfis: Perfil[] = useMemo(() => {
+    return appRoles.map(r => ({
+      id: r.role,
+      label: r.label,
+      sigla: r.sigla,
+      color: `bg-${r.color}-500`,
+      area: r.area,
+      descricao: r.description,
+    }));
+  }, [appRoles]);
+
+  // Áreas dinâmicas
+  const areas = useMemo(() => getAreas(), [getAreas, appRoles]);
+
+  const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({});
   const [selectedPerfil, setSelectedPerfil] = useState<Perfil | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [showMatriz, setShowMatriz] = useState(false);
   
-  // Estado para edição de visibilidade por usuário
   const [editedVisibility, setEditedVisibility] = useState<Record<string, Record<string, boolean>>>({});
   const [editedCanEdit, setEditedCanEdit] = useState<Record<string, Record<string, boolean>>>({});
   const [editedItemVisibility, setEditedItemVisibility] = useState<Record<string, Record<string, Record<string, boolean>>>>({});
@@ -264,7 +116,6 @@ export default function Perfis() {
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Buscar lista de usuários para a matriz
   const { data: matrixUsers = [], isLoading: isLoadingUsers } = useQuery({
     queryKey: ['matrix-users'],
     queryFn: async () => {
@@ -278,7 +129,6 @@ export default function Perfis() {
     },
   });
 
-  // Filtrar usuários por busca
   const filteredMatrixUsers = useMemo(() => {
     if (!matrixUserSearch) return matrixUsers;
     const term = matrixUserSearch.toLowerCase();
@@ -287,7 +137,6 @@ export default function Perfis() {
     );
   }, [matrixUsers, matrixUserSearch]);
 
-  // Busca dados de visibilidade por usuário do banco
   const { data: visibilityData, isLoading: isLoadingVisibility } = useQuery({
     queryKey: ['user-module-visibility-all'],
     queryFn: async () => {
@@ -299,7 +148,6 @@ export default function Perfis() {
     },
   });
 
-  // Busca dados de visibilidade de itens por usuário
   const { data: itemVisibilityData, isLoading: isLoadingItemVisibility } = useQuery({
     queryKey: ['user-module-item-visibility-all'],
     queryFn: async () => {
@@ -311,7 +159,6 @@ export default function Perfis() {
     },
   });
 
-  // Converter dados do banco para mapas indexados por user_id
   const matrizFromDB = useMemo(() => {
     const matriz: Record<string, Record<string, boolean>> = {};
     if (visibilityData) {
@@ -348,7 +195,6 @@ export default function Perfis() {
 
   const { data: usuariosDoPerfil = [] } = useUsuariosPorPerfil(selectedPerfil?.id || '');
 
-  // Filtra perfis por busca
   const perfisFiltrados = useMemo(() => {
     if (!searchTerm) return perfis;
     const term = searchTerm.toLowerCase();
@@ -357,31 +203,32 @@ export default function Perfis() {
       p.descricao.toLowerCase().includes(term) ||
       p.area.toLowerCase().includes(term)
     );
-  }, [searchTerm]);
+  }, [searchTerm, perfis]);
 
   const perfisPorArea = useMemo(() => {
     const grouped: Record<string, Perfil[]> = {};
     areas.forEach(area => { grouped[area] = perfisFiltrados.filter(p => p.area === area); });
     return grouped;
-  }, [perfisFiltrados]);
+  }, [perfisFiltrados, areas]);
 
   const toggleArea = (area: string) => {
     setExpandedAreas(prev => ({ ...prev, [area]: !prev[area] }));
   };
 
   const toggleAll = () => {
-    const allExpanded = Object.values(expandedAreas).every(v => v);
-    setExpandedAreas(Object.keys(expandedAreas).reduce((acc, key) => ({ ...acc, [key]: !allExpanded }), {}));
+    const allExpanded = areas.every(a => expandedAreas[a]);
+    const newState: Record<string, boolean> = {};
+    areas.forEach(a => { newState[a] = !allExpanded; });
+    setExpandedAreas(newState);
   };
 
-  const allExpanded = Object.values(expandedAreas).every(v => v);
+  const allExpanded = areas.every(a => expandedAreas[a]);
 
   const handlePerfilClick = (perfil: Perfil) => {
     setSelectedPerfil(perfil);
     setSheetOpen(true);
   };
 
-  // Handlers para edição de visibilidade (agora indexados por userId)
   const handleVisibilityChange = useCallback((userId: string, moduloId: string, newValue: boolean) => {
     if (!canManagePermissions) return;
     setEditedVisibility(prev => ({
@@ -418,7 +265,6 @@ export default function Perfis() {
     );
   }, []);
 
-  // Salvar alterações no banco (agora para user_module_visibility)
   const handleSaveChanges = useCallback(async () => {
     try {
       setIsSaving(true);
@@ -452,7 +298,6 @@ export default function Perfis() {
         if (error) throw error;
       }
 
-      // Upsert item visibility
       const itemUpsertData: any[] = [];
       Object.entries(editedItemVisibility).forEach(([userId, modules]) => {
         Object.entries(modules).forEach(([moduleId, items]) => {
@@ -501,7 +346,6 @@ export default function Perfis() {
     toast.info('Alterações descartadas');
   }, []);
 
-  // Obter valor atual (editado ou do banco) — agora por userId
   const getVisibility = useCallback((userId: string, moduloId: string): boolean => {
     return editedVisibility[userId]?.[moduloId] ?? matrizFromDB[userId]?.[moduloId] ?? false;
   }, [editedVisibility, matrizFromDB]);
@@ -518,15 +362,14 @@ export default function Perfis() {
     return editedVisibility[userId]?.[moduloId] !== undefined || editedCanEdit[userId]?.[moduloId] !== undefined;
   }, [editedVisibility, editedCanEdit]);
 
-  // Criar uma matriz simplificada para o PerfilSheet (compatibilidade)
   const matrizForSheet = useMemo(() => {
     const result: Record<string, Record<string, boolean | 'read' | 'own'>> = {};
     perfis.forEach(p => {
       result[p.id] = {};
-      modulos.forEach(m => { result[p.id][m.id] = false; });
+      MODULES.forEach(m => { result[p.id][m.id] = false; });
     });
     return result;
-  }, []);
+  }, [perfis]);
 
   return (
     <div className="space-y-6">
@@ -566,7 +409,6 @@ export default function Perfis() {
 
         {/* ABA PERFIS */}
         <TabsContent value="perfis" className="space-y-6">
-          {/* Barra de busca e ações */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -599,18 +441,18 @@ export default function Perfis() {
             <div className="space-y-4">
               {areas.map(area => {
                 const areaPerfis = perfisPorArea[area];
-                if (areaPerfis.length === 0) return null;
-                const config = areaConfig[area];
-                if (!config) return null;
+                if (!areaPerfis || areaPerfis.length === 0) return null;
+                const icon = AREA_ICON_MAP[area] || Shield;
+                const style = AREA_STYLE_MAP[area] || DEFAULT_AREA_STYLE;
                 return (
                   <AreaSection
                     key={area}
                     area={area}
-                    icon={config.icon}
-                    gradient={config.gradient}
-                    borderColor={config.borderColor}
+                    icon={icon}
+                    gradient={style.gradient}
+                    borderColor={style.borderColor}
                     perfis={areaPerfis}
-                    isExpanded={expandedAreas[area]}
+                    isExpanded={expandedAreas[area] ?? false}
                     onToggle={() => toggleArea(area)}
                     onPerfilClick={handlePerfilClick}
                     usuariosPorPerfil={contagemPorPerfil}
@@ -664,7 +506,6 @@ export default function Perfis() {
                     )}
                   </div>
                 </div>
-                {/* Busca de usuários na matriz */}
                 <div className="mt-3">
                   <div className="relative max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -724,8 +565,9 @@ export default function Perfis() {
                           </tr>
                         </thead>
                         <tbody>
-                          {modulos.map((m, idx) => {
-                            const hasSubItems = MODULE_ITEMS[m.id] && MODULE_ITEMS[m.id].length > 0;
+                          {MODULES.map((m, idx) => {
+                            const moduleItems = MODULE_ITEMS[m.id];
+                            const hasSubItems = moduleItems && moduleItems.length > 0;
                             const isExpanded = expandedModules.includes(m.id);
 
                             return (
@@ -768,7 +610,7 @@ export default function Perfis() {
                                 </tr>
 
                                 {/* Sub-itens */}
-                                {isExpanded && hasSubItems && MODULE_ITEMS[m.id].map((item) => (
+                                {isExpanded && hasSubItems && moduleItems.map((item) => (
                                   <tr 
                                     key={`${m.id}-${item.id}`}
                                     className="border-b border-border/30 bg-muted/10"
@@ -833,7 +675,7 @@ export default function Perfis() {
         {/* ABA GERENCIAR */}
         {canManagePermissions && (
           <TabsContent value="roles">
-            <GerenciarRolesTab perfis={perfis} />
+            <GerenciarRolesTab />
           </TabsContent>
         )}
 
@@ -850,7 +692,7 @@ export default function Perfis() {
         perfil={selectedPerfil}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        modulos={modulos}
+        modulos={MODULES}
         matriz={matrizForSheet}
         usuarios={usuariosDoPerfil.map(u => ({ id: u.id, nome: u.nome || '', email: u.email || '' }))}
         onPermissionChange={() => {}}

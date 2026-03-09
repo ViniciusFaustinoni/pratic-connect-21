@@ -29,65 +29,17 @@ import {
 } from '@/components/ui/select';
 import { Shield, Plus, Trash2, Check, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PERFIL_ACESSO_LABELS, type PerfilAcesso } from '@/types/auth';
+import { useAppRoles } from '@/hooks/useAppRoles';
 import type { ProfileWithRoles, RoleRecord } from '@/hooks/useUsuarios';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// ============================================
-// PERFIS DISPONÍVEIS PARA FUNCIONÁRIOS
-// ============================================
-const PERFIS_FUNCIONARIO: PerfilAcesso[] = [
-  'diretor',
-  'gerente_comercial',
-  'supervisor_vendas',
-  'vendedor_clt',
-  'vendedor_externo',
-  'analista_cadastro',
-  'coordenador_monitoramento',
-  'analista_plataforma',
-  'instalador_vistoriador',
-  'vistoriador_base',
-  'analista_marketing',
-  'analista_juridico',
-  'regulador',
-  'analista_eventos',
-];
-
-// ============================================
-// CORES DOS BADGES
-// ============================================
-const PERFIL_COLORS: Record<PerfilAcesso, string> = {
-  diretor: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  gerente_comercial: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  supervisor_vendas: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-  vendedor_clt: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  vendedor_externo: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
-  analista_cadastro: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  coordenador_monitoramento: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  analista_plataforma: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-  instalador_vistoriador: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-  vistoriador_base: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  associado: 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200',
-  analista_marketing: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
-  analista_juridico: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
-  regulador: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-  analista_eventos: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200',
-  sindicante: 'bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200',
-};
-
-// ============================================
-// PROPS
-// ============================================
 interface GerenciarPerfisModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   usuario: ProfileWithRoles;
 }
 
-// ============================================
-// COMPONENTE PRINCIPAL
-// ============================================
 export function GerenciarPerfisModal({
   open,
   onOpenChange,
@@ -95,6 +47,7 @@ export function GerenciarPerfisModal({
 }: GerenciarPerfisModalProps) {
   const [perfilSelecionado, setPerfilSelecionado] = useState<string>('');
   const [confirmRemover, setConfirmRemover] = useState<RoleRecord | null>(null);
+  const { getRoleLabel, getRoleOptions, getRoleBadgeClass } = useAppRoles();
   
   const { 
     adicionarPerfil, 
@@ -103,25 +56,22 @@ export function GerenciarPerfisModal({
     isRemovingPerfil 
   } = useUsuarioActions();
 
-  // Roles do usuário
   const roleRecords = usuario.roleRecords || [];
   const roles = usuario.roles || [];
   
-  // Perfis que ainda podem ser adicionados
-  const perfisDisponiveis = PERFIS_FUNCIONARIO.filter(
-    perfil => !roles.includes(perfil)
+  // Perfis que ainda podem ser adicionados (exclui associado e os já atribuídos)
+  const allOptions = getRoleOptions(true);
+  const perfisDisponiveis = allOptions.filter(
+    opt => !roles.includes(opt.value)
   );
 
-  // ============================================
-  // HANDLERS
-  // ============================================
   const handleAdicionar = () => {
     if (!perfilSelecionado || !usuario.user_id) return;
     
     adicionarPerfil(
       {
         userId: usuario.user_id,
-        role: perfilSelecionado as PerfilAcesso,
+        role: perfilSelecionado,
       },
       {
         onSuccess: () => {
@@ -145,9 +95,6 @@ export function GerenciarPerfisModal({
     return format(new Date(dateString), "dd/MM/yyyy", { locale: ptBR });
   };
 
-  // ============================================
-  // RENDER
-  // ============================================
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -180,15 +127,15 @@ export function GerenciarPerfisModal({
                     <div 
                       key={record.id}
                       className={cn(
-                        'flex items-center justify-between p-3 rounded-lg',
-                        PERFIL_COLORS[record.role]
+                        'flex items-center justify-between p-3 rounded-lg border',
+                        getRoleBadgeClass(record.role)
                       )}
                     >
                       <div className="flex items-center gap-3">
                         <Check className="h-4 w-4" />
                         <div>
                           <p className="font-medium">
-                            {PERFIL_ACESSO_LABELS[record.role]}
+                            {getRoleLabel(record.role)}
                           </p>
                           <p className="text-xs opacity-70 flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
@@ -232,8 +179,8 @@ export function GerenciarPerfisModal({
                     </SelectTrigger>
                     <SelectContent>
                       {perfisDisponiveis.map((perfil) => (
-                        <SelectItem key={perfil} value={perfil}>
-                          {PERFIL_ACESSO_LABELS[perfil]}
+                        <SelectItem key={perfil.value} value={perfil.value}>
+                          {perfil.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -257,7 +204,7 @@ export function GerenciarPerfisModal({
               
               {perfisDisponiveis.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Perfis disponíveis: {perfisDisponiveis.map(p => PERFIL_ACESSO_LABELS[p]).join(', ')}
+                  Perfis disponíveis: {perfisDisponiveis.map(p => p.label).join(', ')}
                 </p>
               )}
             </div>
@@ -278,7 +225,7 @@ export function GerenciarPerfisModal({
             <AlertDialogTitle>Remover perfil</AlertDialogTitle>
             <AlertDialogDescription>
               Tem certeza que deseja remover o perfil{' '}
-              <strong>{confirmRemover && PERFIL_ACESSO_LABELS[confirmRemover.role]}</strong>{' '}
+              <strong>{confirmRemover && getRoleLabel(confirmRemover.role)}</strong>{' '}
               de <strong>{usuario.nome}</strong>?
               <br />
               <br />

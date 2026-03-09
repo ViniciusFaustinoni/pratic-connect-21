@@ -29,26 +29,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2, UserPlus, Mail } from 'lucide-react';
-import { PERFIL_ACESSO_LABELS, type PerfilAcesso } from '@/types/auth';
+import { useAppRoles } from '@/hooks/useAppRoles';
 import { CpfInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
-
-// Perfis disponíveis para funcionários (excluindo 'associado')
-const PERFIS_FUNCIONARIO: PerfilAcesso[] = [
-  'diretor',
-  'gerente_comercial',
-  'supervisor_vendas',
-  'vendedor_clt',
-  'vendedor_externo',
-  'analista_cadastro',
-  'coordenador_monitoramento',
-  'analista_plataforma',
-  'instalador_vistoriador',
-  'vistoriador_base',
-  'analista_marketing',
-  'analista_juridico',
-  'regulador',
-  'analista_eventos',
-];
 
 const formSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
@@ -72,6 +54,10 @@ export function NovoFuncionarioModal({
   onSuccess,
 }: NovoFuncionarioModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { getRoleOptions, getRoleLabel } = useAppRoles();
+
+  // Perfis disponíveis para funcionários (exclui 'associado')
+  const perfisDisponiveis = getRoleOptions(true);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -88,7 +74,6 @@ export function NovoFuncionarioModal({
     setIsSubmitting(true);
 
     try {
-      // Chamar edge function para criar usuário
       const { data, error } = await supabase.functions.invoke('create-user', {
         body: {
           nome: values.nome,
@@ -222,9 +207,9 @@ export function NovoFuncionarioModal({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {PERFIS_FUNCIONARIO.map((perfil) => (
-                        <SelectItem key={perfil} value={perfil}>
-                          {PERFIL_ACESSO_LABELS[perfil]}
+                      {perfisDisponiveis.map((perfil) => (
+                        <SelectItem key={perfil.value} value={perfil.value}>
+                          {perfil.label}
                         </SelectItem>
                       ))}
                     </SelectContent>

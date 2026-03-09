@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUsuarios, useUsuarioActions, type UsuarioFilters, type ProfileWithRoles } from '@/hooks/useUsuarios';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppRoles } from '@/hooks/useAppRoles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -44,7 +45,6 @@ import {
   Search, 
   MoreHorizontal, 
   Eye, 
-  Edit, 
   UserX, 
   UserCheck, 
   KeyRound, 
@@ -55,41 +55,16 @@ import {
   Unlock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TIPO_USUARIO_LABELS, PERFIL_ACESSO_LABELS, type PerfilAcesso, type TipoUsuario } from '@/types/auth';
+import { TIPO_USUARIO_LABELS, type TipoUsuario } from '@/types/auth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { NovoFuncionarioModal } from '@/components/usuarios/NovoFuncionarioModal';
 
-// ============================================
-// CORES DOS BADGES DE PERFIL
-// ============================================
-const PERFIL_COLORS: Record<PerfilAcesso, string> = {
-  diretor: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  gerente_comercial: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  supervisor_vendas: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-  vendedor_clt: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  vendedor_externo: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
-  analista_cadastro: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  coordenador_monitoramento: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  analista_plataforma: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-  instalador_vistoriador: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-  vistoriador_base: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  associado: 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200',
-  analista_marketing: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
-  analista_juridico: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
-  regulador: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-  analista_eventos: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200',
-  sindicante: 'bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200',
-};
-
-// ============================================
-// COMPONENTE PRINCIPAL
-// ============================================
 export default function UsuariosPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { getRoleLabel, getRoleBadgeClass, getRoleOptions } = useAppRoles();
   
-  // Estado de filtros
   const [filters, setFilters] = useState<UsuarioFilters>({
     search: '',
     tipo: 'funcionario',
@@ -97,27 +72,22 @@ export default function UsuariosPage() {
     status: 'todos',
   });
   
-  // Estado de paginação
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  // Estado do modal de novo funcionário
   const [showNovoFuncionarioModal, setShowNovoFuncionarioModal] = useState(false);
 
-  // Estado do modal de confirmação
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     type: 'desativar' | 'ativar' | 'resetar' | 'bloquear' | 'desbloquear';
     usuario: ProfileWithRoles | null;
   }>({ open: false, type: 'desativar', usuario: null });
 
-  // Buscar usuários
   const { usuarios, pagination, isLoading, error } = useUsuarios({
     filters,
     pagination: { page, pageSize },
   });
 
-  // Ações
   const { 
     desativarUsuario, 
     ativarUsuario, 
@@ -127,9 +97,9 @@ export default function UsuariosPage() {
     isLoading: actionLoading 
   } = useUsuarioActions();
 
-  // ============================================
-  // HANDLERS
-  // ============================================
+  // Options para o select de perfil (incluindo associado para filtro)
+  const roleOptions = getRoleOptions(false);
+
   const handleSearch = (value: string) => {
     setFilters(prev => ({ ...prev, search: value }));
     setPage(1);
@@ -174,25 +144,19 @@ export default function UsuariosPage() {
     setConfirmDialog({ open: false, type: 'desativar', usuario: null });
   };
 
-  // Não permitir ações no próprio usuário
   const isSelf = (usuario: ProfileWithRoles) => usuario.user_id === profile?.user_id;
 
-  // ============================================
-  // FILTROS ATIVOS
-  // ============================================
   const hasActiveFilters = 
     filters.search || 
     filters.tipo !== 'funcionario' || 
     filters.perfil !== 'todos' || 
     filters.status !== 'todos';
 
-  // Mascarar CPF
   const maskCPF = (cpf: string | null) => {
     if (!cpf) return null;
     return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '***.$2.***-**');
   };
 
-  // Status badge
   const getStatusBadge = (usuario: ProfileWithRoles) => {
     if (usuario.bloqueado) {
       return <Badge variant="destructive">Bloqueado</Badge>;
@@ -205,9 +169,6 @@ export default function UsuariosPage() {
 
   const totalPages = Math.ceil(pagination.total / pageSize) || 1;
 
-  // ============================================
-  // RENDER
-  // ============================================
   return (
     <div className="p-6 space-y-6">
 
@@ -239,7 +200,6 @@ export default function UsuariosPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-end">
-            {/* Busca */}
             <div className="flex-1 min-w-[250px] relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -250,7 +210,6 @@ export default function UsuariosPage() {
               />
             </div>
 
-            {/* Tipo */}
             <Select
               value={filters.tipo}
               onValueChange={(value) => handleFilterChange('tipo', value)}
@@ -266,7 +225,6 @@ export default function UsuariosPage() {
               </SelectContent>
             </Select>
 
-            {/* Perfil */}
             <Select
               value={filters.perfil}
               onValueChange={(value) => handleFilterChange('perfil', value)}
@@ -276,13 +234,12 @@ export default function UsuariosPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os perfis</SelectItem>
-                {Object.entries(PERFIL_ACESSO_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                {roleOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            {/* Status */}
             <Select
               value={filters.status}
               onValueChange={(value) => handleFilterChange('status', value)}
@@ -299,7 +256,6 @@ export default function UsuariosPage() {
             </Select>
           </div>
 
-          {/* Filtros ativos */}
           {hasActiveFilters && (
             <div className="flex items-center gap-2 mt-4 flex-wrap">
               <span className="text-sm text-muted-foreground">Filtros:</span>
@@ -313,7 +269,7 @@ export default function UsuariosPage() {
               )}
               {filters.perfil !== 'todos' && (
                 <Badge variant="secondary">
-                  Perfil: {PERFIL_ACESSO_LABELS[filters.perfil as PerfilAcesso]}
+                  Perfil: {getRoleLabel(filters.perfil)}
                 </Badge>
               )}
               {filters.status !== 'todos' && (
@@ -396,9 +352,9 @@ export default function UsuariosPage() {
                             usuario.roles.slice(0, 3).map((perfil) => (
                               <Badge
                                 key={perfil}
-                                className={cn('text-xs', PERFIL_COLORS[perfil])}
+                                className={cn('text-xs border', getRoleBadgeClass(perfil))}
                               >
-                                {PERFIL_ACESSO_LABELS[perfil]}
+                                {getRoleLabel(perfil)}
                               </Badge>
                             ))
                           )}
@@ -464,7 +420,6 @@ export default function UsuariosPage() {
                                   type: 'ativar', 
                                   usuario 
                                 })}
-                                className="text-green-600"
                               >
                                 <UserCheck className="h-4 w-4 mr-2" />
                                 Ativar
@@ -478,7 +433,6 @@ export default function UsuariosPage() {
                                   type: 'desbloquear', 
                                   usuario 
                                 })}
-                                className="text-green-600"
                               >
                                 <Unlock className="h-4 w-4 mr-2" />
                                 Desbloquear
@@ -505,43 +459,46 @@ export default function UsuariosPage() {
                 </TableBody>
               </Table>
 
-              {/* PAGINAÇÃO */}
-              <div className="flex items-center justify-between p-4 border-t">
-                <p className="text-sm text-muted-foreground">
-                  Mostrando {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, pagination.total)} de {pagination.total} usuários
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                  >
-                    Anterior
-                  </Button>
-                  <span className="text-sm text-muted-foreground px-2">
-                    Página {page} de {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(p => p + 1)}
-                    disabled={page * pageSize >= pagination.total}
-                  >
-                    Próxima
-                  </Button>
+              {/* Paginação */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Mostrando {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, pagination.total)} de {pagination.total}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => setPage(p => p - 1)}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage(p => p + 1)}
+                    >
+                      Próxima
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </CardContent>
       </Card>
 
-      {/* DIALOG DE CONFIRMAÇÃO */}
-      <AlertDialog 
-        open={confirmDialog.open} 
-        onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
-      >
+      {/* Modal de Novo Funcionário */}
+      <NovoFuncionarioModal
+        open={showNovoFuncionarioModal}
+        onOpenChange={setShowNovoFuncionarioModal}
+        onSuccess={() => {}}
+      />
+
+      {/* Dialog de Confirmação */}
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -553,61 +510,38 @@ export default function UsuariosPage() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDialog.type === 'desativar' && (
-                <>
-                  Tem certeza que deseja desativar o usuário <strong>{confirmDialog.usuario?.nome}</strong>?
-                  <br />
-                  <span className="text-orange-600">Ele não poderá mais acessar o sistema.</span>
-                </>
+                <>Tem certeza que deseja desativar <strong>{confirmDialog.usuario?.nome}</strong>? O usuário não poderá mais acessar o sistema.</>
               )}
               {confirmDialog.type === 'ativar' && (
-                <>
-                  Tem certeza que deseja ativar o usuário <strong>{confirmDialog.usuario?.nome}</strong>?
-                  <br />
-                  <span className="text-green-600">Ele poderá acessar o sistema novamente.</span>
-                </>
+                <>Tem certeza que deseja ativar <strong>{confirmDialog.usuario?.nome}</strong>?</>
               )}
               {confirmDialog.type === 'bloquear' && (
-                <>
-                  Tem certeza que deseja bloquear o usuário <strong>{confirmDialog.usuario?.nome}</strong>?
-                  <br />
-                  <span className="text-destructive">O acesso será bloqueado imediatamente.</span>
-                </>
+                <>Tem certeza que deseja bloquear <strong>{confirmDialog.usuario?.nome}</strong>? O acesso será revogado imediatamente.</>
               )}
               {confirmDialog.type === 'desbloquear' && (
-                <>
-                  Tem certeza que deseja desbloquear o usuário <strong>{confirmDialog.usuario?.nome}</strong>?
-                  <br />
-                  <span className="text-green-600">O usuário poderá acessar o sistema novamente.</span>
-                </>
+                <>Tem certeza que deseja desbloquear <strong>{confirmDialog.usuario?.nome}</strong>?</>
               )}
               {confirmDialog.type === 'resetar' && (
-                <>
-                  Um email será enviado para <strong>{confirmDialog.usuario?.email}</strong> com instruções para redefinir a senha.
-                </>
+                <>Um email será enviado para <strong>{confirmDialog.usuario?.email}</strong> com instruções para redefinir a senha.</>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmAction} disabled={actionLoading}>
-              {confirmDialog.type === 'desativar' && 'Desativar'}
-              {confirmDialog.type === 'ativar' && 'Ativar'}
-              {confirmDialog.type === 'bloquear' && 'Bloquear'}
-              {confirmDialog.type === 'desbloquear' && 'Desbloquear'}
-              {confirmDialog.type === 'resetar' && 'Enviar email'}
+              {actionLoading ? 'Aguarde...' : (
+                <>
+                  {confirmDialog.type === 'desativar' && 'Desativar'}
+                  {confirmDialog.type === 'ativar' && 'Ativar'}
+                  {confirmDialog.type === 'bloquear' && 'Bloquear'}
+                  {confirmDialog.type === 'desbloquear' && 'Desbloquear'}
+                  {confirmDialog.type === 'resetar' && 'Enviar email'}
+                </>
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Modal de Novo Funcionário */}
-      <NovoFuncionarioModal
-        open={showNovoFuncionarioModal}
-        onOpenChange={setShowNovoFuncionarioModal}
-        onSuccess={() => {
-          // Refetch será automático pelo React Query
-        }}
-      />
     </div>
   );
 }

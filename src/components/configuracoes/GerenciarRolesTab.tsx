@@ -15,89 +15,52 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAppRoles } from '@/hooks/useAppRoles';
 import { toast } from 'sonner';
 
-interface Perfil {
-  id: string;
-  label: string;
-  sigla: string;
-  color: string;
-  area: string;
-}
-
-interface GerenciarRolesTabProps {
-  perfis: Perfil[];
-}
-
-// Agrupar perfis por área
-const agruparPorArea = (perfis: Perfil[]) => {
-  const grupos: Record<string, Perfil[]> = {};
-  perfis.forEach(p => {
-    if (!grupos[p.area]) grupos[p.area] = [];
-    grupos[p.area].push(p);
-  });
-  return grupos;
-};
-
-// Ícones por área
-const areaIcons: Record<string, React.ReactNode> = {
+// Mapa de ícones por área (fallback)
+const AREA_ICONS: Record<string, React.ReactNode> = {
   'Diretoria': <Crown className="w-4 h-4" />,
   'Comercial': <Users className="w-4 h-4" />,
   'Cadastro': <Shield className="w-4 h-4" />,
   'Monitoramento': <Shield className="w-4 h-4" />,
+  'Eventos': <Shield className="w-4 h-4" />,
   'Marketing': <Shield className="w-4 h-4" />,
   'Jurídico': <Shield className="w-4 h-4" />,
   'App': <Users className="w-4 h-4" />,
 };
 
-// Cores de borda por área
-const areaBorderColors: Record<string, string> = {
+const AREA_BORDER_COLORS: Record<string, string> = {
   'Diretoria': 'border-l-purple-500',
   'Comercial': 'border-l-blue-500',
   'Cadastro': 'border-l-orange-500',
   'Monitoramento': 'border-l-teal-500',
+  'Eventos': 'border-l-red-500',
   'Marketing': 'border-l-rose-500',
   'Jurídico': 'border-l-gray-500',
   'App': 'border-l-slate-500',
 };
 
-// Descrições dos perfis
-const perfilDescricoes: Record<string, string> = {
-  desenvolvedor: 'Acesso total ao sistema, sem restrições',
-  diretor: 'Acesso total, pode aprovar solicitações',
-  admin_master: 'Gerencia permissões (precisa aprovação para alterações)',
-  gerente_comercial: 'Gestão comercial e equipe de vendas',
-  supervisor_vendas: 'Supervisão da equipe de vendas',
-  vendedor_clt: 'Vendedor interno (CLT)',
-  vendedor_externo: 'Vendedor externo/comissionado',
-  analista_cadastro: 'Gestão de cadastros e documentação',
-  coordenador_monitoramento: 'Coordenação da central de monitoramento',
-  analista_plataforma: 'Operação da plataforma de rastreamento',
-  instalador_vistoriador: 'Instalação e vistoria de veículos',
-  analista_marketing: 'Gestão de campanhas e marketing',
-  analista_juridico: 'Suporte jurídico e contratos',
-  associado: 'Acesso ao aplicativo do associado',
-};
-
-export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
+export function GerenciarRolesTab() {
   const { canCreateRoles, isDesenvolvedor, isDiretor } = usePermissions();
+  const { roles, getRolesByArea, getRoleDescription, isLoading } = useAppRoles();
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDescription, setNewRoleDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
-  const grupos = agruparPorArea(perfis);
+  const grupos = getRolesByArea();
 
-  // Filtrar perfis pela busca
+  // Filtrar por busca
   const filteredGrupos = Object.entries(grupos).reduce((acc, [area, areaPerfis]) => {
     const filtered = areaPerfis.filter(p => 
       p.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.id.toLowerCase().includes(searchTerm.toLowerCase())
+      p.role.toLowerCase().includes(searchTerm.toLowerCase())
     );
     if (filtered.length > 0) acc[area] = filtered;
     return acc;
-  }, {} as Record<string, Perfil[]>);
+  }, {} as Record<string, typeof roles>);
 
   const handleCreateRole = async () => {
     if (!newRoleName.trim()) {
@@ -105,15 +68,13 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
       return;
     }
     
-    // Validar formato snake_case
     const snakeCaseRegex = /^[a-z][a-z0-9_]*$/;
     if (!snakeCaseRegex.test(newRoleName)) {
       toast.error('O nome do perfil deve estar em snake_case (ex: analista_financeiro)');
       return;
     }
     
-    // Verificar se já existe
-    const jaExiste = perfis.some(p => p.id === newRoleName);
+    const jaExiste = roles.some(p => p.role === newRoleName);
     if (jaExiste) {
       toast.error('Já existe um perfil com este nome');
       return;
@@ -122,8 +83,6 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
     setIsCreating(true);
     
     try {
-      // Nota: A criação de novos roles requer alteração no ENUM do banco de dados
-      // que deve ser feita via migration. Por ora, mostramos uma mensagem informativa.
       if (isDesenvolvedor || isDiretor) {
         toast.info(
           `Para criar o perfil "${newRoleName}", é necessário adicionar ao ENUM app_role no banco de dados. ` +
@@ -131,7 +90,6 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
           { duration: 8000 }
         );
       } else {
-        // Admin Master precisa de aprovação
         toast.success(
           `Solicitação de criação do perfil "${newRoleName}" enviada para aprovação.`,
           { duration: 5000 }
@@ -240,10 +198,10 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
       {/* Lista de roles por área */}
       <div className="grid gap-6">
         {Object.entries(filteredGrupos).map(([area, areaPerfis]) => (
-          <Card key={area} className={`border-border/50 border-l-4 ${areaBorderColors[area] || 'border-l-gray-500'}`}>
+          <Card key={area} className={`border-border/50 border-l-4 ${AREA_BORDER_COLORS[area] || 'border-l-gray-500'}`}>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                {areaIcons[area]}
+                {AREA_ICONS[area] || <Shield className="w-4 h-4" />}
                 {area}
                 <Badge variant="secondary" className="ml-auto">
                   {areaPerfis.length} {areaPerfis.length === 1 ? 'perfil' : 'perfis'}
@@ -254,15 +212,15 @@ export function GerenciarRolesTab({ perfis }: GerenciarRolesTabProps) {
               <div className="space-y-3">
                 {areaPerfis.map(perfil => (
                   <div 
-                    key={perfil.id} 
+                    key={perfil.role} 
                     className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${perfil.color}`} />
+                      <div className={`w-3 h-3 rounded-full bg-${perfil.color}-500`} />
                       <div>
                         <p className="font-medium text-foreground">{perfil.label}</p>
                         <p className="text-xs text-muted-foreground">
-                          {perfilDescricoes[perfil.id] || `ID: ${perfil.id}`}
+                          {perfil.description || `ID: ${perfil.role}`}
                         </p>
                       </div>
                     </div>

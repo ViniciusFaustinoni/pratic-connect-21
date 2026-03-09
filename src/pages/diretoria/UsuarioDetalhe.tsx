@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useUsuario, useUsuarioActions } from '@/hooks/useUsuarios';
 import { GerenciarPerfisModal } from '@/components/usuarios/GerenciarPerfisModal';
+import { useAppRoles } from '@/hooks/useAppRoles';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -42,35 +43,10 @@ import {
   Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TIPO_USUARIO_LABELS, PERFIL_ACESSO_LABELS, type PerfilAcesso } from '@/types/auth';
+import { TIPO_USUARIO_LABELS } from '@/types/auth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// ============================================
-// CORES DOS BADGES DE PERFIL
-// ============================================
-const PERFIL_COLORS: Record<PerfilAcesso, string> = {
-  diretor: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  gerente_comercial: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  supervisor_vendas: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-  vendedor_clt: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  vendedor_externo: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
-  analista_cadastro: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  coordenador_monitoramento: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  analista_plataforma: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-  instalador_vistoriador: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-  vistoriador_base: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  associado: 'bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200',
-  analista_marketing: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
-  analista_juridico: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
-  regulador: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-  analista_eventos: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200',
-  sindicante: 'bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200',
-};
-
-// ============================================
-// HELPER: Obter iniciais do nome
-// ============================================
 const getInitials = (nome: string) => {
   return nome
     .split(' ')
@@ -80,12 +56,8 @@ const getInitials = (nome: string) => {
     .toUpperCase();
 };
 
-// ============================================
-// HELPER: Mascarar CPF
-// ============================================
 const maskCPF = (cpf: string | null) => {
   if (!cpf) return '-';
-  // Remove caracteres não numéricos e mascara
   const numbers = cpf.replace(/\D/g, '');
   if (numbers.length >= 7) {
     return `***.${numbers.slice(3, 6)}.***-**`;
@@ -96,6 +68,7 @@ const maskCPF = (cpf: string | null) => {
 export default function UsuarioDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { getRoleLabel, getRoleBadgeClass } = useAppRoles();
   
   const { data: usuario, isLoading, error } = useUsuario(id);
   const { 
@@ -107,13 +80,11 @@ export default function UsuarioDetalhePage() {
     isLoading: actionLoading 
   } = useUsuarioActions();
 
-  // Estado do dialog de confirmação
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     type: 'desativar' | 'ativar' | 'bloquear' | 'desbloquear' | 'resetar';
   }>({ open: false, type: 'desativar' });
 
-  // Estado do modal de perfis
   const [showPerfisModal, setShowPerfisModal] = useState(false);
 
   const handleConfirmAction = () => {
@@ -376,11 +347,11 @@ export default function UsuarioDetalhePage() {
                   <div 
                     key={perfil} 
                     className={cn(
-                      'p-3 rounded-lg',
-                      PERFIL_COLORS[perfil]
+                      'p-3 rounded-lg border',
+                      getRoleBadgeClass(perfil)
                     )}
                   >
-                    <p className="font-medium">{PERFIL_ACESSO_LABELS[perfil]}</p>
+                    <p className="font-medium">{getRoleLabel(perfil)}</p>
                   </div>
                 ))}
               </div>
