@@ -754,21 +754,20 @@ export default function UsuariosAcessos() {
         {/* TAB: PERFIS DE ACESSO */}
         <TabsContent value="perfis" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allRoles.filter(r => r !== 'associado').map(role => {
-              const config = rolesConfig[role];
-              const Icon = config.icon;
+            {allRoles.map(role => {
+              const roleConfig = appRolesData.find(r => r.role === role);
               const count = contagemPerfis?.[role] || 0;
               return (
-                <Card key={role} className="border-l-4" style={{ borderLeftColor: role === 'diretor' ? '#a855f7' : role === 'gerente_comercial' ? '#3b82f6' : role === 'supervisor_vendas' ? '#22c55e' : role === 'vendedor_clt' ? '#14b8a6' : role === 'vendedor_externo' ? '#06b6d4' : role === 'agencia' ? '#d946ef' : role === 'analista_cadastro' ? '#f97316' : role === 'coordenador_monitoramento' ? '#ef4444' : role === 'analista_plataforma' ? '#6b7280' : role === 'instalador_vistoriador' ? '#eab308' : role === 'analista_marketing' ? '#ec4899' : role === 'analista_juridico' ? '#6366f1' : '#9ca3af' }}>
+                <Card key={role} className="border-l-4 border-border/50" style={{ borderLeftColor: `var(--${roleConfig?.color || 'gray'}-500, #9ca3af)` }}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <div className={`p-2 rounded-lg ${config.color}`}>
-                        <Icon className="h-5 w-5" />
+                      <div className={`p-2 rounded-lg bg-${roleConfig?.color || 'gray'}-500/10 text-${roleConfig?.color || 'gray'}-500`}>
+                        <Shield className="h-5 w-5" />
                       </div>
                       <Badge variant="secondary" className="text-xs">{count} usuário{count !== 1 ? 's' : ''}</Badge>
                     </div>
-                    <CardTitle className="text-lg mt-3">{config.label}</CardTitle>
-                    <CardDescription>{config.desc}</CardDescription>
+                    <CardTitle className="text-lg mt-3">{getRoleLabel(role)}</CardTitle>
+                    <CardDescription>{roleConfig?.description || ''}</CardDescription>
                   </CardHeader>
                 </Card>
               );
