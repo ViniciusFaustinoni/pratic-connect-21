@@ -51,6 +51,7 @@ import { Label } from '@/components/ui/label';
 import { useUsuarios, useUsuarioActions, ProfileWithRoles } from '@/hooks/useUsuarios';
 import { useVendedores, useVendedoresContagem } from '@/hooks/useVendedores';
 import { ImportarUsuariosDialog } from '@/components/usuarios/ImportarUsuariosDialog';
+import { useAppRoles } from '@/hooks/useAppRoles';
 
 const PerfisVisibilidade = lazy(() => import('@/pages/configuracoes/Perfis'));
 
