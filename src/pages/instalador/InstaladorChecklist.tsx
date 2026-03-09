@@ -617,6 +617,7 @@ export default function InstaladorChecklist() {
         fotosRessalva: fotosRessalva.length > 0 ? fotosRessalva.map(f => f.preview) : undefined,
         localInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? localInstalacao : undefined,
         descricaoInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? descricaoInstalacao.trim() : undefined,
+        fotoLocalInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? fotoLocalInstalacao : undefined,
       });
       navigate('/instalador');
     } catch (err) {
