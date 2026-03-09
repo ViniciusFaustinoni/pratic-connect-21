@@ -69,14 +69,7 @@ const categorizarBeneficios = (coberturas: string[]) => {
   
   coberturas.forEach(cob => {
     const cobLower = cob.toLowerCase();
-    let categoriaEncontrada: 'cobertura' | 'assistencia' | 'extra' = 'cobertura';
-    
-    for (const [termo, cat] of Object.entries(CATEGORIAS_BENEFICIOS)) {
-      if (cobLower.includes(termo)) {
-        categoriaEncontrada = cat;
-        break;
-      }
-    }
+    let categoriaEncontrada = categorizarPorTermo(cobLower);
     
     if (categoriaEncontrada === 'cobertura') {
       resultado.coberturas.push(cob);
