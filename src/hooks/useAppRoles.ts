@@ -142,6 +142,29 @@ export function useAppRoles() {
   const roleLabelsMap: Record<string, string> = {};
   roles.forEach(r => { roleLabelsMap[r.role] = r.label; });
 
+  /** Verifica se o usuário só tem roles operacionais (ex: instalador, regulador, sindicante) */
+  const isOnlyOperational = (userRoles: string[]): boolean => {
+    if (userRoles.length === 0) return false;
+    return userRoles.every(ur => {
+      const config = roles.find(r => r.role === ur);
+      return config?.is_operational === true;
+    });
+  };
+
+  /** Retorna redirect_path do primeiro role operacional do usuário, se aplicável */
+  const getOperationalRedirectPath = (userRoles: string[]): string | null => {
+    for (const ur of userRoles) {
+      const config = roles.find(r => r.role === ur);
+      if (config?.redirect_path) return config.redirect_path;
+    }
+    return null;
+  };
+
+  /** Verifica se um role específico é operacional */
+  const isRoleOperational = (role: string): boolean => {
+    return roles.find(r => r.role === role)?.is_operational ?? false;
+  };
+
   return {
     roles,
     isLoading,
@@ -158,5 +181,8 @@ export function useAppRoles() {
     getPermissionsForRoles,
     getAreaStyles,
     roleLabelsMap,
+    isOnlyOperational,
+    getOperationalRedirectPath,
+    isRoleOperational,
   };
 }
