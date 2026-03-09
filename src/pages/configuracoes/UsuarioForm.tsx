@@ -18,7 +18,7 @@ import { useVendedorStats } from '@/hooks/useVendedorHistorico';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAppRoles } from '@/hooks/useAppRoles';
 import { MODULE_LABELS } from '@/config/modules';
-import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
+import { useRegioesAtendimento } from '@/hooks/useRegioesAtendimento';
 
 // Card editável de acesso a módulos por usuário
 function ModuleAccessCard({ userId }: { userId: string | undefined }) {
@@ -266,6 +266,7 @@ export default function UsuarioForm() {
 
   const { isDiretor, isAdminMaster } = usePermissions();
   const { roles: appRoles, getRoleLabel, getRoleDescription, isLoading: isLoadingRoles } = useAppRoles();
+  const { regioes: REGIOES_ATENDIMENTO } = useRegioesAtendimento();
   
   // Perfis disponíveis dinamicamente (exclui 'associado')
   const perfisDisponiveis = appRoles

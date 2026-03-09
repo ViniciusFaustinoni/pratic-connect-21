@@ -89,27 +89,10 @@ export const TIPO_USUARIO_LABELS: Record<TipoUsuario, string> = {
 };
 
 /**
- * @deprecated Use useAppRoles().getRoleLabel(role) em vez disso.
- * Mantido temporariamente para compatibilidade. Será removido em breve.
+ * @deprecated Removido. Use useAppRoles().getRoleLabel(role) em vez disso.
+ * Mantido como objeto vazio para não quebrar imports existentes.
  */
-export const PERFIL_ACESSO_LABELS: Record<string, string> = {
-  diretor: 'Diretor',
-  gerente_comercial: 'Gerente Comercial',
-  supervisor_vendas: 'Supervisor de Vendas',
-  vendedor_clt: 'Vendedor CLT',
-  vendedor_externo: 'Vendedor Externo',
-  analista_cadastro: 'Analista de Cadastro',
-  coordenador_monitoramento: 'Coordenador de Monitoramento',
-  analista_plataforma: 'Analista de Plataforma',
-  instalador_vistoriador: 'Instalador/Vistoriador',
-  vistoriador_base: 'Vistoriador Base',
-  associado: 'Associado',
-  analista_marketing: 'Analista de Marketing',
-  analista_juridico: 'Analista Jurídico',
-  regulador: 'Regulador',
-  analista_eventos: 'Analista de Eventos',
-  sindicante: 'Sindicante',
-};
+export const PERFIL_ACESSO_LABELS: Record<string, string> = {};
 
 // ============================================================
 // ESTADO DO CONTEXTO DE AUTENTICAÇÃO

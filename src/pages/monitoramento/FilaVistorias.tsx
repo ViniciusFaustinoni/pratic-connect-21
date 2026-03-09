@@ -35,7 +35,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useVistorias, Vistoria } from '@/hooks/useVistorias';
 import { useServicos, Servico } from '@/hooks/useServicos';
-import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
+import { useRegioesAtendimento } from '@/hooks/useRegioesAtendimento';
 import { toast } from 'sonner';
 import { 
   AgendarVistoriaModal, 
@@ -152,7 +152,8 @@ export default function FilaVistorias() {
   const [regiaoFilter, setRegiaoFilter] = useState('todas');
   const [dataFilter, setDataFilter] = useState<Date | undefined>();
   const [vistoriadorFilter, setVistoriadorFilter] = useState('todos');
-  
+  const { regioes: REGIOES_ATENDIMENTO } = useRegioesAtendimento();
+
   // Estado do modal de agendamento
   const [agendarModalOpen, setAgendarModalOpen] = useState(false);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<VistoriaParaAgendar | null>(null);

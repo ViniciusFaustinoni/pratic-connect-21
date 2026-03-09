@@ -26,29 +26,35 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
-// Mapa de ícones por área (fallback)
-const AREA_ICON_MAP: Record<string, typeof Crown> = {
-  'Diretoria': Crown,
-  'Comercial': Briefcase,
-  'Cadastro': FileText,
-  'Monitoramento': Radio,
-  'Eventos': Shield,
-  'Marketing': Megaphone,
-  'Jurídico': Scale,
-  'App': Smartphone,
+// Mapa de ícones Lucide por nome (para áreas — derivados do banco)
+const ICON_REGISTRY: Record<string, typeof Crown> = {
+  Crown, Briefcase, FileCheck: FileText, Radio, Megaphone, Scale, Smartphone,
+  Shield, Code: Settings2, ShieldCheck: Shield, Users, MapPin: Shield,
+  Monitor: Shield, Wrench: Shield, ClipboardCheck: Shield,
+  AlertTriangle: Shield, Search, Gavel: Scale, User: Shield,
+  UserCheck: Shield, UserPlus: Shield, Building2: Shield,
 };
 
-// Mapa de cores por área (para gradientes e bordas)
-const AREA_STYLE_MAP: Record<string, { gradient: string; borderColor: string }> = {
-  'Diretoria': { gradient: 'from-purple-500/10 via-purple-500/5 to-transparent', borderColor: 'border-l-purple-500' },
-  'Comercial': { gradient: 'from-blue-500/10 via-blue-500/5 to-transparent', borderColor: 'border-l-blue-500' },
-  'Cadastro': { gradient: 'from-orange-500/10 via-orange-500/5 to-transparent', borderColor: 'border-l-orange-500' },
-  'Monitoramento': { gradient: 'from-teal-500/10 via-teal-500/5 to-transparent', borderColor: 'border-l-teal-500' },
-  'Eventos': { gradient: 'from-red-500/10 via-red-500/5 to-transparent', borderColor: 'border-l-red-500' },
-  'Marketing': { gradient: 'from-rose-500/10 via-rose-500/5 to-transparent', borderColor: 'border-l-rose-500' },
-  'Jurídico': { gradient: 'from-gray-500/10 via-gray-500/5 to-transparent', borderColor: 'border-l-gray-500' },
-  'App': { gradient: 'from-slate-500/10 via-slate-500/5 to-transparent', borderColor: 'border-l-slate-500' },
-};
+// Cor → gradiente de área (derivado dinamicamente)
+function getAreaGradient(color: string): { gradient: string; borderColor: string } {
+  const map: Record<string, { gradient: string; borderColor: string }> = {
+    purple: { gradient: 'from-purple-500/10 via-purple-500/5 to-transparent', borderColor: 'border-l-purple-500' },
+    violet: { gradient: 'from-violet-500/10 via-violet-500/5 to-transparent', borderColor: 'border-l-violet-500' },
+    blue: { gradient: 'from-blue-500/10 via-blue-500/5 to-transparent', borderColor: 'border-l-blue-500' },
+    cyan: { gradient: 'from-cyan-500/10 via-cyan-500/5 to-transparent', borderColor: 'border-l-cyan-500' },
+    green: { gradient: 'from-green-500/10 via-green-500/5 to-transparent', borderColor: 'border-l-green-500' },
+    orange: { gradient: 'from-orange-500/10 via-orange-500/5 to-transparent', borderColor: 'border-l-orange-500' },
+    teal: { gradient: 'from-teal-500/10 via-teal-500/5 to-transparent', borderColor: 'border-l-teal-500' },
+    pink: { gradient: 'from-pink-500/10 via-pink-500/5 to-transparent', borderColor: 'border-l-pink-500' },
+    red: { gradient: 'from-red-500/10 via-red-500/5 to-transparent', borderColor: 'border-l-red-500' },
+    rose: { gradient: 'from-rose-500/10 via-rose-500/5 to-transparent', borderColor: 'border-l-rose-500' },
+    indigo: { gradient: 'from-indigo-500/10 via-indigo-500/5 to-transparent', borderColor: 'border-l-indigo-500' },
+    slate: { gradient: 'from-slate-500/10 via-slate-500/5 to-transparent', borderColor: 'border-l-slate-500' },
+    fuchsia: { gradient: 'from-fuchsia-500/10 via-fuchsia-500/5 to-transparent', borderColor: 'border-l-fuchsia-500' },
+    gray: { gradient: 'from-gray-500/10 via-gray-500/5 to-transparent', borderColor: 'border-l-gray-500' },
+  };
+  return map[color] || map.gray;
+}
 
 const DEFAULT_AREA_STYLE = { gradient: 'from-gray-500/10 via-gray-500/5 to-transparent', borderColor: 'border-l-gray-500' };
 
@@ -82,7 +88,7 @@ interface MatrixUser {
 export default function Perfis() {
   const { canManagePermissions, canApprovePermissionChanges } = usePermissions();
   const { contagemPorPerfil, useUsuariosPorPerfil } = usePerfilUsuarios();
-  const { roles: appRoles, getAreas, isLoading: isLoadingRoles } = useAppRoles();
+  const { roles: appRoles, getAreas, getAreaStyles, isLoading: isLoadingRoles } = useAppRoles();
   const queryClient = useQueryClient();
   
   const [activeTab, setActiveTab] = useState('perfis');
@@ -103,6 +109,7 @@ export default function Perfis() {
 
   // Áreas dinâmicas
   const areas = useMemo(() => getAreas(), [getAreas, appRoles]);
+  const areaStyles = useMemo(() => getAreaStyles(), [getAreaStyles, appRoles]);
 
   const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({});
   const [selectedPerfil, setSelectedPerfil] = useState<Perfil | null>(null);
@@ -442,8 +449,9 @@ export default function Perfis() {
               {areas.map(area => {
                 const areaPerfis = perfisPorArea[area];
                 if (!areaPerfis || areaPerfis.length === 0) return null;
-                const icon = AREA_ICON_MAP[area] || Shield;
-                const style = AREA_STYLE_MAP[area] || DEFAULT_AREA_STYLE;
+                const areaData = areaStyles[area];
+                const icon = (areaData?.icon ? ICON_REGISTRY[areaData.icon] : undefined) || Shield;
+                const style = areaData ? getAreaGradient(areaData.color) : DEFAULT_AREA_STYLE;
                 return (
                   <AreaSection
                     key={area}

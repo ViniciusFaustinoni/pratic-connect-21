@@ -1,9 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-
-// Grupos de perfis para cotações
-const PERFIS_VENDEDOR = ['vendedor_clt', 'vendedor_externo'];
-const PERFIS_CADASTRO = ['analista_cadastro'];
-const PERFIS_GESTOR = ['diretor', 'gerente_comercial', 'supervisor_vendas'];
+import { useAppRoles } from '@/hooks/useAppRoles';
 
 export type PermissionKey = 
   | 'isFuncionario'
@@ -57,208 +53,150 @@ export type PermissionKey =
 export type CotacaoViewScope = 'own' | 'team' | 'all';
 
 export interface CotacaoPermissions {
-  // Visualização
   canView: boolean;
   canViewAll: boolean;
   viewScope: CotacaoViewScope;
-  
-  // CRUD
   canCreate: boolean;
   canEdit: boolean;
   canEditOwnOnly: boolean;
   canDelete: boolean;
-  
-  // Ações
   canSend: boolean;
   canCancel: boolean;
   canDuplicate: boolean;
-  
-  // Validação (analista/gestor)
   canValidate: boolean;
   canEditClientData: boolean;
   canEditVehicleData: boolean;
   canViewHistory: boolean;
-  
-  // Exportação e valores
   canExport: boolean;
   canOverrideValue: boolean;
   canGenerateContract: boolean;
 }
 
 /**
- * Hook centralizado de permissões para verificar acessos de forma declarativa
+ * Hook centralizado de permissões.
+ * 
+ * Capability permissions (canXxx) são derivadas da tabela app_roles_config.permissions.
+ * Identity flags (isXxx) são derivadas de hasRole() (identidade do role).
+ * Exclusivity flags (isXxxOnly) são computadas a partir da combinação de roles.
  */
 export function usePermissions() {
   const { profile, roles, hasRole, isGerencia, isVendedor, isFuncionario, user } = useAuth();
+  const { getPermissionsForRoles } = useAppRoles();
 
-  // Verificar roles usando busca direta no array (para novos perfis não tipados ainda)
+  // ============================================
+  // PERMISSIONS DERIVADAS DO BANCO
+  // ============================================
+  const dbPerms = getPermissionsForRoles(roles || []);
+  const hasPerm = (key: string): boolean => dbPerms.has(key);
+
+  // ============================================
+  // IDENTITY FLAGS (baseadas em role names)
+  // ============================================
   const hasRoleByName = (roleName: string) => roles?.includes(roleName as any) ?? false;
 
-  // Novos perfis privilegiados
   const isDesenvolvedor = hasRoleByName('desenvolvedor');
   const isAdminMaster = hasRoleByName('admin_master');
   const isDiretor = hasRole('diretor');
   const isAnalistaCadastro = hasRole('analista_cadastro');
-  
-  // Verifica se é APENAS analista de cadastro (sem perfis de gerência ou admin)
-  const isAnalistaCadastroOnly = isAnalistaCadastro && 
-    !isDiretor && 
-    !isGerencia() && 
-    !isDesenvolvedor && 
-    !isAdminMaster;
-
-  // Verifica se é APENAS vendedor CLT (sem perfis de gerência ou admin)
-  const isVendedorCltOnly = hasRole('vendedor_clt') && 
-    !isDiretor && 
-    !isGerencia() && 
-    !isDesenvolvedor && 
-    !isAdminMaster;
-
-  // Verifica se é APENAS vendedor (CLT ou Externo, sem perfis de gerência ou admin)
-  const isVendedorOnly = isVendedor() && 
-    !isDiretor && 
-    !isGerencia() && 
-    !isDesenvolvedor && 
-    !isAdminMaster &&
-    !isAnalistaCadastro;
-
-  // Verifica se é APENAS coordenador de monitoramento (sem perfis de gerência ou admin)
   const isCoordenadorMonitoramento = hasRole('coordenador_monitoramento');
-  const isCoordenadorMonitoramentoOnly = isCoordenadorMonitoramento && 
-    !isDiretor && 
-    !isGerencia() && 
-    !isDesenvolvedor && 
-    !isAdminMaster &&
-    !hasRole('instalador_vistoriador') &&
-    !hasRoleByName('analista_plataforma') &&
-    !isAnalistaCadastro &&
-    !hasRoleByName('analista_eventos') &&
-    !hasRoleByName('regulador') &&
-    !hasRoleByName('sindicante') &&
-    !isVendedor();
-
-  // Verifica se é APENAS instalador/vistoriador (sem perfis de gerência ou admin)
   const isInstaladorVistoriador = hasRole('instalador_vistoriador');
-  const isInstaladorVistoriadorOnly = isInstaladorVistoriador && 
-    !isDiretor && 
-    !isGerencia() && 
-    !isDesenvolvedor && 
-    !isAdminMaster &&
-    !isCoordenadorMonitoramento &&
-    !hasRoleByName('analista_plataforma') &&
-    !isAnalistaCadastro &&
-    !hasRoleByName('analista_eventos') &&
-    !hasRoleByName('regulador') &&
-    !hasRoleByName('sindicante') &&
-    !isVendedor();
+  const isRegulador = hasRoleByName('regulador');
+  const isAnalistaEventos = hasRoleByName('analista_eventos');
+  const isSindicante = hasRoleByName('sindicante');
 
-  // NOTA: isVistoriadorBase agora é determinado pela alocação diária, não pela role.
-  // Mantemos as flags para compatibilidade, mas sempre false pois a role foi migrada.
-  // O comportamento de "base" é controlado pelo hook useAlocacaoDiaria.
+  const isSuperAdmin = isDesenvolvedor || isAdminMaster;
+
+  // ============================================
+  // EXCLUSIVITY FLAGS (combinação de roles)
+  // Determinam se o usuário APENAS possui este role operacional.
+  // Usadas para redirecionamento de layout especial.
+  // ============================================
+  const hasPrivilegedRole = isDiretor || isGerencia() || isDesenvolvedor || isAdminMaster;
+
+  const isAnalistaCadastroOnly = isAnalistaCadastro && !hasPrivilegedRole;
+
+  const isVendedorCltOnly = hasRole('vendedor_clt') && !hasPrivilegedRole;
+
+  const isVendedorOnly = isVendedor() && !hasPrivilegedRole && !isAnalistaCadastro;
+
+  const isCoordenadorMonitoramentoOnly = isCoordenadorMonitoramento && !hasPrivilegedRole &&
+    !isInstaladorVistoriador && !hasRoleByName('analista_plataforma') &&
+    !isAnalistaCadastro && !isAnalistaEventos && !isRegulador && !isSindicante && !isVendedor();
+
+  const isInstaladorVistoriadorOnly = isInstaladorVistoriador && !hasPrivilegedRole &&
+    !isCoordenadorMonitoramento && !hasRoleByName('analista_plataforma') &&
+    !isAnalistaCadastro && !isAnalistaEventos && !isRegulador && !isSindicante && !isVendedor();
+
   const isVistoriadorBase = false;
   const isVistoriadorBaseOnly = false;
 
-  // Regulador
-  const isRegulador = hasRoleByName('regulador');
-  const isReguladorOnly = isRegulador &&
-    !isDiretor &&
-    !isGerencia() &&
-    !isDesenvolvedor &&
-    !isAdminMaster &&
-    !isCoordenadorMonitoramento &&
-    !isInstaladorVistoriador &&
-    !hasRoleByName('analista_plataforma') &&
-    !isAnalistaCadastro &&
-    !hasRoleByName('analista_eventos') &&
-    !hasRoleByName('sindicante') &&
-    !isVendedor();
+  const isReguladorOnly = isRegulador && !hasPrivilegedRole &&
+    !isCoordenadorMonitoramento && !isInstaladorVistoriador &&
+    !hasRoleByName('analista_plataforma') && !isAnalistaCadastro &&
+    !isAnalistaEventos && !isSindicante && !isVendedor();
 
-  // Analista de Eventos
-  const isAnalistaEventos = hasRoleByName('analista_eventos');
-  const isAnalistaEventosOnly = isAnalistaEventos &&
-    !isDiretor &&
-    !isGerencia() &&
-    !isDesenvolvedor &&
-    !isAdminMaster &&
-    !isCoordenadorMonitoramento &&
-    !isInstaladorVistoriador &&
-    !hasRoleByName('analista_plataforma') &&
-    !isAnalistaCadastro &&
-    !hasRoleByName('regulador') &&
-    !hasRoleByName('sindicante') &&
-    !isVendedor();
+  const isAnalistaEventosOnly = isAnalistaEventos && !hasPrivilegedRole &&
+    !isCoordenadorMonitoramento && !isInstaladorVistoriador &&
+    !hasRoleByName('analista_plataforma') && !isAnalistaCadastro &&
+    !isRegulador && !isSindicante && !isVendedor();
 
-  // Sindicante
-  const isSindicante = hasRoleByName('sindicante');
-  const isSindicanteOnly = isSindicante &&
-    !isDiretor &&
-    !isGerencia() &&
-    !isDesenvolvedor &&
-    !isAdminMaster &&
-    !isCoordenadorMonitoramento &&
-    !isInstaladorVistoriador &&
-    !hasRoleByName('analista_plataforma') &&
-    !isAnalistaCadastro &&
-    !hasRoleByName('analista_eventos') &&
-    !hasRoleByName('regulador') &&
-    !isVendedor();
+  const isSindicanteOnly = isSindicante && !hasPrivilegedRole &&
+    !isCoordenadorMonitoramento && !isInstaladorVistoriador &&
+    !hasRoleByName('analista_plataforma') && !isAnalistaCadastro &&
+    !isAnalistaEventos && !isRegulador && !isVendedor();
 
-  // Perfis que devem ver "Perfil" ao invés de "Configurações"
-  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly || isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly || isVistoriadorBaseOnly || isReguladorOnly || isAnalistaEventosOnly || isSindicanteOnly;
+  const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly ||
+    isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly ||
+    isVistoriadorBaseOnly || isReguladorOnly || isAnalistaEventosOnly || isSindicanteOnly;
 
-  // Verificações de grupo para cotações
+  // ============================================
+  // COTAÇÃO PERMISSIONS (role-based logic)
+  // ============================================
   const isVendedorCotacao = hasRole('vendedor_clt') || hasRole('vendedor_externo');
   const isAnalistaCotacao = hasRole('analista_cadastro');
   const isGestorCotacao = isDiretor || hasRole('gerente_comercial') || hasRole('supervisor_vendas');
-  const isSuperAdmin = isDesenvolvedor || isAdminMaster;
 
-  // Escopo de visualização de cotações
   let cotacaoViewScope: CotacaoViewScope = 'own';
   if (isGestorCotacao || isAnalistaCotacao || isSuperAdmin) {
     cotacaoViewScope = 'all';
   }
 
-  // Permissões específicas de Cotação
   const cotacao: CotacaoPermissions = {
-    // Visualização
     canView: true,
     canViewAll: isGestorCotacao || isAnalistaCotacao || isSuperAdmin,
     viewScope: cotacaoViewScope,
-    
-    // CRUD
     canCreate: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
     canEdit: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
     canEditOwnOnly: isVendedorCotacao && !isGestorCotacao && !isSuperAdmin,
-    canDelete: isDiretor || isSuperAdmin, // Apenas diretores e super admins podem excluir (cascata)
-    
-    // Ações
+    canDelete: isDiretor || isSuperAdmin,
     canSend: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
     canCancel: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
     canDuplicate: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
-    
-    // Validação (analista/gestor)
     canValidate: isAnalistaCotacao || isGestorCotacao || isSuperAdmin,
     canEditClientData: isAnalistaCotacao || isGestorCotacao || isSuperAdmin,
     canEditVehicleData: isAnalistaCotacao || isGestorCotacao || isSuperAdmin,
     canViewHistory: isAnalistaCotacao || isGestorCotacao || isSuperAdmin,
-    
-    // Exportação e valores
     canExport: isGestorCotacao || isSuperAdmin,
     canOverrideValue: isGestorCotacao || isSuperAdmin,
     canGenerateContract: isVendedorCotacao || isGestorCotacao || isSuperAdmin,
   };
 
+  // ============================================
+  // PERMISSÕES FINAIS
+  // Capability permissions (canXxx) vêm do banco via getPermissionsForRoles.
+  // canViewDashboard e canAccessApp permanecem baseados em tipo.
+  // ============================================
   const permissions = {
-    // Verificações de tipo de usuário
+    // Tipo de usuário
     isFuncionario: profile?.tipo === 'funcionario',
     isAssociado: profile?.tipo === 'associado',
     isPrestador: profile?.tipo === 'prestador',
 
-    // Novos perfis de alto privilégio
+    // Privilégio alto
     isDesenvolvedor,
     isAdminMaster,
 
-  // Verificações de perfil/role
+    // Identity flags
     isDiretor,
     isDiretorOnly: isDiretor,
     isGerente: hasRole('gerente_comercial'),
@@ -288,40 +226,38 @@ export function usePermissions() {
     isAnalistaMarketing: hasRole('analista_marketing'),
     isAnalistaJuridico: hasRole('analista_juridico'),
 
-    // Verificações compostas
+    // Compostos
     isVendedor: isVendedor(),
     isGerencia: isGerencia(),
 
-    // Permissões de sistema
-    canManagePermissions: isDesenvolvedor || isDiretor,
-    canApprovePermissionChanges: isDesenvolvedor || isDiretor,
-    canCreateRoles: isDesenvolvedor || isDiretor || isAdminMaster,
+    // === CAPABILITY PERMISSIONS (derivadas do banco) ===
+    canManagePermissions: hasPerm('canManagePermissions'),
+    canApprovePermissionChanges: hasPerm('canApprovePermissionChanges'),
+    canCreateRoles: hasPerm('canCreateRoles'),
 
-    // Permissões funcionais
-    canManageUsers: isDiretor || isDesenvolvedor || isAdminMaster,
-    canManageLeads: isVendedor() || isGerencia(),
-    canManagePlanos: isGerencia() || isDesenvolvedor,
-    canManageContratos: isGerencia() || isDesenvolvedor,
-    canManageApiSettings: isDiretor || hasRole('analista_marketing') || isDesenvolvedor,
-    canManageInstalacoes: hasRole('coordenador_monitoramento') || hasRole('instalador_vistoriador') || isGerencia() || isDesenvolvedor,
-    canManageEquipeEstoque: hasRole('coordenador_monitoramento') || isGerencia() || isDesenvolvedor || isAdminMaster,
-    canManageRastreadores: hasRole('analista_plataforma') || hasRole('coordenador_monitoramento') || isGerencia() || isDesenvolvedor,
-    canViewDashboard: profile?.tipo === 'funcionario',
-    canAccessApp: profile?.tipo === 'associado',
-    canManageCadastro: hasRole('analista_cadastro') || isGerencia() || isDesenvolvedor,
-    canManageOficinas: hasRole('analista_cadastro') || isAnalistaEventos || isGerencia() || isDesenvolvedor,
-    canManageSinistros: hasRole('analista_cadastro') || isAnalistaEventos || isGerencia() || isDesenvolvedor,
-    canApproveOS: isGerencia() || isDesenvolvedor,
-    canManageContabilidade: isDiretor || hasRole('gerente_comercial') || isDesenvolvedor,
-    canManageJuridico: isDiretor || hasRole('gerente_comercial') || hasRole('analista_juridico') || hasRoleByName('advogado') || isDesenvolvedor,
-    canManageRH: isDiretor || hasRole('gerente_comercial') || isDesenvolvedor,
-    canManageMarketing: isDiretor || hasRole('gerente_comercial') || hasRole('analista_marketing') || isDesenvolvedor,
-    canManageOuvidoria: (isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao && !isAnalistaEventosOnly,
-    canManageConsultores: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
-    canManageEquipe: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
-    canViewReports: (isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster || isAnalistaCadastro) && !isVendedorCotacao,
-    // Permissão para editar rotas (coordenador só pode visualizar)
-    canEditRotas: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
+    canManageUsers: hasPerm('canManageUsers'),
+    canManageLeads: hasPerm('canManageLeads'),
+    canManagePlanos: hasPerm('canManagePlanos'),
+    canManageContratos: hasPerm('canManageContratos'),
+    canManageApiSettings: hasPerm('canManageApiSettings'),
+    canManageInstalacoes: hasPerm('canManageInstalacoes'),
+    canManageEquipeEstoque: hasPerm('canManageEquipeEstoque'),
+    canManageRastreadores: hasPerm('canManageRastreadores'),
+    canViewDashboard: profile?.tipo === 'funcionario', // baseado em tipo, não role
+    canAccessApp: profile?.tipo === 'associado',       // baseado em tipo, não role
+    canManageCadastro: hasPerm('canManageCadastro'),
+    canManageOficinas: hasPerm('canManageOficinas'),
+    canManageSinistros: hasPerm('canManageSinistros'),
+    canApproveOS: hasPerm('canApproveOS'),
+    canManageContabilidade: hasPerm('canManageContabilidade'),
+    canManageJuridico: hasPerm('canManageJuridico'),
+    canManageRH: hasPerm('canManageRH'),
+    canManageMarketing: hasPerm('canManageMarketing'),
+    canManageOuvidoria: hasPerm('canManageOuvidoria'),
+    canManageConsultores: hasPerm('canManageConsultores'),
+    canManageEquipe: hasPerm('canManageEquipe'),
+    canViewReports: hasPerm('canViewReports'),
+    canEditRotas: hasPerm('canEditRotas'),
   };
 
   return {

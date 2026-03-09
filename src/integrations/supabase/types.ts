@@ -1091,36 +1091,45 @@ export type Database = {
       app_roles_config: {
         Row: {
           area: string
+          area_color: string
+          area_icon: string
           color: string
           created_at: string
           description: string
           icon_name: string
           is_active: boolean
           label: string
+          permissions: Json
           role: string
           sigla: string
           sort_order: number
         }
         Insert: {
           area?: string
+          area_color?: string
+          area_icon?: string
           color?: string
           created_at?: string
           description?: string
           icon_name?: string
           is_active?: boolean
           label: string
+          permissions?: Json
           role: string
           sigla?: string
           sort_order?: number
         }
         Update: {
           area?: string
+          area_color?: string
+          area_icon?: string
           color?: string
           created_at?: string
           description?: string
           icon_name?: string
           is_active?: boolean
           label?: string
+          permissions?: Json
           role?: string
           sigla?: string
           sort_order?: number

@@ -11,6 +11,9 @@ export interface AppRoleConfig {
   icon_name: string;
   sort_order: number;
   is_active: boolean;
+  permissions: string[];
+  area_icon: string;
+  area_color: string;
 }
 
 /**
@@ -28,7 +31,10 @@ export function useAppRoles() {
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
       if (error) throw error;
-      return (data || []) as AppRoleConfig[];
+      return (data || []).map((r: any) => ({
+        ...r,
+        permissions: Array.isArray(r.permissions) ? r.permissions : [],
+      })) as AppRoleConfig[];
     },
     staleTime: 30 * 60 * 1000, // 30 min
   });
@@ -99,6 +105,37 @@ export function useAppRoles() {
     return roles.find(r => r.role === role);
   };
 
+  /**
+   * Retorna union de permissions para um conjunto de roles do usuário.
+   * Usado por usePermissions para derivar canXxx do banco.
+   */
+  const getPermissionsForRoles = (userRoles: string[]): Set<string> => {
+    const perms = new Set<string>();
+    for (const ur of userRoles) {
+      const config = roles.find(r => r.role === ur);
+      if (config?.permissions) {
+        for (const p of config.permissions) {
+          perms.add(p);
+        }
+      }
+    }
+    return perms;
+  };
+
+  /**
+   * Retorna dados de área (icon, color) a partir dos roles registrados.
+   * Usado por Perfis.tsx para styling dinâmico.
+   */
+  const getAreaStyles = (): Record<string, { icon: string; color: string }> => {
+    const map: Record<string, { icon: string; color: string }> = {};
+    roles.forEach(r => {
+      if (!map[r.area]) {
+        map[r.area] = { icon: r.area_icon, color: r.area_color };
+      }
+    });
+    return map;
+  };
+
   /** Mapa label por role (substituto de PERFIL_ACESSO_LABELS) */
   const roleLabelsMap: Record<string, string> = {};
   roles.forEach(r => { roleLabelsMap[r.role] = r.label; });
@@ -116,6 +153,8 @@ export function useAppRoles() {
     getRoleOptions,
     getRoleBadgeClass,
     getRoleConfig,
+    getPermissionsForRoles,
+    getAreaStyles,
     roleLabelsMap,
   };
 }

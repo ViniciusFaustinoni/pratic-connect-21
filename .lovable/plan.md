@@ -1,134 +1,172 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
 
+## Resumo
 
-# Investigacao: Hardcode na area de Usuarios e Perfis de Acesso
-
-## Focos de hardcode encontrados
-
-### Foco 1 — `src/types/auth.ts`: `PERFIL_ACESSO_LABELS` e `AuthFlags` (CRITICO)
-
-**Linhas 95-112**: Mapa `PERFIL_ACESSO_LABELS` com 16 roles hardcoded. Ja marcado como `@deprecated` mas ainda exportado.
-
-**Linhas 132-154**: Interface `AuthFlags` com 14 flags booleanas hardcoded por role (`isDiretor`, `isGerente`, `isSupervisor`, `isVendedor`, `isAnalistaCadastro`, etc.). Se um novo role for adicionado em `app_roles_config`, nao aparece automaticamente.
-
-**Linhas 197-223**: `computeAuthFlags()` com 14 `perfis.includes('...')` hardcoded. Mesma limitacao.
-
-**Problema**: Novos roles adicionados no banco nao ganham flags automaticas. Porem o `hasRole()` dinamico ja existe e funciona para qualquer role.
-
-### Foco 2 — `src/hooks/usePermissions.ts`: Roles hardcoded por nome (CRITICO)
-
-Todo o hook (334 linhas) referencia roles por string literal:
-- L4-6: `PERFIS_VENDEDOR`, `PERFIS_CADASTRO`, `PERFIS_GESTOR` — arrays fixos
-- L100-204: 10 blocos de `isXxxOnly` com listas de exclusao manual de ~10 roles cada
-- L210-212: `isVendedorCotacao`, `isAnalistaCotacao`, `isGestorCotacao` — hardcoded
-- L296-324: 25+ permissoes (`canManageUsers`, `canManageLeads`, etc.) com combinacoes OR de roles fixos
-
-**Problema**: Quando um novo role e adicionado (ex: `supervisor_comercial`), e preciso editar manualmente este arquivo para ele ganhar permissoes. Deveria ser derivado de metadados no banco.
-
-### Foco 3 — `src/hooks/useRequireAuth.ts`: Hooks com roles fixos (MEDIO)
-
-7 hooks especializados com listas de `allowedPerfis` hardcoded:
-- `useRequireAdmin`: `['diretor', 'gerente_comercial']`
-- `useRequireVendas`: 5 roles fixos
-- `useRequireCadastro`: 3 roles fixos
-- `useRequireMonitoramento`: 4 roles fixos
-- `useRequireFinanceiro`: 2 roles fixos
-- `useRequireJuridico`: 2 roles fixos
-
-**Problema**: Novas roles nao herdam acesso automaticamente. Deveria buscar permissoes do banco.
-
-### Foco 4 — `src/config/modules.ts`: MODULES e MODULE_ITEMS hardcoded (MEDIO)
-
-- 18 modulos e ~80 sub-itens definidos estaticamente
-- Usado pela matriz de visibilidade em `Perfis.tsx` e `UsuarioForm.tsx`
-- Se um modulo for adicionado no sidebar, precisa atualizar este arquivo manualmente
-
-**Problema**: A lista de modulos deveria ser fonte unica. Nao e critico porque modulos raramente mudam, mas e uma duplicacao com o sidebar.
-
-### Foco 5 — `src/pages/configuracoes/Perfis.tsx`: AREA_ICON_MAP e AREA_STYLE_MAP (BAIXO)
-
-- L30-51: Mapas de icone e estilo por area com 8 areas hardcoded
-- Ja usa fallback (`Shield` e `DEFAULT_AREA_STYLE`), entao novas areas funcionam — apenas sem icone/cor especifica
-
-### Foco 6 — `src/types/monitoramento.ts`: REGIOES_ATENDIMENTO (MEDIO)
-
-- L315-326: 10 regioes hardcoded usadas em `UsuarioForm.tsx`, `EquipeFilters.tsx`, `FilaVistorias.tsx`
-- Deveria vir do banco (tabela `regioes` ja existe com outra finalidade, ou nova tabela `regioes_atendimento`)
-
-### Foco 7 — `src/pages/configuracoes/Logs.tsx`: acoesConfig (BAIXO)
-
-- L14-26: 9 tipos de acao de log com labels, icones e cores hardcoded
-- Funcional mas nao extensivel dinamicamente
-
-### Foco 8 — Verificacoes de role por string literal espalhadas (65 arquivos)
-
-`isDiretor`, `isGerente`, `isVendedor` etc. sao usados em 65 arquivos. Esses consomem de `usePermissions()` que ja centraliza, entao o problema real esta no Foco 2.
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
 
 ---
 
-## Plano de correcao
+## ✅ CORRIGIDO (não mexer)
 
-### Fase 1 — Tornar permissoes dinamicas via banco
-
-**O que fazer**: Criar tabela `role_permissions` no banco com colunas `role`, `permission_key`, `granted`. O `usePermissions` passaria a consultar essa tabela para resolver `canManageUsers`, `canManageLeads`, etc.
-
-Alternativa mais simples (recomendada): Adicionar coluna `permissions` (JSONB) na tabela `app_roles_config` existente, contendo as chaves de permissao de cada role. O `usePermissions` leria de `useAppRoles()` e derivaria as permissoes por uniao dos roles do usuario.
-
-### Fase 2 — Limpar `auth.ts`
-
-- Remover `PERFIL_ACESSO_LABELS` (ja tem `useAppRoles().roleLabelsMap`)
-- Remover flags individuais de `AuthFlags` (`isDiretor`, `isGerente`, etc.) — manter apenas `hasRole()`
-- Atualizar `computeAuthFlags` para nao listar roles fixos
-- Atualizar 65 arquivos consumidores para usar `hasRole()` ou `usePermissions()`
-
-### Fase 3 — Limpar `useRequireAuth.ts`
-
-- Remover hooks especializados (`useRequireAdmin`, `useRequireVendas`, etc.) ou refatora-los para buscar roles permitidos da tabela `role_permissions`/`app_roles_config`
-
-### Fase 4 — REGIOES_ATENDIMENTO dinamicas
-
-- Inserir regioes como chave JSON em `configuracoes` ou tabela propria
-- Criar hook `useRegioesAtendimento()`
-- Atualizar 4 consumidores
-
-### Fase 5 — AREA_ICON_MAP / AREA_STYLE_MAP
-
-- Adicionar colunas `icon_area` e `color_area` em `app_roles_config` ou tabela `areas_config`
-- Atualizar `Perfis.tsx` para derivar icones/cores do banco
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
 
 ---
 
-## Dados a adicionar no banco
+## 🟡 PENDENTE
 
-| Tabela/Coluna | Descricao |
-|---|---|
-| `app_roles_config.permissions` (JSONB) | Array de permission keys por role |
-| `configuracoes.regioes_atendimento` | JSON com regioes de atendimento |
-| `app_roles_config.area_icon` | Icone da area (opcional) |
-| `app_roles_config.area_color` | Cor/gradiente da area (opcional) |
+### 1. ✅ `pricing.ts` — REMOVIDO
 
-## Arquivos afetados
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
 
-| Arquivo | Acao |
-|---|---|
-| `src/types/auth.ts` | Remover `PERFIL_ACESSO_LABELS`, simplificar `AuthFlags` |
-| `src/hooks/usePermissions.ts` | Derivar permissoes do banco via `app_roles_config.permissions` |
-| `src/hooks/useRequireAuth.ts` | Remover/refatorar hooks especializados |
-| `src/hooks/useAppRoles.ts` | Adicionar `getPermissionsForRoles()` |
-| `src/config/modules.ts` | Manter (modulos sao estáveis) |
-| `src/types/monitoramento.ts` | Remover `REGIOES_ATENDIMENTO` |
-| `src/pages/configuracoes/Perfis.tsx` | Derivar icones/cores de area do banco |
-| `src/pages/configuracoes/UsuarioForm.tsx` | Usar `useRegioesAtendimento()` |
-| `src/contexts/AuthContext.tsx` | Simplificar flags |
-| 65 arquivos com `isDiretor`/`isGerente`/etc. | Migrar para `hasRole()` ou `usePermissions()` |
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
 
-## Ordem de execucao
+Centralizada em `src/utils/format.ts`.
 
-1. Migration: adicionar coluna `permissions` JSONB em `app_roles_config` com dados iniciais
-2. Migration: inserir `regioes_atendimento` em `configuracoes`
-3. Atualizar `useAppRoles` para expor permissoes
-4. Refatorar `usePermissions` para derivar do banco
-5. Limpar `auth.ts` (remover deprecated)
-6. Refatorar `useRequireAuth` hooks
-7. Criar `useRegioesAtendimento` e atualizar consumidores
-8. Atualizar `Perfis.tsx` para icones/cores dinamicos
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
 
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+### 5. ✅ Veículo Blindado — CORRIGIDO
+
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
+
+
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
+
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
+
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
+
+
+---
+
+## ❌ NÃO FAZER AGORA
+
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
+
+---
+
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
+
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
+
+---
+
+# Visibilidade por Equipe — Supervisor de Vendas
+
+## ✅ CORRIGIDO
+
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
+
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
+
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
+
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
+
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
+
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
+
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
+
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
+
+---
+
+## 🟡 PENDENTE
+
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
+
+---
+
+# Fluxo de Assistência 24h — Reboque
+
+## ✅ CORRIGIDO
+
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.

@@ -189,92 +189,11 @@ export function useRequireAssociado() {
 }
 
 /**
- * Hook para páginas administrativas (diretores/gerentes)
+ * @deprecated Hooks especializados removidos.
+ * Usavam listas de roles hardcoded. 
+ * Use useRequireAuth() diretamente com os roles necessários,
+ * ou use ProtectedRoute/PermissionGate para controle declarativo.
  */
-export function useRequireAdmin() {
-  return useRequireAuth({
-    redirectTo: '/auth',
-    allowedTipo: 'funcionario',
-    allowedPerfis: ['diretor', 'gerente_comercial'],
-    unauthorizedRedirect: '/unauthorized',
-  });
-}
-
-/**
- * Hook para páginas de vendas
- */
-export function useRequireVendas() {
-  return useRequireAuth({
-    redirectTo: '/auth',
-    allowedTipo: 'funcionario',
-    allowedPerfis: [
-      'diretor',
-      'gerente_comercial',
-      'supervisor_vendas',
-      'vendedor_clt',
-      'vendedor_externo',
-    ],
-  });
-}
-
-/**
- * Hook para páginas de cadastro
- */
-export function useRequireCadastro() {
-  return useRequireAuth({
-    redirectTo: '/auth',
-    allowedTipo: 'funcionario',
-    allowedPerfis: [
-      'diretor',
-      'gerente_comercial',
-      'analista_cadastro',
-    ],
-  });
-}
-
-/**
- * Hook para páginas de monitoramento
- */
-export function useRequireMonitoramento() {
-  return useRequireAuth({
-    redirectTo: '/auth',
-    allowedTipo: 'funcionario',
-    allowedPerfis: [
-      'diretor',
-      'coordenador_monitoramento',
-      'analista_plataforma',
-      'instalador_vistoriador',
-    ],
-  });
-}
-
-/**
- * Hook para páginas financeiras
- */
-export function useRequireFinanceiro() {
-  return useRequireAuth({
-    redirectTo: '/auth',
-    allowedTipo: 'funcionario',
-    allowedPerfis: [
-      'diretor',
-      'gerente_comercial',
-    ],
-  });
-}
-
-/**
- * Hook para páginas jurídicas
- */
-export function useRequireJuridico() {
-  return useRequireAuth({
-    redirectTo: '/auth',
-    allowedTipo: 'funcionario',
-    allowedPerfis: [
-      'diretor',
-      'analista_juridico',
-    ],
-  });
-}
 
 // ============================================
 // EXPORTS
