@@ -207,18 +207,8 @@ const normalizarAno = (anoAPI: string): number => {
   return new Date().getFullYear();
 };
 
-// Função estimativa de FIPE quando API não retorna valor
-const estimarValorFipe = (marca: string, ano: number): number => {
-  const baseValor = 35000;
-  const ajusteMarca: Record<string, number> = {
-    Toyota: 1.3, Honda: 1.25, Hyundai: 1.15, Volkswagen: 1.1, Chevrolet: 1.05,
-    Fiat: 1.0, Renault: 0.95, Nissan: 1.1, Jeep: 1.4, Ford: 1.0,
-  };
-  const fatorMarca = ajusteMarca[marca] || 1.0;
-  const anoAtual = new Date().getFullYear();
-  const depreciacao = Math.max(0.5, 1 - (anoAtual - ano) * 0.06);
-  return Math.round(baseValor * fatorMarca * depreciacao / 100) * 100;
-};
+// Função estimativa de FIPE — centralizada em src/utils/fipe.ts
+import { estimarValorFipe } from '@/utils/fipe';
 
 // mapearPlanosParaExibicao REMOVIDO — dados vêm direto do hook usePlanosCotacao
 
