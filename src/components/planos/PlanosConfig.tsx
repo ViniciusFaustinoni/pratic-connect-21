@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Edit, Trash2, Loader2, X, Search, FileText, MapPin, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProductLines } from '@/hooks/usePlans';
+import { useCoberturaFipeDefault, useAnoMinimoDefault } from '@/hooks/useConteudosSistema';
 
 interface PlanoFormData extends PlanoInput {
   regioes: string[];
