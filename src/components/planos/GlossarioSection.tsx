@@ -21,6 +21,7 @@ import {
   useCotasTaxas, 
   useTaxasProcedimentos 
 } from '@/hooks/useConteudosSistema';
+import { useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
 import { BookOpen, AlertTriangle, DollarSign, Loader2 } from 'lucide-react';
 
