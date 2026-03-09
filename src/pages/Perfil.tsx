@@ -276,7 +276,7 @@ export default function Perfil() {
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   {roles.map((role) => (
                     <Badge key={role} variant="secondary">
-                      {ROLE_LABELS[role] || role}
+                      {getRoleLabel(role)}
                     </Badge>
                   ))}
                 </div>
