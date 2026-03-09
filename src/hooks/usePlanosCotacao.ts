@@ -138,12 +138,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     const regiaoDb = regioes?.find(r => {
       const codigoLower = r.codigo.toLowerCase();
       const regiaoLower = regiao.toLowerCase();
-      return codigoLower === regiaoLower 
-        || (regiaoLower === 'rio_de_janeiro' && codigoLower === 'rj')
-        || (regiaoLower === 'regiao_lagos' && codigoLower === 'lagos')
-        || (regiaoLower === 'sao_paulo' && codigoLower === 'sp')
-        || (regiaoLower === 'interior_rj' && codigoLower === 'rj')
-        || (regiaoLower === 'interior_sp' && codigoLower === 'sp');
+      return codigoLower === regiaoLower;
     });
     const multiplicadorRegiao = regiaoDb ? Number(regiaoDb.multiplicador_preco) : 1.0;
 
