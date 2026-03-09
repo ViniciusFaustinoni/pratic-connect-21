@@ -352,7 +352,7 @@ export default function UsuariosAcessos() {
   const handleOpenEditModal = (user: { id: string; user_id: string | null; nome: string; email: string | null }) => {
     if (!user.user_id) { toast.error('Usuário sem conta vinculada'); return; }
     setEditingUser(user);
-    setSelectedRoles((userRoles?.[user.user_id] || []) as AppRole[]);
+    setSelectedRoles((userRoles?.[user.user_id] || []) as string[]);
   };
 
   const handleCloseEditModal = () => {
