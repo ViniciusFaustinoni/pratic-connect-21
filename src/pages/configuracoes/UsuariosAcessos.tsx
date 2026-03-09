@@ -360,7 +360,7 @@ export default function UsuariosAcessos() {
     setSelectedRoles([]);
   };
 
-  const handleToggleRole = (role: AppRole) => {
+  const handleToggleRole = (role: string) => {
     setSelectedRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]);
   };
 
