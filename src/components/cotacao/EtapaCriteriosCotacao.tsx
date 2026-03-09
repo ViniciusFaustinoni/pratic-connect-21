@@ -36,15 +36,7 @@ interface EtapaCriteriosCotacaoProps {
 
 // REGIOES agora vem do banco via useRegioesAtivas()
 
-const COMBUSTIVEIS = [
-  { value: 'flex', label: 'Flex (Gasolina/Etanol)' },
-  { value: 'gasolina', label: 'Gasolina' },
-  { value: 'etanol', label: 'Etanol' },
-  { value: 'diesel', label: 'Diesel' },
-  { value: 'eletrico', label: 'Elétrico' },
-  { value: 'hibrido', label: 'Híbrido' },
-  { value: 'gnv', label: 'GNV' },
-];
+// COMBUSTIVEIS agora vem do banco via useCombustiveis() — fallback em combustiveis.ts
 
 export function EtapaCriteriosCotacao({
   regiao,

@@ -128,7 +128,7 @@ export function StepFinanceiro({
 
   const cotaNovaValor = useMemo(() => {
     if (!cotasNovo || !dadosNovoVeiculo.valor_fipe) return 0;
-    return Math.max(cotasNovo.cotas * 200, 1200);
+    return Math.max(cotasNovo.cotas * 200, cotaMinimaDefault);
   }, [cotasNovo, dadosNovoVeiculo.valor_fipe]);
 
   // Pro-rata

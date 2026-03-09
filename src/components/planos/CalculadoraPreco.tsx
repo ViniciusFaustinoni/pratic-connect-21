@@ -29,9 +29,7 @@ type AnoVeiculo = 'recente' | 'antigo';
 type TipoUso = 'particular' | 'trabalho';
 type CoberturaDesejada = 'todas' | 'basica' | 'completa' | 'premium';
 
-// Fatores de risco configuráveis
-const FATOR_VEICULO_ANTIGO = 1.15; // +15%
-const FATOR_USO_TRABALHO = 1.20;  // +20%
+// Fatores de risco agora vêm do banco via useFatorVeiculoAntigo() e useFatorUsoTrabalho()
 
 export function CalculadoraPreco() {
   const [valorFipe, setValorFipe] = useState<string>('');

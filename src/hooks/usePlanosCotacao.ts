@@ -216,8 +216,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const valorAdesao = Number(plano.valor_adesao);
 
       // Cota
-      const cotaBase = Number(plano.cota_participacao) || 6;
-      const cotaMinima = Number(plano.cota_minima) || 1200;
+      const cotaBase = Number(plano.cota_participacao) || cotaParticipacaoDefault;
+      const cotaMinima = Number(plano.cota_minima) || cotaMinimaDefault;
       let cotaPercentual = cotaBase;
       let cotaMinimaFinal = cotaMinima;
 

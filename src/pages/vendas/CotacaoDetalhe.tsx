@@ -228,7 +228,7 @@ Ficou com alguma dúvida? Estou à disposição!
             coberturas: [],
             naoInclui: [],
             coberturaFipe: 100,
-            cota: '6% (mín R$ 1.200,00)',
+            cota: cotaFallbackStr,
           }];
 
       await gerarPdfCotacaoComparativa({

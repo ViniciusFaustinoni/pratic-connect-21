@@ -81,13 +81,7 @@ const MODELOS_POR_MARCA: Record<string, string[]> = {
 
 const ANOS = Array.from({ length: 17 }, (_, i) => String(2026 - i));
 
-const COMBUSTIVEIS = [
-  { value: 'gasolina', label: 'Gasolina' },
-  { value: 'diesel', label: 'Diesel' },
-  { value: 'flex', label: 'Flex' },
-  { value: 'eletrico', label: 'Elétrico' },
-  { value: 'hibrido', label: 'Híbrido' },
-];
+// COMBUSTIVEIS agora vem do banco via useCombustiveis() — fallback em combustiveis.ts
 
 // REGIOES agora vem do banco via useRegioesAtivas()
 
