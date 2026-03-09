@@ -695,11 +695,7 @@ ${planoFinalSelecionado.naoInclui.length > 0 ? `*Não incluído:*\n${planoFinalS
 
 _Cotação válida por 7 dias_
 
-✨ *Benefícios exclusivos PRATIC:*
-• Cobertura 100% da tabela FIPE
-• Sem análise de perfil
-• Aprovação em até 24h
-• App exclusivo para associados
+${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% da tabela FIPE\n• Sem análise de perfil\n• Aprovação em até 24h\n• App exclusivo para associados'}
       `.trim();
 
       const telefone = leadSelecionado?.telefone?.replace(/\D/g, '') || '';
