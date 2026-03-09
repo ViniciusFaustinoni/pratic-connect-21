@@ -358,7 +358,7 @@ export function useUsuarioActions() {
         .from('user_roles')
         .select('id')
         .eq('user_id', userId)
-        .eq('role', role)
+        .eq('role', role as any)
         .maybeSingle();
 
       if (existente) {
@@ -367,7 +367,7 @@ export function useUsuarioActions() {
 
       const { error } = await supabase
         .from('user_roles')
-        .insert({ user_id: userId, role });
+        .insert({ user_id: userId, role: role as any });
 
       if (error) throw error;
     },
