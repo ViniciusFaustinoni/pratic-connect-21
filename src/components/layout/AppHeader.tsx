@@ -12,7 +12,7 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
-import { ROLE_LABELS } from '@/types/database';
+import { useAppRoles } from '@/hooks/useAppRoles';
 import { UserAvatar } from '@/components/UserAvatar';
 
 import { ThemeToggle } from '@/components/ui/theme-toggle';
