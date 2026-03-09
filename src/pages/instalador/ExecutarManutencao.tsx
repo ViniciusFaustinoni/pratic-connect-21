@@ -100,7 +100,7 @@ export default function ExecutarManutencao() {
   const handleNavegar = () => {
     if (servico?.latitude && servico?.longitude) {
       const url = `https://www.google.com/maps/dir/?api=1&destination=${servico.latitude},${servico.longitude}`;
-      window.open(url, '_blank');
+      window.location.href = url;
     } else {
       toast.error('Endereço não disponível para navegação');
     }
