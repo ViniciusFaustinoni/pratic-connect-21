@@ -119,6 +119,11 @@ export interface AuthFlags {
   isPrestador: boolean;
   isAtivo: boolean;
   isBloqueado: boolean;
+  /** Verifica dinamicamente se possui um role */
+  hasRole: (role: string) => boolean;
+
+  // ===== IDENTITY FLAGS LEGADAS (mantidas para compatibilidade) =====
+  // @deprecated Use hasRole('nome_do_role') ou usePermissions().hasPerm() 
   isDiretor: boolean;
   isGerente: boolean;
   isSupervisor: boolean;
@@ -132,8 +137,6 @@ export interface AuthFlags {
   isSindicante: boolean;
   isAnalistaMarketing: boolean;
   isAnalistaJuridico: boolean;
-  /** Verifica dinamicamente se possui um role */
-  hasRole: (role: string) => boolean;
 }
 
 // ============================================================

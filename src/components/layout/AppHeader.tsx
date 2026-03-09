@@ -81,7 +81,7 @@ export function AppHeader() {
             {roles.length > 0 && (
               <>
                 <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                  Perfis: {roles.map((r) => ROLE_LABELS[r]).join(', ')}
+                  Perfis: {roles.map((r) => getRoleLabel(r)).join(', ')}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border" />
               </>

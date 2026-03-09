@@ -95,7 +95,7 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useModuleItemVisibility, MENU_ITEM_IDS } from '@/hooks/useModuleItemVisibility';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
-import { ROLE_LABELS } from '@/types/database';
+import { useAppRoles } from '@/hooks/useAppRoles';
 
 // Mapeamento de cores por grupo/item
 const MENU_COLORS: Record<string, string> = {
