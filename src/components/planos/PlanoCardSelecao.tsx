@@ -27,7 +27,8 @@ interface PlanoCardSelecaoProps {
   categoriaVeiculo?: string;
 }
 
-const LINHA_CORES: Record<string, string> = {
+// Fallback de cores para linhas sem gradient_class no banco
+const LINHA_CORES_FALLBACK: Record<string, string> = {
   'select': 'from-blue-500 to-blue-600',
   'select-one': 'from-emerald-500 to-green-600',
   'especial': 'from-orange-500 to-amber-600',
