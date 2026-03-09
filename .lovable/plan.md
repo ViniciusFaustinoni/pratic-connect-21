@@ -1,97 +1,118 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
+
+## Resumo
+
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. `pricing.ts` — 539 linhas estáticas (prioridade média)
+
+**Problema:** Categorias fixas (BASIC/PREMIUM/EXCLUSIVE), faixas FIPE hardcoded, preços estáticos por região/combustível, cidades fixas por região.
+
+**Usado por:**
+| Arquivo | O que importa |
+|---------|--------------|
+| `QuoteCalculatorModal.tsx` | `calcularCotacao`, `formatarMoeda`, `ADICIONAIS`, tipos `Categoria`, `ResultadoCotacao` |
+| `useCotacaoAvancada.ts` | `calcularCotacao`, `ResultadoCotacao`, `Categoria` |
+| `CotacaoPublica.tsx` | Apenas `formatarMoeda` |
+| `CotacaoContratacao.tsx` | Apenas `formatarMoeda` |
+
+**Solução:**
+1. Extrair `formatarMoeda` para local centralizado (já existe em `usePlanosPrecificacao.ts` L68)
+2. Migrar `QuoteCalculatorModal` + `useCotacaoAvancada` para usar hooks dinâmicos
+3. Remover `pricing.ts`
+
+### 2. `formatarMoeda` duplicada em 5+ locais (prioridade média)
+
+| Local | Tipo |
+|-------|------|
+| `src/config/pricing.ts` | Exportada, usada por 2 páginas públicas |
+| `src/hooks/usePlanosPrecificacao.ts` L68 | Exportada |
+| `src/pages/public/CotacaoPublicaCompleta.tsx` L196 | Local |
+| `src/components/cotacao-publica/EscolhaPlano.tsx` L33 | Local |
+| `src/components/beneficios/TabelaSaudeBeneficios.tsx` L23 | Local |
+
+**Solução:** Criar `src/utils/format.ts` com `formatarMoeda` e substituir todas as ocorrências.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-# Plano: Eliminar Hardcode de Roles/Perfis — Tornar Dinâmico
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-## Problema Identificado
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-O sistema tem **listas de roles/perfis duplicadas e hardcoded em pelo menos 8 arquivos diferentes**, todas dessincronizadas entre si. Quando um novo role é adicionado no banco (enum `app_role`), é preciso atualizar manualmente:
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
 
-| Arquivo | O que está hardcoded |
-|---|---|
-| `src/types/auth.ts` | `PerfilAcesso` type union, `PERFIL_ACESSO_LABELS`, `AuthFlags` |
-| `src/pages/configuracoes/UsuariosAcessos.tsx` | `perfisConfig`, `tiposUsuario`, `rolesConfig`, `AppRole` type, `allRoles` |
-| `src/pages/configuracoes/Usuarios.tsx` | `perfisConfig`, `tiposUsuario`, filtro de perfis no Select |
-| `src/pages/configuracoes/Perfis.tsx` | `perfis[]` array (20 perfis), `areaConfig`, `MODULE_ITEMS` |
-| `src/pages/configuracoes/UsuarioForm.tsx` | `perfisDisponiveis[]`, `MODULE_LABELS` |
-| `src/hooks/usePermissions.ts` | `PermissionKey` type, todas as flags booleanas |
-| `src/hooks/useRequireAuth.ts` | Hooks especializados com roles hardcoded |
-| `src/contexts/AuthContext.tsx` | Flags booleanas derivadas |
-| Edge Functions (`create-user`) | `allowedRoles` array |
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
 
-Resultado: novos roles como `desenvolvedor`, `admin_master`, `vistoriador_base`, `regulador`, `analista_eventos`, `sindicante` existem no banco mas **não aparecem consistentemente na UI** (filtros, formulários, badges).
 
-## Solução
+---
 
-### 1. Criar tabela `app_roles_config` no banco (fonte única de verdade)
+## ❌ NÃO FAZER AGORA
 
-Uma tabela que armazena a configuração visual e funcional de cada role:
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
-```text
-app_roles_config
-├── role (PK, text) — ex: 'diretor'
-├── label (text) — ex: 'Diretor'
-├── description (text) — ex: 'Acesso total ao sistema'
-├── area (text) — ex: 'Diretoria'
-├── sigla (text) — ex: 'Dir'
-├── color (text) — ex: 'purple'
-├── icon_name (text) — ex: 'Crown'
-├── sort_order (int) — para ordenação na UI
-├── is_active (bool) — para desativar sem remover
-└── created_at (timestamptz)
-```
+---
 
-Populada com os ~20 roles atuais via seed. Quando um novo role for adicionado ao enum, basta inserir uma linha nesta tabela.
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-### 2. Criar hook `useAppRoles` (cache com React Query)
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
 
-Hook centralizado que busca `app_roles_config` e expõe:
-- `roles[]` — lista completa de roles ativos
-- `getRoleLabel(role)` — label para exibição
-- `getRoleColor(role)` — cor para badges
-- `getRolesByArea()` — agrupados por área
-- `roleOptions` — para Selects/filtros
+---
 
-Stale time de 30min (dados raramente mudam). Substituirá todos os `perfisConfig`, `rolesConfig`, `perfisDisponiveis` hardcoded.
+# Fluxo de Assistência 24h — Reboque
 
-### 3. Refatorar componentes para usar `useAppRoles`
+## ✅ CORRIGIDO
 
-**UsuariosAcessos.tsx**: Remover `perfisConfig`, `rolesConfig`, `AppRole` type local. Filtro de perfil no Select populado dinamicamente.
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
 
-**Usuarios.tsx**: Idem — remover `perfisConfig`, Select de filtro dinâmico.
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
 
-**UsuarioForm.tsx**: Remover `perfisDisponiveis`. Checkboxes de roles gerados a partir do hook.
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
 
-**Perfis.tsx**: Remover array `perfis[]` hardcoded. Carregar do hook, agrupar por área dinamicamente.
-
-### 4. Manter tipos TypeScript como `string` para roles dinâmicos
-
-O type `PerfilAcesso` em `auth.ts` será simplificado para `string` (ou mantido como union para autocomplete mas com fallback). `PERFIL_ACESSO_LABELS` será removido em favor do hook.
-
-As flags booleanas no `AuthContext` (`isDiretor`, `isGerente`, etc.) serão mantidas por compatibilidade mas marcadas como deprecated. O pattern recomendado passa a ser `hasRole('diretor')`.
-
-### 5. Módulos (`modulos[]` e `MODULE_ITEMS`)
-
-Estes já estão na tabela `user_module_visibility`. Porém a lista de módulos em si (labels, sub-itens) também está hardcoded. Opcionalmente, criar tabela `app_modules_config` no futuro. Por ora, centralizar em um único arquivo `src/config/modules.ts` para evitar duplicação entre `Perfis.tsx`, `UsuarioForm.tsx` e `useModuleVisibility.ts`.
-
-### Arquivos afetados
-
-- **Novo**: Migration SQL para `app_roles_config` + seed data
-- **Novo**: `src/hooks/useAppRoles.ts`
-- **Novo**: `src/config/modules.ts` (centralizar MODULE_ITEMS + MODULE_LABELS)
-- **Editar**: `src/pages/configuracoes/UsuariosAcessos.tsx` — remover hardcode, usar hook
-- **Editar**: `src/pages/configuracoes/Usuarios.tsx` — remover hardcode, usar hook
-- **Editar**: `src/pages/configuracoes/UsuarioForm.tsx` — remover `perfisDisponiveis`, usar hook
-- **Editar**: `src/pages/configuracoes/Perfis.tsx` — remover `perfis[]`, usar hook
-- **Editar**: `src/types/auth.ts` — simplificar `PerfilAcesso`, remover `PERFIL_ACESSO_LABELS`
-- **Editar**: `src/components/configuracoes/GerenciarRolesTab.tsx` — usar hook
-
-### Ordem de execução
-
-1. Migration + seed (criar tabela e popular)
-2. Criar `useAppRoles` hook + `modules.ts`
-3. Refatorar `UsuarioForm.tsx` (mais isolado)
-4. Refatorar `Usuarios.tsx`
-5. Refatorar `UsuariosAcessos.tsx`
-6. Refatorar `Perfis.tsx`
-7. Limpar types em `auth.ts`
-
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.

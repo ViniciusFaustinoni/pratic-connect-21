@@ -16,33 +16,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useVendedorStats } from '@/hooks/useVendedorHistorico';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAppRoles } from '@/hooks/useAppRoles';
+import { MODULE_LABELS } from '@/config/modules';
 import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
-
-const perfisDisponiveis = [
-  { value: 'diretor', label: 'Diretor', desc: 'Acesso total ao sistema' },
-  { value: 'gerente_comercial', label: 'Gerente Comercial', desc: 'Vendas, relatórios e equipe' },
-  { value: 'supervisor_vendas', label: 'Supervisor de Vendas', desc: 'Vendas da equipe' },
-  { value: 'vendedor_clt', label: 'Vendedor CLT', desc: 'Vendas próprias' },
-  { value: 'vendedor_externo', label: 'Vendedor Externo', desc: 'Vendas próprias' },
-  { value: 'analista_cadastro', label: 'Analista de Cadastro', desc: 'Documentos e associados' },
-  { value: 'coordenador_monitoramento', label: 'Coord. Monitoramento', desc: 'Instalações e rotas' },
-  { value: 'analista_plataforma', label: 'Analista de Plataforma', desc: 'Rastreadores' },
-  { value: 'instalador_vistoriador', label: 'Instalador/Vistoriador', desc: 'App instalador' },
-  { value: 'vistoriador_base', label: 'Vistoriador Base', desc: 'Vistorias agendadas na base' },
-  { value: 'analista_marketing', label: 'Analista de Marketing', desc: 'Campanhas e leads' },
-  { value: 'analista_juridico', label: 'Analista Jurídico', desc: 'Processos e contratos' },
-  { value: 'regulador', label: 'Regulador', desc: 'Vistorias e oficina' },
-  { value: 'analista_eventos', label: 'Analista de Eventos', desc: 'Análise de sinistros' },
-];
-
-const MODULE_LABELS: Record<string, string> = {
-  dashboard: 'Dashboard', vendas: 'Vendas', cadastro: 'Cadastro',
-  monitoramento: 'Monitoramento', eventos: 'Eventos', assistencia: 'Assistência',
-  oficinas: 'Oficinas', financeiro: 'Financeiro', cobranca: 'Cobrança',
-  contabilidade: 'Contabilidade', juridico: 'Jurídico', rh: 'RH',
-  marketing: 'Marketing', ouvidoria: 'Ouvidoria', diretoria: 'Diretoria',
-  relatorios: 'Relatórios', documentos: 'Documentos', configuracoes: 'Configurações',
-};
 
 // Card editável de acesso a módulos por usuário
 function ModuleAccessCard({ userId }: { userId: string | undefined }) {
@@ -289,6 +265,12 @@ export default function UsuarioForm() {
   const preselectedPerfil = searchParams.get('perfil');
 
   const { isDiretor, isAdminMaster } = usePermissions();
+  const { roles: appRoles, getRoleLabel, getRoleDescription, isLoading: isLoadingRoles } = useAppRoles();
+  
+  // Perfis disponíveis dinamicamente (exclui 'associado')
+  const perfisDisponiveis = appRoles
+    .filter(r => r.role !== 'associado')
+    .map(r => ({ value: r.role, label: r.label, desc: r.description }));
 
   const [formData, setFormData] = useState({
     nome: '',

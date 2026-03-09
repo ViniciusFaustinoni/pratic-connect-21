@@ -51,6 +51,7 @@ import { Label } from '@/components/ui/label';
 import { useUsuarios, useUsuarioActions, ProfileWithRoles } from '@/hooks/useUsuarios';
 import { useVendedores, useVendedoresContagem } from '@/hooks/useVendedores';
 import { ImportarUsuariosDialog } from '@/components/usuarios/ImportarUsuariosDialog';
+import { useAppRoles } from '@/hooks/useAppRoles';
 
 const PerfisVisibilidade = lazy(() => import('@/pages/configuracoes/Perfis'));
 
@@ -141,6 +142,8 @@ export default function UsuariosAcessos() {
   const initialTab = searchParams.get('tab') || 'usuarios';
   const [activeTab, setActiveTab] = useState(initialTab);
   const queryClient = useQueryClient();
+  const { roles: appRolesData, getRoleLabel, getRoleBadgeClass, getRoleOptions, isLoading: isLoadingAppRoles } = useAppRoles();
+  const allRoles = appRolesData.filter(r => r.role !== 'associado').map(r => r.role);
 
   // ===== USUARIOS STATE =====
   const [search, setSearch] = useState('');
@@ -163,7 +166,7 @@ export default function UsuariosAcessos() {
 
   // ===== PERFIS STATE =====
   const [editingUser, setEditingUser] = useState<{ id: string; user_id: string | null; nome: string; email: string | null } | null>(null);
-  const [selectedRoles, setSelectedRoles] = useState<AppRole[]>([]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
   // ===== LOGS STATE =====
   const [searchLogs, setSearchLogs] = useState('');
@@ -226,8 +229,8 @@ export default function UsuariosAcessos() {
   });
 
   const addRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
-      const { error } = await supabase.from('user_roles').insert({ user_id: userId, role });
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const { error } = await supabase.from('user_roles').insert({ user_id: userId, role } as any);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -237,8 +240,8 @@ export default function UsuariosAcessos() {
   });
 
   const removeRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
-      const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', role);
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', role as any);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -349,7 +352,7 @@ export default function UsuariosAcessos() {
   const handleOpenEditModal = (user: { id: string; user_id: string | null; nome: string; email: string | null }) => {
     if (!user.user_id) { toast.error('Usuário sem conta vinculada'); return; }
     setEditingUser(user);
-    setSelectedRoles((userRoles?.[user.user_id] || []) as AppRole[]);
+    setSelectedRoles((userRoles?.[user.user_id] || []) as string[]);
   };
 
   const handleCloseEditModal = () => {
@@ -357,13 +360,13 @@ export default function UsuariosAcessos() {
     setSelectedRoles([]);
   };
 
-  const handleToggleRole = (role: AppRole) => {
+  const handleToggleRole = (role: string) => {
     setSelectedRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]);
   };
 
   const handleSaveRoles = async () => {
     if (!editingUser?.user_id) return;
-    const currentRoles = (userRoles?.[editingUser.user_id] || []) as AppRole[];
+    const currentRoles = (userRoles?.[editingUser.user_id] || []) as string[];
     const toAdd = selectedRoles.filter(r => !currentRoles.includes(r));
     const toRemove = currentRoles.filter(r => !selectedRoles.includes(r));
     try {
@@ -484,12 +487,9 @@ export default function UsuariosAcessos() {
               <SelectTrigger className="w-full sm:w-[150px]"><SelectValue placeholder="Perfil" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os perfis</SelectItem>
-                <SelectItem value="vendedor_clt">Vendedor CLT</SelectItem>
-                <SelectItem value="vendedor_externo">Vendedor Externo</SelectItem>
-                <SelectItem value="gerente_comercial">Gerente Comercial</SelectItem>
-                <SelectItem value="supervisor_vendas">Supervisor Vendas</SelectItem>
-                <SelectItem value="analista_cadastro">Analista Cadastro</SelectItem>
-                <SelectItem value="diretor">Diretor</SelectItem>
+                {getRoleOptions().map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={(v) => handleFilterChange(setFilterStatus, v)}>
@@ -550,8 +550,8 @@ export default function UsuariosAcessos() {
                         <TableCell className="hidden lg:table-cell">
                           <div className="flex flex-wrap gap-1">
                             {usuario.roles?.slice(0, 2).map((role, idx) => (
-                              <Badge key={idx} variant="outline" className={`text-xs ${perfisConfig[role]?.color || 'bg-gray-500/20 text-gray-400'}`}>
-                                {perfisConfig[role]?.label || role}
+                              <Badge key={idx} variant="outline" className={`text-xs ${getRoleBadgeClass(role)}`}>
+                                {getRoleLabel(role)}
                               </Badge>
                             ))}
                             {(usuario.roles?.length || 0) > 2 && <Badge variant="outline" className="text-xs">+{(usuario.roles?.length || 0) - 2}</Badge>}
@@ -754,21 +754,20 @@ export default function UsuariosAcessos() {
         {/* TAB: PERFIS DE ACESSO */}
         <TabsContent value="perfis" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allRoles.filter(r => r !== 'associado').map(role => {
-              const config = rolesConfig[role];
-              const Icon = config.icon;
+            {allRoles.map(role => {
+              const roleConfig = appRolesData.find(r => r.role === role);
               const count = contagemPerfis?.[role] || 0;
               return (
-                <Card key={role} className="border-l-4" style={{ borderLeftColor: role === 'diretor' ? '#a855f7' : role === 'gerente_comercial' ? '#3b82f6' : role === 'supervisor_vendas' ? '#22c55e' : role === 'vendedor_clt' ? '#14b8a6' : role === 'vendedor_externo' ? '#06b6d4' : role === 'agencia' ? '#d946ef' : role === 'analista_cadastro' ? '#f97316' : role === 'coordenador_monitoramento' ? '#ef4444' : role === 'analista_plataforma' ? '#6b7280' : role === 'instalador_vistoriador' ? '#eab308' : role === 'analista_marketing' ? '#ec4899' : role === 'analista_juridico' ? '#6366f1' : '#9ca3af' }}>
+                <Card key={role} className="border-l-4 border-border/50" style={{ borderLeftColor: `var(--${roleConfig?.color || 'gray'}-500, #9ca3af)` }}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <div className={`p-2 rounded-lg ${config.color}`}>
-                        <Icon className="h-5 w-5" />
+                      <div className={`p-2 rounded-lg bg-${roleConfig?.color || 'gray'}-500/10 text-${roleConfig?.color || 'gray'}-500`}>
+                        <Shield className="h-5 w-5" />
                       </div>
                       <Badge variant="secondary" className="text-xs">{count} usuário{count !== 1 ? 's' : ''}</Badge>
                     </div>
-                    <CardTitle className="text-lg mt-3">{config.label}</CardTitle>
-                    <CardDescription>{config.desc}</CardDescription>
+                    <CardTitle className="text-lg mt-3">{getRoleLabel(role)}</CardTitle>
+                    <CardDescription>{roleConfig?.description || ''}</CardDescription>
                   </CardHeader>
                 </Card>
               );
@@ -799,10 +798,9 @@ export default function UsuariosAcessos() {
                         <TableCell className="hidden md:table-cell text-muted-foreground">{user.email}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
-                            {roles.length === 0 ? <span className="text-muted-foreground text-sm">Nenhum perfil</span> : roles.map(role => {
-                              const cfg = rolesConfig[role as AppRole];
-                              return cfg ? <Badge key={role} variant="secondary" className="text-xs">{cfg.label}</Badge> : null;
-                            })}
+                            {roles.length === 0 ? <span className="text-muted-foreground text-sm">Nenhum perfil</span> : roles.map(role => (
+                              <Badge key={role} variant="secondary" className="text-xs">{getRoleLabel(role)}</Badge>
+                            ))}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -1027,17 +1025,16 @@ export default function UsuariosAcessos() {
           <div className="py-4">
             <p className="text-sm text-muted-foreground mb-4">Selecione os perfis para <strong>{editingUser?.nome}</strong></p>
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {allRoles.filter(r => r !== 'associado').map(role => {
-                const config = rolesConfig[role];
-                const Icon = config.icon;
+              {allRoles.map(role => {
+                const roleConfig = appRolesData.find(r => r.role === role);
                 const isSelected = selectedRoles.includes(role);
                 return (
                   <div key={role} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`} onClick={() => handleToggleRole(role)}>
                     <Checkbox checked={isSelected} />
-                    <div className={`p-1.5 rounded ${config.color}`}><Icon className="h-4 w-4" /></div>
+                    <div className={`p-1.5 rounded bg-${roleConfig?.color || 'gray'}-500/10 text-${roleConfig?.color || 'gray'}-500`}><Shield className="h-4 w-4" /></div>
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{config.label}</p>
-                      <p className="text-xs text-muted-foreground">{config.desc}</p>
+                      <p className="font-medium text-sm">{getRoleLabel(role)}</p>
+                      <p className="text-xs text-muted-foreground">{roleConfig?.description || ''}</p>
                     </div>
                   </div>
                 );
