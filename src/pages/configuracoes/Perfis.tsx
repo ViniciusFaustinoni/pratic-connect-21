@@ -88,7 +88,7 @@ interface MatrixUser {
 export default function Perfis() {
   const { canManagePermissions, canApprovePermissionChanges } = usePermissions();
   const { contagemPorPerfil, useUsuariosPorPerfil } = usePerfilUsuarios();
-  const { roles: appRoles, getAreas, isLoading: isLoadingRoles } = useAppRoles();
+  const { roles: appRoles, getAreas, getAreaStyles, isLoading: isLoadingRoles } = useAppRoles();
   const queryClient = useQueryClient();
   
   const [activeTab, setActiveTab] = useState('perfis');
