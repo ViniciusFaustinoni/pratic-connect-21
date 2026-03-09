@@ -86,9 +86,15 @@ export function EtapaResultado({
 }: EtapaResultadoProps) {
   const [showAllPlanos, setShowAllPlanos] = useState(false);
 
-  const categoriaLabel = CATEGORIAS_VEICULO.find(c => c.value === categoria)?.label || categoria;
-  const regiaoLabel = REGIOES_LABELS[regiao] || regiao;
-  const observacao = categoria ? OBSERVACOES_CATEGORIA[categoria] : null;
+  // Dados dinâmicos do banco
+  const { data: categoriasVeiculo = [] } = useCategoriasVeiculo();
+  const { data: observacoesCategoria = {} } = useObservacoesCategoria();
+  const { data: regioesDb = [] } = useRegioesAtivas();
+
+  const categoriaLabel = categoriasVeiculo.find(c => c.value === categoria)?.label || categoria;
+  const regiaoDb = regioesDb.find(r => r.codigo.toLowerCase() === regiao.toLowerCase());
+  const regiaoLabel = regiaoDb?.nome || regiao;
+  const observacao = categoria ? observacoesCategoria[categoria] || null : null;
 
   // Mostrar 3 planos por padrão, ou todos se expandido
   const planosVisiveis = showAllPlanos ? planos : planos.slice(0, 3);
