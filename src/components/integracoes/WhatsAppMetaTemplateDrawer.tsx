@@ -8,7 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Save, Send, Loader2, Bot, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Plus, Save, Send, Loader2, Bot, CheckCircle, AlertTriangle, XCircle, X, Link, Phone, Reply } from 'lucide-react';
+
+interface BotaoAcao {
+  tipo: 'url' | 'telefone' | 'resposta_rapida';
+  texto: string;
+  url?: string;
+  telefone?: string;
+}
 import { useCriarMetaTemplate, useAtualizarMetaTemplate, useEnviarMetaTemplate } from '@/hooks/useWhatsAppMeta';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
