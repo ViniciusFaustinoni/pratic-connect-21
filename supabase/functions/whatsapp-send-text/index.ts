@@ -212,10 +212,10 @@ async function enviarViaMeta(
 
   const messageId = result.messages?.[0]?.id;
 
-  // Com o bloqueio de texto livre, todas as mensagens que chegam aqui são templates
+  const statusLabel = templateName ? 'enviada' : 'enviada_texto_livre';
   await supabase.from("whatsapp_mensagens").insert({
     telefone: telefoneFormatado, tipo: "text", mensagem,
-    direcao: "saida", status: "enviada", message_id: messageId,
+    direcao: "saida", status: statusLabel, message_id: messageId,
     provedor: "meta_oficial",
   });
 
