@@ -263,7 +263,7 @@ function QuickActions() {
   ];
 
   return (
-    <div className="flex gap-3">
+    <div className="flex flex-wrap gap-3">
       {actions.map((action) => (
         <Button
           key={action.label}
@@ -430,11 +430,11 @@ export default function Dashboard() {
       {/* AÇÕES RÁPIDAS - HORIZONTAL */}
       <Card className="border-border bg-card">
         <CardContent className="py-4">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <h3 className="text-lg font-semibold text-foreground whitespace-nowrap">
               Ações Rápidas
             </h3>
-            <div className="flex gap-3 flex-1">
+            <div className="flex flex-wrap gap-3 flex-1">
               <QuickActions />
             </div>
           </div>
