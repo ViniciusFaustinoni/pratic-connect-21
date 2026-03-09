@@ -271,7 +271,7 @@ export default function Usuarios() {
                           <Badge 
                             key={idx} 
                             variant="outline" 
-                            className={`text-xs ${perfisConfig[role]?.color || 'bg-gray-500/20 text-gray-400'} ${isVendedor ? 'cursor-pointer hover:opacity-80' : ''}`}
+                             className={`text-xs ${getRoleBadgeClass(role)} ${isVendedor ? 'cursor-pointer hover:opacity-80' : ''}`}
                             onClick={(e) => {
                               if (isVendedor && usuario.user_id) {
                                 e.stopPropagation();
@@ -279,7 +279,7 @@ export default function Usuarios() {
                               }
                             }}
                           >
-                            {perfisConfig[role]?.label || role}
+                            {getRoleLabel(role)}
                             {isVendedor && <ExternalLink className="w-3 h-3 ml-1" />}
                           </Badge>
                         );
