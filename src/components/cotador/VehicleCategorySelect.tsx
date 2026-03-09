@@ -56,8 +56,8 @@ export function VehicleCategorySelect({
   // Encontrar label da opção selecionada
   const selectedLabel = useMemo(() => {
     if (!value) return null;
-    return CATEGORIAS_VEICULO.find((cat) => cat.value === value)?.label || null;
-  }, [value]);
+    return categorias.find((cat) => cat.value === value)?.label || null;
+  }, [value, categorias]);
 
   // Filtrar opções pela busca
   const filteredOptions = useMemo(() => {
