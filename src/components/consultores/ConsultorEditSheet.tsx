@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Save, User, Mail, Phone, Hash, Info } from 'lucide-react';
 import { useUpdateConsultor, type Consultor } from '@/hooks/useConsultores';
+import { useAppRoles } from '@/hooks/useAppRoles';
 
 interface ConsultorEditSheetProps {
   consultor: Consultor | null;
@@ -14,14 +15,8 @@ interface ConsultorEditSheetProps {
   onClose: () => void;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  vendedor_clt: 'Vendedor CLT',
-  vendedor_externo: 'Vendedor Externo',
-  supervisor_vendas: 'Supervisor',
-  gerente_comercial: 'Gerente',
-};
-
 export function ConsultorEditSheet({ consultor, open, onClose }: ConsultorEditSheetProps) {
+  const { getRoleLabel } = useAppRoles();
   const [codigoSga, setCodigoSga] = useState('');
   const updateConsultor = useUpdateConsultor();
 
@@ -80,7 +75,7 @@ export function ConsultorEditSheet({ consultor, open, onClose }: ConsultorEditSh
               <div className="flex flex-wrap gap-1 mt-1">
                 {consultor.roles.map(role => (
                   <Badge key={role} variant="secondary" className="text-xs">
-                    {ROLE_LABELS[role] || role}
+                    {getRoleLabel(role)}
                   </Badge>
                 ))}
               </div>

@@ -7,20 +7,10 @@
 // user_roles === perfis_acesso (do PRD)
 // ============================================================
 
-export type AppRole = 
-  | 'diretor' 
-  | 'gerente_comercial' 
-  | 'supervisor_vendas'
-  | 'vendedor_clt'
-  | 'vendedor_externo'
-  | 'analista_cadastro'
-  | 'coordenador_monitoramento'
-  | 'analista_plataforma'
-  | 'instalador_vistoriador'
-  | 'associado'
-  | 'analista_marketing'
-  | 'analista_juridico'
-  | 'advogado';
+/**
+ * @deprecated AppRole agora é string dinâmico. Use useAppRoles() para metadata.
+ */
+export type AppRole = string;
 
 export type TipoUsuario = 'funcionario' | 'associado' | 'prestador';
 
@@ -594,21 +584,12 @@ export const TIPO_DOCUMENTO_LABELS: Record<TipoDocumento, string> = {
   outro: 'Outro',
 };
 
-export const ROLE_LABELS: Record<AppRole, string> = {
-  diretor: 'Diretor',
-  gerente_comercial: 'Gerente Comercial',
-  supervisor_vendas: 'Supervisor de Vendas',
-  vendedor_clt: 'Vendedor CLT',
-  vendedor_externo: 'Vendedor Externo',
-  analista_cadastro: 'Analista de Cadastro',
-  coordenador_monitoramento: 'Coord. Monitoramento',
-  analista_plataforma: 'Analista de Plataforma',
-  instalador_vistoriador: 'Instalador/Vistoriador',
-  associado: 'Associado',
-  analista_marketing: 'Analista de Marketing',
-  analista_juridico: 'Analista Jurídico',
-  advogado: 'Advogado',
-};
+/**
+ * @deprecated Use useAppRoles().getRoleLabel(role) em vez disso.
+ * Mantido como objeto vazio para não quebrar imports existentes.
+ * Os labels reais vêm de app_roles_config no banco.
+ */
+export const ROLE_LABELS: Record<string, string> = {};
 
 export const STATUS_RASTREADOR_LABELS: Record<StatusRastreador, string> = {
   estoque: 'Em Estoque',

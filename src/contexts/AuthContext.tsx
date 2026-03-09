@@ -488,8 +488,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [perfis]);
 
   const canAccess = useCallback((allowedPerfis: PerfilAcesso[], requireAll = false): boolean => {
-    // Diretor sempre pode acessar tudo
-    if (perfis.includes('diretor')) return true;
+    // Diretor e admin_master sempre podem acessar tudo
+    if (perfis.includes('diretor') || perfis.includes('admin_master') || perfis.includes('desenvolvedor')) return true;
     return requireAll ? hasAllPerfis(allowedPerfis) : hasAnyPerfil(allowedPerfis);
   }, [perfis, hasAllPerfis, hasAnyPerfil]);
 
@@ -500,6 +500,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const getRedirectUrl = useCallback((): string => {
     if (profile?.tipo === 'associado') {
       return '/app/home';
+    }
+    // Para prestadores/operacionais, verificar se tem redirect no perfil
+    if (profile?.tipo === 'prestador') {
+      if (hasPerfil('sindicante')) return '/sindicante';
+      if (hasPerfil('regulador')) return '/regulador';
+      return '/instalador';
     }
     if (hasPerfil('instalador_vistoriador')) {
       return '/instalador';

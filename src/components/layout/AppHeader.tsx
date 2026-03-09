@@ -12,7 +12,7 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
-import { ROLE_LABELS } from '@/types/database';
+import { useAppRoles } from '@/hooks/useAppRoles';
 import { UserAvatar } from '@/components/UserAvatar';
 
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -23,6 +23,7 @@ export function AppHeader() {
   const navigate = useNavigate();
   const { profile, roles, signOut } = useAuth();
   const { isPerfilLimitado } = usePermissions();
+  const { getRoleLabel } = useAppRoles();
 
   const handleSignOut = async () => {
     await signOut();
@@ -62,7 +63,7 @@ export function AppHeader() {
                   {profile?.nome || profile?.email?.split('@')[0] || 'Usuário'}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {roles.length > 0 ? ROLE_LABELS[roles[0]] : 'Colaborador'}
+                  {roles.length > 0 ? getRoleLabel(roles[0]) : 'Colaborador'}
                 </span>
               </div>
             </Button>
@@ -80,7 +81,7 @@ export function AppHeader() {
             {roles.length > 0 && (
               <>
                 <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                  Perfis: {roles.map((r) => ROLE_LABELS[r]).join(', ')}
+                  Perfis: {roles.map((r) => getRoleLabel(r)).join(', ')}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border" />
               </>

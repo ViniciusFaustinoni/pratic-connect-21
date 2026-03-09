@@ -1098,8 +1098,10 @@ export type Database = {
           description: string
           icon_name: string
           is_active: boolean
+          is_operational: boolean
           label: string
           permissions: Json
+          redirect_path: string | null
           role: string
           sigla: string
           sort_order: number
@@ -1113,8 +1115,10 @@ export type Database = {
           description?: string
           icon_name?: string
           is_active?: boolean
+          is_operational?: boolean
           label: string
           permissions?: Json
+          redirect_path?: string | null
           role: string
           sigla?: string
           sort_order?: number
@@ -1128,8 +1132,10 @@ export type Database = {
           description?: string
           icon_name?: string
           is_active?: boolean
+          is_operational?: boolean
           label?: string
           permissions?: Json
+          redirect_path?: string | null
           role?: string
           sigla?: string
           sort_order?: number
@@ -26114,13 +26120,19 @@ export type Database = {
         Returns: Database["public"]["Enums"]["tipo_usuario"]
       }
       get_visible_modules: { Args: { _user_id: string }; Returns: string[] }
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
+      has_permission: {
+        Args: { _permission: string; _user_id: string }
         Returns: boolean
       }
+      has_role:
+        | {
+            Args: {
+              _role: Database["public"]["Enums"]["app_role"]
+              _user_id: string
+            }
+            Returns: boolean
+          }
+        | { Args: { _role: string; _user_id: string }; Returns: boolean }
       is_admin_master: { Args: { _user_id: string }; Returns: boolean }
       is_associado: { Args: { _user_id: string }; Returns: boolean }
       is_desenvolvedor: { Args: { _user_id: string }; Returns: boolean }

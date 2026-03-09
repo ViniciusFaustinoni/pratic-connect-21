@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { 
   Shield, 
   Users, 
@@ -13,125 +13,28 @@ import {
   Monitor,
   Wrench,
   User,
-  LucideIcon,
-  X
+  Eye,
+  Radio,
+  Building2,
+  type LucideIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAppRoles } from '@/hooks/useAppRoles';
 
-type AppRole = 
-  | 'diretor'
-  | 'gerente_comercial'
-  | 'supervisor_vendas'
-  | 'vendedor_clt'
-  | 'vendedor_externo'
-  | 'analista_cadastro'
-  | 'analista_marketing'
-  | 'analista_juridico'
-  | 'coordenador_monitoramento'
-  | 'analista_plataforma'
-  | 'instalador_vistoriador'
-  | 'associado'
-  | 'advogado';
-
-interface RoleConfig {
-  label: string;
-  desc: string;
-  icon: LucideIcon;
-  color: string;
-}
-
-const rolesConfig: Record<AppRole, RoleConfig> = {
-  diretor: { 
-    label: 'Diretor', 
-    desc: 'Acesso total ao sistema', 
-    icon: Crown, 
-    color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
-  },
-  gerente_comercial: { 
-    label: 'Gerente Comercial', 
-    desc: 'Vendas, cadastro e relatórios', 
-    icon: Briefcase, 
-    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
-  },
-  supervisor_vendas: { 
-    label: 'Supervisor de Vendas', 
-    desc: 'Equipe e metas de vendas', 
-    icon: Users, 
-    color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-  },
-  vendedor_clt: { 
-    label: 'Vendedor CLT', 
-    desc: 'Leads e cotações', 
-    icon: UserCheck, 
-    color: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200' 
-  },
-  vendedor_externo: { 
-    label: 'Vendedor Externo', 
-    desc: 'Leads e cotações (comissionado)', 
-    icon: UserPlus, 
-    color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200' 
-  },
-  analista_cadastro: { 
-    label: 'Analista de Cadastro', 
-    desc: 'Documentos e associados', 
-    icon: FileCheck, 
-    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' 
-  },
-  analista_marketing: { 
-    label: 'Analista de Marketing', 
-    desc: 'Campanhas e métricas', 
-    icon: Megaphone, 
-    color: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200' 
-  },
-  analista_juridico: { 
-    label: 'Analista Jurídico', 
-    desc: 'Processos e consultas', 
-    icon: Scale, 
-    color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' 
-  },
-  coordenador_monitoramento: { 
-    label: 'Coordenador de Monitoramento', 
-    desc: 'Rastreadores e rotas', 
-    icon: MapPin, 
-    color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
-  },
-  analista_plataforma: { 
-    label: 'Analista de Plataforma', 
-    desc: 'Monitoramento e alertas', 
-    icon: Monitor, 
-    color: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' 
-  },
-  instalador_vistoriador: { 
-    label: 'Instalador/Vistoriador', 
-    desc: 'App de campo', 
-    icon: Wrench, 
-    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' 
-  },
-  associado: { 
-    label: 'Associado', 
-    desc: 'App do associado', 
-    icon: User, 
-    color: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200' 
-  },
-  advogado: {
-    label: 'Advogado',
-    desc: 'Módulo jurídico e casos',
-    icon: Scale,
-    color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
-  },
+/** Map icon_name from DB to Lucide component */
+const ICON_MAP: Record<string, LucideIcon> = {
+  Crown, Shield, Briefcase, Users, UserCheck, UserPlus, FileCheck,
+  Megaphone, Scale, MapPin, Monitor, Wrench, User, Eye, Radio, Building2,
 };
-
-const allRoles = Object.keys(rolesConfig) as AppRole[];
 
 interface UserProfile {
   id: string;
@@ -144,7 +47,8 @@ export default function PerfisAcesso() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('por-perfil');
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
-  const [selectedRoles, setSelectedRoles] = useState<AppRole[]>([]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const { roles: appRoles, getRoleLabel, getRoleColor, isLoading: rolesLoading } = useAppRoles();
 
   // Contagem de usuários por role
   const { data: contagem } = useQuery({
@@ -195,10 +99,9 @@ export default function PerfisAcesso() {
     }
   });
 
-  // Adicionar role a usuário
   const addRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
-      const { error } = await supabase
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const { error } = await (supabase as any)
         .from('user_roles')
         .insert({ user_id: userId, role });
       if (error) throw error;
@@ -207,15 +110,12 @@ export default function PerfisAcesso() {
       queryClient.invalidateQueries({ queryKey: ['user-roles-map'] });
       queryClient.invalidateQueries({ queryKey: ['roles-contagem'] });
     },
-    onError: () => {
-      toast.error('Erro ao atribuir perfil');
-    }
+    onError: () => { toast.error('Erro ao atribuir perfil'); }
   });
 
-  // Remover role de usuário
   const removeRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
-      const { error } = await supabase
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const { error } = await (supabase as any)
         .from('user_roles')
         .delete()
         .eq('user_id', userId)
@@ -226,9 +126,7 @@ export default function PerfisAcesso() {
       queryClient.invalidateQueries({ queryKey: ['user-roles-map'] });
       queryClient.invalidateQueries({ queryKey: ['roles-contagem'] });
     },
-    onError: () => {
-      toast.error('Erro ao remover perfil');
-    }
+    onError: () => { toast.error('Erro ao remover perfil'); }
   });
 
   const handleOpenEditModal = (user: UserProfile) => {
@@ -237,7 +135,7 @@ export default function PerfisAcesso() {
       return;
     }
     setEditingUser(user);
-    setSelectedRoles((userRoles?.[user.user_id] || []) as AppRole[]);
+    setSelectedRoles(userRoles?.[user.user_id] || []);
   };
 
   const handleCloseEditModal = () => {
@@ -245,7 +143,7 @@ export default function PerfisAcesso() {
     setSelectedRoles([]);
   };
 
-  const handleToggleRole = (role: AppRole) => {
+  const handleToggleRole = (role: string) => {
     setSelectedRoles(prev => 
       prev.includes(role) 
         ? prev.filter(r => r !== role)
@@ -256,7 +154,7 @@ export default function PerfisAcesso() {
   const handleSaveRoles = async () => {
     if (!editingUser?.user_id) return;
 
-    const currentRoles = (userRoles?.[editingUser.user_id] || []) as AppRole[];
+    const currentRoles = userRoles?.[editingUser.user_id] || [];
     const toAdd = selectedRoles.filter(r => !currentRoles.includes(r));
     const toRemove = currentRoles.filter(r => !selectedRoles.includes(r));
 
@@ -302,24 +200,23 @@ export default function PerfisAcesso() {
 
         <TabsContent value="por-perfil" className="mt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allRoles.map(role => {
-              const config = rolesConfig[role];
-              const Icon = config.icon;
-              const count = contagem?.[role] || 0;
+            {appRoles.map(roleConfig => {
+              const count = contagem?.[roleConfig.role] || 0;
+              const IconComponent = ICON_MAP[roleConfig.icon_name] || Shield;
 
               return (
-                <Card key={role}>
+                <Card key={roleConfig.role}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <div className={`p-2 rounded-lg ${config.color}`}>
-                        <Icon className="h-5 w-5" />
+                      <div className={`p-2 rounded-lg bg-${roleConfig.color}-500/20 text-${roleConfig.color}-400`}>
+                        <IconComponent className="h-5 w-5" />
                       </div>
                       <Badge variant="secondary" className="text-xs">
-                        Sistema
+                        {roleConfig.area}
                       </Badge>
                     </div>
-                    <CardTitle className="text-lg mt-3">{config.label}</CardTitle>
-                    <CardDescription>{config.desc}</CardDescription>
+                    <CardTitle className="text-lg mt-3">{roleConfig.label}</CardTitle>
+                    <CardDescription>{roleConfig.description}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -361,14 +258,11 @@ export default function PerfisAcesso() {
                             {roles.length === 0 ? (
                               <span className="text-muted-foreground text-sm">Nenhum perfil</span>
                             ) : (
-                              roles.map(role => {
-                                const config = rolesConfig[role as AppRole];
-                                return config ? (
-                                  <Badge key={role} variant="secondary" className="text-xs">
-                                    {config.label}
-                                  </Badge>
-                                ) : null;
-                              })
+                              roles.map(role => (
+                                <Badge key={role} variant="secondary" className="text-xs">
+                                  {getRoleLabel(role)}
+                                </Badge>
+                              ))
                             )}
                           </div>
                         </TableCell>
@@ -412,26 +306,25 @@ export default function PerfisAcesso() {
             </p>
             
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {allRoles.filter(r => r !== 'associado').map(role => {
-                const config = rolesConfig[role];
-                const Icon = config.icon;
-                const isSelected = selectedRoles.includes(role);
+              {appRoles.filter(r => r.role !== 'associado').map(roleConfig => {
+                const IconComponent = ICON_MAP[roleConfig.icon_name] || Shield;
+                const isSelected = selectedRoles.includes(roleConfig.role);
 
                 return (
                   <div
-                    key={role}
+                    key={roleConfig.role}
                     className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                       isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted'
                     }`}
-                    onClick={() => handleToggleRole(role)}
+                    onClick={() => handleToggleRole(roleConfig.role)}
                   >
                     <Checkbox checked={isSelected} />
-                    <div className={`p-1.5 rounded ${config.color}`}>
-                      <Icon className="h-4 w-4" />
+                    <div className={`p-1.5 rounded bg-${roleConfig.color}-500/20 text-${roleConfig.color}-400`}>
+                      <IconComponent className="h-4 w-4" />
                     </div>
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{config.label}</p>
-                      <p className="text-xs text-muted-foreground">{config.desc}</p>
+                      <p className="font-medium text-sm">{roleConfig.label}</p>
+                      <p className="text-xs text-muted-foreground">{roleConfig.description}</p>
                     </div>
                   </div>
                 );
