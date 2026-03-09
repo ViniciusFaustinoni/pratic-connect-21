@@ -156,6 +156,8 @@ serve(async (req) => {
   try {
     const payload: SendMediaPayload = await req.json();
 
+    console.log(`[whatsapp-send-media] ▶ Chamada recebida - tipo: ${payload.media_type}, telefone: ${payload.telefone}, tem_url: ${!!payload.media_url}, tem_base64: ${!!payload.media_base64}, filename: ${payload.filename || 'N/A'}`);
+
     if (!payload.telefone) throw new Error('telefone é obrigatório');
     if (!payload.media_url && !payload.media_base64) throw new Error('media_url ou media_base64 é obrigatório');
     if (!payload.media_type) throw new Error('media_type é obrigatório');

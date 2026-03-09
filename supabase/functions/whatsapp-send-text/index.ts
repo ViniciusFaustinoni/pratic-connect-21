@@ -172,15 +172,22 @@ async function enviarViaMeta(
   const result = await response.json();
 
   if (!response.ok) {
-    console.error("[whatsapp-send-text] Erro Meta:", result);
+    console.error("[whatsapp-send-text] Erro Meta:", JSON.stringify(result));
     
-    // Se erro 131026 = fora de janela 24h e sem template
     const errorCode = result.error?.code;
-    const errorMsg = result.error?.message || "Erro ao enviar via Meta";
+    const errorSubCode = result.error?.error_subcode;
+    let errorMsg = result.error?.message || "Erro ao enviar via Meta";
+
+    // Erro 131026 = fora da janela de 24h — precisa de template aprovado
+    if (errorCode === 131026 || errorSubCode === 131026) {
+      errorMsg = "Mensagem não enviada: o contato não interagiu nas últimas 24h. Use um template aprovado para iniciar a conversa.";
+    }
 
     await supabase.from("whatsapp_mensagens").insert({
       telefone: telefoneFormatado, tipo: "text", mensagem,
-      direcao: "saida", status: "erro", erro_mensagem: errorMsg,
+      direcao: "saida", status: "erro", 
+      erro_codigo: String(errorCode || errorSubCode || ''),
+      erro_mensagem: errorMsg,
       provedor: "meta_oficial",
     });
 
