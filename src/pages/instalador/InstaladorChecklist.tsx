@@ -1706,6 +1706,22 @@ export default function InstaladorChecklist() {
                       className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 min-h-[80px]"
                     />
                   </div>
+                  {/* Foto do local de instalação - OBRIGATÓRIA */}
+                  <div className="space-y-2">
+                    <Label className="text-sm text-slate-300">Foto do local de instalação *</Label>
+                    <p className="text-xs text-slate-500">Tire uma foto mostrando onde o rastreador foi instalado</p>
+                    <div className="w-32">
+                      <FotoCapture
+                        tipo="local_instalacao"
+                        label="Local Instalação"
+                        obrigatoria={true}
+                        fotoUrl={fotoLocalInstalacao || undefined}
+                        uploading={uploadingFotoLocal}
+                        onCapture={handleFotoLocalInstalacao}
+                        onRemove={() => setFotoLocalInstalacao(null)}
+                      />
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
