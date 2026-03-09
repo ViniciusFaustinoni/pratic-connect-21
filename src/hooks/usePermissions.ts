@@ -317,6 +317,7 @@ export function usePermissions() {
     canManageMarketing: isDiretor || hasRole('gerente_comercial') || hasRole('analista_marketing') || isDesenvolvedor,
     canManageOuvidoria: (isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao && !isAnalistaEventosOnly,
     canManageConsultores: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
+    canManageEquipe: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
     canViewReports: (isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster || isAnalistaCadastro) && !isVendedorCotacao,
     // Permissão para editar rotas (coordenador só pode visualizar)
     canEditRotas: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
