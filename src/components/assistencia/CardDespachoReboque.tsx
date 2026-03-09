@@ -58,6 +58,82 @@ const etapaConfig: Record<string, { label: string; className: string }> = {
 
 export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [observacaoConclusao, setObservacaoConclusao] = useState('');
+  const [fotosPreview, setFotosPreview] = useState<{ file: File; preview: string }[]>([]);
+
+  // Fotos do reboquista
+  const { data: fotosReboque } = useFotosReboquista(chamadoId);
+  const addFotoMutation = useAddFotoReboquista();
+  const deleteFotoMutation = useDeleteFotoReboquista();
+
+  // Mutation: Concluir serviço
+  const concluirMutation = useMutation({
+    mutationFn: async () => {
+      // Upload das fotos anexadas
+      if (fotosPreview.length > 0) {
+        await addFotoMutation.mutateAsync({
+          chamadoId,
+          files: fotosPreview.map(f => f.file),
+          momento: 'conclusao',
+          observacao: observacaoConclusao || 'Serviço concluído',
+        });
+      }
+
+      // Atualizar status do chamado para concluído
+      const { error: chamadoErr } = await supabase
+        .from('chamados_assistencia')
+        .update({ status: 'concluido' })
+        .eq('id', chamadoId);
+      if (chamadoErr) throw chamadoErr;
+
+      // Registrar no histórico
+      await supabase.from('chamados_assistencia_historico').insert({
+        chamado_id: chamadoId,
+        status_anterior: 'prestador_despachado',
+        status_novo: 'concluido',
+        observacao: observacaoConclusao || 'Serviço de reboque concluído pelo analista.',
+      });
+
+      // Registrar status de conclusão no log do reboque
+      await supabase.from('despacho_reboque_status_log').insert({
+        chamado_id: chamadoId,
+        despacho_id: null,
+        prestador_id: null,
+        status: 'concluido',
+        observacao: observacaoConclusao || 'Serviço concluído',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Serviço concluído com sucesso!');
+      setFotosPreview([]);
+      setObservacaoConclusao('');
+      queryClient.invalidateQueries({ queryKey: ['despacho-reboque', chamadoId] });
+      queryClient.invalidateQueries({ queryKey: ['despacho-status-log', chamadoId] });
+      queryClient.invalidateQueries({ queryKey: ['chamado', chamadoId] });
+      queryClient.invalidateQueries({ queryKey: ['fotos-reboquista', chamadoId] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao concluir serviço'),
+  });
+
+  const handleAddFotos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const newPreviews = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setFotosPreview(prev => [...prev, ...newPreviews]);
+    e.target.value = '';
+  };
+
+  const handleRemoveFotoPreview = (index: number) => {
+    setFotosPreview(prev => {
+      const updated = [...prev];
+      URL.revokeObjectURL(updated[index].preview);
+      updated.splice(index, 1);
+      return updated;
+    });
+  };
 
   // Buscar despacho ativo
   const { data: despacho, isLoading } = useQuery({
