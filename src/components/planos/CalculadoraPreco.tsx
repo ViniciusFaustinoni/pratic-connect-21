@@ -42,6 +42,8 @@ export function CalculadoraPreco() {
   const { data: tabelas } = useTabelasPreco();
   const { data: FATOR_VEICULO_ANTIGO = 1.15 } = useFatorVeiculoAntigo();
   const { data: FATOR_USO_TRABALHO = 1.20 } = useFatorUsoTrabalho();
+
+  const calcular = () => {
     const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
     
     if (!valor || !tabelas || tabelas.length === 0) {
