@@ -245,6 +245,21 @@ export function usePermissions() {
     canManageEquipe: hasPerm('canManageEquipe'),
     canViewReports: hasPerm('canViewReports'),
     canEditRotas: hasPerm('canEditRotas'),
+
+    // === NOVAS CAPABILITY PERMISSIONS (Fase 4) ===
+    canManageComissoes: hasPerm('canManageComissoes'),
+    canApproveComissoes: hasPerm('canApproveComissoes'),
+    canDeleteCotacao: hasPerm('canDeleteCotacao'),
+    canDeleteAssociado: hasPerm('canDeleteAssociado'),
+    canDeleteSinistro: hasPerm('canDeleteSinistro'),
+    canCreateTemplate: hasPerm('canCreateTemplate'),
+    canEditTemplate: hasPerm('canEditTemplate'),
+    canDeleteTemplate: hasPerm('canDeleteTemplate'),
+    canCreateUser: hasPerm('canCreateUser'),
+    canImportUsers: hasPerm('canImportUsers'),
+    canResetPassword: hasPerm('canResetPassword'),
+    canDeleteAtivacao: hasPerm('canDeleteAtivacao'),
+    canManageIntegracoes: hasPerm('canManageIntegracoes'),
   };
 
   return {
