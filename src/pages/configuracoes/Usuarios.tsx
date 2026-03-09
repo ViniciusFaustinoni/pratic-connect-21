@@ -23,6 +23,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUsuarios, useUsuarioActions } from '@/hooks/useUsuarios';
 import { useAppRoles } from '@/hooks/useAppRoles';
+const { getRoleArea: getRoleAreaFn } = { getRoleArea: (role: string) => '' }; // placeholder resolved below
 import { toast } from 'sonner';
 import {
   AlertDialog,
