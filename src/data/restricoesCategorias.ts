@@ -20,6 +20,8 @@ export interface BenefitExclusionData {
 
 /**
  * Labels amigáveis para as categorias de veículo.
+ * Fonte primária: tabela configuracoes (chave 'categorias_veiculo').
+ * Aqui mantemos fallback para uso síncrono em funções utilitárias.
  */
 const CATEGORIA_LABELS: Record<string, string> = {
   leilao: 'Veículo de leilão',
