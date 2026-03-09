@@ -364,13 +364,17 @@ serve(async (req) => {
             template_name: 'boas_vindas_associado',
             getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
           },
-          // Técnico/assistência → assistencia_confirmada ({{1}} nome, {{2}} prestador, {{3}} minutos/período)
+          // Técnico a caminho → tecnico_a_caminho (7 params)
           tecnico_em_rota: {
-            template_name: 'assistencia_confirmada',
+            template_name: 'tecnico_a_caminho',
             getParams: () => [
               primeiroNome,
               (dados?.tecnico_nome as string) || 'Técnico PRATIC',
-              (dados?.periodo as string) || '30',
+              (dados?.tecnico_telefone as string) || '',
+              (dados?.tecnico_whatsapp_link as string) || '',
+              (dados?.endereco as string) || 'Endereço a confirmar',
+              (dados?.periodo as string) || 'A confirmar',
+              'Você pode entrar em contato com o técnico se precisar de mais informações!',
             ],
           },
           instalacao_agendada: {
