@@ -226,7 +226,7 @@ serve(async (req) => {
           template_params: [
             nomeAssociado,
             dadosTemplate.prestador_nome as string || 'Praticcar',
-            (dadosTemplate.protocolo as string) || '30',
+            (dadosTemplate.tempo as string) || '30',
           ],
         },
       });

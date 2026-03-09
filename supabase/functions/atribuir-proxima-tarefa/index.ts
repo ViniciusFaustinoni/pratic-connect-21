@@ -936,7 +936,7 @@ ${linkWhatsAppCliente}
                 template_params: [
                   profissionalTel?.nome || 'Profissional',
                   `${tipoServicoLabelVist} - ${servico.associado_nome || 'Cliente'}`,
-                  servico.bairro || servico.cidade || 'Endereço cadastrado',
+                  '30',
                 ],
               },
             });
