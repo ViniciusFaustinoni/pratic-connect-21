@@ -16,7 +16,7 @@ export function useVendedores() {
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role')
-        .in('role', ['vendedor_clt', 'vendedor_externo', 'supervisor_vendas', 'gerente_comercial', 'diretor']);
+        .in('role', ['vendedor_clt', 'vendedor_externo', 'supervisor_vendas', 'gerente_comercial', 'diretor', 'supervisor_comercial']);
 
       if (rolesError) throw rolesError;
 

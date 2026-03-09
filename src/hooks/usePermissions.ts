@@ -49,6 +49,7 @@ export type PermissionKey =
   | 'canApprovePermissionChanges'
   | 'canCreateRoles'
   | 'canManageConsultores'
+  | 'canManageEquipe'
   | 'canManageEquipeEstoque'
   | 'canViewReports'
   | 'canEditRotas';
