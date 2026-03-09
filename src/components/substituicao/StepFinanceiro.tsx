@@ -122,8 +122,8 @@ export function StepFinanceiro({
 
   // Cota de participação
   const cotaAntigaValor = useMemo(() => {
-    if (!cotasAntigo) return veiculoAntigo.valor_fipe * 0.06;
-    return Math.max(cotasAntigo.cotas * 200, 1200);
+    if (!cotasAntigo) return veiculoAntigo.valor_fipe * (cotaParticipacaoDefault / 100);
+    return Math.max(cotasAntigo.cotas * 200, cotaMinimaDefault);
   }, [cotasAntigo, veiculoAntigo.valor_fipe]);
 
   const cotaNovaValor = useMemo(() => {
