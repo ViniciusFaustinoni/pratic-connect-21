@@ -213,7 +213,7 @@ export function AgendarRetiradaModal({
       periodo: periodo as Periodo,
       profissionalId,
       localTipo,
-      endereco: localTipo === 'volante' && tipoEndereco === 'outro'
+      endereco: tipoEndereco === 'outro'
         ? { cep, logradouro, numero, bairro, cidade, uf }
         : undefined,
       notificarWhatsApp,
