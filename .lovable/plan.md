@@ -84,6 +84,7 @@ Blindado deixou de ser aditivo contratual e passou a exigir autorização da dir
 - Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
 - Página de autorizações da diretoria — depende das tabelas acima
 - Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
 ---
 
@@ -93,3 +94,25 @@ Blindado deixou de ser aditivo contratual e passou a exigir autorização da dir
 2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
 3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
 4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
+
+---
+
+# Fluxo de Assistência 24h — Reboque
+
+## ✅ CORRIGIDO
+
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.
