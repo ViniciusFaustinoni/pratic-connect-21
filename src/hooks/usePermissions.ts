@@ -257,11 +257,12 @@ export function usePermissions() {
     isDesenvolvedor,
     isAdminMaster,
 
-    // Verificações de perfil/role
+  // Verificações de perfil/role
     isDiretor,
     isDiretorOnly: isDiretor,
     isGerente: hasRole('gerente_comercial'),
     isSupervisor: hasRole('supervisor_vendas'),
+    isSupervisorVendas: hasRole('supervisor_vendas'),
     isGerenciaOrSupervisor: isGerencia() || hasRole('supervisor_vendas'),
     isVendedorClt: hasRole('vendedor_clt'),
     isVendedorExterno: hasRole('vendedor_externo'),
