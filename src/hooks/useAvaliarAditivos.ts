@@ -8,6 +8,7 @@ interface VeiculoParaAvaliacao {
   procedencia?: string;
   valorFipe?: number;
   observacoes?: string;
+  blindado?: boolean;
 }
 
 function avaliarRegra(regra: RegraAditivo, veiculo: VeiculoParaAvaliacao, fipeLimite: number): boolean {
@@ -26,6 +27,9 @@ function avaliarRegra(regra: RegraAditivo, veiculo: VeiculoParaAvaliacao, fipeLi
     case 'evento_vidros':
       // Avaliação real é feita no backend (edge function)
       return false;
+    
+    case 'veiculo_blindado':
+      return veiculo.blindado === true;
     
     default:
       return false;
