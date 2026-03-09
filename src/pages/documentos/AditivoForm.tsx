@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater } from 'lucide-react';
+import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater, Shield } from 'lucide-react';
 import { formatCurrency } from '@/types/termo-filiacao';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
@@ -19,6 +19,7 @@ const TIPOS_REGRA = [
   { tipo: 'veiculo_0km' as const, label: 'Veículo 0KM', desc: 'Identificado automaticamente via CRLV (sem placa ou procedência "Novo")', icon: Car },
   { tipo: 'fipe_acima_de' as const, label: 'Valor FIPE acima do limite', desc: 'Valor configurável nas configurações do diretor', icon: DollarSign },
   { tipo: 'evento_vidros' as const, label: 'Evento Vidros e Faróis', desc: 'Anexado automaticamente quando o evento/sinistro for do tipo vidros e faróis', icon: GlassWater },
+  { tipo: 'veiculo_blindado' as const, label: 'Veículo Blindado', desc: 'Detectado automaticamente via OCR do CRLV (campo observações)', icon: Shield },
 ];
 
 export default function AditivoForm() {
