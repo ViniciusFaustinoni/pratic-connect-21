@@ -296,11 +296,22 @@ export function TrajetoColisaoCard({
               {renderMap('200px')}
               <div className="p-3 border-t space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline">{trajeto.length} pontos</Badge>
                     {paradas.length > 0 && (
                       <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                         {paradas.length} parada{paradas.length > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                    {metricas && metricas.distanciaKm > 0 && (
+                      <Badge variant="outline">📏 {metricas.distanciaKm.toFixed(1)} km</Badge>
+                    )}
+                    {metricas && metricas.velMedia > 0 && (
+                      <Badge variant="outline">⌀ {metricas.velMedia.toFixed(0)} km/h</Badge>
+                    )}
+                    {metricas && metricas.velMax > 0 && (
+                      <Badge variant={metricas.velMax > 80 ? 'destructive' : 'outline'}>
+                        🔺 {metricas.velMax.toFixed(0)} km/h
                       </Badge>
                     )}
                   </div>
