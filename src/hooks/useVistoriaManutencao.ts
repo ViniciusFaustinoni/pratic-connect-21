@@ -1094,7 +1094,7 @@ export function useRastreadoresInstalados(busca?: string) {
             placa,
             marca,
             modelo,
-            associado:associados(id, nome, telefone)
+            associado:associados(id, nome, telefone, logradouro, numero, bairro, cidade, uf, cep)
           )
         `)
         .eq('status', 'instalado')
