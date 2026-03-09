@@ -152,7 +152,8 @@ export default function FilaVistorias() {
   const [regiaoFilter, setRegiaoFilter] = useState('todas');
   const [dataFilter, setDataFilter] = useState<Date | undefined>();
   const [vistoriadorFilter, setVistoriadorFilter] = useState('todos');
-  
+  const { regioes: REGIOES_ATENDIMENTO } = useRegioesAtendimento();
+
   // Estado do modal de agendamento
   const [agendarModalOpen, setAgendarModalOpen] = useState(false);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<VistoriaParaAgendar | null>(null);
