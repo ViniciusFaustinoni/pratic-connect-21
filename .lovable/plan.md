@@ -1,172 +1,171 @@
-# Auditoria Completa: Planos, Benefícios e Precificação
 
-## Resumo
 
-A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+# Investigacao Profunda: Hardcode Restante em Usuarios e Perfis de Acesso
 
----
+## Estado atual
 
-## ✅ CORRIGIDO (não mexer)
-
-- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
-- `usePlanosCotacao.ts` — Hook principal dinâmico
-- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
-- `CotacaoDetalhe.tsx` — Dados do hook
-- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
-- `ContratoDetalhe.tsx` — Dinâmico
-- `Cotador.tsx` — Usa PlanoCotacao direto
-- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
-- `CardPlano.tsx` — Recebe benefícios/coberturas como props
-- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
-- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
-- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+A refatoracao anterior adicionou `permissions` JSONB em `app_roles_config` e migrou os `canXxx` de `usePermissions` para `hasPerm()`. Porem, **os identity flags e exclusivity flags continuam 100% hardcoded**, e diversos arquivos fazem verificacoes de role por string literal fora do hook centralizado.
 
 ---
 
-## 🟡 PENDENTE
+## Focos de hardcode identificados
 
-### 1. ✅ `pricing.ts` — REMOVIDO
+### Foco 1 — `src/types/database.ts`: `AppRole` union + `ROLE_LABELS` (CRITICO)
 
-Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
+- **L10-23**: Union type `AppRole` com 13 roles fixos. Roles como `regulador`, `sindicante`, `analista_eventos`, `desenvolvedor`, `admin_master`, `supervisor_comercial` NAO existem neste tipo.
+- **L597-611**: `ROLE_LABELS` com 13 labels hardcoded.
+- **Consumidores**: `AppHeader.tsx` (L65, L83), `Perfil.tsx` (L278, L482), `Consultores.tsx` e `ConsultorEditSheet.tsx` (duplicatas locais).
+- O `useAppRoles().getRoleLabel()` ja existe e cobre todos os roles do banco.
 
-### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
+### Foco 2 — `src/types/auth.ts`: `AuthFlags` + `computeAuthFlags()` (CRITICO)
 
-Centralizada em `src/utils/format.ts`.
+- **L115-137**: Interface `AuthFlags` com 14 identity flags hardcoded por role name (`isDiretor`, `isGerente`, `isSupervisor`, etc.)
+- **L153-174**: `initialAuthFlags` com 14 defaults
+- **L180-206**: `computeAuthFlags()` com 14 `perfis.includes()` fixos
+- Novos roles (ex: `supervisor_comercial`) nao ganham flags automaticas.
 
-### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+### Foco 3 — `src/hooks/usePermissions.ts`: Identity + Exclusivity flags (CRITICO)
 
-### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+- **L95-106**: 9 identity flags por `hasRole('nome_fixo')` ou `hasRoleByName('nome_fixo')`
+- **L114-150**: 8 exclusivity flags (`isXxxOnly`) com exclusao manual de ~8 roles cada. Quando um novo role e adicionado, TODOS os blocos `Only` precisam ser atualizados para excluir o novo role.
+- **L148-150**: `isPerfilLimitado` e uma OR de 8 flags fixas
+- **L155-157**: Cotacao permissions com 3 variaveis hardcoded (`isVendedorCotacao`, `isAnalistaCotacao`, `isGestorCotacao`)
 
-### 5. ✅ Veículo Blindado — CORRIGIDO
+### Foco 4 — `src/contexts/AuthContext.tsx`: Funcoes legadas (MEDIO)
 
-### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+- **L490-493**: `canAccess` hardcoda `diretor` como bypass total
+- **L500-508**: `getRedirectUrl` hardcoda `instalador_vistoriador` → `/instalador`
+- **L530-548**: 5 funcoes legadas (`isGerenciaFn`, `isVendedorFn`, `isInstaladorFn`) com roles fixos
 
-Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+### Foco 5 — `src/pages/diretoria/PerfisAcesso.tsx`: Pagina inteira duplicada (CRITICO)
 
-### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+- **L31-44**: Redefine `AppRole` localmente (13 roles)
+- **L53-132**: `rolesConfig` com 13 configs hardcoded (label, desc, icon, color)
+- Deveria usar `useAppRoles()` como `Perfis.tsx` ja faz.
 
-Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+### Foco 6 — `src/hooks/useDocumentoPermissoes.ts`: Mapeamento fixo (MEDIO)
 
-### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+- **L89-101**: `mapearPerfilParaDocumentos()` com 10 `roles.includes()` fixos
+- **L14-86**: `PERMISSOES_POR_PERFIL` com 7 perfis hardcoded
+- Deveria derivar permissoes de documentos do `app_roles_config.permissions` (ex: `canCreateTemplate`, `canEditTemplate`, etc.)
 
-Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+### Foco 7 — `src/pages/vendas/CotacaoDetalhe.tsx`: Check inline (BAIXO)
 
-### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+- **L57**: `const isDiretor = roles?.includes('diretor')` — deveria usar `usePermissions().isDiretor` ou melhor, `cotacao.canDelete`
 
-Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+### Foco 8 — `src/pages/auth/AuthCallback.tsx`: Redirect hardcoded (MEDIO)
 
-### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+- **L106**: `roles.includes('sindicante')` → redirect `/sindicante`
+- **L109**: Fallback → `/instalador`
+- Deveria usar `getRedirectUrl()` do AuthContext
 
-Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+### Foco 9 — `PermissionGate` com identity flags (MEDIO)
 
-### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+11 arquivos usam `PermissionGate` com identity flags como `isDiretor`, `isGerente`:
+- `ComissoesConfig.tsx`: `permission={['isDiretor', 'isGerente']}`
+- `Comissoes.tsx`: `permission={['isDiretor', 'isGerente', 'isSupervisor']}`
+- `ComissoesFechamentoTab.tsx`: 5 ocorrencias de `['isDiretor', 'isGerente']`
+- `Leads.tsx`: `hasPermission('isDiretor')`
+- Deveria usar capability permissions (ex: `canManageComissoes`, `canApproveComissoes`)
 
-Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
+### Foco 10 — Edge Functions com roles fixos (MEDIO)
 
-### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+14 edge functions verificam roles por string:
 
-Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
-- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
-- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
+| Funcao | Roles fixos |
+|---|---|
+| `create-user` | `['diretor', 'gerente_comercial', 'supervisor_vendas', 'analista_eventos']` |
+| `import-users` | `['diretor', 'gerente_comercial', 'supervisor_vendas']` |
+| `delete-ativacao` | `['diretor', 'admin_master', 'desenvolvedor']` |
+| `delete-cotacao` | `.eq('role', 'diretor')` |
+| `delete-associado` | `role === 'diretor'` |
+| `delete-sinistro` | `role === 'diretor'` |
+| `admin-reset-password` | `role === 'diretor'` ou `admin_master` |
+| `integracoes-credenciais` | `['diretor', 'desenvolvedor', 'admin_master']` |
+| `gerar-link-evento` | `['regulador', 'analista_sinistro', 'diretor', ...]` |
+| `criar-sinistro` | `.eq('role', 'analista_sinistros')` fallback `diretor` |
+| `whatsapp-webhook` | `.eq('role', 'diretor')` |
+| `cron-verificar-sindicancias` | `.eq('role', 'diretor')` |
+| `analisar-exclusividade` | `.in('role', ['diretor', 'gerente_comercial'])` |
+| `acionar-roubo-furto` | `.in('role', ['diretor', 'analista_sinistros', ...])` |
 
+### Foco 11 — Queries com roles fixos no frontend (MEDIO)
 
-### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+| Arquivo | Roles fixos na query |
+|---|---|
+| `useConsultores.ts` L18 | `ROLES_COMERCIAIS = ['vendedor_clt', 'vendedor_externo', 'supervisor_vendas', 'gerente_comercial']` |
+| `useVendedores.ts` L19 | `.in('role', ['vendedor_clt', 'vendedor_externo', ...])` |
+| `useRotas.ts` L284, L569 | `.eq('role', 'instalador_vistoriador')` (2x) |
+| `PlantoesCalendario.tsx` L48 | `.eq('role', 'instalador_vistoriador')` |
+| `EscalaDiaPanel.tsx` L50 | `.eq('role', 'instalador_vistoriador')` |
+| `AgendarVistoriaModal.tsx` L138 | `.eq('role', 'instalador_vistoriador')` |
+| `NovoSinistroModal.tsx` L586 | `.eq('role', 'analista_eventos')` fallback `diretor` |
+| `UsuariosAcessos.tsx` L382 | `['vendedor_clt', 'vendedor_externo'].includes(role)` |
+| `Usuarios.tsx` L269 | `['vendedor_clt', 'vendedor_externo'].includes(role)` |
 
-Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
+### Foco 12 — `useRouteGuard.ts`: Redirecionamentos hardcoded (MEDIO)
 
-### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
-
-Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
-- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
-- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
-- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
-- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
-- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
-- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
-- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
-
-
----
-
-## ❌ NÃO FAZER AGORA
-
-- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
-- Página de autorizações da diretoria — depende das tabelas acima
-- Campos de vistoria (rebaixado/turbinado) — escopo separado
-- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
-
----
-
-## 📋 ORDEM DE EXECUÇÃO SUGERIDA
-
-1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
-2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
-3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
-4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
-
----
-
-# Visibilidade por Equipe — Supervisor de Vendas
-
-## ✅ CORRIGIDO
-
-### Tabela `equipes_comerciais`
-- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
-- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
-
-### Função `is_supervisor_of(_vendedor_id)`
-- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
-- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
-
-### RLS de `leads` atualizada
-- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
-- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
-
-### RLS de `cotacoes` atualizada
-- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
-
-### Hook `useEquipeComercial`
-- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
-- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
-- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
-- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
-
-### `usePermissions` atualizado
-- Adicionado `isSupervisorVendas` e `canManageEquipe`
-
-### `useVendasMetricas` atualizado
-- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
-
-### KanbanCard com badge do vendedor
-- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
-- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
+- L26-27: `isReguladorOnly` → `/regulador`
+- L34-35: `isInstaladorVistoriadorOnly` → `/instalador`
+- L45: `isSindicanteOnly` → `/sindicante`
+- Depende das exclusivity flags que sao hardcoded (Foco 3)
 
 ---
 
-## 🟡 PENDENTE
+## Resumo quantitativo
 
-### Tela de gerenciamento de equipe
-- UI para vincular/desvincular vendedores a supervisores
-- Acessível em configurações ou rota dedicada
+| Categoria | Arquivos | Ocorrencias |
+|---|---|---|
+| Identity flags (`isDiretor`, `isVendedor`, etc.) consumidas | 71 | ~1100 |
+| `ROLE_LABELS` / `AppRole` union type | 19 | ~319 |
+| `.includes('role_fixo')` direto | 5 | ~37 |
+| Edge functions com roles fixos | 14 | ~25 |
+| Queries frontend com `.eq('role', ...)` | 9 | ~15 |
+| `PermissionGate` com identity flags | 6 | ~15 |
+| Exclusivity flags (`isXxxOnly`) com exclusao manual | 1 | 8 blocos |
 
 ---
 
-# Fluxo de Assistência 24h — Reboque
+## Plano de correcao (priorizado)
 
-## ✅ CORRIGIDO
+### Fase 1 — Remover `AppRole` union e `ROLE_LABELS` de `database.ts`
+Migrar 6 consumidores para `useAppRoles().getRoleLabel()`. Manter apenas `type AppRole = string` para compatibilidade de tipo.
 
-### Gap 1 — Valor sugerido na mensagem inicial
-Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+### Fase 2 — Simplificar `AuthFlags` e `computeAuthFlags`
+Remover as 14 flags por role name. Manter apenas: `isAuthenticated`, `isFuncionario`, `isAssociado`, `isPrestador`, `isAtivo`, `isBloqueado`, `hasRole()`. Os ~71 consumidores de flags devem migrar para `usePermissions()`.
 
-### Gap 2 — Contato do associado para o reboquista
-Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+### Fase 3 — Refatorar exclusivity flags em `usePermissions`
+Adicionar campo `is_operational` e `redirect_path` em `app_roles_config`. O calculo `isXxxOnly` passa a ser: "usuario so tem roles operacionais (sem privilegiado)" — derivado do banco em vez de exclusao manual.
 
-### Gap 3 — Tela de conclusão com anexo de imagens
-Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
-- Upload múltiplo de fotos usando `useFotosReboquista`
-- Campo de observação
-- Atualiza status do chamado para `concluido`
-- Registra no histórico e no status log do reboque
+### Fase 4 — Adicionar capability permissions faltantes ao banco
+Adicionar `canManageComissoes`, `canApproveComissoes`, `canDeleteCotacao`, `canDeleteAssociado`, `canDeleteSinistro`, `canCreateTemplate`, `canEditTemplate`, `canDeleteTemplate` em `app_roles_config.permissions`. Migrar `PermissionGate` e `useDocumentoPermissoes` para usar `hasPerm()`.
 
-### Gap 4 — Integração financeira (parcial)
-O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.
+### Fase 5 — Criar funcao SQL `has_permission(user_id, permission_key)`
+Usada pelas edge functions para verificar permissoes dinamicamente em vez de listar roles.
+
+### Fase 6 — Migrar edge functions
+Substituir `allowedRoles.includes(role)` por chamada a `has_permission()`.
+
+### Fase 7 — Migrar queries com roles fixos
+Para queries que buscam "quem sao os instaladores", usar `app_roles_config.area = 'Monitoramento'` ou novo campo `is_field_worker`. Para "quem sao os vendedores", usar `area = 'Comercial'`.
+
+### Fase 8 — Limpar `AuthContext.tsx` e `AuthCallback.tsx`
+Remover funcoes legadas. Usar `redirect_path` do banco para `getRedirectUrl()`.
+
+### Fase 9 — Refatorar `PerfisAcesso.tsx`
+Usar `useAppRoles()` como `Perfis.tsx` ja faz.
+
+---
+
+## Dados a adicionar no banco
+
+| Coluna/Tabela | Descricao |
+|---|---|
+| `app_roles_config.is_operational` | Boolean — role e operacional (instalador, regulador, sindicante) |
+| `app_roles_config.redirect_path` | String — path de redirect pos-login (ex: `/instalador`, `/sindicante`) |
+| `app_roles_config.permissions` (novos valores) | `canManageComissoes`, `canApproveComissoes`, `canDeleteCotacao`, `canDeleteAssociado`, `canDeleteSinistro`, `canCreateTemplate`, `canEditTemplate`, `canDeleteTemplate` |
+
+## Arquivos afetados (total)
+
+~90 arquivos entre frontend e edge functions. A migracao deve ser feita em fases para minimizar risco.
+
