@@ -44,6 +44,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
   const [headerTexto, setHeaderTexto] = useState('');
   const [corpo, setCorpo] = useState('');
   const [rodape, setRodape] = useState('');
+  const [botoes, setBotoes] = useState<BotaoAcao[]>([]);
   const [varExemplos, setVarExemplos] = useState<Record<string, string>>({});
   const corpoRef = useRef<HTMLTextAreaElement>(null);
 
