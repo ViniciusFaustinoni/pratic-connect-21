@@ -229,12 +229,12 @@ serve(async (req) => {
         ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valorSugerido)
         : "A combinar";
 
+      const linhaValor = valorSugerido ? `\n💰 Valor sugerido: ${valorDisplay}` : "";
       const mensagem = `🚨 *NOVO CHAMADO - ${tipoLabel}*
 
 🚗 Veículo: ${veiculoDesc} — ${placaDisplay}
-${chamado.observacoes ? `📝 Obs: ${chamado.observacoes}\n` : ""}
-📍 Origem: ${enderecoOrigem || "A informar"}
-📍 Destino: ${enderecoDestino}
+${chamado.observacoes ? `📝 Obs: ${chamado.observacoes}\n` : ""}📍 Origem: ${enderecoOrigem || "A informar"}
+📍 Destino: ${enderecoDestino}${linhaValor}
 
 Tem interesse neste serviço? Responda *SIM* ou *NÃO*.`;
 
