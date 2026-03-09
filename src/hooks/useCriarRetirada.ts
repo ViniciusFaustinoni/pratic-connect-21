@@ -8,6 +8,14 @@ export interface CriarRetiradaParams {
   dataAgendada: string;      // formato: YYYY-MM-DD
   periodo: Periodo;
   motivo?: string;
+  enderecoAlternativo?: {
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+  };
 }
 
 interface RastreadorInfo {
