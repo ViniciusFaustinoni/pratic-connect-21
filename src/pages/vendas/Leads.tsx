@@ -100,7 +100,7 @@ const ORIGENS_TODAS: OrigemLead[] = [
 export default function Leads() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isSupervisor, isGerencia } = usePermissions();
   const [filters, setFilters] = useState<LeadFiltersType>({});
   const [followupFilter, setFollowupFilter] = useState<'all' | 'hoje' | 'atrasado'>(
     (searchParams.get('followup') as 'all' | 'hoje' | 'atrasado') || 'all'
