@@ -242,21 +242,37 @@ serve(async (req) => {
           mensagem: `Olá ${associado.nome}! 🚗\n\nSeu acesso ao App PRATIC está liberado!\n\n🔗 URL: ${appUrl}/app/login\n👤 Login: ${associado.cpf}\n🔑 Senha: ${senhaPadrao}\n\nNo primeiro acesso você deverá trocar sua senha.`,
         };
 
-        // Se Meta ativo, usar template boas_vindas_associado para garantir entrega
+        // Se Meta ativo, usar template ativacao_conta_pratic com botão de acesso
         if (isMetaAtivo) {
-          // Buscar placa do veículo para o template
-          let placa = 'seu veículo';
+          // Buscar dados do veículo para o template
+          let veiculoDescricao = 'seu veículo';
           if (body.veiculo_id) {
             const { data: veiculo } = await supabaseAdmin
               .from('veiculos')
-              .select('placa')
+              .select('placa, marca, modelo')
               .eq('id', body.veiculo_id)
               .single();
-            if (veiculo?.placa) placa = veiculo.placa;
+            if (veiculo?.placa) {
+              const marcaModelo = [veiculo.marca, veiculo.modelo].filter(Boolean).join(' ');
+              veiculoDescricao = marcaModelo ? `${veiculo.placa} - ${marcaModelo}` : veiculo.placa;
+            }
           }
-          sendBody.template_name = 'boas_vindas_associado';
-          sendBody.template_params = [primeiroNome, placa];
-          console.log(`[ativar-associado] Usando template Meta 'boas_vindas_associado' para ${telefoneWhatsapp}`);
+
+          // Buscar plano/cobertura do associado
+          let cobertura = 'Roubo e Furto';
+          if (associado.plano_id) {
+            const { data: plano } = await supabaseAdmin
+              .from('planos')
+              .select('nome')
+              .eq('id', associado.plano_id)
+              .single();
+            if (plano?.nome) cobertura = plano.nome;
+          }
+
+          sendBody.template_name = 'ativacao_conta_pratic';
+          sendBody.template_params = [primeiroNome, veiculoDescricao, cobertura];
+          sendBody.template_button_params = [associado.id];
+          console.log(`[ativar-associado] Usando template Meta 'ativacao_conta_pratic' com botão dinâmico para ${telefoneWhatsapp}`);
         }
 
         await supabaseAdmin.functions.invoke('whatsapp-send-text', {

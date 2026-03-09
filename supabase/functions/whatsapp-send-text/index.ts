@@ -284,7 +284,7 @@ serve(async (req) => {
     console.log(`[whatsapp-send-text] Provedor ativo: ${provedorAtivo}`);
 
     if (provedorAtivo === 'meta_oficial') {
-      const result = await enviarViaMeta(supabase, telefoneFormatado, mensagem, template_name, template_params, allow_text);
+      const result = await enviarViaMeta(supabase, telefoneFormatado, mensagem, template_name, template_params, allow_text, template_button_params);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
