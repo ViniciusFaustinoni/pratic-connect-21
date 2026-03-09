@@ -130,6 +130,9 @@ export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick, onActi
   // Planos de interesse (novo campo)
   const planosInteresse = (lead as any).planos_interesse as string[] | null;
 
+  // Vendedor name from joined data
+  const vendedorNome = (lead as any).vendedor?.nome as string | undefined;
+
   return (
     <Card
       ref={setNodeRef}
