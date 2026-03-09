@@ -1098,8 +1098,10 @@ export type Database = {
           description: string
           icon_name: string
           is_active: boolean
+          is_operational: boolean
           label: string
           permissions: Json
+          redirect_path: string | null
           role: string
           sigla: string
           sort_order: number
@@ -1113,8 +1115,10 @@ export type Database = {
           description?: string
           icon_name?: string
           is_active?: boolean
+          is_operational?: boolean
           label: string
           permissions?: Json
+          redirect_path?: string | null
           role: string
           sigla?: string
           sort_order?: number
@@ -1128,8 +1132,10 @@ export type Database = {
           description?: string
           icon_name?: string
           is_active?: boolean
+          is_operational?: boolean
           label?: string
           permissions?: Json
+          redirect_path?: string | null
           role?: string
           sigla?: string
           sort_order?: number
