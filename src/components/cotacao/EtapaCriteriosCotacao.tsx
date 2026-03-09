@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { VehicleCategorySelect } from '@/components/cotador/VehicleCategorySelect';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { fetchBenefitExclusions, gerarMensagemAlertaCategoria } from '@/data/restricoesCategorias';
 interface EtapaCriteriosCotacaoProps {
   // Região
@@ -33,13 +34,7 @@ interface EtapaCriteriosCotacaoProps {
   isCalculando?: boolean;
 }
 
-const REGIOES = [
-  { value: 'rio_de_janeiro', label: 'Rio de Janeiro - Capital e Região Metropolitana' },
-  { value: 'regiao_lagos', label: 'Região dos Lagos' },
-  { value: 'sao_paulo', label: 'São Paulo - Capital e Região Metropolitana' },
-  { value: 'interior_rj', label: 'Interior do Rio de Janeiro' },
-  { value: 'interior_sp', label: 'Interior de São Paulo' },
-];
+// REGIOES agora vem do banco via useRegioesAtivas()
 
 const COMBUSTIVEIS = [
   { value: 'flex', label: 'Flex (Gasolina/Etanol)' },
@@ -64,6 +59,9 @@ export function EtapaCriteriosCotacao({
   onCalcular,
   isCalculando = false,
 }: EtapaCriteriosCotacaoProps) {
+  const { data: regioesDb = [] } = useRegioesAtivas();
+  const REGIOES = regioesDb.map(r => ({ value: r.codigo.toLowerCase(), label: r.nome }));
+
   // Pode calcular se todos os campos obrigatórios estão preenchidos
   const canCalculate = regiao !== '' && modalidade && combustivel !== '' && categoria !== '';
 

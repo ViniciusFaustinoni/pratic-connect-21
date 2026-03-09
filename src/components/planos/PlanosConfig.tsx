@@ -16,14 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Plus, Edit, Trash2, Loader2, X, Search, FileText, MapPin, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const LINHAS_PLANO = [
-  { value: 'select', label: 'Linha Select' },
-  { value: 'select-one', label: 'Linha Select One' },
-  { value: 'especial', label: 'Linha Especial' },
-  { value: 'lancamento', label: 'Linha Lançamento' },
-  { value: 'advanced', label: 'Linha Advanced' },
-];
+import { useProductLines } from '@/hooks/usePlans';
 
 interface PlanoFormData extends PlanoInput {
   regioes: string[];
@@ -31,6 +24,9 @@ interface PlanoFormData extends PlanoInput {
 }
 
 export function PlanosConfig() {
+  const { data: productLines = [] } = useProductLines();
+  const linhasPlano = productLines.map(pl => ({ value: pl.slug, label: pl.name }));
+
   const { isDiretor, isDesenvolvedor } = usePermissions();
   const podeEditar = isDiretor || isDesenvolvedor;
   
@@ -266,7 +262,7 @@ export function PlanosConfig() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">
-                          {LINHAS_PLANO.find(l => l.value === plano.linha)?.label || plano.linha}
+                          {linhasPlano.find(l => l.value === plano.linha)?.label || plano.linha}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
@@ -386,7 +382,7 @@ export function PlanosConfig() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {LINHAS_PLANO.map(linha => (
+                    {linhasPlano.map(linha => (
                       <SelectItem key={linha.value} value={linha.value}>
                         {linha.label}
                       </SelectItem>

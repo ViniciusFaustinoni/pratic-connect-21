@@ -4,12 +4,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Search, ChevronDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCategoriasVeiculo, type CategoriaVeiculo } from '@/hooks/useConteudosSistema';
 
 // ============================================
-// CONSTANTES - CATEGORIAS DE VEÍCULO
+// CONSTANTES - CATEGORIAS DE VEÍCULO (fallback, fonte primária é o banco)
 // ============================================
 
-export const CATEGORIAS_VEICULO = [
+const CATEGORIAS_VEICULO_FALLBACK: CategoriaVeiculo[] = [
   { value: 'chassi_remarcado', label: 'Chassi remarcado' },
   { value: 'placa_vermelha', label: 'Placa vermelha' },
   { value: 'aplicativo', label: 'Veículo utilizado para aplicativos de transporte' },
@@ -18,9 +19,11 @@ export const CATEGORIAS_VEICULO = [
   { value: 'ex_taxi', label: 'Ex-táxi' },
   { value: 'taxi', label: 'Táxi' },
   { value: 'nenhuma', label: 'Nenhuma das opções' },
-] as const;
+];
 
-export type CategoriaVeiculo = typeof CATEGORIAS_VEICULO[number]['value'];
+// Re-exportar para compatibilidade com importadores existentes
+export { CATEGORIAS_VEICULO_FALLBACK as CATEGORIAS_VEICULO };
+export type { CategoriaVeiculo } from '@/hooks/useConteudosSistema';
 
 // ============================================
 // INTERFACES
@@ -46,20 +49,24 @@ export function VehicleCategorySelect({
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Buscar categorias do banco, com fallback
+  const { data: categoriasDb } = useCategoriasVeiculo();
+  const categorias = categoriasDb && categoriasDb.length > 0 ? categoriasDb : CATEGORIAS_VEICULO_FALLBACK;
+
   // Encontrar label da opção selecionada
   const selectedLabel = useMemo(() => {
     if (!value) return null;
-    return CATEGORIAS_VEICULO.find((cat) => cat.value === value)?.label || null;
-  }, [value]);
+    return categorias.find((cat) => cat.value === value)?.label || null;
+  }, [value, categorias]);
 
   // Filtrar opções pela busca
   const filteredOptions = useMemo(() => {
-    if (!searchTerm.trim()) return CATEGORIAS_VEICULO;
+    if (!searchTerm.trim()) return categorias;
     const term = searchTerm.toLowerCase();
-    return CATEGORIAS_VEICULO.filter((cat) =>
+    return categorias.filter((cat) =>
       cat.label.toLowerCase().includes(term)
     );
-  }, [searchTerm]);
+  }, [searchTerm, categorias]);
 
   // Handler para seleção
   const handleSelect = (selectedValue: string) => {

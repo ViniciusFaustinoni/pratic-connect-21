@@ -17645,11 +17645,14 @@ export type Database = {
           color: string | null
           created_at: string | null
           display_order: number | null
+          gradient_class: string | null
           icon: string | null
           id: string
           is_active: boolean | null
           name: string
+          requires_recent_year: boolean
           slug: string
+          sort_priority: number
           updated_at: string | null
           vehicle_type: string | null
         }
@@ -17657,11 +17660,14 @@ export type Database = {
           color?: string | null
           created_at?: string | null
           display_order?: number | null
+          gradient_class?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean | null
           name: string
+          requires_recent_year?: boolean
           slug: string
+          sort_priority?: number
           updated_at?: string | null
           vehicle_type?: string | null
         }
@@ -17669,11 +17675,14 @@ export type Database = {
           color?: string | null
           created_at?: string | null
           display_order?: number | null
+          gradient_class?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean | null
           name?: string
+          requires_recent_year?: boolean
           slug?: string
+          sort_priority?: number
           updated_at?: string | null
           vehicle_type?: string | null
         }

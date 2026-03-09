@@ -19,6 +19,7 @@ import {
   Calculator
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 
 interface VeiculoEncontrado {
   placa: string;
@@ -88,11 +89,7 @@ const COMBUSTIVEIS = [
   { value: 'hibrido', label: 'Híbrido' },
 ];
 
-const REGIOES = [
-  { value: 'rio_de_janeiro', label: 'Rio de Janeiro' },
-  { value: 'regiao_lagos', label: 'Região dos Lagos' },
-  { value: 'sao_paulo', label: 'São Paulo' },
-];
+// REGIOES agora vem do banco via useRegioesAtivas()
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -126,6 +123,9 @@ export function EtapaDadosVeiculo({
   onCalcular,
   isCalculando,
 }: EtapaDadosVeiculoProps) {
+  const { data: regioesDb = [] } = useRegioesAtivas();
+  const REGIOES = regioesDb.map(r => ({ value: r.codigo.toLowerCase(), label: r.nome }));
+
   const [camposDesbloqueados, setCamposDesbloqueados] = useState(modoEntrada === 'manual');
   const [valorFipeInput, setValorFipeInput] = useState(
     valorFipe ? formatCurrency(valorFipe) : ''

@@ -69,13 +69,16 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   // Buscar decomposição do banco
   const { data: decomposicao } = useConfigDecomposicao();
 
-  // Buscar planos reais do banco de dados
+  // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
     queryKey: ['planos_cotacao'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('planos')
-        .select('*')
+        .select(`
+          *,
+          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class)
+        `)
         .eq('ativo', true)
         .order('ordem', { ascending: true });
       
@@ -135,12 +138,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     const regiaoDb = regioes?.find(r => {
       const codigoLower = r.codigo.toLowerCase();
       const regiaoLower = regiao.toLowerCase();
-      return codigoLower === regiaoLower 
-        || (regiaoLower === 'rio_de_janeiro' && codigoLower === 'rj')
-        || (regiaoLower === 'regiao_lagos' && codigoLower === 'lagos')
-        || (regiaoLower === 'sao_paulo' && codigoLower === 'sp')
-        || (regiaoLower === 'interior_rj' && codigoLower === 'rj')
-        || (regiaoLower === 'interior_sp' && codigoLower === 'sp');
+      return codigoLower === regiaoLower;
     });
     const multiplicadorRegiao = regiaoDb ? Number(regiaoDb.multiplicador_preco) : 1.0;
 
@@ -166,6 +164,12 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const codigo = plano.codigo?.toLowerCase() || '';
       const tipoUsoPlano = plano.tipo_uso?.toLowerCase() || '';
       const categoriaPlano = plano.categoria?.toLowerCase() || '';
+      
+      // Usar product_lines para regras dinâmicas
+      const plProductLine = (plano as any).product_lines;
+      const vehicleType = plProductLine?.vehicle_type || null;
+      const requiresRecentYear = plProductLine?.requires_recent_year || false;
+      const sortPriority = plProductLine?.sort_priority || 100;
 
       // Filtro por uso
       const isPlanoAplicativo = tipoUsoPlano === 'aplicativo' || categoriaPlano === 'aplicativo';
@@ -173,9 +177,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (params.usoApp === true && !isPlanoAplicativo) continue;
       if (params.usoApp === false && isPlanoAplicativo) continue;
 
-      // Filtrar motos/carros
-      if (tipoVeiculo === 'moto' && linha !== 'advanced') continue;
-      if (tipoVeiculo === 'carro' && linha === 'advanced') continue;
+      // Filtrar motos/carros usando vehicle_type do banco
+      if (tipoVeiculo === 'moto' && vehicleType === 'car') continue;
+      if (tipoVeiculo === 'carro' && vehicleType === 'motorcycle') continue;
 
       // Verificar ano mínimo
       const anoMinimo = plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0;
@@ -185,8 +189,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (plano.fipe_minima && valorFipe < Number(plano.fipe_minima)) continue;
       if (plano.fipe_maxima && valorFipe > Number(plano.fipe_maxima)) continue;
 
-      // Lançamento
-      if (linha === 'lancamento' && anoVeiculoNum < anoAtual - 1) continue;
+      // Regra de ano recente usando campo do banco
+      if (requiresRecentYear && anoVeiculoNum < anoAtual - 1) continue;
 
       // Calcular valor base
       let valorBase: number | null = null;
@@ -270,11 +274,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       });
     }
 
-    // Ordenar por campo `ordem` do banco (já veio ordenado, mas manter prioridade SELECT)
+    // Ordenar por sort_priority do product_lines (dinâmico do banco)
     return planosCalculados.sort((a, b) => {
-      if (a.linha === 'select' && b.linha !== 'select') return -1;
-      if (a.linha !== 'select' && b.linha === 'select') return 1;
-      // Dentro da mesma linha, usar valorMensal como tiebreaker
+      const aPriority = planosBanco.find(p => p.id === a.id);
+      const bPriority = planosBanco.find(p => p.id === b.id);
+      const aSortP = (aPriority as any)?.product_lines?.sort_priority || 100;
+      const bSortP = (bPriority as any)?.product_lines?.sort_priority || 100;
+      if (aSortP !== bSortP) return aSortP - bSortP;
+      // Dentro da mesma prioridade, usar valorMensal como tiebreaker
       return a.valorMensal - b.valorMensal;
     });
   }, [params, planosBanco, tabelasPreco, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto]);

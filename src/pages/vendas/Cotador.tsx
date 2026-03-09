@@ -52,6 +52,7 @@ import { useCriarCotacao } from '@/hooks/useCotacao';
 import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
+import { useTemplateWhatsappCotacao } from '@/hooks/useConteudosSistema';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';
@@ -227,6 +228,7 @@ const estimarValorFipe = (marca: string, ano: number): number => {
 
 export default function CotadorPage() {
   const navigate = useNavigate();
+  const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
@@ -693,11 +695,7 @@ ${planoFinalSelecionado.naoInclui.length > 0 ? `*Não incluído:*\n${planoFinalS
 
 _Cotação válida por 7 dias_
 
-✨ *Benefícios exclusivos PRATIC:*
-• Cobertura 100% da tabela FIPE
-• Sem análise de perfil
-• Aprovação em até 24h
-• App exclusivo para associados
+${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% da tabela FIPE\n• Sem análise de perfil\n• Aprovação em até 24h\n• App exclusivo para associados'}
       `.trim();
 
       const telefone = leadSelecionado?.telefone?.replace(/\D/g, '') || '';

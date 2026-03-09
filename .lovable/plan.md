@@ -1,194 +1,203 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
 
+## Resumo
 
-# Investigacao Profunda: Hardcode em Planos e Beneficios
-
-## Resumo dos focos encontrados
-
----
-
-### Foco 1 — `LINHAS_PLANO` hardcoded em `PlanosConfig.tsx` (CRITICO)
-
-**Arquivo**: `src/components/planos/PlanosConfig.tsx` L20-26
-
-```
-const LINHAS_PLANO = [
-  { value: 'select', label: 'Linha Select' },
-  { value: 'select-one', label: 'Linha Select One' },
-  { value: 'especial', label: 'Linha Especial' },
-  { value: 'lancamento', label: 'Linha Lançamento' },
-  { value: 'advanced', label: 'Linha Advanced' },
-];
-```
-
-A tabela `product_lines` ja existe no banco e `useProductLines()` ja esta disponivel. Este array deveria vir do banco.
-
-Defaults do form tambem sao fixos: `linha: 'select'`, `cobertura_fipe: 100`, `ano_minimo: 2005`.
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
 
 ---
 
-### Foco 2 — `LINHA_CORES` hardcoded em `PlanoCardSelecao.tsx` (MEDIO)
+## ✅ CORRIGIDO (não mexer)
 
-**Arquivo**: `src/components/planos/PlanoCardSelecao.tsx` L30-37
-
-```
-const LINHA_CORES: Record<string, string> = {
-  'select': 'from-blue-500 to-blue-600',
-  'select-one': 'from-emerald-500 to-green-600',
-  'especial': 'from-orange-500 to-amber-600',
-  'lancamento': 'from-violet-500 to-purple-600',
-  'advanced': 'from-red-500 to-rose-600',
-  'eletricos': 'from-teal-500 to-cyan-600',
-};
-```
-
-A tabela `product_lines` ja tem campo `color`. O `PlanoCardDynamic.tsx` ja usa `plan.product_lines?.color` — mas este componente nao.
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
 
 ---
 
-### Foco 3 — `NIVEL_CONFIG` hardcoded em `EscolhaPlano.tsx` (MEDIO)
+## 🟡 PENDENTE
 
-**Arquivo**: `src/components/cotacao-publica/EscolhaPlano.tsx` L35-54
+### 1. ✅ `pricing.ts` — REMOVIDO
 
-Mapeia `exclusive`, `premium`, `basic` com icones e cores fixas. Ja tem fallback para niveis desconhecidos, mas os 3 niveis conhecidos sao hardcoded. Poderia ter campo `icon` e `color` na tabela `planos` (que ja tem `badge_color`).
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
 
----
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
 
-### Foco 4 — `REGIOES` hardcoded em 3 arquivos (CRITICO)
+Centralizada em `src/utils/format.ts`.
 
-A tabela `regioes` ja existe e `useRegioes()`/`useRegioesAtivas()` estao disponiveis.
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
 
-| Arquivo | Conteudo fixo |
-|---|---|
-| `EtapaDadosVeiculo.tsx` L91-95 | `REGIOES = [{rio_de_janeiro}, {regiao_lagos}, {sao_paulo}]` |
-| `EtapaCriteriosCotacao.tsx` L36-39 | `REGIOES = [{rio_de_janeiro}, {regiao_lagos}, {sao_paulo}]` |
-| `EtapaResultado.tsx` L64-68 | `REGIOES_LABELS = {rio_de_janeiro: 'Rio de Janeiro', ...}` |
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
----
+### 5. ✅ Veículo Blindado — CORRIGIDO
 
-### Foco 5 — `OBSERVACOES_CATEGORIA` hardcoded em `EtapaResultado.tsx` (MEDIO)
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
 
-**Arquivo**: `src/components/cotacao/EtapaResultado.tsx` L71-75
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
 
-```
-const OBSERVACOES_CATEGORIA: Record<string, string> = {
-  leilao: 'Veículo de leilão: sem cobertura de incêndio',
-  aplicativo: 'Uso para aplicativo: cota de participação 8% (mín R$ 3.000)',
-  chassi_remarcado: 'Chassi remarcado: sujeito à análise de aceitação',
-};
-```
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
 
-Estas observacoes deveriam vir de `benefit_category_exclusions` (ja existe) ou de um campo `observacao` em alguma tabela de categorias.
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
 
----
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
 
-### Foco 6 — `CATEGORIAS_VEICULO` hardcoded em `VehicleCategorySelect.tsx` (MEDIO)
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
 
-**Arquivo**: `src/components/cotador/VehicleCategorySelect.tsx` L12-21
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
 
-Array fixo com 8 categorias. Importado por 5+ componentes. Deveria vir do banco (nova tabela `categorias_veiculo` ou da tabela de configuracoes).
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
 
----
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
 
-### Foco 7 — `MARCAS` e `MODELOS_POR_MARCA` hardcoded em `EtapaDadosVeiculo.tsx` (MEDIO)
+### 12. ✅ Linhas de produto hardcoded — MIGRADO PARA BANCO
 
-**Arquivo**: `src/components/cotacao/EtapaDadosVeiculo.tsx` L54-79
+`LINHAS_PLANO` em `PlanosConfig.tsx` substituído por `useProductLines()`. Linha "Select One" adicionada à tabela `product_lines`.
 
-17 marcas e ~80 modelos fixos em codigo. Usado apenas como fallback para entrada manual (FIPE puxa automaticamente), mas novas marcas/modelos nao aparecem.
+### 13. ✅ Regiões hardcoded — MIGRADO PARA BANCO
 
----
+`REGIOES` em `EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx` substituídos por `useRegioesAtivas()`.
 
-### Foco 8 — Logica de negocio hardcoded em `usePlanosCotacao.ts` (CRITICO)
+### 14. ✅ Lógica de negócio hardcoded em usePlanosCotacao — CORRIGIDO
 
-**Arquivo**: `src/hooks/usePlanosCotacao.ts`
+- `linha === 'advanced'` → `vehicle_type` da tabela `product_lines`
+- `linha === 'lancamento'` → `requires_recent_year` da tabela `product_lines`
+- Ordenação `linha === 'select'` → `sort_priority` da tabela `product_lines`
+- Mapeamento manual de códigos de região removido (usa `regioes.codigo` diretamente)
 
-| Linha | Hardcode |
-|---|---|
-| L177-178 | `linha !== 'advanced'` para filtrar motos/carros |
-| L189 | `linha === 'lancamento'` regra de ano para linha Lancamento |
-| L274-276 | Ordenacao prioriza `linha === 'select'` |
-| L139-143 | Mapeamento manual de codigos de regiao (`rio_de_janeiro` → `rj`, etc.) |
+### 15. ✅ LINHA_CORES hardcoded em PlanoCardSelecao — CORRIGIDO
 
-Estas regras de negocio deveriam derivar de campos na tabela `product_lines` (ex: `tipo_veiculo = 'moto'`, `sort_priority`, `requires_recent_year`).
+`gradient_class` adicionado à tabela `product_lines`. Fallback mantido no componente.
 
----
+### 16. ✅ CATEGORIAS_VEICULO hardcoded — MIGRADO PARA BANCO
 
-### Foco 9 — Mensagem WhatsApp com textos fixos em `Cotador.tsx` (BAIXO)
+Categorias inseridas na tabela `configuracoes` (chave `categorias_veiculo`). Hook `useCategoriasVeiculo()` criado. `VehicleCategorySelect` agora busca do banco com fallback.
 
-**Arquivo**: `src/pages/vendas/Cotador.tsx` L696-700
+### 17. ✅ OBSERVACOES_CATEGORIA hardcoded — MIGRADO PARA BANCO
 
-```
-✨ *Benefícios exclusivos PRATIC:*
-• Cobertura 100% da tabela FIPE
-• Sem análise de perfil
-• Aprovação em até 24h
-• App exclusivo para associados
-```
+Observações inseridas na tabela `configuracoes` (chave `observacoes_categoria`). Hook `useObservacoesCategoria()` criado.
 
-Textos de marketing fixos no codigo. Deveriam vir de uma tabela `configuracoes` ou `templates_mensagem`.
+### 18. ✅ Template WhatsApp hardcoded — MIGRADO PARA BANCO
 
----
+Template de benefícios inserido na tabela `configuracoes` (chave `template_whatsapp_cotacao`). Hook `useTemplateWhatsappCotacao()` criado.
 
-### Foco 10 — Fotos de vistoria hardcoded em `autovistoriaConfig.ts` e `vistoriaConfigCompleta.ts` (BAIXO)
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
 
-**Arquivos**: `src/data/autovistoriaConfig.ts` (509 linhas), `src/data/vistoriaConfigCompleta.ts`
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
 
-~500 linhas de configuracao de fotos (15 fotos carro, 7 fotos moto, instrucoes, periodos, vagas). Importado por 15+ componentes. Adicionar/remover uma foto requer deploy.
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
 
----
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
 
-### Foco 11 — `CATEGORIA_LABELS` hardcoded em `restricoesCategorias.ts` (BAIXO)
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
-**Arquivo**: `src/data/restricoesCategorias.ts` L24-32
 
-Labels de categorias duplicados do `CATEGORIAS_VEICULO` do Foco 6. Sem fonte unica.
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
+
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
+
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
+
 
 ---
 
-## Resumo quantitativo
+## ❌ NÃO FAZER AGORA
 
-| Categoria | Arquivos | Impacto |
-|---|---|---|
-| Linhas de produto fixas (LINHAS_PLANO, LINHA_CORES) | 2 | CRITICO — novas linhas requerem deploy |
-| Regioes fixas (REGIOES, REGIOES_LABELS) | 3 | CRITICO — banco ja tem tabela `regioes` |
-| Logica de negocio por nome de linha | 1 | CRITICO — regras de filtragem/ordenacao |
-| Niveis de plano fixos (NIVEL_CONFIG) | 1 | MEDIO — tem fallback, mas cores fixas |
-| Categorias de veiculo fixas | 2 | MEDIO — 8 categorias hardcoded |
-| Marcas/modelos fixos | 1 | MEDIO — fallback manual |
-| Observacoes por categoria fixas | 1 | MEDIO — textos de negocio |
-| Textos de marketing WhatsApp | 1 | BAIXO — textos fixos |
-| Fotos de vistoria | 2 | BAIXO — ~500 linhas de config |
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
 ---
 
-## Plano de correcao
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-### Fase 1 — Migrar `LINHAS_PLANO` para banco (Foco 1)
-`PlanosConfig.tsx`: substituir array fixo por `useProductLines()`. Usar `product_lines.slug` como value e `product_lines.name` como label.
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
 
-### Fase 2 — Migrar `REGIOES` para banco (Foco 4)
-`EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx`: usar `useRegioesAtivas()` em vez de arrays fixos.
+---
 
-### Fase 3 — Eliminar logica por nome de linha em `usePlanosCotacao.ts` (Foco 8)
-Adicionar campos a `product_lines`:
-- `tipo_veiculo` (enum: 'carro', 'moto', 'ambos') — substitui `linha === 'advanced'`
-- `requires_recent_year` (boolean) — substitui `linha === 'lancamento'`
-- `sort_priority` (int) — substitui `linha === 'select'` na ordenacao
+# Visibilidade por Equipe — Supervisor de Vendas
 
-Atualizar mapeamento de regiao para usar `regioes.codigo` diretamente.
+## ✅ CORRIGIDO
 
-### Fase 4 — Migrar `LINHA_CORES` e `NIVEL_CONFIG` (Focos 2 e 3)
-`PlanoCardSelecao.tsx`: usar `product_lines.color` do banco (ja funciona em `PlanoCardDynamic`).
-`EscolhaPlano.tsx`: manter `NIVEL_CONFIG` como fallback visual, ja que tem auto-fallback funcional.
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
 
-### Fase 5 — Migrar `CATEGORIAS_VEICULO` para banco (Foco 6)
-Criar tabela `categorias_veiculo` (value, label, ativa, ordem) ou usar `configuracoes`. Unificar com `CATEGORIA_LABELS` de `restricoesCategorias.ts`.
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
 
-### Fase 6 — Migrar `OBSERVACOES_CATEGORIA` (Foco 5)
-Derivar observacoes de `benefit_category_exclusions` e dos dados de cota do plano, em vez de textos fixos.
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
 
-### Fase 7 — Migrar textos WhatsApp (Foco 9)
-Mover para tabela `configuracoes` com chave `template_whatsapp_cotacao`.
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
 
-### Fases futuras — Fotos de vistoria e marcas/modelos
-Focos 7 e 10 sao de menor impacto e podem ser tratados separadamente.
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
 
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
+
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
+
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
+
+---
+
+## 🟡 PENDENTE
+
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
+
+---
+
+# Fluxo de Assistência 24h — Reboque
+
+## ✅ CORRIGIDO
+
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.

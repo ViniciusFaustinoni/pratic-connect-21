@@ -16,7 +16,8 @@ import {
   Loader2,
   Fuel
 } from 'lucide-react';
-import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
+import { useCategoriasVeiculo, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { PlanoCardCotacao } from './PlanoCardCotacao';
 import { CurrencyInput } from '@/components/inputs/MaskedInputs';
 import { cn } from '@/lib/utils';
@@ -61,18 +62,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const REGIOES_LABELS: Record<string, string> = {
-  rio_de_janeiro: 'Rio de Janeiro',
-  regiao_lagos: 'Região dos Lagos',
-  sao_paulo: 'São Paulo',
-};
-
-// Observações baseadas na categoria
-const OBSERVACOES_CATEGORIA: Record<string, string> = {
-  leilao: 'Veículo de leilão: sem cobertura de incêndio',
-  aplicativo: 'Uso para aplicativo: cota de participação 8% (mín R$ 3.000)',
-  chassi_remarcado: 'Chassi remarcado: sujeito à análise de aceitação',
-};
+// REGIOES_LABELS e OBSERVACOES_CATEGORIA agora vêm do banco
 
 export function EtapaResultado({
   veiculoFipe,
@@ -96,9 +86,15 @@ export function EtapaResultado({
 }: EtapaResultadoProps) {
   const [showAllPlanos, setShowAllPlanos] = useState(false);
 
-  const categoriaLabel = CATEGORIAS_VEICULO.find(c => c.value === categoria)?.label || categoria;
-  const regiaoLabel = REGIOES_LABELS[regiao] || regiao;
-  const observacao = categoria ? OBSERVACOES_CATEGORIA[categoria] : null;
+  // Dados dinâmicos do banco
+  const { data: categoriasVeiculo = [] } = useCategoriasVeiculo();
+  const { data: observacoesCategoria = {} } = useObservacoesCategoria();
+  const { data: regioesDb = [] } = useRegioesAtivas();
+
+  const categoriaLabel = categoriasVeiculo.find(c => c.value === categoria)?.label || categoria;
+  const regiaoDb = regioesDb.find(r => r.codigo.toLowerCase() === regiao.toLowerCase());
+  const regiaoLabel = regiaoDb?.nome || regiao;
+  const observacao = categoria ? observacoesCategoria[categoria] || null : null;
 
   // Mostrar 3 planos por padrão, ou todos se expandido
   const planosVisiveis = showAllPlanos ? planos : planos.slice(0, 3);
