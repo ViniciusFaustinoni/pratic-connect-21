@@ -1,5 +1,6 @@
 // ============================================
 // MAPEAMENTO CENTRALIZADO DE RESTRIÇÕES POR CATEGORIA DE VEÍCULO
+// Fonte primária: tabela benefit_category_exclusions (banco de dados)
 // ============================================
 
 import { supabase } from '@/integrations/supabase/client';
@@ -19,7 +20,6 @@ export interface BenefitExclusionData {
 
 /**
  * Labels amigáveis para as categorias de veículo.
- * Mantido inline — não precisa de tabela separada.
  */
 const CATEGORIA_LABELS: Record<string, string> = {
   leilao: 'Veículo de leilão',
@@ -31,34 +31,21 @@ const CATEGORIA_LABELS: Record<string, string> = {
   aplicativo: 'Uso para aplicativo',
 };
 
-// Cache local para exclusões (evita múltiplas queries)
+// Cache local para exclusões
 let exclusionsCache: BenefitExclusionData[] | null = null;
 let cacheTimestamp: number = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+const CACHE_DURATION = 5 * 60 * 1000;
 
-/**
- * Busca as exclusões de benefícios do banco de dados
- */
 export async function fetchBenefitExclusions(): Promise<BenefitExclusionData[]> {
   const now = Date.now();
-  
-  // Retornar cache se ainda válido
   if (exclusionsCache && now - cacheTimestamp < CACHE_DURATION) {
     return exclusionsCache;
   }
-  
   try {
     const { data, error } = await supabase
       .from('benefit_category_exclusions')
-      .select(`
-        id,
-        benefit_id,
-        categoria_veiculo,
-        benefits:benefit_id (name)
-      `);
-    
+      .select(`id, benefit_id, categoria_veiculo, benefits:benefit_id (name)`);
     if (error) throw error;
-    
     exclusionsCache = (data || []).map((item: any) => ({
       id: item.id,
       benefit_id: item.benefit_id,
@@ -66,7 +53,6 @@ export async function fetchBenefitExclusions(): Promise<BenefitExclusionData[]> 
       benefit_name: item.benefits?.name || '',
     }));
     cacheTimestamp = now;
-    
     return exclusionsCache;
   } catch (error) {
     console.error('Erro ao buscar exclusões de benefícios:', error);
@@ -74,219 +60,107 @@ export async function fetchBenefitExclusions(): Promise<BenefitExclusionData[]> 
   }
 }
 
-/**
- * Limpa o cache de exclusões (chamar após editar um benefício)
- */
 export function clearExclusionsCache(): void {
   exclusionsCache = null;
   cacheTimestamp = 0;
 }
 
-/**
- * Verifica se uma cobertura/benefício está excluído para a categoria.
- * Usa exclusões do banco de dados + mapa estático como fallback.
- * 
- * @param cobertura - Nome da cobertura/benefício
- * @param categoria - Categoria do veículo
- * @param exclusions - Array de exclusões pré-carregadas (opcional)
- */
 export function isCoberturaRemovida(
   cobertura: string, 
   categoria: string | undefined | null,
   exclusions?: BenefitExclusionData[]
 ): boolean {
   if (!categoria || categoria === 'nenhuma') return false;
-  
   const coberturaLower = cobertura.toLowerCase();
-  
-  // Se exclusões do banco foram passadas, verificar primeiro
   if (exclusions && exclusions.length > 0) {
-    const isExcludedInDb = exclusions.some(
-      (exc) => 
-        exc.categoria_veiculo === categoria &&
+    return exclusions.some(
+      (exc) => exc.categoria_veiculo === categoria &&
         exc.benefit_name?.toLowerCase().includes(coberturaLower)
     );
-    if (isExcludedInDb) return true;
   }
-  
-  // Fallback para mapa estático
-  const restricoes = RESTRICOES_CATEGORIA[categoria];
-  if (!restricoes) return false;
-  
-  return restricoes.coberturasRemovidas.some(
-    removida => coberturaLower.includes(removida.toLowerCase())
-  );
+  return false;
 }
 
-/**
- * Verifica se um benefício (por ID) está excluído para a categoria.
- * Versão mais precisa que usa o ID do benefício.
- */
 export function isBenefitExcludedById(
   benefitId: string,
   categoria: string | undefined | null,
   exclusions: BenefitExclusionData[]
 ): boolean {
   if (!categoria || categoria === 'nenhuma' || !benefitId) return false;
-  
   return exclusions.some(
     (exc) => exc.benefit_id === benefitId && exc.categoria_veiculo === categoria
   );
 }
 
-/**
- * Obtém as coberturas removidas para uma categoria específica (estáticas).
- */
 export function getCoberturasRemovidas(categoria: string | undefined | null): string[] {
   if (!categoria || categoria === 'nenhuma') return [];
-  
-  const restricoes = RESTRICOES_CATEGORIA[categoria];
-  return restricoes?.coberturasRemovidas || [];
+  return [];
 }
 
-/**
- * Obtém as coberturas removidas dinamicamente (banco + estático como fallback).
- * Esta é a função recomendada para uso nas cotações.
- */
 export function getCoberturasRemovidasDinamico(
   categoria: string | undefined | null,
   exclusions: BenefitExclusionData[]
 ): string[] {
   if (!categoria || categoria === 'nenhuma') return [];
-  
-  // Primeiro buscar exclusões dinâmicas do banco
-  const exclusoesDinamicas = exclusions
+  return exclusions
     .filter(exc => exc.categoria_veiculo === categoria)
     .map(exc => exc.benefit_name || '')
     .filter(Boolean);
-  
-  if (exclusoesDinamicas.length > 0) {
-    return exclusoesDinamicas;
-  }
-  
-  // Fallback para mapa estático
-  const restricoes = RESTRICOES_CATEGORIA[categoria];
-  return restricoes?.coberturasRemovidas || [];
 }
 
-/**
- * Obtém a restrição completa para uma categoria.
- */
 export function getRestricaoCategoria(categoria: string | undefined | null): RestricaoCategoria | null {
   if (!categoria || categoria === 'nenhuma') return null;
-  return RESTRICOES_CATEGORIA[categoria] || null;
+  return null;
 }
 
-/**
- * Obtém nomes de benefícios excluídos para uma categoria (do banco)
- */
 export function getBenefitsExcludedForCategory(
   categoria: string,
   exclusions: BenefitExclusionData[]
 ): string[] {
   if (!categoria || categoria === 'nenhuma') return [];
-  
   return exclusions
     .filter((exc) => exc.categoria_veiculo === categoria)
     .map((exc) => exc.benefit_name || '')
     .filter(Boolean);
 }
 
-/**
- * Labels amigáveis para as categorias de veículo
- */
-const CATEGORIA_LABELS: Record<string, string> = {
-  leilao: 'Veículo de leilão',
-  chassi_remarcado: 'Chassi remarcado',
-  ressarcimento_integral: 'Ressarcimento integral',
-  taxi: 'Táxi',
-  ex_taxi: 'Ex-Táxi',
-  placa_vermelha: 'Placa vermelha',
-  aplicativo: 'Uso para aplicativo',
-};
-
-/**
- * Gera mensagem de alerta dinâmica baseada nas exclusões configuradas no banco.
- * Usa fallback para mensagem estática se não houver exclusões.
- */
 export function gerarMensagemAlertaCategoria(
   categoria: string | undefined | null,
   exclusions: BenefitExclusionData[]
 ): string | null {
   if (!categoria || categoria === 'nenhuma') return null;
-  
-  // Buscar benefícios excluídos para esta categoria
-  const beneficiosExcluidos = getBenefitsExcludedForCategory(categoria, exclusions);
-  
-  if (beneficiosExcluidos.length === 0) {
-    // Fallback para mensagem estática se não houver exclusões configuradas
-    const restricaoEstatica = RESTRICOES_CATEGORIA[categoria];
-    return restricaoEstatica?.mensagemAlerta || null;
-  }
-  
-  // Gerar mensagem dinâmica
+  const beneficiosExcluidos = [...getBenefitsExcludedForCategory(categoria, exclusions)];
+  if (beneficiosExcluidos.length === 0) return null;
   const prefixo = CATEGORIA_LABELS[categoria] || 'Esta categoria';
-  
   if (beneficiosExcluidos.length === 1) {
     return `${prefixo}: sem cobertura de ${beneficiosExcluidos[0]}`;
   }
-  
-  // Múltiplos benefícios excluídos
   const ultimoBeneficio = beneficiosExcluidos.pop();
-  const beneficiosTexto = beneficiosExcluidos.join(', ') + ' e ' + ultimoBeneficio;
-  return `${prefixo}: sem cobertura de ${beneficiosTexto}`;
+  return `${prefixo}: sem cobertura de ${beneficiosExcluidos.join(', ')} e ${ultimoBeneficio}`;
 }
 
-/**
- * Gera um resumo de exclusões agrupado por benefício.
- * Mostra quais categorias de veículo não terão acesso a cada benefício.
- * Ideal para o Preview de edição de planos.
- */
-export function gerarResumoExclusoesParaPreview(
-  exclusions: Map<string, string[]>
-): string[] {
+export function gerarResumoExclusoesParaPreview(exclusions: Map<string, string[]>): string[] {
   const alertas: string[] = [];
-  
-  exclusions.forEach((categorias, benefitId) => {
+  exclusions.forEach((categorias) => {
     if (categorias.length === 0) return;
-    
     const labels = categorias.map(cat => CATEGORIA_LABELS[cat] || cat);
-    
-    // O benefício será identificado pelo nome quando renderizado
-    if (labels.length === 1) {
-      alertas.push(`${labels[0]}`);
-    } else if (labels.length === 2) {
-      alertas.push(`${labels[0]} e ${labels[1]}`);
-    } else {
-      const ultimo = labels.pop();
-      alertas.push(`${labels.join(', ')} e ${ultimo}`);
-    }
+    if (labels.length === 1) alertas.push(`${labels[0]}`);
+    else if (labels.length === 2) alertas.push(`${labels[0]} e ${labels[1]}`);
+    else { const ultimo = labels.pop(); alertas.push(`${labels.join(', ')} e ${ultimo}`); }
   });
-  
   return alertas;
 }
 
-/**
- * Gera alertas formatados para o Preview, agrupados por benefício.
- * Retorna um array de objetos com o nome do benefício e as categorias excluídas.
- */
 export function gerarAlertasExclusaoPreview(
   exclusions: Map<string, string[]>,
-  benefitsMap: Map<string, string> // benefitId -> benefitName
+  benefitsMap: Map<string, string>
 ): Array<{ benefitName: string; categorias: string[] }> {
   const alertas: Array<{ benefitName: string; categorias: string[] }> = [];
-  
   exclusions.forEach((categorias, benefitId) => {
     if (categorias.length === 0) return;
-    
     const benefitName = benefitsMap.get(benefitId) || benefitId;
     const categoriasLabels = categorias.map(cat => CATEGORIA_LABELS[cat] || cat);
-    
-    alertas.push({
-      benefitName,
-      categorias: categoriasLabels,
-    });
+    alertas.push({ benefitName, categorias: categoriasLabels });
   });
-  
   return alertas;
 }
