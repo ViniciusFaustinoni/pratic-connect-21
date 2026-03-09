@@ -1,95 +1,68 @@
-# Auditoria Completa: Planos, Benefícios e Precificação
 
-## Resumo
 
-A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+# Análise do Fluxo de Assistência 24h — Reboque
 
----
+## Status Atual vs. Seu Fluxo Esperado
 
-## ✅ CORRIGIDO (não mexer)
-
-- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
-- `usePlanosCotacao.ts` — Hook principal dinâmico
-- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
-- `CotacaoDetalhe.tsx` — Dados do hook
-- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
-- `ContratoDetalhe.tsx` — Dinâmico
-- `Cotador.tsx` — Usa PlanoCotacao direto
-- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
-- `CardPlano.tsx` — Recebe benefícios/coberturas como props
-- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
-- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
-- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+| Etapa | Sua Expectativa | Status Atual | Gaps |
+|-------|----------------|-------------|------|
+| **1. Associado solicita** | ✅ | ✅ Via app ou WhatsApp (IA Maya) | Nenhum |
+| **2. IA ou humano cria o chamado** | ✅ | ✅ `criar-chamado-assistencia` cria o chamado e auto-dispara despacho para reboque/guincho | Nenhum |
+| **3. IA dispara WhatsApp a TODOS os reboquistas ativos** | ✅ | ✅ `despacho-reboque-disparar` busca todos com `status=ativo`, `disponivel=true`, que atendem reboque e têm WhatsApp. Filtra os que já têm chamado ativo | Nenhum |
+| **4. Mensagem com dados do chamado e valor sugerido** | ⚠️ Parcial | A mensagem atual **NÃO inclui o valor sugerido** na primeira mensagem. Mostra veículo, origem, destino e pede SIM/NÃO, mas **omite o valor**. O `valor_sugerido` existe na tabela `prestadores_assistencia_valores` e é buscado, mas só é exibido na etapa 3 (após localização) | **GAP: valor sugerido ausente na mensagem inicial** |
+| **5. IA entende respostas, pede localização, calcula valor, mostra Top 3** | ✅ | ✅ Fluxo conversacional em 4 etapas: interesse → localização → confirmação de valor → ETA. Top 3 ranqueados por menor valor e menor distância no painel do analista | Nenhum |
+| **6. Analista escolhe um resultado** | ✅ | ✅ Botão "Atribuir" no CardDespachoReboque para cada um dos Top 3 | Nenhum |
+| **7. Reboque é atribuído** | ✅ | ✅ Atualiza despacho, chamado, cria atendimento e status log | Nenhum |
+| **8. IA avisa associado e reboquista por WhatsApp com contato** | ⚠️ Parcial | O reboquista recebe "CHAMADO ATRIBUÍDO A VOCÊ" com valor. O associado recebe link de acompanhamento + nome e telefone do reboquista. **Mas o reboquista NÃO recebe os dados de contato do associado (nome/telefone)** | **GAP: reboquista não recebe contato do associado** |
+| **9. Analista marca como concluído e anexa imagens** | ❌ Não implementado | O fluxo atual para na atribuição. Não há UI para o analista marcar conclusão do serviço de reboque nem anexar imagens | **GAP: falta tela de conclusão com anexo de imagens** |
+| **10. Custo computado nos relatórios financeiros** | ❌ Não implementado | O valor fica registrado no atendimento (`valor_servico`), mas não há integração com módulo financeiro/relatórios | **GAP: falta integração financeira** |
 
 ---
 
-## 🟡 PENDENTE
+## Resumo dos Gaps a Corrigir
 
-### 1. `pricing.ts` — 539 linhas estáticas (prioridade média)
+### Gap 1 — Incluir valor sugerido na mensagem inicial
+A mensagem disparada em `despacho-reboque-disparar` (linha 232-239) não inclui o `valor_sugerido`. O valor já é buscado da tabela `prestadores_assistencia_valores`, basta adicioná-lo à mensagem:
 
-**Problema:** Categorias fixas (BASIC/PREMIUM/EXCLUSIVE), faixas FIPE hardcoded, preços estáticos por região/combustível, cidades fixas por região.
+```
+🚨 *NOVO CHAMADO - Reboque*
+🚗 Veículo: Toyota Corolla 2013 — ABC1D23
+📍 Origem: Rua A, 123
+📍 Destino: Rua C, 456
+💰 Valor sugerido: R$ 250,00
 
-**Usado por:**
-| Arquivo | O que importa |
-|---------|--------------|
-| `QuoteCalculatorModal.tsx` | `calcularCotacao`, `formatarMoeda`, `ADICIONAIS`, tipos `Categoria`, `ResultadoCotacao` |
-| `useCotacaoAvancada.ts` | `calcularCotacao`, `ResultadoCotacao`, `Categoria` |
-| `CotacaoPublica.tsx` | Apenas `formatarMoeda` |
-| `CotacaoContratacao.tsx` | Apenas `formatarMoeda` |
+Tem interesse? Responda SIM ou NÃO.
+```
 
-**Solução:**
-1. Extrair `formatarMoeda` para local centralizado (já existe em `usePlanosPrecificacao.ts` L68)
-2. Migrar `QuoteCalculatorModal` + `useCotacaoAvancada` para usar hooks dinâmicos
-3. Remover `pricing.ts`
+**Arquivo**: `supabase/functions/despacho-reboque-disparar/index.ts` (linhas 226-239)
 
-### 2. `formatarMoeda` duplicada em 5+ locais (prioridade média)
+### Gap 2 — Reboquista receber contato do associado
+Na atribuição manual (`CardDespachoReboque.tsx`, linha 252-261), a mensagem ao reboquista não inclui nome/telefone do associado. Precisamos buscar esses dados e incluir na mensagem.
 
-| Local | Tipo |
-|-------|------|
-| `src/config/pricing.ts` | Exportada, usada por 2 páginas públicas |
-| `src/hooks/usePlanosPrecificacao.ts` L68 | Exportada |
-| `src/pages/public/CotacaoPublicaCompleta.tsx` L196 | Local |
-| `src/components/cotacao-publica/EscolhaPlano.tsx` L33 | Local |
-| `src/components/beneficios/TabelaSaudeBeneficios.tsx` L23 | Local |
+**Arquivo**: `src/components/assistencia/CardDespachoReboque.tsx` (linhas 216-264)
 
-**Solução:** Criar `src/utils/format.ts` com `formatarMoeda` e substituir todas as ocorrências.
+### Gap 3 — Tela de conclusão do serviço com anexo de imagens
+Criar funcionalidade para o analista:
+- Marcar o serviço como "concluído"
+- Anexar fotos/imagens recebidas via WhatsApp
+- Salvar no registro do atendimento
 
-### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+**Arquivos novos**: componente de conclusão no `CardDespachoReboque` ou modal dedicado
 
-Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
-- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
-- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
-
-
-### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
-
-Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
-
-### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
-
-Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
-- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
-- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
-- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
-- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
-- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
-- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
-- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
-
+### Gap 4 — Integração com relatórios financeiros
+Registrar o custo do reboque como despesa operacional nos relatórios financeiros existentes.
 
 ---
 
-## ❌ NÃO FAZER AGORA
+## Plano de Implementação
 
-- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
-- Página de autorizações da diretoria — depende das tabelas acima
-- Campos de vistoria (rebaixado/turbinado) — escopo separado
+### Fase 1 (imediata): Gaps 1 e 2
+1. **Adicionar valor sugerido à mensagem inicial** — editar `despacho-reboque-disparar/index.ts` para incluir `💰 Valor sugerido: R$ X` quando disponível
+2. **Enviar contato do associado ao reboquista** — editar a mutation de atribuição em `CardDespachoReboque.tsx` para buscar dados do associado e incluí-los na mensagem WhatsApp ao reboquista
 
----
+### Fase 2 (posterior): Gaps 3 e 4
+3. **UI de conclusão + anexo de imagens** — adicionar seção no CardDespachoReboque para quando `status=atribuido`, com botão "Concluir Serviço" e upload de imagens
+4. **Integração financeira** — registrar o custo como despesa na tabela financeira ao concluir
 
-## 📋 ORDEM DE EXECUÇÃO SUGERIDA
+Deseja que eu implemente a Fase 1 (gaps 1 e 2) agora?
 
-1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
-2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
-3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
-4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
