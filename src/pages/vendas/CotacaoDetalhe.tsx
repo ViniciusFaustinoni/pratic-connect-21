@@ -210,7 +210,7 @@ Ficou com alguma dúvida? Estou à disposição!
             coberturas: p.coberturas || [],
             naoInclui: p.naoInclui || [],
             coberturaFipe: p.coberturaFipe || 100,
-            cota: p.cota || '6% (mín R$ 1.200,00)',
+            cota: p.cota || cotaFallbackStr,
             // Campos expandidos para novo layout
             cotaPercentual: p.cotaPercentual,
             cotaMinima: p.cotaMinima,
