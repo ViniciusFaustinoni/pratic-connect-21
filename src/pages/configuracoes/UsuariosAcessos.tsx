@@ -366,7 +366,7 @@ export default function UsuariosAcessos() {
 
   const handleSaveRoles = async () => {
     if (!editingUser?.user_id) return;
-    const currentRoles = (userRoles?.[editingUser.user_id] || []) as AppRole[];
+    const currentRoles = (userRoles?.[editingUser.user_id] || []) as string[];
     const toAdd = selectedRoles.filter(r => !currentRoles.includes(r));
     const toRemove = currentRoles.filter(r => !selectedRoles.includes(r));
     try {
