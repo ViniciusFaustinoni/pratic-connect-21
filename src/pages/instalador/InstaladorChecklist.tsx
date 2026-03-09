@@ -61,6 +61,7 @@ import {
 import { useSaveAssinatura } from '@/hooks/useAssinatura';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
 import { VistoriaFotoCard } from '@/components/vistorias/VistoriaFotoCard';
+import { FotoCapture } from '@/components/instalador/FotoCapture';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
