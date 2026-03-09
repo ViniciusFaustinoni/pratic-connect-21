@@ -7,19 +7,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Save, User, Mail, Phone, Hash, Info } from 'lucide-react';
 import { useUpdateConsultor, type Consultor } from '@/hooks/useConsultores';
+import { useAppRoles } from '@/hooks/useAppRoles';
 
 interface ConsultorEditSheetProps {
   consultor: Consultor | null;
   open: boolean;
   onClose: () => void;
 }
-
-const ROLE_LABELS: Record<string, string> = {
-  vendedor_clt: 'Vendedor CLT',
-  vendedor_externo: 'Vendedor Externo',
-  supervisor_vendas: 'Supervisor',
-  gerente_comercial: 'Gerente',
-};
 
 export function ConsultorEditSheet({ consultor, open, onClose }: ConsultorEditSheetProps) {
   const [codigoSga, setCodigoSga] = useState('');
