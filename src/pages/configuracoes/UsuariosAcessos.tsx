@@ -142,6 +142,8 @@ export default function UsuariosAcessos() {
   const initialTab = searchParams.get('tab') || 'usuarios';
   const [activeTab, setActiveTab] = useState(initialTab);
   const queryClient = useQueryClient();
+  const { roles: appRolesData, getRoleLabel, getRoleBadgeClass, getRoleOptions, isLoading: isLoadingAppRoles } = useAppRoles();
+  const allRoles = appRolesData.filter(r => r.role !== 'associado').map(r => r.role);
 
   // ===== USUARIOS STATE =====
   const [search, setSearch] = useState('');
