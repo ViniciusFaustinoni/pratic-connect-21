@@ -48,7 +48,21 @@ export type PermissionKey =
   | 'canManageEquipe'
   | 'canManageEquipeEstoque'
   | 'canViewReports'
-  | 'canEditRotas';
+  | 'canEditRotas'
+  // Phase 4 capabilities
+  | 'canManageComissoes'
+  | 'canApproveComissoes'
+  | 'canDeleteCotacao'
+  | 'canDeleteAssociado'
+  | 'canDeleteSinistro'
+  | 'canCreateTemplate'
+  | 'canEditTemplate'
+  | 'canDeleteTemplate'
+  | 'canCreateUser'
+  | 'canImportUsers'
+  | 'canResetPassword'
+  | 'canDeleteAtivacao'
+  | 'canManageIntegracoes';
 
 export type CotacaoViewScope = 'own' | 'team' | 'all';
 

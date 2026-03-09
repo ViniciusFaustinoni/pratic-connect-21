@@ -501,6 +501,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (profile?.tipo === 'associado') {
       return '/app/home';
     }
+    // Para prestadores/operacionais, verificar se tem redirect no perfil
+    if (profile?.tipo === 'prestador') {
+      if (hasPerfil('sindicante')) return '/sindicante';
+      if (hasPerfil('regulador')) return '/regulador';
+      return '/instalador';
+    }
     if (hasPerfil('instalador_vistoriador')) {
       return '/instalador';
     }
