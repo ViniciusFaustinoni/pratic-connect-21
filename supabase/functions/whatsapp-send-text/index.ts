@@ -146,19 +146,31 @@ async function enviarViaMeta(
     };
 
     console.log(`[whatsapp-send-text] Enviando template '${templateName}' via Meta para ${telefoneFormatado}`);
+  } else if (allowText) {
+    // Texto livre permitido (respostas da Maya/chatbot dentro da janela 24h)
+    metaBody = {
+      messaging_product: "whatsapp",
+      to: telefoneFormatado,
+      type: "text",
+      text: {
+        preview_url: contemLink(mensagem),
+        body: mensagem,
+      },
+    };
+
+    console.log(`[whatsapp-send-text] Enviando texto livre via Meta para ${telefoneFormatado} (allow_text=true, preview_url=${contemLink(mensagem)})`);
   } else {
-    // BLOQUEAR texto livre quando Meta está ativa — mensagens sem template NÃO são entregues fora da janela 24h
+    // BLOQUEAR texto livre proativo sem template — NÃO é entregue fora da janela 24h
     console.error(`[whatsapp-send-text] ❌ BLOQUEADO: Tentativa de envio sem template via Meta para ${telefoneFormatado}. Mensagem: "${mensagem.substring(0, 80)}..."`);
     
-    // Registrar a tentativa bloqueada no banco para diagnóstico
     await supabase.from("whatsapp_mensagens").insert({
       telefone: telefoneFormatado, tipo: "text", mensagem,
       direcao: "saida", status: "erro",
-      erro_mensagem: "Bloqueado: Meta API ativa requer template_name. Texto livre não é entregue fora da janela 24h.",
+      erro_mensagem: "Bloqueado: Meta API ativa requer template_name. Texto livre não é entregue fora da janela 24h. Use allow_text=true para respostas na janela 24h.",
       provedor: "meta_oficial",
     });
 
-    throw new Error("Meta API ativa: template_name obrigatório. Texto livre não será entregue fora da janela de 24h. Adicione template_name e template_params ao payload.");
+    throw new Error("Meta API ativa: template_name obrigatório. Texto livre não será entregue fora da janela de 24h. Adicione template_name/template_params ou allow_text=true.");
   }
 
   const response = await fetch(
