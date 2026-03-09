@@ -57,6 +57,37 @@ Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `cat
 
 ### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
 
+### 12. ✅ Linhas de produto hardcoded — MIGRADO PARA BANCO
+
+`LINHAS_PLANO` em `PlanosConfig.tsx` substituído por `useProductLines()`. Linha "Select One" adicionada à tabela `product_lines`.
+
+### 13. ✅ Regiões hardcoded — MIGRADO PARA BANCO
+
+`REGIOES` em `EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx` substituídos por `useRegioesAtivas()`.
+
+### 14. ✅ Lógica de negócio hardcoded em usePlanosCotacao — CORRIGIDO
+
+- `linha === 'advanced'` → `vehicle_type` da tabela `product_lines`
+- `linha === 'lancamento'` → `requires_recent_year` da tabela `product_lines`
+- Ordenação `linha === 'select'` → `sort_priority` da tabela `product_lines`
+- Mapeamento manual de códigos de região removido (usa `regioes.codigo` diretamente)
+
+### 15. ✅ LINHA_CORES hardcoded em PlanoCardSelecao — CORRIGIDO
+
+`gradient_class` adicionado à tabela `product_lines`. Fallback mantido no componente.
+
+### 16. ✅ CATEGORIAS_VEICULO hardcoded — MIGRADO PARA BANCO
+
+Categorias inseridas na tabela `configuracoes` (chave `categorias_veiculo`). Hook `useCategoriasVeiculo()` criado. `VehicleCategorySelect` agora busca do banco com fallback.
+
+### 17. ✅ OBSERVACOES_CATEGORIA hardcoded — MIGRADO PARA BANCO
+
+Observações inseridas na tabela `configuracoes` (chave `observacoes_categoria`). Hook `useObservacoesCategoria()` criado.
+
+### 18. ✅ Template WhatsApp hardcoded — MIGRADO PARA BANCO
+
+Template de benefícios inserido na tabela `configuracoes` (chave `template_whatsapp_cotacao`). Hook `useTemplateWhatsappCotacao()` criado.
+
 Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
 
 ### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
