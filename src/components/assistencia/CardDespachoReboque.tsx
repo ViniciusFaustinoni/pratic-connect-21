@@ -249,14 +249,29 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
         })
         .eq('id', chamadoId);
 
-      // Notificar prestador atribuído via WhatsApp
+      // Buscar dados do associado para enviar contato ao reboquista
+      const { data: chamadoInfo } = await supabase
+        .from('chamados_assistencia')
+        .select('associado:associados(nome, telefone)')
+        .eq('id', chamadoId)
+        .single();
+
+      const associado = (chamadoInfo as any)?.associado;
+      const nomeAssociado = associado?.nome || 'Associado';
+      const telAssociado = associado?.telefone || '';
+
+      // Notificar prestador atribuído via WhatsApp (com contato do associado)
       const prest = convite.prestador as any;
       const telPrest = prest?.whatsapp || prest?.telefone;
       if (telPrest) {
+        const contatoAssociado = telAssociado
+          ? `\n\n👤 *Associado:* ${nomeAssociado}\n📱 *Telefone:* ${telAssociado}`
+          : `\n\n👤 *Associado:* ${nomeAssociado}`;
+
         await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telPrest,
-            mensagem: `🎉 *CHAMADO ATRIBUÍDO A VOCÊ!*\n\nVocê foi selecionado para este serviço de reboque.\nValor: ${formatCurrency(convite.valor_calculado)}\n\nPor favor, dirija-se ao local o mais rápido possível. Boa viagem! 🚛`,
+            mensagem: `🎉 *CHAMADO ATRIBUÍDO A VOCÊ!*\n\nVocê foi selecionado para este serviço de reboque.\nValor: ${formatCurrency(convite.valor_calculado)}${contatoAssociado}\n\nPor favor, dirija-se ao local o mais rápido possível. Boa viagem! 🚛`,
           },
         });
       }
