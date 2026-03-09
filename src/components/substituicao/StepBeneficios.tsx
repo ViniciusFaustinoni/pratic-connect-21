@@ -6,35 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, Loader2 } from 'lucide-react';
+import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
 import type { DadosNovoVeiculo } from '@/types/substituicao';
-
-interface BeneficioConfig {
-  id: string;
-  nome: string;
-  preco: number;
-  info?: string;
-  soApp?: boolean;
-}
-
-const BENEFICIOS: BeneficioConfig[] = [
-  { id: 'cobertura_vidros', nome: 'Proteção para Vidros e Faróis', preco: 9.90, info: 'Carência: 120 dias | Cobertura: 60% Pratic / 40% Associado' },
-  { id: 'reboque_1000km', nome: '1000km de Reboque', preco: 2.90 },
-  { id: 'reboque_excedente', nome: 'Reboque Excedente', preco: 2.90 },
-  { id: 'kit_gas', nome: 'Proteção Kit Gás', preco: 9.90 },
-  { id: 'carro_reserva_7', nome: 'Carro Reserva 7 dias', preco: 7.90 },
-  { id: 'carro_reserva_15', nome: 'Carro Reserva 15 dias', preco: 15.90 },
-  { id: 'carro_reserva_30', nome: 'Carro Reserva 30 dias', preco: 35.90 },
-  { id: 'rastreador_adicional', nome: 'Rastreador (adicional)', preco: 30.00 },
-  { id: 'fipe_100_app', nome: '100% FIPE para APP + 30 dias reserva', preco: 35.90, soApp: true },
-];
-
-const FAIXAS_TERCEIROS = [
-  { id: '15000', nome: 'R$ 15.000', preco: 12.90 },
-  { id: '40000', nome: 'R$ 40.000', preco: 0 },
-  { id: '70000', nome: 'R$ 70.000', preco: 20.00 },
-  { id: '100000', nome: 'R$ 100.000', preco: 40.00 },
-];
 
 interface VeiculoAntigo {
   cobertura_vidros?: boolean;
@@ -60,6 +34,8 @@ export function StepBeneficios({
   onNext,
   onBack,
 }: StepBeneficiosProps) {
+  const { beneficios, faixasTerceiros, precosMap, terceirosMap, isLoading } = useBeneficiosSeparados();
+
   const toggleBeneficio = (id: string) => {
     setBeneficiosSelecionados({
       ...beneficiosSelecionados,
@@ -74,7 +50,29 @@ export function StepBeneficios({
     });
   };
 
-  // Calcular mensalidade base (simplificada: 0.45% do valor FIPE)
+  // Mapear benefícios do banco para formato do componente
+  const beneficiosUI = useMemo(() => {
+    return beneficios.map(b => {
+      const chave = Object.entries(precosMap).find(([, v]) => v.nome === b.nome)?.[0] || b.codigo.toLowerCase();
+      return {
+        id: chave,
+        nome: b.nome,
+        preco: b.preco,
+        info: b.descricao || undefined,
+        soApp: b.codigo === 'COMBO_APP_CARRO',
+      };
+    });
+  }, [beneficios, precosMap]);
+
+  const faixasTerceirosUI = useMemo(() => {
+    return Object.entries(terceirosMap).map(([id, info]) => ({
+      id,
+      nome: info.nome,
+      preco: info.preco,
+    })).sort((a, b) => parseInt(a.id) - parseInt(b.id));
+  }, [terceirosMap]);
+
+  // Mensalidade base — usa valor FIPE (a taxa real viria de tabelas_preco mas os dados estão zerados)
   const mensalidadeBase = useMemo(() => {
     const fipe = dadosNovoVeiculo.valor_fipe || 0;
     return fipe * 0.0045;
@@ -83,16 +81,15 @@ export function StepBeneficios({
   // Total adicionais
   const totalAdicionais = useMemo(() => {
     let total = 0;
-    BENEFICIOS.forEach((b) => {
+    beneficiosUI.forEach((b) => {
       if (beneficiosSelecionados[b.id]) total += b.preco;
     });
     const faixaTerceiros = beneficiosSelecionados.cobertura_terceiros as string;
-    if (faixaTerceiros) {
-      const faixa = FAIXAS_TERCEIROS.find((f) => f.id === faixaTerceiros);
-      if (faixa) total += faixa.preco;
+    if (faixaTerceiros && terceirosMap[faixaTerceiros]) {
+      total += terceirosMap[faixaTerceiros].preco;
     }
     return total;
-  }, [beneficiosSelecionados]);
+  }, [beneficiosSelecionados, beneficiosUI, terceirosMap]);
 
   const totalMensal = mensalidadeBase + totalAdicionais;
   const mensalidadeAnterior = veiculoAntigo.mensalidade || 0;
@@ -106,6 +103,14 @@ export function StepBeneficios({
     veiculoAntigo.cobertura_terceiros && `Danos Terceiros (${veiculoAntigo.cobertura_terceiros})`,
     veiculoAntigo.cobertura_assistencia && `Assistência (${veiculoAntigo.cobertura_assistencia})`,
   ].filter(Boolean);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -141,7 +146,7 @@ export function StepBeneficios({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {BENEFICIOS.filter((b) => !b.soApp || dadosNovoVeiculo.uso_aplicativo).map((beneficio) => {
+          {beneficiosUI.filter((b) => !b.soApp || dadosNovoVeiculo.uso_aplicativo).map((beneficio) => {
             const antigoTinha = beneficio.id === 'cobertura_vidros' && veiculoAntigo.cobertura_vidros;
             return (
               <label
@@ -183,7 +188,7 @@ export function StepBeneficios({
                 <SelectValue placeholder="Selecione a faixa" />
               </SelectTrigger>
               <SelectContent>
-                {FAIXAS_TERCEIROS.map((f) => (
+                {faixasTerceirosUI.map((f) => (
                   <SelectItem key={f.id} value={f.id}>
                     {f.nome} — {f.preco === 0 ? 'Incluído' : `${formatCurrency(f.preco)}/mês`}
                   </SelectItem>
