@@ -196,11 +196,18 @@ async function enviarViaMeta(
 
   const messageId = result.messages?.[0]?.id;
 
+  // Diferenciar status: template = alta chance de entrega, texto livre = pode não entregar
+  const statusEnvio = templateName ? "enviada" : "enviada_texto_livre";
+  
   await supabase.from("whatsapp_mensagens").insert({
     telefone: telefoneFormatado, tipo: "text", mensagem,
-    direcao: "saida", status: "enviada", message_id: messageId,
+    direcao: "saida", status: statusEnvio, message_id: messageId,
     provedor: "meta_oficial",
   });
+
+  if (!templateName) {
+    console.warn(`[whatsapp-send-text] ⚠️ Mensagem ${messageId} salva como '${statusEnvio}' - pode NÃO ser entregue fora da janela 24h.`);
+  }
 
   console.log(`[whatsapp-send-text] ✓ Meta: ${telefoneFormatado} - ID: ${messageId}`);
   return { success: true, message_id: messageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
