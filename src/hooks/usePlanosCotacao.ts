@@ -189,8 +189,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (plano.fipe_minima && valorFipe < Number(plano.fipe_minima)) continue;
       if (plano.fipe_maxima && valorFipe > Number(plano.fipe_maxima)) continue;
 
-      // Lançamento
-      if (linha === 'lancamento' && anoVeiculoNum < anoAtual - 1) continue;
+      // Regra de ano recente usando campo do banco
+      if (requiresRecentYear && anoVeiculoNum < anoAtual - 1) continue;
 
       // Calcular valor base
       let valorBase: number | null = null;
