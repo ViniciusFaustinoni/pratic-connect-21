@@ -1088,6 +1088,45 @@ export type Database = {
           },
         ]
       }
+      app_roles_config: {
+        Row: {
+          area: string
+          color: string
+          created_at: string
+          description: string
+          icon_name: string
+          is_active: boolean
+          label: string
+          role: string
+          sigla: string
+          sort_order: number
+        }
+        Insert: {
+          area?: string
+          color?: string
+          created_at?: string
+          description?: string
+          icon_name?: string
+          is_active?: boolean
+          label: string
+          role: string
+          sigla?: string
+          sort_order?: number
+        }
+        Update: {
+          area?: string
+          color?: string
+          created_at?: string
+          description?: string
+          icon_name?: string
+          is_active?: boolean
+          label?: string
+          role?: string
+          sigla?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       asaas_clientes: {
         Row: {
           asaas_id: string
