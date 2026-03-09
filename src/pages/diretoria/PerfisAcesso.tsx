@@ -2,7 +2,21 @@ import { useState } from 'react';
 import { 
   Shield, 
   Users, 
-  X
+  Crown,
+  Briefcase,
+  UserCheck,
+  UserPlus,
+  FileCheck,
+  Megaphone,
+  Scale,
+  MapPin,
+  Monitor,
+  Wrench,
+  User,
+  Eye,
+  Radio,
+  Building2,
+  type LucideIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +29,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAppRoles } from '@/hooks/useAppRoles';
-import { iconMap } from '@/components/layout/iconMap';
+
+/** Map icon_name from DB to Lucide component */
+const ICON_MAP: Record<string, LucideIcon> = {
+  Crown, Shield, Briefcase, Users, UserCheck, UserPlus, FileCheck,
+  Megaphone, Scale, MapPin, Monitor, Wrench, User, Eye, Radio, Building2,
+};
 
 interface UserProfile {
   id: string;
