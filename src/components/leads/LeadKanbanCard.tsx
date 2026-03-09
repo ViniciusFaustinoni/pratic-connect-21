@@ -76,7 +76,7 @@ function getIndicadorContrato(lead: Lead) {
   return null;
 }
 
-export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick, onAction }: LeadKanbanCardProps) {
+export function LeadKanbanCard({ lead, onClick, onQuote, onWhatsAppClick, onAction, showVendedor }: LeadKanbanCardProps) {
   const {
     attributes,
     listeners,
