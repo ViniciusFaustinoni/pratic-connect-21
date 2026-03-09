@@ -457,14 +457,17 @@ serve(async (req) => {
           mensagem: whatsappMsg,
         };
 
-        // Se Meta ativo e temos template mapeado, usar template
+        // Se Meta ativo, SEMPRE usar template (obrigatório)
         if (isMetaAtivo && META_TEMPLATE_MAP[tipo]) {
           const mapping = META_TEMPLATE_MAP[tipo];
           sendBody.template_name = mapping.template_name;
           sendBody.template_params = mapping.getParams();
           console.log(`[notificar-cliente] Usando template Meta '${mapping.template_name}' para tipo '${tipo}'`);
         } else if (isMetaAtivo) {
-          console.warn(`[notificar-cliente] ⚠️ Meta ativo mas sem template mapeado para tipo '${tipo}'. Enviando texto livre (pode não ser entregue fora da janela 24h).`);
+          // Fallback: usar sinistro_atualizado como template genérico
+          console.warn(`[notificar-cliente] ⚠️ Meta ativo mas sem template específico para tipo '${tipo}'. Usando sinistro_atualizado como fallback.`);
+          sendBody.template_name = 'sinistro_atualizado';
+          sendBody.template_params = [primeiroNome, tipo, titulo.replace(/[^\w\s]/g, '').substring(0, 200)];
         }
 
         const { data: whatsResult, error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
