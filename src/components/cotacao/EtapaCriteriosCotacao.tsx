@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { VehicleCategorySelect } from '@/components/cotador/VehicleCategorySelect';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { fetchBenefitExclusions, gerarMensagemAlertaCategoria } from '@/data/restricoesCategorias';
 interface EtapaCriteriosCotacaoProps {
   // Região
