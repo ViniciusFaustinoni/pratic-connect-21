@@ -52,6 +52,7 @@ import { useCriarCotacao } from '@/hooks/useCotacao';
 import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
+import { useTemplateWhatsappCotacao } from '@/hooks/useConteudosSistema';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';
