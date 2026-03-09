@@ -924,10 +924,18 @@ ${linkWhatsAppCliente}
 
 ⚠️ Entre em contato para confirmar sua chegada!`;
 
+            // Usar template assistencia_confirmada para garantir entrega via Meta
+            const tipoServicoLabelVist = servico.tipo === 'instalacao' ? 'Instalação' : 'Vistoria';
             await supabase.functions.invoke('whatsapp-send-text', {
               body: {
                 telefone: telefoneProfissional.replace(/\D/g, ''),
                 mensagem: mensagemVistoriador,
+                template_name: 'assistencia_confirmada',
+                template_params: [
+                  profissionalTel?.nome || 'Profissional',
+                  `${tipoServicoLabelVist} - ${servico.associado_nome || 'Cliente'}`,
+                  servico.bairro || servico.cidade || 'Endereço cadastrado',
+                ],
               },
             });
             

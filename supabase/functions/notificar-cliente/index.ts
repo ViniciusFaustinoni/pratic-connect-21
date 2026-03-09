@@ -318,6 +318,7 @@ serve(async (req) => {
 
         // Mapear tipos de notificação para templates aprovados da Meta
         const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] }> = {
+          // Aprovações e boas-vindas → boas_vindas_associado ({{1}} nome, {{2}} placa)
           cadastro_aprovado: {
             template_name: 'boas_vindas_associado',
             getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
@@ -333,6 +334,54 @@ serve(async (req) => {
           cobertura_total_ativada: {
             template_name: 'boas_vindas_associado',
             getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
+          },
+          vistoria_aprovada: {
+            template_name: 'boas_vindas_associado',
+            getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
+          },
+          instalacao_concluida: {
+            template_name: 'boas_vindas_associado',
+            getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
+          },
+          // Técnico/assistência → assistencia_confirmada ({{1}} nome, {{2}} prestador, {{3}} minutos/período)
+          tecnico_em_rota: {
+            template_name: 'assistencia_confirmada',
+            getParams: () => [
+              primeiroNome,
+              (dados?.tecnico_nome as string) || 'Técnico PRATIC',
+              (dados?.periodo as string) || '30',
+            ],
+          },
+          instalacao_agendada: {
+            template_name: 'assistencia_confirmada',
+            getParams: () => [
+              primeiroNome,
+              'Técnico PRATIC',
+              (dados?.data as string) || 'em breve',
+            ],
+          },
+          assistencia_prestador_acionado: {
+            template_name: 'assistencia_confirmada',
+            getParams: () => [
+              primeiroNome,
+              (dados?.prestador_nome as string) || 'Prestador',
+              (dados?.previsao as string) || '30',
+            ],
+          },
+          // Documentação → documentacao_pendente ({{1}} nome, {{2}} documentos)
+          documentos_solicitados: {
+            template_name: 'documentacao_pendente',
+            getParams: () => [
+              primeiroNome,
+              (dados?.documentos as string) || 'documentos pendentes',
+            ],
+          },
+          lembrete_documentos: {
+            template_name: 'documentacao_pendente',
+            getParams: () => [
+              primeiroNome,
+              (dados?.documentos as string) || 'documentos pendentes',
+            ],
           },
         };
 
