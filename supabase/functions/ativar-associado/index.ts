@@ -269,9 +269,30 @@ serve(async (req) => {
             if (plano?.nome) cobertura = plano.nome;
           }
 
+          // Gerar token de primeiro acesso (48h)
+          const tokenPrimeiroAcesso = crypto.randomUUID();
+          const expiraEm = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+          // Invalidar tokens anteriores
+          await supabaseAdmin
+            .from('auth_tokens_primeiro_acesso')
+            .update({ usado: true, usado_em: new Date().toISOString() })
+            .eq('associado_id', associado.id)
+            .eq('usado', false);
+
+          // Salvar novo token
+          await supabaseAdmin
+            .from('auth_tokens_primeiro_acesso')
+            .insert({
+              associado_id: associado.id,
+              token: tokenPrimeiroAcesso,
+              expira_em: expiraEm.toISOString(),
+              usado: false
+            });
+
           sendBody.template_name = 'ativacao_conta_pratic';
           sendBody.template_params = [primeiroNome, veiculoDescricao, cobertura];
-          sendBody.template_button_params = [associado.id];
+          sendBody.template_button_params = [tokenPrimeiroAcesso];
           console.log(`[ativar-associado] Usando template Meta 'ativacao_conta_pratic' com botão dinâmico para ${telefoneWhatsapp}`);
         }
 
