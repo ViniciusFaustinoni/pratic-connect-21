@@ -16,6 +16,7 @@ interface ConsultorEditSheetProps {
 }
 
 export function ConsultorEditSheet({ consultor, open, onClose }: ConsultorEditSheetProps) {
+  const { getRoleLabel } = useAppRoles();
   const [codigoSga, setCodigoSga] = useState('');
   const updateConsultor = useUpdateConsultor();
 

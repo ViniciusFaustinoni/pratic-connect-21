@@ -200,7 +200,7 @@ export default function Consultores() {
                             variant="secondary"
                             className={ROLE_COLORS[role] || ''}
                           >
-                            {ROLE_LABELS[role] || role}
+                            {ROLE_SHORT_LABELS[role] || role}
                           </Badge>
                         ))}
                       </div>

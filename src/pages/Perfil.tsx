@@ -480,7 +480,7 @@ export default function Perfil() {
                 <div className="flex flex-wrap gap-2">
                   {roles.map((role) => (
                     <Badge key={role} variant="outline" className="text-sm">
-                      {ROLE_LABELS[role] || role}
+                      {getRoleLabel(role)}
                     </Badge>
                   ))}
                 </div>
