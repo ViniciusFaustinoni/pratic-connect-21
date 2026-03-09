@@ -307,7 +307,7 @@ export default function PerfisAcesso() {
             
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
               {appRoles.filter(r => r.role !== 'associado').map(roleConfig => {
-                const IconComponent = iconMap[roleConfig.icon_name] || Shield;
+                const IconComponent = ICON_MAP[roleConfig.icon_name] || Shield;
                 const isSelected = selectedRoles.includes(roleConfig.role);
 
                 return (
