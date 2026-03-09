@@ -4,12 +4,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Search, ChevronDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCategoriasVeiculo, type CategoriaVeiculo } from '@/hooks/useConteudosSistema';
 
 // ============================================
-// CONSTANTES - CATEGORIAS DE VEÍCULO
+// CONSTANTES - CATEGORIAS DE VEÍCULO (fallback, fonte primária é o banco)
 // ============================================
 
-export const CATEGORIAS_VEICULO = [
+const CATEGORIAS_VEICULO_FALLBACK: CategoriaVeiculo[] = [
   { value: 'chassi_remarcado', label: 'Chassi remarcado' },
   { value: 'placa_vermelha', label: 'Placa vermelha' },
   { value: 'aplicativo', label: 'Veículo utilizado para aplicativos de transporte' },
@@ -18,9 +19,11 @@ export const CATEGORIAS_VEICULO = [
   { value: 'ex_taxi', label: 'Ex-táxi' },
   { value: 'taxi', label: 'Táxi' },
   { value: 'nenhuma', label: 'Nenhuma das opções' },
-] as const;
+];
 
-export type CategoriaVeiculo = typeof CATEGORIAS_VEICULO[number]['value'];
+// Re-exportar para compatibilidade com importadores existentes
+export { CATEGORIAS_VEICULO_FALLBACK as CATEGORIAS_VEICULO };
+export type { CategoriaVeiculo } from '@/hooks/useConteudosSistema';
 
 // ============================================
 // INTERFACES
