@@ -157,13 +157,12 @@ const menuConfig: {
       permission: 'canManageLeads',
       color: MENU_COLORS.vendas,
       items: [
-        { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
         { title: 'Cotação', url: '/vendas/cotacoes', icon: Calculator },
         { title: 'Propostas', url: '/vendas/contratos', icon: FileCheck },
         { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
-        
         { title: 'Equipe Comercial', url: '/vendas/equipe-comercial', icon: FileText, permission: 'canManageConsultores' },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
+        { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
       ],
     },
     {
