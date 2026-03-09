@@ -75,7 +75,7 @@ export function ConsultorEditSheet({ consultor, open, onClose }: ConsultorEditSh
               <div className="flex flex-wrap gap-1 mt-1">
                 {consultor.roles.map(role => (
                   <Badge key={role} variant="secondary" className="text-xs">
-                    {ROLE_LABELS[role] || role}
+                    {getRoleLabel(role)}
                   </Badge>
                 ))}
               </div>
