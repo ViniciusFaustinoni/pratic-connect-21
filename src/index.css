@@ -747,3 +747,9 @@
   border: 1px solid hsl(var(--primary) / 0.2);
   margin: 0 0.125rem;
 }
+
+/* Scroll suave no mobile */
+.app-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}

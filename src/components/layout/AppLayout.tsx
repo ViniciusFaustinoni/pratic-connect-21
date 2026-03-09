@@ -38,7 +38,7 @@ export function AppLayout() {
             <SidebarInset className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
               <AppHeader />
               {/* Main content - single scroll container with overscroll isolation */}
-              <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+              <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden app-scroll-container">
                 <div className="px-3 py-4 sm:px-4 sm:py-6 lg:px-6 xl:px-8 max-w-screen-2xl mx-auto w-full">
                   <Outlet />
                 </div>
