@@ -25,34 +25,43 @@ A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pen
 
 ## 🟡 PENDENTE
 
-### 1. `pricing.ts` — 539 linhas estáticas (prioridade média)
+### 1. ✅ `pricing.ts` — REMOVIDO
 
-**Problema:** Categorias fixas (BASIC/PREMIUM/EXCLUSIVE), faixas FIPE hardcoded, preços estáticos por região/combustível, cidades fixas por região.
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
 
-**Usado por:**
-| Arquivo | O que importa |
-|---------|--------------|
-| `QuoteCalculatorModal.tsx` | `calcularCotacao`, `formatarMoeda`, `ADICIONAIS`, tipos `Categoria`, `ResultadoCotacao` |
-| `useCotacaoAvancada.ts` | `calcularCotacao`, `ResultadoCotacao`, `Categoria` |
-| `CotacaoPublica.tsx` | Apenas `formatarMoeda` |
-| `CotacaoContratacao.tsx` | Apenas `formatarMoeda` |
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
 
-**Solução:**
-1. Extrair `formatarMoeda` para local centralizado (já existe em `usePlanosPrecificacao.ts` L68)
-2. Migrar `QuoteCalculatorModal` + `useCotacaoAvancada` para usar hooks dinâmicos
-3. Remover `pricing.ts`
+Centralizada em `src/utils/format.ts`.
 
-### 2. `formatarMoeda` duplicada em 5+ locais (prioridade média)
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
 
-| Local | Tipo |
-|-------|------|
-| `src/config/pricing.ts` | Exportada, usada por 2 páginas públicas |
-| `src/hooks/usePlanosPrecificacao.ts` L68 | Exportada |
-| `src/pages/public/CotacaoPublicaCompleta.tsx` L196 | Local |
-| `src/components/cotacao-publica/EscolhaPlano.tsx` L33 | Local |
-| `src/components/beneficios/TabelaSaudeBeneficios.tsx` L23 | Local |
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-**Solução:** Criar `src/utils/format.ts` com `formatarMoeda` e substituir todas as ocorrências.
+### 5. ✅ Veículo Blindado — CORRIGIDO
+
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
 
 ### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
 
