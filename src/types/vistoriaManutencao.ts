@@ -264,6 +264,14 @@ export interface AbrirManutencaoParams {
   rastreadorId: string;
   motivo: MotivoManutencao;
   motivoDetalhe?: string;
+  enderecoAlternativo?: {
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+  };
 }
 
 /**

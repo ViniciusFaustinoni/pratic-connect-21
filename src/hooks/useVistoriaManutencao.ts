@@ -341,15 +341,15 @@ export function useAbrirVistoriaManutencao() {
         motivo_manutencao: params.motivo,
         motivo_detalhe: params.motivoDetalhe || null,
         observacoes: `Manutenção: ${params.motivo}`,
-        // Endereço do associado (para quando for agendada como rota)
-        logradouro: associado?.logradouro || null,
-        numero: associado?.numero || null,
-        bairro: associado?.bairro || null,
-        cidade: associado?.cidade || null,
-        uf: associado?.uf || null,
-        cep: associado?.cep || null,
-        latitude: associado?.endereco_latitude || null,
-        longitude: associado?.endereco_longitude || null,
+        // Endereço: usar alternativo se fornecido, senão do associado
+        logradouro: params.enderecoAlternativo?.logradouro || associado?.logradouro || null,
+        numero: params.enderecoAlternativo?.numero || associado?.numero || null,
+        bairro: params.enderecoAlternativo?.bairro || associado?.bairro || null,
+        cidade: params.enderecoAlternativo?.cidade || associado?.cidade || null,
+        uf: params.enderecoAlternativo?.uf || associado?.uf || null,
+        cep: params.enderecoAlternativo?.cep || associado?.cep || null,
+        latitude: params.enderecoAlternativo ? null : (associado?.endereco_latitude || null),
+        longitude: params.enderecoAlternativo ? null : (associado?.endereco_longitude || null),
       };
 
       const { data: servico, error: servicoError } = await supabase
