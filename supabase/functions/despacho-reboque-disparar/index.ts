@@ -102,7 +102,10 @@ serve(async (req) => {
 
     const ciclo = (ultimoDespacho?.ciclo || 0) + 1;
 
-    // Buscar prestadores de reboque ativos
+    // Determinar tipo de serviço do chamado
+    const tipoServicoChamado = (chamado.tipo_servico || "reboque").toLowerCase();
+
+    // Buscar prestadores ativos
     const { data: prestadores, error: prestErr } = await supabase
       .from("prestadores_assistencia")
       .select("id, razao_social, nome_fantasia, whatsapp, telefone, tipos_servico, tipos_reboque, disponivel")
@@ -111,17 +114,17 @@ serve(async (req) => {
 
     if (prestErr) throw new Error("Erro ao buscar prestadores");
 
-    // Filtrar reboquistas com whatsapp e que atendem reboque
+    // Filtrar prestadores com whatsapp e que atendem o tipo de serviço do chamado
     const reboquistas = (prestadores || []).filter((p) => {
       const hasWhatsapp = p.whatsapp || p.telefone;
-      const atendeReboque = p.tipos_servico?.some((t: string) =>
-        ["reboque", "guincho"].includes(t.toLowerCase())
+      const atendeTipo = p.tipos_servico?.some((t: string) =>
+        t.toLowerCase() === tipoServicoChamado
       );
-      return hasWhatsapp && atendeReboque;
+      return hasWhatsapp && atendeTipo;
     });
 
     if (reboquistas.length === 0) {
-      throw new Error("Nenhum reboquista ativo e disponível encontrado. Verifique o cadastro de prestadores.");
+      throw new Error(`Nenhum prestador ativo e disponível encontrado para o tipo '${tipoServicoChamado}'. Verifique o cadastro de prestadores.`);
     }
 
     // Verificar quais reboquistas já têm chamado ativo
