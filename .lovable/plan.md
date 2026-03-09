@@ -1,163 +1,148 @@
-# Auditoria Completa: Planos, Benefícios e Precificação
+
+
+# Plano: Eliminar todo hardcode de Planos e Benefícios — migrar para fontes dinâmicas
 
 ## Resumo
 
-A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+Existem **8 focos de hardcode** restantes. As fontes dinâmicas já existem no banco (`beneficios_adicionais`, `regioes`, `main_coverages`, `benefits`, `tabelas_preco`, `configuracoes`). O trabalho é substituir os imports estáticos pelas queries dinâmicas e criar chaves em `configuracoes` para dados que ainda não têm tabela.
 
 ---
 
-## ✅ CORRIGIDO (não mexer)
+## Alterações por foco
 
-- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
-- `usePlanosCotacao.ts` — Hook principal dinâmico
-- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
-- `CotacaoDetalhe.tsx` — Dados do hook
-- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
-- `ContratoDetalhe.tsx` — Dinâmico
-- `Cotador.tsx` — Usa PlanoCotacao direto
-- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
-- `CardPlano.tsx` — Recebe benefícios/coberturas como props
-- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
-- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
-- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+### Foco 1 — `StepBeneficios.tsx` e `StepFinanceiro.tsx`: benefícios e preços hardcoded
 
----
-
-## 🟡 PENDENTE
-
-### 1. `pricing.ts` — 539 linhas estáticas (prioridade média)
-
-**Problema:** Categorias fixas (BASIC/PREMIUM/EXCLUSIVE), faixas FIPE hardcoded, preços estáticos por região/combustível, cidades fixas por região.
-
-**Usado por:**
-| Arquivo | O que importa |
-|---------|--------------|
-| `QuoteCalculatorModal.tsx` | `calcularCotacao`, `formatarMoeda`, `ADICIONAIS`, tipos `Categoria`, `ResultadoCotacao` |
-| `useCotacaoAvancada.ts` | `calcularCotacao`, `ResultadoCotacao`, `Categoria` |
-| `CotacaoPublica.tsx` | Apenas `formatarMoeda` |
-| `CotacaoContratacao.tsx` | Apenas `formatarMoeda` |
+**Problema:** `BENEFICIOS[]`, `BENEFICIOS_PRECOS{}`, `FAIXAS_TERCEIROS` duplicados com preços fixos (R$9.90, R$2.90 etc.) + taxa `0.0045` fixa.
 
 **Solução:**
-1. Extrair `formatarMoeda` para local centralizado (já existe em `usePlanosPrecificacao.ts` L68)
-2. Migrar `QuoteCalculatorModal` + `useCotacaoAvancada` para usar hooks dinâmicos
-3. Remover `pricing.ts`
+- Criar hook `useBeneficiosAdicionaisCotacao()` que busca de `beneficios_adicionais` (tabela já tem 14 registros com preços corretos)
+- Substituir arrays estáticos nos dois componentes pelo hook
+- Substituir `fipe * 0.0045` por lookup na `tabelas_preco` (campo `taxa_comercial`) — criar hook `useTaxaMensalidade(valorFipe)` que busca a faixa aplicável
+- Mover `TAXA_SUBSTITUICAO = 50.00` para chave `taxa_substituicao` na tabela `configuracoes`
+- Substituir `veiculoAntigo.valor_fipe * 0.06` (cota fallback) por lookup dinâmico via `useFaixasCotas` (já existe)
 
-### 2. `formatarMoeda` duplicada em 5+ locais (prioridade média)
+### Foco 2 — `usePlanosCotacao.ts`: região e fallbacks hardcoded
 
-| Local | Tipo |
-|-------|------|
-| `src/config/pricing.ts` | Exportada, usada por 2 páginas públicas |
-| `src/hooks/usePlanosPrecificacao.ts` L68 | Exportada |
-| `src/pages/public/CotacaoPublicaCompleta.tsx` L196 | Local |
-| `src/components/cotacao-publica/EscolhaPlano.tsx` L33 | Local |
-| `src/components/beneficios/TabelaSaudeBeneficios.tsx` L23 | Local |
+**Problema:** `mapearRegiao()` com mapa fixo, `calcularPrecoRegiao()` com multiplicador `0.90` fixo, fallbacks `0.025`/`0.03`, decomposição `0.60/0.25/0.10/0.05`, ordenação fixa por código `['select-basic', ...]`.
 
-**Solução:** Criar `src/utils/format.ts` com `formatarMoeda` e substituir todas as ocorrências.
+**Solução:**
+- Buscar `regioes` do banco (já tem `multiplicador_preco`: RJ=1.00, Lagos=0.90, SP=1.15) — criar hook `useRegioes()` e usar `multiplicador_preco` da região selecionada
+- Remover `mapearRegiao()` e `calcularPrecoRegiao()` de `planosPrecos.ts` — usar `regioes.codigo` diretamente
+- Mover fallbacks `0.025`/`0.03` para chaves `taxa_fallback_carro` e `taxa_fallback_moto` em `configuracoes`
+- Mover percentuais de decomposição (`0.60`, `0.25`, `0.10`, `0.05`) para chaves em `configuracoes`
+- Substituir ordenação fixa por `planos.ordem` do banco (já existe campo `ordem`)
 
-### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+### Foco 3 — `useCalcularCotacao.ts`: fallback hardcoded
 
-Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
-- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
-- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
+**Problema:** `valorFipe * 0.025 / 12` como fallback.
 
+**Solução:** Reutilizar mesma chave `taxa_fallback_carro` de `configuracoes` criada no Foco 2.
 
-### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+### Foco 4 — `Cotacoes.tsx`: categorização de coberturas hardcoded
 
-Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
+**Problema:** `CATEGORIAS_BENEFICIOS` com 35 termos fixos mapeando coberturas a categorias.
 
-### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
+**Solução:** A tabela `benefits` já tem coluna `category` preenchida (`cobertura`, `assistencia`, `extra`). Criar função `categorizarBeneficiosDinamico()` que busca da tabela `benefits` por nome e usa a `category` do banco. Manter fallback simples (default `cobertura`).
 
-Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
-- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
-- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
-- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
-- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
-- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
-- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
-- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
+### Foco 5 — `restricoesCategorias.ts`: fallback estático `RESTRICOES_CATEGORIA`
 
+**Problema:** 7 categorias com coberturas removidas hardcoded como fallback.
 
----
+**Solução:** O banco `benefit_category_exclusions` já é fonte primária. Remover `RESTRICOES_CATEGORIA` e `CATEGORIA_LABELS` — mover labels para chaves em `configuracoes` ou inline no código de `gerarMensagemAlertaCategoria()` (que já usa DB como fonte principal). Simplificar funções para usar apenas dados do banco sem fallback estático.
 
-## ❌ NÃO FAZER AGORA
+### Foco 6 — `planosPrecos.ts` → banco (dados de referência)
 
-- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
-- Página de autorizações da diretoria — depende das tabelas acima
-- Campos de vistoria (rebaixado/turbinado) — escopo separado
-- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
+**Problema:** `VEICULOS_ACEITOS`, `MOTOS_ACEITAS`, `GLOSSARIO`, `REGRAS_IMPORTANTES`, `COTAS_TAXAS`, `TAXAS_PROCEDIMENTOS`, `CONTATOS`, `COBERTURAS_ICONES`, `BENEFICIOS_ADICIONAIS_COMPLETO`.
 
----
+**Solução:**
+- `COBERTURAS_ICONES` → Já existe em `main_coverages` (10 registros com icon+subtitle). Usar hook `useMainCoverages()`.
+- `BENEFICIOS_ADICIONAIS_COMPLETO` → Já existe em `beneficios_adicionais`. Remover.
+- `CONTATOS` → Inserir 3 chaves em `configuracoes` (`contato_cadastro`, `contato_comercial`, `contato_assistencia`). Criar hook `useContatos()`.
+- `GLOSSARIO` → Inserir como JSON em `configuracoes` (chave `glossario_consultor`). Criar hook `useGlossario()`.
+- `REGRAS_IMPORTANTES` → Inserir como JSON em `configuracoes` (chave `regras_importantes`). Criar hook `useRegrasImportantes()`.
+- `COTAS_TAXAS` → Inserir como JSON em `configuracoes` (chave `cotas_taxas`). Criar hook `useCotasTaxas()`.
+- `TAXAS_PROCEDIMENTOS` → Inserir como JSON em `configuracoes` (chave `taxas_procedimentos`). Criar hook `useTaxasProcedimentos()`.
+- `VEICULOS_ACEITOS` e `MOTOS_ACEITAS` → Inserir como JSON em `configuracoes` (chaves `veiculos_aceitos`, `motos_aceitas`). Criar hook `useVeiculosAceitos()`.
 
-## 📋 ORDEM DE EXECUÇÃO SUGERIDA
+### Foco 7 — Componentes consumidores
 
-1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
-2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
-3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
-4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
+- `VeiculosAceitos.tsx` → trocar import estático por `useVeiculosAceitos()`
+- `ContatosRapidos.tsx` → trocar import estático por `useContatos()`
+- `GlossarioSection.tsx` → trocar imports estáticos por hooks dinâmicos
+- `PlanosBeneficios.tsx` → sem mudança (já consome componentes acima)
 
----
+### Foco 8 — Deletar `src/data/planosPrecos.ts`
 
-# Visibilidade por Equipe — Supervisor de Vendas
-
-## ✅ CORRIGIDO
-
-### Tabela `equipes_comerciais`
-- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
-- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
-
-### Função `is_supervisor_of(_vendedor_id)`
-- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
-- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
-
-### RLS de `leads` atualizada
-- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
-- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
-
-### RLS de `cotacoes` atualizada
-- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
-
-### Hook `useEquipeComercial`
-- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
-- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
-- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
-- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
-
-### `usePermissions` atualizado
-- Adicionado `isSupervisorVendas` e `canManageEquipe`
-
-### `useVendasMetricas` atualizado
-- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
-
-### KanbanCard com badge do vendedor
-- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
-- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
+Após todas as migrações, o arquivo inteiro pode ser removido. Também remover `RESTRICOES_CATEGORIA` do `restricoesCategorias.ts` (manter apenas funções dinâmicas).
 
 ---
 
-## 🟡 PENDENTE
+## Dados a inserir em `configuracoes`
 
-### Tela de gerenciamento de equipe
-- UI para vincular/desvincular vendedores a supervisores
-- Acessível em configurações ou rota dedicada
+| Chave | Valor | Tipo |
+|---|---|---|
+| `taxa_substituicao` | `50` | number |
+| `taxa_fallback_carro` | `0.025` | number |
+| `taxa_fallback_moto` | `0.03` | number |
+| `decomposicao_cota` | `0.60` | number |
+| `decomposicao_admin` | `0.25` | number |
+| `decomposicao_rastreamento` | `0.10` | number |
+| `decomposicao_assistencia` | `0.05` | number |
+| `contato_cadastro` | `21 98393-4083` | string |
+| `contato_comercial` | `21 99129-6732` | string |
+| `contato_assistencia` | `0800 980 0001` | string |
+| `glossario_consultor` | (JSON array) | json |
+| `regras_importantes` | (JSON array) | json |
+| `cotas_taxas` | (JSON array) | json |
+| `taxas_procedimentos` | (JSON array) | json |
+| `veiculos_aceitos` | (JSON object) | json |
+| `motos_aceitas` | (JSON object) | json |
 
 ---
 
-# Fluxo de Assistência 24h — Reboque
+## Hooks a criar
 
-## ✅ CORRIGIDO
+| Hook | Fonte | Usado por |
+|---|---|---|
+| `useBeneficiosAdicionaisCotacao()` | `beneficios_adicionais` | StepBeneficios, StepFinanceiro |
+| `useTaxaMensalidade(fipe)` | `tabelas_preco` | StepBeneficios, StepFinanceiro |
+| `useRegioes()` | `regioes` | usePlanosCotacao |
+| `useContatos()` | `configuracoes` | ContatosRapidos |
+| `useGlossario()` | `configuracoes` | GlossarioSection |
+| `useRegrasImportantes()` | `configuracoes` | GlossarioSection |
+| `useCotasTaxas()` | `configuracoes` | GlossarioSection |
+| `useTaxasProcedimentos()` | `configuracoes` | GlossarioSection |
+| `useVeiculosAceitos()` | `configuracoes` | VeiculosAceitos |
+| `useConfigDecomposicao()` | `configuracoes` | usePlanosCotacao |
 
-### Gap 1 — Valor sugerido na mensagem inicial
-Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+---
 
-### Gap 2 — Contato do associado para o reboquista
-Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+## Arquivos afetados
 
-### Gap 3 — Tela de conclusão com anexo de imagens
-Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
-- Upload múltiplo de fotos usando `useFotosReboquista`
-- Campo de observação
-- Atualiza status do chamado para `concluido`
-- Registra no histórico e no status log do reboque
+| Arquivo | Ação |
+|---|---|
+| `src/data/planosPrecos.ts` | **Deletar** |
+| `src/data/restricoesCategorias.ts` | Remover `RESTRICOES_CATEGORIA` e `CATEGORIA_LABELS`, manter funções dinâmicas |
+| `src/hooks/useBeneficiosAdicionaisCotacao.ts` | **Criar** |
+| `src/hooks/useRegioes.ts` | **Criar** |
+| `src/hooks/useConteudosSistema.ts` | **Criar** (contatos, glossário, regras, cotas, taxas, veículos) |
+| `src/hooks/usePlanosCotacao.ts` | Refatorar: regiões dinâmicas, remover fallbacks fixos, ordenar por `ordem` |
+| `src/hooks/useCalcularCotacao.ts` | Remover fallback fixo |
+| `src/components/substituicao/StepBeneficios.tsx` | Usar hook dinâmico |
+| `src/components/substituicao/StepFinanceiro.tsx` | Usar hook dinâmico |
+| `src/pages/vendas/Cotacoes.tsx` | Categorização via `benefits.category` |
+| `src/components/planos/VeiculosAceitos.tsx` | Usar hook dinâmico |
+| `src/components/planos/ContatosRapidos.tsx` | Usar hook dinâmico |
+| `src/components/planos/GlossarioSection.tsx` | Usar hooks dinâmicos |
 
-### Gap 4 — Integração financeira (parcial)
-O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.
+## Ordem de execução
+
+1. Inserir dados em `configuracoes` (migration de dados)
+2. Criar hooks (`useBeneficiosAdicionaisCotacao`, `useRegioes`, `useConteudosSistema`)
+3. Refatorar `StepBeneficios` + `StepFinanceiro` (Foco 1)
+4. Refatorar `usePlanosCotacao` + `useCalcularCotacao` (Focos 2-3)
+5. Refatorar `Cotacoes.tsx` (Foco 4)
+6. Simplificar `restricoesCategorias.ts` (Foco 5)
+7. Refatorar componentes de UI (Focos 6-7)
+8. Deletar `planosPrecos.ts` (Foco 8)
+
