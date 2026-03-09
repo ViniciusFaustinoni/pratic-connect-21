@@ -321,14 +321,6 @@ export default function ConfiguracoesSistema() {
             const config = categoriaConfig[cat];
             const configs = configsPorCategoria[cat] || [];
             
-            // Tab especial para integrações
-            if (cat === 'integracoes') {
-              return (
-                <TabsContent key={cat} value={cat}>
-                  <IntegracoesStatusCard />
-                </TabsContent>
-              );
-            }
             
             return (
               <TabsContent key={cat} value={cat}>
