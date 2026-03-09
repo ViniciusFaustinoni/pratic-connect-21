@@ -23,6 +23,7 @@ export function AppHeader() {
   const navigate = useNavigate();
   const { profile, roles, signOut } = useAuth();
   const { isPerfilLimitado } = usePermissions();
+  const { getRoleLabel } = useAppRoles();
 
   const handleSignOut = async () => {
     await signOut();
