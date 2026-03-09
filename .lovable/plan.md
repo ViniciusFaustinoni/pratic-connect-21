@@ -1,106 +1,163 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
+
+## Resumo
+
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. `pricing.ts` — 539 linhas estáticas (prioridade média)
+
+**Problema:** Categorias fixas (BASIC/PREMIUM/EXCLUSIVE), faixas FIPE hardcoded, preços estáticos por região/combustível, cidades fixas por região.
+
+**Usado por:**
+| Arquivo | O que importa |
+|---------|--------------|
+| `QuoteCalculatorModal.tsx` | `calcularCotacao`, `formatarMoeda`, `ADICIONAIS`, tipos `Categoria`, `ResultadoCotacao` |
+| `useCotacaoAvancada.ts` | `calcularCotacao`, `ResultadoCotacao`, `Categoria` |
+| `CotacaoPublica.tsx` | Apenas `formatarMoeda` |
+| `CotacaoContratacao.tsx` | Apenas `formatarMoeda` |
+
+**Solução:**
+1. Extrair `formatarMoeda` para local centralizado (já existe em `usePlanosPrecificacao.ts` L68)
+2. Migrar `QuoteCalculatorModal` + `useCotacaoAvancada` para usar hooks dinâmicos
+3. Remover `pricing.ts`
+
+### 2. `formatarMoeda` duplicada em 5+ locais (prioridade média)
+
+| Local | Tipo |
+|-------|------|
+| `src/config/pricing.ts` | Exportada, usada por 2 páginas públicas |
+| `src/hooks/usePlanosPrecificacao.ts` L68 | Exportada |
+| `src/pages/public/CotacaoPublicaCompleta.tsx` L196 | Local |
+| `src/components/cotacao-publica/EscolhaPlano.tsx` L33 | Local |
+| `src/components/beneficios/TabelaSaudeBeneficios.tsx` L23 | Local |
+
+**Solução:** Criar `src/utils/format.ts` com `formatarMoeda` e substituir todas as ocorrências.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-# Plano: Visibilidade por Equipe para Supervisor de Vendas
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-## Situação Atual
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-- **Não existe** tabela de equipes comerciais nem campo `supervisor_id` nos profiles/vendedores
-- A função RLS `is_gerencia()` inclui apenas `diretor` e `gerente_comercial` — **supervisor_vendas fica de fora**
-- Na prática, o supervisor hoje vê leads **como um vendedor comum** (apenas os próprios)
-- Cotações já têm RLS para `supervisor_vendas`, mas leads, contratos e outras tabelas não
-- Nenhum mecanismo de vínculo supervisor→vendedores existe no banco
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
 
-## Solução
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
 
-### 1. Criar tabela `equipes_comerciais`
 
-```text
-equipes_comerciais
-├── id (uuid PK)
-├── supervisor_id (uuid → auth.users) — quem supervisiona
-├── vendedor_id (uuid → auth.users) — quem é supervisionado
-├── created_at (timestamptz)
-└── UNIQUE(supervisor_id, vendedor_id)
-```
+---
 
-RLS: Supervisores veem seus vínculos. Gerência/diretores veem todos. Gerência pode INSERT/UPDATE/DELETE.
+## ❌ NÃO FAZER AGORA
 
-### 2. Criar função RLS `is_supervisor_of()`
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
-Função `SECURITY DEFINER` que verifica se o user autenticado é supervisor de um dado `vendedor_id`:
+---
 
-```sql
-CREATE FUNCTION is_supervisor_of(_vendedor_id uuid)
-RETURNS boolean AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM equipes_comerciais
-    WHERE supervisor_id = auth.uid()
-      AND vendedor_id = _vendedor_id
-  )
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
-```
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-### 3. Atualizar RLS da tabela `leads`
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
 
-A policy SELECT atual é:
-```
-is_gerencia(auth.uid()) OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL
-```
+---
 
-Será alterada para:
-```
-is_gerencia(auth.uid()) 
-OR vendedor_id = get_my_profile_id() 
-OR vendedor_id IS NULL
-OR is_supervisor_of(vendedor_id)
-```
+# Visibilidade por Equipe — Supervisor de Vendas
 
-Mesma lógica para UPDATE e DELETE.
+## ✅ CORRIGIDO
 
-### 4. Atualizar RLS de `cotacoes` (UPDATE policy)
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
 
-A policy de UPDATE de cotações não inclui supervisor — adicionar `is_supervisor_of(vendedor_id)`.
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
 
-### 5. Criar hook `useEquipeComercial`
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
 
-Hook para gerenciar os vínculos supervisor↔vendedor:
-- `useMinhaEquipe()` — retorna vendedores da equipe do supervisor logado
-- `useEquipesComerciais()` — para gerência, retorna todos os vínculos
-- Mutations para adicionar/remover vendedores da equipe
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
 
-### 6. Adaptar hooks de vendas para escopo de equipe
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
 
-**`useLeads`**: Quando o usuário é `supervisor_vendas`, filtrar automaticamente por `vendedor_id IN equipe` (via RLS, sem mudança no hook — a RLS cuida).
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
 
-**`useVendedorHistorico`**: Supervisor pode consultar stats de qualquer vendedor da sua equipe.
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
 
-**`useVendasMetricas`**: Supervisor vê métricas agregadas apenas da sua equipe (filtro client-side usando `useMinhaEquipe`).
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
 
-### 7. UI: Tela de gerenciamento de equipe
+---
 
-Adicionar em `/vendas/equipe-comercial` (rota já existe, aponta para `Propostas`) uma seção ou tab para o supervisor gerenciar sua equipe:
-- Lista de vendedores vinculados
-- Botão para adicionar/remover (apenas gerência/diretor pode fazer isso)
-- Métricas agregadas por vendedor da equipe
+## 🟡 PENDENTE
 
-### 8. UI: Kanban com identificação do vendedor
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
 
-No componente `LeadKanbanCard`, quando o usuário é supervisor, mostrar badge com nome do vendedor responsável pelo lead.
+---
 
-## Arquivos afetados
+# Fluxo de Assistência 24h — Reboque
 
-- **Migration SQL**: tabela `equipes_comerciais` + função `is_supervisor_of()` + RLS updates em `leads` e `cotacoes`
-- **Novo**: `src/hooks/useEquipeComercial.ts`
-- **Editar**: `src/hooks/useVendasMetricas.ts` — filtro de equipe para supervisor
-- **Editar**: `src/components/leads/LeadKanbanCard.tsx` — badge de vendedor
-- **Editar**: `src/pages/vendas/Leads.tsx` — filtro automático por equipe
-- **Editar**: `src/hooks/usePermissions.ts` — adicionar `isSupervisorVendas` e `canManageEquipe`
+## ✅ CORRIGIDO
 
-## Ordem de execução
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
 
-1. Migration (tabela + função + RLS)
-2. Hook `useEquipeComercial`
-3. Ajustar `usePermissions` com flags de supervisor
-4. Adaptar `Leads.tsx` e `LeadKanbanCard` para exibir vendedor
-5. Adaptar métricas para escopo de equipe
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
 
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.

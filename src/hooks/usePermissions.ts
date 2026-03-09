@@ -49,6 +49,7 @@ export type PermissionKey =
   | 'canApprovePermissionChanges'
   | 'canCreateRoles'
   | 'canManageConsultores'
+  | 'canManageEquipe'
   | 'canManageEquipeEstoque'
   | 'canViewReports'
   | 'canEditRotas';
@@ -257,11 +258,12 @@ export function usePermissions() {
     isDesenvolvedor,
     isAdminMaster,
 
-    // Verificações de perfil/role
+  // Verificações de perfil/role
     isDiretor,
     isDiretorOnly: isDiretor,
     isGerente: hasRole('gerente_comercial'),
     isSupervisor: hasRole('supervisor_vendas'),
+    isSupervisorVendas: hasRole('supervisor_vendas'),
     isGerenciaOrSupervisor: isGerencia() || hasRole('supervisor_vendas'),
     isVendedorClt: hasRole('vendedor_clt'),
     isVendedorExterno: hasRole('vendedor_externo'),
@@ -316,6 +318,7 @@ export function usePermissions() {
     canManageMarketing: isDiretor || hasRole('gerente_comercial') || hasRole('analista_marketing') || isDesenvolvedor,
     canManageOuvidoria: (isDiretor || hasRole('gerente_comercial') || hasRole('analista_cadastro') || isFuncionario() || isDesenvolvedor) && !isVendedorCotacao && !isAnalistaEventosOnly,
     canManageConsultores: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
+    canManageEquipe: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,
     canViewReports: (isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster || isAnalistaCadastro) && !isVendedorCotacao,
     // Permissão para editar rotas (coordenador só pode visualizar)
     canEditRotas: isGerencia() || isDiretor || isDesenvolvedor || isAdminMaster,

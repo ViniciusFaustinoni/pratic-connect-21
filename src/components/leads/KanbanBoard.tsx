@@ -25,6 +25,7 @@ interface KanbanBoardProps {
   handleDragEnd: (event: DragEndEvent) => void;
   activeLead: LeadWithVendedor | null;
   setDrawerLeadId: (id: string) => void;
+  showVendedor?: boolean;
 }
 
 // Droppable column component
@@ -74,6 +75,7 @@ export function KanbanBoard({
   handleDragEnd,
   activeLead,
   setDrawerLeadId,
+  showVendedor,
 }: KanbanBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
 
@@ -204,6 +206,7 @@ export function KanbanBoard({
                         key={lead.id}
                         lead={lead as any}
                         onClick={() => setDrawerLeadId(lead.id)}
+                        showVendedor={showVendedor}
                       />
                     ))}
                     {leadsInEtapa.length === 0 && (
