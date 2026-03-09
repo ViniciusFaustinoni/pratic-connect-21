@@ -95,7 +95,8 @@ async function enviarViaMeta(
   telefoneFormatado: string,
   mensagem: string,
   templateName?: string,
-  templateParams?: string[]
+  templateParams?: string[],
+  allowText: boolean = false
 ) {
   const { data: metaConfig } = await supabase
     .from("whatsapp_meta_config")
