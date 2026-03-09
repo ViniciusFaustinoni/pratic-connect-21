@@ -289,6 +289,12 @@ export default function UsuarioForm() {
   const preselectedPerfil = searchParams.get('perfil');
 
   const { isDiretor, isAdminMaster } = usePermissions();
+  const { roles: appRoles, getRoleLabel, getRoleDescription, isLoading: isLoadingRoles } = useAppRoles();
+  
+  // Perfis disponíveis dinamicamente (exclui 'associado')
+  const perfisDisponiveis = appRoles
+    .filter(r => r.role !== 'associado')
+    .map(r => ({ value: r.role, label: r.label, desc: r.description }));
 
   const [formData, setFormData] = useState({
     nome: '',
