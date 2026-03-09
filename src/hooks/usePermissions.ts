@@ -81,7 +81,7 @@ export interface CotacaoPermissions {
  */
 export function usePermissions() {
   const { profile, roles, hasRole, isGerencia, isVendedor, isFuncionario, user } = useAuth();
-  const { getPermissionsForRoles } = useAppRoles();
+  const { getPermissionsForRoles, isOnlyOperational, getOperationalRedirectPath, isRoleOperational } = useAppRoles();
 
   // ============================================
   // PERMISSIONS DERIVADAS DO BANCO
@@ -91,6 +91,7 @@ export function usePermissions() {
 
   // ============================================
   // IDENTITY FLAGS (baseadas em role names)
+  // Mantidas para compatibilidade — gradualmente migrar para hasPerm()
   // ============================================
   const hasRoleByName = (roleName: string) => roles?.includes(roleName as any) ?? false;
 
@@ -107,47 +108,33 @@ export function usePermissions() {
   const isSuperAdmin = isDesenvolvedor || isAdminMaster;
 
   // ============================================
-  // EXCLUSIVITY FLAGS (combinação de roles)
-  // Determinam se o usuário APENAS possui este role operacional.
-  // Usadas para redirecionamento de layout especial.
+  // EXCLUSIVITY FLAGS — agora derivadas do banco via is_operational
+  // Se o usuário SÓ tem roles marcados como is_operational, ele é "only".
   // ============================================
   const hasPrivilegedRole = isDiretor || isGerencia() || isDesenvolvedor || isAdminMaster;
+  const userIsOnlyOperational = !hasPrivilegedRole && isOnlyOperational(roles || []);
 
+  // Flags específicas para cada role operacional — derivadas dinamicamente
+  const isInstaladorVistoriadorOnly = userIsOnlyOperational && isInstaladorVistoriador;
+  const isReguladorOnly = userIsOnlyOperational && isRegulador;
+  const isSindicanteOnly = userIsOnlyOperational && isSindicante;
+  const isAnalistaEventosOnly = userIsOnlyOperational && isAnalistaEventos;
+  const isCoordenadorMonitoramentoOnly = userIsOnlyOperational && isCoordenadorMonitoramento;
+
+  // Flags não-operacionais que mantém lógica especial
   const isAnalistaCadastroOnly = isAnalistaCadastro && !hasPrivilegedRole;
-
   const isVendedorCltOnly = hasRole('vendedor_clt') && !hasPrivilegedRole;
-
   const isVendedorOnly = isVendedor() && !hasPrivilegedRole && !isAnalistaCadastro;
-
-  const isCoordenadorMonitoramentoOnly = isCoordenadorMonitoramento && !hasPrivilegedRole &&
-    !isInstaladorVistoriador && !hasRoleByName('analista_plataforma') &&
-    !isAnalistaCadastro && !isAnalistaEventos && !isRegulador && !isSindicante && !isVendedor();
-
-  const isInstaladorVistoriadorOnly = isInstaladorVistoriador && !hasPrivilegedRole &&
-    !isCoordenadorMonitoramento && !hasRoleByName('analista_plataforma') &&
-    !isAnalistaCadastro && !isAnalistaEventos && !isRegulador && !isSindicante && !isVendedor();
 
   const isVistoriadorBase = false;
   const isVistoriadorBaseOnly = false;
 
-  const isReguladorOnly = isRegulador && !hasPrivilegedRole &&
-    !isCoordenadorMonitoramento && !isInstaladorVistoriador &&
-    !hasRoleByName('analista_plataforma') && !isAnalistaCadastro &&
-    !isAnalistaEventos && !isSindicante && !isVendedor();
-
-  const isAnalistaEventosOnly = isAnalistaEventos && !hasPrivilegedRole &&
-    !isCoordenadorMonitoramento && !isInstaladorVistoriador &&
-    !hasRoleByName('analista_plataforma') && !isAnalistaCadastro &&
-    !isRegulador && !isSindicante && !isVendedor();
-
-  const isSindicanteOnly = isSindicante && !hasPrivilegedRole &&
-    !isCoordenadorMonitoramento && !isInstaladorVistoriador &&
-    !hasRoleByName('analista_plataforma') && !isAnalistaCadastro &&
-    !isAnalistaEventos && !isRegulador && !isVendedor();
-
   const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly ||
     isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly ||
     isVistoriadorBaseOnly || isReguladorOnly || isAnalistaEventosOnly || isSindicanteOnly;
+
+  /** Redirect path para roles operacionais — obtido do banco */
+  const operationalRedirectPath = getOperationalRedirectPath(roles || []);
 
   // ============================================
   // COTAÇÃO PERMISSIONS (role-based logic)
