@@ -194,6 +194,23 @@ export function WhatsAppMetaTemplates() {
                   {viewTemplate.rodape && (
                     <div><strong className="text-xs">Rodapé:</strong> <span className="text-xs text-muted-foreground">{viewTemplate.rodape}</span></div>
                   )}
+                  {viewTemplate.botoes && Array.isArray(viewTemplate.botoes) && viewTemplate.botoes.length > 0 && (
+                    <div>
+                      <strong className="text-xs">Botões:</strong>
+                      <div className="mt-1 space-y-1">
+                        {(viewTemplate.botoes as Array<{ tipo: string; texto: string; url?: string; telefone?: string }>).map((btn, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs p-1.5 rounded bg-muted/50">
+                            <Badge variant="outline" className="text-[10px]">
+                              {btn.tipo === 'url' ? '🔗 URL' : btn.tipo === 'telefone' ? '📞 Tel' : '↩️ Resposta'}
+                            </Badge>
+                            <span className="font-medium">{btn.texto}</span>
+                            {btn.url && <span className="text-muted-foreground truncate">{btn.url}</span>}
+                            {btn.telefone && <span className="text-muted-foreground">{btn.telefone}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {viewTemplate.motivo_rejeicao && (
                     <div className="p-2 bg-red-50 dark:bg-red-950/20 rounded text-xs text-red-700">
                       <strong>Motivo da rejeição:</strong> {viewTemplate.motivo_rejeicao}

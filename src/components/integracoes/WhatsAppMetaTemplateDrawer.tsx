@@ -547,6 +547,22 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
                   )}
                   <p className="text-[10px] text-[#667781] dark:text-gray-400 text-right">10:30 ✓✓</p>
                 </div>
+                {/* Botões preview */}
+                {botoes.length > 0 && (
+                  <div className="bg-[#DCF8C6] dark:bg-[#005C4B] rounded-lg shadow-sm overflow-hidden mt-0.5">
+                    {botoes.map((btn, idx) => (
+                      <div key={idx}>
+                        {idx > 0 && <div className="border-t border-[#c5e8b0] dark:border-[#004a3d]" />}
+                        <button className="w-full py-2 px-3 text-center text-xs text-[#027eb5] dark:text-[#53bdeb] font-medium flex items-center justify-center gap-1.5">
+                          {btn.tipo === 'url' && <Link className="h-3 w-3" />}
+                          {btn.tipo === 'telefone' && <Phone className="h-3 w-3" />}
+                          {btn.tipo === 'resposta_rapida' && <Reply className="h-3 w-3" />}
+                          {btn.texto || 'Botão'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
