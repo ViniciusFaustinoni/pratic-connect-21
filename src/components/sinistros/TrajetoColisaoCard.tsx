@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, CircleMarker } from 'react-leaflet';
@@ -120,6 +120,39 @@ export function TrajetoColisaoCard({
 
   // Última posição conhecida (aproximação do local da colisão)
   const ultimaPosicao = trajeto.length > 0 ? trajeto[trajeto.length - 1] : null;
+
+  // Calcular métricas de velocidade e distância
+  const metricas = useMemo(() => {
+    if (!trajeto.length) return null;
+
+    const velocidades = trajeto
+      .filter((p: any) => p.velocidade != null && p.velocidade > 0)
+      .map((p: any) => p.velocidade as number);
+
+    const velMedia = velocidades.length
+      ? velocidades.reduce((a: number, b: number) => a + b, 0) / velocidades.length
+      : 0;
+    const velMax = velocidades.length ? Math.max(...velocidades) : 0;
+
+    // Haversine
+    const toRad = (deg: number) => deg * (Math.PI / 180);
+    let distanciaKm = 0;
+    for (let i = 1; i < trajeto.length; i++) {
+      const prev = trajeto[i - 1];
+      const curr = trajeto[i];
+      const dLat = toRad(curr.latitude - prev.latitude);
+      const dLon = toRad(curr.longitude - prev.longitude);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(prev.latitude)) * Math.cos(toRad(curr.latitude)) *
+        Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const d = 6371 * c;
+      if (d < 100) distanciaKm += d; // ignorar saltos GPS
+    }
+
+    return { velMedia, velMax, distanciaKm };
+  }, [trajeto]);
 
   const renderMap = (height: string) => (
     <MapContainer
@@ -263,11 +296,22 @@ export function TrajetoColisaoCard({
               {renderMap('200px')}
               <div className="p-3 border-t space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline">{trajeto.length} pontos</Badge>
                     {paradas.length > 0 && (
                       <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                         {paradas.length} parada{paradas.length > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                    {metricas && metricas.distanciaKm > 0 && (
+                      <Badge variant="outline">📏 {metricas.distanciaKm.toFixed(1)} km</Badge>
+                    )}
+                    {metricas && metricas.velMedia > 0 && (
+                      <Badge variant="outline">⌀ {metricas.velMedia.toFixed(0)} km/h</Badge>
+                    )}
+                    {metricas && metricas.velMax > 0 && (
+                      <Badge variant={metricas.velMax > 80 ? 'destructive' : 'outline'}>
+                        🔺 {metricas.velMax.toFixed(0)} km/h
                       </Badge>
                     )}
                   </div>
