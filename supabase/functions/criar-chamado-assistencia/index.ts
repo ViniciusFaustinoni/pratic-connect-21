@@ -331,8 +331,8 @@ serve(async (req) => {
 
     console.log("[criar-chamado] Chamado criado:", chamado.id);
 
-    // Auto-despacho para reboque/guincho
-    if (['reboque', 'guincho'].includes(payload.tipo_assistencia)) {
+    // Auto-despacho para todos os tipos de assistência
+    {
       try {
         console.log("[criar-chamado] Iniciando auto-despacho para tipo:", payload.tipo_assistencia);
         const despRes = await fetch(`${supabaseUrl}/functions/v1/despacho-reboque-disparar`, {

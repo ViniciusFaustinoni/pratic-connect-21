@@ -151,7 +151,8 @@ serve(async (req) => {
 
     const valoresMap = new Map<string, { valor_saida: number; valor_km: number; valor_sugerido: number | null }>();
     for (const v of valores || []) {
-      if (v.tipo_servico === "reboque" || v.tipo_servico === "guincho" || !valoresMap.has(v.prestador_id)) {
+      // Priorizar valor do tipo exato do chamado, senão usar o primeiro disponível
+      if (v.tipo_servico?.toLowerCase() === tipoServicoChamado || !valoresMap.has(v.prestador_id)) {
         valoresMap.set(v.prestador_id, { valor_saida: v.valor_saida || 0, valor_km: v.valor_km || 0, valor_sugerido: v.valor_sugerido || null });
       }
     }
