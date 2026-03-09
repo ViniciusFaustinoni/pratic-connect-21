@@ -10157,6 +10157,27 @@ export type Database = {
           },
         ]
       }
+      equipes_comerciais: {
+        Row: {
+          created_at: string
+          id: string
+          supervisor_id: string
+          vendedor_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          supervisor_id: string
+          vendedor_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          supervisor_id?: string
+          vendedor_id?: string
+        }
+        Relationships: []
+      }
       estoque_movimentacoes: {
         Row: {
           created_at: string | null
@@ -26104,6 +26125,7 @@ export type Database = {
         Args: { _sinistro_id: string }
         Returns: boolean
       }
+      is_supervisor_of: { Args: { _vendedor_id: string }; Returns: boolean }
       is_vendedor: { Args: { _user_id: string }; Returns: boolean }
       log_auth_event: {
         Args: {
