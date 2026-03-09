@@ -493,10 +493,13 @@ serve(async (req) => {
         try {
           const tel = associado.whatsapp || associado.telefone;
           if (tel) {
+            const primeiroNomePagto = associado.nome?.split(' ')[0] || 'Associado';
             await supabase.functions.invoke("whatsapp-send-text", {
               body: {
                 phone: tel,
                 message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${associado.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${valorCota.toFixed(2)} foi confirmado!\n\nEnviaremos o Termo de Entrada para assinatura digital em instantes.`,
+                template_name: 'sinistro_atualizado',
+                template_params: [primeiroNomePagto, sinistro.protocolo, 'Pagamento da cota de coparticipação confirmado! Termo de Entrada será enviado em instantes.'],
               },
             });
           }
