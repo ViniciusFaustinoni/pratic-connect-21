@@ -141,6 +141,8 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
     }
   };
 
+  const botoesPayload = botoes.length > 0 ? botoes : null;
+
   const handleSalvarRascunho = async () => {
     if (!nome || !corpo) return;
     if (isEdit) {
@@ -152,6 +154,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         header_texto: headerTipo === 'text' ? headerTexto : null,
         corpo,
         rodape: rodape || null,
+        botoes: botoesPayload,
         variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : null,
       });
     } else {
@@ -162,6 +165,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         header_tipo: headerTipo,
         header_texto: headerTipo === 'text' ? headerTexto : undefined,
         rodape: rodape || undefined,
+        botoes: botoesPayload as any,
         variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : undefined,
       });
     }
@@ -178,6 +182,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         header_texto: headerTipo === 'text' ? headerTexto : null,
         corpo,
         rodape: rodape || null,
+        botoes: botoesPayload,
         variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : null,
       });
       await enviar.mutateAsync(template.id);
@@ -190,6 +195,7 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
         header_tipo: headerTipo,
         header_texto: headerTipo === 'text' ? headerTexto : undefined,
         rodape: rodape || undefined,
+        botoes: botoesPayload as any,
         variaveis_exemplo: Object.keys(varExemplos).length > 0 ? varExemplos : undefined,
       });
       if (created?.id) {
