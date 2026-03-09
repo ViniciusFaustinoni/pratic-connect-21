@@ -449,8 +449,9 @@ export default function Perfis() {
               {areas.map(area => {
                 const areaPerfis = perfisPorArea[area];
                 if (!areaPerfis || areaPerfis.length === 0) return null;
-                const icon = AREA_ICON_MAP[area] || Shield;
-                const style = AREA_STYLE_MAP[area] || DEFAULT_AREA_STYLE;
+                const areaData = areaStyles[area];
+                const icon = (areaData?.icon ? ICON_REGISTRY[areaData.icon] : undefined) || Shield;
+                const style = areaData ? getAreaGradient(areaData.color) : DEFAULT_AREA_STYLE;
                 return (
                   <AreaSection
                     key={area}
