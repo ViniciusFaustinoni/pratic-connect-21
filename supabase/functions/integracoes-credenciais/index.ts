@@ -146,14 +146,11 @@ serve(async (req) => {
 
     const userId = claimsData.claims.sub;
 
-    // Verificar se é diretor ou desenvolvedor
-    const { data: userRoles } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-
-    const rolesPermitidas = ['diretor', 'desenvolvedor', 'admin_master'];
-    const temPermissao = userRoles?.some(r => rolesPermitidas.includes(r.role));
+    // Verificar permissão dinâmica via has_permission
+    const { data: temPermissao } = await supabase.rpc('has_permission', {
+      _user_id: userId,
+      _permission: 'canManageIntegracoes',
+    });
 
     if (!temPermissao) {
       return new Response(

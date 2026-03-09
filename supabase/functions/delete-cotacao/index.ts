@@ -45,18 +45,15 @@ Deno.serve(async (req) => {
     // Criar cliente admin para operações
     const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Verificar se é diretor
-    const { data: roleData, error: roleError } = await adminClient
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'diretor')
-      .maybeSingle()
+    // Verificar permissão dinâmica via has_permission
+    const { data: temPermissao } = await adminClient.rpc('has_permission', {
+      _user_id: userId,
+      _permission: 'canDeleteCotacao',
+    })
 
-    if (roleError || !roleData) {
-      console.error('Usuário não é diretor:', roleError)
+    if (!temPermissao) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Apenas diretores podem excluir cotações com dependências' }),
+        JSON.stringify({ success: false, error: 'Sem permissão para excluir cotações com dependências' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

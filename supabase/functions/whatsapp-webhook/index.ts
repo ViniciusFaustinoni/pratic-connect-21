@@ -2717,11 +2717,17 @@ serve(async (req) => {
               resposta: { state, timestamp: new Date().toISOString() },
             });
           
-          // Criar notificação geral (buscar diretores)
-          const { data: diretores } = await supabase
-            .from('user_roles')
-            .select('user_id')
-            .eq('role', 'diretor');
+          // Criar notificação para usuários com permissão de gerenciar integrações
+          const { data: configsInteg } = await supabase
+            .from('app_roles_config')
+            .select('role, permissions')
+            .eq('is_active', true);
+          const rolesInteg = (configsInteg || [])
+            .filter(c => Array.isArray(c.permissions) && c.permissions.includes('canManageIntegracoes'))
+            .map(c => c.role);
+          const { data: diretores } = rolesInteg.length > 0
+            ? await supabase.from('user_roles').select('user_id').in('role', rolesInteg)
+            : { data: [] };
           
           if (diretores?.length) {
             const notificacoes = diretores.map(d => ({

@@ -39,23 +39,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user is a director or admin
-    const { data: roles, error: roleError } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id);
+    // Verificar permissão dinâmica via has_permission
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (roleError) {
-      console.error("[delete-ativacao] Erro ao verificar role:", roleError);
-      return new Response(
-        JSON.stringify({ error: "Erro ao verificar permissões" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const { data: temPermissao } = await adminClient.rpc('has_permission', {
+      _user_id: user.id,
+      _permission: 'canDeleteAtivacao',
+    });
 
-    const allowedRoles = ["diretor", "admin_master", "desenvolvedor"];
-    const hasPermission = roles?.some((r) => allowedRoles.includes(r.role));
-    if (!hasPermission) {
+    if (!temPermissao) {
       return new Response(
         JSON.stringify({ error: "Apenas diretores e administradores podem excluir ativações" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }

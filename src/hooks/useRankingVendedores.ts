@@ -49,11 +49,11 @@ export function useRankingVendedores(
       const dataInicio = calcularDataInicio(periodo);
       const dataInicioStr = format(dataInicio, 'yyyy-MM-dd');
 
-      // 1. Buscar roles de vendedores
+      // 1. Buscar roles de vendedores dinamicamente (apenas vendedor_clt e vendedor_externo para ranking)
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role')
-        .in('role', ['vendedor_clt', 'vendedor_externo']);
+        .in('role', ['vendedor_clt', 'vendedor_externo']); // Ranking é apenas para vendedores diretos
 
       if (rolesError) {
         console.error('Erro ao buscar roles:', rolesError);

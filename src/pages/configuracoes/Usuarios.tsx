@@ -44,7 +44,7 @@ const tiposUsuario: Record<string, { label: string; color: string }> = {
 
 export default function Usuarios() {
   const navigate = useNavigate();
-  const { getRoleLabel, getRoleBadgeClass, getRoleOptions } = useAppRoles();
+  const { getRoleLabel, getRoleBadgeClass, getRoleOptions, getRoleArea } = useAppRoles();
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
@@ -266,7 +266,7 @@ export default function Usuarios() {
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {usuario.roles?.slice(0, 2).map((role, idx) => {
-                        const isVendedor = ['vendedor_clt', 'vendedor_externo'].includes(role);
+                        const isVendedor = getRoleArea(role) === 'Comercial';
                         return (
                           <Badge 
                             key={idx} 

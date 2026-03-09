@@ -133,13 +133,32 @@ export function AgendarVistoriaModal({
   const { data: vistoriadores = [], isLoading: isLoadingVistoriadores } = useQuery<VistoriadorOption[]>({
     queryKey: ['vistoriadores-disponiveis'],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (supabase.from('profiles').select('id, nome') as any)
-        .eq('role', 'instalador_vistoriador')
+      // Buscar roles operacionais (instaladores/vistoriadores) dinamicamente
+      const { data: configs } = await supabase
+        .from('app_roles_config')
+        .select('role')
+        .eq('is_operational', true)
+        .eq('is_active', true);
+      const opRoles = (configs || [])
+        .map((c: any) => c.role)
+        .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
+      if (opRoles.length === 0) opRoles.push('instalador_vistoriador');
+
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', opRoles);
+      
+      if (!roleData?.length) return [];
+
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('id, nome')
+        .in('user_id', roleData.map((r: any) => r.user_id))
         .eq('ativo', true);
 
-      if (result.error) throw result.error;
-      return (result.data || []) as VistoriadorOption[];
+      if (error) throw error;
+      return (profiles || []) as VistoriadorOption[];
     },
     enabled: open && formData.tipo !== 'auto_vistoria',
   });

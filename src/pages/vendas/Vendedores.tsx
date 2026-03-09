@@ -18,11 +18,11 @@ import { useVendedoresRisco } from '@/hooks/useAuditoriaVendedores';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VendedorRiskBadge } from '@/components/auditoria/VendedorRiskBadge';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function Vendedores() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const { roles } = useAuth();
 
   const { data: vendedores = [], isLoading: loadingVendedores } = useVendedores();
   const { data: contagemLeads = {}, isLoading: loadingContagem } = useVendedoresContagem();
@@ -30,10 +30,9 @@ export default function Vendedores() {
 
   const isLoading = loadingVendedores || loadingContagem;
   
-  // Check if user can access audit
-  const canAccessAudit = roles?.some(role => 
-    ['diretor', 'gerente_comercial'].includes(role)
-  );
+  // Check if user can access audit via dynamic permissions
+  const { hasPerm } = usePermissions();
+  const canAccessAudit = hasPerm('canViewAudit');
 
   // Filtrar vendedores
   const filteredVendedores = useMemo(() => {

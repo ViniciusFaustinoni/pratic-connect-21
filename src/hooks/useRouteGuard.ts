@@ -2,54 +2,40 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { usePermissions } from './usePermissions';
 import { useModuleVisibility, MODULE_ROUTES } from './useModuleVisibility';
+import { useAppRoles } from './useAppRoles';
+import { useAuth } from '@/contexts/AuthContext';
 
 const ALWAYS_ALLOWED = ['/perfil', '/notificacoes', '/definir-senha', '/acesso-negado'];
 
 /**
  * Hook para proteger rotas baseado no perfil do usuário.
  * Usa a tabela role_module_visibility para determinar quais rotas são acessíveis.
- * Mantém redirects hardcoded para perfis com layouts especiais (regulador, instalador, sindicante).
+ * Usa redirect_path do app_roles_config para perfis operacionais.
  */
 export function useRouteGuard() {
   const location = useLocation();
   const navigate = useNavigate();
   const { isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isSindicanteOnly } = usePermissions();
   const { visibleModules, isLoading } = useModuleVisibility();
+  const { isOnlyOperational, getOperationalRedirectPath } = useAppRoles();
+  const { perfis } = useAuth();
 
   useEffect(() => {
     // Não guardar enquanto carrega
     if (isLoading) return;
 
-    // === Perfis com layout especial (redirects hardcoded) ===
-
-    // Regulador só pode acessar /regulador/*
-    if (isReguladorOnly) {
-      if (!location.pathname.startsWith('/regulador')) {
-        navigate('/regulador', { replace: true });
-        return;
-      }
-    }
-
-    // Instalador/Vistoriador só pode acessar /instalador/*
-    if (isInstaladorVistoriadorOnly) {
-      if (!location.pathname.startsWith('/instalador')) {
-        navigate('/instalador', { replace: true });
-        return;
-      }
-    }
-
-    // NOTA: Bloqueio de mapa para vistoriador base agora é feito
-    // pelo InstaladorLayout via useAlocacaoDiaria, não mais por role.
-
-    // Sindicante só pode acessar /sindicante/*, /perfil, /definir-senha
-    if (isSindicanteOnly) {
-      const allowedPaths = ['/sindicante', '/perfil', '/definir-senha', '/notificacoes'];
-      const isAllowed = allowedPaths.some(path =>
-        location.pathname === path || location.pathname.startsWith(path + '/')
-      );
-      if (!isAllowed) {
-        navigate('/sindicante', { replace: true });
-        return;
+    // === Perfis operacionais — redirect dinâmico via app_roles_config ===
+    if (isOnlyOperational(perfis)) {
+      const redirectPath = getOperationalRedirectPath(perfis);
+      if (redirectPath && !location.pathname.startsWith(redirectPath)) {
+        // Permitir rotas universais
+        const isUniversal = ALWAYS_ALLOWED.some(path =>
+          location.pathname === path || location.pathname.startsWith(path + '/')
+        );
+        if (!isUniversal) {
+          navigate(redirectPath, { replace: true });
+          return;
+        }
       }
     }
 
@@ -75,5 +61,5 @@ export function useRouteGuard() {
         navigate(firstRoute, { replace: true });
       }
     }
-  }, [location.pathname, isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isSindicanteOnly, visibleModules, isLoading, navigate]);
+  }, [location.pathname, isOnlyOperational, getOperationalRedirectPath, perfis, visibleModules, isLoading, navigate]);
 }

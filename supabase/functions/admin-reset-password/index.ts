@@ -36,25 +36,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verificar se o usuário tem role de diretor
-    const { data: roles, error: rolesError } = await supabaseClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id);
+    // Verificar permissão dinâmica via has_permission
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const adminClientForRpc = createClient(supabaseUrl, supabaseServiceKey!);
 
-    if (rolesError) {
+    const { data: temPermissao } = await adminClientForRpc.rpc('has_permission', {
+      _user_id: user.id,
+      _permission: 'canResetPassword',
+    });
+
+    if (!temPermissao) {
       return new Response(
-        JSON.stringify({ error: "Erro ao verificar permissões" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const isDiretor = roles?.some((r) => r.role === "diretor");
-    const isAdminMaster = roles?.some((r) => r.role === "admin_master");
-
-    if (!isDiretor && !isAdminMaster) {
-      return new Response(
-        JSON.stringify({ error: "Apenas diretores e admin master podem redefinir senhas" }),
+        JSON.stringify({ error: "Sem permissão para redefinir senhas" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

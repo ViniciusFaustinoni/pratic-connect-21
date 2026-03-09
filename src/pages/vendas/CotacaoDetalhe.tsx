@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useCotacao, useCotacaoActions, useAtualizarStatusCotacao, useExcluirCotacao, useDuplicarCotacao } from '@/hooks/useCotacoes';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -53,8 +54,9 @@ export default function CotacaoDetalhe() {
   const queryClient = useQueryClient();
   const { profile, roles } = useAuth();
 
-  // Verificar se é diretor para permissão de exclusão
-  const isDiretor = roles?.includes('diretor');
+  // Verificar permissão de exclusão via sistema dinâmico
+  const { hasPerm } = usePermissions();
+  const isDiretor = hasPerm('canDeleteCotacao');
 
   // Realtime para notificações
   useCotacoesRealtime();

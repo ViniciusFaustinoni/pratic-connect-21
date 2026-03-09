@@ -32,11 +32,17 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Buscar diretores
-    const { data: diretores } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .eq('role', 'diretor')
+    // Buscar usuários com permissão de gerenciar sinistros (diretores/admins)
+    const { data: configs } = await supabase
+      .from('app_roles_config')
+      .select('role, permissions')
+      .eq('is_active', true)
+    const rolesGestao = (configs || [])
+      .filter((c: any) => Array.isArray(c.permissions) && c.permissions.includes('canDeleteSinistro'))
+      .map((c: any) => c.role)
+    const { data: diretores } = rolesGestao.length > 0
+      ? await supabase.from('user_roles').select('user_id').in('role', rolesGestao)
+      : { data: [] as any[] }
     const diretorIds = (diretores || []).map((d: any) => d.user_id)
 
     const hojeStr = hoje.toISOString().split('T')[0]

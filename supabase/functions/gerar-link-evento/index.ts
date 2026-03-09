@@ -44,19 +44,24 @@ serve(async (req) => {
 
     const userId = claimsData.claims.sub;
 
-    // 2. Verificar role do usuário
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("id, role")
-      .eq("user_id", userId)
-      .maybeSingle();
+    // 2. Verificar permissão dinâmica
+    const { data: temPermissao } = await supabaseAdmin.rpc('has_permission', {
+      _user_id: userId,
+      _permission: 'canGenerateLinkEvento',
+    });
 
-    const allowedRoles = ["regulador", "analista_sinistro", "diretor", "admin", "gerente", "operacional"];
-    if (!profile || !allowedRoles.includes(profile.role)) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Sem permissão para gerar link de evento" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Fallback: verificar se tem role de regulador (que precisa gerar links para eventos)
+    if (!temPermissao) {
+      const { data: hasRoleResult } = await supabaseAdmin.rpc('has_role', {
+        _user_id: userId,
+        _role: 'regulador',
+      });
+      if (!hasRoleResult) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Sem permissão para gerar link de evento" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const { sinistro_id } = await req.json();

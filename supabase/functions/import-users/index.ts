@@ -67,16 +67,13 @@ serve(async (req) => {
       );
     }
 
-    // Verificar se tem role de gerência
-    const { data: roles } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', currentUser.id);
+    // Verificar permissão dinâmica via has_permission
+    const { data: temPermissao } = await supabaseAdmin.rpc('has_permission', {
+      _user_id: currentUser.id,
+      _permission: 'canImportUsers',
+    });
 
-    const allowedRoles = ['diretor', 'gerente_comercial', 'supervisor_vendas'];
-    const hasPermission = roles?.some(r => allowedRoles.includes(r.role));
-
-    if (!hasPermission) {
+    if (!temPermissao) {
       return new Response(
         JSON.stringify({ error: 'Sem permissão para importar usuários' }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }

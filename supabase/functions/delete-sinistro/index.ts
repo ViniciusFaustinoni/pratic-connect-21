@@ -58,16 +58,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verificar se é diretor
-    const { data: roles } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
+    // Verificar permissão dinâmica via has_permission
+    const { data: temPermissao } = await supabaseAdmin.rpc('has_permission', {
+      _user_id: userId,
+      _permission: 'canDeleteSinistro',
+    });
 
-    const isDiretor = roles?.some((r) => r.role === "diretor");
-    if (!isDiretor) {
+    if (!temPermissao) {
       return new Response(
-        JSON.stringify({ error: "Apenas diretores podem excluir sinistros" }),
+        JSON.stringify({ error: "Sem permissão para excluir sinistros" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

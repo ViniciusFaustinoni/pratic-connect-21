@@ -43,11 +43,21 @@ export function EscalaDiaPanel() {
   const { data: profissionais = [], isLoading } = useQuery({
     queryKey: ['escala-dia', dataFormatada],
     queryFn: async (): Promise<ProfissionalAlocacao[]> => {
-      // 1. Buscar user_ids com role instalador_vistoriador
+      // 1. Buscar roles operacionais (instaladores/vistoriadores)
+      const { data: configs } = await supabase
+        .from('app_roles_config')
+        .select('role')
+        .eq('is_operational', true)
+        .eq('is_active', true);
+      const opRoles = (configs || [])
+        .map((c: any) => c.role)
+        .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
+      if (opRoles.length === 0) opRoles.push('instalador_vistoriador');
+
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role', 'instalador_vistoriador');
+        .in('role', opRoles);
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];

@@ -296,12 +296,18 @@ export function useCriarVistoriaAgendada() {
         dados: { vistoria_id: vistoria.id, data: dataAgendada, horario: horarioAgendado },
       });
 
-      // Notificar coordenadores/reguladores sobre nova vistoria agendada
+      // Notificar coordenadores/reguladores — buscar roles da área Monitoramento
       try {
-        const { data: coordenadores } = await supabase
-          .from('user_roles')
-          .select('user_id')
-          .in('role', ['coordenador_monitoramento', 'regulador'] as any[]);
+        const { data: configs } = await supabase
+          .from('app_roles_config')
+          .select('role')
+          .eq('area', 'Monitoramento')
+          .eq('is_active', true);
+        const monitorRoles = (configs || []).map((c: any) => c.role);
+        
+        const { data: coordenadores } = monitorRoles.length > 0
+          ? await supabase.from('user_roles').select('user_id').in('role', monitorRoles)
+          : { data: [] as any[] };
 
         if (coordenadores?.length) {
           const notificacoes = coordenadores.map((c) => ({

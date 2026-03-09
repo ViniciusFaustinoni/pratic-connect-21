@@ -70,11 +70,20 @@ export function usePropostasMetricas(periodo: PeriodoFiltro = 'mes') {
       const periodoAnteriorInicioStr = format(periodoAnteriorInicio, 'yyyy-MM-dd');
       const periodoAnteriorFimStr = format(periodoAnteriorFim, 'yyyy-MM-dd');
 
+      // Buscar roles da área Comercial dinamicamente
+      const { data: configs } = await supabase
+        .from('app_roles_config')
+        .select('role')
+        .eq('area', 'Comercial')
+        .eq('is_active', true);
+
+      const rolesComerciais = (configs || []).map((c: any) => c.role);
+
       // Buscar vendedores
       const { data: vendedoresRoles } = await supabase
         .from('user_roles')
         .select('user_id, role')
-        .in('role', ['vendedor_clt', 'vendedor_externo', 'supervisor_vendas', 'gerente_comercial']);
+        .in('role', rolesComerciais);
       
       if (!vendedoresRoles || vendedoresRoles.length === 0) {
         return { consultores: [], globais: getEmptyGlobais() };
