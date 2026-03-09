@@ -69,13 +69,16 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   // Buscar decomposição do banco
   const { data: decomposicao } = useConfigDecomposicao();
 
-  // Buscar planos reais do banco de dados
+  // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
     queryKey: ['planos_cotacao'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('planos')
-        .select('*')
+        .select(`
+          *,
+          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class)
+        `)
         .eq('ativo', true)
         .order('ordem', { ascending: true });
       
