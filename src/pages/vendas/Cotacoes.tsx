@@ -49,43 +49,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 
-// Mapeamento de coberturas para categorias
-const CATEGORIAS_BENEFICIOS: Record<string, 'cobertura' | 'assistencia' | 'extra'> = {
-  'roubo e furto': 'cobertura',
-  'roubo': 'cobertura',
-  'furto': 'cobertura',
-  'colisão': 'cobertura',
-  'perda total': 'cobertura',
-  'incêndio': 'cobertura',
-  'alagamento': 'cobertura',
-  'chuva de granizo': 'cobertura',
-  'granizo': 'cobertura',
-  'fenômenos': 'cobertura',
-  'danos a terceiros': 'cobertura',
-  'danos terceiros': 'cobertura',
-  'terceiros': 'cobertura',
-  'vidros': 'cobertura',
-  'faróis': 'cobertura',
-  'retrovisores': 'cobertura',
-  'assistência 24h': 'assistencia',
-  'assistência': 'assistencia',
-  '24h': 'assistencia',
-  'rastreador': 'assistencia',
-  'monitoramento': 'assistencia',
-  'reboque': 'assistencia',
-  'guincho': 'assistencia',
-  'chaveiro': 'assistencia',
-  'pane seca': 'assistencia',
-  'pane elétrica': 'assistencia',
-  'troca de pneu': 'assistencia',
-  'kit gás': 'extra',
-  'carro reserva': 'extra',
-  'clube gás': 'extra',
-  '100% fipe': 'extra',
-  'fipe app': 'extra',
-  'app': 'extra',
-  'proteção de vidros': 'extra',
-  'cobertura de vidros': 'extra',
+// Categorização dinâmica — fallback por termos quando benefits.category não está disponível
+const categorizarPorTermo = (cobLower: string): 'cobertura' | 'assistencia' | 'extra' => {
+  const termos_assistencia = ['assistência', '24h', 'rastreador', 'monitoramento', 'reboque', 'guincho', 'chaveiro', 'pane', 'troca de pneu'];
+  const termos_extra = ['kit gás', 'carro reserva', 'clube gás', '100% fipe', 'fipe app', 'app', 'proteção de vidros', 'cobertura de vidros'];
+  
+  if (termos_assistencia.some(t => cobLower.includes(t))) return 'assistencia';
+  if (termos_extra.some(t => cobLower.includes(t))) return 'extra';
+  return 'cobertura';
 };
 
 // Função para categorizar coberturas
