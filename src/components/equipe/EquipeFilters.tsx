@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
+import { useRegioesAtendimento } from '@/hooks/useRegioesAtendimento';
 
 interface EquipeFiltersProps {
   searchTerm: string;
