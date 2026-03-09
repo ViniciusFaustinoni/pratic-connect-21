@@ -14,6 +14,8 @@ export interface AppRoleConfig {
   permissions: string[];
   area_icon: string;
   area_color: string;
+  is_operational: boolean;
+  redirect_path: string | null;
 }
 
 /**
