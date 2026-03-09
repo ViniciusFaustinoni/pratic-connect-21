@@ -273,12 +273,9 @@ export default function ConfiguracoesSistema() {
     }
   };
 
-  // Adicionar 'integracoes' como categoria sempre disponível
-  const availableCategories = [
-    ...Object.keys(categoriaConfig).filter(
-      cat => cat === 'integracoes' || (configsPorCategoria[cat]?.length > 0)
-    )
-  ];
+  const availableCategories = Object.keys(categoriaConfig).filter(
+    cat => configsPorCategoria[cat]?.length > 0
+  );
 
   if (isLoading) {
     return (
