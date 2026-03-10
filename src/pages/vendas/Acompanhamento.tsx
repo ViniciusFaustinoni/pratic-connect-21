@@ -142,7 +142,9 @@ export default function Acompanhamento() {
       consultor: item.vendedor_nome || 'Não atribuído',
       docsAprovados: item.docs_aprovados,
       docsTotal: item.docs_total,
-      created_at: item.updated_at, // Using updated_at as created_at since view doesn't have created_at
+      created_at: item.updated_at,
+      detalheFase: item.detalhe_fase,
+      faseOriginal: item.fase_acompanhamento,
     }));
   }, [rawItems]);
 
