@@ -77,6 +77,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   const { data: cotaDesagioDefault = 8 } = useCotaDesagioDefault();
   const { data: cotaMinimaDesagioDefault = 2000 } = useCotaMinimaDesagioDefault();
 
+  // Adicional app do banco
+  const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
+
   // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
     queryKey: ['planos_cotacao'],
