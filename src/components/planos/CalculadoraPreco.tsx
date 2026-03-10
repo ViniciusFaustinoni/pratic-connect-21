@@ -67,14 +67,16 @@ export function CalculadoraPreco() {
 
     if (anoVeiculo === 'antigo') {
       fator *= FATOR_VEICULO_ANTIGO;
-      fatoresAplicados.push('Veículo com mais de 10 anos (+15%)');
+      const pctAntigo = Math.round((FATOR_VEICULO_ANTIGO - 1) * 100);
+      fatoresAplicados.push(`Veículo com mais de 10 anos (+${pctAntigo}%)`);
     } else {
       fatoresAplicados.push('Veículo até 10 anos');
     }
 
     if (tipoUso === 'trabalho') {
       fator *= FATOR_USO_TRABALHO;
-      fatoresAplicados.push('Uso para trabalho/app (+20%)');
+      const pctTrabalho = Math.round((FATOR_USO_TRABALHO - 1) * 100);
+      fatoresAplicados.push(`Uso para trabalho/app (+${pctTrabalho}%)`);
     } else {
       fatoresAplicados.push('Uso particular');
     }
