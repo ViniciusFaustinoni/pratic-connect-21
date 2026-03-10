@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { ArrowLeft, Phone, MessageSquare, Mail, Handshake, AlertCircle, User, Car, Clock, DollarSign, MoreVertical, AlertTriangle, Ban, Save, FileText, Plus, Gavel, UserX, Receipt } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,10 +59,10 @@ const openWhatsApp = (numero: string) => {
   window.open(`https://wa.me/55${limpo}`, '_blank');
 };
 
-/** Calcula valor atualizado: principal + 2% multa + 1%/mês juros pro rata */
-const calcValorAtualizado = (valor: number, diasAtraso: number) => {
-  const multa = valor * 0.02;
-  const juros = valor * 0.01 * (diasAtraso / 30);
+/** Calcula valor atualizado: principal + multa + juros pro rata (valores do banco) */
+const calcValorAtualizado = (valor: number, diasAtraso: number, percMulta: number, percJuros: number) => {
+  const multa = valor * percMulta;
+  const juros = valor * percJuros * (diasAtraso / 30);
   return valor + multa + juros;
 };
 
@@ -71,6 +72,8 @@ const InadimplenteDetalhe = () => {
   const [selectedBoletos, setSelectedBoletos] = useState<string[]>([]);
   const [anotacao, setAnotacao] = useState('');
   const [contatoModalOpen, setContatoModalOpen] = useState(false);
+  const { data: percMulta = 0.02 } = useConfiguracaoNumero('multa_inadimplencia', 0.02);
+  const { data: percJuros = 0.01 } = useConfiguracaoNumero('juros_mes_inadimplencia', 0.01);
 
   const { data: associado, isLoading: loadingAssociado } = useQuery({
     queryKey: ['associado-cobranca', id],
@@ -108,7 +111,7 @@ const InadimplenteDetalhe = () => {
       const dias = differenceInDays(hoje, new Date(c.data_vencimento));
       if (dias > diasMaximo) diasMaximo = dias;
       valorTotal += c.valor_final || 0;
-      valorAtualizado += calcValorAtualizado(c.valor_final || 0, dias);
+      valorAtualizado += calcValorAtualizado(c.valor_final || 0, dias, percMulta, percJuros);
     });
     return { diasMaximo, qtdBoletos: cobrancas.length, valorTotal, valorAtualizado };
   }, [cobrancas]);
@@ -276,7 +279,7 @@ const InadimplenteDetalhe = () => {
                   {cobrancas && cobrancas.length > 0 ? (
                     cobrancas.map(c => {
                       const dias = differenceInDays(new Date(), new Date(c.data_vencimento));
-                      const atualizado = calcValorAtualizado(c.valor_final || 0, dias);
+                      const atualizado = calcValorAtualizado(c.valor_final || 0, dias, percMulta, percJuros);
                       return (
                         <TableRow key={c.id}>
                           <TableCell><Checkbox checked={selectedBoletos.includes(c.id)} onCheckedChange={() => toggleBoleto(c.id)} /></TableCell>
