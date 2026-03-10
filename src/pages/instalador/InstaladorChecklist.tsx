@@ -2114,18 +2114,20 @@ export default function InstaladorChecklist() {
               <CheckCircle2 className="mr-2 h-4 w-4" />
               {temCritico ? 'Prosseguir mesmo assim' : 'Há condição de continuar'}
             </Button>
-            <Button
-              onClick={handleEnviarParaMonitoramento}
-              disabled={enviandoMonitoramento}
-              className="w-full bg-blue-600 hover:bg-blue-700"
-            >
-              {enviandoMonitoramento ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <AlertTriangle className="mr-2 h-4 w-4" />
-              )}
-              Enviar para Monitoramento
-            </Button>
+            {servico?.decisao_instalador !== 'aprovado_ressalva' && (
+              <Button
+                onClick={handleEnviarParaMonitoramento}
+                disabled={enviandoMonitoramento}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                {enviandoMonitoramento ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                )}
+                Enviar para Monitoramento
+              </Button>
+            )}
             <Button
               variant="destructive"
               onClick={handleEncerrarSemCondicao}
