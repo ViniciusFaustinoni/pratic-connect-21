@@ -548,17 +548,22 @@ export default function InstaladorChecklist() {
     if (!id) return;
     setUploadingFotoLocal(true);
     try {
-      const fileName = `local-instalacao/${id}/${Date.now()}.jpg`;
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      const fileName = `local-instalacao/${id}/${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
-        .from('servicos-fotos')
-        .upload(fileName, file, { contentType: 'image/jpeg', upsert: true });
-      if (uploadError) throw uploadError;
+        .from('instalacoes')
+        .upload(fileName, file, { contentType: file.type || 'image/jpeg', upsert: true });
+      if (uploadError) {
+        console.error('[handleFotoLocalInstalacao] Upload error:', uploadError.message);
+        throw uploadError;
+      }
       
-      const { data: urlData } = supabase.storage.from('servicos-fotos').getPublicUrl(fileName);
+      const { data: urlData } = supabase.storage.from('instalacoes').getPublicUrl(fileName);
       setFotoLocalInstalacao(urlData.publicUrl);
       toast.success('Foto do local salva!');
-    } catch (err) {
-      toast.error('Erro ao enviar foto do local');
+    } catch (err: any) {
+      console.error('[handleFotoLocalInstalacao] Erro:', err);
+      toast.error(err?.message || 'Erro ao enviar foto do local');
     } finally {
       setUploadingFotoLocal(false);
     }
