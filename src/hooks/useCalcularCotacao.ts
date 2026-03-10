@@ -11,6 +11,7 @@ export interface PlanoCalculado {
   nome: string;
   categoria: string;
   valor_mensal: number;
+  valor_desagio: number | null;
   valor_adesao: number;
   valor_primeira_parcela: number;
   coberturas: string[];
@@ -27,11 +28,13 @@ export interface ResultadoCalculo {
 interface CalcularParams {
   valor_fipe: number;
   tipo_uso: 'particular' | 'aplicativo';
+  regiao?: string;
+  combustivel?: string;
 }
 
 /**
  * Hook para calcular cotação pública buscando planos e preços do banco de dados.
- * Busca taxa fallback dinamicamente de configuracoes.
+ * Usa tabelas_preco_mensalidade + plano_preco_map como fonte de preços.
  */
 export function useCalcularCotacao() {
   const [resultado, setResultado] = useState<ResultadoCalculo | null>(null);
@@ -43,17 +46,20 @@ export function useCalcularCotacao() {
     setError(null);
 
     try {
-      // Buscar planos ativos e taxa fallback em paralelo
-      const [planosRes, tabelasRes, configRes] = await Promise.all([
+      // Buscar planos ativos, mapeamento e preços em paralelo
+      const [planosRes, mapRes, mensalidadeRes, configRes] = await Promise.all([
         supabase
           .from('planos')
           .select('*')
           .eq('ativo', true)
           .order('ordem', { ascending: true }),
         supabase
-          .from('tabelas_preco')
+          .from('plano_preco_map')
+          .select('*'),
+        supabase
+          .from('tabelas_preco_mensalidade')
           .select('*')
-          .eq('ativo', true),
+          .eq('is_active', true),
         supabase
           .from('configuracoes')
           .select('chave, valor')
@@ -67,15 +73,15 @@ export function useCalcularCotacao() {
         throw new Error('Nenhum plano ativo encontrado no banco de dados');
       }
 
-      const tabelasPreco = tabelasRes.data;
+      const planoPrecoMap = mapRes.data || [];
+      const tabelasMensalidade = mensalidadeRes.data || [];
       
       // Taxa fallback dinâmica
       const configMap = Object.fromEntries((configRes.data || []).map(c => [c.chave, c.valor]));
       const taxaFallback = parseFloat(configMap.taxa_fallback_carro || '0.025');
 
-      const faixaPreco = tabelasPreco?.find(
-        f => params.valor_fipe >= Number(f.fipe_de) && params.valor_fipe <= Number(f.fipe_ate)
-      );
+      const regiaoLower = (params.regiao || 'rj').toLowerCase();
+      const combustivelLower = (params.combustivel || 'gasolina').toLowerCase();
 
       const planos: PlanoCalculado[] = [];
 
@@ -90,18 +96,36 @@ export function useCalcularCotacao() {
         if (plano.fipe_minima && params.valor_fipe < Number(plano.fipe_minima)) continue;
         if (plano.fipe_maxima && params.valor_fipe > Number(plano.fipe_maxima)) continue;
 
-        let valorBase = 0;
-        if (faixaPreco) {
-          valorBase = Number(faixaPreco.taxa_comercial) || 0;
-        }
-        if (valorBase === 0) {
-          valorBase = Math.round(params.valor_fipe * taxaFallback / 12);
+        // Buscar valor_mensal da nova tabela via plano_preco_map
+        const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
+        const linhaSlug = mapping?.linha_slug;
+        const tipoUsoPricing = mapping?.tipo_uso || params.tipo_uso;
+
+        let valorMensal = 0;
+        let valorDesagio: number | null = null;
+
+        if (linhaSlug) {
+          const faixa = tabelasMensalidade.find(t =>
+            t.linha_slug === linhaSlug &&
+            t.regiao === regiaoLower &&
+            t.tipo_uso === tipoUsoPricing &&
+            (t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
+            params.valor_fipe >= Number(t.fipe_min) &&
+            params.valor_fipe <= Number(t.fipe_max)
+          );
+
+          if (faixa) {
+            valorMensal = Number(faixa.valor_mensal);
+            valorDesagio = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
+          }
         }
 
-        const adicionalMensal = Number(plano.adicional_mensal) || 0;
-        const valorMensal = valorBase + adicionalMensal;
+        // Fallback
+        if (valorMensal === 0) {
+          valorMensal = Math.round(params.valor_fipe * taxaFallback / 12);
+        }
+
         const valorAdesao = Number(plano.valor_adesao);
-
         const coberturas = Array.isArray(plano.coberturas) ? plano.coberturas as string[] : [];
 
         planos.push({
@@ -110,6 +134,7 @@ export function useCalcularCotacao() {
           nome: plano.nome,
           categoria: plano.categoria || plano.nome,
           valor_mensal: Math.round(valorMensal * 100) / 100,
+          valor_desagio: valorDesagio != null ? Math.round(valorDesagio * 100) / 100 : null,
           valor_adesao: valorAdesao,
           valor_primeira_parcela: valorAdesao,
           coberturas,

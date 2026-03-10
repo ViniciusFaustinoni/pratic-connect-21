@@ -30,13 +30,10 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
     );
   }
 
-  // Ordenar por fipe_de
+  // Ordenar por fipe_min
   const tabelasOrdenadas = tabelas?.sort((a, b) => 
-    Number(a.fipe_de) - Number(b.fipe_de)
+    Number(a.fipe_min) - Number(b.fipe_min)
   ) || [];
-
-
-
 
   if (tabelasOrdenadas.length === 0) {
     return (
@@ -56,36 +53,39 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
         <CardDescription>Valores mensais por faixa FIPE</CardDescription>
       </CardHeader>
       <CardContent>
-
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b">
                 <th className="text-left py-2 px-3">Faixa FIPE</th>
-                <th className="text-right py-2 px-3">Taxa Comercial</th>
-                <th className="text-right py-2 px-3">Taxa Administrativa</th>
-                <th className="text-right py-2 px-3">Taxa Aplicativo</th>
+                <th className="text-left py-2 px-3">Linha</th>
+                <th className="text-left py-2 px-3">Região</th>
+                <th className="text-right py-2 px-3">Valor Mensal</th>
+                <th className="text-right py-2 px-3">Valor Deságio</th>
               </tr>
             </thead>
             <tbody>
-              {tabelasOrdenadas.slice(0, 10).map((tabela) => {
-                const taxaComercial = Number(tabela.taxa_comercial);
+              {tabelasOrdenadas.slice(0, 20).map((tabela) => {
+                const valorMensal = Number(tabela.valor_mensal);
 
                 return (
                   <tr key={tabela.id} className="border-b hover:bg-muted/50">
                     <td className="py-2 px-3">
-                      {formatCurrency(Number(tabela.fipe_de))} - {formatCurrency(Number(tabela.fipe_ate))}
+                      {formatCurrency(Number(tabela.fipe_min))} - {formatCurrency(Number(tabela.fipe_max))}
+                    </td>
+                    <td className="py-2 px-3">
+                      {tabela.linha_slug || '-'}
+                    </td>
+                    <td className="py-2 px-3">
+                      {tabela.regiao || '-'}
                     </td>
                     <td className="text-right py-2 px-3 font-medium">
-                      {taxaComercial > 0 ? formatCurrency(taxaComercial) : (
+                      {valorMensal > 0 ? formatCurrency(valorMensal) : (
                         <span className="text-xs text-muted-foreground italic">Consulte um consultor</span>
                       )}
                     </td>
                     <td className="text-right py-2 px-3">
-                      {formatCurrency(Number(tabela.taxa_administrativa) || 0)}
-                    </td>
-                    <td className="text-right py-2 px-3">
-                      {formatCurrency(Number(tabela.taxa_aplicativo) || 0)}
+                      {tabela.valor_desagio ? formatCurrency(Number(tabela.valor_desagio)) : '-'}
                     </td>
                   </tr>
                 );

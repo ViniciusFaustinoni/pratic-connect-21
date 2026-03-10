@@ -27,6 +27,7 @@ export interface PlanoCotacao {
   cotaPercentual: number;
   cotaMinima: number;
   valorMensal: number;
+  valorDesagio: number | null;
   valorAdesao: number;
   destaque: boolean;
   tag?: string;
@@ -59,7 +60,7 @@ interface CalcularPlanosParams {
 // ============================================
 
 export function usePlanosCotacao(params: CalcularPlanosParams) {
-  // Buscar regiões do banco
+  // Buscar regiões do banco (ainda usada para validação)
   const { data: regioes } = useRegioesAtivas();
   
   // Buscar taxas fallback do banco
@@ -94,15 +95,27 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Buscar tabelas de preço do banco
-  const { data: tabelasPreco } = useQuery({
-    queryKey: ['tabelas_preco_cotacao'],
+  // Buscar mapeamento plano → linha_slug (nova tabela)
+  const { data: planoPrecoMap } = useQuery({
+    queryKey: ['plano_preco_map'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tabelas_preco')
+        .from('plano_preco_map')
+        .select('*');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Buscar tabelas de preço mensalidade (nova tabela)
+  const { data: tabelasMensalidade } = useQuery({
+    queryKey: ['tabelas_preco_mensalidade'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tabelas_preco_mensalidade')
         .select('*')
-        .eq('ativo', true);
-      
+        .eq('is_active', true);
       if (error) throw error;
       return data;
     },
@@ -140,22 +153,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       return [];
     }
 
-    // Encontrar região no banco pelo código
-    const regiaoDb = regioes?.find(r => {
-      const codigoLower = r.codigo.toLowerCase();
-      const regiaoLower = regiao.toLowerCase();
-      return codigoLower === regiaoLower;
-    });
-    const multiplicadorRegiao = regiaoDb ? Number(regiaoDb.multiplicador_preco) : 1.0;
-
+    const regiaoLower = regiao.toLowerCase();
+    const combustivelLower = combustivel?.toLowerCase() || 'gasolina';
     const tipoVeiculo = params.tipoVeiculo || 'carro';
     const anoAtual = new Date().getFullYear();
     const anoVeiculoNum = anoVeiculo || anoAtual;
-
-    // Encontrar faixa de preço aplicável
-    const faixaPreco = tabelasPreco?.find(
-      f => valorFipe >= Number(f.fipe_de) && valorFipe <= Number(f.fipe_ate)
-    );
 
     // Percentuais de decomposição
     const decCota = decomposicao?.cota || 0.60;
@@ -167,7 +169,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
     for (const plano of planosBanco) {
       const linha = plano.linha?.toLowerCase() || null;
-      const codigo = plano.codigo?.toLowerCase() || '';
       const tipoUsoPlano = plano.tipo_uso?.toLowerCase() || '';
       const categoriaPlano = plano.categoria?.toLowerCase() || '';
       
@@ -198,25 +199,35 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Regra de ano recente usando campo do banco
       if (requiresRecentYear && anoVeiculoNum < anoAtual - 1) continue;
 
-      // Calcular valor base
-      let valorBase: number | null = null;
-      
-      if (faixaPreco) {
-        valorBase = Number(faixaPreco.taxa_comercial) || 0;
+      // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
+      const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
+      const linhaSlug = mapping?.linha_slug;
+      const tipoUsoPricing = mapping?.tipo_uso || (params.usoApp ? 'aplicativo' : 'particular');
+
+      let valorMensal = 0;
+      let valorDesagio: number | null = null;
+
+      if (linhaSlug && tabelasMensalidade) {
+        const faixa = tabelasMensalidade.find(t =>
+          t.linha_slug === linhaSlug &&
+          t.regiao === regiaoLower &&
+          t.tipo_uso === tipoUsoPricing &&
+          (t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
+          valorFipe >= t.fipe_min &&
+          valorFipe <= t.fipe_max
+        );
+
+        if (faixa) {
+          valorMensal = faixa.valor_mensal;
+          valorDesagio = faixa.valor_desagio;
+        }
       }
-      
-      if (valorBase === null || valorBase === 0) {
+
+      // Fallback: se não encontrou na nova tabela, usar taxa fallback
+      if (valorMensal === 0) {
         const taxaFallback = tipoVeiculo === 'moto' ? taxaFallbackMoto : taxaFallbackCarro;
-        valorBase = Math.round(valorFipe * taxaFallback / 12);
+        valorMensal = Math.round(valorFipe * taxaFallback / 12);
       }
-
-      // Aplicar multiplicador de região (dinâmico do banco)
-      valorBase = Math.round(valorBase * multiplicadorRegiao * 100) / 100;
-
-      // Adicional por nível
-      const adicionalBanco = Number(plano.adicional_mensal) || 0;
-      const nivel = plano.nivel || null;
-      const valorMensal = valorBase + adicionalBanco;
 
       // Adesão
       const valorAdesao = Number(plano.valor_adesao);
@@ -243,11 +254,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const coberturasRemovidas = getCoberturasRemovidasDinamico(categoria, benefitExclusions || []);
       const alertaDesagio = gerarMensagemAlertaCategoria(categoria, benefitExclusions || []) || undefined;
 
-      // Valores detalhados (decomposição dinâmica)
+      // Valores detalhados (decomposição dinâmica sobre valorMensal)
       const valorCota = Math.round(valorMensal * decCota * 100) / 100;
       const taxaAdministrativa = Math.round(valorMensal * decAdmin * 100) / 100;
       const valorRastreamento = Math.round(valorMensal * decRastreamento * 100) / 100;
       const valorAssistencia = Math.round(valorMensal * decAssistencia * 100) / 100;
+
+      const nivel = plano.nivel || null;
 
       planosCalculados.push({
         id: plano.id,
@@ -255,7 +268,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         nome: plano.nome,
         descricao: plano.descricao || '',
         linha,
-        nivel: nivel || null,
+        nivel,
         coberturas: coberturas as string[],
         naoInclui,
         coberturaFipe: plano.cobertura_fipe || 100,
@@ -263,11 +276,12 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaPercentual,
         cotaMinima: cotaMinimaFinal,
         valorMensal: Math.round(valorMensal * 100) / 100,
+        valorDesagio: valorDesagio != null ? Math.round(valorDesagio * 100) / 100 : null,
         valorAdesao: Math.round(valorAdesao * 100) / 100,
         destaque: isDestaque,
         tag,
         alertaDesagio,
-        adicionalMensal: adicionalBanco,
+        adicionalMensal: 0, // Já incluído no valor_mensal da nova tabela
         valorCota,
         taxaAdministrativa,
         valorRastreamento,
@@ -287,10 +301,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const aSortP = (aPriority as any)?.product_lines?.sort_priority || 100;
       const bSortP = (bPriority as any)?.product_lines?.sort_priority || 100;
       if (aSortP !== bSortP) return aSortP - bSortP;
-      // Dentro da mesma prioridade, usar valorMensal como tiebreaker
       return a.valorMensal - b.valorMensal;
     });
-  }, [params, planosBanco, tabelasPreco, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault]);
 
   return {
     planos,

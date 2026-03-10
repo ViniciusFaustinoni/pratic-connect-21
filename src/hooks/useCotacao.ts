@@ -1,6 +1,7 @@
 // ============================================
 // HOOKS ESPECIALIZADOS PARA MÓDULO DE COTAÇÃO
 // SGA Pratic 2.0 - Proteção Veicular
+// Migrado para tabelas_preco_mensalidade + plano_preco_map
 // ============================================
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +10,6 @@ import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import type {
   PlanoParaCotacao,
-  FaixaPreco,
   CotacaoCompleta,
   ResultadoCotacao,
   TipoUso,
@@ -19,6 +19,30 @@ import type {
 
 // Tipo do status no banco (sem 'visualizada')
 type StatusCotacaoDB = Database['public']['Tables']['cotacoes']['Row']['status'];
+
+// ============================================
+// TIPOS INTERNOS
+// ============================================
+
+interface PlanoPrecoMapEntry {
+  id: string;
+  plano_id: string;
+  linha_slug: string;
+  tipo_uso: string;
+}
+
+interface FaixaMensalidade {
+  id: string;
+  linha_slug: string | null;
+  regiao: string | null;
+  combustivel_tipo: string | null;
+  tipo_uso: string | null;
+  fipe_min: number;
+  fipe_max: number;
+  valor_mensal: number;
+  valor_desagio: number | null;
+  is_active: boolean | null;
+}
 
 // ============================================
 // FUNÇÕES DE MAPEAMENTO (BD → Interface)
@@ -36,23 +60,6 @@ function mapPlanoToInterface(data: any): PlanoParaCotacao {
     coberturas: data.coberturas || [],
     ativo: data.ativo,
     created_at: data.created_at,
-  };
-}
-
-function mapFaixaToInterface(data: any): FaixaPreco {
-  return {
-    id: data.id,
-    nome: data.nome || '',
-    tipo_uso: data.tipo_uso as TipoUso,
-    fipe_minimo: Number(data.fipe_de || 0),
-    fipe_maximo: Number(data.fipe_ate || 0),
-    valor_cota: Number(data.valor_cota || 0),
-    taxa_administrativa: Number(data.taxa_administrativa || 0),
-    valor_rastreamento: Number(data.valor_rastreamento || 0),
-    valor_assistencia: Number(data.valor_assistencia || 0),
-    vigencia_inicio: data.vigencia_inicio || '',
-    vigencia_fim: data.vigencia_fim,
-    ativo: data.ativo,
   };
 }
 
@@ -82,36 +89,35 @@ export function usePlanosCotacao(tipoUso?: TipoUso) {
 }
 
 // ============================================
-// HOOK: BUSCAR FAIXAS DE PREÇO
+// HOOK: BUSCAR DADOS DE PREÇO (nova tabela)
 // ============================================
 
-export function useFaixasPreco(tipoUso?: TipoUso) {
+function usePlanoPrecoMap() {
   return useQuery({
-    queryKey: ['faixas-preco', tipoUso],
+    queryKey: ['plano_preco_map'],
     queryFn: async () => {
-      const hoje = new Date().toISOString().split('T')[0];
-      
-      let query = supabase
-        .from('tabelas_preco')
-        .select('*')
-        .eq('ativo', true)
-        .lte('vigencia_inicio', hoje)
-        .order('fipe_de');
-
-      if (tipoUso) {
-        query = query.eq('tipo_uso', tipoUso);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase
+        .from('plano_preco_map')
+        .select('*');
       if (error) throw error;
-
-      // Filtrar faixas com vigência válida
-      const faixasValidas = (data || []).filter(
-        (f) => !f.vigencia_fim || f.vigencia_fim >= hoje
-      );
-
-      return faixasValidas.map(mapFaixaToInterface);
+      return data as PlanoPrecoMapEntry[];
     },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+function useTabelasMensalidade() {
+  return useQuery({
+    queryKey: ['tabelas_preco_mensalidade'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tabelas_preco_mensalidade')
+        .select('*')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data as FaixaMensalidade[];
+    },
+    staleTime: 1000 * 60 * 5,
   });
 }
 
@@ -119,56 +125,53 @@ export function useFaixasPreco(tipoUso?: TipoUso) {
 // FUNÇÃO: ENCONTRAR FAIXA POR VALOR FIPE
 // ============================================
 
-export interface FaixaPrecoResult {
-  faixa: FaixaPreco | null;
-  ajusteAplicativo: boolean;
-}
-
-export function encontrarFaixaPreco(
-  faixas: FaixaPreco[],
+function encontrarFaixaMensalidade(
+  tabelasMensalidade: FaixaMensalidade[],
+  planoPrecoMap: PlanoPrecoMapEntry[],
+  planoId: string,
   valorFipe: number,
-  tipoUso: TipoUso
-): FaixaPrecoResult {
-  // Filtrar por tipo de uso específico
-  let faixasTipo = faixas.filter((f) => f.tipo_uso === tipoUso);
-  let ajusteAplicativo = false;
+  regiao: string,
+  combustivel: string,
+): { valorMensal: number; valorDesagio: number | null } | null {
+  const mapping = planoPrecoMap.find(m => m.plano_id === planoId);
+  if (!mapping) return null;
 
-  // Se não encontrar faixas para 'aplicativo', usar 'particular' como base (com acréscimo de 40%)
-  if (faixasTipo.length === 0 && tipoUso === 'aplicativo') {
-    faixasTipo = faixas.filter((f) => f.tipo_uso === 'particular');
-    ajusteAplicativo = true;
-  }
-
-  // Encontrar a faixa que contém o valor FIPE
-  const faixa = faixasTipo.find(
-    (f) => valorFipe >= f.fipe_minimo && valorFipe <= f.fipe_maximo
+  const faixa = tabelasMensalidade.find(t =>
+    t.linha_slug === mapping.linha_slug &&
+    t.regiao === regiao.toLowerCase() &&
+    t.tipo_uso === mapping.tipo_uso &&
+    (t.combustivel_tipo === combustivel.toLowerCase() || t.combustivel_tipo === null) &&
+    valorFipe >= t.fipe_min &&
+    valorFipe <= t.fipe_max
   );
 
-  return { faixa: faixa || null, ajusteAplicativo };
+  if (!faixa) return null;
+
+  return {
+    valorMensal: faixa.valor_mensal,
+    valorDesagio: faixa.valor_desagio,
+  };
 }
 
 // ============================================
 // FUNÇÃO: CALCULAR VALORES DA COTAÇÃO
 // ============================================
 
-const MULTIPLICADOR_APLICATIVO = 1.4; // Acréscimo de 40% para uso em aplicativo
-
 export function calcularValoresCotacao(
   plano: PlanoParaCotacao,
-  faixa: FaixaPreco,
+  valorMensalDireto: number,
   valorFipe: number,
-  ajusteAplicativo: boolean = false
 ): ResultadoCotacao['valores'] {
-  // Aplicar multiplicador de 40% para aplicativo quando usando faixa de particular
-  const multiplicador = ajusteAplicativo ? MULTIPLICADOR_APLICATIVO : 1;
+  // Decomposição percentual sobre valor_mensal
+  const decCota = 0.60;
+  const decAdmin = 0.25;
+  const decRastreamento = 0.10;
+  const decAssistencia = 0.05;
 
-  const valor_cota = Math.round(faixa.valor_cota * multiplicador * 100) / 100;
-  const taxa_administrativa = Math.round(faixa.taxa_administrativa * multiplicador * 100) / 100;
-  const valor_rastreamento = faixa.valor_rastreamento;
-  const valor_assistencia = faixa.valor_assistencia;
-
-  const valor_mensal =
-    valor_cota + taxa_administrativa + valor_rastreamento + valor_assistencia;
+  const valor_cota = Math.round(valorMensalDireto * decCota * 100) / 100;
+  const taxa_administrativa = Math.round(valorMensalDireto * decAdmin * 100) / 100;
+  const valor_rastreamento = Math.round(valorMensalDireto * decRastreamento * 100) / 100;
+  const valor_assistencia = Math.round(valorMensalDireto * decAssistencia * 100) / 100;
 
   return {
     valor_fipe: valorFipe,
@@ -176,7 +179,7 @@ export function calcularValoresCotacao(
     taxa_administrativa,
     valor_rastreamento,
     valor_assistencia,
-    valor_mensal,
+    valor_mensal: valorMensalDireto,
     valor_adesao: plano.valor_adesao,
   };
 }
@@ -187,31 +190,19 @@ export function calcularValoresCotacao(
 
 export function useCalcularCotacao() {
   const { data: planos, isLoading: loadingPlanos } = usePlanosCotacao();
-  const { data: faixas, isLoading: loadingFaixas } = useFaixasPreco();
+  const { data: planoPrecoMap, isLoading: loadingMap } = usePlanoPrecoMap();
+  const { data: tabelasMensalidade, isLoading: loadingMensalidade } = useTabelasMensalidade();
 
   const calcular = (
     valorFipe: number,
     tipoUso: TipoUso,
-    planoId?: string
+    planoId?: string,
+    regiao: string = 'rj',
+    combustivel: string = 'gasolina',
   ): ResultadoCotacao[] => {
-    if (!planos || !faixas || valorFipe <= 0) return [];
+    if (!planos || !planoPrecoMap || !tabelasMensalidade || valorFipe <= 0) return [];
 
-    // Encontrar a faixa de preço (com fallback para aplicativo)
-    const { faixa, ajusteAplicativo } = encontrarFaixaPreco(faixas, valorFipe, tipoUso);
-    
-    if (!faixa) {
-      // Mensagem de erro mais específica
-      if (valorFipe > 500000) {
-        toast.error('Valor FIPE acima de R$ 500.000. Entre em contato para cotação especial.');
-      } else if (valorFipe <= 0) {
-        toast.error('Valor FIPE inválido. Verifique o valor do veículo.');
-      } else {
-        toast.error('Valor FIPE fora das faixas configuradas para esta região/uso.');
-      }
-      return [];
-    }
-
-    // Filtrar planos pelo tipo de uso (ou particular se for aplicativo com fallback)
+    // Filtrar planos pelo tipo de uso
     let planosDisponiveis = planos.filter((p) => p.tipo_uso === tipoUso);
     
     // Se não encontrou planos para aplicativo, usar planos de particular
@@ -224,20 +215,44 @@ export function useCalcularCotacao() {
       planosDisponiveis = planosDisponiveis.filter((p) => p.id === planoId);
     }
 
-    // Calcular para cada plano (passando ajusteAplicativo)
-    return planosDisponiveis.map((plano) => ({
-      plano,
-      faixa,
-      valores: calcularValoresCotacao(plano, faixa, valorFipe, ajusteAplicativo),
-    }));
+    const resultados: ResultadoCotacao[] = [];
+
+    for (const plano of planosDisponiveis) {
+      const faixaResult = encontrarFaixaMensalidade(
+        tabelasMensalidade,
+        planoPrecoMap,
+        plano.id,
+        valorFipe,
+        regiao,
+        combustivel,
+      );
+
+      if (!faixaResult) continue;
+
+      resultados.push({
+        plano,
+        faixa: null as any, // Campo legado — decomposição é feita internamente
+        valores: calcularValoresCotacao(plano, faixaResult.valorMensal, valorFipe),
+      });
+    }
+
+    if (resultados.length === 0 && planosDisponiveis.length > 0) {
+      if (valorFipe > 500000) {
+        toast.error('Valor FIPE acima de R$ 500.000. Entre em contato para cotação especial.');
+      } else {
+        toast.error('Valor FIPE fora das faixas configuradas para esta região/uso.');
+      }
+    }
+
+    return resultados;
   };
 
   return {
     calcular,
-    isReady: !!planos && !!faixas,
-    isLoading: loadingPlanos || loadingFaixas,
+    isReady: !!planos && !!planoPrecoMap && !!tabelasMensalidade,
+    isLoading: loadingPlanos || loadingMap || loadingMensalidade,
     planos,
-    faixas,
+    faixas: tabelasMensalidade,
   };
 }
 
@@ -269,7 +284,6 @@ export function useCotacoesFiltradas(filtros?: {
         query = query.eq('lead_id', filtros.lead_id);
       }
       if (filtros?.status) {
-        // Filtrar apenas status válidos no BD
         const statusValido = filtros.status as StatusCotacaoDB;
         query = query.eq('status', statusValido);
       }
@@ -277,7 +291,6 @@ export function useCotacoesFiltradas(filtros?: {
       const { data, error } = await query;
       if (error) throw error;
       
-      // Mapear para interface CotacaoCompleta
       return (data || []).map((item): CotacaoCompleta => ({
         id: item.id,
         numero: item.numero,
@@ -287,10 +300,10 @@ export function useCotacoesFiltradas(filtros?: {
         veiculo_marca: item.veiculo_marca,
         veiculo_modelo: item.veiculo_modelo,
         veiculo_ano: item.veiculo_ano,
-        veiculo_placa: undefined, // Campo não existe no BD
+        veiculo_placa: undefined,
         codigo_fipe: item.codigo_fipe,
         valor_fipe: Number(item.valor_fipe),
-        uso_aplicativo: false, // Campo virtual
+        uso_aplicativo: false,
         valor_cota: Number(item.valor_cota || 0),
         taxa_administrativa: Number(item.taxa_administrativa || 0),
         valor_rastreamento: Number(item.valor_rastreamento || 0),
@@ -375,11 +388,9 @@ export function useCriarCotacao() {
         throw new Error('Dados de planos/faixas ainda carregando');
       }
 
-      // Determinar tipo de uso
       const tipoUso: TipoUso = payload.uso_aplicativo ? 'aplicativo' : 'particular';
-
-      // Calcular valores
       const resultados = calcular(payload.valor_fipe, tipoUso, payload.plano_id);
+      
       if (resultados.length === 0) {
         const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payload.valor_fipe);
         throw new Error(
@@ -393,41 +404,29 @@ export function useCriarCotacao() {
 
       const resultado = resultados[0];
 
-      // Buscar vendedor logado - com fallback robusto
       let vendedorId: string | null = null;
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          console.log('[useCriarCotacao] Usuário autenticado:', user.id);
-          const { data: perfil, error: perfilError } = await supabase
+          const { data: perfil } = await supabase
             .from('profiles')
             .select('id')
             .eq('user_id', user.id)
             .single();
-
-          if (perfilError) {
-            console.warn('[useCriarCotacao] Erro ao buscar perfil:', perfilError);
-          } else if (perfil) {
-            vendedorId = perfil.id;
-            console.log('[useCriarCotacao] Vendedor atribuído:', vendedorId);
-          }
-        } else {
-          console.warn('[useCriarCotacao] Usuário não autenticado, cotação será criada sem vendedor');
+          if (perfil) vendedorId = perfil.id;
         }
       } catch (err) {
-        console.warn('[useCriarCotacao] Erro ao obter vendedor (continuando sem):', err);
+        console.warn('[useCriarCotacao] Erro ao obter vendedor:', err);
       }
 
-      // Gerar número da cotação
       const dataAtual = new Date();
       const numero = `COT-${dataAtual.getFullYear()}${String(dataAtual.getMonth() + 1).padStart(2, '0')}${String(dataAtual.getDate()).padStart(2, '0')}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
 
-      // Inserir cotação
       const cotacaoData = {
         numero,
         lead_id: payload.lead_id,
         plano_id: payload.plano_id,
-        vendedor_id: vendedorId, // Pode ser null se não autenticado
+        vendedor_id: vendedorId,
         veiculo_marca: payload.veiculo_marca,
         veiculo_modelo: payload.veiculo_modelo,
         veiculo_ano: payload.veiculo_ano,
@@ -481,7 +480,6 @@ export function useAtualizarStatusCotacaoV2() {
       id: string;
       status: StatusCotacaoExtended;
     }) => {
-      // Só permite status válidos do BD (exclui 'visualizada')
       const statusValido = status as StatusCotacaoDB;
       
       const { data, error } = await supabase
@@ -498,8 +496,6 @@ export function useAtualizarStatusCotacaoV2() {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       queryClient.invalidateQueries({ queryKey: ['cotacoes-filtradas'] });
       queryClient.invalidateQueries({ queryKey: ['cotacao-detalhe', variables.id] });
-      toast.success('Status atualizado!');
     },
-    onError: () => toast.error('Erro ao atualizar status'),
   });
 }
