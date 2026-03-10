@@ -184,7 +184,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
       let tipoDano: 'parcial' | 'perda_total' | null = null;
       if (resultado === 'aprovado' && valorIndenizacao) {
         if (sinistro.valor_fipe) {
-          const limite75 = sinistro.valor_fipe * 0.75;
+          const limite75 = sinistro.valor_fipe * limiteDanoParcial;
           tipoDano = valorIndenizacao >= limite75 ? 'perda_total' : 'parcial';
         } else {
           tipoDano = tipoDanoManual;

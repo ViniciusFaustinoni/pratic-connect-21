@@ -567,7 +567,7 @@ export function StepFinanceiro({
                 className="mt-0.5"
               />
               <span className="text-sm">
-                Confirmo que o associado está ciente dos valores e da carência de 120 dias.
+                Confirmo que o associado está ciente dos valores e da carência de {carenciaDias} dias.
               </span>
             </label>
           </div>

@@ -84,7 +84,7 @@ export function RastreadorVinculadoModal({
           <div className="bg-muted/50 rounded-lg p-3 text-sm">
             <p className="text-muted-foreground">
               O cancelamento só será finalizado após a <strong>devolução do rastreador</strong> ou 
-              pagamento da <strong>multa de R$ 400,00</strong> conforme regulamento.
+              pagamento da <strong>multa de R$ {multaValor.toFixed(2).replace('.', ',')}</strong> conforme regulamento.
             </p>
           </div>
 

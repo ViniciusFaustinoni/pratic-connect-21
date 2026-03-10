@@ -131,6 +131,8 @@ export interface LocalizacaoRastreador {
 }
 
 /**
- * Valor padrão da multa por não devolução do rastreador
+ * @deprecated Use useMultaRastreador() de '@/hooks/useConteudosSistema' em componentes React.
+ * Mantido temporariamente para compatibilidade com hooks não-React (useMultaRetirada).
+ * Valor real vem da tabela configuracoes, chave 'multa_rastreador'.
  */
 export const VALOR_MULTA_NAO_DEVOLUCAO = 400.00;

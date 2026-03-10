@@ -1118,7 +1118,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                   <div className="text-sm">
                     <p className="font-medium text-destructive">Carência não cumprida</p>
                     <p className="text-muted-foreground">
-                      Este benefício possui carência de 120 dias. Disponível a partir de {vidrosValidacao.carenciaData}.
+                      Este benefício possui carência de {carenciaDiasVal} dias. Disponível a partir de {vidrosValidacao.carenciaData}.
                     </p>
                   </div>
                 </div>

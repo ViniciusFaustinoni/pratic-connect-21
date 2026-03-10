@@ -749,7 +749,7 @@ export default function ExecutarRetirada() {
                     <Alert className="border-red-600 bg-red-950/30">
                       <AlertTriangle className="h-4 w-4 text-red-400" />
                       <AlertDescription className="text-red-200/80">
-                        Multa de R$ 400,00 será sugerida automaticamente. Rastreador irá para triagem.
+                        Multa de R$ {multaValor.toFixed(2).replace('.', ',')} será sugerida automaticamente. Rastreador irá para triagem.
                       </AlertDescription>
                     </Alert>
                     <div>

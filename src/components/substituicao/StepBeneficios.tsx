@@ -118,7 +118,7 @@ export function StepBeneficios({
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription className="text-xs">
-          Todos os benefícios terão carência de 120 dias a partir da efetivação.
+          Todos os benefícios terão carência de {carenciaDiasVal} dias a partir da efetivação.
         </AlertDescription>
       </Alert>
 

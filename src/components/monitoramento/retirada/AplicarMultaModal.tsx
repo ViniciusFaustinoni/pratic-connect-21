@@ -235,7 +235,7 @@ export function AplicarMultaModal({
           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
             <span className="font-medium">Valor da Multa:</span>
             <Badge variant="secondary" className="text-lg font-bold">
-              R$ {VALOR_MULTA_NAO_DEVOLUCAO.toFixed(2).replace('.', ',')}
+              R$ {multaValor.toFixed(2).replace('.', ',')}
             </Badge>
           </div>
 

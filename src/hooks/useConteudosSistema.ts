@@ -245,6 +245,34 @@ export function useCotaMinimaDefault() {
 }
 
 // ============================================
+// Multa Rastreador
+// ============================================
+
+export function useMultaRastreador() {
+  return useConfiguracaoNumero('multa_rastreador', 400);
+}
+
+// ============================================
+// Carência
+// ============================================
+
+export function useCarenciaDiasPadrao() {
+  return useConfiguracaoNumero('carencia_dias_padrao', 120);
+}
+
+// ============================================
+// Defaults de Cota Deságio (Aplicativo)
+// ============================================
+
+export function useCotaDesagioDefault() {
+  return useConfiguracaoNumero('cota_desagio_default', 8);
+}
+
+export function useCotaMinimaDesagioDefault() {
+  return useConfiguracaoNumero('cota_minima_desagio_default', 2000);
+}
+
+// ============================================
 // Defaults do Form de Plano
 // ============================================
 

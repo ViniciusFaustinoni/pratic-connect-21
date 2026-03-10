@@ -257,7 +257,7 @@ export function TratarAusenciaRetiradaModal({
                   <div className="flex-1">
                     <Label htmlFor="aplicar_multa" className="font-medium cursor-pointer flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-red-600" />
-                      Aplicar Multa R$ {VALOR_MULTA_NAO_DEVOLUCAO.toFixed(2)}
+                      Aplicar Multa R$ {multaValor.toFixed(2)}
                     </Label>
                     <p className="text-xs text-muted-foreground mt-1">
                       Multa por não comparecimento conforme regulamento

@@ -226,8 +226,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       let cotaMinimaFinal = cotaMinima;
 
       if (categoria === 'aplicativo') {
-        cotaPercentual = Number(plano.cota_desagio) || 8;
-        cotaMinimaFinal = Number(plano.cota_minima_desagio) || 3000;
+        cotaPercentual = Number(plano.cota_desagio) || cotaDesagioDefault;
+        cotaMinimaFinal = Number(plano.cota_minima_desagio) || cotaMinimaDesagioDefault;
       }
 
       const cotaString = `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
