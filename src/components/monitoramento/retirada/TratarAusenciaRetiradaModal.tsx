@@ -38,7 +38,8 @@ import { ptBR } from 'date-fns/locale';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { MOTIVO_RETIRADA_LABELS, type MotivoRetirada, VALOR_MULTA_NAO_DEVOLUCAO } from '@/types/retirada';
+import { MOTIVO_RETIRADA_LABELS, type MotivoRetirada } from '@/types/retirada';
+import { useMultaRastreador } from '@/hooks/useConteudosSistema';
 import { AplicarMultaModal } from './AplicarMultaModal';
 import { type Servico } from '@/hooks/useServicos';
 
