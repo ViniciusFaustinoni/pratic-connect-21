@@ -54,7 +54,6 @@ Deno.serve(async (req) => {
     }
 
     // Verificar permissão dinâmica via has_permission
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: temPermissao } = await adminClient.rpc('has_permission', {
