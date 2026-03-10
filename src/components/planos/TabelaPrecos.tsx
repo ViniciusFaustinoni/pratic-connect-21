@@ -37,8 +37,8 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
     Number(a.fipe_de) - Number(b.fipe_de)
   ) || [];
 
-  // Verificar se há dados válidos (taxa_comercial > 0)
-  const temDadosValidos = tabelasOrdenadas.some(t => Number(t.taxa_comercial) > 0);
+
+
 
   if (tabelasOrdenadas.length === 0) {
     return (
