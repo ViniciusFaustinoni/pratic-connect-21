@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
           .eq('id', substituicao_id)
 
         if (error) throw error
-        results.push({ step: 5, name: 'Registrar carência 120 dias', success: true })
+        results.push({ step: 5, name: `Registrar carência ${carenciaDias} dias`, success: true })
       } catch (e) {
         results.push({ step: 5, name: 'Registrar carência 120 dias', success: false, error: (e as Error).message })
         criticalFailure = true
