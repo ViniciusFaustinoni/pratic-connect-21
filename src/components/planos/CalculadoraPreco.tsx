@@ -85,13 +85,13 @@ export function CalculadoraPreco() {
     let faixasFiltradas = faixasEncontradas;
     if (coberturaDesejada !== 'todas') {
       const nomeCobertura = {
-        basica: 'Básico',
-        completa: 'Completo',
-        premium: 'Premium',
+        basica: 'básica',
+        completa: 'total',
+        premium: 'premium',
       }[coberturaDesejada];
       
       faixasFiltradas = faixasEncontradas.filter(f => 
-        f.planos?.nome?.toLowerCase().includes(nomeCobertura.toLowerCase())
+        f.planos?.nome?.toLowerCase().includes(nomeCobertura)
       );
       
       // Se não encontrou com filtro, usar todas
