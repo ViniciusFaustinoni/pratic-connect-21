@@ -206,7 +206,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
       const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
       const linhaSlug = mapping?.linha_slug;
-      const tipoUsoPricing = mapping?.tipo_uso || (params.usoApp ? 'aplicativo' : 'particular');
+      const tipoUsoOriginal = mapping?.tipo_uso || (params.usoApp ? 'aplicativo' : 'particular');
+      // Resolver tipo_uso para query (regras de adicional app)
+      const tipoUsoPricing = linhaSlug
+        ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal)
+        : tipoUsoOriginal;
 
       let valorMensal = 0;
       let valorDesagio: number | null = null;
@@ -225,6 +229,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           valorMensal = faixa.valor_mensal;
           valorDesagio = faixa.valor_desagio;
         }
+      }
+
+      // Aplicar adicional app se necessário
+      if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
+        valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp);
       }
 
       // Fallback: se não encontrou na nova tabela, usar taxa fallback
