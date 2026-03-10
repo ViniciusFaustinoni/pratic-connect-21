@@ -27,6 +27,9 @@ export function ProdutosPlanos() {
   const [detailSubTab, setDetailSubTab] = useState<'precos' | 'coberturas' | 'detalhes'>('precos');
   const [modalOpen, setModalOpen] = useState(false);
   const [produtoEdit, setProdutoEdit] = useState<any>(null);
+  const [precosPage, setPrecosPage] = useState(0);
+  const [precosRegiao, setPrecosRegiao] = useState<string>('all');
+  const [precosTipoUso, setPrecosTipoUso] = useState<string>('all');
 
   const { data: lines, isLoading: linesLoading } = useProductLines();
   const { data: plans, isLoading: plansLoading } = usePlans(selectedLineSlug === 'all' ? undefined : selectedLineSlug);
