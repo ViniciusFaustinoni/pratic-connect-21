@@ -719,6 +719,11 @@ export default function InstaladorChecklist() {
     if (etapaAtual < ETAPAS.length && podeAvancar()) {
       // Interceptar transição etapa 2->3 quando houver itens NOK
       if (etapaAtual === 2 && temItensNok) {
+        // Se monitoramento já aprovou a ressalva, pular dialog e avançar direto
+        if (servico?.decisao_instalador === 'aprovado_ressalva') {
+          await salvarEAvancar();
+          return;
+        }
         setShowDialogCondicao(true);
         return;
       }
