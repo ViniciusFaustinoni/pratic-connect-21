@@ -6,6 +6,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const TIPO_LABELS: Record<string, string> = {
+  colisao: "colisão",
+  roubo: "roubo",
+  furto: "furto",
+  incendio: "incêndio",
+  fenomeno_natural: "fenômeno natural",
+  vidros: "vidros",
+  vandalismo: "vandalismo",
+  terceiros: "terceiros",
+  alagamento: "alagamento",
+  outro: "outro",
+};
+
 function addBusinessDays(date: Date, days: number): Date {
   const result = new Date(date);
   let added = 0;
