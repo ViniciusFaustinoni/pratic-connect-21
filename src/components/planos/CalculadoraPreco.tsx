@@ -67,14 +67,16 @@ export function CalculadoraPreco() {
 
     if (anoVeiculo === 'antigo') {
       fator *= FATOR_VEICULO_ANTIGO;
-      fatoresAplicados.push('Veículo com mais de 10 anos (+15%)');
+      const pctAntigo = Math.round((FATOR_VEICULO_ANTIGO - 1) * 100);
+      fatoresAplicados.push(`Veículo com mais de 10 anos (+${pctAntigo}%)`);
     } else {
       fatoresAplicados.push('Veículo até 10 anos');
     }
 
     if (tipoUso === 'trabalho') {
       fator *= FATOR_USO_TRABALHO;
-      fatoresAplicados.push('Uso para trabalho/app (+20%)');
+      const pctTrabalho = Math.round((FATOR_USO_TRABALHO - 1) * 100);
+      fatoresAplicados.push(`Uso para trabalho/app (+${pctTrabalho}%)`);
     } else {
       fatoresAplicados.push('Uso particular');
     }
@@ -83,13 +85,13 @@ export function CalculadoraPreco() {
     let faixasFiltradas = faixasEncontradas;
     if (coberturaDesejada !== 'todas') {
       const nomeCobertura = {
-        basica: 'Básico',
-        completa: 'Completo',
-        premium: 'Premium',
+        basica: 'básica',
+        completa: 'total',
+        premium: 'premium',
       }[coberturaDesejada];
       
       faixasFiltradas = faixasEncontradas.filter(f => 
-        f.planos?.nome?.toLowerCase().includes(nomeCobertura.toLowerCase())
+        f.planos?.nome?.toLowerCase().includes(nomeCobertura)
       );
       
       // Se não encontrou com filtro, usar todas
@@ -235,9 +237,9 @@ export function CalculadoraPreco() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as opções</SelectItem>
-                <SelectItem value="basica">Básica</SelectItem>
-                <SelectItem value="completa">Completa</SelectItem>
-                <SelectItem value="premium">Premium</SelectItem>
+                <SelectItem value="basica">Proteção Básica</SelectItem>
+                <SelectItem value="completa">Proteção Total</SelectItem>
+                <SelectItem value="premium">Proteção Premium</SelectItem>
               </SelectContent>
             </Select>
           </div>
