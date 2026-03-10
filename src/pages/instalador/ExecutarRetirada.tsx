@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMultaRastreador } from '@/hooks/useConteudosSistema';
 import { useIniciarServicoMutation } from '@/hooks/useServicos';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
