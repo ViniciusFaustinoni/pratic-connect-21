@@ -719,6 +719,11 @@ export default function InstaladorChecklist() {
     if (etapaAtual < ETAPAS.length && podeAvancar()) {
       // Interceptar transição etapa 2->3 quando houver itens NOK
       if (etapaAtual === 2 && temItensNok) {
+        // Se monitoramento já aprovou a ressalva, pular dialog e avançar direto
+        if (servico?.decisao_instalador === 'aprovado_ressalva') {
+          await salvarEAvancar();
+          return;
+        }
         setShowDialogCondicao(true);
         return;
       }
@@ -2109,18 +2114,20 @@ export default function InstaladorChecklist() {
               <CheckCircle2 className="mr-2 h-4 w-4" />
               {temCritico ? 'Prosseguir mesmo assim' : 'Há condição de continuar'}
             </Button>
-            <Button
-              onClick={handleEnviarParaMonitoramento}
-              disabled={enviandoMonitoramento}
-              className="w-full bg-blue-600 hover:bg-blue-700"
-            >
-              {enviandoMonitoramento ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <AlertTriangle className="mr-2 h-4 w-4" />
-              )}
-              Enviar para Monitoramento
-            </Button>
+            {servico?.decisao_instalador !== 'aprovado_ressalva' && (
+              <Button
+                onClick={handleEnviarParaMonitoramento}
+                disabled={enviandoMonitoramento}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                {enviandoMonitoramento ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                )}
+                Enviar para Monitoramento
+              </Button>
+            )}
             <Button
               variant="destructive"
               onClick={handleEncerrarSemCondicao}
