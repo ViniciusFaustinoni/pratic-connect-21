@@ -58,14 +58,6 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
         <CardDescription>Valores mensais por faixa FIPE</CardDescription>
       </CardHeader>
       <CardContent>
-        {!temDadosValidos && (
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              A tabela de preços ainda não foi configurada. Os valores exibidos são estimativas.
-            </AlertDescription>
-          </Alert>
-        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
