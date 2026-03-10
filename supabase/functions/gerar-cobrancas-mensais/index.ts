@@ -145,7 +145,17 @@ serve(async (req) => {
           dataVencimento.setMonth(dataVencimento.getMonth() + 1);
         }
 
-        const valorMensalidade = (associado.planos as any)?.valor_mensalidade || 150;
+        // Buscar valor mensal do contrato ativo
+        const contrato = associado.contratos?.[0];
+        const valorMensalidade = contrato?.valor_mensal;
+
+        if (!valorMensalidade || valorMensalidade <= 0) {
+          console.error(`[gerar-cobrancas] Associado ${associado.id} (${associado.nome}) sem contrato ativo com valor_mensal válido. Cobrança NÃO gerada.`);
+          resultados.errosDetalhes.push({ associado_id: associado.id, motivo: 'sem_contrato_ativo_com_valor' });
+          resultados.erros++;
+          continue;
+        }
+
         const asaasClienteId = associado.asaas_clientes?.[0]?.asaas_id;
 
         // Criar cobrança no ASAAS se tiver cliente cadastrado
