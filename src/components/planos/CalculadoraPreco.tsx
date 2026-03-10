@@ -237,9 +237,9 @@ export function CalculadoraPreco() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as opções</SelectItem>
-                <SelectItem value="basica">Básica</SelectItem>
-                <SelectItem value="completa">Completa</SelectItem>
-                <SelectItem value="premium">Premium</SelectItem>
+                <SelectItem value="basica">Proteção Básica</SelectItem>
+                <SelectItem value="completa">Proteção Total</SelectItem>
+                <SelectItem value="premium">Proteção Premium</SelectItem>
               </SelectContent>
             </Select>
           </div>
