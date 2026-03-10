@@ -23207,6 +23207,7 @@ export type Database = {
           linha_slug: string | null
           regiao: string | null
           tipo_uso: string
+          valor_desagio: number | null
           valor_mensal: number
         }
         Insert: {
@@ -23220,6 +23221,7 @@ export type Database = {
           linha_slug?: string | null
           regiao?: string | null
           tipo_uso: string
+          valor_desagio?: number | null
           valor_mensal: number
         }
         Update: {
@@ -23233,6 +23235,7 @@ export type Database = {
           linha_slug?: string | null
           regiao?: string | null
           tipo_uso?: string
+          valor_desagio?: number | null
           valor_mensal?: number
         }
         Relationships: []
