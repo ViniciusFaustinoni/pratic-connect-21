@@ -23278,6 +23278,7 @@ export type Database = {
           is_active: boolean | null
           linha_slug: string | null
           regiao: string | null
+          requer_autorizacao: boolean | null
           tipo_uso: string | null
           valor_desagio: number | null
           valor_mensal: number
@@ -23292,6 +23293,7 @@ export type Database = {
           is_active?: boolean | null
           linha_slug?: string | null
           regiao?: string | null
+          requer_autorizacao?: boolean | null
           tipo_uso?: string | null
           valor_desagio?: number | null
           valor_mensal: number
@@ -23306,6 +23308,7 @@ export type Database = {
           is_active?: boolean | null
           linha_slug?: string | null
           regiao?: string | null
+          requer_autorizacao?: boolean | null
           tipo_uso?: string | null
           valor_desagio?: number | null
           valor_mensal?: number
