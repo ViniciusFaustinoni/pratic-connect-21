@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { ArrowLeft, Phone, MessageSquare, Mail, Handshake, AlertCircle, User, Car, Clock, DollarSign, MoreVertical, AlertTriangle, Ban, Save, FileText, Plus, Gavel, UserX, Receipt } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
