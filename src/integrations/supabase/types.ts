@@ -23203,6 +23203,7 @@ export type Database = {
           fipe_min: number
           id: string
           is_active: boolean | null
+          linha_slug: string | null
           regiao: string | null
           tipo_uso: string
           valor_mensal: number
@@ -23214,6 +23215,7 @@ export type Database = {
           fipe_min: number
           id?: string
           is_active?: boolean | null
+          linha_slug?: string | null
           regiao?: string | null
           tipo_uso: string
           valor_mensal: number
@@ -23225,6 +23227,7 @@ export type Database = {
           fipe_min?: number
           id?: string
           is_active?: boolean | null
+          linha_slug?: string | null
           regiao?: string | null
           tipo_uso?: string
           valor_mensal?: number
