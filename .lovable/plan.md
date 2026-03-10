@@ -1,14 +1,29 @@
 
 
-# Inserir faixas de mensalidade na `tabelas_preco_mensalidade`
+# Tornar `categoria` e `tipo_uso` nullable em `tabelas_preco_mensalidade`
 
 ## O que será feito
 
-Uma migration SQL para inserir 35 faixas de preço da linha `select`, região `rj`, combustível `gasolina`, com valores FIPE de 0 a 180.000.
+Uma migration SQL com:
+
+```sql
+ALTER TABLE tabelas_preco_mensalidade
+  ALTER COLUMN categoria DROP NOT NULL,
+  ALTER COLUMN tipo_uso DROP NOT NULL;
+```
 
 ## Verificação
 
-Após execução, query agrupada para confirmar: 1 linha com 35 faixas, fipe_inicio=0, fipe_fim=180000.
+Após execução, rodar:
+
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'tabelas_preco_mensalidade'
+ORDER BY ordinal_position;
+```
+
+Resultado esperado: `categoria` e `tipo_uso` com `is_nullable = YES`.
 
 Nenhum arquivo de código será alterado.
 
