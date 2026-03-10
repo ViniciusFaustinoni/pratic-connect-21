@@ -100,7 +100,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
     if (resultado !== 'aprovado' || !sinistro?.valor_fipe) return null;
     const valorNumerico = getValorNumerico();
     if (!valorNumerico || valorNumerico <= 0) return null;
-    const limite75 = sinistro.valor_fipe * 0.75;
+    const limite75 = sinistro.valor_fipe * limiteDanoParcial;
     return valorNumerico >= limite75 ? 'perda_total' : 'parcial';
   };
 
