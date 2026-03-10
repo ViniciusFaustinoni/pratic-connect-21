@@ -24,65 +24,65 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface TabelaPrecoComPlano {
+interface FaixaMensalidade {
   id: string;
-  plano_id: string;
-  fipe_de: number;
-  fipe_ate: number;
-  valor_cota: number;
-  taxa_administrativa: number | null;
-  valor_rastreamento: number | null;
-  valor_assistencia: number | null;
-  taxa_aplicativo: number | null;
-  taxa_comercial: number | null;
-  vigencia_inicio: string | null;
-  vigencia_fim: string | null;
-  ativo: boolean;
-  plano: {
-    codigo: string;
-    nome: string;
-  } | null;
+  linha_slug: string | null;
+  regiao: string | null;
+  combustivel_tipo: string | null;
+  tipo_uso: string | null;
+  fipe_min: number;
+  fipe_max: number;
+  valor_mensal: number;
+  valor_desagio: number | null;
+  is_active: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  categoria?: string | null;
 }
 
 export default function TabelaPrecos() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const [planoSelecionado, setPlanoSelecionado] = useState<string>('all');
+  const [linhaSelecionada, setLinhaSelecionada] = useState<string>('all');
+  const [regiaoSelecionada, setRegiaoSelecionada] = useState<string>('all');
   const [apenasVigentes, setApenasVigentes] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [faixaEdit, setFaixaEdit] = useState<TabelaPrecoComPlano | null>(null);
+  const [faixaEdit, setFaixaEdit] = useState<FaixaMensalidade | null>(null);
   const [planoIdParaModal, setPlanoIdParaModal] = useState<string>('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
   const [historicoFaixaId, setHistoricoFaixaId] = useState<string | null>(null);
 
+  // Buscar faixas de preço da nova tabela
   const { data: precos, isLoading } = useQuery({
-    queryKey: ['tabela-precos', planoSelecionado, apenasVigentes],
+    queryKey: ['tabela-precos-mensalidade', linhaSelecionada, regiaoSelecionada, apenasVigentes],
     queryFn: async () => {
       let query = supabase
-        .from('tabelas_preco')
-        .select(`
-          *,
-          plano:planos(codigo, nome)
-        `)
-        .order('plano_id')
-        .order('fipe_de');
+        .from('tabelas_preco_mensalidade')
+        .select('*')
+        .order('linha_slug')
+        .order('fipe_min');
       
-      if (planoSelecionado && planoSelecionado !== 'all') {
-        query = query.eq('plano_id', planoSelecionado);
+      if (linhaSelecionada && linhaSelecionada !== 'all') {
+        query = query.eq('linha_slug', linhaSelecionada);
+      }
+
+      if (regiaoSelecionada && regiaoSelecionada !== 'all') {
+        query = query.eq('regiao', regiaoSelecionada);
       }
       
       if (apenasVigentes) {
-        query = query.eq('ativo', true);
+        query = query.eq('is_active', true);
       }
       
       const { data, error } = await query;
       if (error) throw error;
-      return data as TabelaPrecoComPlano[];
+      return data as FaixaMensalidade[];
     }
   });
 
+  // Buscar planos para o modal (mapear plano → linha)
   const { data: planos } = useQuery({
     queryKey: ['planos-select'],
     queryFn: async () => {
@@ -96,17 +96,32 @@ export default function TabelaPrecos() {
     }
   });
 
+  // Linhas únicas para filtro
+  const linhasUnicas = useMemo(() => {
+    if (!precos) return [];
+    const slugs = new Set(precos.map(p => p.linha_slug).filter(Boolean));
+    return Array.from(slugs).sort() as string[];
+  }, [precos]);
+
+  // Regiões únicas para filtro
+  const regioesUnicas = useMemo(() => {
+    if (!precos) return [];
+    const regioes = new Set(precos.map(p => p.regiao).filter(Boolean));
+    return Array.from(regioes).sort() as string[];
+  }, [precos]);
+
   const deletarFaixaMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from('tabelas_preco')
+        .from('tabelas_preco_mensalidade')
         .delete()
         .eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success('Faixa de preço excluída!');
-      queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
+      queryClient.invalidateQueries({ queryKey: ['tabela-precos-mensalidade'] });
+      queryClient.invalidateQueries({ queryKey: ['tabelas_preco_mensalidade'] });
       setDeleteConfirm(null);
     },
     onError: (error) => {
@@ -115,19 +130,20 @@ export default function TabelaPrecos() {
     },
   });
 
+  // Agrupar por linha_slug
   const precosAgrupados = useMemo(() => {
     if (!precos) return {};
     return precos.reduce((acc, preco) => {
-      const planoId = preco.plano_id;
-      if (!acc[planoId]) {
-        acc[planoId] = {
-          plano: preco.plano,
+      const key = preco.linha_slug || 'sem-linha';
+      if (!acc[key]) {
+        acc[key] = {
+          linha_slug: preco.linha_slug,
           itens: []
         };
       }
-      acc[planoId].itens.push(preco);
+      acc[key].itens.push(preco);
       return acc;
-    }, {} as Record<string, { plano: { codigo: string; nome: string } | null; itens: TabelaPrecoComPlano[] }>);
+    }, {} as Record<string, { linha_slug: string | null; itens: FaixaMensalidade[] }>);
   }, [precos]);
 
   const formatCurrency = (value: number) => {
@@ -137,11 +153,6 @@ export default function TabelaPrecos() {
     }).format(value);
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('pt-BR');
-  };
-
   const handleExportar = () => {
     if (!precos?.length) {
       toast.warning('Nenhum dado para exportar');
@@ -149,20 +160,17 @@ export default function TabelaPrecos() {
     }
     
     const csv = [
-      ['Plano', 'FIPE De', 'FIPE Até', 'Valor Cota', 'Taxa Admin', 'Rastreamento', 'Assistência', 'Taxa App', 'Taxa Comercial', 'Vigência Início', 'Vigência Fim', 'Ativo'].join(';'),
+      ['Linha', 'Região', 'Combustível', 'Tipo Uso', 'FIPE Min', 'FIPE Max', 'Valor Mensal', 'Valor Deságio', 'Ativo'].join(';'),
       ...precos.map(p => [
-        p.plano?.nome || '',
-        p.fipe_de,
-        p.fipe_ate,
-        p.valor_cota,
-        p.taxa_administrativa || '',
-        p.valor_rastreamento || '',
-        p.valor_assistencia || '',
-        p.taxa_aplicativo || '',
-        p.taxa_comercial || '',
-        p.vigencia_inicio || '',
-        p.vigencia_fim || '',
-        p.ativo ? 'Sim' : 'Não'
+        p.linha_slug || '',
+        p.regiao || '',
+        p.combustivel_tipo || '',
+        p.tipo_uso || '',
+        p.fipe_min,
+        p.fipe_max,
+        p.valor_mensal,
+        p.valor_desagio || '',
+        p.is_active ? 'Sim' : 'Não'
       ].join(';'))
     ].join('\n');
 
@@ -170,7 +178,7 @@ export default function TabelaPrecos() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `tabela-precos-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `tabela-precos-mensalidade-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Tabela exportada!');
@@ -191,42 +199,29 @@ export default function TabelaPrecos() {
           return;
         }
         
-        // Pular cabeçalho
         const dataLines = lines.slice(1);
         let importados = 0;
         let erros = 0;
         
         for (const line of dataLines) {
           const cols = line.split(';');
-          if (cols.length < 4) {
-            erros++;
-            continue;
-          }
-          
-          // Buscar plano pelo nome
-          const planoNome = cols[0].trim();
-          const plano = planos?.find(p => p.nome === planoNome);
-          
-          if (!plano) {
+          if (cols.length < 7) {
             erros++;
             continue;
           }
           
           const { error } = await supabase
-            .from('tabelas_preco')
+            .from('tabelas_preco_mensalidade')
             .insert({
-              plano_id: plano.id,
-              fipe_de: parseFloat(cols[1]) || 0,
-              fipe_ate: parseFloat(cols[2]) || 0,
-              valor_cota: parseFloat(cols[3]) || 0,
-              taxa_administrativa: cols[4] ? parseFloat(cols[4]) : null,
-              valor_rastreamento: cols[5] ? parseFloat(cols[5]) : null,
-              valor_assistencia: cols[6] ? parseFloat(cols[6]) : null,
-              taxa_aplicativo: cols[7] ? parseFloat(cols[7]) : null,
-              taxa_comercial: cols[8] ? parseFloat(cols[8]) : null,
-              vigencia_inicio: cols[9] || null,
-              vigencia_fim: cols[10] || null,
-              ativo: cols[11]?.toLowerCase().includes('sim') ?? true,
+              linha_slug: cols[0].trim() || null,
+              regiao: cols[1].trim() || null,
+              combustivel_tipo: cols[2].trim() || null,
+              tipo_uso: cols[3].trim() || null,
+              fipe_min: parseFloat(cols[4]) || 0,
+              fipe_max: parseFloat(cols[5]) || 0,
+              valor_mensal: parseFloat(cols[6]) || 0,
+              valor_desagio: cols[7] ? parseFloat(cols[7]) : null,
+              is_active: cols[8]?.toLowerCase().includes('sim') ?? true,
             });
           
           if (error) {
@@ -236,7 +231,8 @@ export default function TabelaPrecos() {
           }
         }
         
-        queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
+        queryClient.invalidateQueries({ queryKey: ['tabela-precos-mensalidade'] });
+        queryClient.invalidateQueries({ queryKey: ['tabelas_preco_mensalidade'] });
         toast.success(`Importação concluída: ${importados} registros importados, ${erros} erros`);
       } catch (error) {
         console.error('Erro na importação:', error);
@@ -245,7 +241,6 @@ export default function TabelaPrecos() {
     };
     reader.readAsText(file);
     
-    // Limpar input para permitir reimportar mesmo arquivo
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -258,6 +253,9 @@ export default function TabelaPrecos() {
         <div className="flex items-center gap-3">
           <DollarSign className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold">Tabela de Preços</h1>
+          {precos && (
+            <Badge variant="secondary">{precos.length} faixas</Badge>
+          )}
         </div>
         <div className="flex gap-2">
           <input
@@ -277,11 +275,7 @@ export default function TabelaPrecos() {
           </Button>
           <Button 
             onClick={() => { 
-              if (planoSelecionado && planoSelecionado !== 'all') {
-                setPlanoIdParaModal(planoSelecionado);
-                setFaixaEdit(null);
-                setModalOpen(true);
-              } else if (planos?.length) {
+              if (planos?.length) {
                 setPlanoIdParaModal(planos[0].id);
                 setFaixaEdit(null);
                 setModalOpen(true);
@@ -304,16 +298,33 @@ export default function TabelaPrecos() {
             </div>
             
             <div className="flex items-center gap-2">
-              <Label htmlFor="plano-select" className="text-sm text-muted-foreground">Produto:</Label>
-              <Select value={planoSelecionado} onValueChange={setPlanoSelecionado}>
-                <SelectTrigger id="plano-select" className="w-[200px]">
-                  <SelectValue placeholder="Todos os produtos" />
+              <Label htmlFor="linha-select" className="text-sm text-muted-foreground">Linha:</Label>
+              <Select value={linhaSelecionada} onValueChange={setLinhaSelecionada}>
+                <SelectTrigger id="linha-select" className="w-[180px]">
+                  <SelectValue placeholder="Todas as linhas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os produtos</SelectItem>
-                  {planos?.map(plano => (
-                    <SelectItem key={plano.id} value={plano.id}>
-                      {plano.codigo} - {plano.nome}
+                  <SelectItem value="all">Todas as linhas</SelectItem>
+                  {linhasUnicas.map(slug => (
+                    <SelectItem key={slug} value={slug}>
+                      {slug}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Label htmlFor="regiao-select" className="text-sm text-muted-foreground">Região:</Label>
+              <Select value={regiaoSelecionada} onValueChange={setRegiaoSelecionada}>
+                <SelectTrigger id="regiao-select" className="w-[140px]">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {regioesUnicas.map(r => (
+                    <SelectItem key={r} value={r}>
+                      {r.toUpperCase()}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -326,7 +337,7 @@ export default function TabelaPrecos() {
                 checked={apenasVigentes}
                 onCheckedChange={setApenasVigentes}
               />
-              <Label htmlFor="apenas-vigentes" className="text-sm">Apenas vigentes</Label>
+              <Label htmlFor="apenas-vigentes" className="text-sm">Apenas ativos</Label>
             </div>
           </div>
         </CardContent>
@@ -340,11 +351,11 @@ export default function TabelaPrecos() {
           </CardContent>
         </Card>
       ) : Object.keys(precosAgrupados).length > 0 ? (
-        Object.entries(precosAgrupados).map(([planoId, { plano, itens }]) => (
-          <Card key={planoId}>
+        Object.entries(precosAgrupados).map(([key, { linha_slug, itens }]) => (
+          <Card key={key}>
             <CardHeader className="py-3 bg-muted/50">
               <CardTitle className="text-base font-medium">
-                {plano?.codigo} - {plano?.nome}
+                {linha_slug || 'Sem linha'}
                 <Badge variant="secondary" className="ml-2">{itens.length} faixas</Badge>
               </CardTitle>
             </CardHeader>
@@ -353,50 +364,37 @@ export default function TabelaPrecos() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Faixa FIPE</TableHead>
-                    <TableHead>Valor Cota</TableHead>
-                    <TableHead>Taxa Admin</TableHead>
-                    <TableHead>Rastreamento</TableHead>
-                    <TableHead>Assistência</TableHead>
-                    <TableHead>Taxa App</TableHead>
-                    <TableHead>Taxa Comercial</TableHead>
-                    <TableHead>Vigência</TableHead>
+                    <TableHead>Região</TableHead>
+                    <TableHead>Combustível</TableHead>
+                    <TableHead>Tipo Uso</TableHead>
+                    <TableHead>Valor Mensal</TableHead>
+                    <TableHead>Valor Deságio</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-[120px]">Ações</TableHead>
+                    <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {itens.map((preco) => (
-                    <TableRow key={preco.id} className={!preco.ativo ? 'opacity-60' : ''}>
+                    <TableRow key={preco.id} className={!preco.is_active ? 'opacity-60' : ''}>
                       <TableCell className="font-medium">
-                        {formatCurrency(preco.fipe_de)} - {formatCurrency(preco.fipe_ate)}
+                        {formatCurrency(preco.fipe_min)} - {formatCurrency(preco.fipe_max)}
                       </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{preco.regiao?.toUpperCase() || '-'}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {preco.combustivel_tipo || <span className="text-muted-foreground text-xs">NULL</span>}
+                      </TableCell>
+                      <TableCell>{preco.tipo_uso || '-'}</TableCell>
                       <TableCell className="font-semibold text-primary">
-                        {formatCurrency(preco.valor_cota)}
+                        {formatCurrency(preco.valor_mensal)}
                       </TableCell>
                       <TableCell>
-                        {preco.taxa_administrativa ? formatCurrency(preco.taxa_administrativa) : '-'}
+                        {preco.valor_desagio ? formatCurrency(preco.valor_desagio) : '-'}
                       </TableCell>
                       <TableCell>
-                        {preco.valor_rastreamento ? formatCurrency(preco.valor_rastreamento) : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {preco.valor_assistencia ? formatCurrency(preco.valor_assistencia) : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {preco.taxa_aplicativo ? formatCurrency(preco.taxa_aplicativo) : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {preco.taxa_comercial ? formatCurrency(preco.taxa_comercial) : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">
-                          {formatDate(preco.vigencia_inicio)}
-                          {preco.vigencia_fim ? ` - ${formatDate(preco.vigencia_fim)}` : ' - Sem fim'}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={preco.ativo ? 'default' : 'secondary'}>
-                          {preco.ativo ? 'Ativo' : 'Inativo'}
+                        <Badge variant={preco.is_active ? 'default' : 'secondary'}>
+                          {preco.is_active ? 'Ativo' : 'Inativo'}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -406,8 +404,8 @@ export default function TabelaPrecos() {
                             size="icon" 
                             className="h-8 w-8"
                             onClick={() => {
-                              setPlanoIdParaModal(preco.plano_id);
                               setFaixaEdit(preco);
+                              setPlanoIdParaModal('');
                               setModalOpen(true);
                             }}
                           >
@@ -446,7 +444,7 @@ export default function TabelaPrecos() {
           <DollarSign className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">Nenhuma faixa de preço encontrada</h3>
           <p className="text-muted-foreground mb-4">
-            {planoSelecionado !== 'all' ? 'Não há faixas de preço para este produto.' : 'Comece criando sua primeira faixa de preço.'}
+            Comece criando sua primeira faixa de preço.
           </p>
           <Button 
             onClick={() => {

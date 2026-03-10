@@ -48,21 +48,17 @@ interface PlanoCobertura {
   } | null;
 }
 
-interface TabelaPreco {
+interface FaixaMensalidade {
   id: string;
-  plano_id: string;
-  fipe_de: number;
-  fipe_ate: number;
-  valor_cota: number;
-  taxa_administrativa: number | null;
-  valor_rastreamento: number | null;
-  valor_assistencia: number | null;
-  taxa_aplicativo: number | null;
-  taxa_comercial: number | null;
-  valor_adesao?: number | null;
-  vigencia_inicio: string | null;
-  vigencia_fim: string | null;
-  ativo: boolean;
+  linha_slug: string | null;
+  regiao: string | null;
+  combustivel_tipo: string | null;
+  tipo_uso: string | null;
+  fipe_min: number;
+  fipe_max: number;
+  valor_mensal: number;
+  valor_desagio: number | null;
+  is_active: boolean | null;
 }
 
 const tipoVeiculoConfig: Record<string, { label: string; class: string }> = {
@@ -103,7 +99,7 @@ export default function ProdutoDetalhe() {
   const [modalEditCoberturaOpen, setModalEditCoberturaOpen] = useState(false);
   const [modalFaixaOpen, setModalFaixaOpen] = useState(false);
   const [modalProdutoOpen, setModalProdutoOpen] = useState(false);
-  const [faixaEdit, setFaixaEdit] = useState<TabelaPreco | null>(null);
+  const [faixaEdit, setFaixaEdit] = useState<FaixaMensalidade | null>(null);
   const [coberturaEdit, setCoberturaEdit] = useState<PlanoCobertura | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ tipo: 'cobertura' | 'preco'; id: string; nome: string } | null>(null);
@@ -138,17 +134,28 @@ export default function ProdutoDetalhe() {
     enabled: !!id
   });
 
+  // Buscar preços via plano_preco_map → tabelas_preco_mensalidade
   const { data: precos, isLoading: loadingPrecos } = useQuery({
     queryKey: ['plano-precos', id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tabelas_preco')
-        .select('*')
+      // First get the linha_slug for this plano
+      const { data: mapping } = await supabase
+        .from('plano_preco_map')
+        .select('linha_slug, tipo_uso')
         .eq('plano_id', id)
-        .eq('ativo', true)
-        .order('fipe_de');
+        .single();
+
+      if (!mapping) return [];
+
+      const { data, error } = await supabase
+        .from('tabelas_preco_mensalidade')
+        .select('*')
+        .eq('linha_slug', mapping.linha_slug)
+        .eq('is_active', true)
+        .order('fipe_min');
+      
       if (error) throw error;
-      return data as TabelaPreco[];
+      return data as FaixaMensalidade[];
     },
     enabled: !!id
   });
@@ -198,7 +205,6 @@ export default function ProdutoDetalhe() {
     }
   });
 
-  // Mutation para remover cobertura
   const removerCobertura = useMutation({
     mutationFn: async (coberturaId: string) => {
       const { error } = await supabase
@@ -218,11 +224,10 @@ export default function ProdutoDetalhe() {
     }
   });
 
-  // Mutation para remover faixa de preço
   const removerPreco = useMutation({
     mutationFn: async (precoId: string) => {
       const { error } = await supabase
-        .from('tabelas_preco')
+        .from('tabelas_preco_mensalidade')
         .delete()
         .eq('id', precoId);
       if (error) throw error;
@@ -230,6 +235,7 @@ export default function ProdutoDetalhe() {
     onSuccess: () => {
       toast.success('Faixa de preço removida!');
       queryClient.invalidateQueries({ queryKey: ['plano-precos', id] });
+      queryClient.invalidateQueries({ queryKey: ['tabelas_preco_mensalidade'] });
       setDeleteConfirmOpen(false);
       setItemToDelete(null);
     },
@@ -261,16 +267,16 @@ export default function ProdutoDetalhe() {
     setDeleteConfirmOpen(true);
   };
 
-  const handleEditPreco = (preco: TabelaPreco) => {
+  const handleEditPreco = (preco: FaixaMensalidade) => {
     setFaixaEdit(preco);
     setModalFaixaOpen(true);
   };
 
-  const handleDeletePreco = (preco: TabelaPreco) => {
+  const handleDeletePreco = (preco: FaixaMensalidade) => {
     setItemToDelete({ 
       tipo: 'preco', 
       id: preco.id, 
-      nome: `${formatCurrency(preco.fipe_de)} - ${formatCurrency(preco.fipe_ate)}` 
+      nome: `${formatCurrency(preco.fipe_min)} - ${formatCurrency(preco.fipe_max)}` 
     });
     setDeleteConfirmOpen(true);
   };
@@ -534,12 +540,11 @@ export default function ProdutoDetalhe() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Faixa FIPE</TableHead>
-                      <TableHead>Valor Cota</TableHead>
-                      <TableHead>Taxa Admin</TableHead>
-                      <TableHead>Rastreamento</TableHead>
-                      <TableHead>Assistência</TableHead>
-                      <TableHead>Taxa App</TableHead>
-                      <TableHead>Vigência</TableHead>
+                      <TableHead>Região</TableHead>
+                      <TableHead>Combustível</TableHead>
+                      <TableHead>Tipo Uso</TableHead>
+                      <TableHead>Valor Mensal</TableHead>
+                      <TableHead>Deságio</TableHead>
                       <TableHead className="w-[100px]">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -547,16 +552,20 @@ export default function ProdutoDetalhe() {
                     {precos.map((preco) => (
                       <TableRow key={preco.id}>
                         <TableCell className="font-medium">
-                          {formatCurrency(preco.fipe_de)} - {formatCurrency(preco.fipe_ate)}
+                          {formatCurrency(preco.fipe_min)} - {formatCurrency(preco.fipe_max)}
                         </TableCell>
-                        <TableCell>{formatCurrency(preco.valor_cota)}</TableCell>
-                        <TableCell>{preco.taxa_administrativa ? formatCurrency(preco.taxa_administrativa) : '-'}</TableCell>
-                        <TableCell>{preco.valor_rastreamento ? formatCurrency(preco.valor_rastreamento) : '-'}</TableCell>
-                        <TableCell>{preco.valor_assistencia ? formatCurrency(preco.valor_assistencia) : '-'}</TableCell>
-                        <TableCell>{preco.taxa_aplicativo ? formatCurrency(preco.taxa_aplicativo) : '-'}</TableCell>
                         <TableCell>
-                          {preco.vigencia_inicio ? new Date(preco.vigencia_inicio).toLocaleDateString('pt-BR') : '-'}
-                          {preco.vigencia_fim ? ` - ${new Date(preco.vigencia_fim).toLocaleDateString('pt-BR')}` : ''}
+                          <Badge variant="outline">{preco.regiao?.toUpperCase() || '-'}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {preco.combustivel_tipo || <span className="text-muted-foreground text-xs">N/A</span>}
+                        </TableCell>
+                        <TableCell>{preco.tipo_uso || '-'}</TableCell>
+                        <TableCell className="font-semibold text-primary">
+                          {formatCurrency(preco.valor_mensal)}
+                        </TableCell>
+                        <TableCell>
+                          {preco.valor_desagio ? formatCurrency(preco.valor_desagio) : '-'}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
