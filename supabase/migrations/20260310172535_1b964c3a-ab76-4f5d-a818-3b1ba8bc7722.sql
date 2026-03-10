@@ -1,0 +1,1 @@
+ALTER TABLE tabelas_preco_mensalidade ADD COLUMN IF NOT EXISTS linha_slug varchar(50);
