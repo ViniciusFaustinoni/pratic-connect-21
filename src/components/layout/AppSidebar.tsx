@@ -64,6 +64,7 @@ import {
   Bot,
   Bell,
   Send,
+  Layers,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
