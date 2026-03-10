@@ -16,7 +16,7 @@ import {
   Rocket, Download, RefreshCw, Clock, UserCheck,
   AlertTriangle, CheckCircle2, Timer, Search, 
   FileText, CreditCard, Camera, Cpu, Inbox,
-  ChevronRight
+  ChevronRight, Send, PenTool, ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAcompanhamento } from "@/hooks/useAcompanhamento";
