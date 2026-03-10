@@ -58,6 +58,7 @@ interface SinistroDetalheInfoProps {
 export function SinistroDetalheInfo({ sinistro, vistoriaEvento, descricaoCliente, mensagensChat, onOpenConversa }: SinistroDetalheInfoProps) {
   const [fotoViewerOpen, setFotoViewerOpen] = useState(false);
   const [fotoViewerUrl, setFotoViewerUrl] = useState('');
+  const { data: limiteDanoParcial = 0.75 } = useConfiguracaoNumero('limite_dano_parcial_fipe', 0.75);
   const TipoIcon = tipoConfig[sinistro.tipo]?.icon || HelpCircle;
 
   return (

@@ -277,7 +277,7 @@ const InadimplenteDetalhe = () => {
                   {cobrancas && cobrancas.length > 0 ? (
                     cobrancas.map(c => {
                       const dias = differenceInDays(new Date(), new Date(c.data_vencimento));
-                      const atualizado = calcValorAtualizado(c.valor_final || 0, dias);
+                      const atualizado = calcValorAtualizado(c.valor_final || 0, dias, percMulta, percJuros);
                       return (
                         <TableRow key={c.id}>
                           <TableCell><Checkbox checked={selectedBoletos.includes(c.id)} onCheckedChange={() => toggleBoleto(c.id)} /></TableCell>
