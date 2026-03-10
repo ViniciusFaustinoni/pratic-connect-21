@@ -235,7 +235,15 @@ export function TabelaPrecosTab() {
       {isLoading ? (
         <Skeleton className="h-64" />
       ) : Object.keys(agrupados).length > 0 ? (
-        Object.entries(agrupados).map(([linhaSlug, itens]) => (
+        Object.entries(agrupados).map(([linhaSlug, itens]) => {
+          const perPage = 30;
+          const page = groupPages[linhaSlug] || 0;
+          const totalPages = Math.max(1, Math.ceil(itens.length / perPage));
+          const safePage = Math.min(page, totalPages - 1);
+          const paged = itens.slice(safePage * perPage, (safePage + 1) * perPage);
+          const setPage = (p: number) => setGroupPages(prev => ({ ...prev, [linhaSlug]: p }));
+
+          return (
           <div key={linhaSlug} className="rounded-xl border bg-card overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 bg-muted/30 border-b">
               <div className="flex items-center gap-2">
@@ -264,7 +272,7 @@ export function TabelaPrecosTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {itens.map((p: any) => (
+                {paged.map((p: any) => (
                   <TableRow key={p.id} className={!p.is_active ? 'opacity-50' : ''}>
                     <TableCell className="text-xs font-medium">
                       {formatCurrency(p.fipe_min)} – {formatCurrency(p.fipe_max)}
@@ -299,8 +307,26 @@ export function TabelaPrecosTab() {
                 ))}
               </TableBody>
             </Table>
+            {itens.length > perPage && (
+              <div className="flex items-center justify-between px-4 py-2 border-t bg-muted/20">
+                <p className="text-xs text-muted-foreground">
+                  Página {safePage + 1} de {totalPages} · {itens.length} faixas
+                </p>
+                <div className="flex gap-1.5">
+                  <Button variant="outline" size="sm" className="h-7 text-xs" disabled={safePage === 0}
+                    onClick={() => setPage(safePage - 1)}>
+                    ← Anterior
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs" disabled={safePage >= totalPages - 1}
+                    onClick={() => setPage(safePage + 1)}>
+                    Próximo →
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-        ))
+          );
+        })
       ) : (
         <div className="rounded-xl border bg-card p-12 text-center">
           <DollarSign className="h-8 w-8 mx-auto text-muted-foreground mb-3 opacity-30" />

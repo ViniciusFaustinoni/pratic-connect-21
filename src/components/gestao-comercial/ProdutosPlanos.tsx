@@ -244,52 +244,105 @@ export function ProdutosPlanos() {
 
               {/* Sub-tab content */}
               <div className="p-4">
-                {detailSubTab === 'precos' && (
-                  <div>
-                    {selectedPrecos?.faixas && selectedPrecos.faixas.length > 0 ? (
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          Faixas mapeadas via linha <Badge variant="outline" className="ml-1">{selectedPrecos.linhaSlug}</Badge>
-                        </p>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Faixa FIPE</TableHead>
-                              <TableHead>Região</TableHead>
-                              <TableHead>Tipo Uso</TableHead>
-                              <TableHead className="text-right">Valor Mensal</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {selectedPrecos.faixas.slice(0, 30).map((f, i) => (
-                              <TableRow key={i}>
-                                <TableCell className="text-xs">
-                                  {formatCurrency(Number(f.fipe_min))} – {formatCurrency(Number(f.fipe_max))}
-                                </TableCell>
-                                <TableCell><Badge variant="outline">{f.regiao?.toUpperCase() || '-'}</Badge></TableCell>
-                                <TableCell className="text-xs">{f.tipo_uso || '-'}</TableCell>
-                                <TableCell className="text-right font-semibold text-primary">
-                                  {formatCurrency(Number(f.valor_mensal))}
-                                </TableCell>
+                {detailSubTab === 'precos' && (() => {
+                  const allFaixas = selectedPrecos?.faixas || [];
+                  // Extract unique regions and tipo_uso for filters
+                  const regioes = Array.from(new Set(allFaixas.map(f => f.regiao).filter(Boolean))).sort() as string[];
+                  const tiposUso = Array.from(new Set(allFaixas.map(f => f.tipo_uso).filter(Boolean))).sort() as string[];
+                  // Apply filters
+                  const filtered = allFaixas.filter(f => {
+                    if (precosRegiao !== 'all' && f.regiao !== precosRegiao) return false;
+                    if (precosTipoUso !== 'all' && f.tipo_uso !== precosTipoUso) return false;
+                    return true;
+                  });
+                  const perPage = 30;
+                  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+                  const safePage = Math.min(precosPage, totalPages - 1);
+                  const paged = filtered.slice(safePage * perPage, (safePage + 1) * perPage);
+
+                  return (
+                    <div>
+                      {allFaixas.length > 0 ? (
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 mb-3">
+                            <p className="text-xs text-muted-foreground">
+                              Linha <Badge variant="outline" className="ml-1">{selectedPrecos?.linhaSlug}</Badge>
+                            </p>
+                            <Select value={precosRegiao} onValueChange={v => { setPrecosRegiao(v); setPrecosPage(0); }}>
+                              <SelectTrigger className="w-[130px] h-7 text-xs"><SelectValue placeholder="Região" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">Todas regiões</SelectItem>
+                                {regioes.map(r => <SelectItem key={r} value={r}>{r.toUpperCase()}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            {tiposUso.length > 1 && (
+                              <Select value={precosTipoUso} onValueChange={v => { setPrecosTipoUso(v); setPrecosPage(0); }}>
+                                <SelectTrigger className="w-[130px] h-7 text-xs"><SelectValue placeholder="Tipo Uso" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">Todos tipos</SelectItem>
+                                  {tiposUso.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </div>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Faixa FIPE</TableHead>
+                                <TableHead>Região</TableHead>
+                                <TableHead>Tipo Uso</TableHead>
+                                <TableHead className="text-right">Valor Mensal</TableHead>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        {selectedPrecos.faixas.length > 30 && (
-                          <p className="text-xs text-muted-foreground mt-2 text-center">
-                            Mostrando 30 de {selectedPrecos.faixas.length} faixas
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <DollarSign className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">Nenhuma faixa de preço vinculada</p>
-                        <p className="text-xs mt-1">Configure via plano_preco_map</p>
-                      </div>
-                    )}
-                  </div>
-                )}
+                            </TableHeader>
+                            <TableBody>
+                              {paged.map((f, i) => (
+                                <TableRow key={i}>
+                                  <TableCell className="text-xs">
+                                    {formatCurrency(Number(f.fipe_min))} – {formatCurrency(Number(f.fipe_max))}
+                                  </TableCell>
+                                  <TableCell><Badge variant="outline">{f.regiao?.toUpperCase() || '-'}</Badge></TableCell>
+                                  <TableCell className="text-xs">{f.tipo_uso || '-'}</TableCell>
+                                  <TableCell className="text-right font-semibold text-primary">
+                                    {formatCurrency(Number(f.valor_mensal))}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          {/* Pagination footer */}
+                          {filtered.length > perPage && (
+                            <div className="flex items-center justify-between mt-3 px-1">
+                              <p className="text-xs text-muted-foreground">
+                                Página {safePage + 1} de {totalPages} · {filtered.length} faixas
+                              </p>
+                              <div className="flex gap-1.5">
+                                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={safePage === 0}
+                                  onClick={() => setPrecosPage(safePage - 1)}>
+                                  ← Anterior
+                                </Button>
+                                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={safePage >= totalPages - 1}
+                                  onClick={() => setPrecosPage(safePage + 1)}>
+                                  Próximo →
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          {filtered.length === 0 && allFaixas.length > 0 && (
+                            <p className="text-xs text-muted-foreground text-center py-4">
+                              Nenhuma faixa com os filtros selecionados
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <DollarSign className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">Nenhuma faixa de preço vinculada</p>
+                          <p className="text-xs mt-1">Configure via plano_preco_map</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {detailSubTab === 'coberturas' && (
                   <div>
