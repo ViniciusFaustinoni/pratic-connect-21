@@ -1,0 +1,1 @@
+DELETE FROM tabelas_preco_mensalidade WHERE linha_slug IS NULL;
