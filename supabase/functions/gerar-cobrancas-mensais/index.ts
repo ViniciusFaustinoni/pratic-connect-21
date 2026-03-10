@@ -117,6 +117,7 @@ serve(async (req) => {
       erros: 0,
       whatsappEnviados: 0,
       detalhes: [] as any[],
+      errosDetalhes: [] as Array<{ associado_id: string; motivo: string }>,
     };
 
     for (const associado of (associados || []) as unknown as Associado[]) {
