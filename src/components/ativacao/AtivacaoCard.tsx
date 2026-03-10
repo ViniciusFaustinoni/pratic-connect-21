@@ -28,6 +28,8 @@ export interface AtivacaoItem {
   docsAprovados?: number;
   docsTotal?: number;
   created_at: string;
+  detalheFase?: string | null;
+  faseOriginal?: string;
 }
 
 export interface Etapa {
@@ -135,6 +137,13 @@ export function AtivacaoCard({ item, etapa, onClick }: AtivacaoCardProps) {
                 {item.placa}
               </Badge>
             )}
+          </div>
+        )}
+
+        {/* Detalhe da fase - sub-status preciso */}
+        {item.detalheFase && (
+          <div className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-md bg-muted/60">
+            <span className="text-muted-foreground truncate">{item.detalheFase}</span>
           </div>
         )}
 
