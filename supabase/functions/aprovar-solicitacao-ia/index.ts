@@ -6,6 +6,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const TIPO_LABELS: Record<string, string> = {
+  colisao: "colisão",
+  roubo: "roubo",
+  furto: "furto",
+  incendio: "incêndio",
+  fenomeno_natural: "fenômeno natural",
+  vidros: "vidros",
+  vandalismo: "vandalismo",
+  terceiros: "terceiros",
+  alagamento: "alagamento",
+  outro: "outro",
+};
+
 function addBusinessDays(date: Date, days: number): Date {
   const result = new Date(date);
   let added = 0;
@@ -355,13 +368,67 @@ serve(async (req) => {
 
             mensagemSin += `\n⏰ O link é válido por 72 horas. Qualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
 
+            // Preparar params do template comunicacao_sinistro
+            const primeiroNomeSin = associadoSin.nome?.split(' ')[0] || 'Associado';
+            const tipoLabelSin = TIPO_LABELS[dados.tipo as string] || dados.tipo || 'sinistro';
+
+            // Extrair valores de cota já calculados acima
+            let tplPlano = 'Não informado';
+            let tplPerc = '';
+            let tplFipe = '';
+            let tplCota = '';
+            try {
+              const { data: veiculoTpl } = await supabaseAdmin
+                .from("veiculos")
+                .select("valor_fipe, uso_aplicativo")
+                .eq("id", veiculoId)
+                .single();
+              if (associadoSin.plano_id && veiculoTpl?.valor_fipe) {
+                const { data: planoTpl } = await supabaseAdmin
+                  .from("planos")
+                  .select("nome, cota_participacao, cota_minima, cota_app_percent, cota_app_min")
+                  .eq("id", associadoSin.plano_id)
+                  .single();
+                if (planoTpl) {
+                  const catVeic = veiculoTpl.uso_aplicativo ? 'Aplicativo' : 'Passeio';
+                  let perc = planoTpl.cota_participacao;
+                  let min = planoTpl.cota_minima;
+                  if (veiculoTpl.uso_aplicativo && planoTpl.cota_app_percent) {
+                    perc = planoTpl.cota_app_percent;
+                    min = planoTpl.cota_app_min;
+                  }
+                  const vFipe = veiculoTpl.valor_fipe;
+                  const vCota = Math.max(vFipe * (perc || 0) / 100, min || 0);
+                  const fmtBRL2 = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                  tplPlano = `${planoTpl.nome} (${catVeic})`;
+                  tplPerc = `${perc}% da FIPE`;
+                  tplFipe = fmtBRL2(vFipe);
+                  tplCota = fmtBRL2(vCota);
+                }
+              }
+            } catch (_e) { /* não bloqueante */ }
+
             await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
               },
-              body: JSON.stringify({ telefone: telefoneSin, mensagem: mensagemSin }),
+              body: JSON.stringify({
+                telefone: telefoneSin,
+                mensagem: mensagemSin,
+                template_name: 'comunicacao_sinistro',
+                template_params: [
+                  primeiroNomeSin,
+                  String(tipoLabelSin),
+                  protocolo,
+                  tplPlano,
+                  tplPerc,
+                  tplFipe,
+                  tplCota,
+                  linkUrl || '',
+                ],
+              }),
             });
             console.log(`[aprovar-solicitacao-ia] WhatsApp enviado para ${telefoneSin}`);
           }

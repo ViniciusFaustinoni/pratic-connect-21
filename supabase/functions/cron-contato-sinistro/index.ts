@@ -204,8 +204,17 @@ Em caso de dúvidas, estamos à disposição!`;
             body: JSON.stringify({
               telefone,
               mensagem,
-              template_name: 'sinistro_aberto',
-              template_params: [primeiroNomeContato, sinistro.protocolo],
+              template_name: 'comunicacao_sinistro',
+              template_params: [
+                primeiroNomeContato,
+                tipoLabel,
+                sinistro.protocolo,
+                `${planoNome} (${categoriaVeiculo})`,
+                `${percentual}% da FIPE`,
+                formatCurrency(valorFipe),
+                formatCurrency(valorCota),
+                `${siteUrl}/evento/${token}`,
+              ],
             }),
           });
 
