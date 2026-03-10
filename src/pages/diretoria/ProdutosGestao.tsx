@@ -62,24 +62,44 @@ export default function ProdutosGestao() {
     }
   });
 
+  // Buscar preços via plano_preco_map → tabelas_preco_mensalidade
   const { data: precosPorPlano } = useQuery({
     queryKey: ['planos-precos-info'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tabelas_preco')
-        .select('plano_id, fipe_de, fipe_ate')
-        .eq('ativo', true);
-      if (error) throw error;
-      
-      const info: Record<string, { count: number; minFipe: number; maxFipe: number }> = {};
-      data?.forEach(p => {
-        if (!info[p.plano_id]) {
-          info[p.plano_id] = { count: 0, minFipe: Infinity, maxFipe: 0 };
+      // Get all mappings
+      const { data: mappings, error: mapError } = await supabase
+        .from('plano_preco_map')
+        .select('plano_id, linha_slug');
+      if (mapError) throw mapError;
+
+      // Get all active price rows
+      const { data: precos, error: precoError } = await supabase
+        .from('tabelas_preco_mensalidade')
+        .select('linha_slug, fipe_min, fipe_max')
+        .eq('is_active', true);
+      if (precoError) throw precoError;
+
+      // Group price info by linha_slug
+      const porLinha: Record<string, { count: number; minFipe: number; maxFipe: number }> = {};
+      precos?.forEach(p => {
+        const slug = p.linha_slug || '';
+        if (!porLinha[slug]) {
+          porLinha[slug] = { count: 0, minFipe: Infinity, maxFipe: 0 };
         }
-        info[p.plano_id].count++;
-        info[p.plano_id].minFipe = Math.min(info[p.plano_id].minFipe, p.fipe_de);
-        info[p.plano_id].maxFipe = Math.max(info[p.plano_id].maxFipe, p.fipe_ate);
+        porLinha[slug].count++;
+        porLinha[slug].minFipe = Math.min(porLinha[slug].minFipe, Number(p.fipe_min));
+        porLinha[slug].maxFipe = Math.max(porLinha[slug].maxFipe, Number(p.fipe_max));
       });
+
+      // Map back to plano_id
+      const info: Record<string, { count: number; minFipe: number; maxFipe: number }> = {};
+      mappings?.forEach(m => {
+        const linhaInfo = porLinha[m.linha_slug];
+        if (linhaInfo) {
+          info[m.plano_id] = linhaInfo;
+        }
+      });
+
       return info;
     }
   });

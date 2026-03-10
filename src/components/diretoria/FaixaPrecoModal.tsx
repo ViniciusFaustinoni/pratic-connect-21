@@ -5,159 +5,174 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-interface TabelaPreco {
+interface FaixaMensalidade {
   id: string;
-  plano_id: string;
-  fipe_de: number;
-  fipe_ate: number;
-  valor_cota: number;
-  taxa_administrativa: number | null;
-  valor_rastreamento: number | null;
-  valor_assistencia: number | null;
-  taxa_aplicativo: number | null;
-  taxa_comercial: number | null;
-  valor_adesao?: number | null;
-  vigencia_inicio: string | null;
-  vigencia_fim: string | null;
-  ativo: boolean;
+  linha_slug: string | null;
+  regiao: string | null;
+  combustivel_tipo: string | null;
+  tipo_uso: string | null;
+  fipe_min: number;
+  fipe_max: number;
+  valor_mensal: number;
+  valor_desagio: number | null;
+  is_active: boolean | null;
 }
 
 interface FaixaPrecoModalProps {
   open: boolean;
   onClose: () => void;
   planoId: string;
-  faixa?: TabelaPreco | null;
+  faixa?: FaixaMensalidade | null;
 }
 
 export function FaixaPrecoModal({ open, onClose, planoId, faixa }: FaixaPrecoModalProps) {
   const queryClient = useQueryClient();
   
   const [formData, setFormData] = useState({
-    fipe_de: '',
-    fipe_ate: '',
-    valor_cota: '',
-    taxa_administrativa: '',
-    valor_rastreamento: '',
-    valor_assistencia: '',
-    taxa_aplicativo: '',
-    taxa_comercial: '',
-    valor_adesao: '',
-    vigencia_inicio: '',
-    vigencia_fim: '',
-    ativo: true,
+    linha_slug: '',
+    regiao: 'rj',
+    combustivel_tipo: '',
+    tipo_uso: 'particular',
+    fipe_min: '',
+    fipe_max: '',
+    valor_mensal: '',
+    valor_desagio: '',
+    is_active: true,
   });
 
-  useEffect(() => {
-    if (faixa) {
-      setFormData({
-        fipe_de: faixa.fipe_de?.toString() || '',
-        fipe_ate: faixa.fipe_ate?.toString() || '',
-        valor_cota: faixa.valor_cota?.toString() || '',
-        taxa_administrativa: faixa.taxa_administrativa?.toString() || '',
-        valor_rastreamento: faixa.valor_rastreamento?.toString() || '',
-        valor_assistencia: faixa.valor_assistencia?.toString() || '',
-        taxa_aplicativo: faixa.taxa_aplicativo?.toString() || '',
-        taxa_comercial: faixa.taxa_comercial?.toString() || '',
-        valor_adesao: faixa.valor_adesao?.toString() || '',
-        vigencia_inicio: faixa.vigencia_inicio || '',
-        vigencia_fim: faixa.vigencia_fim || '',
-        ativo: faixa.ativo ?? true,
-      });
-    } else {
-      const hoje = new Date().toISOString().split('T')[0];
-      setFormData({
-        fipe_de: '',
-        fipe_ate: '',
-        valor_cota: '',
-        taxa_administrativa: '',
-        valor_rastreamento: '',
-        valor_assistencia: '',
-        taxa_aplicativo: '',
-        taxa_comercial: '',
-        valor_adesao: '',
-        vigencia_inicio: hoje,
-        vigencia_fim: '',
-        ativo: true,
-      });
-    }
-  }, [faixa, open]);
-
-  // Query existing ranges to check overlap
-  const { data: existingRanges } = useQuery({
-    queryKey: ['tabelas-preco-check', planoId],
+  // Look up linha_slug from plano_preco_map when planoId is provided
+  const { data: mapping } = useQuery({
+    queryKey: ['plano-preco-map', planoId],
     queryFn: async () => {
+      if (!planoId) return null;
       const { data, error } = await supabase
-        .from('tabelas_preco')
-        .select('id, fipe_de, fipe_ate')
+        .from('plano_preco_map')
+        .select('linha_slug, tipo_uso')
         .eq('plano_id', planoId)
-        .eq('ativo', true);
-      if (error) throw error;
+        .single();
+      if (error) return null;
       return data;
     },
     enabled: open && !!planoId,
   });
 
+  useEffect(() => {
+    if (faixa) {
+      setFormData({
+        linha_slug: faixa.linha_slug || '',
+        regiao: faixa.regiao || 'rj',
+        combustivel_tipo: faixa.combustivel_tipo || '',
+        tipo_uso: faixa.tipo_uso || 'particular',
+        fipe_min: faixa.fipe_min?.toString() || '',
+        fipe_max: faixa.fipe_max?.toString() || '',
+        valor_mensal: faixa.valor_mensal?.toString() || '',
+        valor_desagio: faixa.valor_desagio?.toString() || '',
+        is_active: faixa.is_active ?? true,
+      });
+    } else {
+      setFormData({
+        linha_slug: mapping?.linha_slug || '',
+        regiao: 'rj',
+        combustivel_tipo: '',
+        tipo_uso: mapping?.tipo_uso || 'particular',
+        fipe_min: '',
+        fipe_max: '',
+        valor_mensal: '',
+        valor_desagio: '',
+        is_active: true,
+      });
+    }
+  }, [faixa, open, mapping]);
+
+  // Check existing ranges for overlap
+  const { data: existingRanges } = useQuery({
+    queryKey: ['tabelas-preco-mensalidade-check', formData.linha_slug, formData.regiao, formData.tipo_uso, formData.combustivel_tipo],
+    queryFn: async () => {
+      let query = supabase
+        .from('tabelas_preco_mensalidade')
+        .select('id, fipe_min, fipe_max')
+        .eq('is_active', true);
+      
+      if (formData.linha_slug) query = query.eq('linha_slug', formData.linha_slug);
+      if (formData.regiao) query = query.eq('regiao', formData.regiao);
+      if (formData.tipo_uso) query = query.eq('tipo_uso', formData.tipo_uso);
+      
+      // Handle NULL combustivel_tipo
+      if (formData.combustivel_tipo) {
+        query = query.eq('combustivel_tipo', formData.combustivel_tipo);
+      } else {
+        query = query.is('combustivel_tipo', null);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled: open && !!formData.linha_slug,
+  });
+
   const saveFaixa = useMutation({
     mutationFn: async () => {
-      const fipeDe = parseFloat(formData.fipe_de);
-      const fipeAte = parseFloat(formData.fipe_ate);
+      const fipeMin = parseFloat(formData.fipe_min);
+      const fipeMax = parseFloat(formData.fipe_max);
 
-      // Validate range
-      if (fipeDe >= fipeAte) {
-        throw new Error('FIPE De deve ser menor que FIPE Até');
+      if (fipeMin >= fipeMax) {
+        throw new Error('FIPE Min deve ser menor que FIPE Max');
+      }
+
+      if (!formData.valor_mensal || parseFloat(formData.valor_mensal) <= 0) {
+        throw new Error('Valor mensal é obrigatório');
       }
 
       // Check overlap
       const hasSobreposicao = existingRanges?.some(e => {
         if (faixa && e.id === faixa.id) return false;
-        return (fipeDe >= e.fipe_de && fipeDe <= e.fipe_ate) ||
-               (fipeAte >= e.fipe_de && fipeAte <= e.fipe_ate) ||
-               (fipeDe <= e.fipe_de && fipeAte >= e.fipe_ate);
+        return (fipeMin >= Number(e.fipe_min) && fipeMin <= Number(e.fipe_max)) ||
+               (fipeMax >= Number(e.fipe_min) && fipeMax <= Number(e.fipe_max)) ||
+               (fipeMin <= Number(e.fipe_min) && fipeMax >= Number(e.fipe_max));
       });
 
       if (hasSobreposicao) {
-        throw new Error('Faixa se sobrepõe a uma existente');
+        throw new Error('Faixa se sobrepõe a uma existente para esta linha/região/uso/combustível');
       }
 
-      const data = {
-        plano_id: planoId,
-        fipe_de: fipeDe,
-        fipe_ate: fipeAte,
-        valor_cota: parseFloat(formData.valor_cota),
-        taxa_administrativa: formData.taxa_administrativa ? parseFloat(formData.taxa_administrativa) : null,
-        valor_rastreamento: formData.valor_rastreamento ? parseFloat(formData.valor_rastreamento) : null,
-        valor_assistencia: formData.valor_assistencia ? parseFloat(formData.valor_assistencia) : null,
-        taxa_aplicativo: formData.taxa_aplicativo ? parseFloat(formData.taxa_aplicativo) : null,
-        taxa_comercial: formData.taxa_comercial ? parseFloat(formData.taxa_comercial) : null,
-        valor_adesao: formData.valor_adesao ? parseFloat(formData.valor_adesao) : null,
-        vigencia_inicio: formData.vigencia_inicio || null,
-        vigencia_fim: formData.vigencia_fim || null,
-        ativo: formData.ativo,
+      const data: any = {
+        linha_slug: formData.linha_slug || null,
+        regiao: formData.regiao || null,
+        combustivel_tipo: formData.combustivel_tipo || null,
+        tipo_uso: formData.tipo_uso || null,
+        fipe_min: fipeMin,
+        fipe_max: fipeMax,
+        valor_mensal: parseFloat(formData.valor_mensal),
+        valor_desagio: formData.valor_desagio ? parseFloat(formData.valor_desagio) : null,
+        is_active: formData.is_active,
         updated_at: new Date().toISOString(),
       };
 
       if (faixa) {
         const { error } = await supabase
-          .from('tabelas_preco')
+          .from('tabelas_preco_mensalidade')
           .update(data)
           .eq('id', faixa.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('tabelas_preco')
+          .from('tabelas_preco_mensalidade')
           .insert(data);
         if (error) throw error;
       }
     },
     onSuccess: () => {
       toast.success(faixa ? 'Faixa atualizada!' : 'Faixa criada!');
-      queryClient.invalidateQueries({ queryKey: ['plano-precos', planoId] });
-      queryClient.invalidateQueries({ queryKey: ['tabela-precos'] });
-      queryClient.invalidateQueries({ queryKey: ['tabelas-preco-check', planoId] });
+      queryClient.invalidateQueries({ queryKey: ['plano-precos'] });
+      queryClient.invalidateQueries({ queryKey: ['tabela-precos-mensalidade'] });
+      queryClient.invalidateQueries({ queryKey: ['tabelas_preco_mensalidade'] });
+      queryClient.invalidateQueries({ queryKey: ['tabelas-preco-mensalidade-check'] });
       queryClient.invalidateQueries({ queryKey: ['planos-precos-info'] });
       onClose();
     },
@@ -168,8 +183,12 @@ export function FaixaPrecoModal({ open, onClose, planoId, faixa }: FaixaPrecoMod
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.fipe_de || !formData.fipe_ate || !formData.valor_cota) {
-      toast.error('FIPE De, FIPE Até e Valor Cota são obrigatórios');
+    if (!formData.fipe_min || !formData.fipe_max || !formData.valor_mensal) {
+      toast.error('FIPE Min, FIPE Max e Valor Mensal são obrigatórios');
+      return;
+    }
+    if (!formData.linha_slug) {
+      toast.error('Linha (slug) é obrigatória');
       return;
     }
     saveFaixa.mutate();
@@ -186,140 +205,124 @@ export function FaixaPrecoModal({ open, onClose, planoId, faixa }: FaixaPrecoMod
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Linha e Região */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="fipe_de">FIPE De (R$) *</Label>
+              <Label htmlFor="linha_slug">Linha (slug) *</Label>
               <Input
-                id="fipe_de"
+                id="linha_slug"
+                value={formData.linha_slug}
+                onChange={(e) => setFormData({ ...formData, linha_slug: e.target.value })}
+                placeholder="Ex: select, lancamento, especial"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="regiao">Região *</Label>
+              <Select value={formData.regiao} onValueChange={(v) => setFormData({ ...formData, regiao: v })}>
+                <SelectTrigger id="regiao">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rj">RJ</SelectItem>
+                  <SelectItem value="sp">SP</SelectItem>
+                  <SelectItem value="lagos">Lagos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Combustível e Tipo Uso */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="combustivel_tipo">Combustível</Label>
+              <Select 
+                value={formData.combustivel_tipo || 'null'} 
+                onValueChange={(v) => setFormData({ ...formData, combustivel_tipo: v === 'null' ? '' : v })}
+              >
+                <SelectTrigger id="combustivel_tipo">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null">Nenhum (NULL)</SelectItem>
+                  <SelectItem value="gasolina">Gasolina</SelectItem>
+                  <SelectItem value="diesel">Diesel</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Select One usa NULL (aceita qualquer combustível)</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tipo_uso">Tipo de Uso *</Label>
+              <Select value={formData.tipo_uso} onValueChange={(v) => setFormData({ ...formData, tipo_uso: v })}>
+                <SelectTrigger id="tipo_uso">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="particular">Particular</SelectItem>
+                  <SelectItem value="aplicativo">Aplicativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Faixa FIPE */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="fipe_min">FIPE Min (R$) *</Label>
+              <Input
+                id="fipe_min"
                 type="number"
-                value={formData.fipe_de}
-                onChange={(e) => setFormData({ ...formData, fipe_de: e.target.value })}
+                value={formData.fipe_min}
+                onChange={(e) => setFormData({ ...formData, fipe_min: e.target.value })}
                 placeholder="Ex: 20000"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fipe_ate">FIPE Até (R$) *</Label>
+              <Label htmlFor="fipe_max">FIPE Max (R$) *</Label>
               <Input
-                id="fipe_ate"
+                id="fipe_max"
                 type="number"
-                value={formData.fipe_ate}
-                onChange={(e) => setFormData({ ...formData, fipe_ate: e.target.value })}
+                value={formData.fipe_max}
+                onChange={(e) => setFormData({ ...formData, fipe_max: e.target.value })}
                 placeholder="Ex: 40000"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          {/* Valores */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="valor_cota">Valor Cota (R$) *</Label>
+              <Label htmlFor="valor_mensal">Valor Mensal (R$) *</Label>
               <Input
-                id="valor_cota"
+                id="valor_mensal"
                 type="number"
                 step="0.01"
-                value={formData.valor_cota}
-                onChange={(e) => setFormData({ ...formData, valor_cota: e.target.value })}
-                placeholder="Ex: 89.90"
+                value={formData.valor_mensal}
+                onChange={(e) => setFormData({ ...formData, valor_mensal: e.target.value })}
+                placeholder="Ex: 218.90"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="taxa_administrativa">Taxa Admin (R$)</Label>
+              <Label htmlFor="valor_desagio">Valor Deságio (R$)</Label>
               <Input
-                id="taxa_administrativa"
+                id="valor_desagio"
                 type="number"
                 step="0.01"
-                value={formData.taxa_administrativa}
-                onChange={(e) => setFormData({ ...formData, taxa_administrativa: e.target.value })}
-                placeholder="Ex: 15.00"
+                value={formData.valor_desagio}
+                onChange={(e) => setFormData({ ...formData, valor_desagio: e.target.value })}
+                placeholder="Ex: 180.00"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="valor_adesao">Taxa de Filiação (R$)</Label>
-              <Input
-                id="valor_adesao"
-                type="number"
-                step="0.01"
-                value={formData.valor_adesao}
-                onChange={(e) => setFormData({ ...formData, valor_adesao: e.target.value })}
-                placeholder="Ex: 150.00"
-              />
+              <p className="text-xs text-muted-foreground">Valor com desconto de deságio (opcional)</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="valor_rastreamento">Rastreamento (R$)</Label>
-              <Input
-                id="valor_rastreamento"
-                type="number"
-                step="0.01"
-                value={formData.valor_rastreamento}
-                onChange={(e) => setFormData({ ...formData, valor_rastreamento: e.target.value })}
-                placeholder="Ex: 39.90"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="valor_assistencia">Assistência (R$)</Label>
-              <Input
-                id="valor_assistencia"
-                type="number"
-                step="0.01"
-                value={formData.valor_assistencia}
-                onChange={(e) => setFormData({ ...formData, valor_assistencia: e.target.value })}
-                placeholder="Ex: 29.90"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="taxa_aplicativo">Taxa App (R$)</Label>
-              <Input
-                id="taxa_aplicativo"
-                type="number"
-                step="0.01"
-                value={formData.taxa_aplicativo}
-                onChange={(e) => setFormData({ ...formData, taxa_aplicativo: e.target.value })}
-                placeholder="Ex: 50.00"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="taxa_comercial">Taxa Comercial (R$)</Label>
-              <Input
-                id="taxa_comercial"
-                type="number"
-                step="0.01"
-                value={formData.taxa_comercial}
-                onChange={(e) => setFormData({ ...formData, taxa_comercial: e.target.value })}
-                placeholder="Ex: 30.00"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="vigencia_inicio">Vigência Início</Label>
-              <Input
-                id="vigencia_inicio"
-                type="date"
-                value={formData.vigencia_inicio}
-                onChange={(e) => setFormData({ ...formData, vigencia_inicio: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="vigencia_fim">Vigência Fim</Label>
-              <Input
-                id="vigencia_fim"
-                type="date"
-                value={formData.vigencia_fim}
-                onChange={(e) => setFormData({ ...formData, vigencia_fim: e.target.value })}
-              />
-            </div>
-          </div>
-
+          {/* Ativo */}
           <div className="flex items-center gap-2 pt-2">
             <Switch
-              id="ativo"
-              checked={formData.ativo}
-              onCheckedChange={(checked) => setFormData({ ...formData, ativo: checked })}
+              id="is_active"
+              checked={formData.is_active}
+              onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
             />
-            <Label htmlFor="ativo">Ativo</Label>
+            <Label htmlFor="is_active">Ativo</Label>
           </div>
 
           <DialogFooter>
