@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit } from 'lucide-react';
+import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -148,6 +148,24 @@ export function WhatsAppMetaTemplates() {
                             <Send className="h-3 w-3" />
                           </Button>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Duplicar template"
+                          onClick={() => {
+                            setEditTemplate({
+                              ...t,
+                              id: undefined,
+                              nome: t.nome + '_copia',
+                              status: 'DRAFT',
+                              meta_id: null,
+                            });
+                            setDrawerOpen(true);
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
                         {canDelete(t.status) && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget({ id: t.id, nome: t.nome })}>
                             <Trash2 className="h-3 w-3" />
