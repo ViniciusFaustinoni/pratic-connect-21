@@ -18,9 +18,20 @@ export interface AcompanhamentoItem {
   instalacao_id: string | null;
   instalacao_status: string | null;
   instalacao_data: string | null;
+  vistoria_id: string | null;
+  vistoria_status: string | null;
+  vistoria_data: string | null;
+  vistoria_tipo: string | null;
+  contrato_id: string | null;
+  contrato_status: string | null;
+  contrato_data_assinatura: string | null;
+  contrato_adesao_paga: boolean | null;
+  cotacao_publica_id: string | null;
+  cotacao_publica_status: string | null;
   docs_total: number;
   docs_aprovados: number;
   fase_acompanhamento: string;
+  detalhe_fase: string | null;
   vendedor_nome: string | null;
   updated_at: string;
 }
