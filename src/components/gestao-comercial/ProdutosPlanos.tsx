@@ -85,7 +85,7 @@ export function ProdutosPlanos() {
     queryFn: async () => {
       const { data } = await supabase
         .from('planos_coberturas')
-        .select('plano_id, coberturas(id, nome, descricao, limite_valor)');
+        .select('plano_id, coberturas(id, nome, descricao, valor_limite)');
       const map: Record<string, any[]> = {};
       data?.forEach((pc: any) => {
         if (!map[pc.plano_id]) map[pc.plano_id] = [];
