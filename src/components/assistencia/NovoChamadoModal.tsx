@@ -136,7 +136,7 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
   const [buscandoRastreador, setBuscandoRastreador] = useState(false);
   
   // Geocode destino debounce
-  const destinoDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const destinoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [geocodificandoDestino, setGeocodificandoDestino] = useState(false);
 
   const handleClose = () => {

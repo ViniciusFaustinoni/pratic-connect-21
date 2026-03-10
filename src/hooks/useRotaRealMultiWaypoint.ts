@@ -22,7 +22,7 @@ export function useRotaRealMultiWaypoint(
     isLoading: false,
   });
 
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Chave estável baseada no número de pontos e primeiro/último ponto
   const stableKey = pontosOriginais.length > 1
     ? `${pontosOriginais.length}:${pontosOriginais[0][0].toFixed(4)},${pontosOriginais[0][1].toFixed(4)}->${pontosOriginais[pontosOriginais.length - 1][0].toFixed(4)},${pontosOriginais[pontosOriginais.length - 1][1].toFixed(4)}`

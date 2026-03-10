@@ -71,7 +71,7 @@ export function MapaHistorico({ rastreadorId, altura = '400px' }: MapaHistoricoP
   const [posicaoAtual, setPosicaoAtual] = useState(0);
   const [reproduzindo, setReproduzindo] = useState(false);
   const [mostrarParadas, setMostrarParadas] = useState(true);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isLoading, error } = useRastreadorHistoricoAPI({
     rastreadorId,

@@ -25,7 +25,7 @@ export function useRotaReal(
     error: null,
   });
   
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Estabilizar coordenadas com toFixed(4) (~11m precisão)
   const origemKey = origem ? `${origem[0].toFixed(4)},${origem[1].toFixed(4)}` : '';
