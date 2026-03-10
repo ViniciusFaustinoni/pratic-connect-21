@@ -27,64 +27,91 @@ import { usePermissions } from "@/hooks/usePermissions";
 // Definição das etapas do pipeline
 const ETAPAS_ATIVACAO: Etapa[] = [
   {
+    id: 'cotacao',
+    nome: 'Cotação',
+    icone: Send,
+    cor: '#6366F1',
+    descricao: 'Link enviado, aguardando cliente',
+    sla: 3,
+  },
+  {
     id: 'documentos',
     nome: 'Documentação',
     icone: FileText,
-    cor: '#6366F1', // Indigo
-    descricao: 'Aguardando envio de documentos',
+    cor: '#8B5CF6',
+    descricao: 'Envio ou análise de documentos',
     sla: 2,
-  },
-  {
-    id: 'analise',
-    nome: 'Em Análise',
-    icone: Search,
-    cor: '#8B5CF6', // Violet
-    descricao: 'Documentos em análise',
-    sla: 1,
-  },
-  {
-    id: 'pagamento',
-    nome: 'Pagamento',
-    icone: CreditCard,
-    cor: '#F59E0B', // Amber
-    descricao: 'Aguardando pagamento',
-    sla: 3,
   },
   {
     id: 'vistoria',
     nome: 'Vistoria',
     icone: Camera,
-    cor: '#3B82F6', // Blue
-    descricao: 'Vistoria pendente ou agendada',
+    cor: '#3B82F6',
+    descricao: 'Vistoria pendente, agendada ou em análise',
     sla: 3,
+  },
+  {
+    id: 'pagamento',
+    nome: 'Pagamento',
+    icone: CreditCard,
+    cor: '#F59E0B',
+    descricao: 'Aguardando pagamento da adesão',
+    sla: 3,
+  },
+  {
+    id: 'contrato',
+    nome: 'Contrato',
+    icone: PenTool,
+    cor: '#A855F7',
+    descricao: 'Contrato pendente ou assinado',
+    sla: 2,
   },
   {
     id: 'instalacao',
     nome: 'Instalação',
     icone: Cpu,
-    cor: '#10B981', // Emerald
-    descricao: 'Instalação do rastreador',
+    cor: '#10B981',
+    descricao: 'Instalação agendada ou em andamento',
     sla: 2,
+  },
+  {
+    id: 'ativacao',
+    nome: 'Ativação',
+    icone: ClipboardCheck,
+    cor: '#14B8A6',
+    descricao: 'Instalação concluída, ativação pendente',
+    sla: 1,
   },
   {
     id: 'ativo',
     nome: 'Ativo',
     icone: CheckCircle2,
-    cor: '#22C55E', // Green
-    descricao: 'Associado ativo',
+    cor: '#22C55E',
+    descricao: 'Associado totalmente ativo',
     sla: null,
   },
 ];
 
 // Mapeamento das fases do banco para as etapas do frontend
 const FASE_TO_ETAPA: Record<string, string> = {
-  'documentacao': 'documentos',
-  'analise_cadastro': 'analise',
-  'aprovado': 'pagamento',
-  'instalacao_agendada': 'vistoria',
-  'instalacao_concluida': 'instalacao',
-  'ativacao_pendente': 'instalacao',
+  'cotacao_pendente': 'cotacao',
+  'documentacao_pendente': 'documentos',
+  'documentacao_analise': 'documentos',
+  'vistoria_pendente': 'vistoria',
+  'vistoria_agendada': 'vistoria',
+  'vistoria_analise': 'vistoria',
+  'pagamento_pendente': 'pagamento',
+  'contrato_pendente': 'contrato',
+  'contrato_assinado': 'contrato',
+  'instalacao_agendada': 'instalacao',
+  'instalacao_andamento': 'instalacao',
+  'ativacao_pendente': 'ativacao',
   'ativo': 'ativo',
+  // Backwards compat for old phases
+  'documentacao': 'documentos',
+  'analise_cadastro': 'documentos',
+  'aprovado': 'pagamento',
+  'instalacao_concluida': 'ativacao',
 };
 
 type SlaFilter = 'todos' | 'no-prazo' | 'atencao' | 'atrasado';
