@@ -109,7 +109,7 @@ export function LinhasTab() {
                 className={`relative ${
                   !line.is_active ? 'opacity-60' : ''
                 } border-l-4 ${
-                  LINE_COLORS[line.color || 'blue']?.split(' ')[1] || 'border-blue-500'
+                  (LINE_COLORS[line.color || 'blue'] || LINE_COLORS['blue']).split(' ')[1] || 'border-blue-500'
                 }`}
               >
                 <CardHeader className="pb-2">

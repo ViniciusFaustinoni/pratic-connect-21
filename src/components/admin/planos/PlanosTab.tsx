@@ -171,7 +171,7 @@ export function PlanosTab() {
       <div className="flex flex-wrap gap-2">
         {productLines?.map((line) => {
           const isSelected = selectedLineId === line.id;
-          const colorConfig = LINE_COLORS[line.color || 'blue'];
+          const colorConfig = LINE_COLORS[line.color || 'blue'] || LINE_COLORS['blue'];
           return (
             <button
               key={line.id}
