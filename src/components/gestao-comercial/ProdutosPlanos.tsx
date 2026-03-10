@@ -85,7 +85,7 @@ export function ProdutosPlanos() {
     queryFn: async () => {
       const { data } = await supabase
         .from('planos_coberturas')
-        .select('plano_id, coberturas(id, nome, descricao, limite_valor)');
+        .select('plano_id, coberturas(id, nome, descricao, valor_limite)');
       const map: Record<string, any[]> = {};
       data?.forEach((pc: any) => {
         if (!map[pc.plano_id]) map[pc.plano_id] = [];
@@ -354,8 +354,8 @@ export function ProdutosPlanos() {
                               <p className="text-sm font-medium">{cob.nome}</p>
                               {cob.descricao && <p className="text-xs text-muted-foreground">{cob.descricao}</p>}
                             </div>
-                            {cob.limite_valor && (
-                              <Badge variant="outline">Limite: {formatCurrency(Number(cob.limite_valor))}</Badge>
+                            {cob.valor_limite && (
+                              <Badge variant="outline">Limite: {formatCurrency(Number(cob.valor_limite))}</Badge>
                             )}
                           </div>
                         ))}
