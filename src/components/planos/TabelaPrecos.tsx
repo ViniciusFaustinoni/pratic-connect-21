@@ -1,7 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTabelasPreco } from '@/hooks/usePlanos';
-import { useTabelasPreco } from '@/hooks/usePlanos';
 
 interface TabelaPrecosProps {
   titulo?: string;
