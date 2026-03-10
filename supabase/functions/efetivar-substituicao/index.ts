@@ -33,6 +33,10 @@ Deno.serve(async (req) => {
     const results: StepResult[] = []
     let criticalFailure = false
 
+    // Buscar carência do banco de configuracoes
+    const { data: cfgCarencia } = await supabase.from('configuracoes').select('valor').eq('chave', 'carencia_dias_padrao').single()
+    const carenciaDias = cfgCarencia ? parseInt(cfgCarencia.valor) : 120
+
     // Buscar dados completos
     const { data: substituicao, error: fetchErr } = await supabase
       .from('substituicoes_veiculo')
