@@ -851,6 +851,13 @@ export type Database = {
             foreignKeyName: "agendamentos_base_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["vistoria_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_base_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
             referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
@@ -1488,6 +1495,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "asaas_cobrancas_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "asaas_cobrancas_criado_por_fkey"
             columns: ["criado_por"]
             isOneToOne: false
@@ -1967,6 +1981,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "associados_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "associados_pendencia_rastreador_servico_id_fkey"
             columns: ["pendencia_rastreador_servico_id"]
             isOneToOne: false
@@ -2127,6 +2148,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_historico_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "associados_historico_documento_id_fkey"
@@ -3472,6 +3500,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "blacklist_veiculos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "blacklist_veiculos_removido_por_fkey"
             columns: ["removido_por"]
             isOneToOne: false
@@ -3526,6 +3561,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_veiculos_com_cotas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blacklist_veiculos_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["vistoria_id"]
           },
           {
             foreignKeyName: "blacklist_veiculos_vistoria_id_fkey"
@@ -5432,6 +5474,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cobrancas_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "cobrancas_criado_por_fkey"
             columns: ["criado_por"]
             isOneToOne: false
@@ -5795,6 +5844,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "contratos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: true
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "comissoes_vendedor_id_fkey"
@@ -6179,6 +6235,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_deducoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "comissoes_deducoes_vendedor_id_fkey"
@@ -7595,6 +7658,13 @@ export type Database = {
             foreignKeyName: "contratos_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["vistoria_id"]
+          },
+          {
+            foreignKeyName: "contratos_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
             referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
@@ -7702,6 +7772,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contratos_documentos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "contratos_documentos_cotacao_id_fkey"
             columns: ["cotacao_id"]
             isOneToOne: false
@@ -7745,6 +7822,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_historico_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "contratos_historico_usuario_id_fkey"
@@ -8125,6 +8209,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cotacoes_contrato_gerado_id_fkey"
+            columns: ["contrato_gerado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "cotacoes_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
@@ -8172,6 +8263,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "cotacoes_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["vistoria_id"]
           },
           {
             foreignKeyName: "cotacoes_vistoria_id_fkey"
@@ -8520,6 +8618,13 @@ export type Database = {
             referencedRelation: "cotacoes_publicas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cotacoes_publicas_fotos_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["cotacao_publica_id"]
+          },
         ]
       }
       cotacoes_publicas_historico: {
@@ -8563,6 +8668,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "cotacoes_publicas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_publicas_historico_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["cotacao_publica_id"]
           },
         ]
       }
@@ -9905,6 +10017,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_solicitados_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "documentos_solicitados_documento_id_fkey"
@@ -11968,6 +12087,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "gastos_beneficios_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "gastos_beneficios_sinistro_id_fkey"
             columns: ["sinistro_id"]
             isOneToOne: false
@@ -12500,6 +12626,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "instalacoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "instalacoes_cotacao_id_fkey"
             columns: ["cotacao_id"]
             isOneToOne: false
@@ -12667,6 +12800,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_pendentes_criacao_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "instalacoes_pendentes_criacao_cotacao_id_fkey"
@@ -20199,6 +20339,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "servicos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "servicos_cotacao_id_fkey"
             columns: ["cotacao_id"]
             isOneToOne: false
@@ -22744,6 +22891,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "substituicoes_veiculo_contrato_novo_id_fkey"
+            columns: ["contrato_novo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
             foreignKeyName: "substituicoes_veiculo_servico_instalacao_id_fkey"
             columns: ["servico_instalacao_id"]
             isOneToOne: false
@@ -24093,6 +24247,13 @@ export type Database = {
             foreignKeyName: "vistoria_fotos_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["vistoria_id"]
+          },
+          {
+            foreignKeyName: "vistoria_fotos_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
             referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
@@ -24393,6 +24554,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "vistorias_cotacao_id_fkey"
@@ -24995,7 +25163,14 @@ export type Database = {
           associado_status:
             | Database["public"]["Enums"]["status_associado"]
             | null
+          contrato_adesao_paga: boolean | null
+          contrato_data_assinatura: string | null
+          contrato_id: string | null
+          contrato_status: Database["public"]["Enums"]["status_contrato"] | null
+          cotacao_publica_id: string | null
+          cotacao_publica_status: string | null
           cpf: string | null
+          detalhe_fase: string | null
           docs_aprovados: number | null
           docs_total: number | null
           fase_acompanhamento: string | null
@@ -25016,6 +25191,10 @@ export type Database = {
           veiculo_status: Database["public"]["Enums"]["status_veiculo"] | null
           vendedor_id: string | null
           vendedor_nome: string | null
+          vistoria_data: string | null
+          vistoria_id: string | null
+          vistoria_status: Database["public"]["Enums"]["status_vistoria"] | null
+          vistoria_tipo: Database["public"]["Enums"]["tipo_vistoria"] | null
         }
         Relationships: []
       }
