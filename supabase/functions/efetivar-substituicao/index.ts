@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
       try {
         const dataInicio = new Date()
         const dataFim = new Date()
-        dataFim.setDate(dataFim.getDate() + 120)
+        dataFim.setDate(dataFim.getDate() + carenciaDias)
 
         const { error } = await supabase
           .from('substituicoes_veiculo')
