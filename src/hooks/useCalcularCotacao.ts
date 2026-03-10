@@ -64,7 +64,7 @@ export function useCalcularCotacao() {
         supabase
           .from('configuracoes')
           .select('chave, valor')
-          .in('chave', ['taxa_fallback_carro']),
+          .in('chave', ['taxa_fallback_carro', 'adicional_app']),
       ]);
 
       if (planosRes.error) throw planosRes.error;
