@@ -89,6 +89,8 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
     setValorAprovado(formatted);
   };
 
+  const { data: limiteDanoParcial = 0.75 } = useConfiguracaoNumero('limite_dano_parcial_fipe', 0.75);
+
   const getValorNumerico = () => {
     return parseFloat(valorAprovado.replace(/\D/g, '')) / 100 || 0;
   };
