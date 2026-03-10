@@ -1,62 +1,74 @@
 
 
-# Criar Template Meta "tecnico_a_caminho" com Variáveis Dinâmicas
+# Template Meta "comunicacao_sinistro" — Integrar nos envios
 
-## Template
+## Situação Atual
 
-Nome: `tecnico_a_caminho` | Categoria: `UTILITY`
+O template `comunicacao_sinistro` já existe no banco como DRAFT com 8 variáveis:
+- `{{1}}` Nome, `{{2}}` Tipo sinistro, `{{3}}` Protocolo, `{{4}}` Plano, `{{5}}` % FIPE, `{{6}}` Valor FIPE, `{{7}}` Valor cota, `{{8}}` Link evento
 
-Corpo com 7 variáveis posicionais:
+Porém os 3 pontos de envio usam `sinistro_aberto` (apenas 2 params) ou texto livre:
 
-```
-🚗 Técnico a Caminho!
-
-Olá {{1}}! Nosso técnico está a caminho do seu endereço para realizar a instalação do rastreador.
-
-👤 Técnico: {{2}}
-📞 Contato: {{3}}
-💬 WhatsApp: {{4}}
-📍 Endereço: {{5}}
-⏰ Período: {{6}}
-
-{{7}}
-```
-
-| Variável | Conteúdo | Exemplo |
+| Função | Envio atual | Problema |
 |---|---|---|
-| `{{1}}` | Nome do associado | Marcus |
-| `{{2}}` | Nome do técnico | Vistoriador |
-| `{{3}}` | Telefone do técnico | (21) 99259-3830 |
-| `{{4}}` | Link WhatsApp do técnico | https://wa.me/5521992593830 |
-| `{{5}}` | Endereço completo | EST CAFUNDA, 725, TANQUE, RIO DE JANEIRO |
-| `{{6}}` | Período agendado | Manhã (08:00-12:00) |
-| `{{7}}` | Mensagem adicional | Você pode entrar em contato com o técnico se precisar! |
+| `cron-contato-sinistro` | `sinistro_aberto` (2 params) | Template simples, ignora conteúdo rico |
+| `aprovar-solicitacao-ia` | Texto livre (sem template) | Meta descarta fora da janela 24h |
+| `disparar-notificacao` | `sinistro_aberto` (2 params) | Idem |
 
 ## Alterações
 
-### 1. Migration SQL
-Inserir o template `tecnico_a_caminho` na tabela `whatsapp_meta_templates` com status `DRAFT`.
-
-### 2. `notificar-cliente/index.ts`
-Atualizar o `META_TEMPLATE_MAP` — substituir o mapeamento atual de `tecnico_em_rota` (que usa `assistencia_confirmada` com 3 params genéricos) pelo novo template `tecnico_a_caminho` com 7 params dinâmicos:
-
+### 1. `cron-contato-sinistro/index.ts` (linhas ~197-209)
+Substituir envio com `sinistro_aberto` por `comunicacao_sinistro` com 8 params:
 ```typescript
-tecnico_em_rota: {
-  template_name: 'tecnico_a_caminho',
-  getParams: () => [
-    primeiroNome,
-    dados?.tecnico_nome || 'Técnico PRATIC',
-    dados?.tecnico_telefone || '',
-    dados?.tecnico_whatsapp_link || '',
-    dados?.endereco || 'Endereço a confirmar',
-    dados?.periodo || 'A confirmar',
-    'Você pode entrar em contato com o técnico se precisar de mais informações!',
-  ],
-},
+template_name: 'comunicacao_sinistro',
+template_params: [
+  primeiroNomeContato,
+  tipoLabel,
+  sinistro.protocolo,
+  `${planoNome} (${categoriaVeiculo})`,
+  `${percentual}% da FIPE`,
+  formatCurrency(valorFipe),
+  formatCurrency(valorCota),
+  `${siteUrl}/evento/${token}`,
+],
 ```
 
-### 3. Re-deploy
-Deploy da edge function `notificar-cliente`.
+### 2. `aprovar-solicitacao-ia/index.ts` (linhas ~358-365)
+Adicionar `template_name` e `template_params` ao envio (atualmente só envia texto livre):
+```typescript
+body: JSON.stringify({
+  telefone: telefoneSin,
+  mensagem: mensagemSin,
+  template_name: 'comunicacao_sinistro',
+  template_params: [primeiroNome, tipoLabel, protocolo, planoInfo, percInfo, fipeInfo, cotaInfo, linkUrl],
+}),
+```
 
-**Nota**: Após criado, o template precisa ser enviado para aprovação na Meta Business Suite.
+### 3. `disparar-notificacao/index.ts` (linhas ~376-380)
+Quando `tipo === 'sinistro'` e `subtipo === 'aberto'`, usar `comunicacao_sinistro` com os dados disponíveis:
+```typescript
+templateName = 'comunicacao_sinistro';
+templateParams = [
+  primeiroNome,
+  String(dados.tipo_sinistro || ''),
+  String(dados.protocolo || ''),
+  String(dados.plano || ''),
+  String(dados.percentual || ''),
+  String(dados.valor_fipe || ''),
+  String(dados.valor_cota || ''),
+  String(dados.link_evento || ''),
+];
+```
+
+### 4. Enviar template para aprovação da Meta
+Após as alterações, o template `comunicacao_sinistro` precisa ser enviado para aprovação na Meta Business Suite (via botão "Enviar para aprovação" no painel ou pela API).
+
+## Resumo
+
+| Arquivo | Alteração |
+|---|---|
+| `cron-contato-sinistro/index.ts` | Usar `comunicacao_sinistro` com 8 params |
+| `aprovar-solicitacao-ia/index.ts` | Adicionar template ao envio (era texto livre) |
+| `disparar-notificacao/index.ts` | Trocar `sinistro_aberto` por `comunicacao_sinistro` |
+| Meta Business Suite | Enviar template para aprovação |
 
