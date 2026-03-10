@@ -123,11 +123,14 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
         const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
         if (!mapping) continue;
 
+        // Resolver tipo_uso para query (regras de adicional app)
+        const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiaoLower, mapping.tipo_uso);
+
         // Buscar faixa de preço na nova tabela
         const faixa = tabelasMensalidade.find(t =>
           t.linha_slug === mapping.linha_slug &&
           t.regiao === regiaoLower &&
-          t.tipo_uso === mapping.tipo_uso &&
+          t.tipo_uso === tipoUsoQuery &&
           (t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
           valorFipe >= Number(t.fipe_min) &&
           valorFipe <= Number(t.fipe_max)
@@ -135,7 +138,8 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
 
         if (!faixa) continue;
 
-        const valorMensal = Number(faixa.valor_mensal);
+        // Aplicar adicional app se necessário
+        const valorMensal = resolverPrecoApp(mapping.linha_slug, regiaoLower, mapping.tipo_uso, Number(faixa.valor_mensal), adicionalApp);
         const valorDesagio = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
         const valorAdesao = Number(plano.valor_adesao) || 0;
 

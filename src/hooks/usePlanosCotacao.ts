@@ -316,7 +316,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (aSortP !== bSortP) return aSortP - bSortP;
       return a.valorMensal - b.valorMensal;
     });
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp]);
 
   return {
     planos,

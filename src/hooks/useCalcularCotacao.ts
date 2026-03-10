@@ -101,7 +101,11 @@ export function useCalcularCotacao() {
         // Buscar valor_mensal da nova tabela via plano_preco_map
         const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
         const linhaSlug = mapping?.linha_slug;
-        const tipoUsoPricing = mapping?.tipo_uso || params.tipo_uso;
+        const tipoUsoOriginal = mapping?.tipo_uso || params.tipo_uso;
+        // Resolver tipo_uso para query (regras de adicional app)
+        const tipoUsoPricing = linhaSlug
+          ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal)
+          : tipoUsoOriginal;
 
         let valorMensal = 0;
         let valorDesagio: number | null = null;
@@ -120,6 +124,11 @@ export function useCalcularCotacao() {
             valorMensal = Number(faixa.valor_mensal);
             valorDesagio = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
           }
+        }
+
+        // Aplicar adicional app se necessário
+        if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
+          valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp);
         }
 
         // Fallback

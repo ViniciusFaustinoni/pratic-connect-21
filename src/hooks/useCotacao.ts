@@ -133,14 +133,18 @@ function encontrarFaixaMensalidade(
   valorFipe: number,
   regiao: string,
   combustivel: string,
+  adicionalApp: number = 0,
 ): { valorMensal: number; valorDesagio: number | null } | null {
   const mapping = planoPrecoMap.find(m => m.plano_id === planoId);
   if (!mapping) return null;
 
+  // Resolver tipo_uso para query (regras de adicional app)
+  const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiao, mapping.tipo_uso);
+
   const faixa = tabelasMensalidade.find(t =>
     t.linha_slug === mapping.linha_slug &&
     t.regiao === regiao.toLowerCase() &&
-    t.tipo_uso === mapping.tipo_uso &&
+    t.tipo_uso === tipoUsoQuery &&
     (t.combustivel_tipo === combustivel.toLowerCase() || t.combustivel_tipo === null) &&
     valorFipe >= t.fipe_min &&
     valorFipe <= t.fipe_max
@@ -148,8 +152,11 @@ function encontrarFaixaMensalidade(
 
   if (!faixa) return null;
 
+  // Aplicar adicional app se necessário
+  const valorMensalFinal = resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp);
+
   return {
-    valorMensal: faixa.valor_mensal,
+    valorMensal: valorMensalFinal,
     valorDesagio: faixa.valor_desagio,
   };
 }
