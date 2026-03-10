@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle, ShieldCheck, Loader2 } from 'lucide-react';
 import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
+import { useCarenciaDiasPadrao } from '@/hooks/useConteudosSistema';
 import type { DadosNovoVeiculo } from '@/types/substituicao';
 
 interface VeiculoAntigo {
