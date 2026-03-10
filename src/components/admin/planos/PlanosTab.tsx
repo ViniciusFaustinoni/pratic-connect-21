@@ -54,6 +54,18 @@ const LINE_COLORS: Record<string, { active: string; inactive: string }> = {
     active: 'border-2 border-blue-500 bg-blue-500/20 text-blue-400', 
     inactive: 'border border-slate-600 text-slate-300 hover:border-blue-500/50 hover:bg-blue-500/10' 
   },
+  emerald: { 
+    active: 'border-2 border-emerald-500 bg-emerald-500/20 text-emerald-400', 
+    inactive: 'border border-slate-600 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10' 
+  },
+  teal: { 
+    active: 'border-2 border-teal-500 bg-teal-500/20 text-teal-400', 
+    inactive: 'border border-slate-600 text-slate-300 hover:border-teal-500/50 hover:bg-teal-500/10' 
+  },
+  cyan: { 
+    active: 'border-2 border-cyan-500 bg-cyan-500/20 text-cyan-400', 
+    inactive: 'border border-slate-600 text-slate-300 hover:border-cyan-500/50 hover:bg-cyan-500/10' 
+  },
 };
 
 const LINE_ICONS: Record<string, React.ReactNode> = {
@@ -159,7 +171,7 @@ export function PlanosTab() {
       <div className="flex flex-wrap gap-2">
         {productLines?.map((line) => {
           const isSelected = selectedLineId === line.id;
-          const colorConfig = LINE_COLORS[line.color || 'blue'];
+          const colorConfig = LINE_COLORS[line.color || 'blue'] || LINE_COLORS['blue'];
           return (
             <button
               key={line.id}
