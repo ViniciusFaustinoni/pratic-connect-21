@@ -157,6 +157,7 @@ const generateProtocolo = () => {
 export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModalProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { data: carenciaDiasVal = 120 } = useCarenciaDiasPadrao();
   
   const [selectedAssociado, setSelectedAssociado] = useState<string | null>(null);
   const [selectedVeiculo, setSelectedVeiculo] = useState<string | null>(null);

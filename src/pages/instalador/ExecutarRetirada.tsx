@@ -64,6 +64,7 @@ export default function ExecutarRetirada() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const { data: multaValor = 400 } = useMultaRastreador();
 
   // Buscar dados do serviço
   const { data: servico, isLoading, error } = useQuery({

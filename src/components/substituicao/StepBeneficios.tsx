@@ -36,6 +36,7 @@ export function StepBeneficios({
   onBack,
 }: StepBeneficiosProps) {
   const { beneficios, faixasTerceiros, precosMap, terceirosMap, isLoading } = useBeneficiosSeparados();
+  const { data: carenciaDiasVal = 120 } = useCarenciaDiasPadrao();
 
   const toggleBeneficio = (id: string) => {
     setBeneficiosSelecionados({

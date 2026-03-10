@@ -72,6 +72,7 @@ export function TratarAusenciaRetiradaModal({
   const [observacao, setObservacao] = useState('');
   const [showConfirmacao, setShowConfirmacao] = useState(false);
   const [showMultaModal, setShowMultaModal] = useState(false);
+  const { data: multaValor = 400 } = useMultaRastreador();
 
   const queryClient = useQueryClient();
 

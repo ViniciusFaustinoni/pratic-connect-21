@@ -72,6 +72,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   // Defaults de cota do banco
   const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
+  const { data: cotaDesagioDefault = 8 } = useCotaDesagioDefault();
+  const { data: cotaMinimaDesagioDefault = 2000 } = useCotaMinimaDesagioDefault();
 
   // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({

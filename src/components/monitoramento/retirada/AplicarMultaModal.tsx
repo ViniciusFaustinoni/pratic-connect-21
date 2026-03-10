@@ -56,6 +56,7 @@ export function AplicarMultaModal({
   const [motivo, setMotivo] = useState<MotivoMulta | null>(null);
   const [formaCobranca, setFormaCobranca] = useState<FormaCobrancaMulta>('automatica_asaas');
   const [bloquearCancelamento, setBloquearCancelamento] = useState(false);
+  const { data: multaValor = 400 } = useMultaRastreador();
 
   const aplicarMultaMutation = useAplicarMulta();
 
