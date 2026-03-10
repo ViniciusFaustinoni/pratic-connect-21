@@ -30,8 +30,6 @@ type AnoVeiculo = 'recente' | 'antigo';
 type TipoUso = 'particular' | 'trabalho';
 type CoberturaDesejada = 'todas' | 'basica' | 'completa' | 'premium';
 
-// Fatores de risco agora vêm do banco via useFatorVeiculoAntigo() e useFatorUsoTrabalho()
-
 export function CalculadoraPreco() {
   const [valorFipe, setValorFipe] = useState<string>('');
   const [anoVeiculo, setAnoVeiculo] = useState<AnoVeiculo>('recente');
@@ -51,9 +49,9 @@ export function CalculadoraPreco() {
       return;
     }
 
-    // Buscar faixas FIPE correspondentes
+    // Buscar faixas FIPE correspondentes (nova tabela: fipe_min/fipe_max)
     const faixasEncontradas = tabelas.filter(
-      t => valor >= Number(t.fipe_de) && valor <= Number(t.fipe_ate)
+      t => valor >= Number(t.fipe_min) && valor <= Number(t.fipe_max)
     );
 
     if (faixasEncontradas.length === 0) {
@@ -81,42 +79,30 @@ export function CalculadoraPreco() {
       fatoresAplicados.push('Uso particular');
     }
 
-    // Filtrar por cobertura se especificado
+    // Filtrar por cobertura se especificado (usando linha_slug como proxy)
     let faixasFiltradas = faixasEncontradas;
     if (coberturaDesejada !== 'todas') {
-      const nomeCobertura = {
-        basica: 'básica',
-        completa: 'total',
-        premium: 'premium',
+      const slugCobertura = {
+        basica: 'select',
+        completa: 'lancamento',
+        premium: 'especial',
       }[coberturaDesejada];
       
       faixasFiltradas = faixasEncontradas.filter(f => 
-        f.planos?.nome?.toLowerCase().includes(nomeCobertura)
+        f.linha_slug?.toLowerCase().includes(slugCobertura)
       );
       
-      // Se não encontrou com filtro, usar todas
       if (faixasFiltradas.length === 0) {
         faixasFiltradas = faixasEncontradas;
       }
     }
 
-    // Calcular valores mensais para cada plano
+    // Calcular valores mensais usando valor_mensal direto
     const valoresCalculados = faixasFiltradas.map(f => {
-      // Base = taxa_comercial ou soma dos componentes
-      const taxaComercial = Number(f.taxa_comercial) || 0;
-      const taxaAdmin = Number(f.taxa_administrativa) || 0;
-      const valorRastreamento = Number(f.valor_rastreamento) || 0;
-      const valorAssistencia = Number(f.valor_assistencia) || 0;
-      const valorCota = Number(f.valor_cota) || 0;
-      
-      // Usar taxa_comercial se disponível, senão somar componentes
-      const valorBase = taxaComercial > 0 
-        ? taxaComercial 
-        : taxaAdmin + valorRastreamento + valorAssistencia + valorCota;
-      
+      const valorBase = Number(f.valor_mensal) || 0;
       return {
         valor: valorBase * fator,
-        plano: f.planos?.nome || 'Plano',
+        plano: f.linha_slug || 'Plano',
       };
     });
 
@@ -131,11 +117,10 @@ export function CalculadoraPreco() {
     const menorValor = valoresCalculados[0];
     const maiorValor = valoresCalculados[valoresCalculados.length - 1];
 
-    // Pegar info da faixa
     const primeiraFaixa = faixasEncontradas[0];
     
     setResultado({
-      faixaFipe: `${formatCurrency(Number(primeiraFaixa.fipe_de))} - ${formatCurrency(Number(primeiraFaixa.fipe_ate))}`,
+      faixaFipe: `${formatCurrency(Number(primeiraFaixa.fipe_min))} - ${formatCurrency(Number(primeiraFaixa.fipe_max))}`,
       valorMinimo: menorValor.valor,
       valorMaximo: maiorValor.valor,
       planoMinimo: menorValor.plano,
@@ -257,13 +242,11 @@ export function CalculadoraPreco() {
           {/* Resultado */}
           {resultado && (
             <div className="space-y-4 pt-4 border-t">
-              {/* Header do resultado */}
               <div className="text-sm text-muted-foreground">
                 <p>Estimativa para veículo {formatCurrency(resultado.valorFipeInformado)}</p>
                 <p className="text-xs">Faixa FIPE: {resultado.faixaFipe}</p>
               </div>
 
-              {/* Valores */}
               <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 text-center space-y-2">
                 <p className="text-sm text-muted-foreground">Mensalidade estimada:</p>
                 <p className="text-2xl font-bold text-primary">
@@ -283,7 +266,6 @@ export function CalculadoraPreco() {
                 )}
               </div>
 
-              {/* Critérios aplicados */}
               <div className="space-y-1">
                 <p className="text-sm font-medium">Critérios aplicados:</p>
                 {resultado.fatoresAplicados.map((fator, i) => (
@@ -294,14 +276,12 @@ export function CalculadoraPreco() {
                 ))}
               </div>
 
-              {/* Disclaimer */}
               <p className="text-xs text-muted-foreground text-center pt-2 border-t">
                 * Valores sujeitos a análise. Entre em contato para cotação personalizada.
               </p>
             </div>
           )}
 
-          {/* Mensagem quando não encontra */}
           {valorFipe && !resultado && (
             <p className="text-sm text-muted-foreground text-center">
               Nenhuma faixa encontrada para este valor. Tente outro valor FIPE.
