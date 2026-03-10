@@ -76,7 +76,7 @@ serve(async (req) => {
     
     console.log(`[gerar-cobrancas] Gerando cobranças para ${competencia}`);
 
-    // Buscar associados ativos com plano e cliente ASAAS
+    // Buscar associados ativos com plano, contrato ativo e cliente ASAAS
     const { data: associados, error: fetchError } = await supabase
       .from('associados')
       .select(`
@@ -89,13 +89,19 @@ serve(async (req) => {
         whatsapp,
         telefone,
         planos:plano_id (
-          valor_mensalidade
+          nome
+        ),
+        contratos!inner (
+          id,
+          valor_mensal,
+          status
         ),
         asaas_clientes (
           asaas_id
         )
       `)
       .eq('status', 'ativo')
+      .eq('contratos.status', 'ativo')
       .not('plano_id', 'is', null);
 
     if (fetchError) {
