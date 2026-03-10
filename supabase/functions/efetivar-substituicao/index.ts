@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
     try {
       if (associado) {
         const dataFimCarencia = new Date()
-        dataFimCarencia.setDate(dataFimCarencia.getDate() + 120)
+        dataFimCarencia.setDate(dataFimCarencia.getDate() + carenciaDias)
         const fmtDate = dataFimCarencia.toLocaleDateString('pt-BR')
         const fmtMensal = substituicao.mensalidade_nova
           ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(substituicao.mensalidade_nova)
