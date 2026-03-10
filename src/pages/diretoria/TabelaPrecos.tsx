@@ -35,8 +35,9 @@ interface FaixaMensalidade {
   valor_mensal: number;
   valor_desagio: number | null;
   is_active: boolean | null;
-  created_at: string | null;
-  updated_at: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  categoria?: string | null;
 }
 
 export default function TabelaPrecos() {
