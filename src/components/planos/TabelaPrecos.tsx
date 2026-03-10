@@ -1,7 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 
 interface TabelaPrecosProps {

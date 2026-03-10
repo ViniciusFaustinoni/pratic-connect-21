@@ -72,6 +72,8 @@ const InadimplenteDetalhe = () => {
   const [selectedBoletos, setSelectedBoletos] = useState<string[]>([]);
   const [anotacao, setAnotacao] = useState('');
   const [contatoModalOpen, setContatoModalOpen] = useState(false);
+  const { data: percMulta = 0.02 } = useConfiguracaoNumero('multa_inadimplencia', 0.02);
+  const { data: percJuros = 0.01 } = useConfiguracaoNumero('juros_mes_inadimplencia', 0.01);
 
   const { data: associado, isLoading: loadingAssociado } = useQuery({
     queryKey: ['associado-cobranca', id],
