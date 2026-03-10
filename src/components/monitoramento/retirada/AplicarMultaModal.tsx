@@ -24,13 +24,13 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAplicarMulta } from '@/hooks/useMultaRetirada';
+import { useMultaRastreador } from '@/hooks/useConteudosSistema';
 import { 
   type MotivoMulta, 
   type FormaCobrancaMulta,
   type IntegridadeAparelho,
   MOTIVO_MULTA_LABELS,
   FORMA_COBRANCA_MULTA_LABELS,
-  VALOR_MULTA_NAO_DEVOLUCAO,
 } from '@/types/retirada';
 
 interface RetiradaParaMulta {
