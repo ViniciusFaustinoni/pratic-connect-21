@@ -72,9 +72,6 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
             <tbody>
               {tabelasOrdenadas.slice(0, 10).map((tabela) => {
                 const taxaComercial = Number(tabela.taxa_comercial);
-                // Fallback: estimar 2.5% do valor FIPE médio da faixa ao mês
-                const fipeMedia = (Number(tabela.fipe_de) + Number(tabela.fipe_ate)) / 2;
-                const taxaEstimada = taxaComercial > 0 ? taxaComercial : Math.round(fipeMedia * 0.025 / 12);
 
                 return (
                   <tr key={tabela.id} className="border-b hover:bg-muted/50">
@@ -82,8 +79,9 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
                       {formatCurrency(Number(tabela.fipe_de))} - {formatCurrency(Number(tabela.fipe_ate))}
                     </td>
                     <td className="text-right py-2 px-3 font-medium">
-                      {formatCurrency(taxaEstimada)}
-                      {taxaComercial === 0 && <span className="text-xs text-muted-foreground ml-1">*</span>}
+                      {taxaComercial > 0 ? formatCurrency(taxaComercial) : (
+                        <span className="text-xs text-muted-foreground italic">Consulte um consultor</span>
+                      )}
                     </td>
                     <td className="text-right py-2 px-3">
                       {formatCurrency(Number(tabela.taxa_administrativa) || 0)}
