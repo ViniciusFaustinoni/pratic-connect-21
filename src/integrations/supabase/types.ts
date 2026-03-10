@@ -16197,6 +16197,48 @@ export type Database = {
           },
         ]
       }
+      plano_preco_map: {
+        Row: {
+          created_at: string | null
+          id: string
+          linha_slug: string
+          plano_id: string
+          tipo_uso: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          linha_slug: string
+          plano_id: string
+          tipo_uso: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          linha_slug?: string
+          plano_id?: string
+          tipo_uso?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plano_preco_map_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plano_preco_map_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planos: {
         Row: {
           adicional_mensal: number | null
