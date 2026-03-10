@@ -354,8 +354,8 @@ export function ProdutosPlanos() {
                               <p className="text-sm font-medium">{cob.nome}</p>
                               {cob.descricao && <p className="text-xs text-muted-foreground">{cob.descricao}</p>}
                             </div>
-                            {cob.limite_valor && (
-                              <Badge variant="outline">Limite: {formatCurrency(Number(cob.limite_valor))}</Badge>
+                            {cob.valor_limite && (
+                              <Badge variant="outline">Limite: {formatCurrency(Number(cob.valor_limite))}</Badge>
                             )}
                           </div>
                         ))}
