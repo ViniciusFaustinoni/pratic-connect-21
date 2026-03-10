@@ -1,0 +1,1 @@
+DELETE FROM tabelas_preco_adesao;
