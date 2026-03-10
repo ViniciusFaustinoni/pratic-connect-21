@@ -126,15 +126,16 @@ serve(async (req) => {
         text: template.corpo,
       };
 
-      // Adicionar exemplos de variáveis
+      // Detectar variáveis reais no corpo e filtrar exemplos
+      const varsNoCorpo = (template.corpo.match(/\{\{(\d+)\}\}/g) || [])
+        .map((m: string) => m.replace(/[{}]/g, ''))
+        .filter((v: string, i: number, arr: string[]) => arr.indexOf(v) === i)
+        .sort((a: string, b: string) => parseInt(a) - parseInt(b));
+
       const varExemplos = template.variaveis_exemplo as Record<string, string> | null;
-      if (varExemplos) {
-        const valores = Object.keys(varExemplos)
-          .sort((a, b) => parseInt(a) - parseInt(b))
-          .map((k) => varExemplos[k]);
-        if (valores.length > 0) {
-          bodyComponent.example = { body_text: [valores] };
-        }
+      if (varExemplos && varsNoCorpo.length > 0) {
+        const valores = varsNoCorpo.map((k: string) => varExemplos[k] || `exemplo_${k}`);
+        bodyComponent.example = { body_text: [valores] };
       }
       components.push(bodyComponent);
 
