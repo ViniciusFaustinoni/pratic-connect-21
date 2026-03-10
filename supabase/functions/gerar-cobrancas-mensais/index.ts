@@ -48,8 +48,13 @@ interface Associado {
   whatsapp: string | null;
   telefone: string | null;
   planos: {
-    valor_mensalidade: number;
+    nome: string;
   } | null;
+  contratos: {
+    id: string;
+    valor_mensal: number;
+    status: string;
+  }[] | null;
   asaas_clientes: {
     asaas_id: string;
   }[] | null;
