@@ -201,6 +201,7 @@ export function useCalcularCotacao() {
   const { data: planos, isLoading: loadingPlanos } = usePlanosCotacao();
   const { data: planoPrecoMap, isLoading: loadingMap } = usePlanoPrecoMap();
   const { data: tabelasMensalidade, isLoading: loadingMensalidade } = useTabelasMensalidade();
+  const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
 
   const calcular = (
     valorFipe: number,
@@ -234,6 +235,7 @@ export function useCalcularCotacao() {
         valorFipe,
         regiao,
         combustivel,
+        adicionalApp,
       );
 
       if (!faixaResult) continue;
