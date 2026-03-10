@@ -509,9 +509,9 @@ export function StepFinanceiro({
       <Alert className="border-primary/30 bg-primary/5">
         <AlertTriangle className="h-4 w-4 text-primary" />
         <AlertDescription>
-          <p className="font-semibold text-sm mb-1">CARÊNCIA DE 120 DIAS</p>
+          <p className="font-semibold text-sm mb-1">CARÊNCIA DE {carenciaDias} DIAS</p>
           <p className="text-xs text-muted-foreground">
-            A partir da efetivação, o novo veículo terá carência de 120 dias para TODOS os benefícios.
+            A partir da efetivação, o novo veículo terá carência de {carenciaDias} dias para TODOS os benefícios.
           </p>
           <div className="flex gap-6 mt-2 text-xs">
             <span><strong>Início:</strong> {format(dataEfetivacao, 'dd/MM/yyyy')}</span>
