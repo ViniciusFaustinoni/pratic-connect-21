@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
           body: {
             associado_id: substituicao.associado_id,
             tipo: 'substituicao_concluida',
-            mensagem: `✅ Substituição concluída!\n\nNovo veículo: ${substituicao.veiculo_novo_modelo || 'N/A'} - ${substituicao.veiculo_novo_placa || 'N/A'}\nNova mensalidade: ${fmtMensal}\nNova cota participação: ${fmtCota}\n\n⚠️ Carência: 120 dias (até ${fmtDate})\nTodos os benefícios com carência própria reiniciam.\n\nNova proposta de filiação enviada para assinatura.`,
+            mensagem: `✅ Substituição concluída!\n\nNovo veículo: ${substituicao.veiculo_novo_modelo || 'N/A'} - ${substituicao.veiculo_novo_placa || 'N/A'}\nNova mensalidade: ${fmtMensal}\nNova cota participação: ${fmtCota}\n\n⚠️ Carência: ${carenciaDias} dias (até ${fmtDate})\nTodos os benefícios com carência própria reiniciam.\n\nNova proposta de filiação enviada para assinatura.`,
           },
         })
       }

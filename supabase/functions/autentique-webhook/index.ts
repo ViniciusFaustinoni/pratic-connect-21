@@ -504,8 +504,14 @@ serve(async (req) => {
                     if (!plano.cota_participacao || !plano.cota_minima) {
                       console.warn('[autentique-webhook] ATENÇÃO: plano sem cota_participacao/cota_minima configurados. Verifique o cadastro do plano.');
                     }
-                    let percentual = plano.cota_participacao || 6;
-                    let minimo = plano.cota_minima || 1200;
+                    // Buscar defaults do banco
+                    const { data: cfgCota } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_participacao_default').single();
+                    const { data: cfgMin } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_minima_default').single();
+                    const cotaDefault = cfgCota ? parseFloat(cfgCota.valor) : 6;
+                    const minimoDefault = cfgMin ? parseFloat(cfgMin.valor) : 1200;
+                    
+                    let percentual = plano.cota_participacao || cotaDefault;
+                    let minimo = plano.cota_minima || minimoDefault;
 
                     if (veiculo.uso_aplicativo && plano.cota_app_percent) {
                       percentual = plano.cota_app_percent;

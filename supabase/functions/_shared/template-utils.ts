@@ -96,9 +96,9 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'plano.descricao': (dados.plano.coberturas || []).join(', ') || 'Proteção veicular completa',
     'plano.valor_base': formatCurrency(dados.contrato.valor_mensal),
     'plano.cobertura_fipe': '100%',
-    'plano.cota_participacao': `${dados.plano.cota_participacao || 10}%`,
+    'plano.cota_participacao': `${dados.plano.cota_participacao || 6}%`,
     'plano.cota_participacao_valor': formatCurrency(cotaParticipacao),
-    'plano.cota_minima': formatCurrency(dados.plano.cota_minima || 3000),
+    'plano.cota_minima': formatCurrency(dados.plano.cota_minima || 1200),
     
     // Empresa
     'empresa.nome': dados.empresa.nome || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR',

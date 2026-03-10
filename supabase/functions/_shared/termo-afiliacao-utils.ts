@@ -330,8 +330,8 @@ export function mapearDadosParaTemplate(
       tipo: plano?.tipo_uso || "Normal",
       linha: plano?.linha || "Normal",
       coberturas: plano?.coberturas || [],
-      cota_participacao: plano?.cota_participacao || 10,
-      cota_minima: plano?.cota_minima || 3000,
+      cota_participacao: plano?.cota_participacao || 6,
+      cota_minima: plano?.cota_minima || 1200,
       carencia: plano?.carencia || "90 dias após instalação do rastreador",
     },
     contrato: {

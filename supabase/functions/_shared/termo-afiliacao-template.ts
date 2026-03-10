@@ -537,12 +537,12 @@ const generateSecao4 = (data: TermoAfiliacaoData): string => {
     </tr>
     ` : ''}
     <tr>
-      <td>Cota de Participação (${data.plano.cota_participacao || 10}%):</td>
+      <td>Cota de Participação (${data.plano.cota_participacao || 6}%):</td>
       <td>${formatCurrency(cotaParticipacao)}</td>
     </tr>
     <tr>
       <td>Cota Mínima:</td>
-      <td>${formatCurrency(data.plano.cota_minima || 3000)}</td>
+      <td>${formatCurrency(data.plano.cota_minima || 1200)}</td>
     </tr>
     <tr>
       <td>Dia de Vencimento:</td>
