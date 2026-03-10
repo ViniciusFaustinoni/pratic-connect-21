@@ -39,7 +39,7 @@ export function useIniciarServico() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const [geoState, setGeoState] = useState<GeolocationState>({ status: 'idle' });
-  const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const locationIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchIdRef = useRef<number | null>(null);
 
   // Query para verificar se o profissional está em serviço

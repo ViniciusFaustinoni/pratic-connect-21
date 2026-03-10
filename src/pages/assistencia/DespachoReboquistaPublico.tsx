@@ -63,7 +63,7 @@ export default function DespachoReboquistaPublico() {
   const [currentProgress, setCurrentProgress] = useState<string[]>([]);
   const [trackingActive, setTrackingActive] = useState(false);
   const watchIdRef = useRef<number | null>(null);
-  const trackingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const trackingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Consultar dados
   const fetchData = useCallback(async () => {

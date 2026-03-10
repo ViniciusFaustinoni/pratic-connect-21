@@ -68,7 +68,7 @@ export function useJornadaTrabalho() {
     minutosTrabalhados: 0,
     minutosAlmoco: 0
   });
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hojeStr = getHojeBrasilia().toISOString().split('T')[0];
 
