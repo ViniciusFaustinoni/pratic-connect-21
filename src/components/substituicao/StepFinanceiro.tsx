@@ -224,7 +224,7 @@ export function StepFinanceiro({
         veiculo_novo_fipe: dadosNovoVeiculo.valor_fipe,
         data_inicio_carencia: format(dataEfetivacao, 'yyyy-MM-dd'),
         data_fim_carencia: format(dataFimCarencia, 'yyyy-MM-dd'),
-        carencia_dias: 120,
+        carencia_dias: carenciaDias,
         cobranca_taxa_asaas_id: (cobrancaGerada as Record<string, unknown>)?.cobranca_id || null,
       });
 
