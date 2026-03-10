@@ -1,0 +1,15 @@
+INSERT INTO plano_preco_map (plano_id, linha_slug, tipo_uso) VALUES
+  ('28ef5622-82d3-4532-8a2c-db304233c414', 'advanced',      'advanced'),
+  ('aee01ee7-d037-48c3-9625-4ef091649156', 'advanced',      'advanced-plus'),
+  ('cf35399e-940e-44ee-9613-be70777c5305', 'especial',      'particular'),
+  ('12cdd378-b42b-4389-a28f-1eba1fe7c837', 'especial-plus', 'particular'),
+  ('fec2154e-001c-4b99-afd7-1a30d9e5a8a6', 'lancamento',    'particular'),
+  ('feeff63c-b2bc-4475-bee0-44c53c8591ff', 'lancamento',    'particular'),
+  ('1addfd28-e67f-45da-8a87-efdb6311a32b', 'lancamento',    'aplicativo'),
+  ('74b8abc5-48bd-48a6-84c3-8f27910a22dd', 'lancamento',    'particular'),
+  ('6f8d28cb-7500-4f5d-85ab-4f771d1e21ab', 'select',        'particular'),
+  ('43fe1e6a-374e-4b69-a76b-aea3f142b3c1', 'select',        'particular'),
+  ('fd6be7d7-6ec7-4d2c-8b56-cca80d14c3f4', 'select',        'aplicativo'),
+  ('20c3685f-2909-4ca3-be04-f0f116a7c0cd', 'select-one',    'particular'),
+  ('ba180738-4b11-4d7e-8ed0-7f73df3e5155', 'select-one',    'aplicativo'),
+  ('fe82bc38-d37d-42ed-a31d-09b7926fb376', 'select',        'particular');
