@@ -109,7 +109,7 @@ const InadimplenteDetalhe = () => {
       const dias = differenceInDays(hoje, new Date(c.data_vencimento));
       if (dias > diasMaximo) diasMaximo = dias;
       valorTotal += c.valor_final || 0;
-      valorAtualizado += calcValorAtualizado(c.valor_final || 0, dias);
+      valorAtualizado += calcValorAtualizado(c.valor_final || 0, dias, percMulta, percJuros);
     });
     return { diasMaximo, qtdBoletos: cobrancas.length, valorTotal, valorAtualizado };
   }, [cobrancas]);
