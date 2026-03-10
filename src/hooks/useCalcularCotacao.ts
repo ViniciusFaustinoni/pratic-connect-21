@@ -80,6 +80,7 @@ export function useCalcularCotacao() {
       // Taxa fallback dinâmica
       const configMap = Object.fromEntries((configRes.data || []).map(c => [c.chave, c.valor]));
       const taxaFallback = parseFloat(configMap.taxa_fallback_carro || '0.025');
+      const adicionalApp = parseFloat(configMap.adicional_app || '35.90') || 35.90;
 
       const regiaoLower = (params.regiao || 'rj').toLowerCase();
       const combustivelLower = (params.combustivel || 'gasolina').toLowerCase();
