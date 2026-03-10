@@ -374,10 +374,22 @@ serve(async (req) => {
             templateName = 'cobranca_mensalidade';
             templateParams = [primeiroNome, String(dados.valor || ''), String(dados.data || dados.data_primeira || '')];
           } else if (tipo === 'sinistro') {
-            templateName = subtipo === 'aberto' ? 'sinistro_aberto' : 'sinistro_atualizado';
-            templateParams = subtipo === 'aberto' 
-              ? [primeiroNome, String(dados.protocolo || '')]
-              : [primeiroNome, String(dados.protocolo || ''), titulo];
+            if (subtipo === 'aberto') {
+              templateName = 'comunicacao_sinistro';
+              templateParams = [
+                primeiroNome,
+                String(dados.tipo_sinistro || ''),
+                String(dados.protocolo || ''),
+                String(dados.plano || ''),
+                String(dados.percentual || ''),
+                String(dados.valor_fipe || ''),
+                String(dados.valor_cota || ''),
+                String(dados.link_evento || ''),
+              ];
+            } else {
+              templateName = 'sinistro_atualizado';
+              templateParams = [primeiroNome, String(dados.protocolo || ''), titulo];
+            }
           } else if (tipo === 'assistencia') {
             templateName = 'assistencia_confirmada';
             templateParams = [primeiroNome, String(dados.prestador || 'Prestador'), String(dados.tempo || '30')];
