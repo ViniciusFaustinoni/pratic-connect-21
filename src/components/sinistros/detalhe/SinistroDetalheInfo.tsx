@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import {
   Car, MapPin, Bot, User, MessageCircle, FileText,
   ExternalLink, CheckCircle, XCircle, Clock, ClipboardCheck,
