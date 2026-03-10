@@ -139,7 +139,7 @@ export function ProdutosPlanos() {
             return (
               <button
                 key={plan.id}
-                onClick={() => { setSelectedPlanoId(plan.id); setDetailSubTab('precos'); }}
+                onClick={() => { setSelectedPlanoId(plan.id); setDetailSubTab('precos'); setPrecosPage(0); setPrecosRegiao('all'); setPrecosTipoUso('all'); }}
                 className={cn(
                   'w-full text-left px-3 py-3 rounded-lg border transition-all',
                   selected
