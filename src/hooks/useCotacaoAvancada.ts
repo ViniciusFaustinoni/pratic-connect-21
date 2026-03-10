@@ -19,6 +19,7 @@ export interface PlanoOpcaoCotacao {
   valor_adesao: number;
   taxa_aplicativo: number;
   mensalidade_total: number;
+  valor_desagio: number | null;
 }
 
 export interface AdicionalOpcao {
@@ -44,7 +45,8 @@ export interface DadosCotacaoAvancada {
   planoId: string;
   usoAplicativo: boolean;
   desagio: number;
-  adicionaisSelecionados: string[]; // IDs dos adicionais
+  adicionaisSelecionados: string[];
+  regiao?: string;
 }
 
 export interface ResultadoCotacaoDinamica {
@@ -68,21 +70,37 @@ export interface CotacaoSalva {
 // HOOKS DE DADOS
 // ============================================
 
-export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean) {
+export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, regiao: string = 'rj', combustivel: string = 'gasolina') {
   return useQuery({
-    queryKey: ['planos-cotacao-avancada', valorFipe, usoAplicativo],
+    queryKey: ['planos-cotacao-avancada', valorFipe, usoAplicativo, regiao, combustivel],
     queryFn: async () => {
       if (!valorFipe || valorFipe <= 0) return [];
 
-      // Buscar planos ativos
-      const { data: planos, error: ePlanos } = await supabase
-        .from('planos')
-        .select('id, codigo, nome, categoria, valor_adesao, descricao')
-        .eq('ativo', true)
-        .order('ordem', { ascending: true });
+      // Buscar planos ativos, mapeamento e preços em paralelo
+      const [planosRes, mapRes, mensalidadeRes] = await Promise.all([
+        supabase
+          .from('planos')
+          .select('id, codigo, nome, categoria, valor_adesao, descricao')
+          .eq('ativo', true)
+          .order('ordem', { ascending: true }),
+        supabase
+          .from('plano_preco_map')
+          .select('*'),
+        supabase
+          .from('tabelas_preco_mensalidade')
+          .select('*')
+          .eq('is_active', true),
+      ]);
 
-      if (ePlanos) throw ePlanos;
+      if (planosRes.error) throw planosRes.error;
+      const planos = planosRes.data;
       if (!planos?.length) return [];
+
+      const planoPrecoMap = mapRes.data || [];
+      const tabelasMensalidade = mensalidadeRes.data || [];
+
+      const regiaoLower = regiao.toLowerCase();
+      const combustivelLower = combustivel.toLowerCase();
 
       // Filtrar por tipo uso
       const planosFiltrados = planos.filter(p => {
@@ -90,34 +108,34 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean) 
         return usoAplicativo ? isApp : !isApp;
       });
 
-      // Buscar tabelas_preco para o valor FIPE
-      const { data: tabelas, error: eTabelas } = await supabase
-        .from('tabelas_preco')
-        .select('*')
-        .eq('ativo', true);
-
-      if (eTabelas) throw eTabelas;
-
       const resultado: PlanoOpcaoCotacao[] = [];
 
       for (const plano of planosFiltrados) {
-        // Encontrar faixa de preço para este plano e FIPE
-        const faixa = tabelas?.find(
-          t => t.plano_id === plano.id &&
-            valorFipe >= Number(t.fipe_de) &&
-            valorFipe <= Number(t.fipe_ate)
+        // Buscar mapeamento para este plano
+        const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
+        if (!mapping) continue;
+
+        // Buscar faixa de preço na nova tabela
+        const faixa = tabelasMensalidade.find(t =>
+          t.linha_slug === mapping.linha_slug &&
+          t.regiao === regiaoLower &&
+          t.tipo_uso === mapping.tipo_uso &&
+          (t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
+          valorFipe >= Number(t.fipe_min) &&
+          valorFipe <= Number(t.fipe_max)
         );
 
         if (!faixa) continue;
 
-        const valorCota = Number(faixa.valor_cota) || 0;
-        const taxaAdmin = Number(faixa.taxa_administrativa) || 0;
-        const valorAssist = Number(faixa.valor_assistencia) || 0;
-        const valorRastreamento = Number(faixa.valor_rastreamento) || 0;
-        const taxaApp = Number(faixa.taxa_aplicativo) || 0;
-        const valorAdesao = Number(faixa.valor_adesao) || Number(plano.valor_adesao) || 0;
+        const valorMensal = Number(faixa.valor_mensal);
+        const valorDesagio = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
+        const valorAdesao = Number(plano.valor_adesao) || 0;
 
-        const mensalidadeTotal = valorCota + taxaAdmin + valorAssist + valorRastreamento + taxaApp;
+        // Decomposição percentual
+        const valorCota = Math.round(valorMensal * 0.60 * 100) / 100;
+        const taxaAdmin = Math.round(valorMensal * 0.25 * 100) / 100;
+        const valorAssist = Math.round(valorMensal * 0.05 * 100) / 100;
+        const valorRastreamento = Math.round(valorMensal * 0.10 * 100) / 100;
 
         resultado.push({
           id: plano.id,
@@ -128,8 +146,9 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean) 
           valor_assistencia: valorAssist,
           valor_rastreamento: valorRastreamento,
           valor_adesao: valorAdesao,
-          taxa_aplicativo: taxaApp,
-          mensalidade_total: Math.round(mensalidadeTotal * 100) / 100,
+          taxa_aplicativo: 0, // Já incluído no valor_mensal para planos aplicativo
+          mensalidade_total: Math.round(valorMensal * 100) / 100,
+          valor_desagio: valorDesagio,
         });
       }
 
@@ -232,7 +251,7 @@ export function useCotacaoAvancada() {
         veiculo_placa: dados.veiculoPlaca || null,
         veiculo_combustivel: dados.veiculoCombustivel || null,
         valor_fipe: dados.valorFipe,
-        regiao: 'RJ',
+        regiao: dados.regiao || 'RJ',
         categoria: cotacao.plano.codigo,
         combustivel: dados.veiculoCombustivel || null,
         uso_aplicativo: dados.usoAplicativo,
