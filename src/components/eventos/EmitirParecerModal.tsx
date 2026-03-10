@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 
 interface Sinistro {
   id: string;
