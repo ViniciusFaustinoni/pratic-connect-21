@@ -34,12 +34,16 @@ serve(async (req) => {
       );
     }
 
+    // Buscar valor da multa da tabela configuracoes
+    const { data: cfgMulta } = await supabase.from('configuracoes').select('valor').eq('chave', 'multa_rastreador').single();
+    const valorMulta = cfgMulta ? parseInt(cfgMulta.valor) : 400;
+
     // Formatar data
     const dataFormatada = new Date(payload.data_agendada).toLocaleDateString('pt-BR');
     const periodoTexto = payload.periodo === 'manha' ? 'manhã' : 'tarde';
 
     // Montar mensagem
-    const mensagem = `Prezado(a) ${payload.nome_associado}, informamos que a retirada do equipamento rastreador do veículo ${payload.veiculo_modelo} • ${payload.veiculo_placa} está agendada para ${dataFormatada} no período da ${periodoTexto}. Local: ${payload.local}. Prazo para comparecimento: 48 horas. Em caso de não comparecimento, será aplicada multa de R$400 conforme regulamento. Praticcar.`;
+    const mensagem = `Prezado(a) ${payload.nome_associado}, informamos que a retirada do equipamento rastreador do veículo ${payload.veiculo_modelo} • ${payload.veiculo_placa} está agendada para ${dataFormatada} no período da ${periodoTexto}. Local: ${payload.local}. Prazo para comparecimento: 48 horas. Em caso de não comparecimento, será aplicada multa de R$${valorMulta} conforme regulamento. Praticcar.`;
 
     // Enviar via whatsapp-send-text
     const supabase = createClient(

@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle, Flame, CloudRain, Home, Wrench } from 'lucide-react';
 import { useOficinas } from '@/hooks/useOficinas';
+import { useCarenciaDiasPadrao } from '@/hooks/useConteudosSistema';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -156,6 +157,7 @@ const generateProtocolo = () => {
 export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModalProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { data: carenciaDiasVal = 120 } = useCarenciaDiasPadrao();
   
   const [selectedAssociado, setSelectedAssociado] = useState<string | null>(null);
   const [selectedVeiculo, setSelectedVeiculo] = useState<string | null>(null);
@@ -1117,7 +1119,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                   <div className="text-sm">
                     <p className="font-medium text-destructive">Carência não cumprida</p>
                     <p className="text-muted-foreground">
-                      Este benefício possui carência de 120 dias. Disponível a partir de {vidrosValidacao.carenciaData}.
+                      Este benefício possui carência de {carenciaDiasVal} dias. Disponível a partir de {vidrosValidacao.carenciaData}.
                     </p>
                   </div>
                 </div>

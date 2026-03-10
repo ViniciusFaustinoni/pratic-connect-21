@@ -24,13 +24,13 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAplicarMulta } from '@/hooks/useMultaRetirada';
+import { useMultaRastreador } from '@/hooks/useConteudosSistema';
 import { 
   type MotivoMulta, 
   type FormaCobrancaMulta,
   type IntegridadeAparelho,
   MOTIVO_MULTA_LABELS,
   FORMA_COBRANCA_MULTA_LABELS,
-  VALOR_MULTA_NAO_DEVOLUCAO,
 } from '@/types/retirada';
 
 interface RetiradaParaMulta {
@@ -56,6 +56,7 @@ export function AplicarMultaModal({
   const [motivo, setMotivo] = useState<MotivoMulta | null>(null);
   const [formaCobranca, setFormaCobranca] = useState<FormaCobrancaMulta>('automatica_asaas');
   const [bloquearCancelamento, setBloquearCancelamento] = useState(false);
+  const { data: multaValor = 400 } = useMultaRastreador();
 
   const aplicarMultaMutation = useAplicarMulta();
 
@@ -235,7 +236,7 @@ export function AplicarMultaModal({
           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
             <span className="font-medium">Valor da Multa:</span>
             <Badge variant="secondary" className="text-lg font-bold">
-              R$ {VALOR_MULTA_NAO_DEVOLUCAO.toFixed(2).replace('.', ',')}
+              R$ {multaValor.toFixed(2).replace('.', ',')}
             </Badge>
           </div>
 

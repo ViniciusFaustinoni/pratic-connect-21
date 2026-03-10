@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMultaRastreador } from '@/hooks/useConteudosSistema';
 import { useIniciarServicoMutation } from '@/hooks/useServicos';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -63,6 +64,7 @@ export default function ExecutarRetirada() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const { data: multaValor = 400 } = useMultaRastreador();
 
   // Buscar dados do serviço
   const { data: servico, isLoading, error } = useQuery({
@@ -748,7 +750,7 @@ export default function ExecutarRetirada() {
                     <Alert className="border-red-600 bg-red-950/30">
                       <AlertTriangle className="h-4 w-4 text-red-400" />
                       <AlertDescription className="text-red-200/80">
-                        Multa de R$ 400,00 será sugerida automaticamente. Rastreador irá para triagem.
+                        Multa de R$ {multaValor.toFixed(2).replace('.', ',')} será sugerida automaticamente. Rastreador irá para triagem.
                       </AlertDescription>
                     </Alert>
                     <div>

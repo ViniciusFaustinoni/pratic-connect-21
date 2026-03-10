@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
-import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
+import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault, useCotaDesagioDefault, useCotaMinimaDesagioDefault } from '@/hooks/useConteudosSistema';
 import { 
   getCoberturasRemovidasDinamico, 
   gerarMensagemAlertaCategoria,
@@ -72,6 +72,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   // Defaults de cota do banco
   const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
+  const { data: cotaDesagioDefault = 8 } = useCotaDesagioDefault();
+  const { data: cotaMinimaDesagioDefault = 2000 } = useCotaMinimaDesagioDefault();
 
   // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
@@ -226,8 +228,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       let cotaMinimaFinal = cotaMinima;
 
       if (categoria === 'aplicativo') {
-        cotaPercentual = Number(plano.cota_desagio) || 8;
-        cotaMinimaFinal = Number(plano.cota_minima_desagio) || 3000;
+        cotaPercentual = Number(plano.cota_desagio) || cotaDesagioDefault;
+        cotaMinimaFinal = Number(plano.cota_minima_desagio) || cotaMinimaDesagioDefault;
       }
 
       const cotaString = `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;

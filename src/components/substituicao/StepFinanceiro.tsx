@@ -13,7 +13,7 @@ import { useAsaas } from '@/hooks/useAsaas';
 import { useCotasPorFipe } from '@/hooks/useFaixasCotas';
 import { useAtualizarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
 import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
-import { useTaxaSubstituicao, useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
+import { useTaxaSubstituicao, useCotaParticipacaoDefault, useCotaMinimaDefault, useCarenciaDiasPadrao } from '@/hooks/useConteudosSistema';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { PixQRCode } from '@/components/app/PixQRCode';
@@ -171,8 +171,9 @@ export function StepFinanceiro({
   }, [diaVencimento, totalMensalNovo, totalMensalAntigo]);
 
   // Carência
+  const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const dataEfetivacao = new Date();
-  const dataFimCarencia = addDays(dataEfetivacao, 120);
+  const dataFimCarencia = addDays(dataEfetivacao, carenciaDias);
 
   // =============================================
   // Gerar cobrança
@@ -223,7 +224,7 @@ export function StepFinanceiro({
         veiculo_novo_fipe: dadosNovoVeiculo.valor_fipe,
         data_inicio_carencia: format(dataEfetivacao, 'yyyy-MM-dd'),
         data_fim_carencia: format(dataFimCarencia, 'yyyy-MM-dd'),
-        carencia_dias: 120,
+        carencia_dias: carenciaDias,
         cobranca_taxa_asaas_id: (cobrancaGerada as Record<string, unknown>)?.cobranca_id || null,
       });
 
@@ -508,9 +509,9 @@ export function StepFinanceiro({
       <Alert className="border-primary/30 bg-primary/5">
         <AlertTriangle className="h-4 w-4 text-primary" />
         <AlertDescription>
-          <p className="font-semibold text-sm mb-1">CARÊNCIA DE 120 DIAS</p>
+          <p className="font-semibold text-sm mb-1">CARÊNCIA DE {carenciaDias} DIAS</p>
           <p className="text-xs text-muted-foreground">
-            A partir da efetivação, o novo veículo terá carência de 120 dias para TODOS os benefícios.
+            A partir da efetivação, o novo veículo terá carência de {carenciaDias} dias para TODOS os benefícios.
           </p>
           <div className="flex gap-6 mt-2 text-xs">
             <span><strong>Início:</strong> {format(dataEfetivacao, 'dd/MM/yyyy')}</span>
@@ -566,7 +567,7 @@ export function StepFinanceiro({
                 className="mt-0.5"
               />
               <span className="text-sm">
-                Confirmo que o associado está ciente dos valores e da carência de 120 dias.
+                Confirmo que o associado está ciente dos valores e da carência de {carenciaDias} dias.
               </span>
             </label>
           </div>

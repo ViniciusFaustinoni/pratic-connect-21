@@ -10717,6 +10717,36 @@ export type Database = {
           },
         ]
       }
+      faixas_producao: {
+        Row: {
+          created_at: string | null
+          descricao: string | null
+          id: string
+          is_active: boolean | null
+          placas_max: number | null
+          placas_min: number
+          valor_bonus: number
+        }
+        Insert: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          is_active?: boolean | null
+          placas_max?: number | null
+          placas_min: number
+          valor_bonus: number
+        }
+        Update: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          is_active?: boolean | null
+          placas_max?: number | null
+          placas_min?: number
+          valor_bonus?: number
+        }
+        Relationships: []
+      }
       faixas_taxa_administrativa: {
         Row: {
           ajuste_percentual: number | null

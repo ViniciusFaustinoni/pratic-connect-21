@@ -1,126 +1,203 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
+
+## Resumo
+
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. ✅ `pricing.ts` — REMOVIDO
+
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
+
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
+
+Centralizada em `src/utils/format.ts`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+### 5. ✅ Veículo Blindado — CORRIGIDO
+
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+
+### 12. ✅ Linhas de produto hardcoded — MIGRADO PARA BANCO
+
+`LINHAS_PLANO` em `PlanosConfig.tsx` substituído por `useProductLines()`. Linha "Select One" adicionada à tabela `product_lines`.
+
+### 13. ✅ Regiões hardcoded — MIGRADO PARA BANCO
+
+`REGIOES` em `EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx` substituídos por `useRegioesAtivas()`.
+
+### 14. ✅ Lógica de negócio hardcoded em usePlanosCotacao — CORRIGIDO
+
+- `linha === 'advanced'` → `vehicle_type` da tabela `product_lines`
+- `linha === 'lancamento'` → `requires_recent_year` da tabela `product_lines`
+- Ordenação `linha === 'select'` → `sort_priority` da tabela `product_lines`
+- Mapeamento manual de códigos de região removido (usa `regioes.codigo` diretamente)
+
+### 15. ✅ LINHA_CORES hardcoded em PlanoCardSelecao — CORRIGIDO
+
+`gradient_class` adicionado à tabela `product_lines`. Fallback mantido no componente.
+
+### 16. ✅ CATEGORIAS_VEICULO hardcoded — MIGRADO PARA BANCO
+
+Categorias inseridas na tabela `configuracoes` (chave `categorias_veiculo`). Hook `useCategoriasVeiculo()` criado. `VehicleCategorySelect` agora busca do banco com fallback.
+
+### 17. ✅ OBSERVACOES_CATEGORIA hardcoded — MIGRADO PARA BANCO
+
+Observações inseridas na tabela `configuracoes` (chave `observacoes_categoria`). Hook `useObservacoesCategoria()` criado.
+
+### 18. ✅ Template WhatsApp hardcoded — MIGRADO PARA BANCO
+
+Template de benefícios inserido na tabela `configuracoes` (chave `template_whatsapp_cotacao`). Hook `useTemplateWhatsappCotacao()` criado.
+
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-# Plano: Eliminar hardcodes de regra de negócio (11 correções + inserts + nova tabela)
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-## PARTE 1 — Inserir registros na tabela `configuracoes` (insert tool)
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-Inserir 11 registros:
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
 
-| chave | valor | tipo | categoria |
-|-------|-------|------|-----------|
-| carencia_dias_padrao | 120 | numero | operacional |
-| carencia_dias_migracao | 0 | numero | operacional |
-| multa_rastreador | 400 | moeda | operacional |
-| taxa_repasse_volante | 50 | moeda | operacional |
-| taxa_substituicao_placa | 50 | moeda | operacional |
-| taxa_revistoria | 50 | moeda | operacional |
-| taxa_troca_titularidade | 50 | moeda | operacional |
-| cota_participacao_default | 6 | numero | atuarial |
-| cota_minima_default | 1200 | moeda | atuarial |
-| cota_desagio_default | 8 | numero | atuarial |
-| cota_minima_desagio_default | 2000 | moeda | atuarial |
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
 
-Nota: `cota_participacao_default` e `cota_minima_default` podem já existir (hooks já referenciam). Será usado INSERT ON CONFLICT para não duplicar.
 
-## PARTE 2 — Criar tabela `faixas_producao` (migration)
+---
 
-```sql
-CREATE TABLE IF NOT EXISTS faixas_producao (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  placas_min integer NOT NULL,
-  placas_max integer,
-  valor_bonus numeric NOT NULL,
-  descricao text,
-  is_active boolean DEFAULT true,
-  created_at timestamptz DEFAULT now()
-);
-ALTER TABLE faixas_producao ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated users can read faixas_producao" ON faixas_producao FOR SELECT TO authenticated USING (true);
-```
+## ❌ NÃO FAZER AGORA
 
-Depois, inserir 6 registros via insert tool:
-- (30, 39, 500), (40, 49, 700), (50, 59, 1000), (60, 79, 1500), (80, 99, 2000), (100, NULL, 3000)
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
-## PARTE 3 — Correções de código (11 arquivos)
+---
 
-### CORREÇÃO 1 — `src/components/eventos/EmitirParecerModal.tsx`
-- Adicionar `import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema'`
-- Dentro do componente: `const { data: limiteDanoParcial = 0.75 } = useConfiguracaoNumero('limite_dano_parcial_fipe', 0.75)`
-- Substituir 4 ocorrências de `* 0.75` por `* limiteDanoParcial` (linhas 100, 137, 154, 184)
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-### CORREÇÃO 2 — `supabase/functions/efetivar-substituicao/index.ts`
-- No início, buscar da tabela configuracoes:
-  ```ts
-  const { data: cfgCarencia } = await supabase.from('configuracoes').select('valor').eq('chave','carencia_dias_padrao').single()
-  const carenciaDias = cfgCarencia ? parseInt(cfgCarencia.valor) : 120
-  ```
-- Substituir todos os `120` hardcoded (linhas 113, 120, 125, 127, 246, 259) por `carenciaDias`
-- Lógica migração: verificar `substituicao.is_migracao` — se true, buscar `carencia_dias_migracao` (valor 0)
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
 
-### CORREÇÃO 3 — `src/components/substituicao/StepFinanceiro.tsx`
-- Adicionar `import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema'`
-- `const { data: carenciaDias = 120 } = useConfiguracaoNumero('carencia_dias_padrao', 120)`
-- Linha 175: `addDays(dataEfetivacao, 120)` → `addDays(dataEfetivacao, carenciaDias)`
-- Linha 226: `carencia_dias: 120` → `carencia_dias: carenciaDias`
-- Linhas 511, 513, 569: substituir textos "120" pelo valor dinâmico `{carenciaDias}`
+---
 
-### CORREÇÃO 4 — `src/components/eventos/NovoSinistroModal.tsx`
-- Adicionar `useConfiguracaoNumero` import
-- `const { data: carenciaDias = 120 } = useConfiguracaoNumero('carencia_dias_padrao', 120)`
-- Linha 1120: `carência de 120 dias` → `carência de ${carenciaDias} dias`
+# Visibilidade por Equipe — Supervisor de Vendas
 
-### CORREÇÃO 5 — `src/types/retirada.ts`
-- Remover `export const VALOR_MULTA_NAO_DEVOLUCAO = 400.00`
-- Não pode usar hook em arquivo de types → criar hook `useMultaRastreador` em `useConteudosSistema.ts`:
-  ```ts
-  export function useMultaRastreador() {
-    return useConfiguracaoNumero('multa_rastreador', 400);
-  }
-  ```
+## ✅ CORRIGIDO
 
-### CORREÇÃO 6 — `supabase/functions/notificar-retirada-whatsapp/index.ts`
-- Buscar `multa_rastreador` da tabela configuracoes antes de montar mensagem
-- Substituir `multa de R$400` pelo valor dinâmico
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
 
-### CORREÇÃO 7 — `src/pages/instalador/ExecutarRetirada.tsx`
-- Importar `useMultaRastreador` e usar no componente
-- Linha 751: `Multa de R$ 400,00` → dinâmico
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
 
-### Correções adicionais em componentes que importam `VALOR_MULTA_NAO_DEVOLUCAO`:
-- `src/components/monitoramento/retirada/AplicarMultaModal.tsx` — usar `useMultaRastreador()`
-- `src/components/monitoramento/retirada/TratarAusenciaRetiradaModal.tsx` — usar `useMultaRastreador()`
-- `src/components/cadastro/RastreadorVinculadoModal.tsx` — usar `useMultaRastreador()`
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
 
-### CORREÇÃO 8 — Edge functions (termo-afiliacao)
-- `supabase/functions/_shared/termo-afiliacao-utils.ts` linha 333-334: `|| 10` → buscar de configuracoes `cota_participacao_default` (fallback 6), `|| 3000` → buscar `cota_minima_default` (fallback 1200)
-- `supabase/functions/_shared/termo-afiliacao-template.ts` linha 540, 545: mesma correção
-- `supabase/functions/_shared/template-utils.ts` linha 99, 101: mesma correção
-- Cada uma dessas funções recebe `supabase` client — buscar config no início
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
 
-### CORREÇÃO 9 — `supabase/functions/aprovar-sinistro/index.ts` e `autentique-webhook/index.ts`
-- Linha 87-88 e 507-508: `|| 6` → buscar `cota_participacao_default`, `|| 1200` → buscar `cota_minima_default`
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
 
-### CORREÇÃO 10 — `src/hooks/usePlanosCotacao.ts`
-- Adicionar hooks: `useCotaDesagioDefault` e `useCotaMinimaDesagioDefault` em `useConteudosSistema.ts`
-- Linha 229: `|| 8` → usar valor do hook
-- Linha 230: `|| 3000` → usar valor do hook (correto: 2000)
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
 
-### CORREÇÃO 11 — `src/components/comissoes/vendedor/TabProducao.tsx`
-- Remover array `FAIXAS_PRODUCAO` hardcoded
-- Buscar da nova tabela `faixas_producao` via useQuery
-- Mover `getFaixaAtual` e `getProximaFaixa` para usar dados do banco
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
 
-### CORREÇÃO adicional — `src/components/substituicao/StepBeneficios.tsx`
-- Linha 120: `carência de 120 dias` → dinâmico via `useConfiguracaoNumero`
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
 
-## Arquivos que NÃO serão tocados
-- `DesligamentoModal.tsx` (FGTS/CLT)
-- `comissoes.ts` (label cosmético)
-- `executar-regua-cobranca/index.ts` (aguardando decisão)
+---
 
-## Resumo de entregas
-- 11 registros inseridos em `configuracoes`
-- 1 tabela `faixas_producao` criada + 6 registros
-- ~18 arquivos alterados
-- 2 novos hooks em `useConteudosSistema.ts` (`useMultaRastreador`, `useCotaDesagioDefault`, `useCotaMinimaDesagioDefault`, `useCarenciaDiasPadrao`)
+## 🟡 PENDENTE
 
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
+
+---
+
+# Fluxo de Assistência 24h — Reboque
+
+## ✅ CORRIGIDO
+
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.

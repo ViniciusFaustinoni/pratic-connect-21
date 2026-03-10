@@ -33,6 +33,10 @@ Deno.serve(async (req) => {
     const results: StepResult[] = []
     let criticalFailure = false
 
+    // Buscar carência do banco de configuracoes
+    const { data: cfgCarencia } = await supabase.from('configuracoes').select('valor').eq('chave', 'carencia_dias_padrao').single()
+    const carenciaDias = cfgCarencia ? parseInt(cfgCarencia.valor) : 120
+
     // Buscar dados completos
     const { data: substituicao, error: fetchErr } = await supabase
       .from('substituicoes_veiculo')
@@ -110,21 +114,21 @@ Deno.serve(async (req) => {
       try {
         const dataInicio = new Date()
         const dataFim = new Date()
-        dataFim.setDate(dataFim.getDate() + 120)
+        dataFim.setDate(dataFim.getDate() + carenciaDias)
 
         const { error } = await supabase
           .from('substituicoes_veiculo')
           .update({
             data_inicio_carencia: dataInicio.toISOString(),
             data_fim_carencia: dataFim.toISOString(),
-            carencia_dias: 120,
+            carencia_dias: carenciaDias,
           })
           .eq('id', substituicao_id)
 
         if (error) throw error
-        results.push({ step: 5, name: 'Registrar carência 120 dias', success: true })
+        results.push({ step: 5, name: `Registrar carência ${carenciaDias} dias`, success: true })
       } catch (e) {
-        results.push({ step: 5, name: 'Registrar carência 120 dias', success: false, error: (e as Error).message })
+        results.push({ step: 5, name: `Registrar carência ${carenciaDias} dias`, success: false, error: (e as Error).message })
         criticalFailure = true
       }
     }
@@ -243,7 +247,7 @@ Deno.serve(async (req) => {
     try {
       if (associado) {
         const dataFimCarencia = new Date()
-        dataFimCarencia.setDate(dataFimCarencia.getDate() + 120)
+        dataFimCarencia.setDate(dataFimCarencia.getDate() + carenciaDias)
         const fmtDate = dataFimCarencia.toLocaleDateString('pt-BR')
         const fmtMensal = substituicao.mensalidade_nova
           ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(substituicao.mensalidade_nova)
@@ -256,7 +260,7 @@ Deno.serve(async (req) => {
           body: {
             associado_id: substituicao.associado_id,
             tipo: 'substituicao_concluida',
-            mensagem: `✅ Substituição concluída!\n\nNovo veículo: ${substituicao.veiculo_novo_modelo || 'N/A'} - ${substituicao.veiculo_novo_placa || 'N/A'}\nNova mensalidade: ${fmtMensal}\nNova cota participação: ${fmtCota}\n\n⚠️ Carência: 120 dias (até ${fmtDate})\nTodos os benefícios com carência própria reiniciam.\n\nNova proposta de filiação enviada para assinatura.`,
+            mensagem: `✅ Substituição concluída!\n\nNovo veículo: ${substituicao.veiculo_novo_modelo || 'N/A'} - ${substituicao.veiculo_novo_placa || 'N/A'}\nNova mensalidade: ${fmtMensal}\nNova cota participação: ${fmtCota}\n\n⚠️ Carência: ${carenciaDias} dias (até ${fmtDate})\nTodos os benefícios com carência própria reiniciam.\n\nNova proposta de filiação enviada para assinatura.`,
           },
         })
       }

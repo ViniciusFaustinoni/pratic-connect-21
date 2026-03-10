@@ -38,7 +38,8 @@ import { ptBR } from 'date-fns/locale';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { MOTIVO_RETIRADA_LABELS, type MotivoRetirada, VALOR_MULTA_NAO_DEVOLUCAO } from '@/types/retirada';
+import { MOTIVO_RETIRADA_LABELS, type MotivoRetirada } from '@/types/retirada';
+import { useMultaRastreador } from '@/hooks/useConteudosSistema';
 import { AplicarMultaModal } from './AplicarMultaModal';
 import { type Servico } from '@/hooks/useServicos';
 
@@ -71,6 +72,7 @@ export function TratarAusenciaRetiradaModal({
   const [observacao, setObservacao] = useState('');
   const [showConfirmacao, setShowConfirmacao] = useState(false);
   const [showMultaModal, setShowMultaModal] = useState(false);
+  const { data: multaValor = 400 } = useMultaRastreador();
 
   const queryClient = useQueryClient();
 
@@ -256,7 +258,7 @@ export function TratarAusenciaRetiradaModal({
                   <div className="flex-1">
                     <Label htmlFor="aplicar_multa" className="font-medium cursor-pointer flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-red-600" />
-                      Aplicar Multa R$ {VALOR_MULTA_NAO_DEVOLUCAO.toFixed(2)}
+                      Aplicar Multa R$ {multaValor.toFixed(2)}
                     </Label>
                     <p className="text-xs text-muted-foreground mt-1">
                       Multa por não comparecimento conforme regulamento

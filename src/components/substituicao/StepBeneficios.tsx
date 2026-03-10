@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle, ShieldCheck, Loader2 } from 'lucide-react';
 import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
+import { useCarenciaDiasPadrao } from '@/hooks/useConteudosSistema';
 import type { DadosNovoVeiculo } from '@/types/substituicao';
 
 interface VeiculoAntigo {
@@ -35,6 +36,7 @@ export function StepBeneficios({
   onBack,
 }: StepBeneficiosProps) {
   const { beneficios, faixasTerceiros, precosMap, terceirosMap, isLoading } = useBeneficiosSeparados();
+  const { data: carenciaDiasVal = 120 } = useCarenciaDiasPadrao();
 
   const toggleBeneficio = (id: string) => {
     setBeneficiosSelecionados({
@@ -117,7 +119,7 @@ export function StepBeneficios({
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription className="text-xs">
-          Todos os benefícios terão carência de 120 dias a partir da efetivação.
+          Todos os benefícios terão carência de {carenciaDiasVal} dias a partir da efetivação.
         </AlertDescription>
       </Alert>
 

@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { useMultaRastreador } from '@/hooks/useConteudosSistema';
 
 export interface RastreadorVinculadoModalProps {
   open: boolean;
@@ -34,6 +35,7 @@ export function RastreadorVinculadoModal({
   isLoading = false,
 }: RastreadorVinculadoModalProps) {
   const [acao, setAcao] = useState<'criar_retirada' | 'apenas_registrar'>('criar_retirada');
+  const { data: multaValor = 400 } = useMultaRastreador();
 
   const handleConfirm = async () => {
     await onConfirm(acao);
@@ -82,7 +84,7 @@ export function RastreadorVinculadoModal({
           <div className="bg-muted/50 rounded-lg p-3 text-sm">
             <p className="text-muted-foreground">
               O cancelamento só será finalizado após a <strong>devolução do rastreador</strong> ou 
-              pagamento da <strong>multa de R$ 400,00</strong> conforme regulamento.
+              pagamento da <strong>multa de R$ {multaValor.toFixed(2).replace('.', ',')}</strong> conforme regulamento.
             </p>
           </div>
 

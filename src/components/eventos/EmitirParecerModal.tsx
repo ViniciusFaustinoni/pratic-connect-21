@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 
 interface Sinistro {
   id: string;
@@ -88,6 +89,8 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
     setValorAprovado(formatted);
   };
 
+  const { data: limiteDanoParcial = 0.75 } = useConfiguracaoNumero('limite_dano_parcial_fipe', 0.75);
+
   const getValorNumerico = () => {
     return parseFloat(valorAprovado.replace(/\D/g, '')) / 100 || 0;
   };
@@ -97,7 +100,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
     if (resultado !== 'aprovado' || !sinistro?.valor_fipe) return null;
     const valorNumerico = getValorNumerico();
     if (!valorNumerico || valorNumerico <= 0) return null;
-    const limite75 = sinistro.valor_fipe * 0.75;
+    const limite75 = sinistro.valor_fipe * limiteDanoParcial;
     return valorNumerico >= limite75 ? 'perda_total' : 'parcial';
   };
 
@@ -134,7 +137,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
     }
   };
 
-  const limite75Fipe = sinistro?.valor_fipe ? sinistro.valor_fipe * 0.75 : null;
+  const limite75Fipe = sinistro?.valor_fipe ? sinistro.valor_fipe * limiteDanoParcial : null;
 
   const isFormValid = () => {
     if (!resultado) return false;
@@ -151,7 +154,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
         if (sinistro?.valor_fipe && valorNumerico > sinistro.valor_fipe) return false;
       } else if (tipoDanoEfetivo === 'parcial') {
         // Parcial: valor deve ser < 75% FIPE se houver FIPE
-        if (sinistro?.valor_fipe && valorNumerico >= sinistro.valor_fipe * 0.75) return false;
+        if (sinistro?.valor_fipe && valorNumerico >= sinistro.valor_fipe * limiteDanoParcial) return false;
       } else {
         // Sem classificação ainda (sem FIPE e sem seleção manual)
         if (!sinistro?.valor_fipe && !tipoDanoManual) return false;
@@ -181,7 +184,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
       let tipoDano: 'parcial' | 'perda_total' | null = null;
       if (resultado === 'aprovado' && valorIndenizacao) {
         if (sinistro.valor_fipe) {
-          const limite75 = sinistro.valor_fipe * 0.75;
+          const limite75 = sinistro.valor_fipe * limiteDanoParcial;
           tipoDano = valorIndenizacao >= limite75 ? 'perda_total' : 'parcial';
         } else {
           tipoDano = tipoDanoManual;
