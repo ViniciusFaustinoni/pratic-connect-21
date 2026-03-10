@@ -94,9 +94,6 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
               })}
             </tbody>
           </table>
-          {!temDadosValidos && (
-            <p className="text-xs text-muted-foreground mt-2">* Valores estimados</p>
-          )}
         </div>
       </CardContent>
     </Card>

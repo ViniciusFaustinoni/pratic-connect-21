@@ -59,10 +59,10 @@ const openWhatsApp = (numero: string) => {
   window.open(`https://wa.me/55${limpo}`, '_blank');
 };
 
-/** Calcula valor atualizado: principal + 2% multa + 1%/mês juros pro rata */
-const calcValorAtualizado = (valor: number, diasAtraso: number) => {
-  const multa = valor * 0.02;
-  const juros = valor * 0.01 * (diasAtraso / 30);
+/** Calcula valor atualizado: principal + multa + juros pro rata (valores do banco) */
+const calcValorAtualizado = (valor: number, diasAtraso: number, percMulta: number, percJuros: number) => {
+  const multa = valor * percMulta;
+  const juros = valor * percJuros * (diasAtraso / 30);
   return valor + multa + juros;
 };
 

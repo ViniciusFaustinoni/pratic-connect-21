@@ -178,7 +178,7 @@ export function SinistroDetalheInfo({ sinistro, vistoriaEvento, descricaoCliente
               </div>
               {(sinistro.valor_fipe || (sinistro as any).veiculo?.valor_fipe) && (
                 <div className="mt-2 text-sm text-muted-foreground">
-                  Limite para Dano Parcial: {formatCurrency((sinistro.valor_fipe || (sinistro as any).veiculo?.valor_fipe) * 0.75)}
+                  Limite para Dano Parcial: {formatCurrency((sinistro.valor_fipe || (sinistro as any).veiculo?.valor_fipe) * limiteDanoParcial)}
                 </div>
               )}
             </div>
