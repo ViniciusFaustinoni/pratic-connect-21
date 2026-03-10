@@ -35,6 +35,7 @@ export function RastreadorVinculadoModal({
   isLoading = false,
 }: RastreadorVinculadoModalProps) {
   const [acao, setAcao] = useState<'criar_retirada' | 'apenas_registrar'>('criar_retirada');
+  const { data: multaValor = 400 } = useMultaRastreador();
 
   const handleConfirm = async () => {
     await onConfirm(acao);
