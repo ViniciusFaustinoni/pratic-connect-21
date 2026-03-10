@@ -28,6 +28,8 @@ export interface AtivacaoItem {
   docsAprovados?: number;
   docsTotal?: number;
   created_at: string;
+  detalheFase?: string | null;
+  faseOriginal?: string;
 }
 
 export interface Etapa {
