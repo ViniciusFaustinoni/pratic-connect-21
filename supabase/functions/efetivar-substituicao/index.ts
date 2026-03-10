@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
           .update({
             data_inicio_carencia: dataInicio.toISOString(),
             data_fim_carencia: dataFim.toISOString(),
-            carencia_dias: 120,
+            carencia_dias: carenciaDias,
           })
           .eq('id', substituicao_id)
 
