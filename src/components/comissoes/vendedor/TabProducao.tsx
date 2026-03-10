@@ -4,11 +4,21 @@ import { Progress } from '@/components/ui/progress';
 import { DollarSign, Target, TrendingUp } from 'lucide-react';
 import type { MeuResumoTipo } from '@/hooks/useMinhasComissoesExtended';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TabProducaoProps {
   resumoProducao: MeuResumoTipo | undefined;
   vendasConfirmadas: number;
   isLoading: boolean;
+}
+
+interface FaixaProducao {
+  id: string;
+  placas_min: number;
+  placas_max: number | null;
+  valor_bonus: number;
+  descricao: string | null;
 }
 
 const formatCurrency = (value: number) => {
@@ -18,19 +28,26 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-// Faixas de produção para externos (simuladas)
-const FAIXAS_PRODUCAO = [
-  { placas_min: 30, valor: 500 },
-  { placas_min: 40, valor: 700 },
-  { placas_min: 50, valor: 1000 },
-  { placas_min: 60, valor: 1500 },
-  { placas_min: 80, valor: 2000 },
-  { placas_min: 100, valor: 3000 },
-];
+function useFaixasProducao() {
+  return useQuery({
+    queryKey: ['faixas-producao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('faixas_producao')
+        .select('*')
+        .eq('is_active', true)
+        .order('placas_min', { ascending: true });
 
-function getFaixaAtual(placas: number) {
-  let faixaAtual = null;
-  for (const faixa of FAIXAS_PRODUCAO) {
+      if (error) throw error;
+      return (data || []) as FaixaProducao[];
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+function getFaixaAtual(faixas: FaixaProducao[], placas: number) {
+  let faixaAtual: FaixaProducao | null = null;
+  for (const faixa of faixas) {
     if (placas >= faixa.placas_min) {
       faixaAtual = faixa;
     }
@@ -38,8 +55,8 @@ function getFaixaAtual(placas: number) {
   return faixaAtual;
 }
 
-function getProximaFaixa(placas: number) {
-  for (const faixa of FAIXAS_PRODUCAO) {
+function getProximaFaixa(faixas: FaixaProducao[], placas: number) {
+  for (const faixa of faixas) {
     if (placas < faixa.placas_min) {
       return faixa;
     }
@@ -52,20 +69,32 @@ export function TabProducao({
   vendasConfirmadas,
   isLoading,
 }: TabProducaoProps) {
-  const minimoPlacas = 30;
+  const { data: faixas = [], isLoading: loadingFaixas } = useFaixasProducao();
+
+  const minimoPlacas = faixas.length > 0 ? faixas[0].placas_min : 30;
   const habilitado = vendasConfirmadas >= minimoPlacas;
 
-  const faixaAtual = getFaixaAtual(vendasConfirmadas);
-  const proximaFaixa = getProximaFaixa(vendasConfirmadas);
+  const faixaAtual = getFaixaAtual(faixas, vendasConfirmadas);
+  const proximaFaixa = getProximaFaixa(faixas, vendasConfirmadas);
 
-  const valorProducao = resumoProducao?.valor_total || faixaAtual?.valor || 0;
+  const valorProducao = resumoProducao?.valor_total || faixaAtual?.valor_bonus || 0;
 
-  if (isLoading) {
+  if (isLoading || loadingFaixas) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-40" />
         <Skeleton className="h-24" />
       </div>
+    );
+  }
+
+  if (faixas.length === 0) {
+    return (
+      <Card>
+        <CardContent className="pt-6 text-center text-muted-foreground">
+          Nenhuma faixa de produção configurada.
+        </CardContent>
+      </Card>
     );
   }
 
@@ -99,7 +128,7 @@ export function TabProducao({
           <div className="p-3 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
             <p className="text-sm text-purple-800 dark:text-purple-300">
               🎯 Ao atingir {minimoPlacas} placas, você receberá: 
-              <span className="font-bold ml-1">{formatCurrency(FAIXAS_PRODUCAO[0].valor)}</span>
+              <span className="font-bold ml-1">{formatCurrency(faixas[0].valor_bonus)}</span>
             </p>
           </div>
         </CardContent>
@@ -132,7 +161,7 @@ export function TabProducao({
               {proximaFaixa && (
                 <div className="flex justify-between text-purple-600">
                   <span>Próxima faixa:</span>
-                  <span>{proximaFaixa.placas_min} placas = {formatCurrency(proximaFaixa.valor)}</span>
+                  <span>{proximaFaixa.placas_min} placas = {formatCurrency(proximaFaixa.valor_bonus)}</span>
                 </div>
               )}
             </div>
@@ -178,8 +207,8 @@ export function TabProducao({
               indicatorClassName="bg-purple-500"
             />
             <div className="flex justify-between mt-1 text-xs text-muted-foreground">
-              <span>{formatCurrency(faixaAtual.valor)} ({faixaAtual.placas_min}+ placas)</span>
-              <span>{formatCurrency(proximaFaixa.valor)} ({proximaFaixa.placas_min}+ placas)</span>
+              <span>{formatCurrency(faixaAtual.valor_bonus)} ({faixaAtual.placas_min}+ placas)</span>
+              <span>{formatCurrency(proximaFaixa.valor_bonus)} ({proximaFaixa.placas_min}+ placas)</span>
             </div>
           </CardContent>
         </Card>
@@ -192,11 +221,11 @@ export function TabProducao({
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {FAIXAS_PRODUCAO.map((faixa) => {
+            {faixas.map((faixa) => {
               const atingida = vendasConfirmadas >= faixa.placas_min;
               return (
                 <div
-                  key={faixa.placas_min}
+                  key={faixa.id}
                   className={`p-3 rounded-lg border text-center ${
                     atingida 
                       ? 'bg-purple-100 border-purple-300 dark:bg-purple-900/30' 
@@ -207,7 +236,7 @@ export function TabProducao({
                     {faixa.placas_min}+ placas
                   </p>
                   <p className={`text-sm ${atingida ? 'text-purple-600' : 'text-muted-foreground'}`}>
-                    {formatCurrency(faixa.valor)}
+                    {formatCurrency(faixa.valor_bonus)}
                   </p>
                   {atingida && (
                     <Badge className="mt-1 bg-purple-500">Atingida ✓</Badge>
