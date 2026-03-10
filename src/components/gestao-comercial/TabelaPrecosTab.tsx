@@ -36,6 +36,7 @@ export function TabelaPrecosTab() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
   const [historicoFaixaId, setHistoricoFaixaId] = useState<string | null>(null);
+  const [groupPages, setGroupPages] = useState<Record<string, number>>({});
 
   // Fetch price rows
   const { data: precos, isLoading } = useQuery({
