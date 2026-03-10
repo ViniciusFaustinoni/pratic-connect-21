@@ -1,0 +1,1 @@
+ALTER TABLE tabelas_preco_mensalidade ADD COLUMN IF NOT EXISTS combustivel_tipo varchar(30);

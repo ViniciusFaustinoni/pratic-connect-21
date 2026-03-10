@@ -23198,6 +23198,7 @@ export type Database = {
       tabelas_preco_mensalidade: {
         Row: {
           categoria: string
+          combustivel_tipo: string | null
           created_at: string | null
           fipe_max: number
           fipe_min: number
@@ -23210,6 +23211,7 @@ export type Database = {
         }
         Insert: {
           categoria: string
+          combustivel_tipo?: string | null
           created_at?: string | null
           fipe_max: number
           fipe_min: number
@@ -23222,6 +23224,7 @@ export type Database = {
         }
         Update: {
           categoria?: string
+          combustivel_tipo?: string | null
           created_at?: string | null
           fipe_max?: number
           fipe_min?: number
