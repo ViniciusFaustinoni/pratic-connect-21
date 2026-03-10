@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
+import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
 import type {
   PlanoParaCotacao,
   CotacaoCompleta,
@@ -16,6 +17,7 @@ import type {
   StatusCotacaoExtended,
   CriarCotacaoPayload,
 } from '@/types/cotacao';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 
 // Tipo do status no banco (sem 'visualizada')
 type StatusCotacaoDB = Database['public']['Tables']['cotacoes']['Row']['status'];
@@ -132,14 +134,18 @@ function encontrarFaixaMensalidade(
   valorFipe: number,
   regiao: string,
   combustivel: string,
+  adicionalApp: number = 0,
 ): { valorMensal: number; valorDesagio: number | null } | null {
   const mapping = planoPrecoMap.find(m => m.plano_id === planoId);
   if (!mapping) return null;
 
+  // Resolver tipo_uso para query (regras de adicional app)
+  const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiao, mapping.tipo_uso);
+
   const faixa = tabelasMensalidade.find(t =>
     t.linha_slug === mapping.linha_slug &&
     t.regiao === regiao.toLowerCase() &&
-    t.tipo_uso === mapping.tipo_uso &&
+    t.tipo_uso === tipoUsoQuery &&
     (t.combustivel_tipo === combustivel.toLowerCase() || t.combustivel_tipo === null) &&
     valorFipe >= t.fipe_min &&
     valorFipe <= t.fipe_max
@@ -147,8 +153,11 @@ function encontrarFaixaMensalidade(
 
   if (!faixa) return null;
 
+  // Aplicar adicional app se necessário
+  const valorMensalFinal = resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp);
+
   return {
-    valorMensal: faixa.valor_mensal,
+    valorMensal: valorMensalFinal,
     valorDesagio: faixa.valor_desagio,
   };
 }
@@ -192,6 +201,7 @@ export function useCalcularCotacao() {
   const { data: planos, isLoading: loadingPlanos } = usePlanosCotacao();
   const { data: planoPrecoMap, isLoading: loadingMap } = usePlanoPrecoMap();
   const { data: tabelasMensalidade, isLoading: loadingMensalidade } = useTabelasMensalidade();
+  const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
 
   const calcular = (
     valorFipe: number,
@@ -225,6 +235,7 @@ export function useCalcularCotacao() {
         valorFipe,
         regiao,
         combustivel,
+        adicionalApp,
       );
 
       if (!faixaResult) continue;

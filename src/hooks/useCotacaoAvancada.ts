@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
 import { formatarMoeda } from '@/utils/format';
+import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
 
 // ============================================
 // TIPOS — agora dinâmicos, sem categorias fixas
@@ -76,8 +77,8 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
     queryFn: async () => {
       if (!valorFipe || valorFipe <= 0) return [];
 
-      // Buscar planos ativos, mapeamento e preços em paralelo
-      const [planosRes, mapRes, mensalidadeRes] = await Promise.all([
+      // Buscar planos ativos, mapeamento, preços e config adicional_app em paralelo
+      const [planosRes, mapRes, mensalidadeRes, configRes] = await Promise.all([
         supabase
           .from('planos')
           .select('id, codigo, nome, categoria, valor_adesao, descricao')
@@ -90,7 +91,14 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
           .from('tabelas_preco_mensalidade')
           .select('*')
           .eq('is_active', true),
+        supabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'adicional_app')
+          .maybeSingle(),
       ]);
+
+      const adicionalApp = parseFloat(configRes.data?.valor || '35.90') || 35.90;
 
       if (planosRes.error) throw planosRes.error;
       const planos = planosRes.data;
@@ -115,11 +123,14 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
         const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
         if (!mapping) continue;
 
+        // Resolver tipo_uso para query (regras de adicional app)
+        const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiaoLower, mapping.tipo_uso);
+
         // Buscar faixa de preço na nova tabela
         const faixa = tabelasMensalidade.find(t =>
           t.linha_slug === mapping.linha_slug &&
           t.regiao === regiaoLower &&
-          t.tipo_uso === mapping.tipo_uso &&
+          t.tipo_uso === tipoUsoQuery &&
           (t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
           valorFipe >= Number(t.fipe_min) &&
           valorFipe <= Number(t.fipe_max)
@@ -127,7 +138,8 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
 
         if (!faixa) continue;
 
-        const valorMensal = Number(faixa.valor_mensal);
+        // Aplicar adicional app se necessário
+        const valorMensal = resolverPrecoApp(mapping.linha_slug, regiaoLower, mapping.tipo_uso, Number(faixa.valor_mensal), adicionalApp);
         const valorDesagio = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
         const valorAdesao = Number(plano.valor_adesao) || 0;
 

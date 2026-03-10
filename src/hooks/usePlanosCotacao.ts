@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
-import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault, useCotaDesagioDefault, useCotaMinimaDesagioDefault } from '@/hooks/useConteudosSistema';
+import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault, useCotaDesagioDefault, useCotaMinimaDesagioDefault, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
+import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
 import { 
   getCoberturasRemovidasDinamico, 
   gerarMensagemAlertaCategoria,
@@ -75,6 +76,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
   const { data: cotaDesagioDefault = 8 } = useCotaDesagioDefault();
   const { data: cotaMinimaDesagioDefault = 2000 } = useCotaMinimaDesagioDefault();
+
+  // Adicional app do banco
+  const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
 
   // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
@@ -202,7 +206,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
       const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
       const linhaSlug = mapping?.linha_slug;
-      const tipoUsoPricing = mapping?.tipo_uso || (params.usoApp ? 'aplicativo' : 'particular');
+      const tipoUsoOriginal = mapping?.tipo_uso || (params.usoApp ? 'aplicativo' : 'particular');
+      // Resolver tipo_uso para query (regras de adicional app)
+      const tipoUsoPricing = linhaSlug
+        ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal)
+        : tipoUsoOriginal;
 
       let valorMensal = 0;
       let valorDesagio: number | null = null;
@@ -221,6 +229,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           valorMensal = faixa.valor_mensal;
           valorDesagio = faixa.valor_desagio;
         }
+      }
+
+      // Aplicar adicional app se necessário
+      if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
+        valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp);
       }
 
       // Fallback: se não encontrou na nova tabela, usar taxa fallback
@@ -303,7 +316,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (aSortP !== bSortP) return aSortP - bSortP;
       return a.valorMensal - b.valorMensal;
     });
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp]);
 
   return {
     planos,
