@@ -137,7 +137,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
     }
   };
 
-  const limite75Fipe = sinistro?.valor_fipe ? sinistro.valor_fipe * 0.75 : null;
+  const limite75Fipe = sinistro?.valor_fipe ? sinistro.valor_fipe * limiteDanoParcial : null;
 
   const isFormValid = () => {
     if (!resultado) return false;
