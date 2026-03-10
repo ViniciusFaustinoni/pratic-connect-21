@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { useMultaRastreador } from '@/hooks/useConteudosSistema';
 
 export interface RastreadorVinculadoModalProps {
   open: boolean;
