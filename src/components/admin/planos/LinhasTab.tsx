@@ -26,6 +26,9 @@ const LINE_COLORS: Record<string, string> = {
   purple: 'bg-purple-100 border-purple-500 text-purple-800',
   red: 'bg-red-100 border-red-500 text-red-800',
   blue: 'bg-blue-100 border-blue-500 text-blue-800',
+  emerald: 'bg-emerald-100 border-emerald-500 text-emerald-800',
+  teal: 'bg-teal-100 border-teal-500 text-teal-800',
+  cyan: 'bg-cyan-100 border-cyan-500 text-cyan-800',
 };
 
 export function LinhasTab() {
