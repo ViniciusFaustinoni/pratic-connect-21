@@ -171,8 +171,9 @@ export function StepFinanceiro({
   }, [diaVencimento, totalMensalNovo, totalMensalAntigo]);
 
   // Carência
+  const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const dataEfetivacao = new Date();
-  const dataFimCarencia = addDays(dataEfetivacao, 120);
+  const dataFimCarencia = addDays(dataEfetivacao, carenciaDias);
 
   // =============================================
   // Gerar cobrança
