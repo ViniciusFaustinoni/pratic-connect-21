@@ -23239,7 +23239,7 @@ export type Database = {
       }
       tabelas_preco_mensalidade: {
         Row: {
-          categoria: string
+          categoria: string | null
           combustivel_tipo: string | null
           created_at: string | null
           fipe_max: number
@@ -23248,12 +23248,12 @@ export type Database = {
           is_active: boolean | null
           linha_slug: string | null
           regiao: string | null
-          tipo_uso: string
+          tipo_uso: string | null
           valor_desagio: number | null
           valor_mensal: number
         }
         Insert: {
-          categoria: string
+          categoria?: string | null
           combustivel_tipo?: string | null
           created_at?: string | null
           fipe_max: number
@@ -23262,12 +23262,12 @@ export type Database = {
           is_active?: boolean | null
           linha_slug?: string | null
           regiao?: string | null
-          tipo_uso: string
+          tipo_uso?: string | null
           valor_desagio?: number | null
           valor_mensal: number
         }
         Update: {
-          categoria?: string
+          categoria?: string | null
           combustivel_tipo?: string | null
           created_at?: string | null
           fipe_max?: number
@@ -23276,7 +23276,7 @@ export type Database = {
           is_active?: boolean | null
           linha_slug?: string | null
           regiao?: string | null
-          tipo_uso?: string
+          tipo_uso?: string | null
           valor_desagio?: number | null
           valor_mensal?: number
         }
