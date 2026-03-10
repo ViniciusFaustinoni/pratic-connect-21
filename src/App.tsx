@@ -614,10 +614,11 @@ const App = () => (
 
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />
-              <Route path="/diretoria/produtos" element={<ProdutosGestao />} />
-              <Route path="/diretoria/planos-beneficios" element={<PlanosAdmin />} />
+              <Route path="/diretoria/gestao-comercial" element={<GestaoComercial />} />
+              <Route path="/diretoria/produtos" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
+              <Route path="/diretoria/planos-beneficios" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
+              <Route path="/diretoria/precos" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
               <Route path="/diretoria/produtos/:id" element={<ProdutoDetalhe />} />
-              <Route path="/diretoria/precos" element={<TabelaPrecos />} />
               <Route path="/diretoria/rateios" element={<RateioSinistros />} />
               <Route path="/diretoria/indicadores" element={<IndicadoresAtuariais />} />
               <Route path="/diretoria/configuracoes" element={<ConfiguracoesSistema />} />

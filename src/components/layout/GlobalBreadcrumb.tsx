@@ -126,6 +126,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   // Diretoria
   '/diretoria': { label: 'Diretoria' },
   '/diretoria/dashboard': { label: 'Dashboard' },
+  '/diretoria/gestao-comercial': { label: 'Gestão Comercial' },
   '/diretoria/produtos': { label: 'Produtos' },
   '/diretoria/precos': { label: 'Tabela de Preços' },
   '/diretoria/rateios': { label: 'Rateios' },
