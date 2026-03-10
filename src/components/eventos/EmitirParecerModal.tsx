@@ -154,7 +154,7 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
         if (sinistro?.valor_fipe && valorNumerico > sinistro.valor_fipe) return false;
       } else if (tipoDanoEfetivo === 'parcial') {
         // Parcial: valor deve ser < 75% FIPE se houver FIPE
-        if (sinistro?.valor_fipe && valorNumerico >= sinistro.valor_fipe * 0.75) return false;
+        if (sinistro?.valor_fipe && valorNumerico >= sinistro.valor_fipe * limiteDanoParcial) return false;
       } else {
         // Sem classificação ainda (sem FIPE e sem seleção manual)
         if (!sinistro?.valor_fipe && !tipoDanoManual) return false;
