@@ -48,8 +48,13 @@ interface Associado {
   whatsapp: string | null;
   telefone: string | null;
   planos: {
-    valor_mensalidade: number;
+    nome: string;
   } | null;
+  contratos: {
+    id: string;
+    valor_mensal: number;
+    status: string;
+  }[] | null;
   asaas_clientes: {
     asaas_id: string;
   }[] | null;
@@ -71,7 +76,7 @@ serve(async (req) => {
     
     console.log(`[gerar-cobrancas] Gerando cobranças para ${competencia}`);
 
-    // Buscar associados ativos com plano e cliente ASAAS
+    // Buscar associados ativos com plano, contrato ativo e cliente ASAAS
     const { data: associados, error: fetchError } = await supabase
       .from('associados')
       .select(`
@@ -84,13 +89,19 @@ serve(async (req) => {
         whatsapp,
         telefone,
         planos:plano_id (
-          valor_mensalidade
+          nome
+        ),
+        contratos!inner (
+          id,
+          valor_mensal,
+          status
         ),
         asaas_clientes (
           asaas_id
         )
       `)
       .eq('status', 'ativo')
+      .eq('contratos.status', 'ativo')
       .not('plano_id', 'is', null);
 
     if (fetchError) {
@@ -106,6 +117,7 @@ serve(async (req) => {
       erros: 0,
       whatsappEnviados: 0,
       detalhes: [] as any[],
+      errosDetalhes: [] as Array<{ associado_id: string; motivo: string }>,
     };
 
     for (const associado of (associados || []) as unknown as Associado[]) {
@@ -133,7 +145,17 @@ serve(async (req) => {
           dataVencimento.setMonth(dataVencimento.getMonth() + 1);
         }
 
-        const valorMensalidade = (associado.planos as any)?.valor_mensalidade || 150;
+        // Buscar valor mensal do contrato ativo
+        const contrato = associado.contratos?.[0];
+        const valorMensalidade = contrato?.valor_mensal;
+
+        if (!valorMensalidade || valorMensalidade <= 0) {
+          console.error(`[gerar-cobrancas] Associado ${associado.id} (${associado.nome}) sem contrato ativo com valor_mensal válido. Cobrança NÃO gerada.`);
+          resultados.errosDetalhes.push({ associado_id: associado.id, motivo: 'sem_contrato_ativo_com_valor' });
+          resultados.erros++;
+          continue;
+        }
+
         const asaasClienteId = associado.asaas_clientes?.[0]?.asaas_id;
 
         // Criar cobrança no ASAAS se tiver cliente cadastrado

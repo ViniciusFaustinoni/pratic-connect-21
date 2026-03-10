@@ -64,6 +64,7 @@ import {
   Bot,
   Bell,
   Send,
+  Layers,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -376,9 +377,7 @@ const menuConfig: {
       color: MENU_COLORS.diretoria,
       items: [
         { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
-        { title: 'Produtos', url: '/diretoria/produtos', icon: Package },
-        { title: 'Planos/Benefícios', url: '/diretoria/planos-beneficios', icon: Gift },
-        { title: 'Tabela de Preços', url: '/diretoria/precos', icon: DollarSign },
+        { title: 'Gestão Comercial', url: '/diretoria/gestao-comercial', icon: Layers },
         { title: 'Rateio', url: '/diretoria/rateios', icon: PieChart },
         { title: 'Atuarial', url: '/diretoria/indicadores', icon: TrendingUp },
         { title: 'Blacklist', url: '/diretoria/blacklist', icon: Ban },
