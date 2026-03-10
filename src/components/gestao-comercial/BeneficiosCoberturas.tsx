@@ -4,15 +4,37 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useBenefits, useMainCoverages, usePlans } from '@/hooks/usePlans';
 import { useDeleteBenefit, useDeleteMainCoverage } from '@/hooks/usePlansAdmin';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { BeneficioFormModal } from '@/components/admin/planos/BeneficioFormModal';
+import { CoberturaFormModal } from '@/components/admin/planos/CoberturaFormModal';
+import type { Benefit, MainCoverage } from '@/types/plans';
 
 export function BeneficiosCoberturas() {
   const [filtroPlano, setFiltroPlano] = useState<string>('all');
-  
+
+  // Benefit modal state
+  const [beneficioModalOpen, setBeneficioModalOpen] = useState(false);
+  const [beneficioEdit, setBeneficioEdit] = useState<Benefit | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteType, setDeleteType] = useState<'benefit' | 'coverage'>('benefit');
+
+  // Coverage modal state
+  const [coberturaModalOpen, setCoberturaModalOpen] = useState(false);
+  const [coberturaEdit, setCoberturaEdit] = useState<MainCoverage | null>(null);
+
   const { data: benefits, isLoading: benefitsLoading } = useBenefits();
   const { data: coverages, isLoading: coveragesLoading } = useMainCoverages();
   const { data: plans } = usePlans();
@@ -47,6 +69,16 @@ export function BeneficiosCoberturas() {
     ? benefits
     : benefits?.filter(b => benefitPlans?.[b.id]?.some(p => p.plano_id === filtroPlano));
 
+  const handleConfirmDelete = () => {
+    if (!deleteConfirmId) return;
+    if (deleteType === 'benefit') {
+      deleteBenefit.mutate(deleteConfirmId);
+    } else {
+      deleteCoverage.mutate(deleteConfirmId);
+    }
+    setDeleteConfirmId(null);
+  };
+
   return (
     <div className="space-y-4">
       {/* Filter by plan */}
@@ -73,6 +105,10 @@ export function BeneficiosCoberturas() {
               <h3 className="font-semibold">Benefícios</h3>
               <Badge variant="secondary" className="text-xs">Marketing & App</Badge>
             </div>
+            <Button size="sm" onClick={() => { setBeneficioEdit(null); setBeneficioModalOpen(true); }}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Novo
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground">
             Itens exibidos no app do associado e materiais comerciais
@@ -94,8 +130,16 @@ export function BeneficiosCoberturas() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-7 w-7"
+                        onClick={() => { setBeneficioEdit(benefit); setBeneficioModalOpen(true); }}
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-7 w-7 text-destructive"
-                        onClick={() => deleteBenefit.mutate(benefit.id)}
+                        onClick={() => { setDeleteType('benefit'); setDeleteConfirmId(benefit.id); }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -133,6 +177,10 @@ export function BeneficiosCoberturas() {
               <h3 className="font-semibold">Coberturas Principais</h3>
               <Badge variant="secondary" className="text-xs">Display</Badge>
             </div>
+            <Button size="sm" onClick={() => { setCoberturaEdit(null); setCoberturaModalOpen(true); }}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Nova
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground">
             Coberturas principais exibidas no site e materiais
@@ -152,8 +200,16 @@ export function BeneficiosCoberturas() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-7 w-7"
+                      onClick={() => { setCoberturaEdit(cov); setCoberturaModalOpen(true); }}
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-7 w-7 text-destructive"
-                      onClick={() => deleteCoverage.mutate(cov.id)}
+                      onClick={() => { setDeleteType('coverage'); setDeleteConfirmId(cov.id); }}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -173,6 +229,39 @@ export function BeneficiosCoberturas() {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      <BeneficioFormModal
+        open={beneficioModalOpen}
+        onOpenChange={setBeneficioModalOpen}
+        benefit={beneficioEdit}
+      />
+
+      <CoberturaFormModal
+        open={coberturaModalOpen}
+        onOpenChange={setCoberturaModalOpen}
+        coverage={coberturaEdit}
+      />
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteType === 'benefit'
+                ? 'Este benefício será removido permanentemente, incluindo todos os vínculos com planos.'
+                : 'Esta cobertura será removida permanentemente.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
