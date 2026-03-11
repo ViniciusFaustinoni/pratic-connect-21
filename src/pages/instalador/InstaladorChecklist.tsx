@@ -247,7 +247,7 @@ export default function InstaladorChecklist() {
     return agruparFotosFiltradas(tipoVeiculo, veiculoPrecisaRastreador);
   }, [tipoVeiculo, veiculoPrecisaRastreador]);
 
-  // Carregar checklist e quilometragem salvos
+  // Carregar checklist, quilometragem e etapa salvos
   useEffect(() => {
     if (servico) {
       // Restaurar checklist do banco se existir
@@ -260,8 +260,42 @@ export default function InstaladorChecklist() {
       if (savedKm) {
         setQuilometragem(String(savedKm));
       }
+      // Restaurar etapa atual
+      const savedEtapa = (servico as any).etapa_atual;
+      if (savedEtapa && savedEtapa > 1) {
+        setEtapaAtual(savedEtapa);
+      }
     }
   }, [servico]);
+
+  // Auto-save debounced: persiste checklist, quilometragem e etapa a cada 2s
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!id || !servico) return;
+    
+    const payload = JSON.stringify({ checklist, quilometragem, etapaAtual });
+    // Skip if nothing changed
+    if (payload === lastSavedRef.current) return;
+    
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    
+    autoSaveTimerRef.current = setTimeout(() => {
+      lastSavedRef.current = payload;
+      salvarChecklistMutation.mutate({
+        id,
+        checklist_data: checklist,
+        quilometragem: quilometragem ? parseInt(quilometragem) : undefined,
+        etapa_atual: etapaAtual,
+      });
+      console.log('[AutoSave] Checklist, km e etapa salvos automaticamente');
+    }, 2000);
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [checklist, quilometragem, etapaAtual, id, servico]);
 
   // Sincronizar KM identificado por OCR automaticamente
   useEffect(() => {
