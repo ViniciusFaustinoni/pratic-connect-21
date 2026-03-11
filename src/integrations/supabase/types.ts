@@ -6873,6 +6873,55 @@ export type Database = {
           },
         ]
       }
+      configuracoes_historico: {
+        Row: {
+          alterado_em: string
+          alterado_por: string | null
+          chave: string
+          id: string
+          valor_anterior: string | null
+          valor_novo: string
+        }
+        Insert: {
+          alterado_em?: string
+          alterado_por?: string | null
+          chave: string
+          id?: string
+          valor_anterior?: string | null
+          valor_novo: string
+        }
+        Update: {
+          alterado_em?: string
+          alterado_por?: string | null
+          chave?: string
+          id?: string
+          valor_anterior?: string | null
+          valor_novo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "configuracoes_historico_alterado_por_fkey"
+            columns: ["alterado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "configuracoes_historico_alterado_por_fkey"
+            columns: ["alterado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "configuracoes_historico_alterado_por_fkey"
+            columns: ["alterado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       confirmacoes_agendamento: {
         Row: {
           contexto_ia: Json | null
