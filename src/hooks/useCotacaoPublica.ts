@@ -251,7 +251,9 @@ export function useCriarCotacaoPublica() {
           veiculo_modelo: params.veiculoModelo,
           veiculo_ano: params.veiculoAno,
           veiculo_placa: params.veiculoPlaca,
+          veiculo_combustivel: params.veiculoCombustivel,
           valor_fipe: params.valorFipe,
+          regiao: params.regiao || 'rj',
           status: 'aguardando',
         })
         .select()

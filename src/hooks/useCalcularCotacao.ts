@@ -61,7 +61,8 @@ export function useCalcularCotacao() {
         publicSupabase
           .from('tabelas_preco_mensalidade')
           .select('*')
-          .eq('is_active', true),
+          .eq('is_active', true)
+          .limit(5000),
         publicSupabase
           .from('configuracoes')
           .select('chave, valor')

@@ -91,7 +91,8 @@ export function useTabelaPrecoByFipe(valorFipe: number | undefined) {
         .eq('is_active', true)
         .lte('fipe_min', valorFipe)
         .gte('fipe_max', valorFipe)
-        .order('valor_mensal');
+        .order('valor_mensal')
+        .limit(5000);
       
       if (error) throw error;
       return data as TabelaPrecoMensalidade[];
