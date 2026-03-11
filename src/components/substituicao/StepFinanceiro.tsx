@@ -13,7 +13,7 @@ import { useAsaas } from '@/hooks/useAsaas';
 import { useCotasPorFipe } from '@/hooks/useFaixasCotas';
 import { useAtualizarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
 import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
-import { useTaxaSubstituicao, useCotaParticipacaoDefault, useCotaMinimaDefault, useCarenciaDiasPadrao, useConfigValor } from '@/hooks/useConteudosSistema';
+import { useTaxaSubstituicao, useCotaParticipacaoDefault, useCotaMinimaDefault, useCarenciaDiasPadrao, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { useCalcularCotacao } from '@/hooks/useCalcularCotacao';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
