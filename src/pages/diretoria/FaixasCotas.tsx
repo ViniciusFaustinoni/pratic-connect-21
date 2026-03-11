@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Settings, History, Calculator, TrendingUp, TrendingDown, Minus, Save, AlertTriangle, Info } from 'lucide-react';
+import { Settings, History, Calculator, TrendingUp, TrendingDown, Minus, Save, AlertTriangle, Info, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
