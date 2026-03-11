@@ -53,6 +53,8 @@ import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
+import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
+import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { useVendedores } from '@/hooks/useVendedores';
