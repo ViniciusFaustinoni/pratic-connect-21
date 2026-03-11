@@ -192,6 +192,7 @@ export interface TarefaAtual {
   vistoria_origem_id: string | null;
   contato_realizado_em: string | null;
   contato_tipo: string | null;
+  etapa_atual?: number;
 }
 
 // Filtros para listagem de serviços
