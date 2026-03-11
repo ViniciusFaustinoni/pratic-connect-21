@@ -170,6 +170,35 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Função de verificação de elegibilidade por modelo
+  function verificarElegibilidadeModelo(
+    planoId: string,
+    veiculo: { marca: string; modelo: string; ano: number; combustivel: string },
+  ): 'aprovado' | 'limitado' | 'negado' {
+    const regrasDoPlano = elegibilidadeData?.filter(e => e.plano_id === planoId) ?? [];
+    // Sem configuração = aceita tudo
+    if (regrasDoPlano.length === 0) return 'aprovado';
+
+    const marcaNorm = veiculo.marca.trim().toUpperCase();
+    const modeloNorm = veiculo.modelo.trim().toUpperCase();
+    const combustivelNorm = veiculo.combustivel.trim().toLowerCase();
+
+    const regra = regrasDoPlano.find(r => {
+      const marcaMatch = r.marca.toUpperCase() === marcaNorm;
+      const modeloMatch = r.modelo.toUpperCase() === modeloNorm;
+      const anoMatch = veiculo.ano >= r.ano_min &&
+                       (r.ano_max === null || veiculo.ano <= r.ano_max);
+      const combustivelMatch = r.combustivel === 'qualquer' ||
+                               r.combustivel === combustivelNorm;
+      return marcaMatch && modeloMatch && anoMatch && combustivelMatch;
+    });
+
+    if (!regra) return 'negado';
+    if (regra.status === 'negado') return 'negado';
+    if (regra.status === 'limitado') return 'limitado';
+    return 'aprovado';
+  }
+
   const planos = useMemo<PlanoCotacao[]>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
