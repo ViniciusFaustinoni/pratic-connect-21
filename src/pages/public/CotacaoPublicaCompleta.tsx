@@ -27,6 +27,7 @@ import {
   useFotosVistoria
 } from '@/hooks/useCotacaoPublica';
 import { useCalcularCotacao } from '@/hooks/useCalcularCotacao';
+import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
 import { 
   TipoUsoVeiculo,
   DOCUMENTOS_CONFIG,
