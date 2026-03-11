@@ -210,6 +210,7 @@ export function BeneficiosAdicionaisConfig() {
                 <TableRow>
                   <TableHead>Benefício</TableHead>
                   <TableHead>Categoria</TableHead>
+                  <TableHead>Linhas</TableHead>
                   <TableHead className="text-center">Regiões</TableHead>
                   <TableHead className="text-right">Preço Base</TableHead>
                   <TableHead className="text-center">Status</TableHead>
@@ -219,7 +220,7 @@ export function BeneficiosAdicionaisConfig() {
               <TableBody>
                 {filteredBeneficios?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={podeEditar ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={podeEditar ? 7 : 6} className="text-center py-8 text-muted-foreground">
                       Nenhum benefício encontrado
                     </TableCell>
                   </TableRow>
@@ -238,6 +239,19 @@ export function BeneficiosAdicionaisConfig() {
                         <Badge variant="secondary">
                           {getCategoriaLabel(beneficio.categoria)}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {(beneficio as any).linhas_permitidas?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {((beneficio as any).linhas_permitidas as string[]).map((slug: string) => (
+                              <Badge key={slug} variant="outline" className="text-xs">
+                                {slug}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Todas</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline">

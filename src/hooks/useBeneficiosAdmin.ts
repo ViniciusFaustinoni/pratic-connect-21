@@ -14,6 +14,7 @@ export interface BeneficioInput {
   ativo?: boolean;
   ordem?: number;
   variacao_por_cota?: boolean;
+  linhas_permitidas?: string[];
 }
 
 export interface BeneficioComRegioes extends BeneficioAdicional {
@@ -69,6 +70,7 @@ export function useCreateBeneficio() {
           ativo: input.ativo ?? true,
           ordem: input.ordem ?? 0,
           variacao_por_cota: input.variacao_por_cota ?? true,
+          linhas_permitidas: input.linhas_permitidas ?? [],
         })
         .select()
         .single();
@@ -121,6 +123,7 @@ export function useUpdateBeneficio() {
           ativo: input.ativo,
           ordem: input.ordem,
           variacao_por_cota: input.variacao_por_cota,
+          linhas_permitidas: input.linhas_permitidas,
         })
         .eq('id', id)
         .select()

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ import {
 import { Loader2, Info } from 'lucide-react';
 import { useCreateBeneficio, useUpdateBeneficio, CATEGORIAS_BENEFICIO } from '@/hooks/useBeneficiosAdmin';
 import { CustoRealInfo } from '@/components/beneficios/CustoRealInfo';
+import { useProductLines } from '@/hooks/usePlans';
 import type { Tables } from '@/integrations/supabase/types';
 
 type BeneficioAdicional = Tables<'beneficios_adicionais'>;
@@ -31,10 +33,24 @@ interface BeneficioAdicionalModalProps {
   beneficio: BeneficioAdicional | null;
 }
 
+const LINHAS_FALLBACK = [
+  { slug: 'select', name: 'Select' },
+  { slug: 'select-one', name: 'Select One' },
+  { slug: 'especial', name: 'Especial' },
+  { slug: 'lancamento', name: 'Lançamento' },
+  { slug: 'advanced', name: 'Advanced' },
+  { slug: 'eletrico', name: 'Elétrico' },
+];
+
 export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: BeneficioAdicionalModalProps) {
   const createBeneficio = useCreateBeneficio();
   const updateBeneficio = useUpdateBeneficio();
+  const { data: productLines } = useProductLines();
   const isEditing = !!beneficio;
+
+  const linhas = productLines?.length
+    ? productLines.map(pl => ({ slug: pl.slug, name: pl.name }))
+    : LINHAS_FALLBACK;
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -45,6 +61,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
     ativo: true,
     ordem: 0,
     variacao_por_cota: true,
+    linhas_permitidas: [] as string[],
   });
 
   useEffect(() => {
@@ -58,6 +75,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
         ativo: beneficio.ativo ?? true,
         ordem: beneficio.ordem ?? 0,
         variacao_por_cota: beneficio.variacao_por_cota ?? true,
+        linhas_permitidas: (beneficio as any).linhas_permitidas || [],
       });
     } else {
       setFormData({
@@ -69,6 +87,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
         ativo: true,
         ordem: 0,
         variacao_por_cota: true,
+        linhas_permitidas: [],
       });
     }
   }, [beneficio, open]);
@@ -80,6 +99,15 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^A-Z0-9]+/g, '_')
       .replace(/^_+|_+$/g, '');
+  };
+
+  const toggleLinha = (slug: string) => {
+    setFormData(prev => ({
+      ...prev,
+      linhas_permitidas: prev.linhas_permitidas.includes(slug)
+        ? prev.linhas_permitidas.filter(s => s !== slug)
+        : [...prev.linhas_permitidas, slug],
+    }));
   };
 
   const handleSubmit = async () => {
@@ -99,6 +127,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
           ativo: formData.ativo,
           ordem: formData.ordem,
           variacao_por_cota: formData.variacao_por_cota,
+          linhas_permitidas: formData.linhas_permitidas,
         });
       } else {
         await createBeneficio.mutateAsync({
@@ -110,6 +139,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
           ativo: formData.ativo,
           ordem: formData.ordem,
           variacao_por_cota: formData.variacao_por_cota,
+          linhas_permitidas: formData.linhas_permitidas,
         });
       }
       onOpenChange(false);
@@ -122,7 +152,7 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? 'Editar Benefício Adicional' : 'Novo Benefício Adicional'}
@@ -159,6 +189,31 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Linhas Permitidas */}
+          <div className="space-y-2">
+            <Label>Linhas de Plano Permitidas</Label>
+            <p className="text-xs text-muted-foreground">
+              Deixe vazio para disponibilizar em todas as linhas
+            </p>
+            <div className="grid grid-cols-2 gap-2 p-3 bg-muted/50 rounded-md">
+              {linhas.map(linha => (
+                <div key={linha.slug} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`linha-${linha.slug}`}
+                    checked={formData.linhas_permitidas.includes(linha.slug)}
+                    onCheckedChange={() => toggleLinha(linha.slug)}
+                  />
+                  <label
+                    htmlFor={`linha-${linha.slug}`}
+                    className="text-sm font-medium leading-none cursor-pointer"
+                  >
+                    {linha.name}
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Variação por Cota */}
@@ -209,7 +264,6 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
               placeholder="0.00"
             />
             
-            {/* Custo Real - mostra info ao criar, dados ao editar */}
             {isEditing && beneficio ? (
               <CustoRealInfo 
                 beneficioId={beneficio.id} 
@@ -227,7 +281,6 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Ordem */}
             <div className="space-y-2">
               <Label htmlFor="ordem">Ordem de Exibição</Label>
               <Input
@@ -238,8 +291,6 @@ export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: Benef
                 onChange={(e) => setFormData({ ...formData, ordem: parseInt(e.target.value) || 0 })}
               />
             </div>
-
-            {/* Ativo */}
             <div className="flex items-center justify-between pt-6">
               <Label htmlFor="ativo">Ativo</Label>
               <Switch

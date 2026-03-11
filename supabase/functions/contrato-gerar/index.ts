@@ -603,6 +603,48 @@ serve(async (req) => {
 
     console.log('Contrato criado:', contrato.numero);
 
+    // 8.1 Propagar adicionais selecionados da cotação para o contrato e associado
+    const adicionaisSelecionados = cotacao.adicionais_selecionados;
+    if (adicionaisSelecionados && Array.isArray(adicionaisSelecionados) && adicionaisSelecionados.length > 0) {
+      console.log('[CONTRATO-GERAR] Propagando adicionais selecionados:', adicionaisSelecionados.length);
+      
+      // Salvar snapshot no contrato
+      const { error: updateAdicionaisError } = await supabase
+        .from('contratos')
+        .update({ adicionais_selecionados: adicionaisSelecionados })
+        .eq('id', contrato.id);
+      
+      if (updateAdicionaisError) {
+        console.error('[CONTRATO-GERAR] Erro ao salvar adicionais no contrato:', updateAdicionaisError);
+      } else {
+        console.log('[CONTRATO-GERAR] ✅ Adicionais salvos no contrato');
+      }
+
+      // Criar registros em associados_beneficios_adicionais
+      if (associadoId) {
+        const registros = adicionaisSelecionados.map((adicional: any) => ({
+          associado_id: associadoId,
+          contrato_id: contrato.id,
+          beneficio_adicional_id: adicional.id || adicional.beneficio_id,
+          valor_contratado: adicional.preco || adicional.valor || 0,
+          ativo: true,
+          data_inicio: new Date().toISOString().split('T')[0],
+        })).filter((r: any) => r.beneficio_adicional_id);
+
+        if (registros.length > 0) {
+          const { error: registrosError } = await supabase
+            .from('associados_beneficios_adicionais')
+            .insert(registros);
+          
+          if (registrosError) {
+            console.error('[CONTRATO-GERAR] Erro ao criar registros de adicionais do associado:', registrosError);
+          } else {
+            console.log(`[CONTRATO-GERAR] ✅ ${registros.length} adicionais vinculados ao associado`);
+          }
+        }
+      }
+    }
+
     // 9. Registrar no histórico
     await supabase.from('contratos_historico').insert({
       contrato_id: contrato.id,
