@@ -70,6 +70,7 @@ export function useCreateBeneficio() {
           ativo: input.ativo ?? true,
           ordem: input.ordem ?? 0,
           variacao_por_cota: input.variacao_por_cota ?? true,
+          linhas_permitidas: input.linhas_permitidas ?? [],
         })
         .select()
         .single();
