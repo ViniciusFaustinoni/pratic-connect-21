@@ -820,10 +820,11 @@ export function useSalvarChecklistServico() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, checklist_data, quilometragem }: {
+    mutationFn: async ({ id, checklist_data, quilometragem, etapa_atual }: {
       id: string;
       checklist_data: Record<string, unknown>;
       quilometragem?: number;
+      etapa_atual?: number;
     }) => {
       const updateData: Record<string, unknown> = {
         checklist_data,
@@ -831,6 +832,9 @@ export function useSalvarChecklistServico() {
       };
       if (quilometragem !== undefined) {
         updateData.quilometragem = quilometragem;
+      }
+      if (etapa_atual !== undefined) {
+        updateData.etapa_atual = etapa_atual;
       }
 
       const { error } = await supabase
