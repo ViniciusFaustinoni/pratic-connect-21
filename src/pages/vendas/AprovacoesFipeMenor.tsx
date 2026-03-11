@@ -91,6 +91,7 @@ export default function AprovacoesFipeMenor() {
         </Alert>
       )}
 
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="pendente">
             <Clock className="h-4 w-4 mr-1" />
