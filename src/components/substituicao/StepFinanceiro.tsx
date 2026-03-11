@@ -146,13 +146,13 @@ export function StepFinanceiro({
   // Cota de participação
   const cotaAntigaValor = useMemo(() => {
     if (!cotasAntigo) return veiculoAntigo.valor_fipe * (cotaParticipacaoDefault / 100);
-    return Math.max(cotasAntigo.cotas * 200, cotaMinimaDefault);
-  }, [cotasAntigo, veiculoAntigo.valor_fipe]);
+    return Math.max(cotasAntigo.cotas * valorCotaParticipacao, cotaMinimaDefault);
+  }, [cotasAntigo, veiculoAntigo.valor_fipe, valorCotaParticipacao, cotaMinimaDefault]);
 
   const cotaNovaValor = useMemo(() => {
     if (!cotasNovo || !dadosNovoVeiculo.valor_fipe) return 0;
-    return Math.max(cotasNovo.cotas * 200, cotaMinimaDefault);
-  }, [cotasNovo, dadosNovoVeiculo.valor_fipe]);
+    return Math.max(cotasNovo.cotas * valorCotaParticipacao, cotaMinimaDefault);
+  }, [cotasNovo, dadosNovoVeiculo.valor_fipe, valorCotaParticipacao, cotaMinimaDefault]);
 
   // Pro-rata
   const proRata = useMemo(() => {
