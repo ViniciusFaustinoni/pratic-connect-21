@@ -138,6 +138,7 @@ function encontrarFaixaMensalidade(
   combustivel: string,
   adicionalApp: number = 0,
   adicionalMensal: number = 0,
+  descontoPercentual: number = 0,
 ): { valorMensal: number; valorDesagio: number | null } | null {
   const mapping = planoPrecoMap.find(m => m.plano_id === planoId);
   if (!mapping) return null;
@@ -166,6 +167,11 @@ function encontrarFaixaMensalidade(
 
   // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
   valorMensalFinal += adicionalMensal;
+
+  // Aplicar desconto percentual dinâmico (ex: 5% OFF)
+  if (descontoPercentual > 0) {
+    valorMensalFinal *= (1 - descontoPercentual / 100);
+  }
 
   return {
     valorMensal: Math.round(valorMensalFinal * 100) / 100,
