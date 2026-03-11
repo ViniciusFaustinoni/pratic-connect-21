@@ -203,6 +203,7 @@ export function useCalcularCotacao() {
   const { data: planoPrecoMap, isLoading: loadingMap } = usePlanoPrecoMap();
   const { data: tabelasMensalidade, isLoading: loadingMensalidade } = useTabelasMensalidade();
   const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
+  const { data: decomposicao } = useConfigDecomposicao();
 
   const calcular = (
     valorFipe: number,
