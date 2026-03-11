@@ -77,27 +77,29 @@ export function ProdutosPlanos() {
     },
   });
 
-  // Fetch price mappings
+  // Fetch price mappings (using linha_slug + tipo_uso to distinguish e.g. Advanced vs Advanced+)
   const { data: precoMappings } = useQuery({
     queryKey: ['plano-preco-mappings'],
     queryFn: async () => {
-      const { data: maps } = await supabase.from('plano_preco_map').select('plano_id, linha_slug');
+      const { data: maps } = await supabase.from('plano_preco_map').select('plano_id, linha_slug, tipo_uso');
       const { data: precos } = await supabase
         .from('tabelas_preco_mensalidade')
         .select('linha_slug, fipe_min, fipe_max, valor_mensal, regiao, tipo_uso')
         .eq('is_active', true);
 
-      const porLinha: Record<string, typeof precos> = {};
+      // Index by composite key: linha_slug|tipo_uso
+      const porChave: Record<string, typeof precos> = {};
       precos?.forEach(p => {
-        const slug = p.linha_slug || '';
-        if (!porLinha[slug]) porLinha[slug] = [];
-        porLinha[slug]!.push(p);
+        const key = `${p.linha_slug || ''}|${p.tipo_uso || ''}`;
+        if (!porChave[key]) porChave[key] = [];
+        porChave[key]!.push(p);
       });
 
-      const porPlano: Record<string, { linhaSlug: string; faixas: typeof precos }> = {};
+      const porPlano: Record<string, { linhaSlug: string; tipoUso: string; faixas: typeof precos }> = {};
       maps?.forEach(m => {
-        if (porLinha[m.linha_slug]) {
-          porPlano[m.plano_id] = { linhaSlug: m.linha_slug, faixas: porLinha[m.linha_slug]! };
+        const key = `${m.linha_slug}|${m.tipo_uso}`;
+        if (porChave[key]) {
+          porPlano[m.plano_id] = { linhaSlug: m.linha_slug, tipoUso: m.tipo_uso, faixas: porChave[key]! };
         }
       });
       return porPlano;

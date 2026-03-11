@@ -216,14 +216,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
       const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
-      console.log('[PRECO DEBUG]', {
-        plano_nome: plano.nome,
-        plano_id: plano.id,
-        mapping_encontrado: !!mapping,
-        linha_slug: mapping?.linha_slug,
-        tipo_uso: mapping?.tipo_uso,
-        total_mappings_carregados: planoPrecoMap?.length
-      });
       const linhaSlug = mapping?.linha_slug;
       const tipoUsoOriginal = mapping?.tipo_uso || (params.usoApp ? 'aplicativo' : 'particular');
       // Resolver tipo_uso para query (regras de adicional app)
