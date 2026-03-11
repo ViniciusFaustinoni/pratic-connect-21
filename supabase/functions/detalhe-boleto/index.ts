@@ -219,9 +219,9 @@ serve(async (req) => {
     const desconto = payment.discount?.value || 0;
     const valorFinal = valorOriginal + juros + multa - desconto;
 
-    // Atualizar cache local
+    // Atualizar cache local — gravar status nativo ASAAS para consistência com webhook/lembretes
     const updateData: Record<string, any> = {
-      status: statusApp,
+      status: payment.status,
       sincronizado_em: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

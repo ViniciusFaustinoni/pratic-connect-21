@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
-const IS_SANDBOX = Deno.env.get('ASAAS_SANDBOX') === 'true' || ASAAS_API_KEY.startsWith('$aact_');
+const IS_SANDBOX = Deno.env.get('ASAAS_SANDBOX') === 'true' || ASAAS_API_KEY.includes('_hmlg_');
 const ASAAS_BASE_URL = IS_SANDBOX
   ? 'https://sandbox.asaas.com/api/v3'
   : 'https://api.asaas.com/v3';

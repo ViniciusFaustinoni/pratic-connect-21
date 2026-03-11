@@ -55,9 +55,10 @@ Deno.serve(async (req) => {
 
     while (true) {
       const { data: cobrancasVencidas, error: errCobrancas } = await supabase
-        .from('cobrancas')
-        .select('id, associado_id, valor_final, data_vencimento')
-        .in('status', ['aguardando_pagamento', 'vencido'])
+        .from('asaas_cobrancas')
+        .select('id, associado_id, valor, data_vencimento')
+        .in('status', ['PENDING', 'OVERDUE'])
+        .not('asaas_id', 'like', 'LOCAL-%')
         .lt('data_vencimento', hoje)
         .order('data_vencimento')
         .range(offset, offset + batchSize - 1)
@@ -78,11 +79,11 @@ Deno.serve(async (req) => {
         if (!existing || dias > existing.diasAtraso) {
           porAssociado.set(cob.associado_id, {
             diasAtraso: dias,
-            valorTotal: (existing?.valorTotal || 0) + Number(cob.valor_final || 0),
+            valorTotal: (existing?.valorTotal || 0) + Number(cob.valor || 0),
             cobrancaIds: [...(existing?.cobrancaIds || []), cob.id]
           })
         } else {
-          existing.valorTotal += Number(cob.valor_final || 0)
+          existing.valorTotal += Number(cob.valor || 0)
           existing.cobrancaIds.push(cob.id)
         }
       }
