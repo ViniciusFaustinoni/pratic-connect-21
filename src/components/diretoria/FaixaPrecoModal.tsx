@@ -174,6 +174,7 @@ export function FaixaPrecoModal({ open, onClose, planoId, faixa }: FaixaPrecoMod
       queryClient.invalidateQueries({ queryKey: ['tabelas_preco_mensalidade'] });
       queryClient.invalidateQueries({ queryKey: ['tabelas-preco-mensalidade-check'] });
       queryClient.invalidateQueries({ queryKey: ['planos-precos-info'] });
+      queryClient.invalidateQueries({ queryKey: ['tabela-precos-gc'] });
       onClose();
     },
     onError: (error: Error) => {
