@@ -11,6 +11,25 @@ interface GerarContratoPayload {
   vendedor_id?: string;
 }
 
+// Palavras-chave para detectar motos a partir de marca/modelo
+const MOTO_KEYWORDS = [
+  'honda', 'yamaha', 'suzuki', 'kawasaki', 'harley', 'triumph', 'ducati', 'bmw motorrad',
+  'nxr', 'bros', 'cg', 'biz', 'pop', 'xre', 'cb ', 'cbr', 'cbx', 'pcx', 'sh ',
+  'fazer', 'ybr', 'factor', 'crosser', 'lander', 'tenere', 'mt-', 'xt ',
+  'gsx', 'intruder', 'burgman', 'v-strom', 'hayabusa',
+  'ninja', 'z900', 'z800', 'versys', 'vulcan',
+  'motocicleta', 'moto ', 'scooter', 'triciclo',
+];
+
+function detectarCategoriaVeiculo(marca?: string, modelo?: string, categoriaExistente?: string): string {
+  // Se já tem categoria definida (ex: aplicativo, taxi), usar ela
+  if (categoriaExistente && categoriaExistente !== 'nenhuma') return categoriaExistente;
+  
+  const texto = `${marca || ''} ${modelo || ''}`.toLowerCase();
+  const isMoto = MOTO_KEYWORDS.some(kw => texto.includes(kw));
+  return isMoto ? 'Motocicleta' : 'Automóvel';
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -555,7 +574,7 @@ serve(async (req) => {
             // Campos para Termo de Afiliação (Autentique)
             codigo_fipe: cotacao.codigo_fipe || null,
             uso_aplicativo: cotacao.uso_aplicativo || false,
-            veiculo_categoria: cotacao.categoria || cotacao.veiculo_categoria || 'Automóvel',
+            veiculo_categoria: cotacao.veiculo_categoria || detectarCategoriaVeiculo(cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.categoria),
             
             // Dados obrigatórios para SGA Hinova e Termo de Afiliação (extraídos do CRLV via OCR)
             veiculo_chassi: cotacao.veiculo_chassi || null,
