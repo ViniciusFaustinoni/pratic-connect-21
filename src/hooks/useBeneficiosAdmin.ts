@@ -14,6 +14,7 @@ export interface BeneficioInput {
   ativo?: boolean;
   ordem?: number;
   variacao_por_cota?: boolean;
+  linhas_permitidas?: string[];
 }
 
 export interface BeneficioComRegioes extends BeneficioAdicional {
