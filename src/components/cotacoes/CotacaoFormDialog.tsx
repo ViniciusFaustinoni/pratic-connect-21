@@ -908,7 +908,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return;
     }
     
-    // Validação extra (redundante mas segura)
+    // Validar justificativa de FIPE menor
+    if (solicitarFipeMenor && justificativaFipeMenor.trim().length < 5) {
+      toast.error('Preencha a justificativa para solicitação de FIPE menor!');
+      return;
+    }
+
     if (data.valor_adesao <= 0) {
       toast.error('O valor de adesão deve ser maior que zero!');
       return;
