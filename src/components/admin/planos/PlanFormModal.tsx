@@ -475,6 +475,57 @@ export function PlanFormModal({
                       </div>
                     </div>
 
+                    {/* Tabela de Preços (linha_slug) */}
+                    <div className="space-y-2">
+                      <Label>Tabela de Preços (Linha)</Label>
+                      <Select
+                        value={formData.linha_slug}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({ ...prev, linha_slug: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Vincular tabela de preços..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableLinhaSlugs?.map((slug) => (
+                            <SelectItem key={slug} value={slug}>
+                              {slug}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Define qual tabela de preços mensais será usada para este plano
+                      </p>
+                    </div>
+
+                    {/* Categorias de Veículo Aceitas */}
+                    <div className="space-y-2">
+                      <Label>Categorias de Veículo Aceitas</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {VEHICLE_CATEGORIES.map((cat) => (
+                          <div key={cat.value} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`cat-${cat.value}`}
+                              checked={formData.categorias_veiculo.includes(cat.value)}
+                              onCheckedChange={(checked) => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  categorias_veiculo: checked
+                                    ? [...prev.categorias_veiculo, cat.value]
+                                    : prev.categorias_veiculo.filter((c) => c !== cat.value),
+                                }));
+                              }}
+                            />
+                            <Label htmlFor={`cat-${cat.value}`} className="text-sm font-normal cursor-pointer">
+                              {cat.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
                         <Switch
