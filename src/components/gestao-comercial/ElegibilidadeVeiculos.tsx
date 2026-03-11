@@ -439,7 +439,7 @@ function TabResumoGlobal() {
             : null;
           return {
             nome: p.nome,
-            linha_slug: p.linha_slug,
+            linha: p.linha,
             total: items.length,
             aceitos,
             limitados,
