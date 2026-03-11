@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
         if (!existing || dias > existing.diasAtraso) {
           porAssociado.set(cob.associado_id, {
             diasAtraso: dias,
-            valorTotal: (existing?.valorTotal || 0) + Number(cob.valor_final || 0),
+            valorTotal: (existing?.valorTotal || 0) + Number(cob.valor || 0),
             cobrancaIds: [...(existing?.cobrancaIds || []), cob.id]
           })
         } else {
