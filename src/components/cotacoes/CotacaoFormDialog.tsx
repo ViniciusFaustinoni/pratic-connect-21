@@ -1600,7 +1600,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 )}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Informe a taxa de filiação que será cobrada do associado
+                Valor da taxa de filiação (NÃO inclui mensalidade)
               </p>
             </div>
 
