@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -26,7 +27,19 @@ import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlans
 import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
+
+const VEHICLE_CATEGORIES = [
+  { value: 'passeio', label: 'Passeio' },
+  { value: 'aplicativo', label: 'Aplicativo' },
+  { value: 'moto', label: 'Moto' },
+  { value: 'diesel', label: 'Diesel' },
+  { value: 'eletrico', label: 'Elétrico' },
+  { value: 'especial_plus', label: 'Especial Plus' },
+  { value: 'lancamento', label: 'Lançamento' },
+];
 
 interface PlanFormModalProps {
   open: boolean;
@@ -65,6 +78,36 @@ export function PlanFormModal({
   const updatePlan = useUpdatePlan();
   const updateExclusions = useUpdateBenefitExclusions();
 
+  // Fetch available linha_slugs from price tables
+  const { data: availableLinhaSlugs } = useQuery({
+    queryKey: ['available-linha-slugs'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('tabelas_preco_mensalidade')
+        .select('linha_slug')
+        .eq('is_active', true);
+      const slugs = new Set<string>();
+      data?.forEach(d => { if (d.linha_slug) slugs.add(d.linha_slug); });
+      return Array.from(slugs).sort();
+    },
+    enabled: open,
+  });
+
+  // Fetch current plano_preco_map for editing
+  const { data: currentPrecoMap } = useQuery({
+    queryKey: ['plano-preco-map', plan?.id],
+    queryFn: async () => {
+      if (!plan?.id) return null;
+      const { data } = await supabase
+        .from('plano_preco_map')
+        .select('linha_slug')
+        .eq('plano_id', plan.id)
+        .single();
+      return data;
+    },
+    enabled: !!plan?.id && open,
+  });
+
   const isEditing = !!plan;
 
   // Form state
@@ -88,6 +131,8 @@ export function PlanFormModal({
     footer_note: '',
     display_order: '0',
     is_active: true,
+    linha_slug: '',
+    categorias_veiculo: [] as string[],
   });
 
   const [selectedBenefits, setSelectedBenefits] = useState<PlanBenefitInput[]>([]);
@@ -101,6 +146,8 @@ export function PlanFormModal({
   // Reset form when plan changes
   useEffect(() => {
     if (plan) {
+      const categoria = (plan as any).categoria;
+      const categorias = categoria ? categoria.split(',').map((c: string) => c.trim()).filter(Boolean) : [];
       setFormData({
         name: plan.name || '',
         slug: plan.slug || '',
@@ -121,6 +168,8 @@ export function PlanFormModal({
         footer_note: plan.footer_note || '',
         display_order: plan.display_order?.toString() || '0',
         is_active: plan.is_active ?? true,
+        linha_slug: '',
+        categorias_veiculo: categorias,
       });
       setSelectedBenefits(
         plan.plan_benefits?.map((pb) => ({
@@ -153,10 +202,19 @@ export function PlanFormModal({
         footer_note: '',
         display_order: '0',
         is_active: true,
+        linha_slug: '',
+        categorias_veiculo: [],
       });
       setSelectedBenefits([]);
     }
   }, [plan, defaultProductLineId]);
+
+  // Sync linha_slug from currentPrecoMap
+  useEffect(() => {
+    if (currentPrecoMap?.linha_slug) {
+      setFormData(prev => ({ ...prev, linha_slug: currentPrecoMap.linha_slug }));
+    }
+  }, [currentPrecoMap]);
 
   // Auto-generate slug from name
   const handleNameChange = (name: string) => {
@@ -205,6 +263,8 @@ export function PlanFormModal({
       display_order: parseInt(formData.display_order) || 0,
       is_active: formData.is_active,
       benefits: selectedBenefits,
+      linha_slug: formData.linha_slug || null,
+      categorias_veiculo: formData.categorias_veiculo.length > 0 ? formData.categorias_veiculo.join(',') : null,
     };
 
     try {
@@ -412,6 +472,57 @@ export function PlanFormModal({
                           }
                           placeholder="Ex: 2015+"
                         />
+                      </div>
+                    </div>
+
+                    {/* Tabela de Preços (linha_slug) */}
+                    <div className="space-y-2">
+                      <Label>Tabela de Preços (Linha)</Label>
+                      <Select
+                        value={formData.linha_slug}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({ ...prev, linha_slug: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Vincular tabela de preços..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableLinhaSlugs?.map((slug) => (
+                            <SelectItem key={slug} value={slug}>
+                              {slug}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Define qual tabela de preços mensais será usada para este plano
+                      </p>
+                    </div>
+
+                    {/* Categorias de Veículo Aceitas */}
+                    <div className="space-y-2">
+                      <Label>Categorias de Veículo Aceitas</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {VEHICLE_CATEGORIES.map((cat) => (
+                          <div key={cat.value} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`cat-${cat.value}`}
+                              checked={formData.categorias_veiculo.includes(cat.value)}
+                              onCheckedChange={(checked) => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  categorias_veiculo: checked
+                                    ? [...prev.categorias_veiculo, cat.value]
+                                    : prev.categorias_veiculo.filter((c) => c !== cat.value),
+                                }));
+                              }}
+                            />
+                            <Label htmlFor={`cat-${cat.value}`} className="text-sm font-normal cursor-pointer">
+                              {cat.label}
+                            </Label>
+                          </div>
+                        ))}
                       </div>
                     </div>
 

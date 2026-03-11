@@ -24,9 +24,11 @@ import { toast } from 'sonner';
 import { 
   VincularCoberturaModal, 
   FaixaPrecoModal, 
-  ProdutoFormModal,
   EditarCoberturaVinculadaModal 
 } from '@/components/diretoria';
+import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
+import { usePlanById } from '@/hooks/usePlans';
+import type { PlanWithDetails } from '@/hooks/usePlans';
 
 interface PlanoCobertura {
   id: string;
@@ -117,6 +119,9 @@ export default function ProdutoDetalhe() {
     },
     enabled: !!id
   });
+
+  // Get plan with details for the PlanFormModal
+  const { data: planWithDetails } = usePlanById(id);
 
   const { data: coberturas, isLoading: loadingCoberturas } = useQuery({
     queryKey: ['plano-coberturas', id],
@@ -676,10 +681,10 @@ export default function ProdutoDetalhe() {
         faixa={faixaEdit}
       />
 
-      <ProdutoFormModal
+      <PlanFormModal
         open={modalProdutoOpen}
-        onClose={() => setModalProdutoOpen(false)}
-        produto={plano}
+        onOpenChange={(open) => { if (!open) setModalProdutoOpen(false); }}
+        plan={planWithDetails || null}
       />
 
       {/* Dialog de confirmação de exclusão */}

@@ -36,6 +36,8 @@ export interface PlanInput {
   display_order?: number;
   is_active?: boolean;
   benefits?: PlanBenefitInput[];
+  linha_slug?: string | null;
+  categorias_veiculo?: string | null;
 }
 
 // ==================== PLAN MUTATIONS ====================
@@ -45,7 +47,7 @@ export function useCreatePlan() {
 
   return useMutation({
     mutationFn: async (input: PlanInput) => {
-      const { benefits, ...planData } = input;
+      const { benefits, linha_slug, categorias_veiculo, ...planData } = input;
 
       // Mapear para campos da tabela planos
       const planoData = {
@@ -70,6 +72,7 @@ export function useCreatePlan() {
         ordem: planData.display_order || 0,
         ativo: planData.is_active ?? true,
         valor_adesao: 0,
+        categoria: categorias_veiculo || null,
       };
 
       // Create plan
@@ -81,12 +84,25 @@ export function useCreatePlan() {
 
       if (planError) throw planError;
 
+      // Upsert plano_preco_map if linha_slug provided
+      if (linha_slug) {
+        // Delete existing and insert new
+        await supabase
+          .from('plano_preco_map')
+          .delete()
+          .eq('plano_id', plan.id);
+        
+        await supabase
+          .from('plano_preco_map')
+          .insert({ plano_id: plan.id, linha_slug, tipo_uso: planData.tipo_uso || 'particular' });
+      }
+
       // Create planos_beneficios if provided
       if (benefits && benefits.length > 0) {
         const planBenefits = benefits.map((b, index) => ({
           plano_id: plan.id,
           benefit_id: b.benefit_id,
-          beneficio: '', // Will be filled from benefits table
+          beneficio: '',
           custom_text: b.custom_text,
           custom_value: b.custom_value,
           additional_info: b.additional_info,
@@ -120,7 +136,7 @@ export function useUpdatePlan() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: PlanInput & { id: string }) => {
-      const { benefits, ...planData } = input;
+      const { benefits, linha_slug, categorias_veiculo, ...planData } = input;
 
       // Mapear para campos da tabela planos
       const planoData = {
@@ -144,6 +160,7 @@ export function useUpdatePlan() {
         footer_note: planData.footer_note,
         ordem: planData.display_order || 0,
         ativo: planData.is_active ?? true,
+        categoria: categorias_veiculo || null,
       };
 
       // Update plan
@@ -155,6 +172,20 @@ export function useUpdatePlan() {
         .single();
 
       if (planError) throw planError;
+
+      // Update plano_preco_map if linha_slug provided
+      if (linha_slug !== undefined) {
+        await supabase
+          .from('plano_preco_map')
+          .delete()
+          .eq('plano_id', id);
+        
+        if (linha_slug) {
+          await supabase
+            .from('plano_preco_map')
+            .insert({ plano_id: id, linha_slug, tipo_uso: planData.tipo_uso || 'particular' });
+        }
+      }
 
       // Update planos_beneficios - delete old and insert new
       if (benefits !== undefined) {
