@@ -21,7 +21,7 @@ export function useBeneficiosAdicionaisCotacao() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('beneficios_adicionais')
-        .select('id, codigo, nome, preco, categoria, descricao')
+        .select('id, codigo, nome, preco, categoria, descricao, linhas_permitidas')
         .eq('ativo', true)
         .order('ordem', { ascending: true });
 
