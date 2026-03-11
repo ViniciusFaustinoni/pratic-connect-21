@@ -115,6 +115,8 @@ Deno.serve(async (req) => {
         body: {
           telefone,
           mensagem: `Olá ${nome}, confirmamos a retirada do seu ${placa}. Garantia de 90 dias ativa a partir de hoje. Problemas relacionados ao reparo? Entre em contato imediatamente.`,
+          template_name: 'sinistro_atualizado',
+          template_params: [nome, 'retirada', `Retirada do veículo ${placa} confirmada. Garantia de 90 dias ativa.`],
         },
       });
     }
