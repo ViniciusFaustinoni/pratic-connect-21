@@ -78,7 +78,7 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
       if (!valorFipe || valorFipe <= 0) return [];
 
       // Buscar planos ativos, mapeamento, preços e config adicional_app em paralelo
-      const [planosRes, mapRes, mensalidadeRes, configRes] = await Promise.all([
+      const [planosRes, mapRes, mensalidadeRes, configRes, decomRes] = await Promise.all([
         supabase
           .from('planos')
           .select('id, codigo, nome, categoria, valor_adesao, descricao')
@@ -96,6 +96,10 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
           .select('valor')
           .eq('chave', 'adicional_app')
           .maybeSingle(),
+        supabase
+          .from('configuracoes')
+          .select('chave, valor')
+          .in('chave', ['decomposicao_cota', 'decomposicao_admin', 'decomposicao_rastreamento', 'decomposicao_assistencia']),
       ]);
 
       const adicionalApp = parseFloat(configRes.data?.valor || '35.90') || 35.90;
