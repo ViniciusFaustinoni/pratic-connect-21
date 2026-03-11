@@ -109,7 +109,7 @@ serve(async (req) => {
 
       const { data: sinistros, error: sinistrosError } = await supabase
         .from('sinistros')
-        .select('id, tipo, tipo_dano, valor_indenizacao, data_ocorrencia, associado_id, veiculo_id')
+        .select('id, tipo, tipo_dano, valor_indenizacao, valor_cota_participacao, data_ocorrencia, associado_id, veiculo_id')
         .in('status', ['aprovado', 'indenizado', 'pago'])
         .gte('data_ocorrencia', inicioMes)
         .lte('data_ocorrencia', fimMes);
