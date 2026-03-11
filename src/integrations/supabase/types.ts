@@ -10908,6 +10908,11 @@ export type Database = {
         Row: {
           ajuste_percentual: number | null
           ativo: boolean | null
+          cotas_aplicativo: number | null
+          cotas_diesel: number | null
+          cotas_eletrico: number | null
+          cotas_moto: number | null
+          cotas_passeio: number | null
           created_at: string | null
           fipe_ate: number
           fipe_de: number
@@ -10919,6 +10924,11 @@ export type Database = {
         Insert: {
           ajuste_percentual?: number | null
           ativo?: boolean | null
+          cotas_aplicativo?: number | null
+          cotas_diesel?: number | null
+          cotas_eletrico?: number | null
+          cotas_moto?: number | null
+          cotas_passeio?: number | null
           created_at?: string | null
           fipe_ate: number
           fipe_de: number
@@ -10930,6 +10940,11 @@ export type Database = {
         Update: {
           ajuste_percentual?: number | null
           ativo?: boolean | null
+          cotas_aplicativo?: number | null
+          cotas_diesel?: number | null
+          cotas_eletrico?: number | null
+          cotas_moto?: number | null
+          cotas_passeio?: number | null
           created_at?: string | null
           fipe_ate?: number
           fipe_de?: number
@@ -16813,6 +16828,51 @@ export type Database = {
           },
           {
             foreignKeyName: "planos_coberturas_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planos_cotas_categoria: {
+        Row: {
+          categoria_veiculo: string
+          cota_minima_valor: number | null
+          cota_percentual: number | null
+          created_at: string | null
+          id: string
+          plano_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          categoria_veiculo: string
+          cota_minima_valor?: number | null
+          cota_percentual?: number | null
+          created_at?: string | null
+          id?: string
+          plano_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          categoria_veiculo?: string
+          cota_minima_valor?: number | null
+          cota_percentual?: number | null
+          created_at?: string | null
+          id?: string
+          plano_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_cotas_categoria_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_cotas_categoria_plano_id_fkey"
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "vw_plans_compat"
