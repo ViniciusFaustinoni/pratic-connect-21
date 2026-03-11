@@ -56,6 +56,7 @@ export function RegioesConfig() {
   
   const { data: regioes, isLoading } = useRegioes();
   const { data: priceCounts } = useRegionPriceCounts();
+  const createRegiao = useCreateRegiao();
   const updateRegiao = useUpdateRegiao();
   const deleteRegiao = useDeleteRegiao();
   const toggleStatus = useToggleRegiaoStatus();
