@@ -340,6 +340,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     };
   }, [valorFipe, planosSelecionados, todasFaixas]);
 
+  // Faixa de preço atual onde o FIPE se enquadra
+  const faixaAtualFipe = useMemo(() => {
+    if (!valorFipe || valorFipe <= 0 || todasFaixas.length === 0) return null;
+    // Buscar faixas únicas (sem duplicar por linha/região)
+    const faixa = todasFaixas.find(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max);
+    if (!faixa) return null;
+    return { min: faixa.fipe_min, max: faixa.fipe_max };
+  }, [valorFipe, todasFaixas]);
+
 
   const dadosAssociadoValidos = useMemo(() => {
     const nomeValido = nomeAssociado.trim().length >= 3;
@@ -1539,6 +1548,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   </FormItem>
                 )}
               />
+              {valorFipe > 0 && faixaAtualFipe && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Faixa enquadrada: {formatCurrency(faixaAtualFipe.min)} – {formatCurrency(faixaAtualFipe.max)}
+                </p>
+              )}
             </div>
 
             {/* BLOCO 2: CONDIÇÕES ESPECIAIS / DESÁGIOS */}
