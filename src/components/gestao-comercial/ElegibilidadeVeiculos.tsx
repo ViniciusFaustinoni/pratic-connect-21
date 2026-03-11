@@ -838,6 +838,13 @@ function TabResumoGlobal() {
 
 // ─── Componente Principal ────────────────────────────────────
 export function ElegibilidadeVeiculos() {
+  const [activeTab, setActiveTab] = useState('por-plano');
+
+  const handleNavigateToPlano = useCallback((planoId: string) => {
+    setActiveTab('por-plano');
+    // TabPorPlano will pick up selectedPlano from URL or state if needed
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -845,7 +852,7 @@ export function ElegibilidadeVeiculos() {
         <p className="text-muted-foreground">Controle quais marcas, modelos e anos são aceitos por plano</p>
       </div>
 
-      <Tabs defaultValue="por-plano">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="por-plano">Por Plano</TabsTrigger>
           <TabsTrigger value="importar-pdf">Importar PDF</TabsTrigger>
@@ -853,7 +860,7 @@ export function ElegibilidadeVeiculos() {
         </TabsList>
 
         <TabsContent value="por-plano"><TabPorPlano /></TabsContent>
-        <TabsContent value="importar-pdf"><TabImportarPDF /></TabsContent>
+        <TabsContent value="importar-pdf"><TabImportarPDF onNavigateToPlano={handleNavigateToPlano} /></TabsContent>
         <TabsContent value="resumo"><TabResumoGlobal /></TabsContent>
       </Tabs>
     </div>
