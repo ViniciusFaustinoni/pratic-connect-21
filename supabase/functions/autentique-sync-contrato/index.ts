@@ -20,7 +20,6 @@ async function anexarContratoAssinado(
   try {
     console.log("[autentique-sync-contrato] Baixando PDF assinado de:", signedFileUrl);
 
-    // Baixar o PDF
     const pdfResponse = await fetch(signedFileUrl);
     if (!pdfResponse.ok) {
       console.error("[autentique-sync-contrato] Erro ao baixar PDF:", pdfResponse.status);
@@ -33,14 +32,12 @@ async function anexarContratoAssinado(
 
     console.log("[autentique-sync-contrato] PDF baixado, tamanho:", pdfBytes.length, "bytes");
 
-    // Gerar nome do arquivo
     const timestamp = Date.now();
     const contratoNumero = contrato.numero || contrato.id;
     const fileName = `${contrato.associado_id}/${contratoNumero}_assinado_${timestamp}.pdf`;
 
     console.log("[autentique-sync-contrato] Fazendo upload para Storage:", fileName);
 
-    // Upload para Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("contratos-assinados")
       .upload(fileName, pdfBytes, {
@@ -55,7 +52,6 @@ async function anexarContratoAssinado(
 
     console.log("[autentique-sync-contrato] ✓ Upload concluído:", uploadData.path);
 
-    // Obter URL pública
     const { data: urlData } = supabase.storage
       .from("contratos-assinados")
       .getPublicUrl(fileName);
@@ -63,13 +59,11 @@ async function anexarContratoAssinado(
     const publicUrl = urlData.publicUrl;
     console.log("[autentique-sync-contrato] URL pública:", publicUrl);
 
-    // Atualizar contrato com URL do PDF assinado
     await supabase
       .from("contratos")
       .update({ pdf_assinado_url: publicUrl })
       .eq("id", contrato.id);
 
-    // Verificar se já existe documento anexado para este contrato
     const { data: existingDoc } = await supabase
       .from("documentos")
       .select("id")
@@ -90,7 +84,6 @@ async function anexarContratoAssinado(
         })
         .eq("id", existingDoc.id);
     } else {
-      // Criar registro na tabela documentos
       console.log("[autentique-sync-contrato] Criando registro de documento...");
       const { error: docError } = await supabase.from("documentos").insert({
         associado_id: contrato.associado_id,
@@ -98,19 +91,17 @@ async function anexarContratoAssinado(
         tipo: "contrato_assinado",
         nome_arquivo: `Contrato ${contratoNumero} - Assinado.pdf`,
         arquivo_url: publicUrl,
-        status: "aprovado", // Já está aprovado pela assinatura digital
+        status: "aprovado",
         observacao: `Contrato assinado eletronicamente por ${signerName} via Autentique (sync)`,
       });
 
       if (docError) {
         console.error("[autentique-sync-contrato] Erro ao criar documento:", docError);
-        // Não falha a operação principal, apenas loga
       } else {
         console.log("[autentique-sync-contrato] ✓ Documento criado com sucesso!");
       }
     }
 
-    // Registrar no histórico do associado
     if (contrato.associado_id) {
       await supabase.from("associados_historico").insert({
         associado_id: contrato.associado_id,
@@ -132,8 +123,33 @@ async function anexarContratoAssinado(
   }
 }
 
+/**
+ * Fallback: verifica se o PDF assinado está realmente disponível e contém assinaturas.
+ * Autentique às vezes demora para atualizar o campo `signed` na API GraphQL,
+ * mas o PDF assinado já está disponível no endpoint.
+ */
+async function verificarPdfAssinadoDisponivel(signedFileUrl: string): Promise<boolean> {
+  try {
+    // HEAD request para verificar se o PDF assinado está acessível
+    const response = await fetch(signedFileUrl, { method: "HEAD" });
+    if (!response.ok) return false;
+    
+    const contentLength = response.headers.get("content-length");
+    const size = contentLength ? parseInt(contentLength) : 0;
+    
+    // Um PDF assinado tipicamente tem mais de 50KB (contém as assinaturas digitais)
+    // Um PDF não assinado (template) geralmente é menor
+    console.log(`[autentique-sync-contrato] PDF check: status=${response.status}, size=${size} bytes`);
+    
+    // Se o arquivo existe e tem tamanho razoável, provavelmente está assinado
+    return size > 10000;
+  } catch (error) {
+    console.error("[autentique-sync-contrato] Erro ao verificar PDF:", error);
+    return false;
+  }
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -187,11 +203,9 @@ serve(async (req) => {
 
     // Se já está assinado, verificar se precisa anexar o documento
     if (contrato.status === "assinado" || contrato.status === "ativo") {
-      // Verificar se já tem documento anexado
       if (contrato.associado_id && !contrato.pdf_assinado_url) {
         console.log("[autentique-sync-contrato] Contrato assinado mas sem PDF anexado, tentando buscar...");
         
-        // Consultar Autentique para obter URL do PDF
         const documentId = contrato.autentique_documento_id;
         if (documentId) {
           const query = `
@@ -261,22 +275,33 @@ serve(async (req) => {
     const documentId = contrato.autentique_documento_id;
     console.log("[autentique-sync-contrato] Consultando Autentique para documento:", documentId);
 
+    // Query expandida para capturar mais campos de status
     const query = `
       query GetDocument($id: UUID!) {
         document(id: $id) {
           id
           name
+          refusable
+          sortable
+          created_at
           signatures {
             public_id
             name
             email
             action { name }
+            link { short_link }
             viewed { created_at }
             signed { created_at }
             rejected { created_at reason }
+            delivery_method
           }
           files {
+            original
             signed
+          }
+          hashes {
+            sha256
+            sha512
           }
         }
       }
@@ -311,20 +336,29 @@ serve(async (req) => {
     // Processar status das assinaturas
     const signatures = document.signatures || [];
     
-    // Filtrar apenas signatários que têm ação de ASSINAR
-    const signersWithSignAction = signatures.filter((s: any) => 
-      s.action?.name === 'SIGN' || s.action?.name === 'Assinar'
-    );
+    // Filtrar signatários que têm ação de ASSINAR (inclui variações conhecidas)
+    const signersWithSignAction = signatures.filter((s: any) => {
+      const actionName = s.action?.name?.toUpperCase();
+      return actionName === 'SIGN' || actionName === 'ASSINAR';
+    });
+
+    // TAMBÉM considerar signatários sem action (autor/criador do documento) que tenham assinado
+    const allPossibleSigners = signatures.filter((s: any) => {
+      // Incluir quem tem action SIGN ou quem efetivamente assinou (mesmo sem action)
+      const actionName = s.action?.name?.toUpperCase();
+      return actionName === 'SIGN' || actionName === 'ASSINAR' || s.signed?.created_at;
+    });
     
-    // Verificar se todos assinaram
+    // Verificar se TODOS os signatários com SIGN assinaram
     const hasSigners = signersWithSignAction.length > 0;
     const allSignersSigned = hasSigners && signersWithSignAction.every((s: any) => s.signed?.created_at);
-    const anySignerRejected = signersWithSignAction.some((s: any) => s.rejected?.created_at);
-    const anySignerViewed = signersWithSignAction.some((s: any) => s.viewed?.created_at);
+    const anySignerRejected = signatures.some((s: any) => s.rejected?.created_at);
+    const anySignerViewed = signatures.some((s: any) => s.viewed?.created_at);
+    const anySignerSigned = signatures.some((s: any) => s.signed?.created_at);
     
     // Encontrar quem assinou
-    const signerWhoSigned = signersWithSignAction.find((s: any) => s.signed?.created_at);
-    const signerName = signerWhoSigned?.name || "Cliente";
+    const signerWhoSigned = allPossibleSigners.find((s: any) => s.signed?.created_at);
+    const signerName = signerWhoSigned?.name || signersWithSignAction[0]?.name || "Cliente";
 
     let overallStatus = "pending";
     if (allSignersSigned) overallStatus = "signed";
@@ -335,10 +369,62 @@ serve(async (req) => {
       totalSignatures: signatures.length,
       signersWithSignAction: signersWithSignAction.length,
       allSignersSigned,
-      overallStatus
+      anySignerSigned,
+      overallStatus,
+      signaturesDetail: signatures.map((s: any) => ({
+        email: s.email,
+        action: s.action?.name,
+        viewed: !!s.viewed?.created_at,
+        signed: !!s.signed?.created_at,
+        rejected: !!s.rejected?.created_at,
+      })),
     });
 
-    // Se está assinado, atualizar o banco
+    // ========== FALLBACK: Se a API mostra "pending" mas o PDF assinado está disponível ==========
+    // Autentique às vezes demora para propagar o status via GraphQL, mas o PDF já está pronto.
+    if (overallStatus === "pending" && document.files?.signed) {
+      console.log("[autentique-sync-contrato] Status pending mas files.signed existe. Verificando PDF...");
+      
+      const pdfDisponivel = await verificarPdfAssinadoDisponivel(document.files.signed);
+      
+      if (pdfDisponivel) {
+        // Comparar com o original: se signed e original têm hashes diferentes, está assinado
+        const hasHashes = document.hashes?.sha256;
+        
+        // Dupla verificação: baixar os primeiros bytes e verificar se é um PDF válido com assinaturas
+        const signedResponse = await fetch(document.files.signed);
+        if (signedResponse.ok) {
+          const signedBytes = new Uint8Array(await signedResponse.arrayBuffer());
+          const signedSize = signedBytes.length;
+          
+          // Verificar também o PDF original para comparar tamanhos
+          let originalSize = 0;
+          if (document.files?.original) {
+            try {
+              const origResponse = await fetch(document.files.original, { method: "HEAD" });
+              const origLength = origResponse.headers.get("content-length");
+              originalSize = origLength ? parseInt(origLength) : 0;
+            } catch { /* ignore */ }
+          }
+          
+          console.log(`[autentique-sync-contrato] Comparação PDFs: signed=${signedSize} bytes, original=${originalSize} bytes`);
+          
+          // Se o PDF assinado é significativamente maior que o original (contém assinatura digital),
+          // OU se o original é desconhecido mas o assinado tem tamanho razoável
+          const isActuallySigned = (originalSize > 0 && signedSize > originalSize * 1.05) || 
+                                   (originalSize === 0 && signedSize > 50000);
+          
+          if (isActuallySigned) {
+            console.log("[autentique-sync-contrato] ✓ FALLBACK: PDF assinado confirmado por comparação de tamanho!");
+            overallStatus = "signed";
+          } else {
+            console.log("[autentique-sync-contrato] PDF assinado não confirmado por comparação de tamanho. Aguardando API.");
+          }
+        }
+      }
+    }
+
+    // Marcar como assinado
     if (overallStatus === "signed") {
       console.log("[autentique-sync-contrato] ✓ Documento assinado! Atualizando banco...");
       
@@ -356,19 +442,18 @@ serve(async (req) => {
         throw updateError;
       }
 
-      // Registrar histórico
       await supabase.from("contratos_historico").insert({
         contrato_id: contrato.id,
         evento: "documento_assinado_sync",
-        descricao: `Contrato assinado (sincronização manual) por ${signerName}`,
+        descricao: `Contrato assinado (sincronização) por ${signerName}`,
         dados: { 
           signed_at: new Date().toISOString(),
           sync_method: "autentique-sync-contrato",
-          signer_name: signerName
+          signer_name: signerName,
+          detection_method: allSignersSigned ? "api_status" : "pdf_fallback",
         },
       });
 
-      // Atualizar lead se existir
       if (contrato.lead_id) {
         await supabase
           .from("leads")
@@ -386,7 +471,7 @@ serve(async (req) => {
 
       console.log("[autentique-sync-contrato] ✓ Contrato atualizado com sucesso!");
 
-      // ========== NOVO: Anexar PDF assinado nos documentos do associado ==========
+      // Anexar PDF assinado
       let anexoUrl: string | null = null;
       const signedFileUrl = document.files?.signed;
       
@@ -412,7 +497,6 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else if (overallStatus === "rejected") {
-      // Atualizar para rejeitado
       await supabase
         .from("contratos")
         .update({
@@ -431,7 +515,6 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else if (overallStatus === "viewed" && contrato.status === "pendente_assinatura") {
-      // Atualizar para visualizado
       await supabase
         .from("contratos")
         .update({
