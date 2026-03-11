@@ -36,6 +36,8 @@ export interface PlanInput {
   display_order?: number;
   is_active?: boolean;
   benefits?: PlanBenefitInput[];
+  linha_slug?: string | null;
+  categorias_veiculo?: string | null;
 }
 
 // ==================== PLAN MUTATIONS ====================
