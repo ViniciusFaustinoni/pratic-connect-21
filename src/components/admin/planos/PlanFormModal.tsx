@@ -114,6 +114,20 @@ export function PlanFormModal({
     enabled: !!plan?.id && open,
   });
 
+  // Fetch existing cotas por categoria for editing
+  const { data: existingCotasCat } = useQuery({
+    queryKey: ['plano-cotas-categoria', plan?.id],
+    queryFn: async () => {
+      if (!plan?.id) return [];
+      const { data } = await supabase
+        .from('planos_cotas_categoria' as any)
+        .select('categoria_veiculo, cota_percentual, cota_minima_valor')
+        .eq('plano_id', plan.id);
+      return (data || []) as { categoria_veiculo: string; cota_percentual: number; cota_minima_valor: number }[];
+    },
+    enabled: !!plan?.id && open,
+  });
+
   const isEditing = !!plan;
 
   // Form state
