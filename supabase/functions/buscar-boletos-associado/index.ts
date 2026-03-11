@@ -244,9 +244,9 @@ serve(async (req) => {
           boletoData = await buscarIdentificacaoBoleto(payment.id);
         }
 
-        // Atualizar cache local (asaas_cobrancas)
+        // Atualizar cache local (asaas_cobrancas) — gravar status nativo ASAAS para consistência
         const updateData: any = {
-          status: statusApp,
+          status: payment.status,
           sincronizado_em: new Date().toISOString(),
         };
 

@@ -55,9 +55,10 @@ Deno.serve(async (req) => {
 
     while (true) {
       const { data: cobrancasVencidas, error: errCobrancas } = await supabase
-        .from('cobrancas')
-        .select('id, associado_id, valor_final, data_vencimento')
-        .in('status', ['aguardando_pagamento', 'vencido'])
+        .from('asaas_cobrancas')
+        .select('id, associado_id, valor, data_vencimento')
+        .in('status', ['PENDING', 'OVERDUE'])
+        .not('asaas_id', 'like', 'LOCAL-%')
         .lt('data_vencimento', hoje)
         .order('data_vencimento')
         .range(offset, offset + batchSize - 1)
