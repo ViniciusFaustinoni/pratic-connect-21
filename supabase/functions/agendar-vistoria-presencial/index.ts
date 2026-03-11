@@ -61,7 +61,7 @@ serve(async (req) => {
       .eq('data_agendada', dataAgendada)
       .eq('periodo', periodoAgendado)
       .eq('local_vistoria', 'cliente')
-      .not('status', 'in', '("cancelada","recusada")');
+      .not('status', 'in', '("cancelada")');
 
     if (servicosError) {
       console.error('[AgendarVistoriaPresencial] Erro ao verificar vagas:', servicosError);
