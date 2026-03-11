@@ -32,9 +32,9 @@ interface FaturasRequest {
   fechamento_id?: string;
   mes?: number;
   ano?: number;
-  preview?: boolean; // Se true, retorna preview sem criar boletos
+  preview?: boolean;
   enviar_whatsapp?: boolean;
-  limite?: number; // Para processar em lotes
+  limite?: number;
 }
 
 interface ComposicaoFatura {
@@ -51,6 +51,29 @@ interface ComposicaoFatura {
   total: number;
 }
 
+// Helper: fetch all rows with pagination (bypass 1000-row limit)
+async function fetchAllRows(supabase: any, table: string, filters: Record<string, any>, selectFields: string): Promise<any[]> {
+  const PAGE_SIZE = 1000;
+  let allRows: any[] = [];
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase.from(table).select(selectFields).range(offset, offset + PAGE_SIZE - 1);
+    for (const [key, value] of Object.entries(filters)) {
+      query = query.eq(key, value);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(`Erro ao buscar ${table}: ${error.message}`);
+    const rows = data || [];
+    allRows = allRows.concat(rows);
+    hasMore = rows.length === PAGE_SIZE;
+    offset += PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -63,7 +86,6 @@ serve(async (req) => {
     
     let fechamentoId = body.fechamento_id;
     
-    // Buscar fechamento pelo mês/ano se não passou ID
     if (!fechamentoId && body.mes && body.ano) {
       const { data: fechamento } = await supabase
         .from('fechamentos_mensais')
@@ -96,7 +118,23 @@ serve(async (req) => {
 
     console.log(`[gerar-faturas] Processando fechamento ${fechamento.mes}/${fechamento.ano}`);
 
-    // 2. Criar mapa de valor por cota por benefício
+    // 2. Buscar configurações dinâmicas (eliminar hardcodes)
+    const { data: configRows } = await supabase
+      .from('configuracoes')
+      .select('chave, valor')
+      .in('chave', ['atuarial_valor_por_cota', 'taxa_administrativa_padrao']);
+
+    const configMap: Record<string, string> = {};
+    for (const row of (configRows || [])) {
+      configMap[row.chave] = row.valor;
+    }
+
+    const valorPorCotaConfig = Number(configMap['atuarial_valor_por_cota']) || 5000;
+    const taxaAdminPadrao = Number(configMap['taxa_administrativa_padrao']) || 49.90;
+
+    console.log(`[gerar-faturas] Config: valorPorCota=${valorPorCotaConfig}, taxaAdminPadrao=${taxaAdminPadrao}`);
+
+    // 3. Criar mapa de valor por cota por benefício
     const valorPorCotaBeneficio: Record<string, number> = {};
     for (const despesa of (fechamento.despesas_rateio || [])) {
       valorPorCotaBeneficio[despesa.tipo_beneficio] = despesa.valor_por_cota || 0;
@@ -104,48 +142,43 @@ serve(async (req) => {
 
     console.log('[gerar-faturas] Valores por cota:', valorPorCotaBeneficio);
 
-    // 3. Buscar associados ativos com veículos e faixas
-    const { data: associados, error: assocError } = await supabase
-      .from('associados')
-      .select(`
+    // 4. Buscar associados ativos com veículos (COM PAGINAÇÃO)
+    const selectFields = `
+      id,
+      nome,
+      email,
+      cpf,
+      dia_vencimento,
+      whatsapp,
+      telefone,
+      data_adesao,
+      veiculos (
         id,
-        nome,
-        email,
-        cpf,
-        dia_vencimento,
-        whatsapp,
-        telefone,
-        data_adesao,
-        veiculos (
+        placa,
+        status,
+        quantidade_cotas,
+        faixa_cota_id,
+        valor_fipe,
+        cobertura_total,
+        cobertura_roubo_furto,
+        cobertura_vidros,
+        cobertura_terceiros,
+        cobertura_assistencia,
+        faixas_cotas:faixa_cota_id (
           id,
-          placa,
-          status,
           quantidade_cotas,
-          faixa_cota_id,
-          valor_fipe,
-          cobertura_total,
-          cobertura_roubo_furto,
-          cobertura_vidros,
-          cobertura_terceiros,
-          cobertura_assistencia,
-          faixas_cotas:faixa_cota_id (
-            id,
-            quantidade_cotas,
-            fipe_de,
-            fipe_ate
-          )
-        ),
-        asaas_clientes (
-          asaas_id
+          fipe_de,
+          fipe_ate
         )
-      `)
-      .eq('status', 'ativo');
+      ),
+      asaas_clientes (
+        asaas_id
+      )
+    `;
 
-    if (assocError) {
-      throw new Error(`Erro ao buscar associados: ${assocError.message}`);
-    }
+    const associados = await fetchAllRows(supabase, 'associados', { status: 'ativo' }, selectFields);
 
-    // 4. Buscar taxas administrativas por faixa
+    // 5. Buscar taxas administrativas por faixa
     const { data: taxasAdmin } = await supabase
       .from('faixas_taxa_administrativa')
       .select('*')
@@ -154,13 +187,11 @@ serve(async (req) => {
 
     const taxasMap = taxasAdmin || [];
 
-    // Função para buscar taxa administrativa por valor FIPE
     function getTaxaAdministrativa(valorFipe: number): number {
-      const faixa = taxasMap.find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
-      return faixa?.valor_taxa || 49.90; // Default
+      const faixa = taxasMap.find((t: any) => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
+      return faixa?.valor_taxa || taxaAdminPadrao;
     }
 
-    // Função para calcular pró-rata
     function calcularProRata(dataAdesao: string | null, mes: number, ano: number): number {
       if (!dataAdesao) return 1;
       
@@ -177,23 +208,23 @@ serve(async (req) => {
       return Math.max(0, Math.min(1, diasAtivos / diasMes));
     }
 
-    console.log(`[gerar-faturas] ${associados?.length || 0} associados para processar`);
+    console.log(`[gerar-faturas] ${associados.length} associados para processar`);
 
     const competencia = `${fechamento.ano}-${String(fechamento.mes).padStart(2, '0')}`;
     const resultados = {
-      total: associados?.length || 0,
+      total: associados.length,
       geradas: 0,
       jaExistentes: 0,
       erros: 0,
+      alertas: 0,
       whatsappEnviados: 0,
       preview: body.preview,
       faturas: [] as any[],
     };
 
-    // 5. Processar cada associado
-    for (const associado of (associados || [])) {
+    // 6. Processar cada associado
+    for (const associado of associados) {
       try {
-        // Buscar TODOS os veículos ativos do associado
         const veiculosAtivos = (associado.veiculos || []).filter((v: any) => v.status === 'ativo');
         if (veiculosAtivos.length === 0) continue;
 
@@ -201,10 +232,8 @@ serve(async (req) => {
           console.log(`[MULTI-VEICULO] Associado ${associado.id} (${associado.nome}): ${veiculosAtivos.length} veículos ativos`);
         }
 
-        // Calcular pró-rata (igual para todos os veículos do mesmo associado)
         const proRata = calcularProRata(associado.data_adesao, fechamento.mes, fechamento.ano);
 
-        // Calcular composição individual de CADA veículo e somar
         let totalGeral = 0;
         let subtotalRateioGeral = 0;
         let taxaAdminGeral = 0;
@@ -218,13 +247,21 @@ serve(async (req) => {
 
         for (const veiculo of veiculosAtivos) {
           const v = veiculo as any;
-          const valorFipe = v.valor_fipe || 50000;
-          const cotas = v.quantidade_cotas || 
-                        (v.faixas_cotas as any)?.quantidade_cotas || 
-                        Math.ceil(valorFipe / 5000);
+          const valorFipe = v.valor_fipe;
+
+          // Se veículo não tem FIPE, alertar e usar cotas da faixa ou pular
+          if (!valorFipe) {
+            console.warn(`[gerar-faturas] ALERTA: Veículo ${v.placa || v.id} sem valor FIPE. Usando cotas cadastradas ou pulando.`);
+            resultados.alertas++;
+          }
+
+          // Cotas: priorizar cadastro direto > faixa > cálculo dinâmico via config
+          const cotas = v.quantidade_cotas ||
+                        (v.faixas_cotas as any)?.quantidade_cotas ||
+                        (valorFipe ? Math.ceil(valorFipe / valorPorCotaConfig) : 1);
 
           const composicao: ComposicaoFatura = {
-            taxa_administrativa: getTaxaAdministrativa(valorFipe),
+            taxa_administrativa: valorFipe ? getTaxaAdministrativa(valorFipe) : taxaAdminPadrao,
             rateio_colisao: v.cobertura_total ? (valorPorCotaBeneficio['colisao'] || 0) * cotas : 0,
             rateio_incendio: v.cobertura_total ? (valorPorCotaBeneficio['incendio'] || 0) * cotas : 0,
             rateio_roubo_furto: (v.cobertura_roubo_furto || v.cobertura_total) 
@@ -233,7 +270,7 @@ serve(async (req) => {
             rateio_terceiros: v.cobertura_terceiros ? (valorPorCotaBeneficio['terceiros'] || 0) * cotas : 0,
             rateio_assistencia: v.cobertura_assistencia !== false 
               ? (valorPorCotaBeneficio['assistencia'] || 0) * cotas : 0,
-            adicionais: 0, // will be filled below
+            adicionais: 0,
             adicionais_detalhes: {} as Record<string, number>,
             fator_prorata: proRata,
             total: 0,
@@ -252,10 +289,10 @@ serve(async (req) => {
           subtotalRateioGeral += subtotalRateio * proRata;
           taxaAdminGeral += composicao.taxa_administrativa * proRata;
 
-          composicoesPorVeiculo.push({ veiculo: v, valorFipe, cotas, composicao, subtotalRateio });
+          composicoesPorVeiculo.push({ veiculo: v, valorFipe: valorFipe || 0, cotas, composicao, subtotalRateio });
         }
 
-        // ===== ADICIONAIS CONTRATADOS (por associado, não por veículo) =====
+        // Adicionais contratados (por associado)
         let totalAdicionais = 0;
         const adicionaisDetalhes: Record<string, number> = {};
         
@@ -272,7 +309,6 @@ serve(async (req) => {
           adicionaisDetalhes[nome] = (adicionaisDetalhes[nome] || 0) + valor;
         }
 
-        // Aplicar adicionais ao primeiro veículo (são por associado)
         if (composicoesPorVeiculo.length > 0) {
           composicoesPorVeiculo[0].composicao.adicionais = totalAdicionais;
           composicoesPorVeiculo[0].composicao.adicionais_detalhes = adicionaisDetalhes;
@@ -280,7 +316,6 @@ serve(async (req) => {
         }
         totalGeral += totalAdicionais * proRata;
 
-        // Montar descrição e resumo
         const placas = composicoesPorVeiculo.map(c => c.veiculo.placa);
         const descricaoVeiculos = veiculosAtivos.length === 1
           ? placas[0]
@@ -301,11 +336,7 @@ serve(async (req) => {
           total: totalGeral,
         };
 
-        if (veiculosAtivos.length > 1) {
-          console.log(`[MULTI-VEICULO] ${associado.nome}: total R$ ${totalGeral.toFixed(2)} (${placas.join(', ')})`);
-        }
-
-        // Se é preview, apenas adicionar ao resultado
+        // Preview mode
         if (body.preview) {
           resultados.faturas.push({
             associado_id: associado.id,
@@ -319,7 +350,7 @@ serve(async (req) => {
           continue;
         }
 
-        // Verificar se já existe cobrança
+        // Verificar duplicidade
         const { data: existente } = await supabase
           .from('asaas_cobrancas')
           .select('id')
@@ -334,14 +365,14 @@ serve(async (req) => {
           continue;
         }
 
-        // Calcular data de vencimento
+        // Data de vencimento
         const diaVenc = associado.dia_vencimento || 10;
         const dataVencimento = new Date(fechamento.ano, fechamento.mes, diaVenc);
         if (dataVencimento < new Date()) {
           dataVencimento.setMonth(dataVencimento.getMonth() + 1);
         }
 
-        // Criar cobrança no ASAAS (boleto unificado)
+        // Criar cobrança no ASAAS
         const asaasClienteId = associado.asaas_clientes?.[0]?.asaas_id;
         let asaasCobranca: any = null;
 
@@ -385,7 +416,7 @@ serve(async (req) => {
           }
         }
 
-        // Inserir cobrança unificada no banco (veiculo_id = null para multi-veículo)
+        // Inserir cobrança no banco
         const { data: cobrancaInserida, error: insertError } = await supabase
           .from('asaas_cobrancas')
           .insert({
@@ -414,7 +445,7 @@ serve(async (req) => {
           throw new Error(`Erro ao inserir cobrança: ${insertError.message}`);
         }
 
-        // Inserir composição detalhada — UMA LINHA POR VEÍCULO
+        // Inserir composição detalhada
         if (cobrancaInserida) {
           for (const item of composicoesPorVeiculo) {
             await supabase.from('cobrancas_composicao').insert({
@@ -438,7 +469,7 @@ serve(async (req) => {
           }
         }
 
-        // Enviar WhatsApp se solicitado
+        // WhatsApp
         if (body.enviar_whatsapp && asaasCobranca?.pixPayload) {
           const telefone = associado.whatsapp || associado.telefone;
           if (telefone) {
@@ -506,19 +537,19 @@ ${asaasCobranca.bankSlipUrl ? `📋 Boleto: ${asaasCobranca.bankSlipUrl}` : ''}`
       }
     }
 
-    // Atualizar status do fechamento se não for preview
+    // Atualizar status do fechamento
     if (!body.preview && resultados.geradas > 0) {
       await supabase
         .from('fechamentos_mensais')
         .update({
           status: 'processado',
           processado_em: new Date().toISOString(),
-          total_geral: resultados.faturas.reduce((acc, f) => acc + (f.valor || 0), 0),
+          total_geral: resultados.faturas.reduce((acc: number, f: any) => acc + (f.valor || 0), 0),
         })
         .eq('id', fechamentoId);
     }
 
-    console.log(`[gerar-faturas] Resultado: ${resultados.geradas} geradas, ${resultados.jaExistentes} existentes, ${resultados.erros} erros`);
+    console.log(`[gerar-faturas] Resultado: ${resultados.geradas} geradas, ${resultados.jaExistentes} existentes, ${resultados.erros} erros, ${resultados.alertas} alertas`);
 
     return new Response(JSON.stringify({
       success: true,

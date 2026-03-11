@@ -1,25 +1,21 @@
 import { useState } from 'react';
-import { Calculator, Check, Play, History, AlertTriangle, Users, DollarSign, TrendingUp, Layers } from 'lucide-react';
+import { Calculator, History, AlertTriangle, Users, DollarSign, TrendingUp, ArrowUpDown, ExternalLink, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useAuth } from '@/contexts/AuthContext';
-
-import { RateioDetalhesFaixasCard } from '@/components/diretoria/RateioDetalhesFaixasCard';
-import { type RateioPorCota } from '@/hooks/useFaixasCotas';
+import { useNavigate } from 'react-router-dom';
 
 const statusConfig: Record<string, { label: string; class: string }> = {
-  calculado: { label: 'Calculado', class: 'bg-yellow-100 text-yellow-800' },
+  aberto: { label: 'Aberto', class: 'bg-gray-100 text-gray-800' },
+  fechado: { label: 'Fechado', class: 'bg-yellow-100 text-yellow-800' },
   aprovado: { label: 'Aprovado', class: 'bg-blue-100 text-blue-800' },
-  aplicado: { label: 'Aplicado', class: 'bg-green-100 text-green-800' },
-  cancelado: { label: 'Cancelado', class: 'bg-red-100 text-red-800' },
+  processado: { label: 'Processado', class: 'bg-green-100 text-green-800' },
 };
 
 const formatCurrency = (value: number | null) => {
@@ -30,255 +26,104 @@ const formatMesAno = (mes: number, ano: number) => {
   return format(new Date(ano, mes - 1), "MMMM 'de' yyyy", { locale: ptBR });
 };
 
+const BENEFICIO_LABELS: Record<string, string> = {
+  colisao: 'Colisão',
+  roubo_furto: 'Roubo/Furto',
+  incendio: 'Incêndio',
+  vidros: 'Vidros/Faróis',
+  terceiros: 'Terceiros',
+  assistencia: 'Assistência 24h',
+  outros: 'Outros',
+};
+
 export default function RateioSinistros() {
-  const queryClient = useQueryClient();
-  const { profile } = useAuth();
+  const navigate = useNavigate();
   const [showHistorico, setShowHistorico] = useState(false);
-  const [calcularModalOpen, setCalcularModalOpen] = useState(false);
 
-  // Lista de rateios (histórico)
-  const { data: rateios, isLoading: loadingRateios } = useQuery({
-    queryKey: ['rateios'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rateios')
-        .select(`
-          *,
-          aprovador:profiles!rateios_aprovado_por_fkey(nome)
-        `)
-        .order('ano', { ascending: false })
-        .order('mes', { ascending: false });
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Rateio do mês atual — se não existir, buscar o último disponível
-  const { data: rateioAtual, isLoading: loadingAtual } = useQuery({
-    queryKey: ['rateio-atual'],
+  // Buscar último fechamento mensal (Sistema B — fonte única de verdade)
+  const { data: fechamentoAtual, isLoading: loadingAtual } = useQuery({
+    queryKey: ['fechamento-rateio-diretoria'],
     queryFn: async () => {
       const hoje = new Date();
-      const selectFields = `
-        *,
-        detalhes:rateios_detalhes(
-          *,
-          plano:planos(nome)
-        ),
-        detalhes_faixas:rateios_detalhes_faixas(*)
-      `;
 
       // Tentar mês atual primeiro
-      const { data: atual, error: erroAtual } = await supabase
-        .from('rateios')
-        .select(selectFields)
+      const { data: atual } = await supabase
+        .from('fechamentos_mensais')
+        .select('*, despesas_rateio(*)')
         .eq('ano', hoje.getFullYear())
         .eq('mes', hoje.getMonth() + 1)
         .maybeSingle();
-      if (erroAtual) throw erroAtual;
       if (atual) return { ...atual, _isCurrentMonth: true };
 
-      // Fallback: último rateio disponível
-      const { data: ultimo, error: erroUltimo } = await supabase
-        .from('rateios')
-        .select(selectFields)
+      // Fallback: último disponível
+      const { data: ultimo } = await supabase
+        .from('fechamentos_mensais')
+        .select('*, despesas_rateio(*)')
         .order('ano', { ascending: false })
         .order('mes', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (erroUltimo) throw erroUltimo;
       if (ultimo) return { ...ultimo, _isCurrentMonth: false };
       return null;
-    }
+    },
   });
 
-  const isCurrentMonth = (rateioAtual as any)?._isCurrentMonth ?? false;
-
-  // Rateio do mês anterior para comparativo
-  const { data: rateioAnterior } = useQuery({
-    queryKey: ['rateio-anterior'],
+  // Fechamento anterior para comparativo
+  const { data: fechamentoAnterior } = useQuery({
+    queryKey: ['fechamento-rateio-anterior'],
     queryFn: async () => {
       const hoje = new Date();
-      let mesAnterior = hoje.getMonth(); // getMonth() já retorna 0-11, então mês atual - 1
-      let anoAnterior = hoje.getFullYear();
-      if (mesAnterior === 0) {
-        mesAnterior = 12;
-        anoAnterior -= 1;
-      }
-      const { data, error } = await supabase
-        .from('rateios')
+      let mesAnt = hoje.getMonth(); // 0-based = mês anterior
+      let anoAnt = hoje.getFullYear();
+      if (mesAnt === 0) { mesAnt = 12; anoAnt -= 1; }
+
+      const { data } = await supabase
+        .from('fechamentos_mensais')
         .select('*')
-        .eq('ano', anoAnterior)
-        .eq('mes', mesAnterior)
+        .eq('ano', anoAnt)
+        .eq('mes', mesAnt)
         .maybeSingle();
-      if (error) throw error;
       return data;
-    }
+    },
   });
 
-  // Calcular variação entre rateios
+  // Histórico de fechamentos
+  const { data: historico, isLoading: loadingHistorico } = useQuery({
+    queryKey: ['fechamentos-historico-diretoria'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('fechamentos_mensais')
+        .select('*')
+        .order('ano', { ascending: false })
+        .order('mes', { ascending: false })
+        .limit(12);
+      return data || [];
+    },
+    enabled: showHistorico,
+  });
+
+  const isCurrentMonth = (fechamentoAtual as any)?._isCurrentMonth ?? false;
+  const despesasRateio = (fechamentoAtual as any)?.despesas_rateio || [];
+
+  const totalCotas = fechamentoAtual?.total_cotas_ativas || 0;
+  const totalDespesas = fechamentoAtual?.total_despesas_rateio || 0;
+  const valorMedioCota = totalCotas > 0 ? totalDespesas / totalCotas : 0;
+
+  // Comparativo
   const variacaoRateio = (() => {
-    if (!rateioAtual || !rateioAnterior) return null;
-    const valorAtual = rateioAtual.valor_rateio_por_cota || rateioAtual.valor_rateio_por_associado || 0;
-    const valorAnterior = rateioAnterior.valor_rateio_por_cota || rateioAnterior.valor_rateio_por_associado || 0;
+    if (!fechamentoAtual || !fechamentoAnterior) return null;
+    const cotasAtual = fechamentoAtual.total_cotas_ativas || 0;
+    const despAtual = fechamentoAtual.total_despesas_rateio || 0;
+    const valorAtual = cotasAtual > 0 ? despAtual / cotasAtual : 0;
+
+    const cotasAnt = fechamentoAnterior.total_cotas_ativas || 0;
+    const despAnt = fechamentoAnterior.total_despesas_rateio || 0;
+    const valorAnterior = cotasAnt > 0 ? despAnt / cotasAnt : 0;
+
     if (valorAnterior === 0) return null;
-    const variacao = ((valorAtual - valorAnterior) / valorAnterior) * 100;
-    return {
-      percentual: variacao,
-      valorAtual,
-      valorAnterior,
-      alerta: Math.abs(variacao) > 5
-    };
+    const percentual = ((valorAtual - valorAnterior) / valorAnterior) * 100;
+    return { percentual, valorAtual, valorAnterior, alerta: Math.abs(percentual) > 5 };
   })();
-
-  // Mutation - Calcular Rateio (CORRIGIDO: usando fn_calcular_rateio_por_cotas)
-  const calcularRateio = useMutation({
-    mutationFn: async ({ mes, ano }: { mes: number; ano: number }) => {
-      const inicioMes = `${ano}-${String(mes).padStart(2, '0')}-01`;
-      const proximoMes = mes === 12 ? 1 : mes + 1;
-      const proximoAno = mes === 12 ? ano + 1 : ano;
-      const fimMes = `${proximoAno}-${String(proximoMes).padStart(2, '0')}-01`;
-
-      // Buscar sinistros, associados e total de cotas
-      const [sinistrosRes, associadosRes, cotasRes] = await Promise.all([
-        supabase.from('sinistros')
-          .select('valor_indenizacao')
-          .in('status', ['aprovado', 'indenizado', 'encerrado'])
-          .gte('data_ocorrencia', inicioMes)
-          .lt('data_ocorrencia', fimMes),
-        supabase.from('associados')
-          .select('id, plano_id')
-          .eq('status', 'ativo'),
-        // Buscar total de cotas usando função SQL
-        supabase.rpc('fn_calcular_total_cotas_ativos')
-      ]);
-
-      const sinistros = sinistrosRes.data || [];
-      const associados = associadosRes.data || [];
-      const totalCotas = Number(cotasRes.data) || 0;
-
-      const totalAssociados = associados.length;
-      const totalSinistros = sinistros.length;
-      const valorTotalSinistros = sinistros.reduce((sum, s) => sum + (s.valor_indenizacao || 0), 0);
-      const percentualFundo = 10;
-      const valorFundo = valorTotalSinistros * (percentualFundo / 100);
-      
-      // Chamar fn_calcular_rateio_por_cotas para obter valores ajustados por faixa
-      const { data: rateioDetalhado, error: erroRateio } = await supabase.rpc('fn_calcular_rateio_por_cotas', {
-        p_custo_total: valorTotalSinistros + valorFundo,
-        p_percentual_fundo: percentualFundo,
-      });
-
-      // Valor base por cota (sem ajustes)
-      const valorRateioPorCota = totalCotas > 0 
-        ? (valorTotalSinistros + valorFundo) / totalCotas 
-        : 0;
-      
-      // Manter compatibilidade com campo antigo (valor por associado = média)
-      const valorRateioPorAssociado = totalAssociados > 0
-        ? (valorTotalSinistros + valorFundo) / totalAssociados
-        : 0;
-
-      const { data, error } = await supabase
-        .from('rateios')
-        .upsert({
-          mes,
-          ano,
-          total_associados: totalAssociados,
-          total_sinistros: totalSinistros,
-          valor_total_sinistros: valorTotalSinistros,
-          valor_rateio_por_associado: valorRateioPorAssociado,
-          percentual_fundo_reserva: percentualFundo,
-          valor_fundo_reserva: valorFundo,
-          status: 'calculado',
-          formula_utilizada: '(Sinistros + Fundo) / Total Cotas + Ajustes por Faixa',
-          // Campos para sistema de cotas
-          total_cotas: totalCotas,
-          valor_rateio_por_cota: valorRateioPorCota
-        }, { onConflict: 'mes,ano' })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Salvar detalhes por faixa se disponível
-      if (rateioDetalhado && rateioDetalhado.length > 0 && data?.id) {
-        // Primeiro, remover detalhes antigos
-        await supabase
-          .from('rateios_detalhes_faixas')
-          .delete()
-          .eq('rateio_id', data.id);
-
-        // Inserir novos detalhes
-        const detalhesParaInserir = rateioDetalhado.map((detalhe: RateioPorCota) => ({
-          rateio_id: data.id,
-          faixa_id: detalhe.faixa_id,
-          fipe_de: detalhe.fipe_de,
-          fipe_ate: detalhe.fipe_ate,
-          quantidade_cotas: detalhe.quantidade_cotas,
-          contratos_na_faixa: detalhe.contratos_na_faixa || 0,
-          total_cotas_faixa: detalhe.total_cotas_faixa || 0,
-          ajuste_percentual: detalhe.ajuste_percentual,
-          valor_base_cota: detalhe.valor_base_cota,
-          valor_final_cota: detalhe.valor_final_cota,
-        }));
-
-        await supabase
-          .from('rateios_detalhes_faixas')
-          .insert(detalhesParaInserir);
-      }
-
-      return data;
-    },
-    onSuccess: () => {
-      toast.success('Rateio calculado com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['rateios'] });
-      queryClient.invalidateQueries({ queryKey: ['rateio-atual'] });
-    },
-    onError: (error) => {
-      toast.error('Erro ao calcular rateio: ' + error.message);
-    }
-  });
-
-  // Mutation - Aprovar Rateio
-  const aprovarRateio = useMutation({
-    mutationFn: async (rateioId: string) => {
-      const { error } = await supabase
-        .from('rateios')
-        .update({ 
-          status: 'aprovado',
-          aprovado_em: new Date().toISOString(),
-          aprovado_por: profile?.id
-        })
-        .eq('id', rateioId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Rateio aprovado!');
-      queryClient.invalidateQueries({ queryKey: ['rateios'] });
-      queryClient.invalidateQueries({ queryKey: ['rateio-atual'] });
-    }
-  });
-
-  // Mutation - Aplicar Rateio
-  const aplicarRateio = useMutation({
-    mutationFn: async (rateioId: string) => {
-      const { error } = await supabase
-        .from('rateios')
-        .update({ 
-          status: 'aplicado',
-          aplicado_em: new Date().toISOString()
-        })
-        .eq('id', rateioId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Rateio aplicado!');
-      queryClient.invalidateQueries({ queryKey: ['rateios'] });
-      queryClient.invalidateQueries({ queryKey: ['rateio-atual'] });
-    }
-  });
-
-  const isLoading = loadingRateios || loadingAtual;
 
   return (
     <div className="space-y-6">
@@ -286,81 +131,88 @@ export default function RateioSinistros() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Rateio de Sinistros</h1>
-          <p className="text-muted-foreground">Cálculo e gestão do rateio mensal</p>
+          <p className="text-muted-foreground">Visão consolidada do rateio mutualista</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setShowHistorico(!showHistorico)}>
             <History className="h-4 w-4 mr-2" />
             {showHistorico ? 'Ocultar Histórico' : 'Histórico'}
           </Button>
-          <Button onClick={() => setCalcularModalOpen(true)}>
+          <Button onClick={() => navigate('/financeiro/faturamento')}>
             <Calculator className="h-4 w-4 mr-2" />
-            Calcular Rateio
+            Ir para Faturamento
+            <ExternalLink className="h-3 w-3 ml-1" />
           </Button>
         </div>
       </div>
 
-      {/* Alerta se não há rateio nenhum */}
-      {!rateioAtual && !isLoading && (
+      {/* Info: fonte única */}
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          Os dados abaixo refletem os fechamentos mensais realizados no módulo Financeiro.
+          Para calcular ou gerar faturas, acesse <strong>Financeiro → Faturamento Mensal</strong>.
+        </AlertDescription>
+      </Alert>
+
+      {/* Nenhum fechamento */}
+      {!fechamentoAtual && !loadingAtual && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            Nenhum rateio calculado ainda. Clique em "Calcular Rateio" para iniciar.
+            Nenhum fechamento mensal encontrado. Acesse o módulo Financeiro para iniciar o primeiro fechamento.
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Alerta se está mostrando rateio de outro mês */}
-      {rateioAtual && !isCurrentMonth && !isLoading && (
+      {/* Mostrando mês antigo */}
+      {fechamentoAtual && !isCurrentMonth && !loadingAtual && (
         <Alert>
           <History className="h-4 w-4" />
           <AlertDescription>
-            Não há rateio para o mês atual. Exibindo o último rateio disponível: <strong>{formatMesAno(rateioAtual.mes, rateioAtual.ano)}</strong>.
-            Clique em "Calcular Rateio" para calcular o mês corrente.
+            Exibindo o último fechamento disponível: <strong>{formatMesAno(fechamentoAtual.mes, fechamentoAtual.ano)}</strong>.
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Alerta de Variação > 5% */}
+      {/* Alerta variação > 5% */}
       {variacaoRateio?.alerta && (
-        <Alert variant={variacaoRateio.percentual > 0 ? "destructive" : "default"}>
+        <Alert variant={variacaoRateio.percentual > 0 ? 'destructive' : 'default'}>
           <AlertTriangle className="h-4 w-4" />
-          <AlertDescription className="flex items-center gap-2">
-            <span>
-              Variação significativa no rateio: <strong>{variacaoRateio.percentual > 0 ? '+' : ''}{variacaoRateio.percentual.toFixed(1)}%</strong> em relação ao mês anterior
-              ({formatCurrency(variacaoRateio.valorAnterior)} → {formatCurrency(variacaoRateio.valorAtual)})
-            </span>
+          <AlertDescription>
+            Variação significativa: <strong>{variacaoRateio.percentual > 0 ? '+' : ''}{variacaoRateio.percentual.toFixed(1)}%</strong> em relação ao mês anterior
+            ({formatCurrency(variacaoRateio.valorAnterior)} → {formatCurrency(variacaoRateio.valorAtual)} por cota)
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Card Comparativo com Mês Anterior */}
-      {rateioAtual && rateioAnterior && (
-        <Card className="border-info/30 bg-info/5">
+      {/* Comparativo */}
+      {variacaoRateio && (
+        <Card className="border-muted">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Comparativo com Mês Anterior</p>
+                <p className="text-sm text-muted-foreground">Comparativo Valor por Cota</p>
                 <div className="flex items-center gap-4 mt-2">
                   <div>
                     <p className="text-xs text-muted-foreground">Anterior</p>
-                    <p className="text-lg font-semibold">{formatCurrency(variacaoRateio?.valorAnterior || 0)}</p>
+                    <p className="text-lg font-semibold">{formatCurrency(variacaoRateio.valorAnterior)}</p>
                   </div>
                   <div className="text-2xl">→</div>
                   <div>
                     <p className="text-xs text-muted-foreground">Atual</p>
-                    <p className="text-lg font-semibold">{formatCurrency(variacaoRateio?.valorAtual || 0)}</p>
+                    <p className="text-lg font-semibold">{formatCurrency(variacaoRateio.valorAtual)}</p>
                   </div>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Variação</p>
                 <p className={`text-2xl font-bold ${
-                  (variacaoRateio?.percentual || 0) > 0 ? 'text-red-600' : 
-                  (variacaoRateio?.percentual || 0) < 0 ? 'text-green-600' : ''
+                  variacaoRateio.percentual > 0 ? 'text-destructive' :
+                  variacaoRateio.percentual < 0 ? 'text-green-600' : ''
                 }`}>
-                  {(variacaoRateio?.percentual || 0) > 0 ? '+' : ''}
-                  {variacaoRateio?.percentual?.toFixed(1) || 0}%
+                  {variacaoRateio.percentual > 0 ? '+' : ''}
+                  {variacaoRateio.percentual.toFixed(1)}%
                 </p>
               </div>
             </div>
@@ -368,30 +220,29 @@ export default function RateioSinistros() {
         </Card>
       )}
 
-      {/* Card Rateio Atual */}
-      {rateioAtual && (
+      {/* KPIs */}
+      {fechamentoAtual && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Calculator className="h-5 w-5" />
-                Rateio de {formatMesAno(rateioAtual.mes, rateioAtual.ano)}
+                Fechamento de {formatMesAno(fechamentoAtual.mes, fechamentoAtual.ano)}
               </CardTitle>
-              <Badge className={statusConfig[rateioAtual.status]?.class || 'bg-gray-100'}>
-                {statusConfig[rateioAtual.status]?.label || rateioAtual.status}
+              <Badge className={statusConfig[fechamentoAtual.status]?.class || 'bg-gray-100'}>
+                {statusConfig[fechamentoAtual.status]?.label || fechamentoAtual.status}
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Grid de métricas */}
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card>
                 <CardContent className="pt-4">
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
                     <Users className="h-4 w-4" />
-                    Total Associados
+                    Associados Ativos
                   </div>
-                  <p className="text-2xl font-bold">{rateioAtual.total_associados?.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{(fechamentoAtual.total_associados_ativos || 0).toLocaleString()}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -400,174 +251,117 @@ export default function RateioSinistros() {
                     <TrendingUp className="h-4 w-4" />
                     Total de Cotas
                   </div>
-                  <p className="text-2xl font-bold">{rateioAtual.total_cotas?.toLocaleString() || '-'}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4">
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <AlertTriangle className="h-4 w-4" />
-                    Total Sinistros
-                  </div>
-                  <p className="text-2xl font-bold">{rateioAtual.total_sinistros}</p>
+                  <p className="text-2xl font-bold">{totalCotas.toLocaleString()}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-4">
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
                     <DollarSign className="h-4 w-4" />
-                    Valor Total Sinistros
+                    Total Despesas
                   </div>
-                  <p className="text-2xl font-bold text-red-600">
-                    {formatCurrency(rateioAtual.valor_total_sinistros)}
-                  </p>
+                  <p className="text-2xl font-bold text-destructive">{formatCurrency(totalDespesas)}</p>
                 </CardContent>
               </Card>
               <Card className="bg-primary/5 border-primary/20">
                 <CardContent className="pt-4">
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <TrendingUp className="h-4 w-4" />
-                    Valor por Cota
+                    <ArrowUpDown className="h-4 w-4" />
+                    Valor Médio / Cota
                   </div>
-                  <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(rateioAtual.valor_rateio_por_cota || rateioAtual.valor_rateio_por_associado)}
-                  </p>
+                  <p className="text-2xl font-bold text-primary">{formatCurrency(valorMedioCota)}</p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Fundo de Reserva */}
-            <Card className="bg-muted/50">
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Fundo de Reserva</p>
-                    <p className="text-lg font-semibold">
-                      {rateioAtual.percentual_fundo_reserva}% do valor total
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Valor destinado</p>
-                    <p className="text-xl font-bold">{formatCurrency(rateioAtual.valor_fundo_reserva)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Ações */}
-            <div className="flex justify-end gap-2">
-              {rateioAtual.status === 'calculado' && (
-                <Button 
-                  onClick={() => aprovarRateio.mutate(rateioAtual.id)}
-                  disabled={aprovarRateio.isPending}
-                >
-                  <Check className="h-4 w-4 mr-2" />
-                  Aprovar Rateio
-                </Button>
-              )}
-              {rateioAtual.status === 'aprovado' && (
-                <Button 
-                  onClick={() => aplicarRateio.mutate(rateioAtual.id)}
-                  disabled={aplicarRateio.isPending}
-                  variant="default"
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  Aplicar Rateio
-                </Button>
-              )}
-            </div>
+            {/* Despesas por Benefício */}
+            {despesasRateio.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Despesas por Benefício</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Benefício</TableHead>
+                        <TableHead className="text-right">Valor Total</TableHead>
+                        <TableHead className="text-right">Cotas Elegíveis</TableHead>
+                        <TableHead className="text-right">Valor / Cota</TableHead>
+                        <TableHead className="text-right">Eventos</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {despesasRateio.map((d: any) => (
+                        <TableRow key={d.id}>
+                          <TableCell className="font-medium">
+                            {BENEFICIO_LABELS[d.tipo_beneficio] || d.tipo_beneficio}
+                          </TableCell>
+                          <TableCell className="text-right">{formatCurrency(d.valor_total)}</TableCell>
+                          <TableCell className="text-right">{(d.total_cotas_elegivel || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-medium">{formatCurrency(d.valor_por_cota)}</TableCell>
+                          <TableCell className="text-right">{d.quantidade_eventos || 0}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Detalhes por Plano */}
-      {rateioAtual?.detalhes && rateioAtual.detalhes.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Detalhes por Plano</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Plano</TableHead>
-                  <TableHead className="text-right">Associados</TableHead>
-                  <TableHead className="text-right">Sinistros</TableHead>
-                  <TableHead className="text-right">Valor Sinistros</TableHead>
-                  <TableHead className="text-right">Valor Rateio</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rateioAtual.detalhes.map((detalhe: any) => (
-                  <TableRow key={detalhe.id}>
-                    <TableCell className="font-medium">{detalhe.plano?.nome || 'N/A'}</TableCell>
-                    <TableCell className="text-right">{detalhe.total_associados}</TableCell>
-                    <TableCell className="text-right">{detalhe.total_sinistros}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(detalhe.valor_sinistros)}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(detalhe.valor_rateio)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Detalhes por Faixa FIPE */}
-      {rateioAtual?.detalhes_faixas && rateioAtual.detalhes_faixas.length > 0 && (
-        <RateioDetalhesFaixasCard detalhesFaixas={rateioAtual.detalhes_faixas as RateioPorCota[]} />
-      )}
+      {/* Histórico */}
       {showHistorico && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <History className="h-5 w-5" />
-              Histórico de Rateios
+              Histórico de Fechamentos
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Período</TableHead>
-                  <TableHead className="text-right">Associados</TableHead>
-                  <TableHead className="text-right">Sinistros</TableHead>
-                  <TableHead className="text-right">Valor Total</TableHead>
-                  <TableHead className="text-right">Valor/Associado</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Aprovado por</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rateios?.slice(0, 12).map((rateio) => (
-                  <TableRow key={rateio.id}>
-                    <TableCell className="font-medium">
-                      {formatMesAno(rateio.mes, rateio.ano)}
-                    </TableCell>
-                    <TableCell className="text-right">{rateio.total_associados?.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{rateio.total_sinistros}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(rateio.valor_total_sinistros)}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(rateio.valor_rateio_por_associado)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={statusConfig[rateio.status]?.class || 'bg-gray-100'}>
-                        {statusConfig[rateio.status]?.label || rateio.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {rateio.aprovador?.nome || '-'}
-                    </TableCell>
+            {loadingHistorico ? (
+              <p className="text-muted-foreground text-sm">Carregando...</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Período</TableHead>
+                    <TableHead className="text-right">Associados</TableHead>
+                    <TableHead className="text-right">Cotas</TableHead>
+                    <TableHead className="text-right">Total Despesas</TableHead>
+                    <TableHead className="text-right">Valor/Cota</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {historico?.map((f: any) => {
+                    const vc = (f.total_cotas_ativas || 0) > 0
+                      ? (f.total_despesas_rateio || 0) / f.total_cotas_ativas
+                      : 0;
+                    return (
+                      <TableRow key={f.id}>
+                        <TableCell className="font-medium">{formatMesAno(f.mes, f.ano)}</TableCell>
+                        <TableCell className="text-right">{(f.total_associados_ativos || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{(f.total_cotas_ativas || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(f.total_despesas_rateio)}</TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(vc)}</TableCell>
+                        <TableCell>
+                          <Badge className={statusConfig[f.status]?.class || 'bg-gray-100'}>
+                            {statusConfig[f.status]?.label || f.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       )}
-
     </div>
   );
 }

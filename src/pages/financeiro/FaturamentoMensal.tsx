@@ -318,6 +318,14 @@ export default function FaturamentoMensal() {
                 </AlertDescription>
               </Alert>
 
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-700">
+                  <strong>Importante:</strong> No modo manual, informe os valores <strong>já descontando a cota de participação</strong> (franquia) 
+                  paga pelos associados sinistrados. O sistema rateia o valor informado diretamente entre as cotas elegíveis.
+                </AlertDescription>
+              </Alert>
+
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {CATEGORIAS_DESPESA.map((cat) => (
                   <div key={cat.key} className="space-y-1.5">
