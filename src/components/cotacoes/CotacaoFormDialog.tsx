@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -269,7 +270,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
     valorFipe,
     valorAdicional,
-    regiao: 'rj', // Default RJ - pode ser ajustado
+    regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
     combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
     categoria: usoVeiculo === 'aplicativo' ? 'aplicativo' : (categoria || undefined),
     anoVeiculo: anoNumerico,

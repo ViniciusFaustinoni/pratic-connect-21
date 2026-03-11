@@ -1,88 +1,203 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
+
+## Resumo
+
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. ✅ `pricing.ts` — REMOVIDO
+
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
+
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
+
+Centralizada em `src/utils/format.ts`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+### 5. ✅ Veículo Blindado — CORRIGIDO
+
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+
+### 12. ✅ Linhas de produto hardcoded — MIGRADO PARA BANCO
+
+`LINHAS_PLANO` em `PlanosConfig.tsx` substituído por `useProductLines()`. Linha "Select One" adicionada à tabela `product_lines`.
+
+### 13. ✅ Regiões hardcoded — MIGRADO PARA BANCO
+
+`REGIOES` em `EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx` substituídos por `useRegioesAtivas()`.
+
+### 14. ✅ Lógica de negócio hardcoded em usePlanosCotacao — CORRIGIDO
+
+- `linha === 'advanced'` → `vehicle_type` da tabela `product_lines`
+- `linha === 'lancamento'` → `requires_recent_year` da tabela `product_lines`
+- Ordenação `linha === 'select'` → `sort_priority` da tabela `product_lines`
+- Mapeamento manual de códigos de região removido (usa `regioes.codigo` diretamente)
+
+### 15. ✅ LINHA_CORES hardcoded em PlanoCardSelecao — CORRIGIDO
+
+`gradient_class` adicionado à tabela `product_lines`. Fallback mantido no componente.
+
+### 16. ✅ CATEGORIAS_VEICULO hardcoded — MIGRADO PARA BANCO
+
+Categorias inseridas na tabela `configuracoes` (chave `categorias_veiculo`). Hook `useCategoriasVeiculo()` criado. `VehicleCategorySelect` agora busca do banco com fallback.
+
+### 17. ✅ OBSERVACOES_CATEGORIA hardcoded — MIGRADO PARA BANCO
+
+Observações inseridas na tabela `configuracoes` (chave `observacoes_categoria`). Hook `useObservacoesCategoria()` criado.
+
+### 18. ✅ Template WhatsApp hardcoded — MIGRADO PARA BANCO
+
+Template de benefícios inserido na tabela `configuracoes` (chave `template_whatsapp_cotacao`). Hook `useTemplateWhatsappCotacao()` criado.
+
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-# Correção: Preços incorretos no link público e no formulário de cotação
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-## Causa Raiz
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-Três problemas independentes estão causando preços errados:
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
 
-### 1. CRÍTICO: Mapeamento de região desconectado (CotacaoFormDialog)
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
 
-O formulário de cotação do vendedor (`CotacaoFormDialog.tsx`, linha 272) **ignora a região selecionada** e sempre passa `regiao: 'rj'` para o hook de precificação:
 
-```typescript
-// BUG: hardcoded
-const { planos } = usePlanosCotacao({
-  regiao: 'rj', // ← Deveria ser regiaoSelecionada
-  ...
-});
-```
+---
 
-Além disso, os valores do seletor de região no formulário usam nomes completos (`rio_de_janeiro`, `regiao_lagos`, `sao_paulo`) que **não correspondem** aos slugs da tabela de preços (`rj`, `lagos`, `sp`). Mesmo corrigindo o hardcode, a consulta falharia sem um mapeamento.
+## ❌ NÃO FAZER AGORA
 
-### 2. Link público `/q/:token` usa cliente autenticado
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
-O hook `useCalcularCotacao.ts` importa `supabase` (cliente autenticado) em vez de `publicSupabase`. A tabela `configuracoes` bloqueia leitura anon para chaves como `taxa_fallback_carro` e `adicional_app`. Isso pode causar falhas silenciosas no cálculo.
+---
 
-Adicionalmente, o `CotacaoPublicaCompleta` não passa `regiao` nem `combustivel` ao chamar `calcular()`.
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-### 3. Valores de região inconsistentes entre formulário e banco
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
 
-```text
-Formulário          →  Tabela de preços
-─────────────────────────────────────────
-rio_de_janeiro      →  rj
-regiao_lagos        →  lagos
-sao_paulo           →  sp
-interior_rj         →  (sem preço separado)
-interior_sp         →  (sem preço separado)
-```
+---
 
-## Plano de Correção
+# Visibilidade por Equipe — Supervisor de Vendas
 
-### Fase 1: Criar mapeamento de região (formulário → pricing)
+## ✅ CORRIGIDO
 
-Adicionar uma função de mapeamento `mapearRegiaoParaPricing()` que converte os nomes do formulário nos slugs da tabela de preços:
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
 
-```typescript
-function mapearRegiaoParaPricing(regiao: string): string {
-  const MAPA: Record<string, string> = {
-    'rio_de_janeiro': 'rj',
-    'regiao_lagos': 'lagos',
-    'sao_paulo': 'sp',
-    'interior_rj': 'rj',
-    'interior_sp': 'sp',
-  };
-  return MAPA[regiao] || regiao;
-}
-```
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
 
-### Fase 2: Corrigir CotacaoFormDialog (formulário do vendedor)
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
 
-- Linha 272: substituir `regiao: 'rj'` por `regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj')`
-- Isso faz o formulário calcular preços com a região real selecionada pelo vendedor
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
 
-### Fase 3: Corrigir useCalcularCotacao (link público `/q/:token`)
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
 
-- Trocar `import { supabase }` por `import { publicSupabase }` para garantir que as queries funcionem sem sessão
-- As tabelas `planos`, `plano_preco_map` e `tabelas_preco_mensalidade` já permitem leitura anon
-- Adicionar leitura das chaves de config necessárias à policy pública de `configuracoes`
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
 
-### Fase 4: Corrigir CotacaoPublicaCompleta
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
 
-- Passar `regiao` e `combustivel` da cotação para `calcular()` (atualmente omitidos)
-- Aplicar o mesmo mapeamento de região
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
 
-### Fase 5: Migração RLS
+---
 
-- Adicionar `taxa_fallback_carro` e `adicional_app` à lista de chaves permitidas na policy `config_base_public_read` de `configuracoes`
+## 🟡 PENDENTE
 
-## Arquivos Afetados
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | Usar `regiaoSelecionada` com mapeamento |
-| `src/hooks/useCalcularCotacao.ts` | Trocar `supabase` por `publicSupabase` |
-| `src/pages/public/CotacaoPublicaCompleta.tsx` | Passar `regiao` e `combustivel` |
-| `supabase/migrations/` | RLS: adicionar chaves à policy pública |
+---
 
+# Fluxo de Assistência 24h — Reboque
+
+## ✅ CORRIGIDO
+
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.
