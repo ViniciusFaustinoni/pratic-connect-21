@@ -38,6 +38,7 @@ export interface PlanWithDetails {
   display_order: number; // alias para compatibilidade
   valor_adesao: number;
   adicional_mensal: number | null;
+  desconto_percentual: number | null;
   additional_price: number | null; // alias para compatibilidade
   ativo: boolean;
   is_active: boolean; // alias para compatibilidade
