@@ -245,7 +245,7 @@ export function useCalcularCotacao() {
       resultados.push({
         plano,
         faixa: null as any, // Campo legado — decomposição é feita internamente
-        valores: calcularValoresCotacao(plano, faixaResult.valorMensal, valorFipe),
+        valores: calcularValoresCotacao(plano, faixaResult.valorMensal, valorFipe, decomposicao),
       });
     }
 
