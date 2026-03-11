@@ -65,6 +65,7 @@ import {
   Bell,
   Send,
   Layers,
+  TrendingDown,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -161,6 +162,7 @@ const menuConfig: {
         { title: 'Cotação', url: '/vendas/cotacoes', icon: Calculator },
         { title: 'Propostas', url: '/vendas/contratos', icon: FileCheck },
         { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
+        { title: 'Aprovações FIPE', url: '/vendas/aprovacoes-fipe', icon: TrendingDown, permission: 'canManageConsultores' },
         { title: 'Equipe Comercial', url: '/vendas/equipe-comercial', icon: FileText, permission: 'canManageConsultores' },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },

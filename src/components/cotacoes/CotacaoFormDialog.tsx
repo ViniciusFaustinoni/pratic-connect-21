@@ -6,7 +6,7 @@ import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle, X, Calendar } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle, X, Calendar, TrendingDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
@@ -49,16 +49,20 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Textarea } from '@/components/ui/textarea';
 import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
+import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
+import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { useVendedores } from '@/hooks/useVendedores';
 import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
@@ -201,6 +205,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Estado para dia de vencimento
   const [diaVencimento, setDiaVencimento] = useState<number | null>(null);
   
+  // Estados para FIPE menor
+  const [solicitarFipeMenor, setSolicitarFipeMenor] = useState(false);
+  const [justificativaFipeMenor, setJustificativaFipeMenor] = useState('');
+  
+  // Hook para criar solicitação de FIPE menor
+  const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
+
   // Função para calcular opções de vencimento baseado no dia atual
   const opcoesVencimento = useMemo((): [number, number] => {
     const hoje = new Date().getDate();
@@ -288,7 +299,46 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     usoApp: usoVeiculo === 'aplicativo',
   });
 
-  // Validação de dados do associado
+  // Buscar todas as faixas de preço para calcular elegibilidade FIPE menor
+  const { data: todasFaixas = [] } = useTabelasPreco();
+
+  // Calcular elegibilidade FIPE menor
+  const fipeMenorInfo = useMemo(() => {
+    if (!valorFipe || valorFipe <= 0 || planosSelecionados.length === 0 || todasFaixas.length === 0) {
+      return null;
+    }
+
+    const plano = planosSelecionados[0];
+    const valorReduzido = valorFipe * 0.99;
+
+    // Encontrar faixa atual do veículo
+    const faixaAtual = todasFaixas.find(f =>
+      valorFipe >= f.fipe_min && valorFipe <= f.fipe_max
+    );
+
+    if (!faixaAtual) return null;
+
+    // Encontrar faixa inferior (onde fipe_max < faixaAtual.fipe_min)
+    const faixasInferiores = todasFaixas
+      .filter(f => f.fipe_max < faixaAtual.fipe_min && f.linha_slug === faixaAtual.linha_slug && f.regiao === faixaAtual.regiao && f.tipo_uso === faixaAtual.tipo_uso)
+      .sort((a, b) => b.fipe_max - a.fipe_max);
+
+    const faixaInferior = faixasInferiores[0];
+    if (!faixaInferior) return null;
+
+    // Verificar elegibilidade: valor reduzido deve caber na faixa inferior
+    const elegivel = valorReduzido <= faixaInferior.fipe_max;
+
+    return {
+      elegivel,
+      valorReduzido,
+      faixaAtual: { min: faixaAtual.fipe_min, max: faixaAtual.fipe_max, mensal: faixaAtual.valor_mensal },
+      faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
+      economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
+    };
+  }, [valorFipe, planosSelecionados, todasFaixas]);
+
+
   const dadosAssociadoValidos = useMemo(() => {
     const nomeValido = nomeAssociado.trim().length >= 3;
     const telefoneValido = telefoneAssociado.replace(/\D/g, '').length >= 10;
@@ -333,6 +383,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
       setDiaVencimento(null);
+      setSolicitarFipeMenor(false);
+      setJustificativaFipeMenor('');
     }
   }, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
 
@@ -856,7 +908,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return;
     }
     
-    // Validação extra (redundante mas segura)
+    // Validar justificativa de FIPE menor
+    if (solicitarFipeMenor && justificativaFipeMenor.trim().length < 5) {
+      toast.error('Preencha a justificativa para solicitação de FIPE menor!');
+      return;
+    }
+
     if (data.valor_adesao <= 0) {
       toast.error('O valor de adesão deve ser maior que zero!');
       return;
@@ -961,19 +1018,31 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         onSuccess?.();
       } else {
         // Modo criação: criar nova cotação
-        await createCotacao.mutateAsync({
+        const novaCotacao = await createCotacao.mutateAsync({
           ...cotacaoData,
+          solicitar_fipe_menor: solicitarFipeMenor,
           status: 'rascunho',
-          // Consultor responsável - liderança escolhe, demais auto-atribuição
-          // IMPORTANTE: Nunca deixar vendedor_id como null para garantir visibilidade via RLS
           vendedor_id: podeAtribuirVendedor 
             ? (pendingFormData.vendedor_id || userId || user?.id) 
             : (userId || user?.id),
         });
         
-        toast.success('Cotação criada com sucesso!');
+        // Se solicitou FIPE menor, criar registro de aprovação
+        if (solicitarFipeMenor && fipeMenorInfo?.elegivel && novaCotacao?.id) {
+          await criarSolicitacaoFipeMenor.mutateAsync({
+            cotacao_id: novaCotacao.id,
+            fipe_real: valorFipe,
+            fipe_faixa_original_min: fipeMenorInfo.faixaAtual.min,
+            fipe_faixa_original_max: fipeMenorInfo.faixaAtual.max,
+            fipe_faixa_solicitada_min: fipeMenorInfo.faixaInferior.min,
+            fipe_faixa_solicitada_max: fipeMenorInfo.faixaInferior.max,
+            valor_mensal_original: fipeMenorInfo.faixaAtual.mensal,
+            valor_mensal_reduzido: fipeMenorInfo.faixaInferior.mensal,
+            justificativa: justificativaFipeMenor,
+          });
+        }
         
-        // Redirecionar para a página de cotações
+        toast.success('Cotação criada com sucesso!');
         navigate('/vendas/cotacoes');
       }
       
@@ -995,8 +1064,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
       setDiaVencimento(null);
-      
-      // Fechar modais após sucesso
+      setSolicitarFipeMenor(false);
+      setJustificativaFipeMenor('');
+
       setShowConfirmDialog(false);
       onOpenChange(false);
     } catch (error) {
@@ -1720,6 +1790,95 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 )}
               />
             </div>
+
+            {/* BLOCO 3.7: SOLICITAR FIPE MENOR */}
+            {fipeMenorInfo && planosSelecionados.length > 0 && !isEditando && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <TrendingDown className="h-4 w-4 text-primary" />
+                        Solicitar FIPE Menor
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Redução de 1% na FIPE para enquadrar em faixa inferior
+                      </p>
+                    </div>
+                    <Switch
+                      checked={solicitarFipeMenor}
+                      onCheckedChange={setSolicitarFipeMenor}
+                      disabled={!fipeMenorInfo.elegivel}
+                    />
+                  </div>
+
+                  {!fipeMenorInfo.elegivel && (
+                    <Alert className="border-amber-500/30 bg-amber-50 dark:bg-amber-950/20">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
+                        Não elegível: FIPE × 0.99 = {formatCurrency(fipeMenorInfo.valorReduzido)} — 
+                        acima do máximo da faixa inferior ({formatCurrency(fipeMenorInfo.faixaInferior.max)})
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {fipeMenorInfo.elegivel && solicitarFipeMenor && (
+                    <div className="space-y-3">
+                      {/* Preview de economia */}
+                      <Card className="border-green-500/30 bg-green-50/50 dark:bg-green-950/20">
+                        <CardContent className="p-3">
+                          <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Faixa Atual</p>
+                              <p className="font-medium">{formatCurrency(fipeMenorInfo.faixaAtual.min)} – {formatCurrency(fipeMenorInfo.faixaAtual.max)}</p>
+                              <p className="text-muted-foreground">{formatCurrency(fipeMenorInfo.faixaAtual.mensal)}/mês</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Faixa Solicitada</p>
+                              <p className="font-medium text-green-700 dark:text-green-400">{formatCurrency(fipeMenorInfo.faixaInferior.min)} – {formatCurrency(fipeMenorInfo.faixaInferior.max)}</p>
+                              <p className="font-bold text-green-700 dark:text-green-400">{formatCurrency(fipeMenorInfo.faixaInferior.mensal)}/mês</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Economia</p>
+                              <p className="font-bold text-green-700 dark:text-green-400 text-lg">
+                                {formatCurrency(fipeMenorInfo.economia)}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground text-center mt-2">
+                            FIPE real ({formatCurrency(valorFipe)}) × 0.99 = {formatCurrency(fipeMenorInfo.valorReduzido)} — enquadra na faixa inferior
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      {/* Justificativa */}
+                      <div>
+                        <Label className="text-sm">Justificativa <span className="text-destructive">*</span></Label>
+                        <Textarea
+                          value={justificativaFipeMenor}
+                          onChange={(e) => setJustificativaFipeMenor(e.target.value)}
+                          placeholder="Explique o motivo da solicitação de FIPE menor..."
+                          rows={2}
+                          className="mt-1"
+                        />
+                        {solicitarFipeMenor && justificativaFipeMenor.trim().length < 5 && (
+                          <p className="text-xs text-destructive mt-1">Justificativa obrigatória (mínimo 5 caracteres)</p>
+                        )}
+                      </div>
+
+                      <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertDescription className="text-xs">
+                          Esta solicitação será enviada para aprovação do Supervisor. 
+                          A cobertura em sinistro permanece baseada na FIPE real do veículo.
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* BLOCO 4: RESUMO INLINE (quando planos selecionados) */}
             {planosSelecionados.length > 0 && (
