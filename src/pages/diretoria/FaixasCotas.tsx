@@ -330,6 +330,7 @@ export default function FaixasCotas() {
                   <TableRow>
                     <TableHead>Faixa FIPE</TableHead>
                     <TableHead className="text-center">Cotas</TableHead>
+                    <TableHead className="text-center">Associados</TableHead>
                     <TableHead className="text-center">Ajuste (%)</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
