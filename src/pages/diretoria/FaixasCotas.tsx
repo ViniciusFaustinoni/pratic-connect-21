@@ -48,7 +48,30 @@ export default function FaixasCotas() {
   
   const atualizarAjuste = useAtualizarAjusteFaixa();
   const atualizarGrupo = useAtualizarAjusteGrupo();
-  
+
+  // Count active associates per FIPE range
+  const { data: associadosPorFaixa } = useQuery({
+    queryKey: ['associados-por-faixa-fipe', faixas?.map(f => f.id)],
+    enabled: !!faixas?.length,
+    queryFn: async () => {
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('valor_fipe, associados!inner(status)')
+        .eq('associados.status', 'ativo')
+        .not('valor_fipe', 'is', null);
+
+      if (!veiculos || !faixas) return {} as Record<string, number>;
+
+      const counts: Record<string, number> = {};
+      for (const faixa of faixas) {
+        counts[faixa.id] = veiculos.filter(
+          v => v.valor_fipe !== null && v.valor_fipe >= faixa.fipe_de && v.valor_fipe <= faixa.fipe_ate
+        ).length;
+      }
+      return counts;
+    },
+  });
+
   // Estatísticas
   const stats = useMemo(() => {
     if (!faixas) return null;
