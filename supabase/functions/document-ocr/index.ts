@@ -636,7 +636,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
                 role: 'user',
                 content: [
                   { type: 'text', text: 'Extraia o CPF desta CNH.' },
-                  ...(isPdfUrl ? [contentParts[1]] : [{ type: 'image_url', image_url: { url } }]),
+                  contentParts[1],
                 ],
               },
             ],
