@@ -63,6 +63,10 @@ export default function PlanosBeneficios() {
   const { isDiretor, isDesenvolvedor, isGerente, isSupervisor, isAdminMaster } = usePermissions();
   const podeVerConfigAvancada = isDiretor || isGerente || isSupervisor || isDesenvolvedor || isAdminMaster;
 
+  // Config dinâmica de deságio
+  const { data: cotaDesagioPerc = 8 } = useCotaDesagioDefault();
+  const { data: cotaMinimaDesagio = 2000 } = useCotaMinimaDesagioDefault();
+
   // Hooks para dados do Supabase
   const { data: productLines, isLoading: loadingLines, error: errorLines } = useProductLines();
   const { data: plans, isLoading: loadingPlans, error: errorPlans } = usePlans();
