@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { maskPlaca } from '@/lib/validations';
 
 interface ResultadoLinha {
+  key: string; // unique key: linha_slug or linha_slug+tipo_uso
   linha: string;
   linhaLabel: string;
   valorMensal: number;
