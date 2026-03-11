@@ -2031,6 +2031,120 @@ export type Database = {
           },
         ]
       }
+      associados_beneficios_adicionais: {
+        Row: {
+          associado_id: string
+          ativo: boolean | null
+          beneficio_adicional_id: string
+          contrato_id: string | null
+          created_at: string | null
+          data_fim: string | null
+          data_inicio: string | null
+          id: string
+          valor_contratado: number
+        }
+        Insert: {
+          associado_id: string
+          ativo?: boolean | null
+          beneficio_adicional_id: string
+          contrato_id?: string | null
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          id?: string
+          valor_contratado: number
+        }
+        Update: {
+          associado_id?: string
+          ativo?: boolean | null
+          beneficio_adicional_id?: string
+          contrato_id?: string | null
+          created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          id?: string
+          valor_contratado?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "associados_beneficios_adicionais_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_beneficio_adicional_id_fkey"
+            columns: ["beneficio_adicional_id"]
+            isOneToOne: false
+            referencedRelation: "beneficios_adicionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_beneficio_adicional_id_fkey"
+            columns: ["beneficio_adicional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_real_adicionais"
+            referencedColumns: ["beneficio_id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "associados_beneficios_adicionais_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+        ]
+      }
       associados_historico: {
         Row: {
           acao: string | null
@@ -3208,6 +3322,7 @@ export type Database = {
           created_at: string | null
           descricao: string | null
           id: string
+          linhas_permitidas: string[] | null
           nome: string
           ordem: number | null
           preco: number
@@ -3221,6 +3336,7 @@ export type Database = {
           created_at?: string | null
           descricao?: string | null
           id?: string
+          linhas_permitidas?: string[] | null
           nome: string
           ordem?: number | null
           preco?: number
@@ -3234,6 +3350,7 @@ export type Database = {
           created_at?: string | null
           descricao?: string | null
           id?: string
+          linhas_permitidas?: string[] | null
           nome?: string
           ordem?: number | null
           preco?: number
@@ -7203,6 +7320,7 @@ export type Database = {
           adesao_cobranca_id: string | null
           adesao_paga: boolean | null
           adesao_paga_em: string | null
+          adicionais_selecionados: Json | null
           analista_id: string | null
           aprovado_em: string | null
           aprovado_por: string | null
@@ -7303,6 +7421,7 @@ export type Database = {
           adesao_cobranca_id?: string | null
           adesao_paga?: boolean | null
           adesao_paga_em?: string | null
+          adicionais_selecionados?: Json | null
           analista_id?: string | null
           aprovado_em?: string | null
           aprovado_por?: string | null
@@ -7403,6 +7522,7 @@ export type Database = {
           adesao_cobranca_id?: string | null
           adesao_paga?: boolean | null
           adesao_paga_em?: string | null
+          adicionais_selecionados?: Json | null
           analista_id?: string | null
           aprovado_em?: string | null
           aprovado_por?: string | null
