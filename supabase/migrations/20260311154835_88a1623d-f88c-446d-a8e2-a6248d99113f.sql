@@ -1,0 +1,1 @@
+ALTER TABLE product_lines ADD COLUMN blocked_categories text[] DEFAULT '{}';

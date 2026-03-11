@@ -88,6 +88,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .from('planos')
         .select(`
           *,
+
           product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class)
         `)
         .eq('ativo', true)
@@ -202,6 +203,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       // Regra de ano recente usando campo do banco
       if (requiresRecentYear && anoVeiculoNum < anoAtual - 1) continue;
+
+      // Filtrar por categorias bloqueadas no product_line
+      const blockedCategories: string[] = plProductLine?.blocked_categories || [];
+      if (categoria && categoria !== 'nenhuma' && categoria !== 'aplicativo' 
+          && blockedCategories.length > 0 && blockedCategories.includes(categoria)) {
+        continue;
+      }
 
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
       const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);

@@ -17974,6 +17974,7 @@ export type Database = {
       }
       product_lines: {
         Row: {
+          blocked_categories: string[] | null
           color: string | null
           created_at: string | null
           display_order: number | null
@@ -17989,6 +17990,7 @@ export type Database = {
           vehicle_type: string | null
         }
         Insert: {
+          blocked_categories?: string[] | null
           color?: string | null
           created_at?: string | null
           display_order?: number | null
@@ -18004,6 +18006,7 @@ export type Database = {
           vehicle_type?: string | null
         }
         Update: {
+          blocked_categories?: string[] | null
           color?: string | null
           created_at?: string | null
           display_order?: number | null
