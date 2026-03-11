@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
-import { isPdf, convertPdfToImage, getPdfConvertedName } from '@/lib/pdfToImage';
+
 
 export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'comprovante_residencia' | 'outro';
 
