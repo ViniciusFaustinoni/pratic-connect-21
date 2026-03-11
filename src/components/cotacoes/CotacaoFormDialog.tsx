@@ -1680,7 +1680,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                         </p>
                         <ul className="text-xs space-y-1 text-muted-foreground">
                           {plano.coberturas.slice(0, 4).map((cobertura, idx) => {
-                            const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                            const isRemovida = plano.coberturasRemovidas.some(
+                              cr => cr.toLowerCase().includes(cobertura.toLowerCase())
+                            );
                             return (
                               <li key={idx} className="flex items-center gap-1">
                                 {isRemovida ? (

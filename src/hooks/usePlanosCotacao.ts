@@ -90,7 +90,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .select(`
           *,
 
-          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class)
+          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories)
         `)
         .eq('ativo', true)
         .order('ordem', { ascending: true });
