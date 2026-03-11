@@ -121,7 +121,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const { data, error } = await supabase
         .from('tabelas_preco_mensalidade')
         .select('*')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .limit(5000);
       if (error) throw error;
       return data;
     },
