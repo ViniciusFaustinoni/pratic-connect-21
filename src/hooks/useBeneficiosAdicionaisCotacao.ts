@@ -8,6 +8,7 @@ export interface BeneficioAdicionalCotacao {
   preco: number;
   categoria: string;
   descricao: string | null;
+  linhas_permitidas: string[] | null;
 }
 
 /**
