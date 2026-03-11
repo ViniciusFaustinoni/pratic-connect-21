@@ -10,6 +10,8 @@ import {
   AlertTriangle, MapPin, Settings, Loader2, Info
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useCotaDesagioDefault, useCotaMinimaDesagioDefault } from '@/hooks/useConteudosSistema';
+import { formatarMoeda } from '@/utils/format';
 
 // Hooks para dados do Supabase
 import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
@@ -60,6 +62,10 @@ export default function PlanosBeneficios() {
   const [searchTerm, setSearchTerm] = useState('');
   const { isDiretor, isDesenvolvedor, isGerente, isSupervisor, isAdminMaster } = usePermissions();
   const podeVerConfigAvancada = isDiretor || isGerente || isSupervisor || isDesenvolvedor || isAdminMaster;
+
+  // Config dinâmica de deságio
+  const { data: cotaDesagioPerc = 8 } = useCotaDesagioDefault();
+  const { data: cotaMinimaDesagio = 2000 } = useCotaMinimaDesagioDefault();
 
   // Hooks para dados do Supabase
   const { data: productLines, isLoading: loadingLines, error: errorLines } = useProductLines();
@@ -224,7 +230,7 @@ export default function PlanosBeneficios() {
             <AlertDescription className="text-amber-700 dark:text-amber-300">
               <strong>REGRA DE DESÁGIO:</strong> Em todos os planos com cota de participação inferior a 10%, 
               quando o associado optar pelo DESÁGIO (adesivo publicitário), a cota de participação passa a ser 
-              <strong> 8% (mínimo R$2.000)</strong>.
+              <strong> {cotaDesagioPerc}% (mínimo {formatarMoeda(cotaMinimaDesagio)})</strong>.
             </AlertDescription>
           </Alert>
 

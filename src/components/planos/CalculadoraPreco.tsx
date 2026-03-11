@@ -8,13 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Calculator, Check, Car, Briefcase } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useFatorVeiculoAntigo, useFatorUsoTrabalho } from '@/hooks/useConteudosSistema';
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
-}
+import { formatarMoeda } from '@/utils/format';
 
 interface ResultadoFaixa {
   faixaFipe: string;
@@ -28,13 +22,27 @@ interface ResultadoFaixa {
 
 type AnoVeiculo = 'recente' | 'antigo';
 type TipoUso = 'particular' | 'trabalho';
-type CoberturaDesejada = 'todas' | 'basica' | 'completa' | 'premium';
+
+const REGIOES = [
+  { value: 'rj', label: 'Rio de Janeiro' },
+  { value: 'lagos', label: 'Região dos Lagos' },
+  { value: 'sp', label: 'São Paulo' },
+] as const;
+
+// Mapeamento de linha_slug técnico → nome amigável
+const LINHA_LABELS: Record<string, string> = {
+  select: 'Select',
+  lancamento: 'Lançamento',
+  especial: 'Especial',
+  advanced: 'Advanced',
+  eletrico: 'Elétrico',
+};
 
 export function CalculadoraPreco() {
   const [valorFipe, setValorFipe] = useState<string>('');
   const [anoVeiculo, setAnoVeiculo] = useState<AnoVeiculo>('recente');
   const [tipoUso, setTipoUso] = useState<TipoUso>('particular');
-  const [coberturaDesejada, setCoberturaDesejada] = useState<CoberturaDesejada>('todas');
+  const [regiao, setRegiao] = useState<string>('rj');
   const [resultado, setResultado] = useState<ResultadoFaixa | null>(null);
   
   const { data: tabelas } = useTabelasPreco();
@@ -49,9 +57,9 @@ export function CalculadoraPreco() {
       return;
     }
 
-    // Buscar faixas FIPE correspondentes (nova tabela: fipe_min/fipe_max)
+    // Filtrar por faixa FIPE e região
     const faixasEncontradas = tabelas.filter(
-      t => valor >= Number(t.fipe_min) && valor <= Number(t.fipe_max)
+      t => valor >= Number(t.fipe_min) && valor <= Number(t.fipe_max) && t.regiao === regiao
     );
 
     if (faixasEncontradas.length === 0) {
@@ -79,48 +87,30 @@ export function CalculadoraPreco() {
       fatoresAplicados.push('Uso particular');
     }
 
-    // Filtrar por cobertura se especificado (usando linha_slug como proxy)
-    let faixasFiltradas = faixasEncontradas;
-    if (coberturaDesejada !== 'todas') {
-      const slugCobertura = {
-        basica: 'select',
-        completa: 'lancamento',
-        premium: 'especial',
-      }[coberturaDesejada];
-      
-      faixasFiltradas = faixasEncontradas.filter(f => 
-        f.linha_slug?.toLowerCase().includes(slugCobertura)
-      );
-      
-      if (faixasFiltradas.length === 0) {
-        faixasFiltradas = faixasEncontradas;
-      }
-    }
+    const regiaoLabel = REGIOES.find(r => r.value === regiao)?.label || regiao;
+    fatoresAplicados.push(`Região: ${regiaoLabel}`);
 
-    // Calcular valores mensais usando valor_mensal direto
-    const valoresCalculados = faixasFiltradas.map(f => {
-      const valorBase = Number(f.valor_mensal) || 0;
-      return {
-        valor: valorBase * fator,
-        plano: f.linha_slug || 'Plano',
-      };
-    });
+    // Calcular valores mensais
+    const valoresCalculados = faixasEncontradas
+      .filter(f => Number(f.valor_mensal) > 0)
+      .map(f => ({
+        valor: Number(f.valor_mensal) * fator,
+        plano: LINHA_LABELS[f.linha_slug || ''] || f.linha_slug || 'Plano',
+      }));
 
     if (valoresCalculados.length === 0) {
       setResultado(null);
       return;
     }
 
-    // Ordenar por valor
     valoresCalculados.sort((a, b) => a.valor - b.valor);
 
     const menorValor = valoresCalculados[0];
     const maiorValor = valoresCalculados[valoresCalculados.length - 1];
-
     const primeiraFaixa = faixasEncontradas[0];
     
     setResultado({
-      faixaFipe: `${formatCurrency(Number(primeiraFaixa.fipe_min))} - ${formatCurrency(Number(primeiraFaixa.fipe_max))}`,
+      faixaFipe: `${formatarMoeda(Number(primeiraFaixa.fipe_min))} - ${formatarMoeda(Number(primeiraFaixa.fipe_max))}`,
       valorMinimo: menorValor.valor,
       valorMaximo: maiorValor.valor,
       planoMinimo: menorValor.plano,
@@ -132,10 +122,7 @@ export function CalculadoraPreco() {
 
   const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, '');
-    const formatted = new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(Number(raw) / 100);
+    const formatted = formatarMoeda(Number(raw) / 100);
     setValorFipe(formatted);
   };
 
@@ -143,7 +130,7 @@ export function CalculadoraPreco() {
     setValorFipe('');
     setAnoVeiculo('recente');
     setTipoUso('particular');
-    setCoberturaDesejada('todas');
+    setRegiao('rj');
     setResultado(null);
   };
 
@@ -173,6 +160,21 @@ export function CalculadoraPreco() {
               value={valorFipe}
               onChange={handleValorChange}
             />
+          </div>
+
+          {/* Região */}
+          <div className="space-y-2">
+            <Label>Região</Label>
+            <Select value={regiao} onValueChange={setRegiao}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a região" />
+              </SelectTrigger>
+              <SelectContent>
+                {REGIOES.map(r => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Ano do Veículo */}
@@ -213,22 +215,6 @@ export function CalculadoraPreco() {
             </ToggleGroup>
           </div>
 
-          {/* Cobertura */}
-          <div className="space-y-2">
-            <Label>Cobertura</Label>
-            <Select value={coberturaDesejada} onValueChange={(v) => setCoberturaDesejada(v as CoberturaDesejada)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a cobertura" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas as opções</SelectItem>
-                <SelectItem value="basica">Proteção Básica</SelectItem>
-                <SelectItem value="completa">Proteção Total</SelectItem>
-                <SelectItem value="premium">Proteção Premium</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Botões */}
           <div className="flex gap-2">
             <Button onClick={calcular} className="flex-1">
@@ -243,7 +229,7 @@ export function CalculadoraPreco() {
           {resultado && (
             <div className="space-y-4 pt-4 border-t">
               <div className="text-sm text-muted-foreground">
-                <p>Estimativa para veículo {formatCurrency(resultado.valorFipeInformado)}</p>
+                <p>Estimativa para veículo {formatarMoeda(resultado.valorFipeInformado)}</p>
                 <p className="text-xs">Faixa FIPE: {resultado.faixaFipe}</p>
               </div>
 
@@ -251,10 +237,10 @@ export function CalculadoraPreco() {
                 <p className="text-sm text-muted-foreground">Mensalidade estimada:</p>
                 <p className="text-2xl font-bold text-primary">
                   {resultado.valorMinimo === resultado.valorMaximo ? (
-                    formatCurrency(resultado.valorMinimo)
+                    formatarMoeda(resultado.valorMinimo)
                   ) : (
                     <>
-                      {formatCurrency(resultado.valorMinimo)} a {formatCurrency(resultado.valorMaximo)}
+                      {formatarMoeda(resultado.valorMinimo)} a {formatarMoeda(resultado.valorMaximo)}
                     </>
                   )}
                   <span className="text-sm font-normal text-muted-foreground">/mês</span>
@@ -284,7 +270,7 @@ export function CalculadoraPreco() {
 
           {valorFipe && !resultado && (
             <p className="text-sm text-muted-foreground text-center">
-              Nenhuma faixa encontrada para este valor. Tente outro valor FIPE.
+              Nenhuma faixa encontrada para este valor e região. Tente outro valor FIPE ou região.
             </p>
           )}
         </div>

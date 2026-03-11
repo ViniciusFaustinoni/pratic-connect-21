@@ -101,7 +101,7 @@ export function PlanoCardDynamic({ plan }: PlanoCardDynamicProps) {
         <div className="flex items-center gap-2">
           <CardTitle className="text-lg">{plan.name}</CardTitle>
           {/* Badge de preço adicional */}
-          {plan.additional_price && plan.additional_price > 0 && (
+          {Number(plan.additional_price) > 0 && (
             <span className="text-xs inline-flex items-center rounded-full border border-input bg-secondary text-secondary-foreground px-2.5 py-0.5 font-semibold">
               +{formatCurrency(plan.additional_price)}/mês
             </span>
