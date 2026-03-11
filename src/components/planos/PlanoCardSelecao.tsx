@@ -15,6 +15,7 @@ interface PlanoData {
   destaque?: boolean | null;
   linha?: string | null;
   categoriaVeiculo?: string;
+  gradient_class?: string | null;
 }
 
 interface PlanoCardSelecaoProps {
