@@ -14,9 +14,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, Car, Bike } from 'lucide-react';
+import { Plus, Edit, Trash2, Car, Bike, Copy } from 'lucide-react';
 import { useProductLines, usePlans } from '@/hooks/usePlans';
-import { useDeleteProductLine, useUpdateProductLine } from '@/hooks/usePlansAdmin';
+import { useDeleteProductLine, useUpdateProductLine, useDuplicateProductLine } from '@/hooks/usePlansAdmin';
 import { LinhaFormModal } from './LinhaFormModal';
 import type { ProductLine } from '@/types/plans';
 
