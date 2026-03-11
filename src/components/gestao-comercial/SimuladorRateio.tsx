@@ -111,8 +111,7 @@ export function SimuladorRateio() {
         .from('fechamentos_mensais')
         .select('id, status')
         .eq('mes_referencia', mes)
-        .eq('ano_referencia', ano)
-        .limit(1);
+        .eq('ano_referencia', ano) as any;
       return data?.[0] || null;
     },
   });
