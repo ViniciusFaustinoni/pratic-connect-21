@@ -50,7 +50,8 @@ export function ProdutosPlanos() {
   const [coberturaParaEditar, setCoberturaParaEditar] = useState<any>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmType, setDeleteConfirmType] = useState<'cobertura' | 'beneficio'>('cobertura');
-
+  const [planDeleteConfirmOpen, setPlanDeleteConfirmOpen] = useState(false);
+  const [planToggleConfirm, setPlanToggleConfirm] = useState<{ id: string; activate: boolean } | null>(null);
   // Beneficio modals
   const [vincularBeneficioOpen, setVincularBeneficioOpen] = useState(false);
 
