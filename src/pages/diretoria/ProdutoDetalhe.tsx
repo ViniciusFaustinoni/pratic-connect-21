@@ -24,9 +24,11 @@ import { toast } from 'sonner';
 import { 
   VincularCoberturaModal, 
   FaixaPrecoModal, 
-  ProdutoFormModal,
   EditarCoberturaVinculadaModal 
 } from '@/components/diretoria';
+import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
+import { usePlanById } from '@/hooks/usePlans';
+import type { PlanWithDetails } from '@/hooks/usePlans';
 
 interface PlanoCobertura {
   id: string;
