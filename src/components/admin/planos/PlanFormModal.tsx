@@ -243,6 +243,9 @@ export function PlanFormModal({
       additional_price: formData.additional_price
         ? parseFloat(formData.additional_price)
         : null,
+      desconto_percentual: formData.desconto_percentual
+        ? parseFloat(formData.desconto_percentual)
+        : null,
       cota_passeio_percent: formData.cota_passeio_percent
         ? parseFloat(formData.cota_passeio_percent)
         : null,
