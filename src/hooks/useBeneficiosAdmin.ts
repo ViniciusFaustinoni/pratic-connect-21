@@ -123,6 +123,7 @@ export function useUpdateBeneficio() {
           ativo: input.ativo,
           ordem: input.ordem,
           variacao_por_cota: input.variacao_por_cota,
+          linhas_permitidas: input.linhas_permitidas,
         })
         .eq('id', id)
         .select()

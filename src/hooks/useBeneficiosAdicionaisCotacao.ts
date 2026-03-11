@@ -36,11 +36,23 @@ export function useBeneficiosAdicionaisCotacao() {
  * Retorna benefícios separados entre gerais e faixas de terceiros,
  * formatados para uso nos componentes StepBeneficios e StepFinanceiro.
  */
-export function useBeneficiosSeparados() {
+/**
+ * Retorna benefícios separados entre gerais e faixas de terceiros,
+ * formatados para uso nos componentes StepBeneficios e StepFinanceiro.
+ * @param productLineSlug - Se informado, filtra adicionais pela linha do plano selecionado
+ */
+export function useBeneficiosSeparados(productLineSlug?: string) {
   const { data: todos, isLoading } = useBeneficiosAdicionaisCotacao();
 
-  const beneficios = (todos || []).filter(b => b.categoria !== 'Terceiros');
-  const faixasTerceiros = (todos || []).filter(b => b.categoria === 'Terceiros');
+  // Filtrar por linha permitida (vazio = disponível para todos)
+  const filtrados = (todos || []).filter(b => {
+    if (!productLineSlug) return true;
+    if (!b.linhas_permitidas || b.linhas_permitidas.length === 0) return true;
+    return b.linhas_permitidas.includes(productLineSlug);
+  });
+
+  const beneficios = filtrados.filter(b => b.categoria !== 'Terceiros');
+  const faixasTerceiros = filtrados.filter(b => b.categoria === 'Terceiros');
 
   // Mapa de preços por código (para compatibilidade com StepFinanceiro)
   const precosMap: Record<string, { nome: string; preco: number }> = {};
