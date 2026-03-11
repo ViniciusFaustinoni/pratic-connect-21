@@ -293,12 +293,21 @@ export function ProdutosPlanos() {
                     <DropdownMenuItem onClick={() => duplicatePlan.mutate(selectedPlan.id)}>
                       <Copy className="h-4 w-4 mr-2" /> Duplicar
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={() => { deletePlan.mutate(selectedPlan.id); setSelectedPlanoId(null); }}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" /> Excluir
-                    </DropdownMenuItem>
+                    {selectedPlan.ativo ? (
+                      <DropdownMenuItem
+                        className="text-destructive opacity-50 cursor-not-allowed"
+                        onClick={(e) => { e.preventDefault(); toast.error('Inative o plano antes de excluir'); }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => setPlanDeleteConfirmOpen(true)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
