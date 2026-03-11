@@ -49,19 +49,19 @@ export function useCalcularCotacao() {
     try {
       // Buscar planos ativos, mapeamento e preços em paralelo
       const [planosRes, mapRes, mensalidadeRes, configRes] = await Promise.all([
-        supabase
+        publicSupabase
           .from('planos')
           .select('*')
           .eq('ativo', true)
           .order('ordem', { ascending: true }),
-        supabase
+        publicSupabase
           .from('plano_preco_map')
           .select('*'),
-        supabase
+        publicSupabase
           .from('tabelas_preco_mensalidade')
           .select('*')
           .eq('is_active', true),
-        supabase
+        publicSupabase
           .from('configuracoes')
           .select('chave, valor')
           .in('chave', ['taxa_fallback_carro', 'adicional_app']),

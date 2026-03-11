@@ -270,7 +270,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
     valorFipe,
     valorAdicional,
-    regiao: 'rj', // Default RJ - pode ser ajustado
+    regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
     combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
     categoria: usoVeiculo === 'aplicativo' ? 'aplicativo' : (categoria || undefined),
     anoVeiculo: anoNumerico,
