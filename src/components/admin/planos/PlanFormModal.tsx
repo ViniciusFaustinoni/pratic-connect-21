@@ -318,10 +318,32 @@ export function PlanFormModal({
     };
 
     try {
+      let planId: string;
       if (isEditing && plan) {
         await updatePlan.mutateAsync({ id: plan.id, ...payload });
+        planId = plan.id;
       } else {
-        await createPlan.mutateAsync(payload);
+        const created = await createPlan.mutateAsync(payload);
+        planId = (created as any)?.id || plan?.id || '';
+      }
+
+      // Save cotas por categoria
+      if (planId && cotasCategorias.length > 0) {
+        await supabase
+          .from('planos_cotas_categoria' as any)
+          .delete()
+          .eq('plano_id', planId);
+
+        const rows = cotasCategorias.map(c => ({
+          plano_id: planId,
+          categoria_veiculo: c.categoria_veiculo,
+          cota_percentual: parseFloat(c.cota_percentual) || 6,
+          cota_minima_valor: parseFloat(c.cota_minima_valor) || 1200,
+        }));
+
+        await supabase
+          .from('planos_cotas_categoria' as any)
+          .insert(rows);
       }
 
       // Save benefit exclusions
