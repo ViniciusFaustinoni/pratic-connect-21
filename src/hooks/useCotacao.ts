@@ -61,6 +61,7 @@ function mapPlanoToInterface(data: any): PlanoParaCotacao {
     valor_adesao: Number(data.valor_adesao || 0),
     coberturas: data.coberturas || [],
     adicional_mensal: Number(data.adicional_mensal || 0),
+    desconto_percentual: Number(data.desconto_percentual || 0),
     ativo: data.ativo,
     created_at: data.created_at,
   };
@@ -137,6 +138,7 @@ function encontrarFaixaMensalidade(
   combustivel: string,
   adicionalApp: number = 0,
   adicionalMensal: number = 0,
+  descontoPercentual: number = 0,
 ): { valorMensal: number; valorDesagio: number | null } | null {
   const mapping = planoPrecoMap.find(m => m.plano_id === planoId);
   if (!mapping) return null;
@@ -165,6 +167,11 @@ function encontrarFaixaMensalidade(
 
   // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
   valorMensalFinal += adicionalMensal;
+
+  // Aplicar desconto percentual dinâmico (ex: 5% OFF)
+  if (descontoPercentual > 0) {
+    valorMensalFinal *= (1 - descontoPercentual / 100);
+  }
 
   return {
     valorMensal: Math.round(valorMensalFinal * 100) / 100,
@@ -262,6 +269,7 @@ export function useCalcularCotacao() {
         combustivel,
         adicionalApp,
         plano.adicional_mensal || 0,
+        plano.desconto_percentual || 0,
       );
 
       if (!faixaResult) continue;

@@ -121,6 +121,7 @@ export function PlanFormModal({
     coverage_type: '',
     min_vehicle_year: '',
     additional_price: '',
+    desconto_percentual: '',
     cota_passeio_percent: '',
     cota_passeio_min: '',
     cota_desagio_percent: '',
@@ -158,6 +159,7 @@ export function PlanFormModal({
         coverage_type: plan.coverage_type || '',
         min_vehicle_year: plan.min_vehicle_year || '',
         additional_price: plan.additional_price?.toString() || '',
+        desconto_percentual: (plan as any).desconto_percentual?.toString() || '',
         cota_passeio_percent: plan.cota_passeio_percent?.toString() || '',
         cota_passeio_min: plan.cota_passeio_min?.toString() || '',
         cota_desagio_percent: plan.cota_desagio_percent?.toString() || '',
@@ -192,6 +194,7 @@ export function PlanFormModal({
         coverage_type: '',
         min_vehicle_year: '',
         additional_price: '',
+        desconto_percentual: '',
         cota_passeio_percent: '',
         cota_passeio_min: '',
         cota_desagio_percent: '',
@@ -239,6 +242,9 @@ export function PlanFormModal({
       min_vehicle_year: formData.min_vehicle_year || null,
       additional_price: formData.additional_price
         ? parseFloat(formData.additional_price)
+        : null,
+      desconto_percentual: formData.desconto_percentual
+        ? parseFloat(formData.desconto_percentual)
         : null,
       cota_passeio_percent: formData.cota_passeio_percent
         ? parseFloat(formData.cota_passeio_percent)
@@ -558,6 +564,25 @@ export function PlanFormModal({
                       />
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="desconto_percentual">Desconto Promocional (%)</Label>
+                      <Input
+                        id="desconto_percentual"
+                        type="number"
+                        step="0.1"
+                        value={formData.desconto_percentual}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            desconto_percentual: e.target.value,
+                          }))
+                        }
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Percentual de desconto sobre o valor mensal (ex: 5 = 5% OFF). Deixe 0 para sem desconto.
+                      </p>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Cota Passeio (%)</Label>
