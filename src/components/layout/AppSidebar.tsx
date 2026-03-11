@@ -98,6 +98,7 @@ import { useModuleItemVisibility, MENU_ITEM_IDS } from '@/hooks/useModuleItemVis
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAppRoles } from '@/hooks/useAppRoles';
+import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 
 // Mapeamento de cores por grupo/item
 const MENU_COLORS: Record<string, string> = {
@@ -507,6 +508,7 @@ export function AppSidebar() {
   const permissions = usePermissions();
   const { visibleModules } = useModuleVisibility();
   const { isItemVisible } = useModuleItemVisibility();
+  const { fipeMenorAtivo } = useFipeMenorAtivo();
 
   const isActive = (path: string) => {
     if (path === '/dashboard') return location.pathname === path;
@@ -519,6 +521,7 @@ export function AppSidebar() {
   const filterByPermission = (items: MenuItem[]) => 
     items.filter(item => {
       if (item.hideForDiretor && permissions.isDiretor) return false;
+      if (!fipeMenorAtivo && item.url === '/vendas/aprovacoes-fipe') return false;
       return !item.permission || permissions.hasPermission(item.permission);
     });
 

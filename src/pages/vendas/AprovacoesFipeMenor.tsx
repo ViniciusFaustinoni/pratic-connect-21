@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import {
   useRecusarFipeMenor,
   type AprovacaoFipeMenor,
 } from '@/hooks/useAprovacoesFipeMenor';
+import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { formatarMoeda } from '@/utils/format';
 
 const STATUS_CONFIG = {
@@ -33,6 +35,7 @@ export default function AprovacoesFipeMenor() {
   const { data: solicitacoes = [], isLoading } = useAprovacoesFipeMenor(tab === 'todas' ? undefined : tab);
   const aprovar = useAprovarFipeMenor();
   const recusar = useRecusarFipeMenor();
+  const { fipeMenorAtivo } = useFipeMenorAtivo();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'aprovar' | 'recusar'>('aprovar');
@@ -78,6 +81,15 @@ export default function AprovacoesFipeMenor() {
           Solicitações de enquadramento em faixa FIPE inferior (redução de 1%)
         </p>
       </div>
+
+      {!fipeMenorAtivo && (
+        <Alert className="border-amber-500/30 bg-amber-50 dark:bg-amber-950/20">
+          <ShieldOff className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
+            A regra de FIPE Menor está <strong>desativada</strong> pelo Diretor. Novas solicitações não podem ser criadas. O histórico abaixo permanece acessível.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>

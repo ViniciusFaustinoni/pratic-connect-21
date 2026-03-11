@@ -55,6 +55,7 @@ import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
 import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
+import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
@@ -211,6 +212,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   
   // Hook para criar solicitação de FIPE menor
   const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
+  const { fipeMenorAtivo } = useFipeMenorAtivo();
 
   // Função para calcular opções de vencimento baseado no dia atual
   const opcoesVencimento = useMemo((): [number, number] => {
@@ -1792,7 +1794,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             </div>
 
             {/* BLOCO 3.7: SOLICITAR FIPE MENOR */}
-            {fipeMenorInfo && planosSelecionados.length > 0 && !isEditando && (
+            {fipeMenorAtivo && fipeMenorInfo && planosSelecionados.length > 0 && !isEditando && (
               <>
                 <Separator />
                 <div className="space-y-3">
