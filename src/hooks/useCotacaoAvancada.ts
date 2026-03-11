@@ -31,6 +31,13 @@ export interface AdicionalOpcao {
   preco: number;
 }
 
+export interface AdicionalSelecionado {
+  id: string;
+  codigo: string;
+  nome: string;
+  preco: number;
+}
+
 export interface DadosCotacaoAvancada {
   leadId?: string;
   clienteNome: string;
@@ -46,7 +53,7 @@ export interface DadosCotacaoAvancada {
   planoId: string;
   usoAplicativo: boolean;
   desagio: number;
-  adicionaisSelecionados: string[];
+  adicionaisSelecionados: AdicionalSelecionado[];
   regiao?: string;
 }
 
