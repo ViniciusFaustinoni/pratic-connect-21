@@ -123,7 +123,9 @@ serve(async (req) => {
       .from('contratos')
       .select('id, associado_id, veiculo_id, link_token')
       .eq('cotacao_id', cotacaoId)
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (contratoError || !contrato) {
       console.error('[AgendarVistoriaPresencial] Contrato não encontrado:', contratoError);
