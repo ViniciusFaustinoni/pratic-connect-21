@@ -234,7 +234,9 @@ interface CriarCotacaoPublicaParams {
   veiculoModelo?: string;
   veiculoAno?: number;
   veiculoPlaca?: string;
+  veiculoCombustivel?: string;
   valorFipe?: number;
+  regiao?: string;
 }
 
 export function useCriarCotacaoPublica() {
