@@ -8,14 +8,16 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
-import { Plus, Pencil, ToggleLeft, FileUp, AlertTriangle, Upload, X } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, FileUp, AlertTriangle, Upload, X, Download, Loader2, CheckCircle2, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { COMBUSTIVEIS_FALLBACK } from '@/data/combustiveis';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 type ElegibilidadeRecord = {
   id: string;
@@ -356,58 +358,402 @@ function TabPorPlano() {
 }
 
 // ─── Importar PDF ────────────────────────────────────────────
-function TabImportarPDF() {
+function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: string) => void }) {
+  const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
+  const [selectedPlano, setSelectedPlano] = useState<string>('');
+  const [modo, setModo] = useState<'adicionar' | 'substituir'>('adicionar');
+  const [processando, setProcessando] = useState(false);
+  const [resultado, setResultado] = useState<any>(null);
+  const [erro, setErro] = useState<{ error: string; erros?: string[]; detalhe?: string } | null>(null);
+
+  // Export state
+  const [exportPlano, setExportPlano] = useState<string>('');
+  const [exportando, setExportando] = useState(false);
+
+  const { data: planos } = useQuery({
+    queryKey: ['planos-elegibilidade'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos')
+        .select('id, nome, linha')
+        .eq('ativo', true)
+        .order('nome');
+      if (error) throw error;
+      return data as PlanoOption[];
+    },
+  });
+
+  const selectedPlanoObj = planos?.find(p => p.id === selectedPlano);
+  const exportPlanoObj = planos?.find(p => p.id === exportPlano);
 
   const onDrop = useCallback((accepted: File[]) => {
-    if (accepted.length > 0) setFile(accepted[0]);
+    if (accepted.length > 0) {
+      setFile(accepted[0]);
+      setResultado(null);
+      setErro(null);
+    }
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'application/pdf': ['.pdf'] },
     maxFiles: 1,
+    disabled: !selectedPlano,
   });
 
-  const processar = () => {
-    toast.info('Importação via PDF será habilitada em breve.');
+  const processar = async () => {
+    if (!file || !selectedPlano || !selectedPlanoObj) return;
+    setProcessando(true);
+    setErro(null);
+    setResultado(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('arquivo', file);
+      formData.append('plano_id', selectedPlano);
+      formData.append('linha_slug', selectedPlanoObj.linha || '');
+      formData.append('modo', modo);
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const res = await fetch(
+        `https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/parse-elegibilidade-pdf`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setErro(json);
+      } else {
+        setResultado(json);
+        toast.success(`${json.total_importados} modelos importados!`);
+        queryClient.invalidateQueries({ queryKey: ['elegibilidade', selectedPlano] });
+        queryClient.invalidateQueries({ queryKey: ['elegibilidade-resumo'] });
+        queryClient.invalidateQueries({ queryKey: ['plano_elegibilidade_modelos'] });
+      }
+    } catch (e: any) {
+      setErro({ error: 'Erro de rede', detalhe: e.message });
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFile(null);
+    setResultado(null);
+    setErro(null);
+  };
+
+  // --- Export PDF ---
+  const exportarPDF = async () => {
+    if (!exportPlano || !exportPlanoObj) return;
+    setExportando(true);
+
+    try {
+      const { data: registros, error } = await supabase
+        .from('plano_elegibilidade_modelos')
+        .select('*')
+        .eq('plano_id', exportPlano)
+        .eq('is_active', true)
+        .order('marca')
+        .order('modelo');
+
+      if (error) throw error;
+
+      const pdfDoc = await PDFDocument.create();
+      const font = await pdfDoc.embedFont(StandardFonts.Courier);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.CourierBold);
+      const page = pdfDoc.addPage([595, 842]); // A4
+      const { height } = page.getSize();
+      let y = height - 50;
+      const lineHeight = 14;
+      const fontSize = 9;
+
+      // Header
+      page.drawText('PRATICCAR — Elegibilidade de Veículos', { x: 50, y, font: fontBold, size: 14, color: rgb(0.1, 0.1, 0.4) });
+      y -= 24;
+      page.drawText(`Plano: ${exportPlanoObj.nome}`, { x: 50, y, font: fontBold, size: 11 });
+      y -= 16;
+      page.drawText(`Linha: ${exportPlanoObj.linha || '—'}`, { x: 50, y, font, size: fontSize });
+      y -= 16;
+      page.drawText(`Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, { x: 50, y, font, size: fontSize });
+      y -= 16;
+      page.drawText(`Total de modelos: ${registros?.length || 0}`, { x: 50, y, font, size: fontSize });
+      y -= 24;
+
+      // Visual table header
+      if (registros && registros.length > 0) {
+        page.drawText('Marca        Modelo           Ano Min  Ano Max  Comb.      Status', { x: 50, y, font: fontBold, size: fontSize });
+        y -= lineHeight;
+        page.drawText('─'.repeat(75), { x: 50, y, font, size: fontSize });
+        y -= lineHeight;
+
+        for (const r of registros) {
+          if (y < 120) {
+            // New page if needed
+            const newPage = pdfDoc.addPage([595, 842]);
+            y = newPage.getSize().height - 50;
+          }
+          const line = `${(r.marca || '').padEnd(13)}${(r.modelo || '').padEnd(17)}${String(r.ano_min).padEnd(9)}${(r.ano_max != null ? String(r.ano_max) : '—').padEnd(9)}${(r.combustivel || 'qualquer').padEnd(11)}${r.status}`;
+          page.drawText(line, { x: 50, y, font, size: fontSize });
+          y -= lineHeight;
+        }
+      }
+
+      // Structured data block
+      y -= 24;
+      const sep = '════════════════════════════════════════';
+      const dataLines = [
+        sep,
+        '##DADOS_IMPORTACAO_INICIO##',
+        `LINHA_SLUG: ${exportPlanoObj.linha || ''}`,
+        'VERSAO: 1.0',
+        `GERADO_EM: ${format(new Date(), 'yyyy-MM-dd')}`,
+        sep,
+        'MARCA|MODELO|ANO_MIN|ANO_MAX|COMBUSTIVEL|STATUS|OBSERVACAO',
+      ];
+
+      for (const r of (registros || [])) {
+        dataLines.push(
+          `${r.marca}|${r.modelo}|${r.ano_min}|${r.ano_max ?? ''}|${r.combustivel || 'qualquer'}|${r.status}|${r.observacao || ''}`
+        );
+      }
+
+      dataLines.push('##DADOS_IMPORTACAO_FIM##');
+      dataLines.push(sep);
+
+      for (const line of dataLines) {
+        if (y < 40) {
+          const newPage = pdfDoc.addPage([595, 842]);
+          y = newPage.getSize().height - 50;
+        }
+        page.drawText(line.substring(0, 90), { x: 50, y, font, size: 8 });
+        y -= 12;
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `elegibilidade_${(exportPlanoObj.linha || exportPlanoObj.nome).replace(/\s+/g, '_').toLowerCase()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('PDF exportado com sucesso!');
+    } catch (e: any) {
+      toast.error(`Erro ao exportar: ${e.message}`);
+    } finally {
+      setExportando(false);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      {!file ? (
-        <div
-          {...getRootProps()}
-          className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 cursor-pointer transition-colors ${
-            isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/30 hover:border-primary/50'
-          }`}
-        >
-          <input {...getInputProps()} />
-          <FileUp className="h-10 w-10 text-muted-foreground mb-3" />
-          <p className="font-medium text-foreground">Arraste o PDF de elegibilidade ou clique para selecionar</p>
-          <p className="text-sm text-muted-foreground mt-1">O PDF deve estar no formato padrão Praticcar</p>
+    <div className="space-y-8">
+      {/* ── Seção de Importação ── */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-foreground">Importar PDF de Elegibilidade</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label>Para qual plano é este PDF? *</Label>
+            <Select value={selectedPlano} onValueChange={(v) => { setSelectedPlano(v); resetForm(); }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um plano..." />
+              </SelectTrigger>
+              <SelectContent>
+                {planos?.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      {p.nome}
+                      {p.linha && <Badge variant="outline" className="text-xs ml-1">{p.linha}</Badge>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Modo de importação</Label>
+            <Select value={modo} onValueChange={(v: 'adicionar' | 'substituir') => setModo(v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="adicionar">Adicionar</SelectItem>
+                <SelectItem value="substituir">Substituir</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-      ) : (
-        <div className="rounded-lg border p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-foreground">{file.name}</p>
-              <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+
+        {modo === 'substituir' && (
+          <Alert className="border-amber-500/50 bg-amber-500/10">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
+              Atenção: todos os modelos atuais do plano serão desativados e substituídos pelos dados do PDF.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Dropzone */}
+        {!resultado && (
+          <>
+            {!file ? (
+              <div
+                {...getRootProps()}
+                className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 cursor-pointer transition-colors ${
+                  !selectedPlano ? 'opacity-50 cursor-not-allowed border-muted' :
+                  isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/30 hover:border-primary/50'
+                }`}
+              >
+                <input {...getInputProps()} />
+                <FileUp className="h-10 w-10 text-muted-foreground mb-3" />
+                <p className="font-medium text-foreground">
+                  {selectedPlano ? 'Arraste o PDF ou clique para selecionar' : 'Selecione um plano primeiro'}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">O PDF deve estar no formato padrão Praticcar</p>
+              </div>
+            ) : (
+              <div className="rounded-lg border p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-8 w-8 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">{file.name}</p>
+                      <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(1)} KB • Plano: {selectedPlanoObj?.nome}</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={resetForm} disabled={processando}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {erro && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      <p className="font-medium">{erro.error}</p>
+                      {erro.detalhe && <p className="text-sm mt-1">{erro.detalhe}</p>}
+                      {erro.erros && (
+                        <ul className="text-sm mt-2 space-y-0.5 list-disc pl-4">
+                          {erro.erros.map((e, i) => <li key={i}>{e}</li>)}
+                        </ul>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="flex gap-2">
+                  <Button onClick={processar} disabled={processando}>
+                    {processando ? (
+                      <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processando PDF...</>
+                    ) : (
+                      <><Upload className="h-4 w-4 mr-1" /> Processar PDF</>
+                    )}
+                  </Button>
+                  <Button variant="outline" onClick={resetForm} disabled={processando}>Remover</Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Resultado de sucesso */}
+        {resultado && (
+          <div className="space-y-4">
+            <Alert className="border-green-500/50 bg-green-500/10">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-700 dark:text-green-400">
+                <strong>{resultado.total_importados}</strong> modelos importados para <strong>{selectedPlanoObj?.nome}</strong>
+                {resultado.modo === 'substituir' && ' (registros anteriores desativados)'}
+              </AlertDescription>
+            </Alert>
+
+            {resultado.registros && resultado.registros.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Marca</TableHead>
+                    <TableHead>Modelo</TableHead>
+                    <TableHead>Ano Min</TableHead>
+                    <TableHead>Ano Max</TableHead>
+                    <TableHead>Combustível</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {resultado.registros.map((r: any, i: number) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">{r.marca}</TableCell>
+                      <TableCell>{r.modelo}</TableCell>
+                      <TableCell>{r.ano_min}</TableCell>
+                      <TableCell>{r.ano_max ?? 'Sem limite'}</TableCell>
+                      <TableCell>{r.combustivel}</TableCell>
+                      <TableCell>{statusBadge(r.status, r.observacao)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+
+            <div className="flex gap-2">
+              {onNavigateToPlano && (
+                <Button variant="outline" onClick={() => onNavigateToPlano(selectedPlano)}>
+                  Ver no plano
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => { resetForm(); setFile(null); }}>
+                Importar outro PDF
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setFile(null)}>
-              <X className="h-4 w-4" />
-            </Button>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={processar}><Upload className="h-4 w-4 mr-1" /> Processar PDF</Button>
-            <Button variant="outline" onClick={() => setFile(null)}>Remover</Button>
+        )}
+      </div>
+
+      {/* ── Seção de Exportação ── */}
+      <div className="border-t pt-6 space-y-4">
+        <h3 className="text-lg font-semibold text-foreground">Exportar PDF de Elegibilidade</h3>
+        <p className="text-sm text-muted-foreground">Gera um PDF com os dados atuais do plano, no formato padrão reimportável.</p>
+
+        <div className="flex items-end gap-4">
+          <div className="w-80">
+            <Label>Plano</Label>
+            <Select value={exportPlano} onValueChange={setExportPlano}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um plano..." />
+              </SelectTrigger>
+              <SelectContent>
+                {planos?.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      {p.nome}
+                      {p.linha && <Badge variant="outline" className="text-xs ml-1">{p.linha}</Badge>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <Button onClick={exportarPDF} disabled={!exportPlano || exportando}>
+            {exportando ? (
+              <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Gerando...</>
+            ) : (
+              <><Download className="h-4 w-4 mr-1" /> Exportar PDF</>
+            )}
+          </Button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
-
 // ─── Resumo Global ───────────────────────────────────────────
 function TabResumoGlobal() {
   const { data, isLoading } = useQuery({
@@ -492,6 +838,13 @@ function TabResumoGlobal() {
 
 // ─── Componente Principal ────────────────────────────────────
 export function ElegibilidadeVeiculos() {
+  const [activeTab, setActiveTab] = useState('por-plano');
+
+  const handleNavigateToPlano = useCallback((planoId: string) => {
+    setActiveTab('por-plano');
+    // TabPorPlano will pick up selectedPlano from URL or state if needed
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -499,7 +852,7 @@ export function ElegibilidadeVeiculos() {
         <p className="text-muted-foreground">Controle quais marcas, modelos e anos são aceitos por plano</p>
       </div>
 
-      <Tabs defaultValue="por-plano">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="por-plano">Por Plano</TabsTrigger>
           <TabsTrigger value="importar-pdf">Importar PDF</TabsTrigger>
@@ -507,7 +860,7 @@ export function ElegibilidadeVeiculos() {
         </TabsList>
 
         <TabsContent value="por-plano"><TabPorPlano /></TabsContent>
-        <TabsContent value="importar-pdf"><TabImportarPDF /></TabsContent>
+        <TabsContent value="importar-pdf"><TabImportarPDF onNavigateToPlano={handleNavigateToPlano} /></TabsContent>
         <TabsContent value="resumo"><TabResumoGlobal /></TabsContent>
       </Tabs>
     </div>

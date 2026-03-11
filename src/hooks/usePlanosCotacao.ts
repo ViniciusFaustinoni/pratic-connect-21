@@ -44,6 +44,7 @@ export interface PlanoCotacao {
   cotaDesagio?: number;
   cotaMinimaDesagio?: number;
   anoMinimo?: number;
+  elegibilidadeStatus?: 'aprovado' | 'limitado' | 'negado';
 }
 
 interface CalcularPlanosParams {
@@ -55,6 +56,8 @@ interface CalcularPlanosParams {
   anoVeiculo?: number;
   tipoVeiculo?: 'carro' | 'moto';
   usoApp?: boolean;
+  marca?: string;
+  modelo?: string;
 }
 
 // ============================================
@@ -129,6 +132,20 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Buscar elegibilidade de modelos por plano
+  const { data: elegibilidadeData, isLoading: elegibilidadeLoading } = useQuery({
+    queryKey: ['plano_elegibilidade_modelos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('plano_elegibilidade_modelos')
+        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Buscar exclusões de benefícios por categoria
   const { data: benefitExclusions } = useQuery({
     queryKey: ['benefit_exclusions_cotacao'],
@@ -152,6 +169,35 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     },
     staleTime: 1000 * 60 * 5,
   });
+
+  // Função de verificação de elegibilidade por modelo
+  function verificarElegibilidadeModelo(
+    planoId: string,
+    veiculo: { marca: string; modelo: string; ano: number; combustivel: string },
+  ): 'aprovado' | 'limitado' | 'negado' {
+    const regrasDoPlano = elegibilidadeData?.filter(e => e.plano_id === planoId) ?? [];
+    // Sem configuração = aceita tudo
+    if (regrasDoPlano.length === 0) return 'aprovado';
+
+    const marcaNorm = veiculo.marca.trim().toUpperCase();
+    const modeloNorm = veiculo.modelo.trim().toUpperCase();
+    const combustivelNorm = veiculo.combustivel.trim().toLowerCase();
+
+    const regra = regrasDoPlano.find(r => {
+      const marcaMatch = r.marca.toUpperCase() === marcaNorm;
+      const modeloMatch = r.modelo.toUpperCase() === modeloNorm;
+      const anoMatch = veiculo.ano >= r.ano_min &&
+                       (r.ano_max === null || veiculo.ano <= r.ano_max);
+      const combustivelMatch = r.combustivel === 'qualquer' ||
+                               r.combustivel === combustivelNorm;
+      return marcaMatch && modeloMatch && anoMatch && combustivelMatch;
+    });
+
+    if (!regra) return 'negado';
+    if (regra.status === 'negado') return 'negado';
+    if (regra.status === 'limitado') return 'limitado';
+    return 'aprovado';
+  }
 
   const planos = useMemo<PlanoCotacao[]>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
@@ -224,6 +270,20 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         if (!categoriasAceitasPlano.includes(categoriaLower) && !categoriasAceitasPlano.includes('todos')) {
           continue;
         }
+      }
+
+      // Filtrar por elegibilidade de modelo (aditivo — só aplica se dados carregados e veículo informado)
+      if (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData && !elegibilidadeLoading) {
+        const resultado = verificarElegibilidadeModelo(
+          plano.id,
+          {
+            marca: params.marca,
+            modelo: params.modelo,
+            ano: anoVeiculoNum,
+            combustivel: combustivelLower || 'flex',
+          },
+        );
+        if (resultado === 'negado') continue;
       }
 
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
@@ -344,6 +404,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: anoMinimo || undefined,
+        elegibilidadeStatus: (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData)
+          ? verificarElegibilidadeModelo(plano.id, {
+              marca: params.marca,
+              modelo: params.modelo,
+              ano: anoVeiculoNum,
+              combustivel: combustivelLower || 'flex',
+            })
+          : undefined,
       });
     }
 
@@ -356,11 +424,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (aSortP !== bSortP) return aSortP - bSortP;
       return a.valorMensal - b.valorMensal;
     });
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading]);
 
   return {
     planos,
-    isLoading,
+    isLoading: isLoading || elegibilidadeLoading,
   };
 }
 

@@ -119,3 +119,6 @@ verify_jwt = false
 
 [functions.document-ocr]
 verify_jwt = false
+
+[functions.parse-elegibilidade-pdf]
+verify_jwt = false

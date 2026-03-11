@@ -289,6 +289,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return tipo === 'moto' ? 'moto' as const : 'carro' as const;
   }, [veiculoEncontrado, marcaSelecionada]);
 
+  // Resolver marca/modelo para elegibilidade
+  const marcaResolvida = useMemo(() => {
+    return veiculoEncontrado?.vehicleData?.marca || marcaSelecionada || '';
+  }, [veiculoEncontrado, marcaSelecionada]);
+
+  const modeloResolvido = useMemo(() => {
+    return veiculoEncontrado?.vehicleData?.modelo || '';
+  }, [veiculoEncontrado]);
+
   // Hook de planos calculados dinamicamente do banco
   const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
     valorFipe,
@@ -299,6 +308,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     anoVeiculo: anoNumerico,
     tipoVeiculo: tipoVeiculoDetectado,
     usoApp: usoVeiculo === 'aplicativo',
+    marca: marcaResolvida || undefined,
+    modelo: modeloResolvido || undefined,
   });
 
   // Buscar todas as faixas de preço para calcular elegibilidade FIPE menor
@@ -1665,7 +1676,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                         )}
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-sm">{plano.nome}</h4>
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="font-semibold text-sm">{plano.nome}</h4>
+                              {plano.elegibilidadeStatus === 'limitado' && (
+                                <Badge className="bg-amber-500/15 text-amber-600 border-amber-300 text-[10px] px-1.5 py-0">
+                                  Restrições
+                                </Badge>
+                              )}
+                            </div>
                             {isSelecionado ? (
                               <CheckCircle2 className="h-4 w-4 text-primary" />
                             ) : plano.destaque ? (

@@ -62,9 +62,16 @@ export function PlanoCardCotacao({
       <CardHeader className={cn("pb-3", plano.destaque && "pt-6")}>
         <div className="flex items-start justify-between">
           <div>
-            <CardTitle className="text-base font-semibold">
-              {plano.nome}
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base font-semibold">
+                {plano.nome}
+              </CardTitle>
+              {plano.elegibilidadeStatus === 'limitado' && (
+                <Badge className="bg-amber-500/15 text-amber-600 border-amber-300 text-[10px] px-1.5 py-0">
+                  Aceitação com restrições
+                </Badge>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
               {plano.descricao}
             </p>
