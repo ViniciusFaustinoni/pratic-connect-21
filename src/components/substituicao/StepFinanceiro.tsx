@@ -442,7 +442,7 @@ export function StepFinanceiro({
                 <Input
                   type="number"
                   step="0.01"
-                  placeholder={`Auto: ${formatCurrency((dadosNovoVeiculo.valor_fipe || 0) * 0.0045)}`}
+                  placeholder={`Auto: ${formatCurrency(mensalidadeBaseNova)}`}
                   value={mensalidadeManual}
                   onChange={(e) => setMensalidadeManual(e.target.value)}
                   className="mt-1 max-w-xs"

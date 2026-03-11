@@ -75,11 +75,26 @@ export function StepBeneficios({
     })).sort((a, b) => parseInt(a.id) - parseInt(b.id));
   }, [terceirosMap]);
 
-  // Mensalidade base — usa valor FIPE (a taxa real viria de tabelas_preco mas os dados estão zerados)
+  // Mensalidade base — busca valor real de tabelas_preco_mensalidade
+  const { calcular, resultado: resultadoCotacao } = useCalcularCotacao();
+
+  useEffect(() => {
+    const fipe = dadosNovoVeiculo.valor_fipe;
+    if (fipe && fipe > 0) {
+      calcular({
+        valor_fipe: fipe,
+        tipo_uso: dadosNovoVeiculo.uso_aplicativo ? 'aplicativo' : 'particular',
+      });
+    }
+  }, [dadosNovoVeiculo.valor_fipe, dadosNovoVeiculo.uso_aplicativo, calcular]);
+
   const mensalidadeBase = useMemo(() => {
-    const fipe = dadosNovoVeiculo.valor_fipe || 0;
-    return fipe * 0.0045;
-  }, [dadosNovoVeiculo.valor_fipe]);
+    if (resultadoCotacao?.planos?.length) {
+      const planoDestaque = resultadoCotacao.planos.find(p => p.destaque) || resultadoCotacao.planos[0];
+      return planoDestaque.valor_mensal;
+    }
+    return 0;
+  }, [resultadoCotacao]);
 
   // Total adicionais
   const totalAdicionais = useMemo(() => {
