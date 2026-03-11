@@ -73,7 +73,7 @@ export function StepFinanceiro({
   const { data: taxaSubstituicao = 50 } = useTaxaSubstituicao();
   const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
-  const { data: valorCotaParticipacao = 200 } = useConfigValor('atuarial_valor_cota_participacao', 200);
+  const { data: valorCotaParticipacao = 200 } = useConfiguracaoNumero('atuarial_valor_cota_participacao', 200);
 
   // Cotação dinâmica para mensalidade do novo veículo
   const { calcular, resultado: resultadoCotacao } = useCalcularCotacao();
