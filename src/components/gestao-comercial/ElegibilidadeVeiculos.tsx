@@ -36,7 +36,7 @@ type ElegibilidadeRecord = {
 type PlanoOption = {
   id: string;
   nome: string;
-  linha_slug: string | null;
+  linha: string | null;
 };
 
 const STATUS_OPTIONS = [
