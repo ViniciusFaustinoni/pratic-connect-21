@@ -136,6 +136,7 @@ function encontrarFaixaMensalidade(
   regiao: string,
   combustivel: string,
   adicionalApp: number = 0,
+  adicionalMensal: number = 0,
 ): { valorMensal: number; valorDesagio: number | null } | null {
   const mapping = planoPrecoMap.find(m => m.plano_id === planoId);
   if (!mapping) return null;
