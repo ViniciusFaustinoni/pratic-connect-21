@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import {
   useRecusarFipeMenor,
   type AprovacaoFipeMenor,
 } from '@/hooks/useAprovacoesFipeMenor';
+import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { formatarMoeda } from '@/utils/format';
 
 const STATUS_CONFIG = {
