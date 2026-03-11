@@ -404,7 +404,21 @@ export function ProdutosPlanos() {
                                   <TableCell><Badge variant="outline">{f.regiao?.toUpperCase() || '-'}</Badge></TableCell>
                                   <TableCell className="text-xs">{f.tipo_uso || '-'}</TableCell>
                                   <TableCell className="text-right font-semibold text-primary">
-                                    {formatCurrency(Number(f.valor_mensal))}
+                                    {(() => {
+                                      const base = Number(f.valor_mensal);
+                                      const adicional = Number(selectedPlan?.adicional_mensal || 0);
+                                      const desconto = Number(selectedPlan?.desconto_percentual || 0);
+                                      let valor = base + adicional;
+                                      if (desconto > 0) valor *= (1 - desconto / 100);
+                                      valor = Math.round(valor * 100) / 100;
+                                      const temAjuste = adicional !== 0 || desconto > 0;
+                                      return (
+                                        <span title={temAjuste ? `Base: ${formatCurrency(base)}${adicional ? ` + ${formatCurrency(adicional)}` : ''}${desconto ? ` − ${desconto}%` : ''}` : undefined}>
+                                          {formatCurrency(valor)}
+                                          {temAjuste && <span className="text-xs text-muted-foreground ml-1">*</span>}
+                                        </span>
+                                      );
+                                    })()}
                                   </TableCell>
                                 </TableRow>
                               ))}
