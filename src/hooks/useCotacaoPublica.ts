@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CotacaoPublicaData } from '@/types/cotacaoPublica';
-import { isPdf, convertPdfToImage, getPdfConvertedName } from '@/lib/pdfToImage';
+
 
 // ============================================
 // HOOK: Buscar cotação pública por token
