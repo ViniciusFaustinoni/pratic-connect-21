@@ -204,6 +204,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Estado para dia de vencimento
   const [diaVencimento, setDiaVencimento] = useState<number | null>(null);
   
+  // Estados para FIPE menor
+  const [solicitarFipeMenor, setSolicitarFipeMenor] = useState(false);
+  const [justificativaFipeMenor, setJustificativaFipeMenor] = useState('');
+  
+  // Hook para criar solicitação de FIPE menor
+  const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
+
   // Função para calcular opções de vencimento baseado no dia atual
   const opcoesVencimento = useMemo((): [number, number] => {
     const hoje = new Date().getDate();
