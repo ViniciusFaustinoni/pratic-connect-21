@@ -1785,6 +1785,95 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               />
             </div>
 
+            {/* BLOCO 3.7: SOLICITAR FIPE MENOR */}
+            {fipeMenorInfo && planosSelecionados.length > 0 && !isEditando && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <TrendingDown className="h-4 w-4 text-primary" />
+                        Solicitar FIPE Menor
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Redução de 1% na FIPE para enquadrar em faixa inferior
+                      </p>
+                    </div>
+                    <Switch
+                      checked={solicitarFipeMenor}
+                      onCheckedChange={setSolicitarFipeMenor}
+                      disabled={!fipeMenorInfo.elegivel}
+                    />
+                  </div>
+
+                  {!fipeMenorInfo.elegivel && (
+                    <Alert className="border-amber-500/30 bg-amber-50 dark:bg-amber-950/20">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
+                        Não elegível: FIPE × 0.99 = {formatCurrency(fipeMenorInfo.valorReduzido)} — 
+                        acima do máximo da faixa inferior ({formatCurrency(fipeMenorInfo.faixaInferior.max)})
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {fipeMenorInfo.elegivel && solicitarFipeMenor && (
+                    <div className="space-y-3">
+                      {/* Preview de economia */}
+                      <Card className="border-green-500/30 bg-green-50/50 dark:bg-green-950/20">
+                        <CardContent className="p-3">
+                          <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Faixa Atual</p>
+                              <p className="font-medium">{formatCurrency(fipeMenorInfo.faixaAtual.min)} – {formatCurrency(fipeMenorInfo.faixaAtual.max)}</p>
+                              <p className="text-muted-foreground">{formatCurrency(fipeMenorInfo.faixaAtual.mensal)}/mês</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Faixa Solicitada</p>
+                              <p className="font-medium text-green-700 dark:text-green-400">{formatCurrency(fipeMenorInfo.faixaInferior.min)} – {formatCurrency(fipeMenorInfo.faixaInferior.max)}</p>
+                              <p className="font-bold text-green-700 dark:text-green-400">{formatCurrency(fipeMenorInfo.faixaInferior.mensal)}/mês</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Economia</p>
+                              <p className="font-bold text-green-700 dark:text-green-400 text-lg">
+                                {formatCurrency(fipeMenorInfo.economia)}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground text-center mt-2">
+                            FIPE real ({formatCurrency(valorFipe)}) × 0.99 = {formatCurrency(fipeMenorInfo.valorReduzido)} — enquadra na faixa inferior
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      {/* Justificativa */}
+                      <div>
+                        <Label className="text-sm">Justificativa <span className="text-destructive">*</span></Label>
+                        <Textarea
+                          value={justificativaFipeMenor}
+                          onChange={(e) => setJustificativaFipeMenor(e.target.value)}
+                          placeholder="Explique o motivo da solicitação de FIPE menor..."
+                          rows={2}
+                          className="mt-1"
+                        />
+                        {solicitarFipeMenor && justificativaFipeMenor.trim().length < 5 && (
+                          <p className="text-xs text-destructive mt-1">Justificativa obrigatória (mínimo 5 caracteres)</p>
+                        )}
+                      </div>
+
+                      <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertDescription className="text-xs">
+                          Esta solicitação será enviada para aprovação do Supervisor. 
+                          A cobertura em sinistro permanece baseada na FIPE real do veículo.
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
             {/* BLOCO 4: RESUMO INLINE (quando planos selecionados) */}
             {planosSelecionados.length > 0 && (
               <>
