@@ -8,14 +8,16 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
-import { Plus, Pencil, ToggleLeft, FileUp, AlertTriangle, Upload, X } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, FileUp, AlertTriangle, Upload, X, Download, Loader2, CheckCircle2, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { COMBUSTIVEIS_FALLBACK } from '@/data/combustiveis';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 type ElegibilidadeRecord = {
   id: string;
