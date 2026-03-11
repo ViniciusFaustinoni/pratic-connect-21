@@ -386,12 +386,16 @@ serve(async (req) => {
         { global: { headers: { Authorization: authHeader } } }
       );
 
-      const token = authHeader.replace('Bearer ', '');
-      const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-      
-      if (!claimsError && claimsData?.claims) {
-        isAuthenticated = true;
-        console.log('Authenticated request from user:', claimsData.claims.sub);
+      try {
+        const token = authHeader.replace('Bearer ', '');
+        const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+        
+        if (!claimsError && claimsData?.claims) {
+          isAuthenticated = true;
+          console.log('Authenticated request from user:', claimsData.claims.sub);
+        }
+      } catch (authErr) {
+        console.warn('Auth validation failed (proceeding as public):', authErr);
       }
     }
     
