@@ -606,8 +606,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-pro',
-            messages: [
+            model: 'google/gemini-2.5-pro', // Pro apenas para retry de CPF
               { role: 'system', content: cpfRetryPrompt },
               {
                 role: 'user',
