@@ -16503,6 +16503,69 @@ export type Database = {
           },
         ]
       }
+      plano_elegibilidade_modelos: {
+        Row: {
+          ano_max: number | null
+          ano_min: number
+          combustivel: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          linha_slug: string
+          marca: string
+          modelo: string
+          observacao: string | null
+          plano_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          ano_max?: number | null
+          ano_min?: number
+          combustivel?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          linha_slug: string
+          marca: string
+          modelo: string
+          observacao?: string | null
+          plano_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          ano_max?: number | null
+          ano_min?: number
+          combustivel?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          linha_slug?: string
+          marca?: string
+          modelo?: string
+          observacao?: string | null
+          plano_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plano_elegibilidade_modelos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plano_elegibilidade_modelos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plano_preco_map: {
         Row: {
           created_at: string | null
