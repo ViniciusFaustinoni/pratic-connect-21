@@ -56,6 +56,8 @@ interface CalcularPlanosParams {
   anoVeiculo?: number;
   tipoVeiculo?: 'carro' | 'moto';
   usoApp?: boolean;
+  marca?: string;
+  modelo?: string;
 }
 
 // ============================================
