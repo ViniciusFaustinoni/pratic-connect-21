@@ -1058,8 +1058,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
       setDiaVencimento(null);
-      
-      // Fechar modais após sucesso
+      setSolicitarFipeMenor(false);
+      setJustificativaFipeMenor('');
+
       setShowConfirmDialog(false);
       onOpenChange(false);
     } catch (error) {
