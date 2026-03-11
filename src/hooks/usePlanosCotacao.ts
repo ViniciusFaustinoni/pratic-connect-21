@@ -214,6 +214,18 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
+      // Filtrar por categorias aceitas no plano (campo categoria do plano)
+      const categoriasAceitasPlano = categoriaPlano
+        ? categoriaPlano.split(',').map((c: string) => c.trim().toLowerCase()).filter(Boolean)
+        : [];
+      if (categoriasAceitasPlano.length > 0 && categoria && categoria !== 'nenhuma') {
+        const categoriaLower = categoria.toLowerCase();
+        // Se o plano define categorias aceitas e a categoria do veículo não está entre elas, excluir
+        if (!categoriasAceitasPlano.includes(categoriaLower) && !categoriasAceitasPlano.includes('todos')) {
+          continue;
+        }
+      }
+
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
       const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
       const linhaSlug = mapping?.linha_slug;
