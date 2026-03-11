@@ -1548,6 +1548,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   </FormItem>
                 )}
               />
+              {valorFipe > 0 && faixaAtualFipe && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Faixa enquadrada: {formatCurrency(faixaAtualFipe.min)} – {formatCurrency(faixaAtualFipe.max)}
+                </p>
+              )}
             </div>
 
             {/* BLOCO 2: CONDIÇÕES ESPECIAIS / DESÁGIOS */}
