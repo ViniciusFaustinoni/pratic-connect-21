@@ -131,6 +131,8 @@ export function PlanFormModal({
     footer_note: '',
     display_order: '0',
     is_active: true,
+    linha_slug: '',
+    categorias_veiculo: [] as string[],
   });
 
   const [selectedBenefits, setSelectedBenefits] = useState<PlanBenefitInput[]>([]);
