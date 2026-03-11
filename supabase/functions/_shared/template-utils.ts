@@ -95,7 +95,7 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'plano.coberturas': (dados.plano.coberturas || []).join(', ') || 'Roubo e Furto, Assistência 24 horas',
     'plano.descricao': (dados.plano.coberturas || []).join(', ') || 'Proteção veicular completa',
     'plano.valor_base': formatCurrency(dados.contrato.valor_mensal),
-    'plano.cobertura_fipe': '100%',
+    'plano.cobertura_fipe': `${dados.plano.cobertura_fipe || 100}%`,
     'plano.cota_participacao': `${dados.plano.cota_participacao || 6}%`,
     'plano.cota_participacao_valor': formatCurrency(cotaParticipacao),
     'plano.cota_minima': formatCurrency(dados.plano.cota_minima || 1200),
