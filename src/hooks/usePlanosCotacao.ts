@@ -191,9 +191,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (params.usoApp === true && !isPlanoAplicativo) continue;
       if (params.usoApp === false && isPlanoAplicativo) continue;
 
-      // Filtrar motos/carros usando vehicle_type do banco
-      if (tipoVeiculo === 'moto' && vehicleType === 'car') continue;
-      if (tipoVeiculo === 'carro' && vehicleType === 'motorcycle') continue;
+      // Filtrar motos/carros/elétricos usando vehicle_type e linha_slug do banco
+      const plSlug = plProductLine?.slug?.toLowerCase() || '';
+      if (tipoVeiculo === 'moto' && vehicleType !== 'motorcycle') continue;
+      if (tipoVeiculo === 'carro' && (vehicleType === 'motorcycle' || plSlug === 'eletrico')) continue;
 
       // Verificar ano mínimo
       const anoMinimo = plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0;

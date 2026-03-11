@@ -505,7 +505,7 @@ export function CalculadoraPreco() {
               <div className="space-y-2">
                 {resultado.linhas.map((linha) => (
                   <div
-                    key={linha.linha}
+                    key={linha.key}
                     className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/10"
                   >
                     <span className="text-sm font-medium">{linha.linhaLabel}</span>
