@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CotacaoPublicaData } from '@/types/cotacaoPublica';
-import { isPdf, convertPdfToImage, getPdfConvertedName } from '@/lib/pdfToImage';
+
 
 // ============================================
 // HOOK: Buscar cotação pública por token
@@ -141,29 +141,12 @@ interface UploadDocumentoParams {
 export function useUploadDocumento() {
   return useMutation({
     mutationFn: async ({ cotacaoId, tipo, file }: UploadDocumentoParams) => {
-      let fileToUpload = file;
-      let fileName = file.name;
-
-      // Converter PDF para imagem antes do upload (OCR não processa PDF)
-      if (isPdf(file)) {
-        try {
-          console.log('[useUploadDocumento] Convertendo PDF para imagem...');
-          const imageBlob = await convertPdfToImage(file);
-          fileName = getPdfConvertedName(file.name);
-          fileToUpload = new File([imageBlob], fileName, { type: 'image/jpeg' });
-          console.log('[useUploadDocumento] PDF convertido com sucesso');
-        } catch (pdfError) {
-          console.error('[useUploadDocumento] Erro ao converter PDF:', pdfError);
-          throw new Error('Erro ao converter PDF. Tente enviar como imagem JPG ou PNG.');
-        }
-      }
-
-      const ext = fileName.split('.').pop() || 'jpg';
+      const ext = file.name.split('.').pop() || 'jpg';
       const path = `cotacoes/${cotacaoId}/${tipo}_${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('cotacoes-docs')
-        .upload(path, fileToUpload, { upsert: true });
+        .upload(path, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
@@ -191,29 +174,12 @@ interface UploadFotoVistoriaParams {
 export function useUploadFotoVistoria() {
   return useMutation({
     mutationFn: async ({ cotacaoId, tipo, file, latitude, longitude }: UploadFotoVistoriaParams) => {
-      let fileToUpload = file;
-      let fileName = file.name;
-
-      // Converter PDF para imagem antes do upload
-      if (isPdf(file)) {
-        try {
-          console.log('[useUploadFotoVistoria] Convertendo PDF para imagem...');
-          const imageBlob = await convertPdfToImage(file);
-          fileName = getPdfConvertedName(file.name);
-          fileToUpload = new File([imageBlob], fileName, { type: 'image/jpeg' });
-          console.log('[useUploadFotoVistoria] PDF convertido com sucesso');
-        } catch (pdfError) {
-          console.error('[useUploadFotoVistoria] Erro ao converter PDF:', pdfError);
-          throw new Error('Erro ao converter PDF. Tente enviar como imagem JPG ou PNG.');
-        }
-      }
-
-      const ext = fileName.split('.').pop() || 'jpg';
+      const ext = file.name.split('.').pop() || 'jpg';
       const path = `cotacoes/${cotacaoId}/vistoria_${tipo}_${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('cotacoes-docs')
-        .upload(path, fileToUpload, { upsert: true });
+        .upload(path, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 

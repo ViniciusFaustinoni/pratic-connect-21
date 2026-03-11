@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
-import { isPdf, convertPdfToImage, getPdfConvertedName } from '@/lib/pdfToImage';
+
 
 export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'comprovante_residencia' | 'outro';
 
@@ -127,30 +127,8 @@ export function UnifiedDocumentUploader({
     });
 
     try {
-      let fileToUpload = file;
-      let finalFileName = originalFileName;
-
-      // Se for PDF, converter para imagem antes do upload
-      if (isPdf(file)) {
-        setDocuments(prev => {
-          const updated = prev.map(d => 
-            d.id === tempId ? { ...d, status: 'processing' as const } : d
-          );
-          onDocumentsChange(updated);
-          return updated;
-        });
-        
-        toast.info('Convertendo PDF para imagem...');
-        
-        try {
-          const imageBlob = await convertPdfToImage(file);
-          finalFileName = getPdfConvertedName(originalFileName);
-          fileToUpload = new File([imageBlob], finalFileName, { type: 'image/jpeg' });
-        } catch (pdfError) {
-          console.error('PDF conversion error:', pdfError);
-          throw new Error('Erro ao converter PDF. Tente enviar como imagem JPG ou PNG.');
-        }
-      }
+      const fileToUpload = file;
+      const finalFileName = originalFileName;
 
       // 1. Upload para storage
       // Usar cliente e bucket público para cotações (cliente não autenticado) ou bucket de contratos (autenticado)
