@@ -269,6 +269,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
+      console.log(`[AJUSTE] ${plano.nome}: base=${valorBase} + adicional=${adicionalMensal} - desconto=${descontoPerc}% = final=${Math.round(valorMensal * 100) / 100}`);
+
       // Adesão
       const valorAdesao = Number(plano.valor_adesao);
 
