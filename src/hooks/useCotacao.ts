@@ -61,6 +61,7 @@ function mapPlanoToInterface(data: any): PlanoParaCotacao {
     valor_adesao: Number(data.valor_adesao || 0),
     coberturas: data.coberturas || [],
     adicional_mensal: Number(data.adicional_mensal || 0),
+    desconto_percentual: Number(data.desconto_percentual || 0),
     ativo: data.ativo,
     created_at: data.created_at,
   };
