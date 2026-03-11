@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRegioes, useCreateRegiao, useUpdateRegiao, useDeleteRegiao, useToggleRegiaoStatus, Regiao, RegiaoInput } from '@/hooks/useRegioes';
 import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,9 +13,42 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, MapPin, Loader2, X, Search, Building2, ShieldCheck } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Plus, Edit, Trash2, MapPin, Loader2, X, Search, Building2, ShieldCheck, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+
+// Map region codes to slugs used in tabelas_preco_mensalidade
+const REGION_CODE_TO_SLUG: Record<string, string> = {
+  'RJ': 'rj',
+  'LAGOS': 'lagos',
+  'SP': 'sp',
+};
+
+function useRegionPriceCounts() {
+  return useQuery({
+    queryKey: ['region-price-counts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tabelas_preco_mensalidade')
+        .select('regiao, linha_slug')
+        .eq('is_active', true);
+
+      if (error) throw error;
+
+      // Group by region -> set of linha_slugs + count
+      const map: Record<string, { total: number; linhas: Set<string> }> = {};
+      data?.forEach((row) => {
+        if (!map[row.regiao]) map[row.regiao] = { total: 0, linhas: new Set() };
+        map[row.regiao].total++;
+        if (row.linha_slug) map[row.regiao].linhas.add(row.linha_slug);
+      });
+
+      return map;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
 
 export function RegioesConfig() {
   const { isDiretor, isDesenvolvedor } = usePermissions();
