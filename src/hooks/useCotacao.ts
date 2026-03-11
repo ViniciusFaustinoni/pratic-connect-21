@@ -17,7 +17,7 @@ import type {
   StatusCotacaoExtended,
   CriarCotacaoPayload,
 } from '@/types/cotacao';
-import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
+import { useConfiguracaoNumero, useConfigDecomposicao } from '@/hooks/useConteudosSistema';
 
 // Tipo do status no banco (sem 'visualizada')
 type StatusCotacaoDB = Database['public']['Tables']['cotacoes']['Row']['status'];
@@ -170,12 +170,13 @@ export function calcularValoresCotacao(
   plano: PlanoParaCotacao,
   valorMensalDireto: number,
   valorFipe: number,
+  decomposicao?: { cota: number; admin: number; rastreamento: number; assistencia: number },
 ): ResultadoCotacao['valores'] {
-  // Decomposição percentual sobre valor_mensal
-  const decCota = 0.60;
-  const decAdmin = 0.25;
-  const decRastreamento = 0.10;
-  const decAssistencia = 0.05;
+  // Decomposição percentual sobre valor_mensal (valores do banco com fallback)
+  const decCota = decomposicao?.cota || 0.60;
+  const decAdmin = decomposicao?.admin || 0.25;
+  const decRastreamento = decomposicao?.rastreamento || 0.10;
+  const decAssistencia = decomposicao?.assistencia || 0.05;
 
   const valor_cota = Math.round(valorMensalDireto * decCota * 100) / 100;
   const taxa_administrativa = Math.round(valorMensalDireto * decAdmin * 100) / 100;
@@ -202,6 +203,7 @@ export function useCalcularCotacao() {
   const { data: planoPrecoMap, isLoading: loadingMap } = usePlanoPrecoMap();
   const { data: tabelasMensalidade, isLoading: loadingMensalidade } = useTabelasMensalidade();
   const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
+  const { data: decomposicao } = useConfigDecomposicao();
 
   const calcular = (
     valorFipe: number,
@@ -243,7 +245,7 @@ export function useCalcularCotacao() {
       resultados.push({
         plano,
         faixa: null as any, // Campo legado — decomposição é feita internamente
-        valores: calcularValoresCotacao(plano, faixaResult.valorMensal, valorFipe),
+        valores: calcularValoresCotacao(plano, faixaResult.valorMensal, valorFipe, decomposicao),
       });
     }
 

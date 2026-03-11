@@ -78,7 +78,7 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
       if (!valorFipe || valorFipe <= 0) return [];
 
       // Buscar planos ativos, mapeamento, preços e config adicional_app em paralelo
-      const [planosRes, mapRes, mensalidadeRes, configRes] = await Promise.all([
+      const [planosRes, mapRes, mensalidadeRes, configRes, decomRes] = await Promise.all([
         supabase
           .from('planos')
           .select('id, codigo, nome, categoria, valor_adesao, descricao')
@@ -96,9 +96,22 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
           .select('valor')
           .eq('chave', 'adicional_app')
           .maybeSingle(),
+        supabase
+          .from('configuracoes')
+          .select('chave, valor')
+          .in('chave', ['decomposicao_cota', 'decomposicao_admin', 'decomposicao_rastreamento', 'decomposicao_assistencia']),
       ]);
 
       const adicionalApp = parseFloat(configRes.data?.valor || '35.90') || 35.90;
+
+      // Decomposição percentual do banco
+      const decMap = Object.fromEntries((decomRes.data || []).map(d => [d.chave, parseFloat(d.valor || '0') || 0]));
+      const dec = {
+        cota: decMap.decomposicao_cota || 0.60,
+        admin: decMap.decomposicao_admin || 0.25,
+        rastreamento: decMap.decomposicao_rastreamento || 0.10,
+        assistencia: decMap.decomposicao_assistencia || 0.05,
+      };
 
       if (planosRes.error) throw planosRes.error;
       const planos = planosRes.data;
@@ -143,11 +156,11 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
         const valorDesagio = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
         const valorAdesao = Number(plano.valor_adesao) || 0;
 
-        // Decomposição percentual
-        const valorCota = Math.round(valorMensal * 0.60 * 100) / 100;
-        const taxaAdmin = Math.round(valorMensal * 0.25 * 100) / 100;
-        const valorAssist = Math.round(valorMensal * 0.05 * 100) / 100;
-        const valorRastreamento = Math.round(valorMensal * 0.10 * 100) / 100;
+        // Decomposição percentual (valores do banco)
+        const valorCota = Math.round(valorMensal * dec.cota * 100) / 100;
+        const taxaAdmin = Math.round(valorMensal * dec.admin * 100) / 100;
+        const valorAssist = Math.round(valorMensal * dec.assistencia * 100) / 100;
+        const valorRastreamento = Math.round(valorMensal * dec.rastreamento * 100) / 100;
 
         resultado.push({
           id: plano.id,
