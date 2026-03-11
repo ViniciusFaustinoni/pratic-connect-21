@@ -1012,19 +1012,31 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         onSuccess?.();
       } else {
         // Modo criação: criar nova cotação
-        await createCotacao.mutateAsync({
+        const novaCotacao = await createCotacao.mutateAsync({
           ...cotacaoData,
+          solicitar_fipe_menor: solicitarFipeMenor,
           status: 'rascunho',
-          // Consultor responsável - liderança escolhe, demais auto-atribuição
-          // IMPORTANTE: Nunca deixar vendedor_id como null para garantir visibilidade via RLS
           vendedor_id: podeAtribuirVendedor 
             ? (pendingFormData.vendedor_id || userId || user?.id) 
             : (userId || user?.id),
         });
         
-        toast.success('Cotação criada com sucesso!');
+        // Se solicitou FIPE menor, criar registro de aprovação
+        if (solicitarFipeMenor && fipeMenorInfo?.elegivel && novaCotacao?.id) {
+          await criarSolicitacaoFipeMenor.mutateAsync({
+            cotacao_id: novaCotacao.id,
+            fipe_real: valorFipe,
+            fipe_faixa_original_min: fipeMenorInfo.faixaAtual.min,
+            fipe_faixa_original_max: fipeMenorInfo.faixaAtual.max,
+            fipe_faixa_solicitada_min: fipeMenorInfo.faixaInferior.min,
+            fipe_faixa_solicitada_max: fipeMenorInfo.faixaInferior.max,
+            valor_mensal_original: fipeMenorInfo.faixaAtual.mensal,
+            valor_mensal_reduzido: fipeMenorInfo.faixaInferior.mensal,
+            justificativa: justificativaFipeMenor,
+          });
+        }
         
-        // Redirecionar para a página de cotações
+        toast.success('Cotação criada com sucesso!');
         navigate('/vendas/cotacoes');
       }
       
