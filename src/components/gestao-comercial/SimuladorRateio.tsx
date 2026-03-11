@@ -106,13 +106,13 @@ export function SimuladorRateio() {
   // Fetch existing fechamento for this month
   const { data: fechamentoExistente } = useQuery({
     queryKey: ['simulador-fechamento-existente', mesRef],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('fechamentos_mensais')
+    queryFn: async (): Promise<{ id: string; status: string } | null> => {
+      const result = await supabase
+        .from('fechamentos_mensais' as any)
         .select('id, status')
         .eq('mes_referencia', mes)
-        .eq('ano_referencia', ano) as any;
-      return data?.[0] || null;
+        .eq('ano_referencia', ano);
+      return (result.data as any)?.[0] || null;
     },
   });
 
