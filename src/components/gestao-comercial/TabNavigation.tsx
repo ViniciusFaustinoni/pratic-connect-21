@@ -1,4 +1,4 @@
-import { Package, Shield, DollarSign, Gift, Calculator, LucideIcon } from 'lucide-react';
+import { Package, Shield, DollarSign, Gift, Calculator, ShieldCheck, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Tab {
