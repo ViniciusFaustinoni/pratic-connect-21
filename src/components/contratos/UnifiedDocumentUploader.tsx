@@ -177,8 +177,9 @@ export function UnifiedDocumentUploader({
         return updated;
       });
 
-      // 3. Chamar OCR para detectar tipo e extrair dados
-      const { data: ocrData, error: ocrError } = await supabase.functions.invoke('document-ocr', {
+      // 3. Chamar OCR para detectar tipo e extrair dados (usar cliente apropriado)
+      const ocrClient = cotacaoId && !contratoId ? publicSupabase : supabase;
+      const { data: ocrData, error: ocrError } = await ocrClient.functions.invoke('document-ocr', {
         body: { url: arquivoUrl, cpfEsperado, nomeEsperado }
       });
 

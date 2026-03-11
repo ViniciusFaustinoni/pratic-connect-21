@@ -116,3 +116,6 @@ verify_jwt = false
 
 [functions.whatsapp-status]
 verify_jwt = false
+
+[functions.document-ocr]
+verify_jwt = false
