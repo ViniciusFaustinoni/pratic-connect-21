@@ -131,6 +131,9 @@ export function useCalcularCotacao() {
             valorMensal = Number(faixa.valor_mensal);
             valorDesagio = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
           }
+
+          // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
+          valorMensal += Number(plano.adicional_mensal || 0);
         }
 
         // Aplicar adicional app se necessário

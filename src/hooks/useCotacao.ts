@@ -261,6 +261,7 @@ export function useCalcularCotacao() {
         regiao,
         combustivel,
         adicionalApp,
+        plano.adicional_mensal || 0,
       );
 
       if (!faixaResult) continue;
