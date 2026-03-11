@@ -88,6 +88,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .from('planos')
         .select(`
           *,
+
           product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class)
         `)
         .eq('ativo', true)
