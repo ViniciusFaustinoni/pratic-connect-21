@@ -1,100 +1,203 @@
-
-# Auditoria Completa: Cotação, Autentique, ASAAS e Rateio — Diagnóstico e Plano
-
-## Status Geral
-
-| Fluxo | Status |
-|-------|--------|
-| Cotação — precificação via `usePlanosCotacao` | OK — dinâmico do banco |
-| Cotação — precificação via `useCalcularCotacao` (público) | OK — dinâmico do banco |
-| Cotação — filtragem por categoria bloqueada | OK — corrigido na sessão anterior |
-| Contrato-gerar — valores propagados | OK — lê `valor_adesao` e `valor_mensal` da cotação |
-| ASAAS — sandbox, status, régua | OK — corrigido na sessão anterior |
-| Rateio — `calcular-rateio-completo` | OK — usa edge function dedicada |
-| Gerar cobranças mensais — `valor_mensal` do contrato | OK — lê do banco |
-
-## Problemas Encontrados
-
-### 1. `plano.cobertura_fipe` HARDCODED no Autentique (template-utils)
-
-**Arquivo**: `supabase/functions/_shared/template-utils.ts` (linha 98)
-
-```typescript
-'plano.cobertura_fipe': '100%',  // ← HARDCODED
-```
-
-O plano Especial tem 80% FIPE, mas o termo de afiliação enviado pelo Autentique sempre exibe "100%". Isso é um erro contratual — o associado de um plano Especial recebe um documento dizendo que tem cobertura de 100% da FIPE quando na verdade é 80%.
-
-**Correção**: Ler `cobertura_fipe` do plano. O campo já existe na tabela `planos` e é propagado via join em `autentique-create`.
-
-```typescript
-'plano.cobertura_fipe': `${dados.plano.cobertura_fipe || 100}%`,
-```
-
-E adicionar o campo na interface `PlanoData` e no `mapearDadosParaTemplate`.
-
-### 2. `cota_participacao` e `cota_minima` com fallbacks hardcoded no Autentique
-
-**Arquivo**: `supabase/functions/_shared/termo-afiliacao-utils.ts` (linhas 333-334)
-
-```typescript
-cota_participacao: plano?.cota_participacao || 6,
-cota_minima: plano?.cota_minima || 1200,
-```
-
-E em `template-utils.ts` (linhas 99, 101):
-```typescript
-'plano.cota_participacao': `${dados.plano.cota_participacao || 6}%`,
-'plano.cota_minima': formatCurrency(dados.plano.cota_minima || 1200),
-```
-
-Esses valores vêm do plano do banco (que já tem os campos preenchidos), então os fallbacks raramente disparam. Mas para planos de aplicativo, a cota é 8% e a mínima R$ 2.000 — e esses valores estão na **cotação**, não no plano base.
-
-**Correção**: Propagar `cota_participacao` e `cota_minima` do contrato (que herda da cotação) em vez de depender exclusivamente do plano. Adicionar campos `cota_participacao` e `cota_minima` no insert do contrato em `contrato-gerar`, lidos da cotação.
-
-### 3. Contrato-gerar não propaga `cobertura_fipe` do plano para o contrato
-
-**Arquivo**: `supabase/functions/contrato-gerar/index.ts` (linha 538)
-
-O contrato é criado com `plano_id` mas não grava `cobertura_fipe` diretamente. O `autentique-create` faz join com `planos(*)`, então **tecnicamente** o dado está disponível — o problema é que o `mapearDadosParaTemplate` não o extrai.
-
----
-
-## Plano de Correção
-
-### Fase 1: Corrigir `cobertura_fipe` no template Autentique
-
-**Arquivo 1**: `supabase/functions/_shared/termo-afiliacao-utils.ts`
-- Adicionar `cobertura_fipe?: number` na interface `PlanoData`
-- No `mapearDadosParaTemplate`, adicionar: `cobertura_fipe: plano?.cobertura_fipe || 100`
-
-**Arquivo 2**: `supabase/functions/_shared/template-utils.ts`
-- Linha 98: mudar de `'100%'` para `\`${dados.plano.cobertura_fipe || 100}%\``
-
-### Fase 2: Propagar cota contextual para o Autentique
-
-**Arquivo**: `supabase/functions/_shared/termo-afiliacao-utils.ts`
-- No `mapearDadosParaTemplate`, usar cota do contrato quando disponível:
-
-```typescript
-cota_participacao: contrato.cota_participacao || plano?.cota_participacao || 6,
-cota_minima: contrato.cota_minima || plano?.cota_minima || 1200,
-```
-
-**Arquivo**: `supabase/functions/contrato-gerar/index.ts`
-- Propagar cota da cotação para o contrato no insert (se os campos existirem na tabela `contratos`). Verificar schema — se não existirem, criar migração.
-
-### Fase 3: Verificar se campos existem na tabela contratos
-
-Precisamos confirmar se `cota_participacao`, `cota_minima` e `cobertura_fipe` existem na tabela `contratos`. Se não, criar migração para adicioná-los.
-
----
+# Auditoria Completa: Planos, Benefícios e Precificação
 
 ## Resumo
 
-| Correção | Impacto | Risco |
-|----------|---------|-------|
-| `cobertura_fipe` hardcoded '100%' no Autentique | ALTO — erro contratual para planos Especial (80%) | Contratual |
-| Cota contextual não propagada | MÉDIO — associados de app recebem cota errada no documento | Contratual |
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
 
-Correções cirúrgicas: ~3 arquivos de edge functions, possivelmente 1 migração para campos no contrato.
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. ✅ `pricing.ts` — REMOVIDO
+
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
+
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
+
+Centralizada em `src/utils/format.ts`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+### 5. ✅ Veículo Blindado — CORRIGIDO
+
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+
+### 12. ✅ Linhas de produto hardcoded — MIGRADO PARA BANCO
+
+`LINHAS_PLANO` em `PlanosConfig.tsx` substituído por `useProductLines()`. Linha "Select One" adicionada à tabela `product_lines`.
+
+### 13. ✅ Regiões hardcoded — MIGRADO PARA BANCO
+
+`REGIOES` em `EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx` substituídos por `useRegioesAtivas()`.
+
+### 14. ✅ Lógica de negócio hardcoded em usePlanosCotacao — CORRIGIDO
+
+- `linha === 'advanced'` → `vehicle_type` da tabela `product_lines`
+- `linha === 'lancamento'` → `requires_recent_year` da tabela `product_lines`
+- Ordenação `linha === 'select'` → `sort_priority` da tabela `product_lines`
+- Mapeamento manual de códigos de região removido (usa `regioes.codigo` diretamente)
+
+### 15. ✅ LINHA_CORES hardcoded em PlanoCardSelecao — CORRIGIDO
+
+`gradient_class` adicionado à tabela `product_lines`. Fallback mantido no componente.
+
+### 16. ✅ CATEGORIAS_VEICULO hardcoded — MIGRADO PARA BANCO
+
+Categorias inseridas na tabela `configuracoes` (chave `categorias_veiculo`). Hook `useCategoriasVeiculo()` criado. `VehicleCategorySelect` agora busca do banco com fallback.
+
+### 17. ✅ OBSERVACOES_CATEGORIA hardcoded — MIGRADO PARA BANCO
+
+Observações inseridas na tabela `configuracoes` (chave `observacoes_categoria`). Hook `useObservacoesCategoria()` criado.
+
+### 18. ✅ Template WhatsApp hardcoded — MIGRADO PARA BANCO
+
+Template de benefícios inserido na tabela `configuracoes` (chave `template_whatsapp_cotacao`). Hook `useTemplateWhatsappCotacao()` criado.
+
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
+
+
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
+
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
+
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
+
+
+---
+
+## ❌ NÃO FAZER AGORA
+
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
+
+---
+
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
+
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
+
+---
+
+# Visibilidade por Equipe — Supervisor de Vendas
+
+## ✅ CORRIGIDO
+
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
+
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
+
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
+
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
+
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
+
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
+
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
+
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
+
+---
+
+## 🟡 PENDENTE
+
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
+
+---
+
+# Fluxo de Assistência 24h — Reboque
+
+## ✅ CORRIGIDO
+
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.

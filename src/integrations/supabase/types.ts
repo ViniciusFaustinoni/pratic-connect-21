@@ -7349,7 +7349,10 @@ export type Database = {
           cliente_telefone: string | null
           cliente_telefone_secundario: string | null
           cliente_uf: string | null
+          cobertura_fipe: number | null
           codigo_fipe: string | null
+          cota_minima: number | null
+          cota_participacao: number | null
           cotacao_id: string | null
           cotacao_token_publico: string | null
           created_at: string
@@ -7450,7 +7453,10 @@ export type Database = {
           cliente_telefone?: string | null
           cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
+          cobertura_fipe?: number | null
           codigo_fipe?: string | null
+          cota_minima?: number | null
+          cota_participacao?: number | null
           cotacao_id?: string | null
           cotacao_token_publico?: string | null
           created_at?: string
@@ -7551,7 +7557,10 @@ export type Database = {
           cliente_telefone?: string | null
           cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
+          cobertura_fipe?: number | null
           codigo_fipe?: string | null
+          cota_minima?: number | null
+          cota_participacao?: number | null
           cotacao_id?: string | null
           cotacao_token_publico?: string | null
           created_at?: string
