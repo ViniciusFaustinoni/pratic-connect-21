@@ -104,6 +104,15 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
 
       const adicionalApp = parseFloat(configRes.data?.valor || '35.90') || 35.90;
 
+      // Decomposição percentual do banco
+      const decMap = Object.fromEntries((decomRes.data || []).map(d => [d.chave, parseFloat(d.valor || '0') || 0]));
+      const dec = {
+        cota: decMap.decomposicao_cota || 0.60,
+        admin: decMap.decomposicao_admin || 0.25,
+        rastreamento: decMap.decomposicao_rastreamento || 0.10,
+        assistencia: decMap.decomposicao_assistencia || 0.05,
+      };
+
       if (planosRes.error) throw planosRes.error;
       const planos = planosRes.data;
       if (!planos?.length) return [];
