@@ -76,13 +76,20 @@ serve(async (req) => {
 
     console.log(`[enviar-cotacao-pecas] Enviando cotação para ${nomeAC} (${autoCenter.whatsapp})`);
 
-    // Enviar via whatsapp-send-text
+    // Enviar via whatsapp-send-text (com template para Meta API)
     const { data: whatsResult, error: whatsError } = await supabase.functions.invoke(
       "whatsapp-send-text",
       {
         body: {
           telefone: autoCenter.whatsapp,
           mensagem,
+          template_name: 'orcamento_oficina',
+          template_params: [
+            nomeAC,
+            `${veiculo?.marca || ''} ${veiculo?.modelo || ''}`.trim(),
+            veiculo?.placa || '',
+            itens.map((item: any) => item.descricao).join(', ').substring(0, 200),
+          ],
         },
       }
     );
