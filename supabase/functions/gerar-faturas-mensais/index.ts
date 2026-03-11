@@ -233,8 +233,8 @@ serve(async (req) => {
             rateio_terceiros: v.cobertura_terceiros ? (valorPorCotaBeneficio['terceiros'] || 0) * cotas : 0,
             rateio_assistencia: v.cobertura_assistencia !== false 
               ? (valorPorCotaBeneficio['assistencia'] || 0) * cotas : 0,
-            adicionais: 0,
-            adicionais_detalhes: {},
+            adicionais: 0, // will be filled below
+            adicionais_detalhes: {} as Record<string, number>,
             fator_prorata: proRata,
             total: 0,
           };
