@@ -22,7 +22,7 @@ import {
 import { Loader2, Info } from 'lucide-react';
 import { useCreateBeneficio, useUpdateBeneficio, CATEGORIAS_BENEFICIO } from '@/hooks/useBeneficiosAdmin';
 import { CustoRealInfo } from '@/components/beneficios/CustoRealInfo';
-import { useProductLines } from '@/hooks/useProductLines';
+import { useProductLines } from '@/hooks/usePlans';
 import type { Tables } from '@/integrations/supabase/types';
 
 type BeneficioAdicional = Tables<'beneficios_adicionais'>;
