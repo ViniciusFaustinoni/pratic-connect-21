@@ -164,7 +164,7 @@ function TabPorPlano() {
 
       const payload = {
         plano_id: selectedPlano,
-        linha_slug: selectedPlanoObj?.linha_slug || '',
+        linha_slug: selectedPlanoObj?.linha || '',
         marca: marca.trim(),
         modelo: modelo.trim(),
         ano_min: anoMin,
