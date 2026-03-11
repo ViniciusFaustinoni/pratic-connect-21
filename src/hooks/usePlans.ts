@@ -139,6 +139,7 @@ export function usePlans(productLineSlug?: string) {
           )
         `)
         .eq('ativo', true)
+        .eq('visivel_gestao', true)
         .order('ordem');
       
       if (productLineSlug) {
