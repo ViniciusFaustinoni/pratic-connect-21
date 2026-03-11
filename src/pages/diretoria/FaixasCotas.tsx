@@ -323,8 +323,12 @@ export default function FaixasCotas() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Faixas de Cotas (33 faixas de R$ 5.000)</CardTitle>
+              <CardDescription>
+                Colunas por categoria indicam o peso de cota específico (opcional). Se vazio, usa o valor padrão de cotas.
+              </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -332,11 +336,18 @@ export default function FaixasCotas() {
                     <TableHead className="text-center">Cotas</TableHead>
                     <TableHead className="text-center">Associados</TableHead>
                     <TableHead className="text-center">Ajuste (%)</TableHead>
+                    <TableHead className="text-center text-xs">Passeio</TableHead>
+                    <TableHead className="text-center text-xs">App</TableHead>
+                    <TableHead className="text-center text-xs">Moto</TableHead>
+                    <TableHead className="text-center text-xs">Diesel</TableHead>
+                    <TableHead className="text-center text-xs">Elétrico</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {faixas?.map((faixa) => (
+                  {faixas?.map((faixa) => {
+                    const faixaAny = faixa as any;
+                    return (
                     <TableRow key={faixa.id}>
                       <TableCell>
                         <span className="font-medium">{formatFipe(faixa.fipe_de)}</span>
@@ -368,6 +379,11 @@ export default function FaixasCotas() {
                           getAjusteBadge(faixa.ajuste_percentual)
                         )}
                       </TableCell>
+                      {['cotas_passeio', 'cotas_aplicativo', 'cotas_moto', 'cotas_diesel', 'cotas_eletrico'].map(col => (
+                        <TableCell key={col} className="text-center text-xs text-muted-foreground">
+                          {faixaAny[col] != null ? faixaAny[col] : '—'}
+                        </TableCell>
+                      ))}
                       <TableCell className="text-right">
                         {editingId === faixa.id ? (
                           <div className="flex justify-end gap-2">
@@ -407,9 +423,11 @@ export default function FaixasCotas() {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
