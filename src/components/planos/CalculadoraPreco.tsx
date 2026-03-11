@@ -7,21 +7,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Calculator, Check, Car, Briefcase } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
-import { useFatorVeiculoAntigo, useFatorUsoTrabalho } from '@/hooks/useConteudosSistema';
 import { formatarMoeda } from '@/utils/format';
+import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 
-interface ResultadoFaixa {
-  faixaFipe: string;
-  valorMinimo: number;
-  valorMaximo: number;
-  planoMinimo: string;
-  planoMaximo: string;
-  fatoresAplicados: string[];
-  valorFipeInformado: number;
+interface ResultadoLinha {
+  linha: string;
+  linhaLabel: string;
+  valorMensal: number;
+  valorDesagio: number | null;
 }
 
-type AnoVeiculo = 'recente' | 'antigo';
-type TipoUso = 'particular' | 'trabalho';
+interface ResultadoCalc {
+  linhas: ResultadoLinha[];
+  faixaFipe: string;
+  valorFipeInformado: number;
+  regiaoLabel: string;
+  tipoUsoLabel: string;
+}
+
+type TipoUso = 'particular' | 'aplicativo';
 
 const REGIOES = [
   { value: 'rj', label: 'Rio de Janeiro' },
@@ -29,95 +35,111 @@ const REGIOES = [
   { value: 'sp', label: 'São Paulo' },
 ] as const;
 
-// Mapeamento de linha_slug técnico → nome amigável
 const LINHA_LABELS: Record<string, string> = {
   select: 'Select',
+  'select-one': 'Select One',
+  'select-premium': 'Select Premium',
   lancamento: 'Lançamento',
   especial: 'Especial',
   advanced: 'Advanced',
   eletrico: 'Elétrico',
 };
 
+function useAdicionalApp() {
+  return useQuery({
+    queryKey: ['configuracoes', 'adicional_app'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'adicional_app')
+        .single();
+      return parseFloat(data?.valor || '35.90') || 35.90;
+    },
+  });
+}
+
 export function CalculadoraPreco() {
   const [valorFipe, setValorFipe] = useState<string>('');
-  const [anoVeiculo, setAnoVeiculo] = useState<AnoVeiculo>('recente');
   const [tipoUso, setTipoUso] = useState<TipoUso>('particular');
   const [regiao, setRegiao] = useState<string>('rj');
-  const [resultado, setResultado] = useState<ResultadoFaixa | null>(null);
-  
+  const [resultado, setResultado] = useState<ResultadoCalc | null>(null);
+  const [semResultado, setSemResultado] = useState(false);
+
   const { data: tabelas } = useTabelasPreco();
-  const { data: FATOR_VEICULO_ANTIGO = 1.15 } = useFatorVeiculoAntigo();
-  const { data: FATOR_USO_TRABALHO = 1.20 } = useFatorUsoTrabalho();
+  const { data: adicionalApp = 35.90 } = useAdicionalApp();
 
   const calcular = () => {
     const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
-    
+
     if (!valor || !tabelas || tabelas.length === 0) {
       setResultado(null);
+      setSemResultado(!!valor);
       return;
     }
 
-    // Filtrar por faixa FIPE e região
-    const faixasEncontradas = tabelas.filter(
-      t => valor >= Number(t.fipe_min) && valor <= Number(t.fipe_max) && t.regiao === regiao
+    // Get unique linha_slugs from the data
+    const linhasSlugs = [...new Set(tabelas.map(t => t.linha_slug).filter(Boolean))] as string[];
+
+    const linhas: ResultadoLinha[] = [];
+
+    for (const linhaSlug of linhasSlugs) {
+      // Determine which tipo_uso to query for this linha/regiao
+      const tipoUsoPricing = resolverTipoUsoQuery(linhaSlug, regiao, tipoUso);
+
+      // Find matching row
+      const faixa = tabelas.find(t =>
+        t.linha_slug === linhaSlug &&
+        t.regiao === regiao &&
+        t.tipo_uso === tipoUsoPricing &&
+        valor >= Number(t.fipe_min) &&
+        valor <= Number(t.fipe_max)
+      );
+
+      if (!faixa || Number(faixa.valor_mensal) <= 0) continue;
+
+      let valorMensal = Number(faixa.valor_mensal);
+
+      // Apply app surcharge if needed
+      if (tipoUso === 'aplicativo') {
+        valorMensal = resolverPrecoApp(linhaSlug, regiao, tipoUso, valorMensal, adicionalApp);
+      }
+
+      linhas.push({
+        linha: linhaSlug,
+        linhaLabel: LINHA_LABELS[linhaSlug] || linhaSlug,
+        valorMensal: Math.round(valorMensal * 100) / 100,
+        valorDesagio: faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null,
+      });
+    }
+
+    if (linhas.length === 0) {
+      setResultado(null);
+      setSemResultado(true);
+      return;
+    }
+
+    // Sort by price ascending
+    linhas.sort((a, b) => a.valorMensal - b.valorMensal);
+
+    // Get faixa description from first match
+    const primeiraFaixa = tabelas.find(t =>
+      t.linha_slug === linhas[0].linha &&
+      t.regiao === regiao &&
+      valor >= Number(t.fipe_min) &&
+      valor <= Number(t.fipe_max)
     );
 
-    if (faixasEncontradas.length === 0) {
-      setResultado(null);
-      return;
-    }
-
-    // Calcular fator de risco
-    let fator = 1.0;
-    const fatoresAplicados: string[] = [];
-
-    if (anoVeiculo === 'antigo') {
-      fator *= FATOR_VEICULO_ANTIGO;
-      const pctAntigo = Math.round((FATOR_VEICULO_ANTIGO - 1) * 100);
-      fatoresAplicados.push(`Veículo com mais de 10 anos (+${pctAntigo}%)`);
-    } else {
-      fatoresAplicados.push('Veículo até 10 anos');
-    }
-
-    if (tipoUso === 'trabalho') {
-      fator *= FATOR_USO_TRABALHO;
-      const pctTrabalho = Math.round((FATOR_USO_TRABALHO - 1) * 100);
-      fatoresAplicados.push(`Uso para trabalho/app (+${pctTrabalho}%)`);
-    } else {
-      fatoresAplicados.push('Uso particular');
-    }
-
-    const regiaoLabel = REGIOES.find(r => r.value === regiao)?.label || regiao;
-    fatoresAplicados.push(`Região: ${regiaoLabel}`);
-
-    // Calcular valores mensais
-    const valoresCalculados = faixasEncontradas
-      .filter(f => Number(f.valor_mensal) > 0)
-      .map(f => ({
-        valor: Number(f.valor_mensal) * fator,
-        plano: LINHA_LABELS[f.linha_slug || ''] || f.linha_slug || 'Plano',
-      }));
-
-    if (valoresCalculados.length === 0) {
-      setResultado(null);
-      return;
-    }
-
-    valoresCalculados.sort((a, b) => a.valor - b.valor);
-
-    const menorValor = valoresCalculados[0];
-    const maiorValor = valoresCalculados[valoresCalculados.length - 1];
-    const primeiraFaixa = faixasEncontradas[0];
-    
     setResultado({
-      faixaFipe: `${formatarMoeda(Number(primeiraFaixa.fipe_min))} - ${formatarMoeda(Number(primeiraFaixa.fipe_max))}`,
-      valorMinimo: menorValor.valor,
-      valorMaximo: maiorValor.valor,
-      planoMinimo: menorValor.plano,
-      planoMaximo: maiorValor.plano,
-      fatoresAplicados,
+      linhas,
+      faixaFipe: primeiraFaixa
+        ? `${formatarMoeda(Number(primeiraFaixa.fipe_min))} - ${formatarMoeda(Number(primeiraFaixa.fipe_max))}`
+        : '',
       valorFipeInformado: valor,
+      regiaoLabel: REGIOES.find(r => r.value === regiao)?.label || regiao,
+      tipoUsoLabel: tipoUso === 'aplicativo' ? 'Aplicativo / Trabalho' : 'Particular',
     });
+    setSemResultado(false);
   };
 
   const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,10 +150,10 @@ export function CalculadoraPreco() {
 
   const limpar = () => {
     setValorFipe('');
-    setAnoVeiculo('recente');
     setTipoUso('particular');
     setRegiao('rj');
     setResultado(null);
+    setSemResultado(false);
   };
 
   return (
@@ -146,10 +168,10 @@ export function CalculadoraPreco() {
         <DialogHeader>
           <DialogTitle>Calculadora de Preço</DialogTitle>
           <DialogDescription>
-            Simule rapidamente a faixa de mensalidade
+            Simule rapidamente a mensalidade por linha de produto
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-5">
           {/* Valor FIPE */}
           <div className="space-y-2">
@@ -177,30 +199,12 @@ export function CalculadoraPreco() {
             </Select>
           </div>
 
-          {/* Ano do Veículo */}
-          <div className="space-y-2">
-            <Label>Ano do Veículo</Label>
-            <ToggleGroup 
-              type="single" 
-              value={anoVeiculo} 
-              onValueChange={(v) => v && setAnoVeiculo(v as AnoVeiculo)}
-              className="justify-start"
-            >
-              <ToggleGroupItem value="recente" aria-label="Até 10 anos" className="flex-1">
-                Até 10 anos
-              </ToggleGroupItem>
-              <ToggleGroupItem value="antigo" aria-label="Mais de 10 anos" className="flex-1">
-                Mais de 10 anos
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-
           {/* Tipo de Uso */}
           <div className="space-y-2">
             <Label>Tipo de Uso</Label>
-            <ToggleGroup 
-              type="single" 
-              value={tipoUso} 
+            <ToggleGroup
+              type="single"
+              value={tipoUso}
               onValueChange={(v) => v && setTipoUso(v as TipoUso)}
               className="justify-start"
             >
@@ -208,9 +212,9 @@ export function CalculadoraPreco() {
                 <Car className="h-4 w-4" />
                 Particular
               </ToggleGroupItem>
-              <ToggleGroupItem value="trabalho" aria-label="Trabalho/App" className="flex-1 gap-2">
+              <ToggleGroupItem value="aplicativo" aria-label="Aplicativo/Trabalho" className="flex-1 gap-2">
                 <Briefcase className="h-4 w-4" />
-                Trabalho/App
+                Aplicativo
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -229,49 +233,60 @@ export function CalculadoraPreco() {
           {resultado && (
             <div className="space-y-4 pt-4 border-t">
               <div className="text-sm text-muted-foreground">
-                <p>Estimativa para veículo {formatarMoeda(resultado.valorFipeInformado)}</p>
-                <p className="text-xs">Faixa FIPE: {resultado.faixaFipe}</p>
+                <p>Veículo {formatarMoeda(resultado.valorFipeInformado)}</p>
+                <p className="text-xs">Faixa: {resultado.faixaFipe}</p>
               </div>
 
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 text-center space-y-2">
-                <p className="text-sm text-muted-foreground">Mensalidade estimada:</p>
-                <p className="text-2xl font-bold text-primary">
-                  {resultado.valorMinimo === resultado.valorMaximo ? (
-                    formatarMoeda(resultado.valorMinimo)
-                  ) : (
-                    <>
-                      {formatarMoeda(resultado.valorMinimo)} a {formatarMoeda(resultado.valorMaximo)}
-                    </>
-                  )}
-                  <span className="text-sm font-normal text-muted-foreground">/mês</span>
-                </p>
-                {resultado.valorMinimo !== resultado.valorMaximo && (
-                  <p className="text-xs text-muted-foreground">
-                    {resultado.planoMinimo} até {resultado.planoMaximo}
-                  </p>
-                )}
+              {/* Critérios */}
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted">
+                  <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  {resultado.regiaoLabel}
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted">
+                  <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  {resultado.tipoUsoLabel}
+                </span>
               </div>
 
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Critérios aplicados:</p>
-                {resultado.fatoresAplicados.map((fator, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    {fator}
+              {/* Preços por linha */}
+              <div className="space-y-2">
+                {resultado.linhas.map((linha) => (
+                  <div
+                    key={linha.linha}
+                    className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/10"
+                  >
+                    <span className="text-sm font-medium">{linha.linhaLabel}</span>
+                    <div className="text-right">
+                      <span className="text-lg font-bold text-primary">
+                        {formatarMoeda(linha.valorMensal)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">/mês</span>
+                      {linha.valorDesagio != null && (
+                        <p className="text-xs text-muted-foreground">
+                          Deságio: {formatarMoeda(linha.valorDesagio)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
 
               <p className="text-xs text-muted-foreground text-center pt-2 border-t">
-                * Valores sujeitos a análise. Entre em contato para cotação personalizada.
+                * Valores da tabela vigente. Cotação final sujeita a análise.
               </p>
             </div>
           )}
 
-          {valorFipe && !resultado && (
-            <p className="text-sm text-muted-foreground text-center">
-              Nenhuma faixa encontrada para este valor e região. Tente outro valor FIPE ou região.
-            </p>
+          {semResultado && (
+            <div className="text-center py-4">
+              <p className="text-sm font-medium text-muted-foreground">
+                Consulte um consultor
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Nenhuma faixa encontrada para este valor e região.
+              </p>
+            </div>
           )}
         </div>
       </DialogContent>
