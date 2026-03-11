@@ -510,7 +510,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               resultado.vehicleData.marca,
               resultado.vehicleData.modelo,
               anoVeiculo,
-              'carros'
+              tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros'
             );
             if (fipeResult?.valorNumerico) {
               form.setValue('valor_fipe', fipeResult.valorNumerico);
