@@ -146,6 +146,8 @@ export function PlanFormModal({
   // Reset form when plan changes
   useEffect(() => {
     if (plan) {
+      const categoria = (plan as any).categoria;
+      const categorias = categoria ? categoria.split(',').map((c: string) => c.trim()).filter(Boolean) : [];
       setFormData({
         name: plan.name || '',
         slug: plan.slug || '',
@@ -166,6 +168,8 @@ export function PlanFormModal({
         footer_note: plan.footer_note || '',
         display_order: plan.display_order?.toString() || '0',
         is_active: plan.is_active ?? true,
+        linha_slug: '',
+        categorias_veiculo: categorias,
       });
       setSelectedBenefits(
         plan.plan_benefits?.map((pb) => ({
@@ -198,10 +202,19 @@ export function PlanFormModal({
         footer_note: '',
         display_order: '0',
         is_active: true,
+        linha_slug: '',
+        categorias_veiculo: [],
       });
       setSelectedBenefits([]);
     }
   }, [plan, defaultProductLineId]);
+
+  // Sync linha_slug from currentPrecoMap
+  useEffect(() => {
+    if (currentPrecoMap?.linha_slug) {
+      setFormData(prev => ({ ...prev, linha_slug: currentPrecoMap.linha_slug }));
+    }
+  }, [currentPrecoMap]);
 
   // Auto-generate slug from name
   const handleNameChange = (name: string) => {
