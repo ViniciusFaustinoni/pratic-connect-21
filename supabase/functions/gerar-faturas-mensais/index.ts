@@ -139,8 +139,7 @@ serve(async (req) => {
           asaas_id
         )
       `)
-      .eq('status', 'ativo')
-      .limit(body.limite || 500);
+      .eq('status', 'ativo');
 
     if (assocError) {
       throw new Error(`Erro ao buscar associados: ${assocError.message}`);
