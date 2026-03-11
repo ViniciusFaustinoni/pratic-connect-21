@@ -123,7 +123,7 @@ export function PlanFormModal({
         .from('planos_cotas_categoria' as any)
         .select('categoria_veiculo, cota_percentual, cota_minima_valor')
         .eq('plano_id', plan.id);
-      return (data || []) as { categoria_veiculo: string; cota_percentual: number; cota_minima_valor: number }[];
+      return ((data || []) as unknown) as { categoria_veiculo: string; cota_percentual: number; cota_minima_valor: number }[];
     },
     enabled: !!plan?.id && open,
   });
