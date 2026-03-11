@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertTriangle, ShieldCheck, Loader2 } from 'lucide-react';
 import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
 import { useCarenciaDiasPadrao } from '@/hooks/useConteudosSistema';
+import { useCalcularCotacao } from '@/hooks/useCalcularCotacao';
 import type { DadosNovoVeiculo } from '@/types/substituicao';
 
 interface VeiculoAntigo {
