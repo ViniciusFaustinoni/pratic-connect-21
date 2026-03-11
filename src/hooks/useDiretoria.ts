@@ -80,27 +80,7 @@ export function useDiretoria() {
 
   // (Legacy calcularRateio removed — use FechamentoMensal pipeline)
 
-  // Aprovar rateio
-  const aprovarRateioMutation = useMutation({
-    mutationFn: async (rateioId: string) => {
-      const { error } = await supabase
-        .from('rateios')
-        .update({
-          status: 'aprovado',
-          aprovado_por: profile?.id,
-          aprovado_em: new Date().toISOString()
-        })
-        .eq('id', rateioId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Rateio aprovado!');
-      queryClient.invalidateQueries({ queryKey: ['rateios'] });
-    },
-    onError: () => {
-      toast.error('Erro ao aprovar rateio');
-    }
-  });
+  // (Legacy aprovarRateio removed — use FechamentoMensal pipeline)
 
   // Atualizar plano
   const atualizarPlanoMutation = useMutation({

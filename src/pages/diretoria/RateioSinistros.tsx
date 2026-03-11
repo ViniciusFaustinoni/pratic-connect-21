@@ -540,10 +540,6 @@ export default function RateioSinistros() {
         </Card>
       )}
 
-      <CalcularRateioModal
-        open={calcularModalOpen}
-        onClose={() => setCalcularModalOpen(false)}
-      />
     </div>
   );
 }
