@@ -344,6 +344,16 @@ export function BeneficiosAdicionaisConfig() {
                 : 'Preencha as informações para criar um novo benefício'}
             </DialogDescription>
           </DialogHeader>
+
+          {editingBeneficio && (associadosCounts?.[editingBeneficio.id] ?? 0) > 0 && (
+            <Alert className="border-amber-500/30 bg-amber-500/5">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-sm">
+                A alteração de preço vale apenas para novos contratos. Os{' '}
+                <strong>{associadosCounts?.[editingBeneficio.id] ?? 0}</strong> associado(s) atuais mantêm o valor contratado.
+              </AlertDescription>
+            </Alert>
+          )}
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
