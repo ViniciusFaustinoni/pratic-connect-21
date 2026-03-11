@@ -146,7 +146,7 @@ export function useUploadDocumento() {
 
       const { error: uploadError } = await supabase.storage
         .from('cotacoes-docs')
-        .upload(path, fileToUpload, { upsert: true });
+        .upload(path, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
