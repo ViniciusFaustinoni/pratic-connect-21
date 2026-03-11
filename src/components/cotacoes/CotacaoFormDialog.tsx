@@ -298,7 +298,46 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     usoApp: usoVeiculo === 'aplicativo',
   });
 
-  // Validação de dados do associado
+  // Buscar todas as faixas de preço para calcular elegibilidade FIPE menor
+  const { data: todasFaixas = [] } = useTabelasPreco();
+
+  // Calcular elegibilidade FIPE menor
+  const fipeMenorInfo = useMemo(() => {
+    if (!valorFipe || valorFipe <= 0 || planosSelecionados.length === 0 || todasFaixas.length === 0) {
+      return null;
+    }
+
+    const plano = planosSelecionados[0];
+    const valorReduzido = valorFipe * 0.99;
+
+    // Encontrar faixa atual do veículo
+    const faixaAtual = todasFaixas.find(f =>
+      valorFipe >= f.fipe_min && valorFipe <= f.fipe_max
+    );
+
+    if (!faixaAtual) return null;
+
+    // Encontrar faixa inferior (onde fipe_max < faixaAtual.fipe_min)
+    const faixasInferiores = todasFaixas
+      .filter(f => f.fipe_max < faixaAtual.fipe_min && f.linha_slug === faixaAtual.linha_slug && f.regiao === faixaAtual.regiao && f.tipo_uso === faixaAtual.tipo_uso)
+      .sort((a, b) => b.fipe_max - a.fipe_max);
+
+    const faixaInferior = faixasInferiores[0];
+    if (!faixaInferior) return null;
+
+    // Verificar elegibilidade: valor reduzido deve caber na faixa inferior
+    const elegivel = valorReduzido <= faixaInferior.fipe_max;
+
+    return {
+      elegivel,
+      valorReduzido,
+      faixaAtual: { min: faixaAtual.fipe_min, max: faixaAtual.fipe_max, mensal: faixaAtual.valor_mensal },
+      faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
+      economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
+    };
+  }, [valorFipe, planosSelecionados, todasFaixas]);
+
+
   const dadosAssociadoValidos = useMemo(() => {
     const nomeValido = nomeAssociado.trim().length >= 3;
     const telefoneValido = telefoneAssociado.replace(/\D/g, '').length >= 10;
