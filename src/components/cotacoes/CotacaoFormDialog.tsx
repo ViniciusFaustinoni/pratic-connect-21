@@ -212,6 +212,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   
   // Hook para criar solicitação de FIPE menor
   const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
+  const { fipeMenorAtivo } = useFipeMenorAtivo();
 
   // Função para calcular opções de vencimento baseado no dia atual
   const opcoesVencimento = useMemo((): [number, number] => {

@@ -521,6 +521,7 @@ export function AppSidebar() {
   const filterByPermission = (items: MenuItem[]) => 
     items.filter(item => {
       if (item.hideForDiretor && permissions.isDiretor) return false;
+      if (!fipeMenorAtivo && item.url === '/vendas/aprovacoes-fipe') return false;
       return !item.permission || permissions.hasPermission(item.permission);
     });
 

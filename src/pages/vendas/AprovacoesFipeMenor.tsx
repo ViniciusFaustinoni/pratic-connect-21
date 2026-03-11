@@ -35,6 +35,7 @@ export default function AprovacoesFipeMenor() {
   const { data: solicitacoes = [], isLoading } = useAprovacoesFipeMenor(tab === 'todas' ? undefined : tab);
   const aprovar = useAprovarFipeMenor();
   const recusar = useRecusarFipeMenor();
+  const { fipeMenorAtivo } = useFipeMenorAtivo();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'aprovar' | 'recusar'>('aprovar');
