@@ -262,6 +262,8 @@ ${asaasCobranca.nossoNumero ? `📊 *Linha Digitável:*\n${asaasCobranca.nossoNu
                 telefone: telefone.replace(/\D/g, ''),
                 mensagem,
                 delay_ms: 500,
+                template_name: 'cobranca_mensalidade',
+                template_params: [nomeAbreviado, valorFormatado, dataFormatada],
               },
             });
             

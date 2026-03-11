@@ -755,6 +755,8 @@ serve(async (req) => {
                     body: {
                       phone: tel,
                       message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${assocData?.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${payment.value.toFixed(2)} foi confirmado!\n\nAs peças do seu veículo estão sendo cotadas junto aos nossos fornecedores. Você será notificado sobre cada etapa do processo! 🔧`,
+                      template_name: 'sinistro_atualizado',
+                      template_params: [assocData?.nome?.split(' ')[0] || 'Associado', 'pagamento', 'Pagamento da cota confirmado com sucesso.'],
                     },
                   });
                 }

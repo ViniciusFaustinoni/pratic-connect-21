@@ -144,11 +144,14 @@ Acesse pelo app ou clique no link acima para pagar! 😊`;
         if (telefone) {
           try {
             const telFmt = formatarTelefone(telefone);
+            const nomeAbrev = associado.nome?.split(' ')[0] || 'Associado';
             const { data: sendResult, error: sendErr } = await supabase.functions.invoke('whatsapp-send-text', {
               body: {
                 telefone: telFmt,
                 mensagem: mensagemWhatsApp,
                 delay_ms: 300,
+                template_name: 'cobranca_mensalidade',
+                template_params: [nomeAbrev, valorFmt, dataFmt],
               },
             });
 

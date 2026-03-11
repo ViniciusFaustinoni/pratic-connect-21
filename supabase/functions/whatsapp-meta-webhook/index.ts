@@ -23,7 +23,7 @@ async function enviarWhatsApp(supabaseUrl: string, serviceKey: string, telefone:
     const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-      body: JSON.stringify({ telefone, mensagem }),
+      body: JSON.stringify({ telefone, mensagem, allow_text: true }),
     });
     const result = await res.json();
     if (!result.success) {

@@ -164,10 +164,13 @@ Aguardamos sua confirmação! 🚗
 *PRATIC Proteção Veicular*`;
 
         // Enviar mensagem via whatsapp-send-text
+        const nomeAbrevVist = nomeCliente.split(' ')[0];
         const { data: sendResult, error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefoneFormatado,
-            mensagem
+            mensagem,
+            template_name: 'sinistro_atualizado',
+            template_params: [nomeAbrevVist, 'vistoria', `Vistoria agendada para hoje. Confirme sua presença.`],
           }
         });
 

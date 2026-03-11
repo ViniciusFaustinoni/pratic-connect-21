@@ -373,11 +373,14 @@ serve(async (req) => {
           const telefoneFormatado = telefone.replace(/\D/g, '');
           
           try {
+            const nomeAbrev = associado.nome?.split(' ')[0] || 'Associado';
             const { data: sendResult, error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
               body: {
                 telefone: telefoneFormatado,
                 mensagem,
                 delay_ms: 500,
+                template_name: 'cobranca_mensalidade',
+                template_params: [nomeAbrev, valorFormatado, dataFormatada],
               },
             });
             

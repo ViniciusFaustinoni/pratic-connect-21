@@ -146,11 +146,14 @@ Nosso técnico *${nomeTecnico}* está a caminho!
 
 Aguardamos sua confirmação! 🚗`;
 
-        // Enviar mensagem via whatsapp-send-text
+        // Enviar mensagem via whatsapp-send-text (com template para Meta API)
+        const nomeAbrev = nomeCliente.split(' ')[0];
         const { data: sendResult, error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefoneFormatado,
-            mensagem
+            mensagem,
+            template_name: 'sinistro_atualizado',
+            template_params: [nomeAbrev, 'agendamento', `${tipoServico} agendada para hoje às ${horaFormatada}`],
           }
         });
 

@@ -117,6 +117,12 @@ Agradecemos sua compreensão.`;
           body: {
             telefone: telefone.replace(/\D/g, ''),
             mensagem,
+            template_name: 'sinistro_atualizado',
+            template_params: [
+              associado?.nome?.split(' ')[0] || 'Associado',
+              sinistro?.protocolo || '',
+              'Seu sinistro não foi aprovado. Verifique os detalhes no app.',
+            ],
           },
         });
         console.log('[reprovar-sinistro] WhatsApp enviado');
