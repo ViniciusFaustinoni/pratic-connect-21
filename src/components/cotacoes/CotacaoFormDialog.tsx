@@ -295,7 +295,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     valorAdicional,
     regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
     combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
-    categoria: usoVeiculo === 'aplicativo' ? 'aplicativo' : (categoria || undefined),
+    categoria: categoria && categoria !== 'nenhuma' ? categoria : undefined,
     anoVeiculo: anoNumerico,
     tipoVeiculo: tipoVeiculoDetectado,
     usoApp: usoVeiculo === 'aplicativo',
