@@ -265,7 +265,7 @@ export function StepFinanceiro({
     const rows: { nome: string; antigo: number; novo: number }[] = [];
 
     // Vidros
-    const vidrosPreco = precosMap['cobertura_vidros']?.preco || 9.90;
+    const vidrosPreco = precosMap['cobertura_vidros']?.preco || 0;
     rows.push({
       nome: 'Vidros e Faróis',
       antigo: veiculoAntigo.cobertura_vidros ? vidrosPreco : 0,
