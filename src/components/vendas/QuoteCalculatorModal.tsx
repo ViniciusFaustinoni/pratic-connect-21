@@ -166,7 +166,7 @@ export function QuoteCalculatorModal({
   };
 
   const toggleAdicional = (id: string) => {
-    setAdicionaisSelecionados(prev =>
+    setAdicionaisSelecionadosIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
