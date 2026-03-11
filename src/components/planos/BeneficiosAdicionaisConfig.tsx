@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useBeneficiosAdicionais, useCreateBeneficio, useUpdateBeneficio, useDeleteBeneficio, useToggleBeneficioStatus, BeneficioInput, BeneficioComRegioes, CATEGORIAS_BENEFICIO } from '@/hooks/useBeneficiosAdmin';
 import { useRegioes } from '@/hooks/useRegioes';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, Loader2, Search, Gift, MapPin } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Plus, Edit, Trash2, Loader2, Search, Gift, MapPin, Users, AlertTriangle } from 'lucide-react';
 
 interface BeneficioFormData extends BeneficioInput {
   regioes: { id: string; preco_regional?: number }[];
@@ -30,7 +33,23 @@ export function BeneficiosAdicionaisConfig() {
   const updateBeneficio = useUpdateBeneficio();
   const deleteBeneficio = useDeleteBeneficio();
   const toggleStatus = useToggleBeneficioStatus();
-  
+
+  // Count active associates per benefit
+  const { data: associadosCounts } = useQuery({
+    queryKey: ['associados-por-beneficio-adicional'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('associados_beneficios_adicionais')
+        .select('beneficio_adicional_id')
+        .eq('ativo', true);
+      const counts: Record<string, number> = {};
+      data?.forEach(a => {
+        counts[a.beneficio_adicional_id] = (counts[a.beneficio_adicional_id] || 0) + 1;
+      });
+      return counts;
+    },
+  });
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingBeneficio, setEditingBeneficio] = useState<BeneficioComRegioes | null>(null);
@@ -212,6 +231,7 @@ export function BeneficiosAdicionaisConfig() {
                   <TableHead>Categoria</TableHead>
                   <TableHead>Linhas</TableHead>
                   <TableHead className="text-center">Regiões</TableHead>
+                  <TableHead className="text-center">Associados</TableHead>
                   <TableHead className="text-right">Preço Base</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   {podeEditar && <TableHead className="text-right">Ações</TableHead>}
@@ -220,7 +240,7 @@ export function BeneficiosAdicionaisConfig() {
               <TableBody>
                 {filteredBeneficios?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={podeEditar ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={podeEditar ? 8 : 7} className="text-center py-8 text-muted-foreground">
                       Nenhum benefício encontrado
                     </TableCell>
                   </TableRow>
@@ -257,6 +277,12 @@ export function BeneficiosAdicionaisConfig() {
                         <Badge variant="outline">
                           <MapPin className="h-3 w-3 mr-1" />
                           {beneficio.beneficios_regioes?.length || 0}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline">
+                          <Users className="h-3 w-3 mr-1" />
+                          {associadosCounts?.[beneficio.id] ?? 0}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-medium">
@@ -318,6 +344,16 @@ export function BeneficiosAdicionaisConfig() {
                 : 'Preencha as informações para criar um novo benefício'}
             </DialogDescription>
           </DialogHeader>
+
+          {editingBeneficio && (associadosCounts?.[editingBeneficio.id] ?? 0) > 0 && (
+            <Alert className="border-amber-500/30 bg-amber-500/5">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-sm">
+                A alteração de preço vale apenas para novos contratos. Os{' '}
+                <strong>{associadosCounts?.[editingBeneficio.id] ?? 0}</strong> associado(s) atuais mantêm o valor contratado.
+              </AlertDescription>
+            </Alert>
+          )}
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">

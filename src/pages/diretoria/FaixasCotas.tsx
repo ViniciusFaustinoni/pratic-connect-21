@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Settings, History, Calculator, TrendingUp, TrendingDown, Minus, Save, AlertTriangle, Info } from 'lucide-react';
+import { Settings, History, Calculator, TrendingUp, TrendingDown, Minus, Save, AlertTriangle, Info, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   useFaixasCotas, 
   useFaixasCotasHistorico,
@@ -46,7 +48,30 @@ export default function FaixasCotas() {
   
   const atualizarAjuste = useAtualizarAjusteFaixa();
   const atualizarGrupo = useAtualizarAjusteGrupo();
-  
+
+  // Count active associates per FIPE range
+  const { data: associadosPorFaixa } = useQuery({
+    queryKey: ['associados-por-faixa-fipe', faixas?.map(f => f.id)],
+    enabled: !!faixas?.length,
+    queryFn: async () => {
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('valor_fipe, associados!inner(status)')
+        .eq('associados.status', 'ativo')
+        .not('valor_fipe', 'is', null);
+
+      if (!veiculos || !faixas) return {} as Record<string, number>;
+
+      const counts: Record<string, number> = {};
+      for (const faixa of faixas) {
+        counts[faixa.id] = veiculos.filter(
+          v => v.valor_fipe !== null && v.valor_fipe >= faixa.fipe_de && v.valor_fipe <= faixa.fipe_ate
+        ).length;
+      }
+      return counts;
+    },
+  });
+
   // Estatísticas
   const stats = useMemo(() => {
     if (!faixas) return null;
@@ -305,6 +330,7 @@ export default function FaixasCotas() {
                   <TableRow>
                     <TableHead>Faixa FIPE</TableHead>
                     <TableHead className="text-center">Cotas</TableHead>
+                    <TableHead className="text-center">Associados</TableHead>
                     <TableHead className="text-center">Ajuste (%)</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -319,6 +345,12 @@ export default function FaixasCotas() {
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary">{faixa.quantidade_cotas}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline">
+                          <Users className="h-3 w-3 mr-1" />
+                          {associadosPorFaixa?.[faixa.id] ?? 0}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">
                         {editingId === faixa.id ? (

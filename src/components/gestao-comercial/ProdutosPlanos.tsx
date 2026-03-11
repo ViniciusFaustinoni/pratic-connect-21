@@ -50,7 +50,8 @@ export function ProdutosPlanos() {
   const [coberturaParaEditar, setCoberturaParaEditar] = useState<any>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmType, setDeleteConfirmType] = useState<'cobertura' | 'beneficio'>('cobertura');
-
+  const [planDeleteConfirmOpen, setPlanDeleteConfirmOpen] = useState(false);
+  const [planToggleConfirm, setPlanToggleConfirm] = useState<{ id: string; activate: boolean } | null>(null);
   // Beneficio modals
   const [vincularBeneficioOpen, setVincularBeneficioOpen] = useState(false);
 
@@ -292,12 +293,21 @@ export function ProdutosPlanos() {
                     <DropdownMenuItem onClick={() => duplicatePlan.mutate(selectedPlan.id)}>
                       <Copy className="h-4 w-4 mr-2" /> Duplicar
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={() => { deletePlan.mutate(selectedPlan.id); setSelectedPlanoId(null); }}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" /> Excluir
-                    </DropdownMenuItem>
+                    {selectedPlan.ativo ? (
+                      <DropdownMenuItem
+                        className="text-destructive opacity-50 cursor-not-allowed"
+                        onClick={(e) => { e.preventDefault(); toast.error('Inative o plano antes de excluir'); }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => setPlanDeleteConfirmOpen(true)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -578,7 +588,23 @@ export function ProdutosPlanos() {
                       <span className="text-muted-foreground text-xs">Ativo:</span>
                       <Switch
                         checked={selectedPlan.ativo}
-                        onCheckedChange={(checked) => toggleStatus.mutate({ id: selectedPlan.id, is_active: checked })}
+                        onCheckedChange={(checked) => {
+                          const count = associadosCounts?.[selectedPlan.id] ?? 0;
+                          if (!checked && count > 0) {
+                            setPlanToggleConfirm({ id: selectedPlan.id, activate: false });
+                          } else if (checked) {
+                            // Validate: must have at least coberturas or precos
+                            const hasCoberturas = (coberturasPorPlano?.[selectedPlan.id]?.length ?? 0) > 0;
+                            const hasPrecos = !!precoMappings?.[selectedPlan.id]?.faixas?.length;
+                            if (!hasCoberturas && !hasPrecos) {
+                              toast.error('O plano precisa ter coberturas ou preços vinculados antes de ser ativado');
+                              return;
+                            }
+                            toggleStatus.mutate({ id: selectedPlan.id, is_active: true });
+                          } else {
+                            toggleStatus.mutate({ id: selectedPlan.id, is_active: false });
+                          }
+                        }}
                       />
                     </div>
                   </div>
@@ -632,6 +658,57 @@ export function ProdutosPlanos() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Desvincular
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Plan delete confirmation */}
+      <AlertDialog open={planDeleteConfirmOpen} onOpenChange={setPlanDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir plano</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o plano "{selectedPlan?.nome}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (selectedPlan) {
+                  deletePlan.mutate(selectedPlan.id);
+                  setSelectedPlanoId(null);
+                }
+                setPlanDeleteConfirmOpen(false);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Plan toggle confirmation (inactivation with associates) */}
+      <AlertDialog open={!!planToggleConfirm} onOpenChange={(open) => { if (!open) setPlanToggleConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Inativar plano</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este plano possui {planToggleConfirm ? (associadosCounts?.[planToggleConfirm.id] ?? 0) : 0} associado(s) vinculado(s). 
+              Eles não serão afetados — apenas novos cadastros deixarão de poder escolher este plano. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (planToggleConfirm) {
+                toggleStatus.mutate({ id: planToggleConfirm.id, is_active: false });
+              }
+              setPlanToggleConfirm(null);
+            }}>
+              Inativar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -378,7 +378,8 @@ const menuConfig: {
       items: [
         { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
         { title: 'Gestão Comercial', url: '/diretoria/gestao-comercial', icon: Layers },
-        { title: 'Rateio', url: '/diretoria/rateios', icon: PieChart },
+        { title: 'Fechamento & Rateio', url: '/diretoria/fechamento', icon: PieChart },
+        { title: 'Faixas & Cotas', url: '/diretoria/faixas-cotas', icon: Calculator },
         { title: 'Atuarial', url: '/diretoria/indicadores', icon: TrendingUp },
         { title: 'Blacklist', url: '/diretoria/blacklist', icon: Ban },
         { title: 'Configurações', url: '/diretoria/configuracoes', icon: Settings },
