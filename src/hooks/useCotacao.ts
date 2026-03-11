@@ -60,6 +60,7 @@ function mapPlanoToInterface(data: any): PlanoParaCotacao {
     fipe_maximo: data.fipe_maxima ? Number(data.fipe_maxima) : null,
     valor_adesao: Number(data.valor_adesao || 0),
     coberturas: data.coberturas || [],
+    adicional_mensal: Number(data.adicional_mensal || 0),
     ativo: data.ativo,
     created_at: data.created_at,
   };
