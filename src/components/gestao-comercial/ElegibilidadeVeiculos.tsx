@@ -471,7 +471,7 @@ function TabResumoGlobal() {
         {data?.map((row: any, i: number) => (
           <TableRow key={i} className={row.total === 0 ? 'bg-yellow-50' : ''}>
             <TableCell className="font-medium">{row.nome}</TableCell>
-            <TableCell><Badge variant="outline">{row.linha_slug || '—'}</Badge></TableCell>
+            <TableCell><Badge variant="outline">{row.linha || '—'}</Badge></TableCell>
             <TableCell className="text-center">
               {row.total === 0
                 ? <Badge className="bg-yellow-500 text-white hover:bg-yellow-600">Sem configuração</Badge>
