@@ -170,12 +170,13 @@ export function calcularValoresCotacao(
   plano: PlanoParaCotacao,
   valorMensalDireto: number,
   valorFipe: number,
+  decomposicao?: { cota: number; admin: number; rastreamento: number; assistencia: number },
 ): ResultadoCotacao['valores'] {
-  // Decomposição percentual sobre valor_mensal
-  const decCota = 0.60;
-  const decAdmin = 0.25;
-  const decRastreamento = 0.10;
-  const decAssistencia = 0.05;
+  // Decomposição percentual sobre valor_mensal (valores do banco com fallback)
+  const decCota = decomposicao?.cota || 0.60;
+  const decAdmin = decomposicao?.admin || 0.25;
+  const decRastreamento = decomposicao?.rastreamento || 0.10;
+  const decAssistencia = decomposicao?.assistencia || 0.05;
 
   const valor_cota = Math.round(valorMensalDireto * decCota * 100) / 100;
   const taxa_administrativa = Math.round(valorMensalDireto * decAdmin * 100) / 100;
