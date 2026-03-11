@@ -174,24 +174,7 @@ interface UploadFotoVistoriaParams {
 export function useUploadFotoVistoria() {
   return useMutation({
     mutationFn: async ({ cotacaoId, tipo, file, latitude, longitude }: UploadFotoVistoriaParams) => {
-      let fileToUpload = file;
-      let fileName = file.name;
-
-      // Converter PDF para imagem antes do upload
-      if (isPdf(file)) {
-        try {
-          console.log('[useUploadFotoVistoria] Convertendo PDF para imagem...');
-          const imageBlob = await convertPdfToImage(file);
-          fileName = getPdfConvertedName(file.name);
-          fileToUpload = new File([imageBlob], fileName, { type: 'image/jpeg' });
-          console.log('[useUploadFotoVistoria] PDF convertido com sucesso');
-        } catch (pdfError) {
-          console.error('[useUploadFotoVistoria] Erro ao converter PDF:', pdfError);
-          throw new Error('Erro ao converter PDF. Tente enviar como imagem JPG ou PNG.');
-        }
-      }
-
-      const ext = fileName.split('.').pop() || 'jpg';
+      const ext = file.name.split('.').pop() || 'jpg';
       const path = `cotacoes/${cotacaoId}/vistoria_${tipo}_${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
