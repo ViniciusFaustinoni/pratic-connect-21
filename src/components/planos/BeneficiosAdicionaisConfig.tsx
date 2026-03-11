@@ -279,6 +279,12 @@ export function BeneficiosAdicionaisConfig() {
                           {beneficio.beneficios_regioes?.length || 0}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline">
+                          <Users className="h-3 w-3 mr-1" />
+                          {associadosCounts?.[beneficio.id] ?? 0}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(beneficio.preco)}
                       </TableCell>
