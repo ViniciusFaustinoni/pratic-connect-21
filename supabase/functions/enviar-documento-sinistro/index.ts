@@ -326,7 +326,15 @@ Deno.serve(async (req) => {
         await supabaseAdmin.functions.invoke('whatsapp-send-text', {
           body: { 
             telefone: telefoneAssociado.replace(/\D/g, ''), 
-            mensagem 
+            mensagem,
+            template_name: 'sinistro_atualizado',
+            template_params: [
+              associado?.nome?.split(' ')[0] || 'Associado',
+              sinistro.protocolo || '',
+              documentosRestantes > 0
+                ? `Documento ${tipoDocFormatado} recebido. Faltam ${documentosRestantes} documento(s).`
+                : 'Todos os documentos recebidos. Sinistro em análise.',
+            ],
           }
         });
         

@@ -432,6 +432,12 @@ _Você receberá uma notificação quando o prestador for acionado._`;
             mensagem: mensagemAssociado,
             referencia_tipo: 'chamado_assistencia',
             referencia_id: chamado.id,
+            template_name: 'sinistro_atualizado',
+            template_params: [
+              associado.nome?.split(' ')[0] || 'Associado',
+              'assistência',
+              'Seu chamado de assistência foi registrado com sucesso.',
+            ],
           },
         });
         console.log("[criar-chamado] WhatsApp de confirmação enviado para associado");
