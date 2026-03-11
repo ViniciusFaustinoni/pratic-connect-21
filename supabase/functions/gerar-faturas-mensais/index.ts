@@ -139,8 +139,7 @@ serve(async (req) => {
           asaas_id
         )
       `)
-      .eq('status', 'ativo')
-      .limit(body.limite || 500);
+      .eq('status', 'ativo');
 
     if (assocError) {
       throw new Error(`Erro ao buscar associados: ${assocError.message}`);
@@ -234,8 +233,8 @@ serve(async (req) => {
             rateio_terceiros: v.cobertura_terceiros ? (valorPorCotaBeneficio['terceiros'] || 0) * cotas : 0,
             rateio_assistencia: v.cobertura_assistencia !== false 
               ? (valorPorCotaBeneficio['assistencia'] || 0) * cotas : 0,
-            adicionais: 0,
-            adicionais_detalhes: {},
+            adicionais: 0, // will be filled below
+            adicionais_detalhes: {} as Record<string, number>,
             fator_prorata: proRata,
             total: 0,
           };
@@ -247,7 +246,7 @@ serve(async (req) => {
                                  composicao.rateio_terceiros +
                                  composicao.rateio_assistencia;
 
-          composicao.total = (composicao.taxa_administrativa + subtotalRateio + composicao.adicionais) * proRata;
+          composicao.total = (composicao.taxa_administrativa + subtotalRateio) * proRata;
 
           totalGeral += composicao.total;
           subtotalRateioGeral += subtotalRateio * proRata;
@@ -255,6 +254,31 @@ serve(async (req) => {
 
           composicoesPorVeiculo.push({ veiculo: v, valorFipe, cotas, composicao, subtotalRateio });
         }
+
+        // ===== ADICIONAIS CONTRATADOS (por associado, não por veículo) =====
+        let totalAdicionais = 0;
+        const adicionaisDetalhes: Record<string, number> = {};
+        
+        const { data: adicionaisAtivos } = await supabase
+          .from('associados_beneficios_adicionais')
+          .select('valor_contratado, beneficio_adicional:beneficio_adicional_id(nome)')
+          .eq('associado_id', associado.id)
+          .eq('ativo', true);
+
+        for (const adicional of (adicionaisAtivos || [])) {
+          const nome = (adicional.beneficio_adicional as any)?.nome || 'Adicional';
+          const valor = adicional.valor_contratado || 0;
+          totalAdicionais += valor;
+          adicionaisDetalhes[nome] = (adicionaisDetalhes[nome] || 0) + valor;
+        }
+
+        // Aplicar adicionais ao primeiro veículo (são por associado)
+        if (composicoesPorVeiculo.length > 0) {
+          composicoesPorVeiculo[0].composicao.adicionais = totalAdicionais;
+          composicoesPorVeiculo[0].composicao.adicionais_detalhes = adicionaisDetalhes;
+          composicoesPorVeiculo[0].composicao.total += totalAdicionais * proRata;
+        }
+        totalGeral += totalAdicionais * proRata;
 
         // Montar descrição e resumo
         const placas = composicoesPorVeiculo.map(c => c.veiculo.placa);
