@@ -78,62 +78,7 @@ export function useDiretoria() {
     }
   });
 
-  // Calcular rateio
-  const calcularRateioMutation = useMutation({
-    mutationFn: async ({ mes, ano }: { mes: number; ano: number }) => {
-      const inicioMes = `${ano}-${String(mes).padStart(2, '0')}-01`;
-      const fimMes = new Date(ano, mes, 0).toISOString().split('T')[0];
-      
-      // Buscar dados
-      const [sinistrosData, associadosData, configData] = await Promise.all([
-        supabase.from('sinistros')
-          .select('valor_indenizacao')
-          .in('status', ['aprovado', 'pago', 'encerrado'])
-          .gte('data_ocorrencia', inicioMes)
-          .lte('data_ocorrencia', fimMes),
-        supabase.from('associados')
-          .select('id')
-          .eq('status', 'ativo'),
-        supabase.from('configuracoes')
-          .select('valor')
-          .eq('chave', 'atuarial_percentual_fundo_reserva')
-          .single()
-      ]);
-      
-      const totalAssociados = associadosData.data?.length || 0;
-      const totalSinistros = sinistrosData.data?.length || 0;
-      const valorSinistros = sinistrosData.data?.reduce((sum, s) => sum + (s.valor_indenizacao || 0), 0) || 0;
-      const percentualFundo = parseFloat(configData.data?.valor || '10');
-      const valorFundo = valorSinistros * (percentualFundo / 100);
-      const valorRateio = totalAssociados > 0 ? (valorSinistros + valorFundo) / totalAssociados : 0;
-      
-      const { data, error } = await supabase
-        .from('rateios')
-        .upsert({
-          mes,
-          ano,
-          total_associados: totalAssociados,
-          total_sinistros: totalSinistros,
-          valor_total_sinistros: valorSinistros,
-          valor_rateio_por_associado: valorRateio,
-          percentual_fundo_reserva: percentualFundo,
-          valor_fundo_reserva: valorFundo,
-          status: 'calculado'
-        }, { onConflict: 'mes,ano' })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      toast.success('Rateio calculado!');
-      queryClient.invalidateQueries({ queryKey: ['rateios'] });
-    },
-    onError: () => {
-      toast.error('Erro ao calcular rateio');
-    }
-  });
+  // (Legacy calcularRateio removed — use FechamentoMensal pipeline)
 
   // Aprovar rateio
   const aprovarRateioMutation = useMutation({
