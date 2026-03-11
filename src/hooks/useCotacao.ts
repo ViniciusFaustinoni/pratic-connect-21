@@ -142,11 +142,16 @@ function encontrarFaixaMensalidade(
   // Resolver tipo_uso para query (regras de adicional app)
   const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiao, mapping.tipo_uso);
 
+  // For eletrico: ignore region (national pricing) and combustivel
+  const isEletrico = mapping.linha_slug === 'eletrico';
+  const regiaoLower = regiao.toLowerCase();
+  const combustivelLower = combustivel.toLowerCase();
+
   const faixa = tabelasMensalidade.find(t =>
     t.linha_slug === mapping.linha_slug &&
-    t.regiao === regiao.toLowerCase() &&
+    (isEletrico || t.regiao === regiaoLower) &&
     t.tipo_uso === tipoUsoQuery &&
-    (t.combustivel_tipo === combustivel.toLowerCase() || t.combustivel_tipo === null) &&
+    (isEletrico || t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
     valorFipe >= t.fipe_min &&
     valorFipe <= t.fipe_max
   );
