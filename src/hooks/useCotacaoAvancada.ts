@@ -81,7 +81,7 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
       const [planosRes, mapRes, mensalidadeRes, configRes, decomRes] = await Promise.all([
         supabase
           .from('planos')
-          .select('id, codigo, nome, categoria, valor_adesao, descricao')
+          .select('id, codigo, nome, categoria, valor_adesao, descricao, adicional_mensal, desconto_percentual')
           .eq('ativo', true)
           .order('ordem', { ascending: true }),
         supabase
