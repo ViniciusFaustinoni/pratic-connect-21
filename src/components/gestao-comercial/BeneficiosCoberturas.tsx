@@ -101,10 +101,10 @@ export function BeneficiosCoberturas() {
         {/* Benefits column */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
               <Gift className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold">Benefícios</h3>
-              <Badge variant="secondary" className="text-xs">Marketing & App</Badge>
+              <h3 className="font-semibold">Benefícios de Marketing</h3>
+              <Badge variant="secondary" className="text-xs">Exibição no App & Site</Badge>
             </div>
             <Button size="sm" onClick={() => { setBeneficioEdit(null); setBeneficioModalOpen(true); }}>
               <Plus className="h-3.5 w-3.5 mr-1" />
