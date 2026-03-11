@@ -150,9 +150,9 @@ export function useCalcularCotacao() {
           valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp);
         }
 
-        // Fallback
+        // Se não encontrou faixa de preço válida, ocultar o plano
         if (valorMensal === 0) {
-          valorMensal = Math.round(params.valor_fipe * taxaFallback / 12);
+          continue;
         }
 
         const valorAdesao = Number(plano.valor_adesao);
