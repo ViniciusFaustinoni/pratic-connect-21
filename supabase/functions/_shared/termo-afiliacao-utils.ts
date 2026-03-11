@@ -58,6 +58,7 @@ export interface PlanoData {
   coberturas?: string[];
   cota_participacao?: number;
   cota_minima?: number;
+  cobertura_fipe?: number;
   carencia?: string;
 }
 
