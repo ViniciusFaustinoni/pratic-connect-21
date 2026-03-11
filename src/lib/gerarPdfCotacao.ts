@@ -154,15 +154,8 @@ const formatPlaca = (placa: string | null | undefined): string => {
   return placa.toUpperCase();
 };
 
-// Coberturas padrão caso o plano não tenha
-const COBERTURAS_PADRAO = [
-  'Proteção contra Roubo e Furto',
-  'Proteção contra Colisão',
-  'Proteção contra Perda Total',
-  'Proteção contra Incêndio',
-  'Assistência 24 horas',
-  'App de Rastreamento',
-];
+// Coberturas carregadas dinamicamente do banco (main_coverages)
+// Fallback removido — se o plano não tiver coberturas, o PDF mostrará lista vazia
 
 // Altura reservada para rodapé
 const FOOTER_HEIGHT = 45;
