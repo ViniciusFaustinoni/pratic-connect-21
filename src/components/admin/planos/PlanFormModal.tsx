@@ -240,6 +240,29 @@ export function PlanFormModal({
     }
   }, [currentPrecoMap]);
 
+  // Sync cotasCategorias from DB when editing
+  useEffect(() => {
+    if (existingCotasCat && existingCotasCat.length > 0) {
+      setCotasCategorias(existingCotasCat.map(c => ({
+        categoria_veiculo: c.categoria_veiculo,
+        cota_percentual: c.cota_percentual?.toString() || '6',
+        cota_minima_valor: c.cota_minima_valor?.toString() || '1200',
+      })));
+    }
+  }, [existingCotasCat]);
+
+  // Keep cotasCategorias in sync with selected categories
+  useEffect(() => {
+    setCotasCategorias(prev => {
+      const result: CotaCategoria[] = [];
+      for (const cat of formData.categorias_veiculo) {
+        const existing = prev.find(c => c.categoria_veiculo === cat);
+        result.push(existing || { categoria_veiculo: cat, cota_percentual: '6', cota_minima_valor: '1200' });
+      }
+      return result;
+    });
+  }, [formData.categorias_veiculo]);
+
   // Auto-generate slug from name
   const handleNameChange = (name: string) => {
     setFormData((prev) => ({
