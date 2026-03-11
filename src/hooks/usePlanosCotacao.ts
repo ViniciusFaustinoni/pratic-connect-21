@@ -255,6 +255,18 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         valorMensal = Math.round(valorFipe * taxaFallback / 12);
       }
 
+      // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
+      valorMensal += Number(plano.adicional_mensal || 0);
+
+      // Aplicar desconto percentual do plano (ex: 5% OFF)
+      const descontoPerc = Number(plano.desconto_percentual || 0);
+      if (descontoPerc > 0) {
+        valorMensal *= (1 - descontoPerc / 100);
+        if (valorDesagio != null) {
+          valorDesagio *= (1 - descontoPerc / 100);
+        }
+      }
+
       // Adesão
       const valorAdesao = Number(plano.valor_adesao);
 
