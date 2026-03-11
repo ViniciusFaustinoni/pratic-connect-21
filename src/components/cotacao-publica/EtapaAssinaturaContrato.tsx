@@ -203,12 +203,12 @@ export function EtapaAssinaturaContrato({
 
       console.log('[EtapaAssinatura] Enviado para Autentique:', data);
 
-      const linkAssinatura = data.link_assinatura || data.autentique_url;
+      const linkAssinatura = data.signatureLink || data.link_assinatura || data.autentique_url;
 
       setContrato(prev => prev ? {
         ...prev,
         linkAssinatura,
-        autentiqueDocumentoId: data.autentique_documento_id,
+        autentiqueDocumentoId: data.documentId || data.autentique_documento_id,
       } : null);
 
       setEtapaInterna('aguardando_assinatura');
