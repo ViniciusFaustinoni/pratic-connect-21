@@ -382,6 +382,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
       setDiaVencimento(null);
+      setSolicitarFipeMenor(false);
+      setJustificativaFipeMenor('');
     }
   }, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
 
