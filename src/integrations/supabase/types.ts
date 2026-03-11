@@ -26219,18 +26219,6 @@ export type Database = {
           total_cotas: number
         }[]
       }
-      fn_calcular_preco_plano: {
-        Args: { p_plano_id: string }
-        Returns: {
-          indicador_geral: string
-          mensalidade: number
-          plano_id: string
-          qtd_beneficios: number
-          soma_beneficios: number
-          valor_adesao: number
-          valor_adicional: number
-        }[]
-      }
       fn_calcular_producao: {
         Args: { p_ano: number; p_mes: number; p_vendedor_id: string }
         Returns: Json

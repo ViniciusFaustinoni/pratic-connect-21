@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS fn_calcular_preco_plano;
