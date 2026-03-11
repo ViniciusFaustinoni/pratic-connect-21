@@ -231,6 +231,7 @@ export function BeneficiosAdicionaisConfig() {
                   <TableHead>Categoria</TableHead>
                   <TableHead>Linhas</TableHead>
                   <TableHead className="text-center">Regiões</TableHead>
+                  <TableHead className="text-center">Associados</TableHead>
                   <TableHead className="text-right">Preço Base</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   {podeEditar && <TableHead className="text-right">Ações</TableHead>}
