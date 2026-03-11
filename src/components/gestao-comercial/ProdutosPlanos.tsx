@@ -595,7 +595,7 @@ export function ProdutosPlanos() {
                           } else if (checked) {
                             // Validate: must have at least coberturas or precos
                             const hasCoberturas = (coberturasPorPlano?.[selectedPlan.id]?.length ?? 0) > 0;
-                            const hasPrecos = !!precoMappings?.[selectedPlan.id]?.length;
+                            const hasPrecos = !!precoMappings?.[selectedPlan.id]?.faixas?.length;
                             if (!hasCoberturas && !hasPrecos) {
                               toast.error('O plano precisa ter coberturas ou preços vinculados antes de ser ativado');
                               return;
