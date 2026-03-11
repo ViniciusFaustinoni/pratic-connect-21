@@ -300,12 +300,23 @@ export default function RateioSinistros() {
         </div>
       </div>
 
-      {/* Alerta se não há rateio */}
+      {/* Alerta se não há rateio nenhum */}
       {!rateioAtual && !isLoading && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            Nenhum rateio calculado para o mês atual. Clique em "Calcular Novo Rateio" para iniciar.
+            Nenhum rateio calculado ainda. Clique em "Calcular Rateio" para iniciar.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Alerta se está mostrando rateio de outro mês */}
+      {rateioAtual && !isCurrentMonth && !isLoading && (
+        <Alert>
+          <History className="h-4 w-4" />
+          <AlertDescription>
+            Não há rateio para o mês atual. Exibindo o último rateio disponível: <strong>{formatMesAno(rateioAtual.mes, rateioAtual.ano)}</strong>.
+            Clique em "Calcular Rateio" para calcular o mês corrente.
           </AlertDescription>
         </Alert>
       )}
