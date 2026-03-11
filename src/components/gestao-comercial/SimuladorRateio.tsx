@@ -112,8 +112,8 @@ export function SimuladorRateio() {
         .select('id, status')
         .eq('mes_referencia', mes)
         .eq('ano_referencia', ano)
-        .maybeSingle();
-      return data;
+        .limit(1);
+      return data?.[0] || null;
     },
   });
 
