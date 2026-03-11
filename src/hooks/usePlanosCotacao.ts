@@ -249,10 +249,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp);
       }
 
-      // Fallback: se não encontrou na nova tabela, usar taxa fallback
+      // Se não encontrou faixa de preço válida, ocultar o plano
       if (valorMensal === 0) {
-        const taxaFallback = tipoVeiculo === 'moto' ? taxaFallbackMoto : taxaFallbackCarro;
-        valorMensal = Math.round(valorFipe * taxaFallback / 12);
+        continue;
       }
 
       // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
