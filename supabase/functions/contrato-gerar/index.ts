@@ -555,7 +555,7 @@ serve(async (req) => {
             // Campos para Termo de Afiliação (Autentique)
             codigo_fipe: cotacao.codigo_fipe || null,
             uso_aplicativo: cotacao.uso_aplicativo || false,
-            veiculo_categoria: cotacao.categoria || cotacao.veiculo_categoria || 'Automóvel',
+            veiculo_categoria: cotacao.veiculo_categoria || detectarCategoriaVeiculo(cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.categoria),
             
             // Dados obrigatórios para SGA Hinova e Termo de Afiliação (extraídos do CRLV via OCR)
             veiculo_chassi: cotacao.veiculo_chassi || null,
