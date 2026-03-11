@@ -678,10 +678,10 @@ export default function ProdutoDetalhe() {
         faixa={faixaEdit}
       />
 
-      <ProdutoFormModal
+      <PlanFormModal
         open={modalProdutoOpen}
-        onClose={() => setModalProdutoOpen(false)}
-        produto={plano}
+        onOpenChange={(open) => { if (!open) setModalProdutoOpen(false); }}
+        plan={planWithDetails || null}
       />
 
       {/* Dialog de confirmação de exclusão */}
