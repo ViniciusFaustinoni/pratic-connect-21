@@ -194,6 +194,7 @@ export function PlanFormModal({
         coverage_type: '',
         min_vehicle_year: '',
         additional_price: '',
+        desconto_percentual: '',
         cota_passeio_percent: '',
         cota_passeio_min: '',
         cota_desagio_percent: '',
