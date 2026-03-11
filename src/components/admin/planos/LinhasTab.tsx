@@ -40,6 +40,7 @@ export function LinhasTab() {
 
   const deleteLine = useDeleteProductLine();
   const updateLine = useUpdateProductLine();
+  const duplicateLine = useDuplicateProductLine();
 
   const handleNewLine = () => {
     setEditingLine(null);
