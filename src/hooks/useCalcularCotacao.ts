@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 
 // ============================================
 // TIPOS
