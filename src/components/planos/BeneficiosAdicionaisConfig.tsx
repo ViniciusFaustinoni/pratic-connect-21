@@ -33,7 +33,23 @@ export function BeneficiosAdicionaisConfig() {
   const updateBeneficio = useUpdateBeneficio();
   const deleteBeneficio = useDeleteBeneficio();
   const toggleStatus = useToggleBeneficioStatus();
-  
+
+  // Count active associates per benefit
+  const { data: associadosCounts } = useQuery({
+    queryKey: ['associados-por-beneficio-adicional'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('associados_beneficios_adicionais')
+        .select('beneficio_adicional_id')
+        .eq('ativo', true);
+      const counts: Record<string, number> = {};
+      data?.forEach(a => {
+        counts[a.beneficio_adicional_id] = (counts[a.beneficio_adicional_id] || 0) + 1;
+      });
+      return counts;
+    },
+  });
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingBeneficio, setEditingBeneficio] = useState<BeneficioComRegioes | null>(null);
