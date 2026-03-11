@@ -1149,6 +1149,74 @@ export type Database = {
         }
         Relationships: []
       }
+      aprovacoes_fipe_menor: {
+        Row: {
+          cotacao_id: string
+          created_at: string
+          fipe_faixa_original_max: number
+          fipe_faixa_original_min: number
+          fipe_faixa_solicitada_max: number
+          fipe_faixa_solicitada_min: number
+          fipe_real: number
+          id: string
+          justificativa: string
+          observacao_supervisor: string | null
+          respondido_em: string | null
+          solicitante_id: string
+          status: string
+          supervisor_id: string | null
+          updated_at: string
+          valor_mensal_original: number
+          valor_mensal_reduzido: number
+        }
+        Insert: {
+          cotacao_id: string
+          created_at?: string
+          fipe_faixa_original_max: number
+          fipe_faixa_original_min: number
+          fipe_faixa_solicitada_max: number
+          fipe_faixa_solicitada_min: number
+          fipe_real: number
+          id?: string
+          justificativa: string
+          observacao_supervisor?: string | null
+          respondido_em?: string | null
+          solicitante_id: string
+          status?: string
+          supervisor_id?: string | null
+          updated_at?: string
+          valor_mensal_original: number
+          valor_mensal_reduzido: number
+        }
+        Update: {
+          cotacao_id?: string
+          created_at?: string
+          fipe_faixa_original_max?: number
+          fipe_faixa_original_min?: number
+          fipe_faixa_solicitada_max?: number
+          fipe_faixa_solicitada_min?: number
+          fipe_real?: number
+          id?: string
+          justificativa?: string
+          observacao_supervisor?: string | null
+          respondido_em?: string | null
+          solicitante_id?: string
+          status?: string
+          supervisor_id?: string | null
+          updated_at?: string
+          valor_mensal_original?: number
+          valor_mensal_reduzido?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aprovacoes_fipe_menor_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asaas_clientes: {
         Row: {
           asaas_id: string
@@ -8069,6 +8137,9 @@ export type Database = {
           doc_selfie: string | null
           email_enviado_em: string | null
           email_solicitante: string | null
+          fipe_faixa_cobranca_max: number | null
+          fipe_faixa_cobranca_min: number | null
+          fipe_menor_aprovado: boolean | null
           id: string
           lead_id: string | null
           meses_desconto_campanha: number | null
@@ -8078,6 +8149,7 @@ export type Database = {
           plano_escolhido_id: string | null
           plano_id: string | null
           regiao: string | null
+          solicitar_fipe_menor: boolean
           status: Database["public"]["Enums"]["status_cotacao"]
           status_contratacao: string | null
           taxa_administrativa: number
@@ -8182,6 +8254,9 @@ export type Database = {
           doc_selfie?: string | null
           email_enviado_em?: string | null
           email_solicitante?: string | null
+          fipe_faixa_cobranca_max?: number | null
+          fipe_faixa_cobranca_min?: number | null
+          fipe_menor_aprovado?: boolean | null
           id?: string
           lead_id?: string | null
           meses_desconto_campanha?: number | null
@@ -8191,6 +8266,7 @@ export type Database = {
           plano_escolhido_id?: string | null
           plano_id?: string | null
           regiao?: string | null
+          solicitar_fipe_menor?: boolean
           status?: Database["public"]["Enums"]["status_cotacao"]
           status_contratacao?: string | null
           taxa_administrativa?: number
@@ -8295,6 +8371,9 @@ export type Database = {
           doc_selfie?: string | null
           email_enviado_em?: string | null
           email_solicitante?: string | null
+          fipe_faixa_cobranca_max?: number | null
+          fipe_faixa_cobranca_min?: number | null
+          fipe_menor_aprovado?: boolean | null
           id?: string
           lead_id?: string | null
           meses_desconto_campanha?: number | null
@@ -8304,6 +8383,7 @@ export type Database = {
           plano_escolhido_id?: string | null
           plano_id?: string | null
           regiao?: string | null
+          solicitar_fipe_menor?: boolean
           status?: Database["public"]["Enums"]["status_cotacao"]
           status_contratacao?: string | null
           taxa_administrativa?: number
