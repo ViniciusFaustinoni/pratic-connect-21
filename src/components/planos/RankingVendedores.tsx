@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trophy, Users, Medal } from 'lucide-react';
+import { Trophy, Users, Medal, FileText } from 'lucide-react';
 import { useRankingVendedores, type PeriodoRanking, type TipoVendedor } from '@/hooks/useRankingVendedores';
 import { usePermissions } from '@/hooks/usePermissions';
 import { cn } from '@/lib/utils';
@@ -67,10 +67,8 @@ export function RankingVendedores() {
   
   const { isDiretor, isGerente, isSupervisor, isDesenvolvedor, isAdminMaster, isVendedorClt, isVendedorExterno } = usePermissions();
   
-  // Gestores podem ver todos e filtrar, vendedores veem apenas seu tipo
   const isGestor = isDiretor || isGerente || isSupervisor || isDesenvolvedor || isAdminMaster;
   
-  // Se é vendedor, definir o filtro automaticamente pelo seu tipo
   const tipoEfetivo: TipoVendedor = isGestor 
     ? tipoFiltro 
     : (isVendedorClt ? 'interno' : isVendedorExterno ? 'externo' : 'todos');
@@ -89,7 +87,7 @@ export function RankingVendedores() {
     );
   }
 
-  const maxVendas = data?.ranking?.[0]?.totalVendas || 1;
+  const maxVendas = data?.ranking?.[0]?.totalVendas || data?.ranking?.[0]?.cotacoesCriadas || 1;
 
   return (
     <div className="space-y-6">
@@ -112,7 +110,6 @@ export function RankingVendedores() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {/* Filtro de tipo - só para gestores */}
               {isGestor && (
                 <Select value={tipoFiltro} onValueChange={(v) => setTipoFiltro(v as TipoVendedor)}>
                   <SelectTrigger className="w-[140px]">
@@ -153,13 +150,14 @@ export function RankingVendedores() {
             <div className="text-center py-12">
               <Medal className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">
-                Nenhuma venda encontrada no período selecionado.
+                Nenhuma atividade encontrada no período selecionado.
               </p>
             </div>
           ) : (
             <div className="space-y-3">
               {data.ranking.map((vendedor) => {
-                const percentual = (vendedor.totalVendas / maxVendas) * 100;
+                const metricaPrincipal = vendedor.totalVendas || vendedor.cotacoesCriadas;
+                const percentual = (metricaPrincipal / maxVendas) * 100;
                 
                 return (
                   <div
@@ -169,16 +167,13 @@ export function RankingVendedores() {
                       vendedor.posicao <= 3 ? 'bg-muted/50' : 'bg-background hover:bg-muted/30'
                     )}
                   >
-                    {/* Posição */}
                     <div className="flex-shrink-0">{getMedalIcon(vendedor.posicao)}</div>
 
-                    {/* Avatar */}
                     <Avatar className="h-10 w-10 flex-shrink-0">
                       <AvatarImage src={vendedor.avatarUrl || undefined} alt={vendedor.vendedorNome} />
                       <AvatarFallback>{getInitials(vendedor.vendedorNome)}</AvatarFallback>
                     </Avatar>
 
-                    {/* Informações */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold truncate">{vendedor.vendedorNome}</span>
@@ -193,17 +188,24 @@ export function RankingVendedores() {
                         >
                           {vendedor.tipoVendedor === 'interno' ? 'Interno' : 'Externo'}
                         </Badge>
-                        <Badge variant="secondary" className="text-xs shrink-0">
-                          {vendedor.totalVendas} vendas
-                        </Badge>
+                        {vendedor.totalVendas > 0 && (
+                          <Badge variant="secondary" className="text-xs shrink-0 bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">
+                            {vendedor.totalVendas} {vendedor.totalVendas === 1 ? 'contrato' : 'contratos'}
+                          </Badge>
+                        )}
+                        {vendedor.cotacoesCriadas > 0 && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            <FileText className="h-3 w-3 mr-1" />
+                            {vendedor.cotacoesCriadas} cotações
+                          </Badge>
+                        )}
                       </div>
 
-                      {/* Barra de progresso */}
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                           <div
                             className={cn('h-full rounded-full transition-all', getBarColor(vendedor.posicao))}
-                            style={{ width: `${percentual}%` }}
+                            style={{ width: `${Math.min(percentual, 100)}%` }}
                           />
                         </div>
                         <span className="text-xs text-muted-foreground w-12 text-right">
@@ -211,11 +213,15 @@ export function RankingVendedores() {
                         </span>
                       </div>
 
-                      {/* Detalhes */}
                       <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
-                        <span>Valor: {formatCurrency(vendedor.valorTotal)}</span>
-                        <span>Ticket: {formatCurrency(vendedor.ticketMedio)}</span>
-                        <span>Conversão: {vendedor.taxaConversao.toFixed(1)}%</span>
+                        {vendedor.valorTotal > 0 && <span>Valor: {formatCurrency(vendedor.valorTotal)}</span>}
+                        {vendedor.ticketMedio > 0 && <span>Ticket: {formatCurrency(vendedor.ticketMedio)}</span>}
+                        {vendedor.cotacoesCriadas > 0 && (
+                          <span>Conversão: {vendedor.taxaConversao.toFixed(1)}%</span>
+                        )}
+                        {vendedor.cotacoesAceitas > 0 && (
+                          <span className="text-green-600">✓ {vendedor.cotacoesAceitas} aceitas</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -228,12 +234,12 @@ export function RankingVendedores() {
 
       {/* Resumo */}
       {data && data.ranking.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-4">
           <Card>
             <CardContent className="p-4">
               <div className="text-center">
                 <p className="text-2xl font-bold text-primary">{data.total}</p>
-                <p className="text-xs text-muted-foreground">Total de Vendas</p>
+                <p className="text-xs text-muted-foreground">Contratos</p>
               </div>
             </CardContent>
           </Card>
@@ -242,6 +248,14 @@ export function RankingVendedores() {
               <div className="text-center">
                 <p className="text-2xl font-bold text-green-600">{formatCurrency(data.totalValor)}</p>
                 <p className="text-xs text-muted-foreground">Valor Total</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-orange-600">{data.totalCotacoes}</p>
+                <p className="text-xs text-muted-foreground">Cotações no Período</p>
               </div>
             </CardContent>
           </Card>

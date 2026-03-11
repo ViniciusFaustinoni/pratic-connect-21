@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRegioes, useCreateRegiao, useUpdateRegiao, useDeleteRegiao, useToggleRegiaoStatus, Regiao, RegiaoInput } from '@/hooks/useRegioes';
 import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,15 +13,49 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, MapPin, Loader2, X, Search, Building2, ShieldCheck } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Plus, Edit, Trash2, MapPin, Loader2, X, Search, Building2, ShieldCheck, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+
+// Map region codes to slugs used in tabelas_preco_mensalidade
+const REGION_CODE_TO_SLUG: Record<string, string> = {
+  'RJ': 'rj',
+  'LAGOS': 'lagos',
+  'SP': 'sp',
+};
+
+function useRegionPriceCounts() {
+  return useQuery({
+    queryKey: ['region-price-counts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tabelas_preco_mensalidade')
+        .select('regiao, linha_slug')
+        .eq('is_active', true);
+
+      if (error) throw error;
+
+      // Group by region -> set of linha_slugs + count
+      const map: Record<string, { total: number; linhas: Set<string> }> = {};
+      data?.forEach((row) => {
+        if (!map[row.regiao]) map[row.regiao] = { total: 0, linhas: new Set() };
+        map[row.regiao].total++;
+        if (row.linha_slug) map[row.regiao].linhas.add(row.linha_slug);
+      });
+
+      return map;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
 
 export function RegioesConfig() {
   const { isDiretor, isDesenvolvedor } = usePermissions();
   const podeEditar = isDiretor || isDesenvolvedor;
   
   const { data: regioes, isLoading } = useRegioes();
+  const { data: priceCounts } = useRegionPriceCounts();
   const createRegiao = useCreateRegiao();
   const updateRegiao = useUpdateRegiao();
   const deleteRegiao = useDeleteRegiao();
@@ -189,6 +225,7 @@ export function RegioesConfig() {
                   <TableHead>Código</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead className="text-center">Cidades</TableHead>
+                  <TableHead className="text-center">Faixas de Preço</TableHead>
                   <TableHead className="text-center">Multiplicador</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   {podeEditar && <TableHead className="text-right">Ações</TableHead>}
@@ -197,7 +234,7 @@ export function RegioesConfig() {
               <TableBody>
                 {filteredRegioes?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={podeEditar ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={podeEditar ? 7 : 6} className="text-center py-8 text-muted-foreground">
                       Nenhuma região encontrada
                     </TableCell>
                   </TableRow>
@@ -224,6 +261,34 @@ export function RegioesConfig() {
                           <Building2 className="h-3 w-3 mr-1" />
                           {regiao.cidades?.length || 0}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {(() => {
+                          const slug = REGION_CODE_TO_SLUG[regiao.codigo] || regiao.codigo.toLowerCase();
+                          const info = priceCounts?.[slug];
+                          if (!info) return <span className="text-muted-foreground text-xs">—</span>;
+                          const linhasArr = Array.from(info.linhas);
+                          return (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="secondary" className="cursor-help">
+                                    <BarChart3 className="h-3 w-3 mr-1" />
+                                    {info.total} faixas
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="max-w-xs">
+                                  <p className="font-medium mb-1">Linhas de produto:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {linhasArr.map((l) => (
+                                      <Badge key={l} variant="outline" className="text-xs capitalize">{l}</Badge>
+                                    ))}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-center">
                         <span className={cn(
