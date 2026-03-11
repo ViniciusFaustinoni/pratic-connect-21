@@ -92,10 +92,15 @@ export function useCalcularCotacao() {
       for (const plano of planosBanco) {
         const tipoUsoPlano = plano.tipo_uso?.toLowerCase() || '';
         const categoriaPlano = plano.categoria?.toLowerCase() || '';
+        const linhaPlano = plano.linha?.toLowerCase() || '';
         const isPlanoAplicativo = tipoUsoPlano === 'aplicativo' || categoriaPlano === 'aplicativo';
+        const isMotoLine = linhaPlano === 'advanced' || categoriaPlano === 'advanced';
 
-        if (params.tipo_uso === 'aplicativo' && !isPlanoAplicativo) continue;
-        if (params.tipo_uso === 'particular' && isPlanoAplicativo) continue;
+        // Skip app/particular mismatch (but not for moto lines which don't distinguish)
+        if (!isMotoLine) {
+          if (params.tipo_uso === 'aplicativo' && !isPlanoAplicativo) continue;
+          if (params.tipo_uso === 'particular' && isPlanoAplicativo) continue;
+        }
 
         if (plano.fipe_minima && params.valor_fipe < Number(plano.fipe_minima)) continue;
         if (plano.fipe_maxima && params.valor_fipe > Number(plano.fipe_maxima)) continue;

@@ -191,9 +191,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (params.usoApp === true && !isPlanoAplicativo) continue;
       if (params.usoApp === false && isPlanoAplicativo) continue;
 
-      // Filtrar motos/carros usando vehicle_type do banco
-      if (tipoVeiculo === 'moto' && vehicleType === 'car') continue;
-      if (tipoVeiculo === 'carro' && vehicleType === 'motorcycle') continue;
+      // Filtrar motos/carros/elétricos usando vehicle_type e linha_slug do banco
+      const plSlug = plProductLine?.slug?.toLowerCase() || '';
+      if (tipoVeiculo === 'moto' && vehicleType !== 'motorcycle') continue;
+      if (tipoVeiculo === 'carro' && (vehicleType === 'motorcycle' || plSlug === 'eletrico')) continue;
 
       // Verificar ano mínimo
       const anoMinimo = plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0;
@@ -226,11 +227,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       let valorDesagio: number | null = null;
 
       if (linhaSlug && tabelasMensalidade) {
+        // For eletrico line: ignore region (national pricing) and combustivel
+        const isEletrico = linhaSlug === 'eletrico';
         const faixa = tabelasMensalidade.find(t =>
           t.linha_slug === linhaSlug &&
-          t.regiao === regiaoLower &&
+          (isEletrico || t.regiao === regiaoLower) &&
           t.tipo_uso === tipoUsoPricing &&
-          (t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
+          (isEletrico || t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
           valorFipe >= t.fipe_min &&
           valorFipe <= t.fipe_max
         );

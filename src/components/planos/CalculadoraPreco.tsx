@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { maskPlaca } from '@/lib/validations';
 
 interface ResultadoLinha {
+  key: string; // unique key: linha_slug or linha_slug+tipo_uso
   linha: string;
   linhaLabel: string;
   valorMensal: number;
@@ -191,8 +192,18 @@ export function CalculadoraPreco() {
       return;
     }
 
-    // Get unique linha_slugs
-    const linhasSlugs = [...new Set(tabelas.map(t => t.linha_slug).filter(Boolean))] as string[];
+    // Get unique linha_slug + tipo_uso pairs for iteration
+    // This is critical for motos where advanced has both 'advanced' and 'advanced-plus' tipo_uso
+    const pairsSet = new Set<string>();
+    const pairs: { linhaSlug: string; tipoUso: string }[] = [];
+    for (const t of tabelas) {
+      if (!t.linha_slug || !t.tipo_uso) continue;
+      const key = `${t.linha_slug}|${t.tipo_uso}`;
+      if (!pairsSet.has(key)) {
+        pairsSet.add(key);
+        pairs.push({ linhaSlug: t.linha_slug, tipoUso: t.tipo_uso });
+      }
+    }
 
     // Normalize combustivel for pricing filter
     const combustivelPricing = combustivelDetectado
@@ -201,12 +212,25 @@ export function CalculadoraPreco() {
 
     const linhas: ResultadoLinha[] = [];
 
-    for (const linhaSlug of linhasSlugs) {
+    for (const pair of pairs) {
+      const { linhaSlug, tipoUso: tipoUsoDB } = pair;
+
       // Filter by vehicle type
       if (!linhaMatchesTipo(linhaSlug)) continue;
 
-      // Determine which tipo_uso to query
-      const tipoUsoPricing = resolverTipoUsoQuery(linhaSlug, regiao, tipoUso);
+      // Determine which tipo_uso to use for this pair
+      // For motos: tipo_uso in DB is 'advanced' or 'advanced-plus' — use directly
+      // For cars: resolve via resolverTipoUsoQuery based on user selection
+      const tipoUsoPricing = resolverTipoUsoQuery(linhaSlug, regiao, tipoUsoDB);
+
+      // Skip pairs that don't match user's selected tipo_uso (particular/aplicativo)
+      // For motos (advanced/advanced-plus): always show both variants regardless of uso selection
+      const isMotoLine = tipoUsoDB === 'advanced' || tipoUsoDB === 'advanced-plus';
+      if (!isMotoLine) {
+        // For car lines: the resolved tipo_uso must match what user selected
+        const expectedTipoUso = resolverTipoUsoQuery(linhaSlug, regiao, tipoUso);
+        if (tipoUsoPricing !== expectedTipoUso) continue;
+      }
 
       // For eletrico: ignore region (national pricing)
       const regiaoQuery = tipoVeiculo === 'eletrico' ? undefined : regiao;
@@ -217,7 +241,6 @@ export function CalculadoraPreco() {
         if (regiaoQuery && t.regiao !== regiaoQuery) return false;
         if (t.tipo_uso !== tipoUsoPricing) return false;
         if (valor < Number(t.fipe_min) || valor > Number(t.fipe_max)) return false;
-        // If we know combustivel, filter by it (null in table = matches all)
         if (combustivelPricing && t.combustivel_tipo && t.combustivel_tipo !== combustivelPricing) return false;
         return true;
       });
@@ -226,14 +249,24 @@ export function CalculadoraPreco() {
 
       let valorMensal = Number(faixa.valor_mensal);
 
-      // Apply app surcharge if needed
-      if (tipoUso === 'aplicativo') {
+      // Apply app surcharge if needed (not for moto lines)
+      if (!isMotoLine && tipoUso === 'aplicativo') {
         valorMensal = resolverPrecoApp(linhaSlug, regiao, tipoUso, valorMensal, adicionalApp);
       }
 
+      // Build unique key and label
+      const resultKey = isMotoLine ? `${linhaSlug}|${tipoUsoDB}` : linhaSlug;
+      const label = isMotoLine
+        ? (LINHA_LABELS[tipoUsoDB] || LINHA_LABELS[linhaSlug] || linhaSlug)
+        : (LINHA_LABELS[linhaSlug] || linhaSlug);
+
+      // Avoid duplicates
+      if (linhas.some(l => l.key === resultKey)) continue;
+
       linhas.push({
+        key: resultKey,
         linha: linhaSlug,
-        linhaLabel: LINHA_LABELS[linhaSlug] || linhaSlug,
+        linhaLabel: label,
         valorMensal: Math.round(valorMensal * 100) / 100,
         valorDesagio: faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null,
       });
@@ -472,7 +505,7 @@ export function CalculadoraPreco() {
               <div className="space-y-2">
                 {resultado.linhas.map((linha) => (
                   <div
-                    key={linha.linha}
+                    key={linha.key}
                     className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/10"
                   >
                     <span className="text-sm font-medium">{linha.linhaLabel}</span>
