@@ -8506,6 +8506,7 @@ export type Database = {
           rastreador_agendado_para: string | null
           rastreador_id: string | null
           rastreador_instalado_em: string | null
+          regiao: string | null
           selfie_ok_em: string | null
           status: string | null
           termos_aceitos: boolean | null
@@ -8571,6 +8572,7 @@ export type Database = {
           rastreador_agendado_para?: string | null
           rastreador_id?: string | null
           rastreador_instalado_em?: string | null
+          regiao?: string | null
           selfie_ok_em?: string | null
           status?: string | null
           termos_aceitos?: boolean | null
@@ -8636,6 +8638,7 @@ export type Database = {
           rastreador_agendado_para?: string | null
           rastreador_id?: string | null
           rastreador_instalado_em?: string | null
+          regiao?: string | null
           selfie_ok_em?: string | null
           status?: string | null
           termos_aceitos?: boolean | null
