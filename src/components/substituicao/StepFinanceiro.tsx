@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { Loader2, Receipt, ArrowLeftRight, Calculator, Shield, CheckCircle2, AlertTriangle, CreditCard, QrCode, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
