@@ -161,10 +161,13 @@ function encontrarFaixaMensalidade(
   if (!faixa) return null;
 
   // Aplicar adicional app se necessário
-  const valorMensalFinal = resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp);
+  let valorMensalFinal = resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp);
+
+  // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
+  valorMensalFinal += adicionalMensal;
 
   return {
-    valorMensal: valorMensalFinal,
+    valorMensal: Math.round(valorMensalFinal * 100) / 100,
     valorDesagio: faixa.valor_desagio,
   };
 }

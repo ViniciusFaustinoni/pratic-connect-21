@@ -60,6 +60,7 @@ export interface PlanoParaCotacao {
   fipe_maximo: number | null;
   valor_adesao: number;
   coberturas: string[];
+  adicional_mensal: number;
   ativo: boolean;
   created_at: string;
 }
