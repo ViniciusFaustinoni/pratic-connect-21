@@ -14,9 +14,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, Car, Bike } from 'lucide-react';
+import { Plus, Edit, Trash2, Car, Bike, Copy } from 'lucide-react';
 import { useProductLines, usePlans } from '@/hooks/usePlans';
-import { useDeleteProductLine, useUpdateProductLine } from '@/hooks/usePlansAdmin';
+import { useDeleteProductLine, useUpdateProductLine, useDuplicateProductLine } from '@/hooks/usePlansAdmin';
 import { LinhaFormModal } from './LinhaFormModal';
 import type { ProductLine } from '@/types/plans';
 
@@ -40,6 +40,7 @@ export function LinhasTab() {
 
   const deleteLine = useDeleteProductLine();
   const updateLine = useUpdateProductLine();
+  const duplicateLine = useDuplicateProductLine();
 
   const handleNewLine = () => {
     setEditingLine(null);
@@ -159,6 +160,15 @@ export function LinhasTab() {
                     >
                       <Edit className="h-4 w-4 mr-1" />
                       Editar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => duplicateLine.mutate(line.id)}
+                      disabled={duplicateLine.isPending}
+                    >
+                      <Copy className="h-4 w-4 mr-1" />
+                      Duplicar
                     </Button>
                     <Button
                       size="sm"

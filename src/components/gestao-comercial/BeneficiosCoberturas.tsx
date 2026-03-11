@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Gift, Shield, Plus, Edit, Trash2 } from 'lucide-react';
+import { Gift, Shield, Plus, Edit, Trash2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useBenefits, useMainCoverages, usePlans } from '@/hooks/usePlans';
-import { useDeleteBenefit, useDeleteMainCoverage } from '@/hooks/usePlansAdmin';
+import { useDeleteBenefit, useDeleteMainCoverage, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { BeneficioFormModal } from '@/components/admin/planos/BeneficioFormModal';
@@ -40,6 +40,7 @@ export function BeneficiosCoberturas() {
   const { data: plans } = usePlans();
   const deleteBenefit = useDeleteBenefit();
   const deleteCoverage = useDeleteMainCoverage();
+  const duplicateBenefit = useDuplicateBenefit();
 
   // Fetch benefit-plan associations
   const { data: benefitPlans } = useQuery({
@@ -134,6 +135,16 @@ export function BeneficiosCoberturas() {
                         onClick={() => { setBeneficioEdit(benefit); setBeneficioModalOpen(true); }}
                       >
                         <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Duplicar"
+                        onClick={() => duplicateBenefit.mutate(benefit.id)}
+                        disabled={duplicateBenefit.isPending}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         variant="ghost"

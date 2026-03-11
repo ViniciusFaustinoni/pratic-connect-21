@@ -15,6 +15,7 @@ export interface PlanoUnificado {
   ordem: number | null;
   valor_adesao: number;
   ativo: boolean;
+  gradient_class?: string | null;
 }
 
 export function usePlanosUnificados() {
@@ -23,12 +24,17 @@ export function usePlanosUnificados() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('planos')
-        .select('id, codigo, nome, descricao, coberturas, cobertura_fipe, ano_minimo, destaque, linha, ordem, valor_adesao, ativo')
+        .select('id, codigo, nome, descricao, coberturas, cobertura_fipe, ano_minimo, destaque, linha, ordem, valor_adesao, ativo, product_lines:product_line_id (gradient_class)')
         .eq('ativo', true)
         .order('ordem', { ascending: true, nullsFirst: false });
       
       if (error) throw error;
-      return data as PlanoUnificado[];
+      // Flatten gradient_class from joined product_lines
+      return (data || []).map((p: any) => ({
+        ...p,
+        gradient_class: p.product_lines?.gradient_class || null,
+        product_lines: undefined,
+      })) as PlanoUnificado[];
     },
   });
 }

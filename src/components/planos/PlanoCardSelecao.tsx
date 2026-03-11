@@ -15,6 +15,7 @@ interface PlanoData {
   destaque?: boolean | null;
   linha?: string | null;
   categoriaVeiculo?: string;
+  gradient_class?: string | null;
 }
 
 interface PlanoCardSelecaoProps {
@@ -27,15 +28,8 @@ interface PlanoCardSelecaoProps {
   categoriaVeiculo?: string;
 }
 
-// Fallback de cores para linhas sem gradient_class no banco
-const LINHA_CORES_FALLBACK: Record<string, string> = {
-  'select': 'from-blue-500 to-blue-600',
-  'select-one': 'from-emerald-500 to-green-600',
-  'especial': 'from-orange-500 to-amber-600',
-  'lancamento': 'from-violet-500 to-purple-600',
-  'advanced': 'from-red-500 to-rose-600',
-  'eletricos': 'from-teal-500 to-cyan-600',
-};
+// Gradient padrão quando product_line não tem gradient_class definido
+const DEFAULT_GRADIENT = 'from-primary to-primary/80';
 
 export function PlanoCardSelecao({ 
   plano, 
@@ -53,7 +47,7 @@ export function PlanoCardSelecao({
     }).format(value);
   };
 
-  const gradientClass = plano.linha ? LINHA_CORES_FALLBACK[plano.linha] || 'from-gray-500 to-gray-600' : 'from-primary to-primary/80';
+  const gradientClass = plano.gradient_class || DEFAULT_GRADIENT;
   const coberturasToShow = compact ? (plano.coberturas?.slice(0, 4) || []) : (plano.coberturas || []);
 
   return (
