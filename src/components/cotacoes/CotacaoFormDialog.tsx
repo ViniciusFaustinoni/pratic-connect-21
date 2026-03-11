@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
@@ -1445,74 +1446,40 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   <div className="grid grid-cols-3 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Marca</Label>
-                      <Select 
-                        value={marcaSelecionada} 
+                      <SearchableSelect
+                        options={marcas.map((m) => ({ value: m.codigo, label: m.nome }))}
+                        value={marcaSelecionada}
                         onValueChange={handleMarcaChange}
-                        disabled={loadingMarcas}
-                      >
-                        <SelectTrigger className="h-9">
-                          {loadingMarcas ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <SelectValue placeholder="Marca" />
-                          )}
-                        </SelectTrigger>
-                        <SelectContent>
-                          {marcas.map((marca) => (
-                            <SelectItem key={marca.codigo} value={marca.codigo}>
-                              {marca.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Marca"
+                        searchPlaceholder="Buscar marca..."
+                        loading={loadingMarcas}
+                      />
                     </div>
 
                     <div className="space-y-1">
                       <Label className="text-xs">Modelo</Label>
-                      <Select 
-                        value={modeloSelecionado} 
+                      <SearchableSelect
+                        options={modelos.map((m) => ({ value: m.codigo.toString(), label: m.nome }))}
+                        value={modeloSelecionado}
                         onValueChange={handleModeloChange}
-                        disabled={!marcaSelecionada || loadingModelos}
-                      >
-                        <SelectTrigger className="h-9">
-                          {loadingModelos ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <SelectValue placeholder="Modelo" />
-                          )}
-                        </SelectTrigger>
-                        <SelectContent>
-                          {modelos.map((modelo) => (
-                            <SelectItem key={modelo.codigo} value={modelo.codigo.toString()}>
-                              {modelo.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Modelo"
+                        searchPlaceholder="Buscar modelo..."
+                        disabled={!marcaSelecionada}
+                        loading={loadingModelos}
+                      />
                     </div>
 
                     <div className="space-y-1">
                       <Label className="text-xs">Ano</Label>
-                      <Select 
-                        value={anoSelecionado} 
+                      <SearchableSelect
+                        options={anos.map((a) => ({ value: a.codigo, label: a.nome }))}
+                        value={anoSelecionado}
                         onValueChange={setAnoSelecionado}
-                        disabled={!modeloSelecionado || loadingAnos}
-                      >
-                        <SelectTrigger className="h-9">
-                          {loadingAnos ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <SelectValue placeholder="Ano" />
-                          )}
-                        </SelectTrigger>
-                        <SelectContent>
-                          {anos.map((ano) => (
-                            <SelectItem key={ano.codigo} value={ano.codigo}>
-                              {ano.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Ano"
+                        searchPlaceholder="Buscar ano..."
+                        disabled={!modeloSelecionado}
+                        loading={loadingAnos}
+                      />
                     </div>
                   </div>
                 </>
