@@ -98,6 +98,7 @@ import { useModuleItemVisibility, MENU_ITEM_IDS } from '@/hooks/useModuleItemVis
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAppRoles } from '@/hooks/useAppRoles';
+import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 
 // Mapeamento de cores por grupo/item
 const MENU_COLORS: Record<string, string> = {
