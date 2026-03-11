@@ -99,11 +99,17 @@ export function StepFinanceiro({
   // Cálculos financeiros
   // =============================================
 
-  // Mensalidade base (0.45% FIPE — simplificado)
-  const mensalidadeBaseAntiga = veiculoAntigo.mensalidade || (veiculoAntigo.valor_fipe * 0.0045);
-  const mensalidadeBaseNova = dadosNovoVeiculo.valor_fipe
-    ? (mensalidadeManual ? parseFloat(mensalidadeManual) : dadosNovoVeiculo.valor_fipe * 0.0045)
-    : 0;
+  // Mensalidade base — valor real de tabelas_preco_mensalidade
+  const mensalidadeBaseAntiga = veiculoAntigo.mensalidade || 0;
+
+  const mensalidadeBaseNova = useMemo(() => {
+    if (mensalidadeManual) return parseFloat(mensalidadeManual) || 0;
+    if (resultadoCotacao?.planos?.length) {
+      const plano = resultadoCotacao.planos.find(p => p.destaque) || resultadoCotacao.planos[0];
+      return plano.valor_mensal;
+    }
+    return 0;
+  }, [resultadoCotacao, mensalidadeManual]);
 
   // Adicionais antigos
   const adicionaisAntigo = useMemo(() => {
