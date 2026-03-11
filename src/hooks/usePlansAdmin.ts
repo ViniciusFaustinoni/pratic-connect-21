@@ -136,7 +136,7 @@ export function useUpdatePlan() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: PlanInput & { id: string }) => {
-      const { benefits, ...planData } = input;
+      const { benefits, linha_slug, categorias_veiculo, ...planData } = input;
 
       // Mapear para campos da tabela planos
       const planoData = {
