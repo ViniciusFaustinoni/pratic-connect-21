@@ -78,6 +78,36 @@ export function PlanFormModal({
   const updatePlan = useUpdatePlan();
   const updateExclusions = useUpdateBenefitExclusions();
 
+  // Fetch available linha_slugs from price tables
+  const { data: availableLinhaSlugs } = useQuery({
+    queryKey: ['available-linha-slugs'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('tabelas_preco_mensalidade')
+        .select('linha_slug')
+        .eq('is_active', true);
+      const slugs = new Set<string>();
+      data?.forEach(d => { if (d.linha_slug) slugs.add(d.linha_slug); });
+      return Array.from(slugs).sort();
+    },
+    enabled: open,
+  });
+
+  // Fetch current plano_preco_map for editing
+  const { data: currentPrecoMap } = useQuery({
+    queryKey: ['plano-preco-map', plan?.id],
+    queryFn: async () => {
+      if (!plan?.id) return null;
+      const { data } = await supabase
+        .from('plano_preco_map')
+        .select('linha_slug')
+        .eq('plano_id', plan.id)
+        .single();
+      return data;
+    },
+    enabled: !!plan?.id && open,
+  });
+
   const isEditing = !!plan;
 
   // Form state
