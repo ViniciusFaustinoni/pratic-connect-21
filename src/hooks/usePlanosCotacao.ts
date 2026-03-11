@@ -272,6 +272,20 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
+      // Filtrar por elegibilidade de modelo (aditivo — só aplica se dados carregados e veículo informado)
+      if (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData && !elegibilidadeLoading) {
+        const resultado = verificarElegibilidadeModelo(
+          plano.id,
+          {
+            marca: params.marca,
+            modelo: params.modelo,
+            ano: anoVeiculoNum,
+            combustivel: combustivelLower || 'flex',
+          },
+        );
+        if (resultado === 'negado') continue;
+      }
+
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
       const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
       const linhaSlug = mapping?.linha_slug;
