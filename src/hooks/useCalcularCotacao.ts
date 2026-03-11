@@ -137,7 +137,7 @@ export function useCalcularCotacao() {
         }
 
         // Aplicar desconto percentual dinâmico (ex: 5% OFF)
-        const descontoPerc = Number(plano.desconto_percentual || 0);
+        const descontoPerc = Number((plano as any).desconto_percentual || 0);
         if (descontoPerc > 0) {
           valorMensal *= (1 - descontoPerc / 100);
           if (valorDesagio != null) {

@@ -16474,6 +16474,7 @@ export type Database = {
           cota_terceiros_isento: boolean
           coverage_type: string | null
           created_at: string
+          desconto_percentual: number | null
           descricao: string | null
           destaque: boolean | null
           fipe_maxima: number | null
@@ -16518,6 +16519,7 @@ export type Database = {
           cota_terceiros_isento?: boolean
           coverage_type?: string | null
           created_at?: string
+          desconto_percentual?: number | null
           descricao?: string | null
           destaque?: boolean | null
           fipe_maxima?: number | null
@@ -16562,6 +16564,7 @@ export type Database = {
           cota_terceiros_isento?: boolean
           coverage_type?: string | null
           created_at?: string
+          desconto_percentual?: number | null
           descricao?: string | null
           destaque?: boolean | null
           fipe_maxima?: number | null
