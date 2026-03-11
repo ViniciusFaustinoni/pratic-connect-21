@@ -72,6 +72,7 @@ export function useCreatePlan() {
         ordem: planData.display_order || 0,
         ativo: planData.is_active ?? true,
         valor_adesao: 0,
+        categoria: categorias_veiculo || null,
       };
 
       // Create plan
@@ -83,12 +84,22 @@ export function useCreatePlan() {
 
       if (planError) throw planError;
 
+      // Upsert plano_preco_map if linha_slug provided
+      if (linha_slug) {
+        await supabase
+          .from('plano_preco_map')
+          .upsert(
+            { plano_id: plan.id, linha_slug },
+            { onConflict: 'plano_id' }
+          );
+      }
+
       // Create planos_beneficios if provided
       if (benefits && benefits.length > 0) {
         const planBenefits = benefits.map((b, index) => ({
           plano_id: plan.id,
           benefit_id: b.benefit_id,
-          beneficio: '', // Will be filled from benefits table
+          beneficio: '',
           custom_text: b.custom_text,
           custom_value: b.custom_value,
           additional_info: b.additional_info,
