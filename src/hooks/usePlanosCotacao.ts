@@ -160,7 +160,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     }
 
     const regiaoLower = regiao.toLowerCase();
-    const combustivelLower = combustivel?.toLowerCase() || 'gasolina';
+    const combustivelLower = normalizarCombustivelParaPricing(combustivel);
     const tipoVeiculo = params.tipoVeiculo || 'carro';
     const anoAtual = new Date().getFullYear();
     const anoVeiculoNum = anoVeiculo || anoAtual;

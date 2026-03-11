@@ -84,7 +84,7 @@ export function useCalcularCotacao() {
       const adicionalApp = parseFloat(configMap.adicional_app || '35.90') || 35.90;
 
       const regiaoLower = (params.regiao || 'rj').toLowerCase();
-      const combustivelLower = (params.combustivel || 'gasolina').toLowerCase();
+      const combustivelLower = normalizarCombustivelParaPricing(params.combustivel);
 
       const planos: PlanoCalculado[] = [];
 
