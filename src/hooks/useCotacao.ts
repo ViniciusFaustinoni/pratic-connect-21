@@ -17,7 +17,7 @@ import type {
   StatusCotacaoExtended,
   CriarCotacaoPayload,
 } from '@/types/cotacao';
-import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
+import { useConfiguracaoNumero, useConfigDecomposicao } from '@/hooks/useConteudosSistema';
 
 // Tipo do status no banco (sem 'visualizada')
 type StatusCotacaoDB = Database['public']['Tables']['cotacoes']['Row']['status'];
