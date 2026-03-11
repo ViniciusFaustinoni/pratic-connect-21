@@ -25,8 +25,10 @@ import { useDeletePlan, useDuplicatePlan, useTogglePlanStatus } from '@/hooks/us
 import { toast } from 'sonner';
 
 // Import existing modals
-import { ProdutoFormModal, VincularCoberturaModal, EditarCoberturaVinculadaModal } from '@/components/diretoria';
+import { VincularCoberturaModal, EditarCoberturaVinculadaModal } from '@/components/diretoria';
 import { VincularBeneficioModal } from '@/components/gestao-comercial/VincularBeneficioModal';
+import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
+import type { PlanWithDetails } from '@/hooks/usePlans';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
