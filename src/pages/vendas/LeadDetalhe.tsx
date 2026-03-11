@@ -149,6 +149,10 @@ export default function LeadDetalhe() {
     if (!lead) return;
     
     try {
+      // Buscar região da cotação mais recente deste lead (se existir)
+      const regiaoFromCotacao = cotacoes?.[0]?.regiao || 'rj';
+      const combustivelFromCotacao = cotacoes?.[0]?.veiculo_combustivel || cotacoes?.[0]?.combustivel || undefined;
+
       const result = await criarCotacaoPublica.mutateAsync({
         leadId: lead.id,
         vendedorId: lead.vendedor_id || undefined,
@@ -156,7 +160,9 @@ export default function LeadDetalhe() {
         veiculoModelo: lead.veiculo_modelo || undefined,
         veiculoAno: lead.veiculo_ano || undefined,
         veiculoPlaca: lead.veiculo_placa || undefined,
+        veiculoCombustivel: combustivelFromCotacao,
         valorFipe: lead.veiculo_fipe || undefined,
+        regiao: regiaoFromCotacao,
       });
       
       const link = `${window.location.origin}/q/${result.token}`;
