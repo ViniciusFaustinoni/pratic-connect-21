@@ -885,29 +885,42 @@ serve(async (req) => {
           const telefoneProfissional = profissionalTel?.whatsapp || profissionalTel?.telefone;
           
           if (telefoneProfissional) {
-            const tipoServicoLabelWhats = servico.tipo === 'instalacao' 
-              ? 'INSTALAÇÃO' 
-              : 'VISTORIA';
+            // ✅ GUARD: Não enviar WhatsApp ao profissional se telefone = telefone do cliente
+            // Evita confusão quando profissional e associado compartilham número (teste ou representante)
+            const telProfNorm = telefoneProfissional.replace(/\D/g, '');
+            const telClienteRaw = servico.associado_whatsapp || servico.associado_telefone || '';
+            const telClienteNorm = telClienteRaw.replace(/\D/g, '');
             
-            const telefoneCliente = servico.associado_whatsapp || servico.associado_telefone;
-            const linkWhatsAppCliente = telefoneCliente 
-              ? `https://wa.me/55${telefoneCliente.replace(/\D/g, '')}` 
-              : 'Não informado';
+            // Comparar últimos 10-11 dígitos (ignora código de país)
+            const telProfSuffix = telProfNorm.slice(-11);
+            const telClienteSuffix = telClienteNorm.slice(-11);
             
-            const enderecoVist = [
-              servico.logradouro,
-              servico.numero,
-              servico.bairro,
-              servico.cidade
-            ].filter(Boolean).join(', ') || 'Endereço cadastrado';
-            
-            const periodoLabelVist = servico.periodo === 'manha' 
-              ? 'Manhã (08:00-12:00)' 
-              : servico.periodo === 'tarde'
-                ? 'Tarde (14:00-18:00)'
-                : 'A definir';
+            if (telProfSuffix && telClienteSuffix && telProfSuffix === telClienteSuffix) {
+              console.log(`[atribuir-proxima-tarefa] ⚠️ Telefone do profissional = telefone do cliente (${telProfSuffix}). WhatsApp do vistoriador SUPRIMIDO para evitar confusão. Push já foi enviado.`);
+            } else {
+              const tipoServicoLabelWhats = servico.tipo === 'instalacao' 
+                ? 'INSTALAÇÃO' 
+                : 'VISTORIA';
+              
+              const telefoneCliente = servico.associado_whatsapp || servico.associado_telefone;
+              const linkWhatsAppCliente = telefoneCliente 
+                ? `https://wa.me/55${telefoneCliente.replace(/\D/g, '')}` 
+                : 'Não informado';
+              
+              const enderecoVist = [
+                servico.logradouro,
+                servico.numero,
+                servico.bairro,
+                servico.cidade
+              ].filter(Boolean).join(', ') || 'Endereço cadastrado';
+              
+              const periodoLabelVist = servico.periodo === 'manha' 
+                ? 'Manhã (08:00-12:00)' 
+                : servico.periodo === 'tarde'
+                  ? 'Tarde (14:00-18:00)'
+                  : 'A definir';
 
-            const mensagemVistoriador = `📋 *NOVA TAREFA ATRIBUÍDA*
+              const mensagemVistoriador = `📋 *NOVA TAREFA ATRIBUÍDA*
 
 🔧 *Tipo:* ${tipoServicoLabelWhats}
 📍 *Endereço:* ${enderecoVist}
@@ -926,22 +939,18 @@ ${linkWhatsAppCliente}
 
 ⚠️ Entre em contato para confirmar sua chegada!`;
 
-            // Usar template assistencia_confirmada para garantir entrega via Meta
-            const tipoServicoLabelVist = servico.tipo === 'instalacao' ? 'Instalação' : 'Vistoria';
-            await supabase.functions.invoke('whatsapp-send-text', {
-              body: {
-                telefone: telefoneProfissional.replace(/\D/g, ''),
-                mensagem: mensagemVistoriador,
-                template_name: 'assistencia_confirmada',
-                template_params: [
-                  profissionalTel?.nome || 'Profissional',
-                  `${tipoServicoLabelVist} - ${servico.associado_nome || 'Cliente'}`,
-                  '30',
-                ],
-              },
-            });
-            
-            console.log(`[atribuir-proxima-tarefa] ✓ Vistoriador ${profissionalId} notificado via WhatsApp`);
+              // ✅ CORRIGIDO: Usar texto livre (allow_text) em vez de template de CLIENTE
+              // Template assistencia_confirmada é de cliente e gerava nomes invertidos
+              await supabase.functions.invoke('whatsapp-send-text', {
+                body: {
+                  telefone: telProfNorm,
+                  mensagem: mensagemVistoriador,
+                  allow_text: true,
+                },
+              });
+              
+              console.log(`[atribuir-proxima-tarefa] ✓ Vistoriador ${profissionalId} notificado via WhatsApp (texto livre)`);
+            }
           } else {
             console.log(`[atribuir-proxima-tarefa] Profissional sem WhatsApp cadastrado`);
           }
