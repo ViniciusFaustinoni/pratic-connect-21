@@ -588,7 +588,23 @@ export function ProdutosPlanos() {
                       <span className="text-muted-foreground text-xs">Ativo:</span>
                       <Switch
                         checked={selectedPlan.ativo}
-                        onCheckedChange={(checked) => toggleStatus.mutate({ id: selectedPlan.id, is_active: checked })}
+                        onCheckedChange={(checked) => {
+                          const count = associadosCounts?.[selectedPlan.id] ?? 0;
+                          if (!checked && count > 0) {
+                            setPlanToggleConfirm({ id: selectedPlan.id, activate: false });
+                          } else if (checked) {
+                            // Validate: must have at least coberturas or precos
+                            const hasCoberturas = (coberturasPorPlano?.[selectedPlan.id]?.length ?? 0) > 0;
+                            const hasPrecos = !!precoMappings?.[selectedPlan.id]?.length;
+                            if (!hasCoberturas && !hasPrecos) {
+                              toast.error('O plano precisa ter coberturas ou preços vinculados antes de ser ativado');
+                              return;
+                            }
+                            toggleStatus.mutate({ id: selectedPlan.id, is_active: true });
+                          } else {
+                            toggleStatus.mutate({ id: selectedPlan.id, is_active: false });
+                          }
+                        }}
                       />
                     </div>
                   </div>
