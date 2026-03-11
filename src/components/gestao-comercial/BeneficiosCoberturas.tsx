@@ -183,10 +183,10 @@ export function BeneficiosCoberturas() {
         {/* Coverages column */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
               <Shield className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold">Coberturas Principais</h3>
-              <Badge variant="secondary" className="text-xs">Display</Badge>
+              <h3 className="font-semibold">Coberturas Visuais</h3>
+              <Badge variant="secondary" className="text-xs">Site & Propostas</Badge>
             </div>
             <Button size="sm" onClick={() => { setCoberturaEdit(null); setCoberturaModalOpen(true); }}>
               <Plus className="h-3.5 w-3.5 mr-1" />
