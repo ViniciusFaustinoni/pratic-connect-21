@@ -204,18 +204,34 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
   });
 }
 
-export function useAdicionaisDisponiveis() {
+export function useAdicionaisDisponiveis(linhaSlug?: string) {
   return useQuery({
-    queryKey: ['adicionais-cotacao'],
+    queryKey: ['adicionais-cotacao', linhaSlug],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('beneficios_adicionais')
-        .select('id, codigo, nome, descricao, preco')
+        .select('id, codigo, nome, descricao, preco, linhas_permitidas, beneficios_regioes(regiao_id, preco_regional)')
         .eq('ativo', true)
         .order('nome');
 
       if (error) throw error;
-      return (data || []) as AdicionalOpcao[];
+
+      // Filtrar por linha permitida
+      const filtered = (data || []).filter(b => {
+        if (!linhaSlug) return true;
+        const permitidas = b.linhas_permitidas as string[] | null;
+        if (!permitidas || permitidas.length === 0) return true;
+        return permitidas.includes(linhaSlug);
+      });
+
+      return filtered.map(b => ({
+        id: b.id,
+        codigo: b.codigo,
+        nome: b.nome,
+        descricao: b.descricao || '',
+        preco: b.preco,
+        _regioes: (b as any).beneficios_regioes || [],
+      })) as (AdicionalOpcao & { _regioes: { regiao_id: string; preco_regional: number | null }[] })[];
     },
     staleTime: 1000 * 60 * 10,
   });
