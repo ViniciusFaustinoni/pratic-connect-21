@@ -175,7 +175,7 @@ export default function CotacaoPublicaCompleta() {
   useEffect(() => {
     if (cotacao?.valor_fipe && tipoUso) {
       calcular({ 
-        valor_fipe: cotacao.valor_fipe, 
+        valor_fipe: Number(cotacao.valor_fipe), 
         tipo_uso: tipoUso,
         regiao: mapearRegiaoParaPricing((cotacao as any).regiao || 'rj'),
         combustivel: (cotacao as any).veiculo_combustivel || undefined,
