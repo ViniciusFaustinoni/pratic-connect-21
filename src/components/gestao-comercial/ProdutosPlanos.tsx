@@ -662,6 +662,57 @@ export function ProdutosPlanos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Plan delete confirmation */}
+      <AlertDialog open={planDeleteConfirmOpen} onOpenChange={setPlanDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir plano</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o plano "{selectedPlan?.nome}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (selectedPlan) {
+                  deletePlan.mutate(selectedPlan.id);
+                  setSelectedPlanoId(null);
+                }
+                setPlanDeleteConfirmOpen(false);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Plan toggle confirmation (inactivation with associates) */}
+      <AlertDialog open={!!planToggleConfirm} onOpenChange={(open) => { if (!open) setPlanToggleConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Inativar plano</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este plano possui {planToggleConfirm ? (associadosCounts?.[planToggleConfirm.id] ?? 0) : 0} associado(s) vinculado(s). 
+              Eles não serão afetados — apenas novos cadastros deixarão de poder escolher este plano. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (planToggleConfirm) {
+                toggleStatus.mutate({ id: planToggleConfirm.id, is_active: false });
+              }
+              setPlanToggleConfirm(null);
+            }}>
+              Inativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
