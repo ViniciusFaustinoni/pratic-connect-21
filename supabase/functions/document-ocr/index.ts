@@ -607,12 +607,13 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           },
           body: JSON.stringify({
             model: 'google/gemini-2.5-pro', // Pro apenas para retry de CPF
+            messages: [
               { role: 'system', content: cpfRetryPrompt },
               {
                 role: 'user',
                 content: [
                   { type: 'text', text: 'Extraia o CPF desta CNH.' },
-                  { type: 'image_url', image_url: { url } },
+                  ...(isPdfUrl ? [contentParts[1]] : [{ type: 'image_url', image_url: { url } }]),
                 ],
               },
             ],
