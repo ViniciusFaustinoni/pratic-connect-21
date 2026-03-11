@@ -1,0 +1,8 @@
+ALTER TABLE planos ADD COLUMN IF NOT EXISTS visivel_gestao boolean NOT NULL DEFAULT true;
+
+UPDATE planos SET visivel_gestao = false 
+WHERE nome IN (
+  'SELECT EXCLUSIVE APLICATIVO',
+  'SELECT ONE APLICATIVO', 
+  'LANÇAMENTO EXCLUSIVE APLICATIVO'
+);

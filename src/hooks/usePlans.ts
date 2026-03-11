@@ -106,6 +106,7 @@ export function useProductLinesWithPlans() {
         .from('planos')
         .select('*')
         .eq('ativo', true)
+        .eq('visivel_gestao', true)
         .order('ordem');
 
       if (planosError) throw planosError;
@@ -138,6 +139,7 @@ export function usePlans(productLineSlug?: string) {
           )
         `)
         .eq('ativo', true)
+        .eq('visivel_gestao', true)
         .order('ordem');
       
       if (productLineSlug) {
@@ -388,6 +390,7 @@ export function usePlansGroupedByLine() {
           )
         `)
         .eq('ativo', true)
+        .eq('visivel_gestao', true)
         .order('ordem');
       
       if (planosError) throw planosError;
