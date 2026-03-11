@@ -31,6 +31,12 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
 
+interface CotaCategoria {
+  categoria_veiculo: string;
+  cota_percentual: string;
+  cota_minima_valor: string;
+}
+
 const VEHICLE_CATEGORIES = [
   { value: 'passeio', label: 'Passeio' },
   { value: 'aplicativo', label: 'Aplicativo' },
