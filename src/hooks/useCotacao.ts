@@ -60,6 +60,7 @@ function mapPlanoToInterface(data: any): PlanoParaCotacao {
     fipe_maximo: data.fipe_maxima ? Number(data.fipe_maxima) : null,
     valor_adesao: Number(data.valor_adesao || 0),
     coberturas: data.coberturas || [],
+    adicional_mensal: Number(data.adicional_mensal || 0),
     ativo: data.ativo,
     created_at: data.created_at,
   };
@@ -135,6 +136,7 @@ function encontrarFaixaMensalidade(
   regiao: string,
   combustivel: string,
   adicionalApp: number = 0,
+  adicionalMensal: number = 0,
 ): { valorMensal: number; valorDesagio: number | null } | null {
   const mapping = planoPrecoMap.find(m => m.plano_id === planoId);
   if (!mapping) return null;
@@ -159,10 +161,13 @@ function encontrarFaixaMensalidade(
   if (!faixa) return null;
 
   // Aplicar adicional app se necessário
-  const valorMensalFinal = resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp);
+  let valorMensalFinal = resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp);
+
+  // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
+  valorMensalFinal += adicionalMensal;
 
   return {
-    valorMensal: valorMensalFinal,
+    valorMensal: Math.round(valorMensalFinal * 100) / 100,
     valorDesagio: faixa.valor_desagio,
   };
 }
@@ -256,6 +261,7 @@ export function useCalcularCotacao() {
         regiao,
         combustivel,
         adicionalApp,
+        plano.adicional_mensal || 0,
       );
 
       if (!faixaResult) continue;
