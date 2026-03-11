@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault, useCotaDesagioDefault, useCotaMinimaDesagioDefault, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 import { 
   getCoberturasRemovidasDinamico, 
   gerarMensagemAlertaCategoria,
@@ -159,7 +160,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     }
 
     const regiaoLower = regiao.toLowerCase();
-    const combustivelLower = combustivel?.toLowerCase() || 'gasolina';
+    const combustivelLower = normalizarCombustivelParaPricing(combustivel);
     const tipoVeiculo = params.tipoVeiculo || 'carro';
     const anoAtual = new Date().getFullYear();
     const anoVeiculoNum = anoVeiculo || anoAtual;

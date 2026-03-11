@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 
 // ============================================
 // TIPOS
@@ -83,7 +84,7 @@ export function useCalcularCotacao() {
       const adicionalApp = parseFloat(configMap.adicional_app || '35.90') || 35.90;
 
       const regiaoLower = (params.regiao || 'rj').toLowerCase();
-      const combustivelLower = (params.combustivel || 'gasolina').toLowerCase();
+      const combustivelLower = normalizarCombustivelParaPricing(params.combustivel);
 
       const planos: PlanoCalculado[] = [];
 

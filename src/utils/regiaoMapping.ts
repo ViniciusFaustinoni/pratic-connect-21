@@ -21,3 +21,22 @@ export function mapearRegiaoParaPricing(regiao: string): string {
   const lower = regiao.toLowerCase();
   return MAPA_REGIAO_PRICING[lower] || lower;
 }
+
+/**
+ * Normaliza o combustível do veículo para o slug esperado pela tabela de preços.
+ * A tabela `tabelas_preco_mensalidade` só tem 'gasolina', 'diesel' ou NULL.
+ * Veículos flex, etanol, híbridos, GNV → usam preço de 'gasolina'.
+ * Veículos diesel → usam preço de 'diesel'.
+ */
+export function normalizarCombustivelParaPricing(combustivel?: string | null): string {
+  if (!combustivel) return 'gasolina';
+  
+  const lower = combustivel.toLowerCase().trim();
+  
+  // Diesel direto
+  if (lower === 'diesel') return 'diesel';
+  if (lower.includes('diesel') && !lower.includes('gasolina')) return 'diesel';
+  
+  // Tudo que tem gasolina, flex, etanol, álcool, elétrico, híbrido, GNV → gasolina
+  return 'gasolina';
+}
