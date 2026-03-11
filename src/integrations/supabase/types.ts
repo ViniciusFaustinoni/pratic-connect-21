@@ -16575,6 +16575,7 @@ export type Database = {
           updated_at: string
           uso: string | null
           valor_adesao: number
+          visivel_gestao: boolean
         }
         Insert: {
           adicional_mensal?: number | null
@@ -16620,6 +16621,7 @@ export type Database = {
           updated_at?: string
           uso?: string | null
           valor_adesao: number
+          visivel_gestao?: boolean
         }
         Update: {
           adicional_mensal?: number | null
@@ -16665,6 +16667,7 @@ export type Database = {
           updated_at?: string
           uso?: string | null
           valor_adesao?: number
+          visivel_gestao?: boolean
         }
         Relationships: [
           {
