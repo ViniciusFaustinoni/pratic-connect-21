@@ -263,6 +263,34 @@ export function RegioesConfig() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
+                        {(() => {
+                          const slug = REGION_CODE_TO_SLUG[regiao.codigo] || regiao.codigo.toLowerCase();
+                          const info = priceCounts?.[slug];
+                          if (!info) return <span className="text-muted-foreground text-xs">—</span>;
+                          const linhasArr = Array.from(info.linhas);
+                          return (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="secondary" className="cursor-help">
+                                    <BarChart3 className="h-3 w-3 mr-1" />
+                                    {info.total} faixas
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="max-w-xs">
+                                  <p className="font-medium mb-1">Linhas de produto:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {linhasArr.map((l) => (
+                                      <Badge key={l} variant="outline" className="text-xs capitalize">{l}</Badge>
+                                    ))}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-center">
                         <span className={cn(
                           "font-mono font-medium",
                           regiao.multiplicador_preco > 1 && "text-red-600",
