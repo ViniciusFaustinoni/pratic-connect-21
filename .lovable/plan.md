@@ -1,203 +1,118 @@
-# Auditoria Completa: Planos, Benefícios e Precificação
 
-## Resumo
 
-A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+# Auditoria PARTE 4 — Interface do Diretor: Estado Atual vs Requisitos
+
+## Estrutura atual da Gestão Comercial (4 abas)
+
+| Aba | Componente | Função |
+|-----|-----------|--------|
+| Produtos & Planos | `ProdutosPlanos.tsx` | Master-detail: lista lateral de planos + painel com sub-abas (Faixas de Preço, Coberturas, Benefícios, Detalhes) |
+| Benefícios & Coberturas | `BeneficiosCoberturas.tsx` | CRUD de benefícios de marketing (`benefits`) + coberturas de display (`main_coverages`) |
+| Tabela de Preços | `TabelaPrecosTab.tsx` | CRUD completo de `tabelas_preco_mensalidade` com filtros, import/export CSV, histórico |
+| Adicionais | `BeneficiosAdicionaisConfig.tsx` | CRUD de benefícios adicionais pagos (`beneficios_adicionais`) com preço, linhas permitidas, regiões |
+
+## Páginas separadas já existentes
+
+| Página | Rota | Função |
+|--------|------|--------|
+| Faixas & Cotas | `/diretoria/faixas-cotas` | Grade editável de `faixas_cotas` com ajuste percentual por faixa FIPE, contagem de associados, simulação de impacto, histórico |
+| Fechamento & Rateio | `/diretoria/fechamento` | Visualização de `fechamentos_mensais` (agora read-only, consome Sistema B) |
+| Rateio Config | `/diretoria/configuracoes` | Parâmetros atuariais: valor por cota, multiplicadores, taxa admin, dias de fechamento/vencimento |
+
+## Checklist: Requisitos da PARTE 4 vs Estado Atual
+
+### ÁREA 1 — Gestão de Planos
+
+| Requisito | Status | Onde |
+|-----------|--------|------|
+| Listagem com nome, linha, status, associados | **OK** | `ProdutosPlanos.tsx` — sidebar com badge de contagem |
+| Formulário em etapas (nome, linha) | **PARCIAL** | `PlanFormModal.tsx` usa tabs, não wizard sequencial — funcional mas não impede pular etapas |
+| Categorias de veículo aceitas | **OK** | Checkboxes no form |
+| Cota de participação por categoria | **PARCIAL** | Apenas cota_passeio/app/desagio — não por diesel/moto/elétrico |
+| Coberturas incluídas por padrão | **OK** | Sub-aba Coberturas com vincular/editar/desvincular |
+| Adicionais compatíveis com plano | **PARCIAL** | Benefícios de marketing (`benefits`) são vinculados, mas adicionais pagos (`beneficios_adicionais`) usam `linhas_permitidas` na própria config — não há vínculo direto plano↔adicional |
+| Grade de preços por FIPE/região | **OK** | Sub-aba Faixas de Preço (read-only) + aba Tabela de Preços (CRUD) |
+| Plano só ativa com coberturas+preços | **OK** | Validação no toggle ativo/inativo |
+| Plano ativo não pode ser excluído | **OK** | Botão bloqueado com toast |
+| Alerta de associados ao inativar | **OK** | Dialog com contagem |
+
+### ÁREA 2 — Gestão de Benefícios Adicionais
+
+| Requisito | Status | Onde |
+|-----------|--------|------|
+| Listagem com nome, valor, planos, associados | **OK** | `BeneficiosAdicionaisConfig.tsx` — tabela completa |
+| CRUD (nome, descrição, valor, linhas permitidas) | **OK** | Dialog com form completo |
+| Alerta "alteração vale para novos contratos" | **OK** | Alert amarelo no dialog de edição |
+| Preço por região | **OK** | Checkboxes de regiões com preço regional no form |
+
+### ÁREA 3 — Tabela de Quotas (Atuarial)
+
+| Requisito | Status | Onde |
+|-----------|--------|------|
+| Grade editável faixa FIPE × categoria | **PARCIAL** | `FaixasCotas.tsx` tem grade por faixa FIPE, mas **apenas ajuste percentual** — não segmenta por categoria (passeio/app/moto/diesel) nas colunas |
+| Contagem de associados por faixa | **OK** | Badge com contagem ao lado de cada linha |
+| Alterações só valem no próximo ciclo | **OK** | Informado na UI |
+| Histórico versionado | **OK** | Tab de histórico com data/hora/autor |
+| Simulação de impacto | **OK** | `SimulacaoImpactoCard` com custo base simulado |
+
+### ÁREA 4 — Simulador de Rateio
+
+| Requisito | Status | Onde |
+|-----------|--------|------|
+| Simulação por mês de referência | **NÃO EXISTE** | Não há tela dedicada de simulação de rateio |
+| Projeção valor por benefício | **NÃO EXISTE** | — |
+| Impacto médio por associado | **NÃO EXISTE** | — |
+| Confirmação de fechamento pelo Diretor | **PARCIAL** | O wizard de fechamento fica em `/financeiro/faturamento`, não na Diretoria |
+
+## O que MANTER como está
+
+1. **Aba "Produtos & Planos"** — estrutura master-detail funcional e completa. Apenas pequenos ajustes necessários.
+2. **Aba "Adicionais"** (`BeneficiosAdicionaisConfig`) — CRUD robusto, atende todos os requisitos da Área 2.
+3. **Aba "Tabela de Preços"** — CRUD com import/export, filtros, histórico. Completo.
+4. **Página "Faixas & Cotas"** — grade editável com simulação e histórico. Base sólida.
+5. **Validações de ativação/inativação de plano** — lógica correta e implementada.
+
+## O que precisa ser ADAPTADO
+
+### Adaptação 1 — Grade de Cotas por Categoria (Faixas & Cotas)
+A grade atual mostra apenas um ajuste percentual por faixa FIPE. O requisito pede colunas por categoria (passeio, aplicativo, moto, diesel, elétrico) com valor de cota específico. Isso requer:
+- Adicionar colunas à tabela `faixas_cotas` (ou criar tabela relacional `faixas_cotas_categorias`)
+- Atualizar a grade para exibir e editar cotas por categoria
+- Manter a simulação de impacto com a nova estrutura
+
+### Adaptação 2 — Cotas por Categoria no Formulário de Plano
+O `PlanFormModal` tem campos fixos (cota_passeio, cota_app, cota_desagio). O requisito pede que, para cada categoria marcada no plano, o Diretor informe % de cota e valor mínimo. Isso pode ser feito:
+- Renderizando campos dinâmicos por categoria selecionada
+- Salvando em `planos_cotas_categoria` (tabela nova proposta na Fase 2 da PARTE 1)
+
+### Adaptação 3 — Aba "Benefícios & Coberturas" — Dualidade confusa
+Esta aba mistura dois conceitos diferentes: benefícios de marketing (`benefits`) e coberturas de display (`main_coverages`). Ambos são itens de apresentação visual que já estão vinculados aos planos na sub-aba de Produtos & Planos. A aba funciona, mas é redundante com a sub-aba do plano. Sugestão: manter como catálogo centralizado (o que já é), mas adicionar um label mais claro sobre a diferença entre os dois.
+
+## O que precisa ser CRIADO
+
+### Criação 1 — Simulador de Rateio (Área 4)
+Criar nova aba na Gestão Comercial ou nova página na Diretoria com:
+- Select de mês de referência
+- Busca de eventos aprovados no período + base ativa
+- Cálculo projetado: custo por benefício ÷ cotas elegíveis = valor/cota
+- Tabela com impacto médio por associado (amostra ou total)
+- Botão "Confirmar Fechamento" que redireciona ao wizard de Faturamento ou dispara diretamente
+
+### Criação 2 — Tabela `planos_cotas_categoria`
+Nova tabela para armazenar cotas segmentadas:
+```text
+plano_id | categoria_veiculo | cota_percentual | cota_minima_valor
+```
+Isso substitui os campos fixos `cota_passeio`, `cota_app`, `cota_desagio` no plano.
+
+## Resumo de ações
+
+| Prioridade | Ação | Tipo |
+|-----------|------|------|
+| Alta | Criar Simulador de Rateio | Nova feature |
+| Alta | Criar `planos_cotas_categoria` + form dinâmico | Schema + UI |
+| Média | Expandir Faixas & Cotas com colunas por categoria | UI refactor |
+| Baixa | Clarificar labels na aba Benefícios & Coberturas | UI polish |
+
+Tudo consolidado no menu Gestão Comercial como solicitado — o Simulador de Rateio seria uma 5ª aba ou integrado à página de Fechamento existente.
 
----
-
-## ✅ CORRIGIDO (não mexer)
-
-- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
-- `usePlanosCotacao.ts` — Hook principal dinâmico
-- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
-- `CotacaoDetalhe.tsx` — Dados do hook
-- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
-- `ContratoDetalhe.tsx` — Dinâmico
-- `Cotador.tsx` — Usa PlanoCotacao direto
-- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
-- `CardPlano.tsx` — Recebe benefícios/coberturas como props
-- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
-- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
-- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
-
----
-
-## 🟡 PENDENTE
-
-### 1. ✅ `pricing.ts` — REMOVIDO
-
-Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
-
-### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
-
-Centralizada em `src/utils/format.ts`.
-
-### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
-
-### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
-
-### 5. ✅ Veículo Blindado — CORRIGIDO
-
-### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
-
-Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
-
-### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
-
-Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
-
-### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
-
-Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
-
-### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
-
-Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
-
-### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
-
-### 12. ✅ Linhas de produto hardcoded — MIGRADO PARA BANCO
-
-`LINHAS_PLANO` em `PlanosConfig.tsx` substituído por `useProductLines()`. Linha "Select One" adicionada à tabela `product_lines`.
-
-### 13. ✅ Regiões hardcoded — MIGRADO PARA BANCO
-
-`REGIOES` em `EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx` substituídos por `useRegioesAtivas()`.
-
-### 14. ✅ Lógica de negócio hardcoded em usePlanosCotacao — CORRIGIDO
-
-- `linha === 'advanced'` → `vehicle_type` da tabela `product_lines`
-- `linha === 'lancamento'` → `requires_recent_year` da tabela `product_lines`
-- Ordenação `linha === 'select'` → `sort_priority` da tabela `product_lines`
-- Mapeamento manual de códigos de região removido (usa `regioes.codigo` diretamente)
-
-### 15. ✅ LINHA_CORES hardcoded em PlanoCardSelecao — CORRIGIDO
-
-`gradient_class` adicionado à tabela `product_lines`. Fallback mantido no componente.
-
-### 16. ✅ CATEGORIAS_VEICULO hardcoded — MIGRADO PARA BANCO
-
-Categorias inseridas na tabela `configuracoes` (chave `categorias_veiculo`). Hook `useCategoriasVeiculo()` criado. `VehicleCategorySelect` agora busca do banco com fallback.
-
-### 17. ✅ OBSERVACOES_CATEGORIA hardcoded — MIGRADO PARA BANCO
-
-Observações inseridas na tabela `configuracoes` (chave `observacoes_categoria`). Hook `useObservacoesCategoria()` criado.
-
-### 18. ✅ Template WhatsApp hardcoded — MIGRADO PARA BANCO
-
-Template de benefícios inserido na tabela `configuracoes` (chave `template_whatsapp_cotacao`). Hook `useTemplateWhatsappCotacao()` criado.
-
-Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
-
-### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
-
-Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
-
-### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
-
-Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
-- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
-- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
-
-
-### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
-
-Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
-
-### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
-
-Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
-- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
-- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
-- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
-- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
-- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
-- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
-- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
-
-
----
-
-## ❌ NÃO FAZER AGORA
-
-- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
-- Página de autorizações da diretoria — depende das tabelas acima
-- Campos de vistoria (rebaixado/turbinado) — escopo separado
-- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
-
----
-
-## 📋 ORDEM DE EXECUÇÃO SUGERIDA
-
-1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
-2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
-3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
-4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
-
----
-
-# Visibilidade por Equipe — Supervisor de Vendas
-
-## ✅ CORRIGIDO
-
-### Tabela `equipes_comerciais`
-- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
-- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
-
-### Função `is_supervisor_of(_vendedor_id)`
-- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
-- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
-
-### RLS de `leads` atualizada
-- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
-- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
-
-### RLS de `cotacoes` atualizada
-- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
-
-### Hook `useEquipeComercial`
-- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
-- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
-- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
-- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
-
-### `usePermissions` atualizado
-- Adicionado `isSupervisorVendas` e `canManageEquipe`
-
-### `useVendasMetricas` atualizado
-- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
-
-### KanbanCard com badge do vendedor
-- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
-- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
-
----
-
-## 🟡 PENDENTE
-
-### Tela de gerenciamento de equipe
-- UI para vincular/desvincular vendedores a supervisores
-- Acessível em configurações ou rota dedicada
-
----
-
-# Fluxo de Assistência 24h — Reboque
-
-## ✅ CORRIGIDO
-
-### Gap 1 — Valor sugerido na mensagem inicial
-Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
-
-### Gap 2 — Contato do associado para o reboquista
-Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
-
-### Gap 3 — Tela de conclusão com anexo de imagens
-Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
-- Upload múltiplo de fotos usando `useFotosReboquista`
-- Campo de observação
-- Atualiza status do chamado para `concluido`
-- Registra no histórico e no status log do reboque
-
-### Gap 4 — Integração financeira (parcial)
-O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.
