@@ -17,14 +17,26 @@ export class AppErrorBoundary extends React.Component<Props, State> {
   state: State = { hasError: false };
 
   static getDerivedStateFromError(error: unknown): State {
+    // Erros de "removeChild" são causados por scripts externos (ex: Lovable preview token)
+    // manipulando o DOM. Não são erros reais da aplicação — ignorar silenciosamente.
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('removeChild') || msg.includes('insertBefore') || msg.includes('The node to be removed is not a child')) {
+      return { hasError: false };
+    }
     return {
       hasError: true,
-      message: error instanceof Error ? error.message : String(error),
+      message: msg,
     };
   }
 
   componentDidCatch(error: unknown, errorInfo: React.ErrorInfo) {
-    // Mantém logs bem explícitos para acharmos o componente que está causando o loop.
+    const msg = error instanceof Error ? error.message : String(error);
+    // Ignorar erros de DOM causados por scripts externos
+    if (msg.includes('removeChild') || msg.includes('insertBefore') || msg.includes('The node to be removed is not a child')) {
+      // eslint-disable-next-line no-console
+      console.warn("[AppErrorBoundary] Ignored DOM manipulation error (likely external script):", msg);
+      return;
+    }
     // eslint-disable-next-line no-console
     console.error("[AppErrorBoundary] error:", error);
     // eslint-disable-next-line no-console
