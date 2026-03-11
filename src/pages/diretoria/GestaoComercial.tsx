@@ -21,6 +21,7 @@ export default function GestaoComercial() {
       {activeTab === 2 && <TabelaPrecosTab />}
       {activeTab === 3 && <BeneficiosAdicionaisConfig />}
       {activeTab === 4 && <SimuladorRateio />}
+      {activeTab === 5 && <ElegibilidadeVeiculos />}
     </div>
   );
 }

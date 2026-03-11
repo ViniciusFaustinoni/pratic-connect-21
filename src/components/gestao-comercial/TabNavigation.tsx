@@ -12,6 +12,7 @@ const tabs: Tab[] = [
   { label: 'Tabela de Preços', icon: DollarSign },
   { label: 'Adicionais', icon: Gift },
   { label: 'Simulador de Rateio', icon: Calculator },
+  { label: 'Elegibilidade', icon: ShieldCheck },
 ];
 
 interface TabNavigationProps {
