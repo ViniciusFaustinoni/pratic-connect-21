@@ -6,11 +6,20 @@ interface Tab {
   icon: LucideIcon;
 }
 
+import { Package, Shield, DollarSign, Gift, Calculator, LucideIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+interface Tab {
+  label: string;
+  icon: LucideIcon;
+}
+
 const tabs: Tab[] = [
   { label: 'Produtos & Planos', icon: Package },
   { label: 'Benefícios & Coberturas', icon: Shield },
   { label: 'Tabela de Preços', icon: DollarSign },
   { label: 'Adicionais', icon: Gift },
+  { label: 'Simulador de Rateio', icon: Calculator },
 ];
 
 interface TabNavigationProps {

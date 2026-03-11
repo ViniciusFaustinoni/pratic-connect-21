@@ -194,7 +194,7 @@ export function BeneficiosCoberturas() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Coberturas principais exibidas no site e materiais
+            Ícones e textos de coberturas exibidos no site e propostas comerciais. Diferente das coberturas técnicas de sinistro (gerenciadas na sub-aba do plano).
           </p>
 
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
