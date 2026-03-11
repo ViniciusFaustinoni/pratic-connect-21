@@ -25970,6 +25970,7 @@ export type Database = {
           cotacao_id: string
           data_agendada: string
           em_rota_em: string
+          etapa_atual: number
           hora_agendada: string
           id: string
           imei_rastreador: string
