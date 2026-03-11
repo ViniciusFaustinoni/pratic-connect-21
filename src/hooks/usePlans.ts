@@ -106,6 +106,7 @@ export function useProductLinesWithPlans() {
         .from('planos')
         .select('*')
         .eq('ativo', true)
+        .eq('visivel_gestao', true)
         .order('ordem');
 
       if (planosError) throw planosError;
