@@ -564,6 +564,25 @@ export function PlanFormModal({
                       />
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="desconto_percentual">Desconto Promocional (%)</Label>
+                      <Input
+                        id="desconto_percentual"
+                        type="number"
+                        step="0.1"
+                        value={formData.desconto_percentual}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            desconto_percentual: e.target.value,
+                          }))
+                        }
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Percentual de desconto sobre o valor mensal (ex: 5 = 5% OFF). Deixe 0 para sem desconto.
+                      </p>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Cota Passeio (%)</Label>
