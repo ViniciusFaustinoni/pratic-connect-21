@@ -347,6 +347,12 @@ export default function FaixasCotas() {
                         <Badge variant="secondary">{faixa.quantidade_cotas}</Badge>
                       </TableCell>
                       <TableCell className="text-center">
+                        <Badge variant="outline">
+                          <Users className="h-3 w-3 mr-1" />
+                          {associadosPorFaixa?.[faixa.id] ?? 0}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
                         {editingId === faixa.id ? (
                           <Input
                             type="number"
