@@ -61,6 +61,7 @@ export interface PlanoParaCotacao {
   valor_adesao: number;
   coberturas: string[];
   adicional_mensal: number;
+  desconto_percentual: number;
   ativo: boolean;
   created_at: string;
 }

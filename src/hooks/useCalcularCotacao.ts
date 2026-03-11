@@ -136,6 +136,15 @@ export function useCalcularCotacao() {
           valorMensal += Number(plano.adicional_mensal || 0);
         }
 
+        // Aplicar desconto percentual dinâmico (ex: 5% OFF)
+        const descontoPerc = Number(plano.desconto_percentual || 0);
+        if (descontoPerc > 0) {
+          valorMensal *= (1 - descontoPerc / 100);
+          if (valorDesagio != null) {
+            valorDesagio *= (1 - descontoPerc / 100);
+          }
+        }
+
         // Aplicar adicional app se necessário
         if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
           valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp);

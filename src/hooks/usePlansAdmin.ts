@@ -152,6 +152,7 @@ export function useUpdatePlan() {
         coverage_type: planData.coverage_type,
         ano_minimo: planData.min_vehicle_year ? parseInt(planData.min_vehicle_year.replace(/\D/g, '')) : null,
         adicional_mensal: planData.additional_price || 0,
+        desconto_percentual: planData.desconto_percentual ?? 0,
         cota_participacao: planData.cota_passeio_percent,
         cota_minima: planData.cota_passeio_min,
         cota_desagio: planData.cota_desagio_percent,

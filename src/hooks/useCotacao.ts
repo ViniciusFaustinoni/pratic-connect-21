@@ -269,6 +269,7 @@ export function useCalcularCotacao() {
         combustivel,
         adicionalApp,
         plano.adicional_mensal || 0,
+        plano.desconto_percentual || 0,
       );
 
       if (!faixaResult) continue;
