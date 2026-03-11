@@ -96,6 +96,7 @@ export function useTarefaAtual() {
         permite_encaixe: tarefa.permite_encaixe ?? false,
         contato_realizado_em: tarefa.contato_realizado_em || null,
         contato_tipo: tarefa.contato_tipo || null,
+        etapa_atual: tarefa.etapa_atual || 1,
       };
     },
     enabled: !!profissionalId,
