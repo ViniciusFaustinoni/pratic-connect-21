@@ -82,7 +82,15 @@ export default function AprovacoesFipeMenor() {
         </p>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      {!fipeMenorAtivo && (
+        <Alert className="border-amber-500/30 bg-amber-50 dark:bg-amber-950/20">
+          <ShieldOff className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
+            A regra de FIPE Menor está <strong>desativada</strong> pelo Diretor. Novas solicitações não podem ser criadas. O histórico abaixo permanece acessível.
+          </AlertDescription>
+        </Alert>
+      )}
+
         <TabsList>
           <TabsTrigger value="pendente">
             <Clock className="h-4 w-4 mr-1" />
