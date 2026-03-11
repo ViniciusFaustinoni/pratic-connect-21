@@ -289,6 +289,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return tipo === 'moto' ? 'moto' as const : 'carro' as const;
   }, [veiculoEncontrado, marcaSelecionada]);
 
+  // Resolver marca/modelo para elegibilidade
+  const marcaResolvida = useMemo(() => {
+    return veiculoEncontrado?.vehicleData?.marca || marcaSelecionada || '';
+  }, [veiculoEncontrado, marcaSelecionada]);
+
+  const modeloResolvido = useMemo(() => {
+    return veiculoEncontrado?.vehicleData?.modelo || '';
+  }, [veiculoEncontrado]);
+
   // Hook de planos calculados dinamicamente do banco
   const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
     valorFipe,
@@ -299,6 +308,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     anoVeiculo: anoNumerico,
     tipoVeiculo: tipoVeiculoDetectado,
     usoApp: usoVeiculo === 'aplicativo',
+    marca: marcaResolvida || undefined,
+    modelo: modeloResolvido || undefined,
   });
 
   // Buscar todas as faixas de preço para calcular elegibilidade FIPE menor
