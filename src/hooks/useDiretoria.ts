@@ -180,10 +180,6 @@ export function useDiretoria() {
     isLoadingDashboard: dashboardQuery.isLoading,
     salvarConfig: salvarConfigMutation.mutate,
     isSavingConfig: salvarConfigMutation.isPending,
-    calcularRateio: calcularRateioMutation.mutate,
-    isCalculandoRateio: calcularRateioMutation.isPending,
-    aprovarRateio: aprovarRateioMutation.mutate,
-    isAprovandoRateio: aprovarRateioMutation.isPending,
     atualizarPlano: atualizarPlanoMutation.mutate,
     isAtualizandoPlano: atualizarPlanoMutation.isPending,
   };

@@ -146,20 +146,24 @@ serve(async (req) => {
         const beneficio = SINISTRO_PARA_BENEFICIO[sinistro.tipo];
         if (!beneficio || !despesasPorBeneficio[beneficio]) continue;
 
-        let valorCusto = 0;
+        let valorBruto = 0;
         const valorOS = valorPagoPorSinistro[sinistro.id] || 0;
         const valorIndenizacao = sinistro.valor_indenizacao || 0;
+        const cotaParticipacao = sinistro.valor_cota_participacao || 0;
 
         if (sinistro.tipo_dano === 'perda_total') {
-          valorCusto = valorIndenizacao;
-          totalIndenizacoes += valorCusto;
+          valorBruto = valorIndenizacao;
+          totalIndenizacoes += valorBruto;
         } else if (valorOS > 0) {
-          valorCusto = valorOS;
-          totalReparosOficina += valorCusto;
+          valorBruto = valorOS;
+          totalReparosOficina += valorBruto;
         } else {
-          valorCusto = valorIndenizacao;
-          totalIndenizacoes += valorCusto;
+          valorBruto = valorIndenizacao;
+          totalIndenizacoes += valorBruto;
         }
+
+        // Abater cota de participação do associado sinistrado
+        const valorCusto = Math.max(0, valorBruto - cotaParticipacao);
 
         despesasPorBeneficio[beneficio].valor += valorCusto;
         despesasPorBeneficio[beneficio].quantidade += 1;

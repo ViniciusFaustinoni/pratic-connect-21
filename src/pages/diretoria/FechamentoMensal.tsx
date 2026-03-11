@@ -65,6 +65,7 @@ function DespesaBeneficioCard({ despesa }: { despesa: any }) {
     vidros: '🪟 Vidros',
     terceiros: '👥 Terceiros',
     assistencia: '🆘 Assistência',
+    outros: '📦 Outros',
   };
 
   return (
