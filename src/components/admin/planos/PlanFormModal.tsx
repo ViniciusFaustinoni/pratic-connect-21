@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -26,7 +27,19 @@ import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlans
 import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
+
+const VEHICLE_CATEGORIES = [
+  { value: 'passeio', label: 'Passeio' },
+  { value: 'aplicativo', label: 'Aplicativo' },
+  { value: 'moto', label: 'Moto' },
+  { value: 'diesel', label: 'Diesel' },
+  { value: 'eletrico', label: 'Elétrico' },
+  { value: 'especial_plus', label: 'Especial Plus' },
+  { value: 'lancamento', label: 'Lançamento' },
+];
 
 interface PlanFormModalProps {
   open: boolean;
