@@ -1,102 +1,203 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
+
+## Resumo
+
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. ✅ `pricing.ts` — REMOVIDO
+
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
+
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
+
+Centralizada em `src/utils/format.ts`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+### 5. ✅ Veículo Blindado — CORRIGIDO
+
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+
+### 12. ✅ Linhas de produto hardcoded — MIGRADO PARA BANCO
+
+`LINHAS_PLANO` em `PlanosConfig.tsx` substituído por `useProductLines()`. Linha "Select One" adicionada à tabela `product_lines`.
+
+### 13. ✅ Regiões hardcoded — MIGRADO PARA BANCO
+
+`REGIOES` em `EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx` substituídos por `useRegioesAtivas()`.
+
+### 14. ✅ Lógica de negócio hardcoded em usePlanosCotacao — CORRIGIDO
+
+- `linha === 'advanced'` → `vehicle_type` da tabela `product_lines`
+- `linha === 'lancamento'` → `requires_recent_year` da tabela `product_lines`
+- Ordenação `linha === 'select'` → `sort_priority` da tabela `product_lines`
+- Mapeamento manual de códigos de região removido (usa `regioes.codigo` diretamente)
+
+### 15. ✅ LINHA_CORES hardcoded em PlanoCardSelecao — CORRIGIDO
+
+`gradient_class` adicionado à tabela `product_lines`. Fallback mantido no componente.
+
+### 16. ✅ CATEGORIAS_VEICULO hardcoded — MIGRADO PARA BANCO
+
+Categorias inseridas na tabela `configuracoes` (chave `categorias_veiculo`). Hook `useCategoriasVeiculo()` criado. `VehicleCategorySelect` agora busca do banco com fallback.
+
+### 17. ✅ OBSERVACOES_CATEGORIA hardcoded — MIGRADO PARA BANCO
+
+Observações inseridas na tabela `configuracoes` (chave `observacoes_categoria`). Hook `useObservacoesCategoria()` criado.
+
+### 18. ✅ Template WhatsApp hardcoded — MIGRADO PARA BANCO
+
+Template de benefícios inserido na tabela `configuracoes` (chave `template_whatsapp_cotacao`). Hook `useTemplateWhatsappCotacao()` criado.
+
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-# Corrigir hardcodes em StepBeneficios.tsx e StepFinanceiro.tsx
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-## Contexto do wizard
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-Estes componentes fazem parte do fluxo de **substituição de veículo** (`src/components/substituicao/`). O wizard tem os dados do novo veículo (`dadosNovoVeiculo`) com `valor_fipe`, `marca`, `modelo`, `uso_aplicativo`, e o plano do associado atual.
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
 
-O `useCalcularCotacao` é um hook imperativo (chama `calcular(params)` que retorna planos com `valor_mensal` da `tabelas_preco_mensalidade`). Porém, o contexto de substituição não tem `plano_id` nem `linha_slug` explícitos — o associado já tem um plano ativo.
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
 
-**Abordagem**: Criar um hook wrapper simples que busca o valor mensal correto de `tabelas_preco_mensalidade` dado um `valor_fipe` e `tipo_uso`, reutilizando a mesma lógica do `useCalcularCotacao`. Chamar `calcular()` e pegar o `valor_mensal` do plano correspondente.
 
-## Passo 1 — StepBeneficios.tsx (linha 78-81)
+---
 
-Substituir `fipe * 0.0045` por chamada ao `useCalcularCotacao`:
+## ❌ NÃO FAZER AGORA
 
-```typescript
-const { calcular, resultado } = useCalcularCotacao();
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
-useEffect(() => {
-  const fipe = dadosNovoVeiculo.valor_fipe;
-  if (fipe && fipe > 0) {
-    calcular({
-      valor_fipe: fipe,
-      tipo_uso: dadosNovoVeiculo.uso_aplicativo ? 'aplicativo' : 'particular',
-    });
-  }
-}, [dadosNovoVeiculo.valor_fipe, dadosNovoVeiculo.uso_aplicativo]);
+---
 
-const mensalidadeBase = useMemo(() => {
-  if (resultado?.planos?.length) {
-    // Pegar o plano destaque ou o primeiro disponível
-    const planoDestaque = resultado.planos.find(p => p.destaque) || resultado.planos[0];
-    return planoDestaque.valor_mensal;
-  }
-  return 0;
-}, [resultado]);
-```
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-## Passo 2 — StepFinanceiro.tsx
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
 
-### 2.1 — Mensalidade base (linhas 87-91)
-Mesmo padrão: usar `useCalcularCotacao` para buscar o valor real.
+---
 
-```typescript
-const { calcular, resultado: resultadoCotacao } = useCalcularCotacao();
+# Visibilidade por Equipe — Supervisor de Vendas
 
-useEffect(() => {
-  const fipe = dadosNovoVeiculo.valor_fipe;
-  if (fipe && fipe > 0) {
-    calcular({
-      valor_fipe: fipe,
-      tipo_uso: dadosNovoVeiculo.uso_aplicativo ? 'aplicativo' : 'particular',
-    });
-  }
-}, [dadosNovoVeiculo.valor_fipe, dadosNovoVeiculo.uso_aplicativo]);
+## ✅ CORRIGIDO
 
-const mensalidadeBaseNova = useMemo(() => {
-  if (mensalidadeManual) return parseFloat(mensalidadeManual);
-  if (resultadoCotacao?.planos?.length) {
-    const plano = resultadoCotacao.planos.find(p => p.destaque) || resultadoCotacao.planos[0];
-    return plano.valor_mensal;
-  }
-  return 0;
-}, [resultadoCotacao, mensalidadeManual]);
-```
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
 
-A `mensalidadeBaseAntiga` mantém o fallback `veiculoAntigo.mensalidade || 0` (valor histórico do contrato).
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
 
-### 2.2 — Fallback vidros R$ 9.90 (linhas 98 e 247)
-Duas ocorrências de `9.90`. Substituir pelo valor do `precosMap` que já vem de `useBeneficiosSeparados()` (tabela `beneficios_adicionais`). Usar `precosMap['cobertura_vidros']?.preco || 0` em vez de `|| 9.90`.
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
 
-### 2.3 — Multiplicador `cotas * 200` (linhas 128, 133)
-O `200` é o **valor monetário por cota de participação**. Já existe o hook `useValorPorCota()` que busca `atuarial_valor_por_cota` da tabela `configuracoes` (padrão: 5000). Porém, 200 ≠ 5000 — são conceitos diferentes.
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
 
-Investigando: `cotas * 200` calcula a **cota de participação em sinistro** (quanto o associado paga). Já `valor_por_cota = 5000` é o **tamanho da faixa FIPE** que define quantas cotas o veículo tem.
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
 
-O valor `200` deveria ser uma chave em `configuracoes`, ex: `atuarial_valor_cota_participacao`. Precisa criar essa chave no banco.
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
 
-**Ação**: Criar chave `atuarial_valor_cota_participacao` com valor `200` na tabela `configuracoes`, e um hook `useValorCotaParticipacao()` para buscá-la.
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
 
-### 2.4 — Placeholder (linha 424)
-Substituir `(dadosNovoVeiculo.valor_fipe || 0) * 0.0045` pelo `mensalidadeBaseNova` calculado.
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
 
-## Passo 3 — Verificação global
-Busca por `0.0045` para confirmar zero ocorrências restantes.
+---
 
-## Arquivos a modificar
-- `src/components/substituicao/StepBeneficios.tsx` — usar `useCalcularCotacao` para mensalidade base
-- `src/components/substituicao/StepFinanceiro.tsx` — usar `useCalcularCotacao`, remover fallback 9.90, substituir multiplicador 200
+## 🟡 PENDENTE
 
-## Migração SQL
-- Inserir chave `atuarial_valor_cota_participacao` = `200` na tabela `configuracoes`
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
 
-## Checklist
-- [ ] StepBeneficios: mensalidade usa hook real
-- [ ] StepFinanceiro: mensalidade usa hook real
-- [ ] StepFinanceiro: vidros R$9,90 corrigido
-- [ ] StepFinanceiro: multiplicador 200 vem do banco
-- [ ] Placeholder atualizado
-- [ ] Busca global: zero ocorrências de 0.0045
+---
 
+# Fluxo de Assistência 24h — Reboque
+
+## ✅ CORRIGIDO
+
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { Loader2, Receipt, ArrowLeftRight, Calculator, Shield, CheckCircle2, AlertTriangle, CreditCard, QrCode, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +13,8 @@ import { useAsaas } from '@/hooks/useAsaas';
 import { useCotasPorFipe } from '@/hooks/useFaixasCotas';
 import { useAtualizarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
 import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
-import { useTaxaSubstituicao, useCotaParticipacaoDefault, useCotaMinimaDefault, useCarenciaDiasPadrao } from '@/hooks/useConteudosSistema';
+import { useTaxaSubstituicao, useCotaParticipacaoDefault, useCotaMinimaDefault, useCarenciaDiasPadrao, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
+import { useCalcularCotacao } from '@/hooks/useCalcularCotacao';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { PixQRCode } from '@/components/app/PixQRCode';
@@ -72,6 +73,20 @@ export function StepFinanceiro({
   const { data: taxaSubstituicao = 50 } = useTaxaSubstituicao();
   const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
+  const { data: valorCotaParticipacao = 200 } = useConfiguracaoNumero('atuarial_valor_cota_participacao', 200);
+
+  // Cotação dinâmica para mensalidade do novo veículo
+  const { calcular, resultado: resultadoCotacao } = useCalcularCotacao();
+
+  useEffect(() => {
+    const fipe = dadosNovoVeiculo.valor_fipe;
+    if (fipe && fipe > 0) {
+      calcular({
+        valor_fipe: fipe,
+        tipo_uso: dadosNovoVeiculo.uso_aplicativo ? 'aplicativo' : 'particular',
+      });
+    }
+  }, [dadosNovoVeiculo.valor_fipe, dadosNovoVeiculo.uso_aplicativo, calcular]);
 
   // Faixas de cota
   const cotasAntigo = useCotasPorFipe(veiculoAntigo.valor_fipe);
@@ -84,18 +99,24 @@ export function StepFinanceiro({
   // Cálculos financeiros
   // =============================================
 
-  // Mensalidade base (0.45% FIPE — simplificado)
-  const mensalidadeBaseAntiga = veiculoAntigo.mensalidade || (veiculoAntigo.valor_fipe * 0.0045);
-  const mensalidadeBaseNova = dadosNovoVeiculo.valor_fipe
-    ? (mensalidadeManual ? parseFloat(mensalidadeManual) : dadosNovoVeiculo.valor_fipe * 0.0045)
-    : 0;
+  // Mensalidade base — valor real de tabelas_preco_mensalidade
+  const mensalidadeBaseAntiga = veiculoAntigo.mensalidade || 0;
+
+  const mensalidadeBaseNova = useMemo(() => {
+    if (mensalidadeManual) return parseFloat(mensalidadeManual) || 0;
+    if (resultadoCotacao?.planos?.length) {
+      const plano = resultadoCotacao.planos.find(p => p.destaque) || resultadoCotacao.planos[0];
+      return plano.valor_mensal;
+    }
+    return 0;
+  }, [resultadoCotacao, mensalidadeManual]);
 
   // Adicionais antigos
   const adicionaisAntigo = useMemo(() => {
     let total = 0;
     if (veiculoAntigo.cobertura_vidros) {
       const vidros = precosMap['cobertura_vidros'];
-      total += vidros ? vidros.preco : 9.90;
+      total += vidros ? vidros.preco : 0;
     }
     if (veiculoAntigo.cobertura_terceiros) {
       const ft = terceirosMap[veiculoAntigo.cobertura_terceiros];
@@ -125,13 +146,13 @@ export function StepFinanceiro({
   // Cota de participação
   const cotaAntigaValor = useMemo(() => {
     if (!cotasAntigo) return veiculoAntigo.valor_fipe * (cotaParticipacaoDefault / 100);
-    return Math.max(cotasAntigo.cotas * 200, cotaMinimaDefault);
-  }, [cotasAntigo, veiculoAntigo.valor_fipe]);
+    return Math.max(cotasAntigo.cotas * valorCotaParticipacao, cotaMinimaDefault);
+  }, [cotasAntigo, veiculoAntigo.valor_fipe, valorCotaParticipacao, cotaMinimaDefault]);
 
   const cotaNovaValor = useMemo(() => {
     if (!cotasNovo || !dadosNovoVeiculo.valor_fipe) return 0;
-    return Math.max(cotasNovo.cotas * 200, cotaMinimaDefault);
-  }, [cotasNovo, dadosNovoVeiculo.valor_fipe]);
+    return Math.max(cotasNovo.cotas * valorCotaParticipacao, cotaMinimaDefault);
+  }, [cotasNovo, dadosNovoVeiculo.valor_fipe, valorCotaParticipacao, cotaMinimaDefault]);
 
   // Pro-rata
   const proRata = useMemo(() => {
@@ -244,7 +265,7 @@ export function StepFinanceiro({
     const rows: { nome: string; antigo: number; novo: number }[] = [];
 
     // Vidros
-    const vidrosPreco = precosMap['cobertura_vidros']?.preco || 9.90;
+    const vidrosPreco = precosMap['cobertura_vidros']?.preco || 0;
     rows.push({
       nome: 'Vidros e Faróis',
       antigo: veiculoAntigo.cobertura_vidros ? vidrosPreco : 0,
@@ -421,7 +442,7 @@ export function StepFinanceiro({
                 <Input
                   type="number"
                   step="0.01"
-                  placeholder={`Auto: ${formatCurrency((dadosNovoVeiculo.valor_fipe || 0) * 0.0045)}`}
+                  placeholder={`Auto: ${formatCurrency(mensalidadeBaseNova)}`}
                   value={mensalidadeManual}
                   onChange={(e) => setMensalidadeManual(e.target.value)}
                   className="mt-1 max-w-xs"
