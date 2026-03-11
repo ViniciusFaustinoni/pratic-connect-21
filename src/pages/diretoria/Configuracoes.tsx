@@ -288,12 +288,45 @@ export default function ConfiguracoesSistema() {
     );
   }
 
+  // Find the fipe_menor_ativo config for the highlighted card
+  const fipeMenorConfig = configuracoes?.find(c => c.chave === 'fipe_menor_ativo');
+
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Configurações do Sistema</h1>
         <p className="text-muted-foreground">Gerencie os parâmetros de funcionamento da associação</p>
       </div>
+
+      {/* Card destacado: FIPE Menor */}
+      {fipeMenorConfig && (
+        <Card className="border-2 border-primary/30 bg-primary/5">
+          <CardContent className="flex items-center justify-between py-5 px-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <TrendingDown className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Regra FIPE Menor 1%</h3>
+                <p className="text-sm text-muted-foreground">
+                  {fipeMenorConfig.descricao || 'Permite enquadrar veículos em faixa de preço inferior com desconto de 1% na FIPE'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <Badge variant={fipeMenorConfig.valor === 'true' ? 'default' : 'secondary'}>
+                {fipeMenorConfig.valor === 'true' ? 'Ativa' : 'Desativada'}
+              </Badge>
+              <Switch
+                checked={fipeMenorConfig.valor === 'true'}
+                onCheckedChange={(checked) => {
+                  updateConfig.mutate({ chave: 'fipe_menor_ativo', valor: String(checked) });
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {availableCategories.length === 0 ? (
         <Card>
