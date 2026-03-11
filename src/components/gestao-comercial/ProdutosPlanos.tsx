@@ -234,9 +234,12 @@ export function ProdutosPlanos() {
               >
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-sm truncate">{plan.nome}</span>
-                  <Badge variant="outline" className="text-xs ml-2 shrink-0">
-                    {count}
-                  </Badge>
+                  {count > 0 && (
+                    <Badge variant="outline" className="text-xs ml-2 shrink-0">
+                      <Users className="h-3 w-3 mr-1" />
+                      {count}
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {plan.product_lines?.name || 'Sem linha'}
