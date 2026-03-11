@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
