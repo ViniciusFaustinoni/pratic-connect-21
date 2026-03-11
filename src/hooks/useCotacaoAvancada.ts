@@ -152,8 +152,21 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
         if (!faixa) continue;
 
         // Aplicar adicional app se necessário
-        const valorMensal = resolverPrecoApp(mapping.linha_slug, regiaoLower, mapping.tipo_uso, Number(faixa.valor_mensal), adicionalApp);
-        const valorDesagio = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
+        let valorMensal = resolverPrecoApp(mapping.linha_slug, regiaoLower, mapping.tipo_uso, Number(faixa.valor_mensal), adicionalApp);
+
+        // Aplicar adicional_mensal do plano (Premium +30, Exclusive +60)
+        valorMensal += Number(plano.adicional_mensal || 0);
+
+        // Aplicar desconto percentual dinâmico (ex: 5% OFF)
+        const descontoPerc = Number(plano.desconto_percentual || 0);
+        if (descontoPerc > 0) {
+          valorMensal *= (1 - descontoPerc / 100);
+        }
+
+        let valorDesagio = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
+        if (valorDesagio != null && descontoPerc > 0) {
+          valorDesagio *= (1 - descontoPerc / 100);
+        }
         const valorAdesao = Number(plano.valor_adesao) || 0;
 
         // Decomposição percentual (valores do banco)
