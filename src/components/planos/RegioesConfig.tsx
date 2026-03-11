@@ -225,6 +225,7 @@ export function RegioesConfig() {
                   <TableHead>Código</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead className="text-center">Cidades</TableHead>
+                  <TableHead className="text-center">Faixas de Preço</TableHead>
                   <TableHead className="text-center">Multiplicador</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   {podeEditar && <TableHead className="text-right">Ações</TableHead>}
@@ -233,7 +234,7 @@ export function RegioesConfig() {
               <TableBody>
                 {filteredRegioes?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={podeEditar ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={podeEditar ? 7 : 6} className="text-center py-8 text-muted-foreground">
                       Nenhuma região encontrada
                     </TableCell>
                   </TableRow>
