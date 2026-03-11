@@ -53,28 +53,45 @@ export default function RateioSinistros() {
     }
   });
 
-  // Rateio do mês atual com detalhes
+  // Rateio do mês atual — se não existir, buscar o último disponível
   const { data: rateioAtual, isLoading: loadingAtual } = useQuery({
     queryKey: ['rateio-atual'],
     queryFn: async () => {
       const hoje = new Date();
-      const { data, error } = await supabase
-        .from('rateios')
-        .select(`
+      const selectFields = `
+        *,
+        detalhes:rateios_detalhes(
           *,
-          detalhes:rateios_detalhes(
-            *,
-            plano:planos(nome)
-          ),
-          detalhes_faixas:rateios_detalhes_faixas(*)
-        `)
+          plano:planos(nome)
+        ),
+        detalhes_faixas:rateios_detalhes_faixas(*)
+      `;
+
+      // Tentar mês atual primeiro
+      const { data: atual, error: erroAtual } = await supabase
+        .from('rateios')
+        .select(selectFields)
         .eq('ano', hoje.getFullYear())
         .eq('mes', hoje.getMonth() + 1)
         .maybeSingle();
-      if (error) throw error;
-      return data;
+      if (erroAtual) throw erroAtual;
+      if (atual) return { ...atual, _isCurrentMonth: true };
+
+      // Fallback: último rateio disponível
+      const { data: ultimo, error: erroUltimo } = await supabase
+        .from('rateios')
+        .select(selectFields)
+        .order('ano', { ascending: false })
+        .order('mes', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (erroUltimo) throw erroUltimo;
+      if (ultimo) return { ...ultimo, _isCurrentMonth: false };
+      return null;
     }
   });
+
+  const isCurrentMonth = (rateioAtual as any)?._isCurrentMonth ?? false;
 
   // Rateio do mês anterior para comparativo
   const { data: rateioAnterior } = useQuery({
