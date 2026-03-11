@@ -132,6 +132,20 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Buscar elegibilidade de modelos por plano
+  const { data: elegibilidadeData, isLoading: elegibilidadeLoading } = useQuery({
+    queryKey: ['plano_elegibilidade_modelos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('plano_elegibilidade_modelos')
+        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Buscar exclusões de benefícios por categoria
   const { data: benefitExclusions } = useQuery({
     queryKey: ['benefit_exclusions_cotacao'],
