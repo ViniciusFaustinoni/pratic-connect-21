@@ -116,7 +116,7 @@ export function StepFinanceiro({
     let total = 0;
     if (veiculoAntigo.cobertura_vidros) {
       const vidros = precosMap['cobertura_vidros'];
-      total += vidros ? vidros.preco : 9.90;
+      total += vidros ? vidros.preco : 0;
     }
     if (veiculoAntigo.cobertura_terceiros) {
       const ft = terceirosMap[veiculoAntigo.cobertura_terceiros];
