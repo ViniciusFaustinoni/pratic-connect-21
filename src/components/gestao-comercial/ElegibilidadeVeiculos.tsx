@@ -227,8 +227,8 @@ function TabPorPlano() {
                 <SelectItem key={p.id} value={p.id}>
                   <span className="flex items-center gap-2">
                     {p.nome}
-                    {p.linha_slug && (
-                      <Badge variant="outline" className="text-xs ml-1">{p.linha_slug}</Badge>
+                    {p.linha && (
+                      <Badge variant="outline" className="text-xs ml-1">{p.linha}</Badge>
                     )}
                   </span>
                 </SelectItem>
