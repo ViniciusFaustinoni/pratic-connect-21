@@ -73,6 +73,20 @@ export function StepFinanceiro({
   const { data: taxaSubstituicao = 50 } = useTaxaSubstituicao();
   const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
+  const { data: valorCotaParticipacao = 200 } = useConfigValor('atuarial_valor_cota_participacao', 200);
+
+  // Cotação dinâmica para mensalidade do novo veículo
+  const { calcular, resultado: resultadoCotacao } = useCalcularCotacao();
+
+  useEffect(() => {
+    const fipe = dadosNovoVeiculo.valor_fipe;
+    if (fipe && fipe > 0) {
+      calcular({
+        valor_fipe: fipe,
+        tipo_uso: dadosNovoVeiculo.uso_aplicativo ? 'aplicativo' : 'particular',
+      });
+    }
+  }, [dadosNovoVeiculo.valor_fipe, dadosNovoVeiculo.uso_aplicativo, calcular]);
 
   // Faixas de cota
   const cotasAntigo = useCotasPorFipe(veiculoAntigo.valor_fipe);
