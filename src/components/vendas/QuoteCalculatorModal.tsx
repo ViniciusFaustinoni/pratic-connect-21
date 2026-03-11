@@ -76,7 +76,7 @@ export function QuoteCalculatorModal({
   const [desagio, setDesagio] = useState(0);
   const [copied, setCopied] = useState(false);
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string>('');
-  const [adicionaisSelecionados, setAdicionaisSelecionados] = useState<string[]>([]);
+  const [adicionaisSelecionadosIds, setAdicionaisSelecionadosIds] = useState<string[]>([]);
 
   // ========== DADOS DO BANCO ==========
   const { data: planos = [], isLoading: loadingPlanos } = usePlanosParaCotacao(valorFipe, usoAplicativo);

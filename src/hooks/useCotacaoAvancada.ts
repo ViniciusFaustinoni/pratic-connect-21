@@ -334,7 +334,7 @@ export function useCotacaoAvancada() {
         nome_solicitante: dados.clienteNome || null,
         telefone1_solicitante: dados.clienteTelefone?.replace(/\D/g, '') || null,
         email_solicitante: dados.clienteEmail || null,
-        adicionais_selecionados: dados.adicionaisSelecionados,
+        adicionais_selecionados: dados.adicionaisSelecionados as any,
         cidade: dados.cidade,
         token_publico: token,
         dados_extras: {
