@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useBenefits, useMainCoverages, usePlans } from '@/hooks/usePlans';
-import { useDeleteBenefit, useDeleteMainCoverage } from '@/hooks/usePlansAdmin';
+import { useDeleteBenefit, useDeleteMainCoverage, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { BeneficioFormModal } from '@/components/admin/planos/BeneficioFormModal';
