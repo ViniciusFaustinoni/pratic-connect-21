@@ -142,11 +142,16 @@ function encontrarFaixaMensalidade(
   // Resolver tipo_uso para query (regras de adicional app)
   const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiao, mapping.tipo_uso);
 
+  // For eletrico: ignore region (national pricing) and combustivel
+  const isEletrico = mapping.linha_slug === 'eletrico';
+  const regiaoLower = regiao.toLowerCase();
+  const combustivelLower = combustivel.toLowerCase();
+
   const faixa = tabelasMensalidade.find(t =>
     t.linha_slug === mapping.linha_slug &&
-    t.regiao === regiao.toLowerCase() &&
+    (isEletrico || t.regiao === regiaoLower) &&
     t.tipo_uso === tipoUsoQuery &&
-    (t.combustivel_tipo === combustivel.toLowerCase() || t.combustivel_tipo === null) &&
+    (isEletrico || t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
     valorFipe >= t.fipe_min &&
     valorFipe <= t.fipe_max
   );
@@ -215,16 +220,29 @@ export function useCalcularCotacao() {
     if (!planos || !planoPrecoMap || !tabelasMensalidade || valorFipe <= 0) return [];
 
     // Filtrar planos pelo tipo de uso
-    let planosDisponiveis = planos.filter((p) => p.tipo_uso === tipoUso);
+    // 'passeio' no banco é tratado como 'particular' (motos e elétricos usam 'passeio')
+    let planosDisponiveis = planos.filter((p) => {
+      const tipoUsoBD = p.tipo_uso?.toLowerCase();
+      if (tipoUso === 'particular') {
+        return tipoUsoBD === 'particular' || tipoUsoBD === 'passeio';
+      }
+      return tipoUsoBD === tipoUso;
+    });
     
-    // Se não encontrou planos para aplicativo, usar planos de particular
+    // Se não encontrou planos para aplicativo, incluir planos passeio/particular
     if (planosDisponiveis.length === 0 && tipoUso === 'aplicativo') {
-      planosDisponiveis = planos.filter((p) => p.tipo_uso === 'particular');
+      planosDisponiveis = planos.filter((p) => {
+        const t = p.tipo_uso?.toLowerCase();
+        return t === 'particular' || t === 'passeio';
+      });
     }
 
-    // Se especificou plano, filtrar
+    // Se especificou plano, filtrar (bypass tipo_uso — o plano já foi escolhido)
     if (planoId) {
-      planosDisponiveis = planosDisponiveis.filter((p) => p.id === planoId);
+      const planoEspecifico = planos.filter((p) => p.id === planoId);
+      if (planoEspecifico.length > 0) {
+        planosDisponiveis = planoEspecifico;
+      }
     }
 
     const resultados: ResultadoCotacao[] = [];

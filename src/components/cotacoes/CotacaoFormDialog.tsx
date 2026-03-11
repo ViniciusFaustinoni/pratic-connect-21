@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -266,6 +267,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return anoTexto ? parseInt(anoTexto.split(' ')[0]) : undefined;
   }, [anoTexto]);
 
+  // Detectar tipo de veículo automaticamente (moto vs carro)
+  const tipoVeiculoDetectado = useMemo(() => {
+    const marca = veiculoEncontrado?.vehicleData?.marca || marcaSelecionada || '';
+    const modelo = veiculoEncontrado?.vehicleData?.modelo || '';
+    if (!marca && !modelo) return 'carro' as const;
+    const tipo = detectarTipoVeiculo(undefined, modelo, marca);
+    return tipo === 'moto' ? 'moto' as const : 'carro' as const;
+  }, [veiculoEncontrado, marcaSelecionada]);
+
   // Hook de planos calculados dinamicamente do banco
   const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
     valorFipe,
@@ -274,6 +284,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
     categoria: usoVeiculo === 'aplicativo' ? 'aplicativo' : (categoria || undefined),
     anoVeiculo: anoNumerico,
+    tipoVeiculo: tipoVeiculoDetectado,
     usoApp: usoVeiculo === 'aplicativo',
   });
 
@@ -349,7 +360,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       const buscarFipeAutomatico = async () => {
         setBuscandoFipe(true);
         try {
-          const resultado = await getPreco(marcaSelecionada, modeloSelecionado, anoSelecionado, 'carros');
+          const tipoFipe = tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros';
+          const resultado = await getPreco(marcaSelecionada, modeloSelecionado, anoSelecionado, tipoFipe);
           if (resultado && resultado.valorNumerico) {
             form.setValue('valor_fipe', resultado.valorNumerico);
             toast.success(`Valor FIPE: ${resultado.valor}`);
@@ -498,7 +510,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               resultado.vehicleData.marca,
               resultado.vehicleData.modelo,
               anoVeiculo,
-              'carros'
+              tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros'
             );
             if (fipeResult?.valorNumerico) {
               form.setValue('valor_fipe', fipeResult.valorNumerico);
