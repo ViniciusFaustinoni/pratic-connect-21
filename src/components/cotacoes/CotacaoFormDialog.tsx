@@ -780,6 +780,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           form.setValue('valor_cota', primeiro.valorCota || 0);
           form.setValue('taxa_administrativa', primeiro.taxaAdministrativa || 0);
           form.setValue('valor_rastreamento', primeiro.valorRastreamento || 0);
+          form.setValue('valor_adesao', primeiro.valorAdesao || 0);
           const adicional = form.getValues('valor_adicional') || 0;
           form.setValue('valor_total_mensal', primeiro.valorMensal + adicional);
         } else {
@@ -795,6 +796,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         form.setValue('valor_cota', plano.valorCota || 0);
         form.setValue('taxa_administrativa', plano.taxaAdministrativa || 0);
         form.setValue('valor_rastreamento', plano.valorRastreamento || 0);
+        form.setValue('valor_adesao', plano.valorAdesao || 0);
         const adicional = form.getValues('valor_adicional') || 0;
         form.setValue('valor_total_mensal', plano.valorMensal + adicional);
       }
@@ -1598,7 +1600,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 )}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Informe a taxa de filiação que será cobrada do associado
+                Valor da taxa de filiação (NÃO inclui mensalidade)
               </p>
             </div>
 
