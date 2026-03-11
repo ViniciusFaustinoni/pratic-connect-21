@@ -164,6 +164,15 @@ export function LinhasTab() {
                     <Button
                       size="sm"
                       variant="ghost"
+                      onClick={() => duplicateLine.mutate(line.id)}
+                      disabled={duplicateLine.isPending}
+                    >
+                      <Copy className="h-4 w-4 mr-1" />
+                      Duplicar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       onClick={() => setDeleteId(line.id)}
                       disabled={getPlansCount(line.id) > 0}
                     >

@@ -47,7 +47,7 @@ export function PlanoCardSelecao({
     }).format(value);
   };
 
-  const gradientClass = plano.linha ? LINHA_CORES_FALLBACK[plano.linha] || 'from-gray-500 to-gray-600' : 'from-primary to-primary/80';
+  const gradientClass = plano.gradient_class || DEFAULT_GRADIENT;
   const coberturasToShow = compact ? (plano.coberturas?.slice(0, 4) || []) : (plano.coberturas || []);
 
   return (

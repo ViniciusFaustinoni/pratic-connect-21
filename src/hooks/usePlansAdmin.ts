@@ -603,3 +603,87 @@ export function useDeleteProductLine() {
     },
   });
 }
+
+// ==================== DUPLICATE PRODUCT LINE ====================
+
+export function useDuplicateProductLine() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: original, error: fetchError } = await supabase
+        .from('product_lines')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const { id: _, created_at, ...lineData } = original;
+      const newLine = {
+        ...lineData,
+        name: `${lineData.name} (cópia)`,
+        slug: `${lineData.slug}-copia-${Date.now()}`,
+        is_active: false,
+      };
+
+      const { data, error } = await supabase
+        .from('product_lines')
+        .insert(newLine)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['product_lines'] });
+      toast.success('Linha duplicada! (criada como inativa)');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao duplicar linha: ${error.message}`);
+    },
+  });
+}
+
+// ==================== DUPLICATE BENEFIT ====================
+
+export function useDuplicateBenefit() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: original, error: fetchError } = await supabase
+        .from('benefits')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const { id: _, created_at, ...benefitData } = original;
+      const newBenefit = {
+        ...benefitData,
+        name: `${benefitData.name} (cópia)`,
+        slug: `${benefitData.slug}-copia-${Date.now()}`,
+        is_active: false,
+      };
+
+      const { data, error } = await supabase
+        .from('benefits')
+        .insert(newBenefit)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['benefits'] });
+      toast.success('Benefício duplicado! (criado como inativo)');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao duplicar benefício: ${error.message}`);
+    },
+  });
+}

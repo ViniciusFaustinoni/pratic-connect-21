@@ -508,10 +508,8 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COBERTURAS INCLUÍDAS');
   y += HEADER_HEIGHT + INNER_GAP;
 
-  // Usar coberturas do plano se disponíveis, senão usar padrão
-  const coberturas = (cotacao.planos?.coberturas && cotacao.planos.coberturas.length > 0)
-    ? cotacao.planos.coberturas
-    : COBERTURAS_PADRAO;
+  // Usar coberturas do plano (sem fallback hardcoded)
+  const coberturas = cotacao.planos?.coberturas || [];
 
   // Exibir em 2 colunas - posições fixas para evitar sobreposição
   const coberturasCol1 = coberturas.slice(0, Math.ceil(coberturas.length / 2));
