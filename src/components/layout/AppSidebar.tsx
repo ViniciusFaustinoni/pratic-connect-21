@@ -65,6 +65,7 @@ import {
   Bell,
   Send,
   Layers,
+  TrendingDown,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
