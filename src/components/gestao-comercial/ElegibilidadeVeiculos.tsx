@@ -418,7 +418,7 @@ function TabResumoGlobal() {
       if (error) {
         const { data: planos, error: pe } = await supabase
           .from('planos')
-          .select('id, nome, linha_slug')
+          .select('id, nome, linha')
           .eq('ativo', true)
           .order('nome');
         if (pe) throw pe;
