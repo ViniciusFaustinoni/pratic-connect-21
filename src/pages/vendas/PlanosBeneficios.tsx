@@ -230,7 +230,7 @@ export default function PlanosBeneficios() {
             <AlertDescription className="text-amber-700 dark:text-amber-300">
               <strong>REGRA DE DESÁGIO:</strong> Em todos os planos com cota de participação inferior a 10%, 
               quando o associado optar pelo DESÁGIO (adesivo publicitário), a cota de participação passa a ser 
-              <strong> 8% (mínimo R$2.000)</strong>.
+              <strong> {cotaDesagioPerc}% (mínimo {formatarMoeda(cotaMinimaDesagio)})</strong>.
             </AlertDescription>
           </Alert>
 
