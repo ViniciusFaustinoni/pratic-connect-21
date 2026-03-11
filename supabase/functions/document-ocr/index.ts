@@ -460,38 +460,57 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
     console.log('Calling Lovable AI Gateway for document OCR:', url);
 
-    // Detectar se é PDF para enviar como base64 (IA processa PDF nativo melhor que imagem convertida)
+    // Sempre baixar o arquivo e enviar como base64 para evitar problemas de acesso à URL pelo gateway
     const isPdfUrl = url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf?');
+    const isDataUri = url.startsWith('data:');
     let contentParts: any[];
 
-    if (isPdfUrl) {
-      console.log('PDF detected, downloading and converting to base64...');
+    if (isDataUri) {
+      // Já é base64 data URI, enviar direto
+      console.log('Data URI detected, sending directly...');
+      contentParts = [
+        { type: 'text', text: userPrompt },
+        { type: 'image_url', image_url: { url } },
+      ];
+    } else {
+      // Baixar arquivo (PDF ou imagem) e converter para base64
+      const fileType = isPdfUrl ? 'PDF' : 'image';
+      console.log(`${fileType} detected, downloading and converting to base64...`);
       try {
-        const pdfResponse = await fetch(url);
-        if (!pdfResponse.ok) {
-          throw new Error(`Failed to download PDF: ${pdfResponse.status}`);
+        const fileResponse = await fetch(url);
+        if (!fileResponse.ok) {
+          throw new Error(`Failed to download ${fileType}: ${fileResponse.status}`);
         }
-        const pdfBuffer = await pdfResponse.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(pdfBuffer)));
-        const dataUri = `data:application/pdf;base64,${base64}`;
-        console.log(`PDF downloaded: ${pdfBuffer.byteLength} bytes`);
+        const fileBuffer = await fileResponse.arrayBuffer();
+        const uint8Array = new Uint8Array(fileBuffer);
+        
+        // Converter para base64 em chunks para evitar stack overflow em arquivos grandes
+        let base64 = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+          const chunk = uint8Array.slice(i, i + chunkSize);
+          base64 += String.fromCharCode(...chunk);
+        }
+        base64 = btoa(base64);
+        
+        // Detectar MIME type
+        const mimeType = isPdfUrl 
+          ? 'application/pdf' 
+          : (fileResponse.headers.get('content-type') || 'image/jpeg');
+        const dataUri = `data:${mimeType};base64,${base64}`;
+        console.log(`${fileType} downloaded: ${fileBuffer.byteLength} bytes, mime: ${mimeType}`);
         
         contentParts = [
           { type: 'text', text: userPrompt },
           { type: 'image_url', image_url: { url: dataUri } },
         ];
       } catch (downloadError) {
-        console.error('Failed to download PDF:', downloadError);
+        console.error(`Failed to download ${fileType}:`, downloadError);
         return new Response(
-          JSON.stringify({ error: 'Erro ao baixar o PDF para processamento.' }),
+          JSON.stringify({ error: `Erro ao baixar o documento para processamento.` }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-    } else {
-      contentParts = [
-        { type: 'text', text: userPrompt },
-        { type: 'image_url', image_url: { url } },
-      ];
     }
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
