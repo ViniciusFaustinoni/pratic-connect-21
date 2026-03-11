@@ -227,11 +227,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       let valorDesagio: number | null = null;
 
       if (linhaSlug && tabelasMensalidade) {
+        // For eletrico line: ignore region (national pricing) and combustivel
+        const isEletrico = linhaSlug === 'eletrico';
         const faixa = tabelasMensalidade.find(t =>
           t.linha_slug === linhaSlug &&
-          t.regiao === regiaoLower &&
+          (isEletrico || t.regiao === regiaoLower) &&
           t.tipo_uso === tipoUsoPricing &&
-          (t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
+          (isEletrico || t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
           valorFipe >= t.fipe_min &&
           valorFipe <= t.fipe_max
         );
