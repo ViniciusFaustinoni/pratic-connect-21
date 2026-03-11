@@ -253,9 +253,6 @@ export function BeneficiosAdicionaisConfig() {
                           <span className="text-xs text-muted-foreground">Todas</span>
                         )}
                       </TableCell>
-                          {getCategoriaLabel(beneficio.categoria)}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline">
                           <MapPin className="h-3 w-3 mr-1" />
