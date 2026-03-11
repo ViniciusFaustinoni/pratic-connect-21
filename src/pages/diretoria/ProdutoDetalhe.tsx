@@ -120,6 +120,9 @@ export default function ProdutoDetalhe() {
     enabled: !!id
   });
 
+  // Get plan with details for the PlanFormModal
+  const { data: planWithDetails } = usePlanById(id);
+
   const { data: coberturas, isLoading: loadingCoberturas } = useQuery({
     queryKey: ['plano-coberturas', id],
     queryFn: async () => {

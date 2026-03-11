@@ -590,10 +590,10 @@ export function ProdutosPlanos() {
       </div>
 
       {/* Modals */}
-      <ProdutoFormModal
+      <PlanFormModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        produto={produtoEdit}
+        onOpenChange={(open) => { if (!open) setModalOpen(false); }}
+        plan={produtoEdit as PlanWithDetails | null}
       />
 
       {selectedPlanoId && (

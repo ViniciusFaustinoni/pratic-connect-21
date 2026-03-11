@@ -10,42 +10,36 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ProdutoFormModal } from '@/components/diretoria';
-
-const tipoVeiculoConfig: Record<string, { label: string; class: string }> = {
-  carro: { label: 'Carro', class: 'bg-blue-100 text-blue-800' },
-  moto: { label: 'Moto', class: 'bg-orange-100 text-orange-800' },
-  caminhao: { label: 'Caminhão', class: 'bg-gray-100 text-gray-800' },
-  van: { label: 'Van', class: 'bg-purple-100 text-purple-800' },
-  utilitario: { label: 'Utilitário', class: 'bg-green-100 text-green-800' },
-};
-
-const usoConfig: Record<string, { label: string; class: string }> = {
-  particular: { label: 'Particular', class: 'bg-green-100 text-green-800' },
-  aplicativo: { label: 'Aplicativo', class: 'bg-yellow-100 text-yellow-800' },
-  comercial: { label: 'Comercial', class: 'bg-blue-100 text-blue-800' },
-  taxi: { label: 'Táxi', class: 'bg-purple-100 text-purple-800' },
-  frota: { label: 'Frota', class: 'bg-gray-100 text-gray-800' },
-};
+import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
+import { usePlans, useProductLines } from '@/hooks/usePlans';
+import type { PlanWithDetails } from '@/hooks/usePlans';
+import { useTogglePlanStatus } from '@/hooks/usePlansAdmin';
 
 export default function ProdutosGestao() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
-  const [produtoEdit, setProdutoEdit] = useState<any>(null);
+  const [produtoEdit, setProdutoEdit] = useState<PlanWithDetails | null>(null);
 
-  const { data: planos, isLoading } = useQuery({
-    queryKey: ['planos-gestao'],
+  const { data: plans, isLoading } = usePlans();
+  const { data: lines } = useProductLines();
+  const toggleStatus = useTogglePlanStatus();
+
+  // Fetch associados count per plan
+  const { data: associadosCounts } = useQuery({
+    queryKey: ['associados-por-plano'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('planos')
-        .select('*')
-        .order('nome');
-      if (error) throw error;
-      return data;
-    }
+      const { data } = await supabase
+        .from('associados')
+        .select('plano_id')
+        .eq('status', 'ativo');
+      const counts: Record<string, number> = {};
+      data?.forEach(a => { if (a.plano_id) counts[a.plano_id] = (counts[a.plano_id] || 0) + 1; });
+      return counts;
+    },
   });
 
+  // Fetch coberturas count per plan
   const { data: coberturasPorPlano } = useQuery({
     queryKey: ['planos-coberturas-count'],
     queryFn: async () => {
@@ -53,7 +47,6 @@ export default function ProdutosGestao() {
         .from('planos_coberturas')
         .select('plano_id');
       if (error) throw error;
-      
       const contagem: Record<string, number> = {};
       data?.forEach(pc => {
         contagem[pc.plano_id] = (contagem[pc.plano_id] || 0) + 1;
@@ -62,91 +55,35 @@ export default function ProdutosGestao() {
     }
   });
 
-  // Buscar preços via plano_preco_map → tabelas_preco_mensalidade
+  // Fetch price info per plan
   const { data: precosPorPlano } = useQuery({
     queryKey: ['planos-precos-info'],
     queryFn: async () => {
-      // Get all mappings
-      const { data: mappings, error: mapError } = await supabase
-        .from('plano_preco_map')
-        .select('plano_id, linha_slug');
-      if (mapError) throw mapError;
-
-      // Get all active price rows
-      const { data: precos, error: precoError } = await supabase
+      const { data: mappings } = await supabase.from('plano_preco_map').select('plano_id, linha_slug');
+      const { data: precos } = await supabase
         .from('tabelas_preco_mensalidade')
         .select('linha_slug, fipe_min, fipe_max')
         .eq('is_active', true);
-      if (precoError) throw precoError;
 
-      // Group price info by linha_slug
       const porLinha: Record<string, { count: number; minFipe: number; maxFipe: number }> = {};
       precos?.forEach(p => {
         const slug = p.linha_slug || '';
-        if (!porLinha[slug]) {
-          porLinha[slug] = { count: 0, minFipe: Infinity, maxFipe: 0 };
-        }
+        if (!porLinha[slug]) porLinha[slug] = { count: 0, minFipe: Infinity, maxFipe: 0 };
         porLinha[slug].count++;
         porLinha[slug].minFipe = Math.min(porLinha[slug].minFipe, Number(p.fipe_min));
         porLinha[slug].maxFipe = Math.max(porLinha[slug].maxFipe, Number(p.fipe_max));
       });
 
-      // Map back to plano_id
       const info: Record<string, { count: number; minFipe: number; maxFipe: number }> = {};
       mappings?.forEach(m => {
-        const linhaInfo = porLinha[m.linha_slug];
-        if (linhaInfo) {
-          info[m.plano_id] = linhaInfo;
-        }
+        if (porLinha[m.linha_slug]) info[m.plano_id] = porLinha[m.linha_slug];
       });
-
       return info;
     }
   });
 
-  const { data: estatisticas } = useQuery({
-    queryKey: ['planos-estatisticas'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('associados')
-        .select('plano_id')
-        .eq('status', 'ativo');
-      if (error) throw error;
-      
-      const contagem: Record<string, number> = {};
-      data?.forEach(a => {
-        if (a.plano_id) {
-          contagem[a.plano_id] = (contagem[a.plano_id] || 0) + 1;
-        }
-      });
-      return contagem;
-    }
-  });
-
-  const toggleAtivo = useMutation({
-    mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
-      const { error } = await supabase
-        .from('planos')
-        .update({ ativo })
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['planos-gestao'] });
-      toast.success('Status atualizado!');
-    },
-    onError: () => {
-      toast.error('Erro ao atualizar status');
-    }
-  });
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      maximumFractionDigits: 0
-    }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 
   if (isLoading) {
     return (
@@ -156,9 +93,7 @@ export default function ProdutosGestao() {
           <Skeleton className="h-10 w-32" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => (
-            <Skeleton key={i} className="h-64" />
-          ))}
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-64" />)}
         </div>
       </div>
     );
@@ -178,26 +113,25 @@ export default function ProdutosGestao() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {planos?.map(plano => {
-          const tipoConfig = tipoVeiculoConfig[plano.tipo_veiculo || ''] || { label: plano.tipo_veiculo, class: 'bg-gray-100 text-gray-800' };
-          const usoConfigItem = usoConfig[plano.uso || ''] || { label: plano.uso, class: 'bg-gray-100 text-gray-800' };
-          const coberturasCount = coberturasPorPlano?.[plano.id] || 0;
-          const precosInfo = precosPorPlano?.[plano.id];
-          const associadosCount = estatisticas?.[plano.id] || 0;
+        {plans?.map(plan => {
+          const coberturasCount = coberturasPorPlano?.[plan.id] || 0;
+          const precosInfo = precosPorPlano?.[plan.id];
+          const associadosCount = associadosCounts?.[plan.id] || 0;
 
           return (
-            <Card key={plano.id} className={`relative ${!plano.ativo ? 'opacity-60' : ''}`}>
+            <Card key={plan.id} className={`relative ${!plan.ativo ? 'opacity-60' : ''}`}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
-                    {plano.destaque && (
-                      <Badge className="bg-yellow-100 text-yellow-800 mb-1">
+                    {plan.destaque && (
+                      <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 mb-1">
                         <Star className="h-3 w-3 mr-1" />
                         Destaque
                       </Badge>
                     )}
-                    <p className="text-xs text-muted-foreground">{plano.codigo}</p>
-                    <CardTitle className="text-lg">{plano.nome}</CardTitle>
+                    <p className="text-xs text-muted-foreground">{plan.codigo}</p>
+                    <CardTitle className="text-lg">{plan.nome}</CardTitle>
+                    <p className="text-xs text-muted-foreground">{plan.product_lines?.name || 'Sem linha'}</p>
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -206,36 +140,20 @@ export default function ProdutosGestao() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => { setProdutoEdit(plano); setModalOpen(true); }}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Editar
+                      <DropdownMenuItem onClick={() => { setProdutoEdit(plan); setModalOpen(true); }}>
+                        <Edit className="h-4 w-4 mr-2" /> Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(`/diretoria/produtos/${plano.id}?tab=precos`)}>
-                        <DollarSign className="h-4 w-4 mr-2" />
-                        Preços
+                      <DropdownMenuItem onClick={() => navigate(`/diretoria/produtos/${plan.id}?tab=precos`)}>
+                        <DollarSign className="h-4 w-4 mr-2" /> Preços
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(`/diretoria/produtos/${plano.id}?tab=coberturas`)}>
-                        <Shield className="h-4 w-4 mr-2" />
-                        Coberturas
+                      <DropdownMenuItem onClick={() => navigate(`/diretoria/produtos/${plan.id}?tab=coberturas`)}>
+                        <Shield className="h-4 w-4 mr-2" /> Coberturas
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  {plano.tipo_veiculo && (
-                    <Badge variant="secondary" className={tipoConfig.class}>
-                      {tipoConfig.label}
-                    </Badge>
-                  )}
-                  {plano.uso && (
-                    <Badge variant="secondary" className={usoConfigItem.class}>
-                      {usoConfigItem.label}
-                    </Badge>
-                  )}
-                </div>
-
                 <div className="space-y-2 text-sm">
                   {precosInfo && precosInfo.minFipe !== Infinity && (
                     <div className="flex items-center justify-between">
@@ -245,37 +163,30 @@ export default function ProdutosGestao() {
                       </span>
                     </div>
                   )}
-                  
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground flex items-center gap-1">
-                      <Shield className="h-3 w-3" />
-                      Coberturas:
+                      <Shield className="h-3 w-3" /> Coberturas:
                     </span>
                     <span className="font-medium">{coberturasCount} inclusas</span>
                   </div>
-
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      Faixas de preço:
+                      <DollarSign className="h-3 w-3" /> Faixas de preço:
                     </span>
                     <span className="font-medium">{precosInfo?.count || 0}</span>
                   </div>
-
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground flex items-center gap-1">
-                      <Users className="h-3 w-3" />
-                      Associados:
+                      <Users className="h-3 w-3" /> Associados:
                     </span>
                     <span className="font-medium">{associadosCount} ativos</span>
                   </div>
                 </div>
-
                 <div className="flex items-center justify-between pt-2 border-t">
                   <span className="text-sm text-muted-foreground">Ativo</span>
                   <Switch
-                    checked={plano.ativo}
-                    onCheckedChange={(checked) => toggleAtivo.mutate({ id: plano.id, ativo: checked })}
+                    checked={plan.ativo}
+                    onCheckedChange={(checked) => toggleStatus.mutate({ id: plan.id, is_active: checked })}
                   />
                 </div>
               </CardContent>
@@ -284,25 +195,22 @@ export default function ProdutosGestao() {
         })}
       </div>
 
-      {planos?.length === 0 && (
+      {plans?.length === 0 && (
         <Card className="p-12 text-center">
           <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">Nenhum produto cadastrado</h3>
-          <p className="text-muted-foreground mb-4">
-            Comece criando seu primeiro plano de proteção.
-          </p>
-        <Button onClick={() => { setProdutoEdit(null); setModalOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Produto
-        </Button>
-      </Card>
-    )}
+          <p className="text-muted-foreground mb-4">Comece criando seu primeiro plano de proteção.</p>
+          <Button onClick={() => { setProdutoEdit(null); setModalOpen(true); }}>
+            <Plus className="h-4 w-4 mr-2" /> Novo Produto
+          </Button>
+        </Card>
+      )}
 
-    <ProdutoFormModal
-      open={modalOpen}
-      onClose={() => setModalOpen(false)}
-      produto={produtoEdit}
-    />
-  </div>
-);
+      <PlanFormModal
+        open={modalOpen}
+        onOpenChange={(open) => { if (!open) setModalOpen(false); }}
+        plan={produtoEdit}
+      />
+    </div>
+  );
 }
