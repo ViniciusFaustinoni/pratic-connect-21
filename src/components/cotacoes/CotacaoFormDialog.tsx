@@ -1792,7 +1792,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             </div>
 
             {/* BLOCO 3.7: SOLICITAR FIPE MENOR */}
-            {fipeMenorInfo && planosSelecionados.length > 0 && !isEditando && (
+            {fipeMenorAtivo && fipeMenorInfo && planosSelecionados.length > 0 && !isEditando && (
               <>
                 <Separator />
                 <div className="space-y-3">
