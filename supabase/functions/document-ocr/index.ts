@@ -456,6 +456,40 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
     console.log('Calling Lovable AI Gateway for document OCR:', url);
 
+    // Detectar se é PDF para enviar como base64 (IA processa PDF nativo melhor que imagem convertida)
+    const isPdfUrl = url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf?');
+    let contentParts: any[];
+
+    if (isPdfUrl) {
+      console.log('PDF detected, downloading and converting to base64...');
+      try {
+        const pdfResponse = await fetch(url);
+        if (!pdfResponse.ok) {
+          throw new Error(`Failed to download PDF: ${pdfResponse.status}`);
+        }
+        const pdfBuffer = await pdfResponse.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(pdfBuffer)));
+        const dataUri = `data:application/pdf;base64,${base64}`;
+        console.log(`PDF downloaded: ${pdfBuffer.byteLength} bytes`);
+        
+        contentParts = [
+          { type: 'text', text: userPrompt },
+          { type: 'image_url', image_url: { url: dataUri } },
+        ];
+      } catch (downloadError) {
+        console.error('Failed to download PDF:', downloadError);
+        return new Response(
+          JSON.stringify({ error: 'Erro ao baixar o PDF para processamento.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      contentParts = [
+        { type: 'text', text: userPrompt },
+        { type: 'image_url', image_url: { url } },
+      ];
+    }
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -463,15 +497,12 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-pro', // Modelo mais potente para melhor OCR
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: [
-              { type: 'text', text: userPrompt },
-              { type: 'image_url', image_url: { url } },
-            ],
+            content: contentParts,
           },
         ],
         max_tokens: 4000,
