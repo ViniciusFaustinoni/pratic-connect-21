@@ -240,6 +240,22 @@ export function BeneficiosAdicionaisConfig() {
                           {getCategoriaLabel(beneficio.categoria)}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        {(beneficio as any).linhas_permitidas?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {((beneficio as any).linhas_permitidas as string[]).map((slug: string) => (
+                              <Badge key={slug} variant="outline" className="text-xs">
+                                {slug}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Todas</span>
+                        )}
+                      </TableCell>
+                          {getCategoriaLabel(beneficio.categoria)}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline">
                           <MapPin className="h-3 w-3 mr-1" />
