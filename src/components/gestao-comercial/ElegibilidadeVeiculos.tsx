@@ -89,7 +89,7 @@ function TabPorPlano() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('planos')
-        .select('id, nome, linha_slug')
+        .select('id, nome, linha')
         .eq('ativo', true)
         .order('nome');
       if (error) throw error;
