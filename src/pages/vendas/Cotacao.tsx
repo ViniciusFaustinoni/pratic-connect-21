@@ -114,6 +114,8 @@ export default function CotacaoPage() {
     anoVeiculo: ano ? parseInt(ano) : undefined,
     tipoVeiculo: tipoVeiculoDetectado,
     usoApp: modalidade === 'aplicativo',
+    marca: marca || undefined,
+    modelo: modelo || undefined,
   });
 
   // ============================================

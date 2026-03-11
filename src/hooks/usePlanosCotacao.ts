@@ -428,7 +428,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
   return {
     planos,
-    isLoading,
+    isLoading: isLoading || elegibilidadeLoading,
   };
 }
 

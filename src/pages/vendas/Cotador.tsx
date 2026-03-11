@@ -302,7 +302,9 @@ export default function CotadorPage() {
     tipoVeiculo: tipoVeiculoDetectado,
     usoApp: usoApp, // Filtra planos por uso
     categoria: categoriaVeiculo || undefined,
-  }), [valorFipe, ano, usoApp, categoriaVeiculo, tipoVeiculoDetectado]);
+    marca: marca || undefined,
+    modelo: modelo || undefined,
+  }), [valorFipe, ano, usoApp, categoriaVeiculo, tipoVeiculoDetectado, marca, modelo]);
   
   const { planos: planosDB, isLoading: loadingPlanos } = usePlanosCotacao(parametrosPlanos);
   const criarCotacao = useCriarCotacao();
