@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault, useCotaDesagioDefault, useCotaMinimaDesagioDefault, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 import { 
   getCoberturasRemovidasDinamico, 
   gerarMensagemAlertaCategoria,
