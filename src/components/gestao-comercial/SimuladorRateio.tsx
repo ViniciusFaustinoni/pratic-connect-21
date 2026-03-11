@@ -77,7 +77,7 @@ export function SimuladorRateio() {
 
       const { data } = await supabase
         .from('sinistros')
-        .select('tipo_sinistro, valor_indenizacao, cota_participacao_valor')
+        .select('tipo, valor_indenizacao, valor_cota_participacao')
         .in('status', ['aprovado', 'pago', 'encerrado'])
         .gte('data_ocorrencia', inicioMes)
         .lt('data_ocorrencia', fimMes);
@@ -88,11 +88,11 @@ export function SimuladorRateio() {
         porBeneficio[b.key] = { total: 0, count: 0, cotaParticipacao: 0 };
       });
 
-      data?.forEach(s => {
-        const tipo = mapSinistroTipo(s.tipo_sinistro);
+      data?.forEach((s: any) => {
+        const tipo = mapSinistroTipo(s.tipo);
         if (porBeneficio[tipo]) {
           const bruto = s.valor_indenizacao || 0;
-          const cota = s.cota_participacao_valor || 0;
+          const cota = s.valor_cota_participacao || 0;
           porBeneficio[tipo].total += Math.max(0, bruto - cota);
           porBeneficio[tipo].count += 1;
           porBeneficio[tipo].cotaParticipacao += cota;

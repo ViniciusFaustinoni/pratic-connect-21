@@ -1,11 +1,3 @@
-import { Package, Shield, DollarSign, Gift, LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-interface Tab {
-  label: string;
-  icon: LucideIcon;
-}
-
 import { Package, Shield, DollarSign, Gift, Calculator, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
