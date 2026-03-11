@@ -627,97 +627,58 @@ export function PlanFormModal({
                         Percentual de desconto sobre o valor mensal (ex: 5 = 5% OFF). Deixe 0 para sem desconto.
                       </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Cota Passeio (%)</Label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          value={formData.cota_passeio_percent}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              cota_passeio_percent: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Mínimo (R$)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formData.cota_passeio_min}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              cota_passeio_min: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Cota Deságio (%)</Label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          value={formData.cota_desagio_percent}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              cota_desagio_percent: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Mínimo (R$)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formData.cota_desagio_min}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              cota_desagio_min: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Cota APP (%)</Label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          value={formData.cota_app_percent}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              cota_app_percent: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Mínimo (R$)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formData.cota_app_min}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              cota_app_min: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
+                    {/* Dynamic cotas per selected category */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-semibold">Cota de Participação por Categoria</Label>
+                      {formData.categorias_veiculo.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">
+                          Selecione categorias de veículo na aba "Básico" para configurar cotas.
+                        </p>
+                      ) : (
+                        cotasCategorias.map((cota) => {
+                          const catLabel = VEHICLE_CATEGORIES.find(c => c.value === cota.categoria_veiculo)?.label || cota.categoria_veiculo;
+                          return (
+                            <div key={cota.categoria_veiculo} className="rounded-lg border p-3 space-y-2">
+                              <p className="text-sm font-medium">{catLabel}</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Cota (%)</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    value={cota.cota_percentual}
+                                    onChange={(e) => {
+                                      setCotasCategorias(prev => prev.map(c =>
+                                        c.categoria_veiculo === cota.categoria_veiculo
+                                          ? { ...c, cota_percentual: e.target.value }
+                                          : c
+                                      ));
+                                    }}
+                                    placeholder="6.0"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Mínimo (R$)</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={cota.cota_minima_valor}
+                                    onChange={(e) => {
+                                      setCotasCategorias(prev => prev.map(c =>
+                                        c.categoria_veiculo === cota.categoria_veiculo
+                                          ? { ...c, cota_minima_valor: e.target.value }
+                                          : c
+                                      ));
+                                    }}
+                                    placeholder="1200.00"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </TabsContent>
 
