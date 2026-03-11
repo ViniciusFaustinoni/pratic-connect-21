@@ -25,6 +25,7 @@ export interface PlanInput {
   coverage_type?: string | null;
   min_vehicle_year?: string | null;
   additional_price?: number | null;
+  desconto_percentual?: number | null;
   cota_passeio_percent?: number | null;
   cota_passeio_min?: number | null;
   cota_desagio_percent?: number | null;
