@@ -740,6 +740,7 @@ export default function InstaladorChecklist() {
           id,
           checklist_data: checklist,
           quilometragem: quilometragem ? parseInt(quilometragem) : undefined,
+          etapa_atual: etapaAtual + 1,
         });
       } catch (err) {
         toast.error('Erro ao salvar checklist');
