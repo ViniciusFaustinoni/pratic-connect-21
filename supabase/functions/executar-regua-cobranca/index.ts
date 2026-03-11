@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
             cobrancaIds: [...(existing?.cobrancaIds || []), cob.id]
           })
         } else {
-          existing.valorTotal += Number(cob.valor_final || 0)
+          existing.valorTotal += Number(cob.valor || 0)
           existing.cobrancaIds.push(cob.id)
         }
       }
