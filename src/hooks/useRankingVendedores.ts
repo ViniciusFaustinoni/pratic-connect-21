@@ -118,7 +118,7 @@ export function useRankingVendedores(
           cotacoesPorVendedor[c.vendedor_id] = { criadas: 0, aceitas: 0 };
         }
         cotacoesPorVendedor[c.vendedor_id].criadas++;
-        if (c.status === 'aceita' || c.status === 'contrato_gerado') {
+        if (c.status === 'aceita') {
           cotacoesPorVendedor[c.vendedor_id].aceitas++;
         }
       });
