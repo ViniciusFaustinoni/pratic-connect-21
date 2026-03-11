@@ -55,7 +55,7 @@ export function RegioesConfig() {
   const podeEditar = isDiretor || isDesenvolvedor;
   
   const { data: regioes, isLoading } = useRegioes();
-  const createRegiao = useCreateRegiao();
+  const { data: priceCounts } = useRegionPriceCounts();
   const updateRegiao = useUpdateRegiao();
   const deleteRegiao = useDeleteRegiao();
   const toggleStatus = useToggleRegiaoStatus();
