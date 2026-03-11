@@ -31,6 +31,13 @@ export interface AdicionalOpcao {
   preco: number;
 }
 
+export interface AdicionalSelecionado {
+  id: string;
+  codigo: string;
+  nome: string;
+  preco: number;
+}
+
 export interface DadosCotacaoAvancada {
   leadId?: string;
   clienteNome: string;
@@ -46,7 +53,7 @@ export interface DadosCotacaoAvancada {
   planoId: string;
   usoAplicativo: boolean;
   desagio: number;
-  adicionaisSelecionados: string[];
+  adicionaisSelecionados: AdicionalSelecionado[];
   regiao?: string;
 }
 
@@ -197,18 +204,34 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
   });
 }
 
-export function useAdicionaisDisponiveis() {
+export function useAdicionaisDisponiveis(linhaSlug?: string) {
   return useQuery({
-    queryKey: ['adicionais-cotacao'],
+    queryKey: ['adicionais-cotacao', linhaSlug],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('beneficios_adicionais')
-        .select('id, codigo, nome, descricao, preco')
+        .select('id, codigo, nome, descricao, preco, linhas_permitidas, beneficios_regioes(regiao_id, preco_regional)')
         .eq('ativo', true)
         .order('nome');
 
       if (error) throw error;
-      return (data || []) as AdicionalOpcao[];
+
+      // Filtrar por linha permitida
+      const filtered = (data || []).filter(b => {
+        if (!linhaSlug) return true;
+        const permitidas = b.linhas_permitidas as string[] | null;
+        if (!permitidas || permitidas.length === 0) return true;
+        return permitidas.includes(linhaSlug);
+      });
+
+      return filtered.map(b => ({
+        id: b.id,
+        codigo: b.codigo,
+        nome: b.nome,
+        descricao: b.descricao || '',
+        preco: b.preco,
+        _regioes: (b as any).beneficios_regioes || [],
+      })) as (AdicionalOpcao & { _regioes: { regiao_id: string; preco_regional: number | null }[] })[];
     },
     staleTime: 1000 * 60 * 10,
   });
@@ -222,7 +245,8 @@ export function calcularCotacaoDinamica(
   plano: PlanoOpcaoCotacao,
   adicionais: AdicionalOpcao[],
   adicionaisSelecionadosIds: string[],
-  desagio: number
+  desagio: number,
+  regiaoId?: string
 ): ResultadoCotacaoDinamica {
   const desagioClamp = Math.min(Math.max(desagio || 0, 0), 30);
   const fatorDesconto = (100 - desagioClamp) / 100;
@@ -231,9 +255,15 @@ export function calcularCotacaoDinamica(
   const adicionaisNomes: string[] = [];
 
   for (const id of adicionaisSelecionadosIds) {
-    const ad = adicionais.find(a => a.id === id);
+    const ad = adicionais.find(a => a.id === id) as (AdicionalOpcao & { _regioes?: { regiao_id: string; preco_regional: number | null }[] }) | undefined;
     if (ad) {
-      valorAdicionais += ad.preco;
+      // Usar preço regional se disponível
+      let preco = ad.preco;
+      if (regiaoId && ad._regioes) {
+        const regional = ad._regioes.find(r => r.regiao_id === regiaoId);
+        if (regional?.preco_regional != null) preco = regional.preco_regional;
+      }
+      valorAdicionais += preco;
       adicionaisNomes.push(ad.nome);
     }
   }
@@ -304,7 +334,7 @@ export function useCotacaoAvancada() {
         nome_solicitante: dados.clienteNome || null,
         telefone1_solicitante: dados.clienteTelefone?.replace(/\D/g, '') || null,
         email_solicitante: dados.clienteEmail || null,
-        adicionais_selecionados: dados.adicionaisSelecionados,
+        adicionais_selecionados: dados.adicionaisSelecionados as any,
         cidade: dados.cidade,
         token_publico: token,
         dados_extras: {

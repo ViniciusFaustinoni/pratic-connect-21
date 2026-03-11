@@ -76,7 +76,7 @@ export function QuoteCalculatorModal({
   const [desagio, setDesagio] = useState(0);
   const [copied, setCopied] = useState(false);
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string>('');
-  const [adicionaisSelecionados, setAdicionaisSelecionados] = useState<string[]>([]);
+  const [adicionaisSelecionadosIds, setAdicionaisSelecionadosIds] = useState<string[]>([]);
 
   // ========== DADOS DO BANCO ==========
   const { data: planos = [], isLoading: loadingPlanos } = usePlanosParaCotacao(valorFipe, usoAplicativo);
@@ -101,8 +101,19 @@ export function QuoteCalculatorModal({
 
   const cotacao = useMemo((): ResultadoCotacaoDinamica | null => {
     if (!planoSelecionado || !valorFipe || valorFipe <= 0) return null;
-    return calcularCotacaoDinamica(planoSelecionado, adicionais, adicionaisSelecionados, desagio);
-  }, [planoSelecionado, adicionais, adicionaisSelecionados, desagio, valorFipe]);
+    return calcularCotacaoDinamica(planoSelecionado, adicionais, adicionaisSelecionadosIds, desagio);
+  }, [planoSelecionado, adicionais, adicionaisSelecionadosIds, desagio, valorFipe]);
+
+  // Build full objects for saving
+  const adicionaisSelecionadosObjetos = useMemo(() => {
+    return adicionaisSelecionadosIds
+      .map(id => {
+        const ad = adicionais.find(a => a.id === id);
+        if (!ad) return null;
+        return { id: ad.id, codigo: ad.codigo, nome: ad.nome, preco: ad.preco };
+      })
+      .filter(Boolean) as { id: string; codigo: string; nome: string; preco: number }[];
+  }, [adicionaisSelecionadosIds, adicionais]);
 
   // ========== DADOS PARA SALVAR ==========
   const getDadosCotacao = (): DadosCotacaoAvancada & { cotacao: ResultadoCotacaoDinamica } => ({
@@ -120,7 +131,7 @@ export function QuoteCalculatorModal({
     planoId: planoSelecionadoId,
     usoAplicativo,
     desagio,
-    adicionaisSelecionados,
+    adicionaisSelecionados: adicionaisSelecionadosObjetos,
     cotacao: cotacao!,
   });
 
@@ -155,7 +166,7 @@ export function QuoteCalculatorModal({
   };
 
   const toggleAdicional = (id: string) => {
-    setAdicionaisSelecionados(prev =>
+    setAdicionaisSelecionadosIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
@@ -453,7 +464,7 @@ export function QuoteCalculatorModal({
                         <div className="flex items-start gap-2">
                           <Checkbox
                             id={adicional.id}
-                            checked={adicionaisSelecionados.includes(adicional.id)}
+                            checked={adicionaisSelecionadosIds.includes(adicional.id)}
                             onCheckedChange={() => toggleAdicional(adicional.id)}
                           />
                           <div>
