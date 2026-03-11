@@ -245,7 +245,8 @@ export function calcularCotacaoDinamica(
   plano: PlanoOpcaoCotacao,
   adicionais: AdicionalOpcao[],
   adicionaisSelecionadosIds: string[],
-  desagio: number
+  desagio: number,
+  regiaoId?: string
 ): ResultadoCotacaoDinamica {
   const desagioClamp = Math.min(Math.max(desagio || 0, 0), 30);
   const fatorDesconto = (100 - desagioClamp) / 100;
@@ -254,9 +255,15 @@ export function calcularCotacaoDinamica(
   const adicionaisNomes: string[] = [];
 
   for (const id of adicionaisSelecionadosIds) {
-    const ad = adicionais.find(a => a.id === id);
+    const ad = adicionais.find(a => a.id === id) as (AdicionalOpcao & { _regioes?: { regiao_id: string; preco_regional: number | null }[] }) | undefined;
     if (ad) {
-      valorAdicionais += ad.preco;
+      // Usar preço regional se disponível
+      let preco = ad.preco;
+      if (regiaoId && ad._regioes) {
+        const regional = ad._regioes.find(r => r.regiao_id === regiaoId);
+        if (regional?.preco_regional != null) preco = regional.preco_regional;
+      }
+      valorAdicionais += preco;
       adicionaisNomes.push(ad.nome);
     }
   }
