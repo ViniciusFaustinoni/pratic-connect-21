@@ -240,7 +240,7 @@ export function BeneficiosAdicionaisConfig() {
               <TableBody>
                 {filteredBeneficios?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={podeEditar ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={podeEditar ? 8 : 7} className="text-center py-8 text-muted-foreground">
                       Nenhum benefício encontrado
                     </TableCell>
                   </TableRow>
