@@ -464,7 +464,7 @@ export function QuoteCalculatorModal({
                         <div className="flex items-start gap-2">
                           <Checkbox
                             id={adicional.id}
-                            checked={adicionaisSelecionados.includes(adicional.id)}
+                            checked={adicionaisSelecionadosIds.includes(adicional.id)}
                             onCheckedChange={() => toggleAdicional(adicional.id)}
                           />
                           <div>
