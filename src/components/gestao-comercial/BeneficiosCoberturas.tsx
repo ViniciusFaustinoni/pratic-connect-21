@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Gift, Shield, Plus, Edit, Trash2 } from 'lucide-react';
+import { Gift, Shield, Plus, Edit, Trash2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
