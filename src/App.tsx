@@ -441,6 +441,7 @@ const App = () => (
               <Route path="/vendas/vendedores" element={<Vendedores />} />
               <Route path="/vendas/vendedores/:id" element={<VendedorHistorico />} />
               <Route path="/vendas/configuracoes" element={<VendasConfig />} />
+              <Route path="/vendas/aprovacoes-fipe" element={<AprovacoesFipeMenor />} />
               
               {/* Auditoria */}
               <Route path="/auditoria/vendedores" element={<AuditoriaVendedores />} />
