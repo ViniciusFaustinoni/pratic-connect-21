@@ -159,6 +159,7 @@ export function PlanFormModal({
         coverage_type: plan.coverage_type || '',
         min_vehicle_year: plan.min_vehicle_year || '',
         additional_price: plan.additional_price?.toString() || '',
+        desconto_percentual: (plan as any).desconto_percentual?.toString() || '',
         cota_passeio_percent: plan.cota_passeio_percent?.toString() || '',
         cota_passeio_min: plan.cota_passeio_min?.toString() || '',
         cota_desagio_percent: plan.cota_desagio_percent?.toString() || '',
